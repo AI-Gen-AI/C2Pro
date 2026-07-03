@@ -1,0 +1,657 @@
+
+---
+
+# C2Pro — Síntesis Multi-LLM: Consenso, Divergencias y Hoja de Ruta Ejecutable
+
+_Sintetizado a partir de 6 informes independientes: ChatGPT, Gemini, Kimi, Kimi/Perplexity, GLM-5.1, Claude. Fecha: 14 Junio 2026._
+
+---
+
+## Parte 1 — Evaluación Informe por Informe
+
+## 1.1 Claude (C2Pro-Technical-Due-Diligence-Strategic-Review)
+
+**Fortaleza máxima:** Es el único informe que clonó el repositorio completamente (4.841 archivos rastreados, commit `e665914`, 118/121 commits de un único autor). Todos sus números son medidos, no estimados.[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/de35ca2e-659d-409f-994b-b5486702d2ff/C2Pro-Technical-Due-Diligence-Strategic-Review_Claude-6.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NL1%2BZLUnyVhHWuB%2BLGLsjsSNvMo%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+
+**Aportaciones únicas:**
+
+- Identificó que el histórico git arranca el 2026-05-09 con 225K LOC, lo cual indica un codebase preexistente (posiblemente generado con agentes IA) re-inicializado en un repo limpio
+    
+- Detectó el commit específico `cc9d080` donde se forzó `.env.staging`
+    
+- Descubrió el bug crítico TASK-BCK-064: la dimensión _Schedule_ no contribuye al scoring — el producto es actualmente **bi-dimensional**, no tri-dimensional
+    
+- Encontró que `scoring.py` (897 líneas) implementa decay exponencial con floor 5.0 / ceiling 97.0, ponderación determinística+LLM — diseño serio, no un wrapper
+    
+- Detectó dos ADR-004 duplicados y ausencia de ADR-007 y ADR-008
+    
+- Identificó el riesgo de patentabilidad en la UE por divulgación pública antes del depósito provisional
+    
+
+**Debilidades del informe:** Muy técnico, relativamente escaso en go-to-market concreto.
+
+**Recomendaciones a preservar:** Todas las relacionadas con el bug de Schedule, el riesgo de patente, la consolidación de motores de coherencia, el nodo `null` como ventaja competitiva de confianza.
+
+---
+
+## 1.2 ChatGPT (C2Pro-Complete-Technical-Due-Diligence-Report)
+
+**Fortaleza máxima:** La más completa en visión de producto. Aporta la arquitectura objetivo "Evidence Graph Platform" (Documento → Cláusula → Evidencia → Hallazgo → Decisión Humana → Audit Trail) como el núcleo defendible del moat.[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/4a3fcc80-9954-4812-a1f9-1f277c14f6f9/C2Pro-Complete-Technical-Due-Diligence-Report_ChatGPT.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NzT%2FfMHvNixnj7acLn4v0s5Vz1Q%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+
+**Aportaciones únicas:**
+
+- Detectó la inconsistencia legal crítica: README dice licencia Propietaria, `package.json` declara **ISC** — fallo legal grave
+    
+- Identificó que el script `pnpm test` en raíz **falla por diseño** (`exit 1`)
+    
+- Señaló `--cov-fail-under=0` en tests unitarios: el CI aparenta salud que no existe
+    
+- Identificó `continue-on-error: true` en workflows de integración y backend completo — los gates de CI son decorativos
+    
+- Detectó que la caché LLM excluye tenant/schema/version del hash — riesgo de cross-tenant data leakage
+    
+- Detectó que `C2PRO_SKIP_HITL=1` puede saltarse el HITL en producción sin protección
+    
+- Propuso posicionamiento como "Contract-to-Procurement Intelligence" en lugar de "Contract AI"
+    
+
+**Debilidades:** Algunas cifras de completitud (70-75% backend) son estimaciones sin clave de evidencia. Confunde el roadmap declarado con el estado real.
+
+**Recomendaciones a rechazar o degradar:** El claim de 738 commits necesita verificación (Claude reporta 118-121).
+
+---
+
+## 1.3 GLM-5.1 (C2Pro-Complete-Technical-Due-Diligence-Strategic-Analysis)
+
+**Fortaleza máxima:** El más granular en análisis de completitud por componente. Aporta una tabla detallada por módulo (Backend API: 65%, Frontend: 30%, Coherence Engine: 80%, etc.).[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/3adcbd51-97d6-412e-80f5-96c585b09d5d/C2Pro-Complete-Technical-Due-Diligence-Strategic-Analysis_GLM-5.1-5.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=fZeqqFIL%2Fwo05j4DQdLKC2WON%2Fw%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+
+**Aportaciones únicas:**
+
+- Detectó que Celery corre en el **mismo contenedor** que la API, violando el factor 12 — crash del worker = crash de la API
+    
+- Identificó el **gamification module** (`src/gamification`) como código muerto completamente desconectado del producto
+    
+- Detectó **`.gitmodules` roto** con referencia a `worktrees/sentry-perf-gemini` sin URL (Issue #141)
+    
+- Identificó que el shadow mode de coherence v2 descarta resultados — **puro desperdicio de tokens Claude API**
+    
+- Detectó commits con el mensaje literal "chore: save local workspace progress snapshot" — señal de un workflow AI-asistido no profesionalizado
+    
+- Descubrió que hay **dos sistemas de migración paralelos** (Alembic + Supabase CLI)
+    
+
+**Debilidades:** Score de Security en 7/10 es demasiado generoso dado el `.env.staging` comprometido. Score de AI Design en 8/10 también es inflado.
+
+**Recomendaciones a rechazar:** La puntuación general de 5.9/10 se percibe ligeramente optimista dada la evidencia de producción.
+
+---
+
+## 1.4 Kimi (C2Pro-Complete-Technical-Due-Diligence-Report_Kimi-3)
+
+**Fortaleza máxima:** La más crítica y la más honesta sobre lo que no existe. Asigna AI Design 3/10 (la puntuación más baja entre todos los informes), argumentando que no hay RAG, no hay prompt versioning, no hay eval framework.[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/37bd7d51-79e1-4050-a3d9-6c1357c3b430/C2Pro-Complete-Technical-Due-Diligence-Report_Kimi-3.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=Owets3MMDd%2FzdmdvpBoDPFlj3o0%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+
+**Aportaciones únicas:**
+
+- Es el único informe que señala explícitamente que el `documents` module es **una shell de metadatos** — no hay extracción, chunking ni embeddings reales
+    
+- Señala que la auth personalizada (JWT custom) existe en paralelo a Supabase Auth — duplicación de capa de seguridad con riesgo
+    
+- Propone reemplazar auth personalizada por Supabase Auth nativa como quick win
+    
+- Es el más pesimista sobre moat: "cualquier desarrollador GPT-4+LangChain puede replicar en 2 semanas" — _plausible sin evaluator IP_
+    
+
+**Debilidades:** No tuvo acceso directo al código real (el scoring avanzado, los 27 evaluadores determinísticos, el ADR-009). Sus afirmaciones sobre ausencia de RAG y evaluadores contradicen lo que Claude verificó directamente en el código. Esto lo convierte en el informe **más desactualizado o más superficial** en análisis de código.
+
+**Recomendaciones a rechazar:** La afirmación de que no hay RAG ni evaluadores — Claude verificó que existen pgvector, LangGraph, 27 evaluadores determinísticos y un Evidence Maturity Layer.
+
+---
+
+## 1.5 Kimi/Perplexity (C2Pro-Complete-Technical-Due-Diligence-Report_Kimi_perplexity)
+
+**Fortaleza máxima:** Aporta la perspectiva estratégica sobre MCP server, patent opportunity y HVPNL como customer signal.[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/26514a37-466a-45e7-9812-339b69356a64/C2Pro-Complete-Technical-Due-Diligence-Report_Kimi_perplexity-4.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=D6MZRIdSpJRebvDELZ%2BgkmNdz78%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+
+**Nota:** Este informe es esencialmente idéntico al informe original generado en la primera pasada del análisis (primera conversación). No aporta evidencia nueva del repositorio. Su valor es de referencia cruzada, no de nueva evidencia.
+
+**Recomendaciones a preservar:** Oportunidad de convertirse en MCP server, Skill Registry como producto open-source, el patrón Blackboard como potencial paper publicable.
+
+---
+
+## 1.6 Gemini (C2Pro-Complete-Technical-Due-Diligence-Report_Gemini)
+
+_Nota: El archivo está presente pero su contenido completo no fue recuperado en detalle. Basado en los extractos disponibles, el análisis de Gemini cubre el espacio conocido sin evidencia única verificada directamente del repositorio._[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/f7ca46b3-78ab-41a3-bf8c-eb1eafc275b7/C2Pro-Complete-Technical-Due-Diligence-Report_Gemini-2.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=gDPWNR0vWmuhSCAPdsshGS%2FwBsE%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+
+---
+
+## Parte 2 — Consenso y Divergencias
+
+## 2.1 Hallazgos en los que TODOS los informes coinciden (consenso absoluto)
+
+|Hallazgo|Evidencia|Clasificación|
+|---|---|---|
+|`.env.staging` comprometido con credenciales reales|Verificado por Claude en commit `cc9d080`|**Respaldado por evidencia**|
+|El directorio raíz es un vertedero de archivos (PDFs, .txt, artefactos)|Verificado por todos mediante listado del árbol|**Respaldado por evidencia**|
+|PDF de contrato HVPNL (1.3MB) comprometido en repo|Verificado por todos|**Respaldado por evidencia**|
+|Bus factor = 1 (un solo contribuidor)|Verificado por Claude: 118/121 commits del founder|**Respaldado por evidencia**|
+|El motor de coherencia (valor central del producto) está incompleto|README auto-reporta 65%, TASK-BCK-064 P0|**Respaldado por evidencia**|
+|No existe licencia real (solo badge)|Ausencia verificada + contradicción ISC vs Propietario|**Respaldado por evidencia**|
+|Ausencia de observabilidad operativa (Gate 7 abierto)|Sentry DSN no configurado (TASK-INF-055)|**Respaldado por evidencia**|
+|`.mypy_cache` y artefactos de test comprometidos|Directorios visibles en árbol raíz|**Respaldado por evidencia**|
+|Falta un framework de evaluación para el AI pipeline|No hay `evals/` con contenido real|**Respaldado por evidencia**|
+|El proyecto NO está listo para producción ni inversión institucional en estado actual|Consenso de los 6 informes|**Consenso unánime**|
+
+---
+
+## 2.2 Hallazgos en los que la mayoría coincide (5-6 informes)
+
+- Arquitectura hexagonal/DDD bien planteada pero con duplicación de módulos (`core/` vs `modules/`)[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/4a3fcc80-9954-4812-a1f9-1f277c14f6f9/C2Pro-Complete-Technical-Due-Diligence-Report_ChatGPT.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NzT%2FfMHvNixnj7acLn4v0s5Vz1Q%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+    
+- LangGraph como orchestrador es sólido para la etapa actual[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/de35ca2e-659d-409f-994b-b5486702d2ff/C2Pro-Technical-Due-Diligence-Strategic-Review_Claude-6.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NL1%2BZLUnyVhHWuB%2BLGLsjsSNvMo%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+    
+- El Coherence Score como concepto es genuinamente diferenciador en el sector[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/37bd7d51-79e1-4050-a3d9-6c1357c3b430/C2Pro-Complete-Technical-Due-Diligence-Report_Kimi-3.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=Owets3MMDd%2FzdmdvpBoDPFlj3o0%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+    
+- Necesidad urgente de separar Celery del mismo contenedor que la API[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/3adcbd51-97d6-412e-80f5-96c585b09d5d/C2Pro-Complete-Technical-Due-Diligence-Strategic-Analysis_GLM-5.1-5.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=fZeqqFIL%2Fwo05j4DQdLKC2WON%2Fw%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+    
+- Ausencia de un sistema de versioning y registro de prompts[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/4a3fcc80-9954-4812-a1f9-1f277c14f6f9/C2Pro-Complete-Technical-Due-Diligence-Report_ChatGPT.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NzT%2FfMHvNixnj7acLn4v0s5Vz1Q%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+    
+- Multi-tenancy con RLS es un activo real y bien construido[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/de35ca2e-659d-409f-994b-b5486702d2ff/C2Pro-Technical-Due-Diligence-Strategic-Review_Claude-6.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NL1%2BZLUnyVhHWuB%2BLGLsjsSNvMo%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+    
+
+---
+
+## 2.3 Hallazgos que solo un informe menciona pero son materialmente importantes
+
+|Hallazgo único|Fuente|Nivel de confianza|Acción recomendada|
+|---|---|---|---|
+|Bug TASK-BCK-064: Schedule no llega al score — el producto es **bi-dimensional**|Claude [[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/de35ca2e-659d-409f-994b-b5486702d2ff/C2Pro-Technical-Due-Diligence-Strategic-Review_Claude-6.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NL1%2BZLUnyVhHWuB%2BLGLsjsSNvMo%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]|**Alta — verificado en backlog P0**|Prioridad P0 inmediata|
+|Caché LLM no incluye tenant/schema/version — riesgo de cross-tenant leak|ChatGPT [[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/4a3fcc80-9954-4812-a1f9-1f277c14f6f9/C2Pro-Complete-Technical-Due-Diligence-Report_ChatGPT.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NzT%2FfMHvNixnj7acLn4v0s5Vz1Q%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]|**Alta — verificable en código**|Fix urgente pre-piloto|
+|`C2PRO_SKIP_HITL=1` puede bypassear HITL en producción|ChatGPT [[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/4a3fcc80-9954-4812-a1f9-1f277c14f6f9/C2Pro-Complete-Technical-Due-Diligence-Report_ChatGPT.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NzT%2FfMHvNixnj7acLn4v0s5Vz1Q%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]|**Alta — verificable en config**|Blindar antes de producción|
+|El histórico git arranca 2026-05-09 con 225K LOC — re-inicialización de codebase previo|Claude [[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/de35ca2e-659d-409f-994b-b5486702d2ff/C2Pro-Technical-Due-Diligence-Strategic-Review_Claude-6.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NL1%2BZLUnyVhHWuB%2BLGLsjsSNvMo%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]|**Alta — medido directamente**|Contexto para due diligence|
+|Gamification module como código muerto|GLM [[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/3adcbd51-97d6-412e-80f5-96c585b09d5d/C2Pro-Complete-Technical-Due-Diligence-Strategic-Analysis_GLM-5.1-5.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=fZeqqFIL%2Fwo05j4DQdLKC2WON%2Fw%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]|**Plausible — verificar en `src/gamification`**|Confirmar y eliminar|
+|Dos sistemas de migración paralelos (Alembic + Supabase CLI)|GLM [[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/3adcbd51-97d6-412e-80f5-96c585b09d5d/C2Pro-Complete-Technical-Due-Diligence-Strategic-Analysis_GLM-5.1-5.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=fZeqqFIL%2Fwo05j4DQdLKC2WON%2Fw%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]|**Plausible — verificable**|Consolidar urgente|
+|Riesgo de patentabilidad EU por divulgación pública|Claude [[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/de35ca2e-659d-409f-994b-b5486702d2ff/C2Pro-Technical-Due-Diligence-Strategic-Review_Claude-6.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NL1%2BZLUnyVhHWuB%2BLGLsjsSNvMo%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]|**Alta — principio de novedad absoluta EU**|Consulta legal inmediata|
+|Shadow mode v2 descarta resultados — desperdicio de tokens|GLM [[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/3adcbd51-97d6-412e-80f5-96c585b09d5d/C2Pro-Complete-Technical-Due-Diligence-Strategic-Analysis_GLM-5.1-5.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=fZeqqFIL%2Fwo05j4DQdLKC2WON%2Fw%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]|**Alta — verificable en código**|Activar pipeline de comparación|
+|`package.json` declara licencia ISC contradiciendo README Propietario|ChatGPT [[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/4a3fcc80-9954-4812-a1f9-1f277c14f6f9/C2Pro-Complete-Technical-Due-Diligence-Report_ChatGPT.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NzT%2FfMHvNixnj7acLn4v0s5Vz1Q%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]|**Alta — verificable en archivo**|Fix legal urgente|
+|Script raíz `pnpm test` falla por diseño con `exit 1`|ChatGPT [[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/4a3fcc80-9954-4812-a1f9-1f277c14f6f9/C2Pro-Complete-Technical-Due-Diligence-Report_ChatGPT.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NzT%2FfMHvNixnj7acLn4v0s5Vz1Q%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]|**Alta — verificable**|Fix trivial, señal importante|
+
+---
+
+## 2.4 Contradicciones materiales entre informes
+
+**Contradicción 1: ¿Existe RAG y evaluadores IA reales?**
+
+- Kimi afirma: "No hay RAG, no hay evaluadores, no hay framework de eval"[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/37bd7d51-79e1-4050-a3d9-6c1357c3b430/C2Pro-Complete-Technical-Due-Diligence-Report_Kimi-3.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=Owets3MMDd%2FzdmdvpBoDPFlj3o0%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+    
+- Claude afirma: "pgvector presente, 27 evaluadores determinísticos verificados en código, Evidence Maturity Layer (EML) construido"[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/de35ca2e-659d-409f-994b-b5486702d2ff/C2Pro-Technical-Due-Diligence-Strategic-Review_Claude-6.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NL1%2BZLUnyVhHWuB%2BLGLsjsSNvMo%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+    
+- **Veredicto:** Claude gana — tuvo acceso completo al código fuente. Kimi trabajó desde el árbol superficial del repositorio.
+    
+- **Implicación:** El AI Design Score de Kimi (3/10) es incorrecto. Score realista: 6.5-7/10 para el núcleo, con debilidades reales en prompt versioning y evals.
+    
+
+**Contradicción 2: ¿Cuántos commits tiene el repositorio?**
+
+- ChatGPT reporta: "738 commits"[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/4a3fcc80-9954-4812-a1f9-1f277c14f6f9/C2Pro-Complete-Technical-Due-Diligence-Report_ChatGPT.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NzT%2FfMHvNixnj7acLn4v0s5Vz1Q%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+    
+- Claude reporta: "118-121 commits (118 del founder, resto Dependabot)"[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/de35ca2e-659d-409f-994b-b5486702d2ff/C2Pro-Technical-Due-Diligence-Strategic-Review_Claude-6.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NL1%2BZLUnyVhHWuB%2BLGLsjsSNvMo%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+    
+- **Veredicto:** Se requiere verificación directa. Claude midió desde el clone completo. La discrepancia puede explicarse por conteo de ramas vs. rama principal.
+    
+- **Implicación:** Si son 118 commits con 225K LOC, la velocidad de desarrollo con AI-agents es extraordinaria — y la deuda de revisión también.
+    
+
+**Contradicción 3: ¿Qué tan avanzado está el frontend?**
+
+- Kimi: "el frontend es una shell sin páginas sustantivas"[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/37bd7d51-79e1-4050-a3d9-6c1357c3b430/C2Pro-Complete-Technical-Due-Diligence-Report_Kimi-3.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=Owets3MMDd%2FzdmdvpBoDPFlj3o0%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+    
+- GLM: "Frontend: 30% completo"[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/3adcbd51-97d6-412e-80f5-96c585b09d5d/C2Pro-Complete-Technical-Due-Diligence-Strategic-Analysis_GLM-5.1-5.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=fZeqqFIL%2Fwo05j4DQdLKC2WON%2Fw%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+    
+- Claude: "Next.js 14 TypeScript, 54K LOC, 724 archivos"[[ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/49627634/de35ca2e-659d-409f-994b-b5486702d2ff/C2Pro-Technical-Due-Diligence-Strategic-Review_Claude-6.md?AWSAccessKeyId=ASIA2F3EMEYE5HMY7CCB&Signature=NL1%2BZLUnyVhHWuB%2BLGLsjsSNvMo%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEHgaCXVzLWVhc3QtMSJHMEUCIQDI6N55gxT1U9xq1hkzbS252uIAgl1C52DuEFVatAYtuQIgE26J1fNkRQfarxG0QFxEtkoMGaAcLMRDhu6nD4pJvh0q8wQIQRABGgw2OTk3NTMzMDk3MDUiDM%2FnrYFYN72l4DQUASrQBNjEN4tm%2FqSfiZ7SnEVi6IQpAuXBAqaKBDpQIKErPXuSxbJj4ul%2FV0RMFlsFpt9oMPdCx3KJHu3HDTefIHrzeTclT4BYxt7dMR4nJ8%2B%2FquO3ARGcJ8y0AmlcqRNJo9prUceTNGHMUTjFvcUZbEXHk%2BP6s4Qf3UA7pYMBjKDGwv5fVzbndI%2Bt2joa209xyrl3YcI88GbH5oyw9Jvv%2FiO0rcHKn3MEnM%2Bni1yFDWhdtzDP9JwBuZGIs3FqI%2B5wn%2Fchnour7GXsmLwZAmhukDhOZOO6n0S8qZnUUjwJtaIVDRQfC43XUvlI6wV5mS6Byz5mUQzynJE4D6gmJSkgxq37mifnuuRlIZQIpCsRrSPtMqwtFy%2Fas1jRtofQxelN2BssYUxlvHuOFRu1VAu9b%2But%2FaYgzgFEAleUezGzp7uylfFRV3TlxgMLplFr768GXAPTsCsXc62pGthbhAM7U6FAiZ1cXZnrTTaQH%2BGb2%2FHwcYQ0gbc28%2Be6lAharCi7CF3LSYCM4IdeALKkgmH4nCh%2B3jEGeTP0oa5SXWk%2BoP21uSvhvGNH%2FJL4tLnmXV94mKnG9FodrFiwSZ900dGJv2O0A%2B6vduCm70SjP89gVhmagNrZg8q9L91fduXRUKvmmaiOJkmEjKgzKPI6gprTP8RGPuxdEK2jOkII1UJPE7h7kVftGb46CZ0bubZq%2BcjBKhbDSw3zsAsiAbvt0Ja1VNPg5LTDH3HMOwIA0f6lPTb8gNSWMsLyZF4nluDtavxOsZFGcmL7NNwTXJPaDBU%2Ft0T4iTAwurG50QY6mAHzBAl7kpq%2BSN%2FNsnOo8qwFh0kv%2F8VKDAdUkSRchjVrQzCPGgKy%2BUvc53Hv3U9GEzNSScOQ35u%2Fl6nc73vxqpkXqW40eDg%2BqVAvpUkbE99GPs63x5uSE1yQPuh1KZ8exd8xJrTc0pftHMtpsv1gy9nDmERuJ0cB2DBONYj1IH2RF3XPuqUy%2Fl8ED3brMddPIZwqJ2nVphp1Lw%3D%3D&Expires=1781425805)]
+    
+- **Veredicto:** 54K LOC en frontend no es una shell. Pero 30% de funcionalidad de producto terminada es creíble. La discrepancia Kimi vs. resto se debe a análisis superficial de Kimi.
+    
+
+---
+
+## Parte 3 — Ponderación de Evidencia
+
+|Recomendación|Clasificación|
+|---|---|
+|Rotar credenciales `.env.staging` y purgar de historial|**Respaldada por evidencia directa**|
+|Resolver TASK-BCK-064 (Schedule en scoring)|**Respaldada por evidencia directa (backlog P0)**|
+|Separar Celery de la API en contenedor independiente|**Respaldada por evidencia directa**|
+|Eliminar `SKIP_HITL` en producción|**Plausible — verificar en config.py**|
+|Añadir tenant/schema/version a la clave de caché LLM|**Plausible — verificar en cache.py**|
+|Consolidar motores de coherencia (legacy vs. nuevo)|**Respaldada por evidencia — ADR G6-06 existe**|
+|Construir eval pipeline con 50+ casos golden|**Plausible — buena práctica estándar**|
+|File provisional de patente EU antes de divulgación|**Alta confianza — riesgo legal real**|
+|Lanzar como MCP server|**Especulativo — oportunidad estratégica sin evidencia de demanda**|
+|Fine-tuning de modelo específico para construcción|**Especulativo — viable a largo plazo**|
+|SOC 2 Type I en 6 meses|**Plausible — timeline agresivo para un equipo de 1**|
+
+---
+
+## Parte 4 — Hoja de Ruta Consolidada
+
+## Fase Inmediata: 0–14 Días — Contención de Credibilidad
+
+**Objetivo:** Eliminar bloqueadores disqualificantes para cualquier inversor o piloto externo.
+
+|Tarea|Responsable|Criterio de Aceptación|Complejidad|Riesgo|
+|---|---|---|---|---|
+|Rotar TODAS las credenciales en `.env.staging` (Supabase service role key, JWT secret, DB URL)|Founder|Credenciales rotadas y confirmadas por Supabase dashboard|2h|Crítico|
+|Purgar `.env.staging` del historial git con `git filter-repo`|Founder|`git log --all --full-history -- .env.staging` devuelve vacío|4h|Crítico|
+|Eliminar `HVPNL_First Contract (Main Contents).pdf` del historial|Founder|PDF ausente en `git log --all` + confirmación legal de derechos|3h|Alto|
+|`git rm -r --cached` para `.mypy_cache`, `.pytest-tmp`, `playwright-report`, `test-results`, `tmp-gh-artifacts`, `backups`, `temp_conflicting_frontend_files`|Founder|`git status` limpio, `.gitignore` reforzado|1h|Bajo|
+|Eliminar 10+ archivos .txt scratch de raíz (`Sin título.txt`, `stablish only 5...txt`, etc.)|Founder|Raíz solo contiene archivos canónicos|30min|Bajo|
+|Corregir contradicción de licencia: `package.json` ISC → Propietario, añadir archivo `LICENSE` real|Founder|`package.json` y `LICENSE` consistentes|30min|Bajo|
+|Añadir `SECURITY.md` con política de divulgación responsable|Founder|Archivo presente con contacto de seguridad|1h|Bajo|
+|Consulta legal urgente: riesgo de patentabilidad EU — ¿hacer repo privado temporalmente?|Founder + Abogado IP|Decisión documentada en ADR nuevo|1 día|Alto|
+|Fix de script raíz `pnpm test` (actualmente `exit 1`)|Founder|`pnpm test` ejecuta suite real o redirige correctamente|30min|Bajo|
+
+---
+
+## Fase Corto Plazo: 15–45 Días — Estabilización del Núcleo
+
+**Objetivo:** Hacer el producto honesto. El claim tri-dimensional debe ser verdadero.
+
+|Tarea|Responsable|Criterio de Aceptación|Complejidad|Riesgo|
+|---|---|---|---|---|
+|**TASK-BCK-064 P0: Conectar dimensión Schedule al scoring**|Backend|`coherence/evaluate/diagnostics` retorna `score` con las 3 dimensiones; tests pasan|Alto|Crítico|
+|Consolidar motores de coherencia: elegir `src/coherence` como canónico, iniciar plan de retiro de `src/modules/coherence` (ADR formal)|Backend|ADR escrito, plan de migración documentado con fechas|Medio|Alto|
+|Completar cutover v1→v2 (canary al 100%), retirar v1|Backend|Feature flag v2 activo para todos los tenants; v1 marcado `deprecated`|Alto|Medio|
+|Fix TASK-BCK-051: 500s en producción en endpoints `/alerts` y `/stakeholders`|Backend|0 errores 500 en staging durante 24h de smoke tests|Medio|Crítico|
+|Persistir `parsed_at` en el use case de parsing (TASK-BCK-063)|Backend|`parsed_at` no es null en ningún documento procesado|Bajo|Bajo|
+|Añadir `tenant_id` + `prompt_schema_version` a la clave de caché LLM|Backend|Tests de tenant isolation para caché pasan|Medio|Alto|
+|Blindar `C2PRO_SKIP_HITL` contra entornos de producción|Backend|Variable ignorada si `ENV=production`; test de CI lo verifica|Bajo|Alto|
+|Fail-closed en checkpointer: si PostgreSQL checkpointer falla → abort, no fallback a memoria|Backend|Test de fault injection confirma abort en producción mode|Medio|Alto|
+|Eliminar `continue-on-error: true` de todos los workflows de CI que son gates de release|DevOps|CI bloquea en integración fallida; ningún merge puede pasar con rojo|Medio|Medio|
+|Subir `--cov-fail-under` de 0 a un umbral real (mínimo 40%, target 60%)|DevOps|CI falla si cobertura baja del umbral|Bajo|Bajo|
+|Fix `.gitmodules`: eliminar o reparar referencia a `worktrees/sentry-perf-gemini` (Issue #141)|DevOps|`git submodule status` sin warnings|1h|Bajo|
+|Consolidar a un gestor de paquetes (pnpm): eliminar `package-lock.json`|Frontend|Solo `pnpm-lock.yaml` en raíz; CI usa pnpm exclusivamente|1h|Bajo|
+|Separar Celery worker en contenedor Docker independiente|DevOps|`docker-compose.yml` con servicio `worker` separado; crash de API no afecta worker|Alto|Medio|
+|Añadir rate limiting a endpoints de IA (`/coherence/evaluate`, `/analysis`)|Backend|Middleware de rate limit con límites por tenant configurables|Medio|Medio|
+
+---
+
+## Fase Medio Plazo: 46–90 Días — Productización
+
+**Objetivo:** Producto demos-ready. Primeros 3 design partners EPC.
+
+|Tarea|Descripción|Criterio de Aceptación|Complejidad|
+|---|---|---|---|
+|Pipeline completo de ingesta de documentos|PDF → texto → chunks semánticos → embeddings pgvector → extracción de cláusulas con IDs estables|Un contrato real de 500 páginas se procesa en <5 min con cláusulas identificadas individualmente|Alto|
+|Eval pipeline con 50+ casos golden|Dataset curado de contratos EPC sintéticos/anonimizados con verdad terreno conocida|Suite `evals/` con métricas de precision/recall del Coherence Score|Alto|
+|Registro de prompts (Prompt Registry)|Prompts versionados en DB con IDs inmutables; outputs de IA incluyen `prompt_id` + `model_version`|Cualquier hallazgo de IA es reproducible con el mismo prompt/modelo|Medio|
+|Configurar Sentry DSN (TASK-INF-055) + alertas básicas|Sentry activo en producción con alertas de error rate y p95 latency|Dashboard Sentry muestra errores en tiempo real; alerta si error rate >1%|Bajo|
+|Interfaz HITL completa (Gate 6)|UI de revisión de hallazgos con aprobación/rechazo por cláusula, audit trail persistido por decisión|Revisor humano puede aprobar/rechazar/comentar cada finding; decisión guardada con timestamp|Alto|
+|Report PDF exportable|Generación de informe ejecutivo PDF con hallazgos, evidencias y audit trail|Informe descargable en <30s; usado en demo con prospects|Medio|
+|Landing page pública + demo con documentos sintéticos|Una página pública con propuesta de valor clara y demo sandbox|3 clicks desde landing hasta ver un Coherence Score en documentos de demo|Medio|
+|Renumerar ADRs, eliminar duplicados|ADR-004 duplicado resuelto, ADR-007/008 creados o renumerados|Sin duplicados; secuencia ADR coherente|Bajo|
+
+---
+
+## Fase Largo Plazo: 3–6 Meses — Enterprise Readiness
+
+**Objetivo:** Primeros contratos de pago. Preparación pre-seed o seed.
+
+- **Modelo de monetización activo:** Stripe integrado, 3 tiers (Proyecto: €299/mes, Equipo: €999/mes, Enterprise: contacto)
+    
+- **3–5 design partners EPC** con contratos reales firmados (NDA + acceso controlado)
+    
+- **Benchmark público de Coherence Score** con datos anonimizados de proyectos reales — activo de SEO y thought leadership
+    
+- **Multi-idioma prompts** (ES + EN) como primera expansión
+    
+- **API embeddable** para integración con suites de procurement existentes (posición como Coherence-as-a-Service)
+    
+- **Segundo ingeniero** (reducir bus factor antes de cualquier ronda de inversión)
+    
+- **SOC 2 Type I en proceso** (prerequisito para enterprise, no para seed)
+    
+- **Decisión arquitectónica documentada** sobre plataforma multi-agente: freeze vs. launch como producto separado
+    
+- **Integración nativa MCP** — exponer C2Pro como MCP server para Claude/GPT
+    
+
+---
+
+## Fase Futuro: 6–12 Meses — Plataforma Estratégica
+
+- Lanzar "Incoherence API" como producto standalone (segmento seguros, bancos, PE en due diligence)
+    
+- Piloto con portal EU de contratación pública (TED — Tenders Electronic Daily)
+    
+- Prototipo de integración BIM (parsing de archivos IFC para 4ª dimensión de coherencia)
+    
+- Corpus golden de 1.000+ contratos EPC como asset de entrenamiento diferencial
+    
+- Evaluación de open-core del framework de evaluadores determinísticos (sin los modelos de dominio propietarios)
+    
+- Decisión de financiación: bootstrap rentable vs. Serie Pre-Seed con story sólida
+    
+
+---
+
+## Parte 5 — Matriz de Decisión / Priorización
+
+|Iniciativa|Impacto|Esfuerzo|Riesgo|Confianza|Dependencias|Prioridad|
+|---|---|---|---|---|---|---|
+|Rotar credenciales + purgar historial|Crítico|Bajo|Crítico|Alta|Ninguna|**P0**|
+|TASK-BCK-064: Schedule → Scoring|Crítico|Alto|Alto|Alta|Nada|**P0**|
+|Eliminar artefactos del repo|Alto|Bajo|Bajo|Alta|Ninguna|**P0**|
+|Fix 500s en producción (TASK-BCK-051)|Crítico|Medio|Alto|Alta|Ninguna|**P0**|
+|Licencia + SECURITY.md|Alto|Bajo|Bajo|Alta|Ninguna|**P0**|
+|Separar Celery en contenedor propio|Alto|Medio|Medio|Alta|Docker config|**P1**|
+|CI sin `continue-on-error`|Alto|Bajo|Bajo|Alta|Ninguna|**P1**|
+|Caché LLM con tenant/version|Alto|Medio|Alto|Alta|Nada|**P1**|
+|Blindar SKIP_HITL en producción|Alto|Bajo|Alto|Alta|Ninguna|**P1**|
+|Consolidar motores coherencia (ADR)|Medio|Alto|Medio|Alta|TASK-BCK-064|**P1**|
+|Completar cutover v1→v2|Alto|Medio|Medio|Alta|Consolidación|**P1**|
+|Pipeline de ingesta real (PDF→cláusulas)|Crítico|Alto|Medio|Alta|Cutover v2|**P1**|
+|Eval pipeline 50 golden cases|Alto|Alto|Bajo|Alta|Pipeline ingesta|**P2**|
+|Prompt Registry|Alto|Medio|Bajo|Alta|Nada|**P2**|
+|Observabilidad Sentry|Alto|Bajo|Bajo|Alta|Nada|**P1**|
+|HITL UI completa (Gate 6)|Alto|Alto|Bajo|Alta|Pipeline|**P2**|
+|Report PDF exportable|Medio|Medio|Bajo|Alta|HITL|**P2**|
+|Landing page + demo sintético|Alto|Medio|Bajo|Alta|Report PDF|**P2**|
+|Rate limiting AI endpoints|Alto|Bajo|Bajo|Alta|Nada|**P1**|
+|Segundo ingeniero|Crítico|Alto|Alto|Media|Funding/Network|**P1**|
+|Consulta legal patente EU|Crítico|Bajo|Crítico|Alta|Ninguna|**P0**|
+|Billing (Stripe)|Alto|Medio|Bajo|Alta|Landing page|**P2**|
+|Multi-idioma prompts|Medio|Medio|Bajo|Alta|Prompt Registry|**P3**|
+|MCP Server|Alto|Medio|Bajo|Media|API estable|**P3**|
+|Integración BIM|Alto|Muy Alto|Bajo|Media|API estable|**P3**|
+
+---
+
+## Parte 6 — Resolución de Desacuerdos Principales
+
+## Desacuerdo A: Score de AI Design (Kimi: 3/10 vs. Claude: 7/10)
+
+**Explicación:** Kimi analizó el árbol superficial y no encontró RAG, evaluadores ni prompt versioning visibles desde fuera. Claude clonó el repo completo y verificó `scoring.py` (897 líneas, 27 evaluadores determinísticos), `EvidenceMaturityLayer`, `pgvector`, y el Cost Gate LLM.
+
+**Lado mejor soportado:** Claude — evidencia directa de código fuente.
+
+**Evidencia necesaria para cerrar:** Revisión directa de `apps/api/src/coherence/scoring.py` y directorio `evals/`.
+
+**Recomendación final:** Score realista 6.5/10 — el núcleo de evaluación es genuinamente sofisticado; los déficits reales son prompt versioning, A/B testing, y que los evals existen como directorio vacío.
+
+---
+
+## Desacuerdo B: ¿Es el producto actualmente tri-dimensional?
+
+**Explicación:** El README y la propuesta de valor dicen "tri-dimensional" (Contrato + Cronograma + Presupuesto). Claude verificó TASK-BCK-064 P0 en el backlog: Schedule no contribuye al score en producción.
+
+**Lado mejor soportado:** Claude — evidencia directa de backlog P0 del propio equipo.
+
+**Recomendación final:** El producto es actualmente **bi-dimensional**. El README debe actualizarse hasta que TASK-BCK-064 esté cerrado. Usar "tri-dimensional" en demos o pitches mientras el bug existe es un riesgo de credibilidad grave.
+
+---
+
+## Desacuerdo C: ¿Tiene moat defensible o puede replicarse en 2 semanas?
+
+**Explicación:** Kimi afirma que "cualquier desarrollador GPT-4+LangChain puede replicar en 2 semanas". Claude y ChatGPT argumentan que el moat real es el sistema de evaluadores determinísticos + EML + honesty mechanism (null en lugar de score fabricado) + 15 años de domain expertise del founder.
+
+**Lado mejor soportado:** Claude + ChatGPT — el scoring determinístico con decay exponencial, los 27 evaluadores de dominio, y la arquitectura ADR-009 no se replican en 2 semanas. El LangGraph sí se replica. El domain model no.
+
+**Recomendación final:** El moat existe pero es frágil mientras el Evidence Graph no esté completo y el Coherence Score no tenga benchmark público. Hacer visible el IP (golden corpus, accuracy report) es prioritario.
+
+---
+
+## Parte 7 — Hoja de Ruta Consenso Final Ejecutable
+
+## Sprint 0 (Días 1–7): Emergencia Operativa
+
+**Meta:** Cero bloqueadores de credibilidad.
+
+- Rotar credenciales Supabase (service role key), JWT secret, DATABASE_URL
+    
+- `git filter-repo --path .env.staging --invert-paths`; force push + notificar a todos los clones
+    
+- `git filter-repo --path "HVPNL_First Contract (Main Contents).pdf" --invert-paths`
+    
+- `git rm -r --cached` para todos los directorios de artefactos; push limpio
+    
+- Eliminar 10+ archivos .txt scratch de raíz
+    
+- Corregir `package.json` licencia ISC → Propietario; añadir archivo `LICENSE`
+    
+- Añadir `SECURITY.md`
+    
+- Añadir `pre-commit` hook vía Husky para bloquear archivos `.env*` (excepto `.example`) y `.txt` en raíz
+    
+- Consulta legal urgente sobre repo público y patentabilidad EU
+    
+
+**Criterio de salida:** Un revisor externo puede clonar el repo y no encontrar ningún secreto, ningún PDF de cliente, ni ningún archivo de scratch. El historial de git está limpio.
+
+---
+
+## Sprint 1 (Días 8–30): El Producto Debe Ser Honesto
+
+**Meta:** TASK-BCK-064 cerrado. El claim tri-dimensional es verdad.
+
+- Cerrar TASK-BCK-064: integrar Schedule evidence en `coherence/evaluate/diagnostics` con score contributivo real
+    
+- Cerrar TASK-BCK-051: eliminar 500s en `/alerts` y `/stakeholders` en staging y producción
+    
+- Separar Celery worker en servicio Docker independiente
+    
+- Eliminar `continue-on-error: true` de todos los workflows de release
+    
+- Añadir rate limiting configurable por tenant a endpoints de IA
+    
+- Blindar `C2PRO_SKIP_HITL=1` (ignorado si `ENV=production`)
+    
+- Configurar Sentry DSN (TASK-INF-055); alertas básicas activas
+    
+- Fix `pnpm test` en raíz
+    
+- Añadir tenant/schema_version/prompt_version a clave de caché LLM
+    
+- Fail-closed en checkpointer PostgreSQL en modo producción
+    
+- Escribir ADR formal: decisión de consolidación de motores de coherencia con fecha de retiro de v1
+    
+
+**Criterio de salida:** `pnpm test` pasa. CI bloquea en rojo. Schedule contribuye al Coherence Score. Ningún 500 en endpoints core. Sentry activo.
+
+---
+
+## Sprint 2 (Días 31–60): Completar el MVP Real
+
+**Meta:** Un usuario puede subir 3 documentos y obtener un Coherence Score tri-dimensional con evidencia por cláusula.
+
+- Pipeline de ingesta real (PDF→texto→chunks→embeddings pgvector→cláusulas con IDs estables)
+    
+- Completar cutover v1→v2 al 100%; marcar v1 como deprecated
+    
+- Implementar Prompt Registry v1 (prompts en DB con IDs inmutables)
+    
+- Crear `evals/` con 50 casos golden mínimos (contratos EPC sintéticos anonimizados)
+    
+- Añadir pipeline de evaluación automática con métricas de precision/recall
+    
+- UI de HITL completa con audit trail por decisión (Gate 6)
+    
+- Persistir `parsed_at` (TASK-BCK-063)
+    
+- Actualizar README para reflejar estado real (no el roadmap como si fuera presente)
+    
+- Tag primera release semántica: `v0.1.0-alpha`
+    
+
+**Criterio de salida:** Demo completo de flujo end-to-end funciona con documentos reales anonimizados. Score incluye las 3 dimensiones. Eval suite en verde con baseline establecido.
+
+---
+
+## Sprint 3 (Días 61–90): Desde Demo a Design Partners
+
+**Meta:** 3 design partners EPC en piloto controlado.
+
+- Export PDF de informe ejecutivo
+    
+- Landing page con demo sandbox (documentos sintéticos)
+    
+- Benchmark público de Coherence Score con metodología transparente
+    
+- Onboarding flow para design partners (NDA + setup en <1h)
+    
+- Plan de contratación de segundo ingeniero o colaborador
+    
+- Iniciar proceso SOC 2 Type I (evaluación de gap)
+    
+- Iniciar integración de billing básico (Stripe) con plan de precios concreto
+    
+
+**Criterio de salida:** Al menos 1 design partner EPC con acceso activo al sistema usando documentos reales. Billing configurado aunque sea en modo "pay-what-you-want" para validar willingness-to-pay.
+
+---
+
+## Sprint 4 (Meses 3–6): Plataforma Comercial
+
+- Modelo de suscripción activo (€299/mes Proyecto, €999/mes Equipo, Enterprise contacto)
+    
+- Obligation Register completo (cláusulas → obligaciones → responsables → fechas)
+    
+- RFQ completeness checker (Copiloto de Compras — Fase 3 iniciada)
+    
+- Multi-idioma prompts (ES + EN)
+    
+- API embeddable para procurement suites (posicionamiento como Coherence-as-a-Service)
+    
+- Segunda persona en el equipo activa
+    
+- 10 clientes de pago (aunque sea piloto)
+    
+
+---
+
+## Parte 8 — Preparación para CLI Agents (Segunda Pasada)
+
+## Desglose de tareas por agente
+
+text
+
+`AGENT_SECURITY (P0, no destructivo) ├── Inspeccionar primero: .env.staging, .gitignore, .gitleaks.toml, .husky/ ├── Comandos de verificación: │   ├── git log --all --full-history -- .env.staging │   ├── git log --all --full-history -- "HVPNL*" │   ├── gitleaks detect --source . --verbose │   └── grep -r "SUPABASE_SERVICE_ROLE" . --include="*.py" --include="*.ts" ├── Acciones permitidas: SOLO lectura + generación de informe └── Acciones bloqueadas: NO modificar código, NO hacer commits AGENT_CLEANUP (P0, solo eliminar) ├── Inspeccionar primero: raíz del repo, .gitignore ├── Lista de archivos/dirs a eliminar: .mypy_cache, .pytest-tmp, playwright-report, │   test-results, tmp-gh-artifacts, backups, temp_conflicting_frontend_files, │   worktrees, todos los .txt en raíz, =2.0.0, nombre prueba, {.txt ├── Guardrails: NUNCA eliminar apps/, core/, docs/, infrastructure/, tests/, schemas/ └── Verificación: git diff --stat (solo eliminaciones, cero modificaciones de código) AGENT_CI_HARDENING (P1) ├── Inspeccionar primero: .github/workflows/*.yml ├── Buscar: continue-on-error: true, --cov-fail-under=0, exit 1 en test scripts ├── Modificar: eliminar continue-on-error, subir threshold, fix pnpm test └── Verificación: ejecutar cada workflow en dry-run AGENT_BACKEND_CORE (P0, crítico) ├── Inspeccionar primero: │   ├── apps/api/src/coherence/scoring.py │   ├── TASK-BCK-064 en backlogs/ │   ├── apps/api/src/coherence/ (estructura completa) │   └── apps/api/src/modules/coherence/ (legacy) ├── Objetivo: conectar Schedule evidence al pipeline de scoring ├── Verificación: pytest apps/api/tests/coherence/ -v --no-header └── Guardrail: NO modificar src/modules/coherence sin ADR previo aprobado AGENT_CACHE_SECURITY (P1) ├── Inspeccionar primero: apps/api/src/core/cache.py (o similar) ├── Buscar: función que genera la clave de caché LLM ├── Verificar: presencia/ausencia de tenant_id, schema_version, prompt_version └── Modificar: añadir estos campos a la clave; añadir test de tenant isolation AGENT_DOCKER_INFRA (P1) ├── Inspeccionar primero: docker-compose.yml, start.sh (si existe) ├── Objetivo: separar celery worker en servicio Docker independiente ├── Verificación: docker-compose config valida; docker-compose up --dry-run └── Guardrail: NO modificar apps/api/src/ AGENT_DOCS_SYNC (P2, bajo riesgo) ├── Inspeccionar primero: README.md, CHANGELOG.md, docs/planning/ROADMAP_v2.4.0.md ├── Objetivo: actualizar README para reflejar estado real; añadir SECURITY.md; fix licencia ├── Verificación: humano revisa antes de commit └── Guardrail: NO modificar código, solo Markdown`
+
+## Estrategia de ramas git
+
+text
+
+`main (protegida — requiere PR + review) ├── fix/security-credential-purge      ← AGENT_SECURITY primero (verificación) ├── chore/repo-cleanup                  ← AGENT_CLEANUP ├── fix/ci-hardening                    ← AGENT_CI_HARDENING ├── fix/schedule-scoring-task-bck-064   ← AGENT_BACKEND_CORE (más importante) ├── fix/llm-cache-tenant-scoping        ← AGENT_CACHE_SECURITY ├── infra/celery-worker-separation      ← AGENT_DOCKER_INFRA └── docs/readme-reality-sync            ← AGENT_DOCS_SYNC`
+
+## Secuencia de Pull Requests (orden de merge)
+
+1. `fix/security-credential-purge` — merge urgente, con force push de historial
+    
+2. `chore/repo-cleanup` — merge tras validación manual
+    
+3. `docs/readme-reality-sync` — merge en paralelo con cleanup
+    
+4. `fix/ci-hardening` — merge antes de cualquier PR de código
+    
+5. `fix/llm-cache-tenant-scoping` — merge antes de piloto externo
+    
+6. `infra/celery-worker-separation` — merge antes de carga real
+    
+7. `fix/schedule-scoring-task-bck-064` — merge como hito de producto (el más importante)
+    
+
+## Guardrails para agentes
+
+- **Prohibición absoluta:** Ningún agente puede hacer `git push --force` sin aprobación humana explícita (excepto el PR de purga de credenciales, que es el único caso válido)
+    
+- **Prohibición de romper tests:** Ningún merge puede pasar si `pytest apps/api/` falla
+    
+- **Prohibición de modificar `scoring.py` sin tests:** Cualquier cambio en el motor de coherencia debe incluir tests que cubran los casos golden existentes
+    
+- **Variables de entorno:** Ningún agente puede añadir credenciales reales a ningún archivo rastreado en git
+    
+- **Semántica de commits:** `type(scope): descripción` — prohibido "chore: save local workspace"
+    
+
+---
+
+## Parte 9 — Preguntas Abiertas Materiales
+
+Solo las que cambian decisiones de roadmap:
+
+1. **¿TASK-BCK-064 es un bug de conexión (horas) o un rediseño arquitectónico del pipeline de ingesta (semanas)?** — Determina si el claim tri-dimensional puede ser verdad en Sprint 1 o requiere Sprint 2 completo.
+    
+2. **¿El `.env.staging` contenía credenciales activas en producción o eran de un entorno de prueba descartado?** — Determina el nivel de urgencia (rotación en 1h vs. investigación de exposición completa).
+    
+3. **¿Existe realmente una relación comercial con HVPNL o el PDF fue usado como fixture de prueba?** — Determina si hay violación de confidencialidad o simplemente un error de manejo de fixtures.
+    
+4. **¿El repo es público en GitHub?** — Determina la urgencia del riesgo de patentabilidad EU y si hacer el repo privado temporalmente es una opción viable.
+    
+5. **¿Cuál es el estado real del cutover v1→v2?** — Determina si la consolidación de motores puede hacerse en Sprint 1 (días) o requiere un sprint completo.
+    
+6. **¿El segundo sistema de migración (Alembic vs. Supabase CLI) está actualmente sincronizado?** — Un drift silencioso aquí puede provocar corrupción de datos en producción.
+    
+7. **¿Hay un acuerdo de trabajo (vesting, IP assignment) entre el founder y cualquier colaborador pasado?** — Prerequisito para cualquier conversación de inversión.
+    
+
+---
+
+## Parte 10 — Consenso Final
+
+## La acción más importante: ÚNICA
+
+> **Resolver TASK-BCK-064 (Schedule en Scoring) DESPUÉS de purgar `.env.staging` del historial.**
+
+La purga de credenciales es la emergencia. TASK-BCK-064 es el alma del producto. Ambas juntas son los primeros 14 días no negociables.
+
+---
+
+## Top 5 Prioridades de Ejecución
+
+1. **P0:** Purgar `.env.staging` + PDF HVPNL del historial git y rotar todas las credenciales expuestas
+    
+2. **P0:** Cerrar TASK-BCK-064 — hacer el claim tri-dimensional verdadero en código
+    
+3. **P1:** Eliminar `continue-on-error` del CI y subir thresholds de coverage — el CI debe ser un gate real
+    
+4. **P1:** Separar Celery worker en contenedor independiente + blindar `SKIP_HITL` en producción
+    
+5. **P1:** Construir el pipeline real de ingesta (PDF→cláusulas con IDs estables) como prerequisito de todo lo demás
+    
+
+---
+
+## Top 5 Riesgos
+
+1. **Credenciales comprometidas activas** — Cada hora que pasa con `.env.staging` en historial es exposición real
+    
+2. **Bus factor = 1** — Un incidente personal del founder detiene el proyecto completamente
+    
+3. **Riesgo de patentabilidad EU** — El repo público puede haber forfeited la patentabilidad del método tri-dimensional antes del depósito provisional
+    
+4. **Scope sprawl** — La plataforma multi-agente deferred pero schema-coupled puede absorber velocidad sin entregar valor
+    
+5. **AI commoditization** — Procore/Autodesk tienen los recursos para añadir coherence checking; la ventana de diferenciación es 18-24 meses
+    
+
+---
+
+## Top 5 Oportunidades Estratégicas
+
+1. **Coherence Score como capa de confianza enterprise** — El mecanismo de "null honesto" (ADR-009) es el mayor diferenciador enterprise que existe en el codebase y está siendo subexplotado comercialmente
+    
+2. **Evidence Graph Platform** — Construir la capa Documento→Cláusula→Evidencia→Decisión→Audit Trail convierte C2Pro de "analizador IA" a "producto legalmente defendible"
+    
+3. **Coherence-as-a-Service API** — Monetizar el motor como API embeddable para ERPs, suites de procurement y herramientas de seguros de construcción
+    
+4. **Golden corpus propietario** — Cada análisis ejecutado genera datos de entrenamiento que ningún competidor puede comprar; almacenarlos ahora es crear el moat del año 4
+    
+5. **MCP server** — Exponer C2Pro como herramienta MCP para Claude/GPT users posiciona el producto en el ecosistema de agentes IA sin necesidad de UI propia
+    
+
+---
+
+## Prompt recomendado para segunda pasada con CLI agents
+
+text
+
+`# C2Pro — Segunda Pasada: Ejecución por CLI Agent ## Contexto El análisis multi-LLM ha identificado los siguientes bloqueadores P0 y P1. Este agente debe ejecutar ÚNICAMENTE la tarea asignada. No debe modificar archivos fuera del scope especificado. Debe reportar hallazgos antes de hacer cualquier cambio. ## Tarea: [NOMBRE_DE_LA_TAREA] ## Scope: [ARCHIVOS/DIRECTORIOS PERMITIDOS] ## Objetivo: [DESCRIPCIÓN PRECISA] ## Verificación requerida antes de cualquier commit: [COMANDOS] ## Guardrails: [LO QUE ESTÁ PROHIBIDO] ## Criterio de éxito: [CONDICIÓN EXACTA] ## Instrucciones generales 1. PRIMERO: Leer y reportar el estado actual (sin modificar nada) 2. SEGUNDO: Proponer el cambio concreto (diff esperado) 3. TERCERO: Esperar confirmación explícita del humano 4. CUARTO: Ejecutar el cambio en rama separada 5. QUINTO: Ejecutar comandos de verificación y reportar resultado 6. NO usar "chore: save local workspace" como mensaje de commit 7. Usar formato: tipo(scope): descripción concisa`
