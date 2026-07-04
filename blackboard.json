@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-06-27T22:00:00Z",
+  "updated_at": "2026-07-03T23:28:26Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,49 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T121",
+      "backlog_id": "TASK-FRT-175",
+      "tipo": "frontend",
+      "descripcion": "Implement typed staged document upload with per-file generated DocumentType selection.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "Users can stage PDF/XLSX/BC3 files, confirm contract/budget/schedule roles per file, upload sequentially with lowercase generated DocumentType values, and see budget/other document types honestly in the register.",
+      "archivos_modificados": [
+        "apps/web/lib/api/index.ts",
+        "apps/web/components/features/documents/DocumentUploadDropzone.tsx",
+        "apps/web/hooks/useProjectDocuments.ts",
+        "apps/web/types/document.ts",
+        "apps/web/app/(app)/projects/[id]/documents/page.tsx",
+        "apps/web/components/features/documents/DocumentUploadDropzone.test.tsx",
+        "apps/web/lib/api/uploadDocument.test.ts",
+        "apps/web/hooks/useProjectDocuments.test.ts",
+        "apps/web/app/(app)/projects/[id]/documents/page.test.tsx",
+        "apps/web/src/tests/integration/uploads/TASK-FRT-175-staged-upload.integration.test.tsx",
+        "apps/web/scripts/vitest-run-all.mjs",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-03T22:45:00Z",
+        "completado": "2026-07-03T23:28:26Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-175 completed locally on fix/frt-l1-wave0: typed staged upload unblocks contract+budget+schedule triplet from the UI.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "Focused RED/GREEN slice: 5 files / 37 tests passed for documents page, dropzone, uploadDocument, useProjectDocuments, and TASK-FRT-175 integration.",
+          "pnpm typecheck -> passed",
+          "pnpm lint -> passed",
+          "pnpm generate:api:check -> passed",
+          "rg '\"BOM\"|\"CONTRACT\"' apps/web/lib apps/web/components -> 0 hits",
+          "pnpm test:all -> runner config repaired, then known unrelated suite failures remain: 15 files / 34 tests failed outside the TASK-FRT-175 touched surface."
+        ]
+      }
+    },
     {
       "tarea_id": "T120",
       "backlog_id": "TASK-COH-EVAL-TENANT-008",

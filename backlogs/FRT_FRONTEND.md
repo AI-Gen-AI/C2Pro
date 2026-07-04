@@ -2,7 +2,7 @@
 
 **Category**: Frontend (FRT)
 **Owner Role**: frontend
-**Last Updated**: 2026-05-16
+**Last Updated**: 2026-07-04
 
 **Quick Links**:
 
@@ -13,13 +13,14 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 1
+**Pending Tasks**: 23
 
 - IDs: `TASK-FRT-041` (blocked — requires Clerk dashboard operator access)
+- IDs: `TASK-FRT-176`-`TASK-FRT-197` — **EPIC-FRT-L1-WEDGE** (Level-1 wedge closure, 2026-07-04). Wave 0/P0: 176-183 · Wave 1/P1: 184-192 · Wave 2/P2: 193-197. Patch-by-patch executable spec: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md`
 
-**Completed Tasks**: 173
+**Completed Tasks**: 174
 
-- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-174`
+- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-175`
 
 **Usage Note**:
 
@@ -30,6 +31,29 @@
 
 | Status | Priority | Task ID        | Depends On | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Source                                              |
 | ------ | -------- | -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| [x]    | P0       | `TASK-FRT-175` | None       | Typed document upload: per-file type selector (contract/budget/schedule/…) defaulted by extension; kill hardcoded `"CONTRACT"` in `DocumentUploadDropzone.tsx:81`; align `uploadDocument` union with generated `DocumentType` (remove `BOM`, add `budget`); fix `budget→bom` display mapping. Unblocks the triplet — the product wedge. `[x] Implemented (Typed Staged Upload + Generated DocumentType)` | `Fable5 L1 Prompt — PATCH 1` |
+| [ ]    | P0       | `TASK-FRT-176` | None       | Fix Rules-of-Hooks crash in project Overview (`useMemo` after early returns → crash on loading→data); remove hardcoded `Status: Active` and fabricated `Budget Used = 100−subscore` (honest `Budget coherence` value or `—`); same fix on Analysis page. | `Fable5 L1 Prompt — PATCH 2` |
+| [ ]    | P0       | `TASK-FRT-177` | None       | Coherence page SSR with real credentials: thread Clerk server token into `fetchApiJson({server:true})` (today it sends no Authorization/tenant headers → core tab 401s). | `Fable5 L1 Prompt — PATCH 3` |
+| [ ]    | P0       | `TASK-FRT-178` | None       | Purge fabricated UI data: fake assignees + synthesized `clause-${id}` (project alerts), fabricated severity distribution / `alertCount=0` / empty trend (CoherenceClient), fake notifications + dead menu items (AppHeader), internal "v1 active" banner. Real data or honest placeholder. | `Fable5 L1 Prompt — PATCH 4` |
+| [ ]    | P0       | `TASK-FRT-179` | None       | Real reviewer identity: HITL approve/reject and evidence resolve send Clerk user email/id instead of literals `"current-user"` / `"web-evidence-viewer"`; buttons disabled until identity loaded. Audit-trail integrity. | `Fable5 L1 Prompt — PATCH 5` |
+| [ ]    | P0       | `TASK-FRT-180` | `TASK-FRT-175` | Visible analysis progress: simplify orphaned `AnalysisProgressTracker` to 4 user-facing stages, mount on Analysis + Documents; convert `useProjectDocuments` to react-query with polling while docs in-flight; delete the raw-SSE `<Link>` dead end. | `Fable5 L1 Prompt — PATCH 6` |
+| [ ]    | P0       | `TASK-FRT-181` | None       | Fix "Retry processing": raw `fetch` sends no Authorization (guaranteed 401, silent failure) → use `apiClient.post` + visible error toast. | `Fable5 L1 Prompt — PATCH 7` |
+| [ ]    | P0       | `TASK-FRT-182` | None       | Landing honesty pass: remove fabricated metrics (94%/6x/$2.4M/<30s) and visible deploy marker; fix `Get Started → /signup` (dead) to `/sign-up`; remove dead Pricing anchor; retitle tab (`C2Pro — Contract Coherence Audit`); triplet-focused hero subhead. | `Fable5 L1 Prompt — PATCH 8` |
+| [ ]    | P0       | `TASK-FRT-183` | None       | Dashboard inside the app shell: drop the `/dashboard→/` permanent redirect, authed `/` redirects to `/dashboard` (renders with sidebar/header); delete ghost `/admin/*` role redirects (404 today); guided zero-projects empty state with Create CTA. | `Fable5 L1 Prompt — PATCH 9` |
+| [ ]    | P1       | `TASK-FRT-184` | `TASK-FRT-175`, `TASK-FRT-180` | Triplet checklist (contract/budget/schedule slots: missing/processing/ready) on Documents + compact variant on Overview; per-slot CTA opens upload dialog with type preselected; success row when complete. | `Fable5 L1 Prompt — PATCH 10` |
+| [ ]    | P1       | `TASK-FRT-185` | `TASK-FRT-180`, `TASK-FRT-184` | "Evaluate coherence" + "Re-run analysis" actions wired to the never-used generated mutations (`useEvaluateProjectCoherence…`, analyze/reprocess); verify request contract first; invalidate dashboard/alerts queries on success; disabled until triplet complete. | `Fable5 L1 Prompt — PATCH 11` |
+| [ ]    | P1       | `TASK-FRT-186` | `TASK-FRT-177` | Render `categories_v2` (typed in `contracts.ts:50-75`, never displayed): per-category status, evidence coverage, missing evidence, conflicts, recommendation; map through `getDashboardSummary`; humanize `AUDIT_INCOMPLETE` copy. | `Fable5 L1 Prompt — PATCH 12` |
+| [ ]    | P1       | `TASK-FRT-187` | `TASK-FRT-179` | HITL queue project scoping (pass project param or honest retitle; register backend task if filter missing), human-readable `ReviewItemCard` with evidence link (raw JSON behind disclosure), visible mutation errors, pagination. | `Fable5 L1 Prompt — PATCH 13` |
+| [ ]    | P1       | `TASK-FRT-188` | `TASK-FRT-178`, `TASK-FRT-179`, `TASK-FRT-186` | Audit Report export v1: new `/projects/[id]/report` tab composing score + categories + findings by status + evidence refs + HITL decisions with reviewers; print-optimized A4 route + JSON download; remove `alert()` PDF placeholder in Budget. The product's value output. | `Fable5 L1 Prompt — PATCH 14` |
+| [ ]    | P1       | `TASK-FRT-189` | None       | Global mutation error surface: `MutationCache.onError` → toast in `createQueryClient`; remove swallow patterns (`catch {}`, `console.error`-only in useBudget etc.). No silent write failures anywhere. | `Fable5 L1 Prompt — PATCH 15` |
+| [ ]    | P1       | `TASK-FRT-190` | None       | Navigation focus: flags `NEXT_PUBLIC_FEATURE_INTERNAL_DASHBOARDS` (AI Analytics/Observability) + `NEXT_PUBLIC_FEATURE_PHASE2_MODULES` (Stakeholders/WBS), default off; prune sidebar/project tabs to Level-1 surface; remove decorative header search input. | `Fable5 L1 Prompt — PATCH 16` |
+| [ ]    | P1       | `TASK-FRT-191` | None       | Single project-creation flow: `/projects/new` → `redirect('/projects?create=1')` opening the wizard; delete decorative Templates + Batch Import dialogs; extract `CreateProjectWizard` component (starts god-file split). | `Fable5 L1 Prompt — PATCH 17` |
+| [ ]    | P1       | `TASK-FRT-192` | `TASK-FRT-175`…`TASK-FRT-188` | CI wedge gates: `pnpm test:all` in frontend-ci (today only 50/249 test files gate); new `journey-3-wedge.spec.ts` (E2E-W1..W5: typed triplet → progress → evaluate → evidence → identity-approve → export) MSW-deterministic + `@real-backend` variant. | `Fable5 L1 Prompt — PATCH 18` |
+| [ ]    | P2       | `TASK-FRT-193` | `TASK-FRT-186` | Budget reconciliation block: Stated vs Computed vs Contract totals with delta % (pilot: 636M vs 654M = 2.8%) sourced from DET-BUD findings / `categories_v2.BUDGET`; replace duck-typed budget response with real types. | `Fable5 L1 Prompt — PATCH 19` |
+| [ ]    | P2       | `TASK-FRT-194` | None       | Design-system consolidation: single `severityToToken`/`statusToToken` source (kill ≥4 divergent raw-Tailwind maps), shared `EmptyState` component, ProjectTabs active state + `aria-current`. | `Fable5 L1 Prompt — PATCH 20` |
+| [ ]    | P2       | `TASK-FRT-195` | `TASK-FRT-183` | Mount orphaned onboarding: `OnboardingEntry` + sample-project bootstrap on first login (zero projects, not dismissed); persist dismissal. | `Fable5 L1 Prompt — PATCH 21` |
+| [ ]    | P2       | `TASK-FRT-196` | None       | Language unification (EN): translate `"Sesión expirada o inválida"` / `"Sin permisos"` toasts and Spanish form placeholders; grep-clean. Full i18n out of scope. | `Fable5 L1 Prompt — PATCH 22` |
+| [ ]    | P2       | `TASK-FRT-197` | `TASK-FRT-186`, `TASK-FRT-188`, `TASK-FRT-191` | Component-root consolidation (merge `src/components` + `features/coherence` duplicates into one canonical root), split 1,636-line evidence page, delete `GlobalSearch`/`CrossModuleNavigator` RED-phase placeholders + 3D view/no-op templates; enforce <800 lines/file. | `Fable5 L1 Prompt — PATCH 23` |
 | [ ]    | P3       | `TASK-FRT-041` | None       | Production email templates and sender verified in Clerk `[-] Blocked: Requires operator Clerk dashboard access. Verification checklist in docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md (TASK-1177). Steps: (1) Verify sender email is noreply@c2pro.app with verified domain, (2) Customize sign-in/sign-up/reset templates with C2Pro branding, (3) Test email delivery from production instance.` | `docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md`        |
 | [x]    | P1       | `TASK-FRT-172` | None       | Add an explicit return path from the dashboard portfolio overview to the Projects list so users are not stranded after entering Dashboard. `[x] Implemented (Dashboard Navigation Recovery)` | `User report 2026-05-16` |
 | [x]    | P1       | `TASK-FRT-173` | `TASK-BCK-053` | Replace raw document-upload failure copy with a plain-language state that tells the user the file was not queued and what to do next. `[x] Implemented (Upload Failure Clarity)` | `User report 2026-05-16` |
@@ -37,14 +61,22 @@
 
 **Statistics**:
 
-- Total: 174 tasks
-- Active: 1 (0.6%)
-- Completed: 173 (99.4%)
-- Blocked: 1 (0.6%)
+- Total: 197 tasks
+- Active: 23 (11.7%)
+- Completed: 174 (88.3%)
+- Blocked: 1 (0.5%)
 
 ---
 
 ## 2. Specifications
+
+### EPIC-FRT-L1-WEDGE — Frontend Level-1 Wedge Closure (2026-07-04)
+
+- **Goal**: make the Level-1 journey (create project → upload contract+budget+schedule triplet → visible analysis → coherence findings with real evidence → HITL with real identity → exportable audit report) completable end-to-end from the UI. Today it breaks at upload (type hardcoded to `contract`), has no visible progress, fabricates display data, records HITL decisions as `"current-user"`, and has no report export.
+- **Sources**: analysis `docs/audits/C2Pro — Frontend, Product, Marketing & End-User Analysis_Fable5.md` (evidence, §12 backlog) · executable patch-by-patch spec `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md` (authoritative per-task steps, tests, acceptance criteria, verify commands).
+- **Task ↔ patch map**: `TASK-FRT-175`=PATCH 1 (typed upload) · 176=P2 (Overview hooks crash + honest metrics) · 177=P3 (coherence SSR auth) · 178=P4 (purge fabricated data) · 179=P5 (real HITL identity) · 180=P6 (analysis progress + polling) · 181=P7 (retry auth) · 182=P8 (landing honesty) · 183=P9 (dashboard shell + admin redirects) · 184=P10 (triplet checklist) · 185=P11 (run/evaluate actions) · 186=P12 (categories_v2 render) · 187=P13 (HITL scoping/cards) · 188=P14 (audit report export) · 189=P15 (global mutation errors) · 190=P16 (nav flags) · 191=P17 (single creation flow) · 192=P18 (CI wedge gates) · 193=P19 (budget reconciliation) · 194=P20 (severity tokens/EmptyState/tabs) · 195=P21 (onboarding mount) · 196=P22 (EN language) · 197=P23 (component consolidation + god-file split).
+- **Definition of Done**: all 23 tasks `[x]` with evidence; `pnpm typecheck && pnpm lint && pnpm test:all && pnpm generate:api:check` green; `journey-3-wedge.spec.ts` (E2E-W1..W5) green in CI; manual demo script passes; zero fabricated data / dead controls / placeholder exports.
+- **External deps (backend, already tracked)**: `TASK-DOC-REUPLOAD-005` (re-upload PATCH 500), `TASK-COH-BUD-RECON-006` (EN/INR totals). Frontend degrades honestly where these bite.
 
 ### TASK-FRT-171 - Production partial failure resilience
 

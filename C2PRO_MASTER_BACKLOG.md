@@ -1,7 +1,7 @@
 # C2PRO Master Backlog - Index & Overview
 
 **Purpose**: High-level project index. Only **pending** work is tracked here.
-**Last Updated**: 2026-06-30 (pending-only PM view)
+**Last Updated**: 2026-07-04 (pending-only PM view)
 **Archive**: [`backlogs/COMPLETED.md`](backlogs/COMPLETED.md)
 
 > **Navigation**: Quick Navigation → Pending Manifest → Pending by Category.
@@ -16,7 +16,7 @@
 | Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 53 | 6 | 47 |
 | DevOps | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md) | devops | 2 | 0 | 2 |
 | Documentation | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md) | shared | 0 | 0 | 0 |
-| Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 170 | 16 | 154 |
+| Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 197 | 23 | 174 |
 | Infrastructure | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md) | infra | 59 | 17 | 42 |
 | Planning | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md) | planner | 0 | 0 | 0 |
 | Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 120 | 108 | 12 |
@@ -31,6 +31,7 @@
 
 | Status | Priority | ID | Dependency | Task | Source |
 | ------ | -------- | -- | ---------- | ---- | ------ |
+| [ ] | P0 | `EPIC-FRT-L1-WEDGE` | overlaps EPIC-OPS-DOCFLOW (UI leg) | Frontend Level-1 wedge closure: typed triplet upload (kills hardcoded `contract`), Overview hooks-crash fix, coherence SSR auth, purge of fabricated UI data, real HITL identity, visible analysis progress, `categories_v2` rendering, audit-report export, CI wedge gates. 23 tasks `TASK-FRT-175..197` (Wave 0 P0: 175-183 · Wave 1 P1: 184-192 · Wave 2 P2: 193-197). | `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md` (patch-by-patch) + `docs/audits/C2Pro — Frontend, Product, Marketing & End-User Analysis_Fable5.md` (evidence) |
 | [ ] | P2 | `EPIC-LC-WORKFLOWS` | DDD-MIGRATION + PHASE-2 | Procurement + RACI + Stakeholder + intelligent WBS flows with EN/ES prompts. Deferred to Phase 2; not on current critical path. | Manifest v3 |
 | [ ] | P0 | `EPIC-OPS-DOCFLOW` | EPIC-COVERAGE-GATES | Real document operability gate: upload, parse, anonymize, extract, score, alert, and render through tenant-safe API/UI. | `blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md` |
 | [ ] | P3 | `EPIC-SENTRY-PERF` | TENANT-RLS-HARDENING | Sentry auth alerts remain blocked on operator prerequisites. | Manifest v3 |
@@ -56,6 +57,36 @@
 | `EPIC-V3-018` | ADR-018 Health Engine v0 | Feature | P1 | EPIC-V3-014, EPIC-V3-015 | 4 v0 dimensions (Risk/Contract/Docs/Governance), honest nulls, coherence demoted to subscore. v1 dims gated. |
 | `EPIC-V3-019-020` | ADR-019/020 Action & Review Loop [GATED] | Feature | P2 | EPIC-V3-016, EPIC-V3-017, EPIC-V3-018 | `ActionItem` correlation + Contract-Manager HITL queue + active-learning loop. Single persona/queue at launch. |
 | `EPIC-V3-021` | ADR-021 Read-Model & Briefing [DEFERRED] | Feature | P3 | EPIC-V3-015, EPIC-V3-018, EPIC-V3-019-020 | Snapshot projection + Morning Briefing + portfolio rollup. Read-only; UI is a separate PRD epic. |
+
+### Frontend Level-1 Wedge (EPIC-FRT-L1-WEDGE, 2026-07-04)
+
+> Source of truth for per-task steps/tests/acceptance criteria: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md` (patch-by-patch executable prompt). Evidence base: `docs/audits/C2Pro — Frontend, Product, Marketing & End-User Analysis_Fable5.md` (frontend workflow maturity 2/5 — the Level-1 journey breaks at upload, shows fabricated data, and has no report export). Task rows + epic spec: `backlogs/FRT_FRONTEND.md` §1-§2. External backend deps (already tracked): `TASK-DOC-REUPLOAD-005`, `TASK-COH-BUD-RECON-006`.
+
+| Task ID | Patch | Priority | Blocking Deps | Title |
+| ------- | ----- | -------- | ------------- | ----- |
+| `TASK-FRT-175` | 1 | P0 | — | Typed document upload (per-file type selector; kill hardcoded `"CONTRACT"`; align with generated `DocumentType`) — triplet unblocker. ✅ Completed 2026-07-03: staged per-file upload, generated lowercase `DocumentType`, budget/other register mapping, and upload-path literal scan clean. |
+| `TASK-FRT-176` | 2 | P0 | — | Fix Overview Rules-of-Hooks crash + honest metrics (no `Active` literal, no `100−subscore`) |
+| `TASK-FRT-177` | 3 | P0 | — | Coherence SSR with real Clerk credentials (server fetch currently unauthenticated) |
+| `TASK-FRT-178` | 4 | P0 | — | Purge fabricated UI data (fake assignees, `clause-${id}`, fake severity distribution, fake notifications) |
+| `TASK-FRT-179` | 5 | P0 | — | Real reviewer identity in HITL/evidence (replace `"current-user"`, `"web-evidence-viewer"`) |
+| `TASK-FRT-180` | 6 | P0 | 175 | Visible analysis progress (4-stage tracker) + document status polling; remove raw-SSE link |
+| `TASK-FRT-181` | 7 | P0 | — | Fix "Retry processing" (missing auth header, silent failure) |
+| `TASK-FRT-182` | 8 | P0 | — | Landing honesty pass (fabricated stats, deploy marker, dead `/signup` CTA, tab title) |
+| `TASK-FRT-183` | 9 | P0 | — | Dashboard inside app shell; delete ghost `/admin/*` redirects; guided empty state |
+| `TASK-FRT-184` | 10 | P1 | 175, 180 | Triplet checklist (contract/budget/schedule slots + contextual CTA) |
+| `TASK-FRT-185` | 11 | P1 | 180, 184 | "Evaluate coherence" / "Re-run analysis" actions (wire never-used generated mutations) |
+| `TASK-FRT-186` | 12 | P1 | 177 | Render `categories_v2` (status, missing evidence, conflicts, recommendation) + humanized copy |
+| `TASK-FRT-187` | 13 | P1 | 179 | HITL project scoping + readable review cards + visible errors + pagination |
+| `TASK-FRT-188` | 14 | P1 | 178, 179, 186 | Audit Report export v1 (`/projects/[id]/report`: score + findings + evidence + reviewers; print-A4 + JSON) |
+| `TASK-FRT-189` | 15 | P1 | — | Global mutation error surface (MutationCache onError → toast; kill swallow patterns) |
+| `TASK-FRT-190` | 16 | P1 | — | Nav focus: flags for internal dashboards + Phase-2 modules; prune sidebar/tabs; remove decorative search |
+| `TASK-FRT-191` | 17 | P1 | — | Single project-creation flow; delete decorative Templates/Batch-Import dialogs |
+| `TASK-FRT-192` | 18 | P1 | 175-188 | CI wedge gates: `test:all` + `journey-3-wedge.spec.ts` (E2E-W1..W5) |
+| `TASK-FRT-193` | 19 | P2 | 186 | Budget reconciliation block (Stated vs Computed vs Contract, delta %; pilot 2.8%) |
+| `TASK-FRT-194` | 20 | P2 | — | Severity/status tokens single-source + shared EmptyState + active project tabs |
+| `TASK-FRT-195` | 21 | P2 | 183 | Mount orphaned onboarding (sample-project bootstrap on first login) |
+| `TASK-FRT-196` | 22 | P2 | — | Language unification (EN) — remove ES toast/placeholders |
+| `TASK-FRT-197` | 23 | P2 | 186, 188, 191 | Component-root consolidation + god-file split + delete RED-phase placeholders |
 
 ### Pruned — `[STATUS: WONT DO]`
 
@@ -409,6 +440,8 @@ FOLLOW-UPS (open):
 
 ## Change Log
 
+**2026-07-03**: Completed `TASK-FRT-175` (PATCH 1 typed document upload) on branch `fix/frt-l1-wave0`. Implemented staged upload rows with per-file document type selector, extension defaults (`.pdf→contract`, `.xlsx/.bc3→budget`) and schedule override; `uploadDocument` now accepts generated lowercase `DocumentType`; document register maps `budget→budget` and `other→other`; upload dialog copy names contract/budget/schedule roles. Verification: focused upload/documents slice `pnpm test:nowarn run "app/(app)/projects/[id]/documents/page.test.tsx" components/features/documents/DocumentUploadDropzone.test.tsx lib/api/uploadDocument.test.ts hooks/useProjectDocuments.test.ts src/tests/integration/uploads/TASK-FRT-175-staged-upload.integration.test.tsx` → 5 files / 37 tests passed; `pnpm typecheck` → passed; `pnpm lint` → passed; `pnpm generate:api:check` → passed; `rg '"BOM"|"CONTRACT"' apps/web/lib apps/web/components` → 0 hits. `pnpm test:all` now starts after repairing its config path but remains red on pre-existing unrelated suites (RACI/sidebar/WBS/settings/wireframes/etc.; 15 files failed / 34 tests failed after touched document-page tests were fixed and focused-green).
+
 **2026-06-22**: Hotfix alerts/analysis honesty (PR #162, branch hotfix/alerts-analysis-honesty) — Opus-gate APPROVED, awaiting merge to main. Fixed a 7-layer pre-existing failure chain so a real contract produces grounded output end-to-end: alerts.message migration drift (TASK-HOTFIX-001), risk-extractor honest-fail (002), no-text honesty (003), /analyze preview clarity (004), async analysis trigger (005), Celery worker tool registration — the empty-registry root cause of fabricated risks (006), start.sh CRLF API-startup (007), LangGraph checkpoint isolation (008), risk-parser fenced-JSON shape handling (009 → 14 grounded risks), and restoration of the REAL coherence category-routing modules main was missing (010, + openapi regen). Live: real ADIF-AV contract → 14 grounded risks → alerts; coherence engine now loads on main. Gate independently re-verified the migration up/down on a fresh DB and the coherence-module faithfulness. Filed follow-ups TASK-HOTFIX-F1..F4. NOTE: coherence score still requires the contract+schedule+budget triplet (contract-only honest-null by design). These are existing-app fixes, independent of v3 PR #158 (still pending). No push to main (PR awaiting review).
 
 **2026-06-25**: Deployed the integrated stack to `main` and recovered `c2pro-api`. #158/#162/#163/#164 all merged to main. main had two Alembic heads (v3 spine `20260614_0004` + alerts hotfix `20260620_0001`) → `start.sh` `alembic upgrade head` (singular) crash-looped the API; fixed with no-op merge migration `20260624_0001` (TASK-HOTFIX-F5, PR #164). category_registry Docker-safe path fix (#163) confirmed live on main (TASK-HOTFIX-F1 done). Reset the half-migrated `c2pro` dev DB (drop+recreate) → clean migrate from base to `20260624_0001` (56 tables). Backend healthy: `c2pro-api` Up (GET /health 200 on :8000), `c2pro-celery-worker` Up. Pending: re-run the pilot with the contract+schedule+budget triplet to verify grounded risks→alerts + Coherence Score end-to-end.
@@ -434,3 +467,5 @@ FOLLOW-UPS (open):
 **2026-06-30**: PR #177 (coherence LLM gate: async execution, observability, R-RESPONSIBILITY-01 calibration) and PR #179 (ADR-013 Phase 1 conformance: honest-null fix in coherence category_aggregator — no more fabricated 100.0 on missing evidence; N7/N15 NodeResult; documentation-health Tier-1→Tier-2 wiring) MERGED to main. ADR-013 Phase 1 (013-01..08) now COMPLETE. PR #180 (017-06 critique-router: decouple automated retries from skip_hitl) green and merging. Work orchestrated across Codex/Gemini/DeepSeek with Opus as lead.
 
 **2026-07-02**: PR #182 MERGED — API test-debt CI-signal cleanup (langsmith isolator, WBS schemathesis source-backed 404s, pnpm action SHA-pin). V3-P1-TEST-12 marked [x] DONE with evidence of fixed LangSmith SDK isolator context shape, confirmed alert_generator exports, WBS 404 response handling + OpenAPI regen, and CI supply-chain hardening. V3-P1-CHIMP-14 and V3-P1-CHIMP-15 marked ⏸️ DEFERRED by unanimous team verdict (DeepSeek + Codex + Opus lead, 2026-07-01) — no operational consumer for the needs_review precision gain (HITL queue gated/missing); the current fuzzy anchoring + needs_review path is honest and sufficient; when revisited post-HITL-queue, scope = deterministic content-hash IDs at artifact-build time (~30-line core), NOT the LLM-extraction-layer variant. All merged paths honest; all deferred paths documented with rationale.
+
+**2026-07-04**: Registered **EPIC-FRT-L1-WEDGE** — 23 new frontend tasks `TASK-FRT-175..197` derived from the Fable5 frontend/product/marketing/end-user audit (`docs/audits/C2Pro — Frontend, Product, Marketing & End-User Analysis_Fable5.md`, 2026-07-03; frontend workflow maturity 2/5). Key audit findings driving the epic: upload hardcodes `document_type="contract"` making the contract+budget+schedule triplet unbuildable from the UI (`DocumentUploadDropzone.tsx:81` vs backend `router.py:376`); Rules-of-Hooks crash in project Overview; coherence SSR fetch sends no auth headers; HITL records `reviewer_name:"current-user"`; fabricated UI data (fake assignees, synthesized `clause-${id}`, fake severity distribution); orphaned progress/analysis components and never-called generated mutations (analyze, evaluate); no audit-report export (budget PDF = `alert()` placeholder); CI gates only 50/249 web test files. Executable patch-by-patch spec with per-task steps/tests/acceptance criteria: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md`. Waves: P0 demo blockers 175-183, P1 MVP 184-192 (closes the Level-1 loop incl. report export + CI wedge journey E2E-W1..W5), P2 beta 193-197. Task rows + epic spec added to `backlogs/FRT_FRONTEND.md` (§0/§1/§2, totals 174→197); Quick Navigation counts aligned to FRT reality (197 total / 24 active / 173 completed). External backend deps referenced, not duplicated: `TASK-DOC-REUPLOAD-005`, `TASK-COH-BUD-RECON-006`.
