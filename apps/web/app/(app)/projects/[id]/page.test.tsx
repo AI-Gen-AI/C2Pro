@@ -7,6 +7,7 @@ import { renderWithProviders, screen } from "@/src/tests/test-utils";
 
 const getDashboardMock = vi.fn();
 const listProjectAlertsMock = vi.fn();
+const useProjectMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "proj_real_001" }),
@@ -22,12 +23,22 @@ vi.mock("@/lib/api/generated/alerts/alerts", () => ({
     listProjectAlertsMock(...args),
 }));
 
+vi.mock("@/hooks/useProject", () => ({
+  useProject: (...args: unknown[]) => useProjectMock(...args),
+}));
+
 import ProjectOverviewPage from "./page";
 
 describe("ProjectOverviewPage", () => {
   beforeEach(() => {
     getDashboardMock.mockReset();
     listProjectAlertsMock.mockReset();
+    useProjectMock.mockReset();
+    useProjectMock.mockReturnValue({
+      data: { status: "active" },
+      isLoading: false,
+      error: null,
+    });
   });
 
   it("shows a loading state while project summary is being fetched", () => {
@@ -121,8 +132,74 @@ describe("ProjectOverviewPage", () => {
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.getByText("Documents")).toBeInTheDocument();
     expect(screen.getByText("12")).toBeInTheDocument();
-    expect(screen.getByText("Budget Used")).toBeInTheDocument();
-    expect(screen.getAllByText("63%")).toHaveLength(2);
+    expect(screen.getAllByText("Budget coherence")).toHaveLength(2);
+    expect(screen.getAllByText("37")).toHaveLength(2);
+  });
+
+  it("does not crash when the overview transitions from loading to backend data", () => {
+    getDashboardMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    });
+    listProjectAlertsMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    });
+
+    const { rerender } = renderWithProviders(<ProjectOverviewPage />);
+
+    getDashboardMock.mockReturnValue({
+      data: {
+        coherence_score: 88,
+        sub_scores: { BUDGET: 72 },
+        alert_count: 0,
+        document_count: 3,
+      },
+      isLoading: false,
+      error: null,
+    });
+    listProjectAlertsMock.mockReturnValue({
+      data: { items: [] },
+      isLoading: false,
+      error: null,
+    });
+
+    expect(() => rerender(<ProjectOverviewPage />)).not.toThrow();
+    expect(screen.getAllByText("Budget coherence")).toHaveLength(2);
+  });
+
+  it("renders real project status and an honest placeholder when budget coherence is missing", () => {
+    useProjectMock.mockReturnValue({
+      data: { status: "draft" },
+      isLoading: false,
+      error: null,
+    });
+    getDashboardMock.mockReturnValue({
+      data: {
+        coherence_score: 87,
+        sub_scores: { SCOPE: 90 },
+        alert_count: 0,
+        document_count: 2,
+      },
+      isLoading: false,
+      error: null,
+    });
+    listProjectAlertsMock.mockReturnValue({
+      data: { items: [] },
+      isLoading: false,
+      error: null,
+    });
+
+    renderWithProviders(<ProjectOverviewPage />);
+
+    expect(useProjectMock).toHaveBeenCalledWith("proj_real_001");
+    expect(screen.getByText("draft")).toBeInTheDocument();
+    expect(screen.queryByText("Active")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Budget coherence")).toHaveLength(2);
+    expect(screen.getAllByText("—")).toHaveLength(2);
+    expect(screen.getAllByTitle("Requires budget document")).toHaveLength(2);
   });
 
   it("links to the alerts route from the recent alerts panel", () => {

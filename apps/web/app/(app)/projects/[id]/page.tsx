@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -15,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet } from '@/lib/api/generated/coherence-dashboard/coherence-dashboard';
 import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from '@/lib/api/generated/alerts/alerts';
+import { useProject } from '@/hooks/useProject';
 
 /**
  * Test Suite ID: TASK-1347
@@ -34,6 +34,7 @@ export default function ProjectOverviewPage() {
     isLoading: alertsLoading,
     error: alertsError,
   } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id, undefined);
+  const { data: project } = useProject(id);
 
   const isLoading = dashboardLoading || alertsLoading;
   const hasError = dashboardError || !dashboard;
@@ -60,46 +61,41 @@ export default function ProjectOverviewPage() {
   const openAlerts = alerts.filter((alert) => alert.status === 'open');
   const alertsUnavailable = Boolean(alertsError);
   
-  const coherenceScore = useMemo(() => 
+  const coherenceScore =
     typeof dashboard.coherence_score === 'number'
       ? dashboard.coherence_score
-      : Number(dashboard.coherence_score ?? 0),
-    [dashboard.coherence_score]
-  );
+      : Number(dashboard.coherence_score ?? 0);
 
-  const documentCount = useMemo(() => 
+  const documentCount =
     typeof dashboard.document_count === 'number'
       ? dashboard.document_count
-      : Number(dashboard.document_count ?? 0),
-    [dashboard.document_count]
-  );
+      : Number(dashboard.document_count ?? 0);
 
-  const budgetScore = useMemo(() => {
-    const subScores =
-      dashboard.sub_scores && typeof dashboard.sub_scores === 'object'
-        ? (dashboard.sub_scores as Record<string, number>)
-        : {};
-    return subScores['BUDGET'] ?? 0;
-  }, [dashboard.sub_scores]);
+  const subScores =
+    dashboard.sub_scores && typeof dashboard.sub_scores === 'object'
+      ? (dashboard.sub_scores as Record<string, number | null | undefined>)
+      : {};
+  const budgetScore =
+    typeof subScores['BUDGET'] === 'number' ? subScores['BUDGET'] : null;
+  const budgetValue = budgetScore === null ? '—' : String(budgetScore);
+  const budgetTitle =
+    budgetScore === null ? 'Requires budget document' : undefined;
 
   const openAlertCount = alertsUnavailable
     ? Number(dashboard.alert_count ?? 0)
     : openAlerts.length;
 
-  const recentAlerts = useMemo(() => 
-    openAlerts.slice(0, 3).map((alert) => ({
-      severity: alert.severity,
-      title: alert.message.split(' — ')[0],
-    })),
-    [openAlerts]
-  );
+  const recentAlerts = openAlerts.slice(0, 3).map((alert) => ({
+    severity: alert.severity,
+    title: alert.message.split(' — ')[0],
+  }));
 
-  const statCards = useMemo(() => [
+  const statCards = [
     { label: 'Coherence Score', value: String(coherenceScore), icon: Gauge, color: 'text-primary' },
     { label: 'Open Alerts', value: String(openAlertCount), icon: AlertTriangle, color: 'text-warning' },
     { label: 'Documents', value: String(documentCount), icon: FileText, color: 'text-chart-quality' },
-    { label: 'Budget Used', value: `${100 - budgetScore}%`, icon: DollarSign, color: 'text-chart-budget' },
-  ], [coherenceScore, openAlertCount, documentCount, budgetScore]);
+    { label: 'Budget coherence', value: budgetValue, title: budgetTitle, icon: DollarSign, color: 'text-chart-budget' },
+  ];
 
   return (
     <div className="space-y-5">
@@ -114,7 +110,9 @@ export default function ProjectOverviewPage() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
-                  <p className="font-mono text-2xl font-bold">{stat.value}</p>
+                  <p className="font-mono text-2xl font-bold" title={stat.title}>
+                    {stat.value}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -128,15 +126,24 @@ export default function ProjectOverviewPage() {
             <CardTitle className="text-sm font-semibold">Project Summary</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
+            {project?.status ? (
+              <div className="flex justify-between">
+                <span>Status</span>
+                <Badge variant="default">{project.status}</Badge>
+              </div>
+            ) : null}
             <div className="flex justify-between">
-              <span>Status</span>
-              <Badge variant="default">Active</Badge>
+              <span>Budget coherence</span>
+              <span
+                className="font-mono font-medium text-foreground"
+                title={budgetTitle}
+              >
+                {budgetValue}
+              </span>
             </div>
-            <div className="flex justify-between">
-              <span>Budget Utilization</span>
-              <span className="font-mono font-medium text-foreground">{100 - budgetScore}%</span>
-            </div>
-            <Progress value={100 - budgetScore} className="h-1.5" />
+            {budgetScore === null ? null : (
+              <Progress value={budgetScore} className="h-1.5" />
+            )}
             <div className="flex justify-between">
               <span>Coherence Score</span>
               <span className="font-mono font-medium text-foreground">{coherenceScore}</span>

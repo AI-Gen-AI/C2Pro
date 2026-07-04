@@ -59,7 +59,7 @@ export default function AnalysisPage() {
       : Number(dashboard.document_count ?? 0);
   const subScores =
     dashboard.sub_scores && typeof dashboard.sub_scores === "object"
-      ? (dashboard.sub_scores as Record<string, number>)
+      ? (dashboard.sub_scores as Record<string, number | null | undefined>)
       : {};
   const scoreVersion =
     typeof (dashboard as { score_version?: unknown }).score_version === "string"
@@ -74,7 +74,11 @@ export default function AnalysisPage() {
           (dimension): dimension is string => typeof dimension === "string",
         )
     : [];
-  const budgetUsed = 100 - (subScores["BUDGET"] ?? 0);
+  const budgetScore =
+    typeof subScores["BUDGET"] === "number" ? subScores["BUDGET"] : null;
+  const budgetValue = budgetScore === null ? "—" : String(budgetScore);
+  const budgetTitle =
+    budgetScore === null ? "Requires budget document" : undefined;
   const recentAlerts = openAlerts.slice(0, 3).map((alert) => ({
     severity: alert.severity,
     title: alert.message.split(" — ")[0],
@@ -101,8 +105,9 @@ export default function AnalysisPage() {
       tone: "text-chart-quality",
     },
     {
-      label: "Budget Pressure",
-      value: `${budgetUsed}%`,
+      label: "Budget coherence",
+      value: budgetValue,
+      title: budgetTitle,
       icon: Wallet,
       tone: "text-chart-budget",
     },
@@ -142,7 +147,7 @@ export default function AnalysisPage() {
                     {stat.label}
                   </div>
                   <div className="font-mono text-2xl font-bold">
-                    {stat.value}
+                    <span title={stat.title}>{stat.value}</span>
                   </div>
                 </div>
               </CardContent>
