@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-03T23:28:26Z",
+  "updated_at": "2026-07-04T07:15:39Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -57,6 +57,43 @@
           "pnpm generate:api:check -> passed",
           "rg '\"BOM\"|\"CONTRACT\"' apps/web/lib apps/web/components -> 0 hits",
           "pnpm test:all -> runner config repaired, then known unrelated suite failures remain: 15 files / 34 tests failed outside the TASK-FRT-175 touched surface."
+        ]
+      }
+    },
+    {
+      "tarea_id": "T122",
+      "backlog_id": "TASK-FRT-176",
+      "tipo": "frontend",
+      "descripcion": "Fix project overview hook-order crash and replace fabricated budget/status metrics with honest backend-backed values.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "Project overview can transition from loading to backend data without a Rules-of-Hooks crash; Overview and Analysis render Budget coherence from sub_scores.BUDGET or an honest placeholder; the overview status badge reflects the project status from useProject(id).",
+      "archivos_modificados": [
+        "apps/web/app/(app)/projects/[id]/page.tsx",
+        "apps/web/app/(app)/projects/[id]/page.test.tsx",
+        "apps/web/app/(app)/projects/[id]/analysis/page.tsx",
+        "apps/web/app/(app)/projects/[id]/analysis/page.test.tsx",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-04T07:05:00Z",
+        "completado": "2026-07-04T07:15:39Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-176 completed locally on fix/frt-l1-wave0: overview hook-order hazard removed and budget/status metrics now degrade honestly.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: focused tests failed on old Budget Used/Budget Pressure labels and missing honest placeholders.",
+          "GREEN: pnpm vitest run \"app/(app)/projects/[id]/page.test.tsx\" \"app/(app)/projects/[id]/analysis\" -> 2 files / 10 tests passed.",
+          "pnpm typecheck -> passed",
+          "pnpm lint -> passed",
+          "rg \"Budget Used|Budget Pressure|100 -|Active\" touched overview/analysis routes -> 0 hits",
+          "rg \"useMemo\" overview route -> 0 hits",
+          "pnpm test:all -> known unrelated suite failures remain: 15 files / 34 tests failed, already cataloged under TASK-FRT-192."
         ]
       }
     },

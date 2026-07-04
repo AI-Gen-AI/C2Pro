@@ -13,14 +13,14 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 23
+**Pending Tasks**: 22
 
 - IDs: `TASK-FRT-041` (blocked — requires Clerk dashboard operator access)
-- IDs: `TASK-FRT-176`-`TASK-FRT-197` — **EPIC-FRT-L1-WEDGE** (Level-1 wedge closure, 2026-07-04). Wave 0/P0: 176-183 · Wave 1/P1: 184-192 · Wave 2/P2: 193-197. Patch-by-patch executable spec: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md`
+- IDs: `TASK-FRT-177`-`TASK-FRT-197` — **EPIC-FRT-L1-WEDGE** (Level-1 wedge closure, 2026-07-04). Wave 0/P0: 177-183 · Wave 1/P1: 184-192 · Wave 2/P2: 193-197. Patch-by-patch executable spec: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md`
 
-**Completed Tasks**: 174
+**Completed Tasks**: 175
 
-- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-175`
+- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-176`
 
 **Usage Note**:
 
@@ -32,7 +32,7 @@
 | Status | Priority | Task ID        | Depends On | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Source                                              |
 | ------ | -------- | -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | [x]    | P0       | `TASK-FRT-175` | None       | Typed document upload: per-file type selector (contract/budget/schedule/…) defaulted by extension; kill hardcoded `"CONTRACT"` in `DocumentUploadDropzone.tsx:81`; align `uploadDocument` union with generated `DocumentType` (remove `BOM`, add `budget`); fix `budget→bom` display mapping. Unblocks the triplet — the product wedge. `[x] Implemented (Typed Staged Upload + Generated DocumentType)` | `Fable5 L1 Prompt — PATCH 1` |
-| [ ]    | P0       | `TASK-FRT-176` | None       | Fix Rules-of-Hooks crash in project Overview (`useMemo` after early returns → crash on loading→data); remove hardcoded `Status: Active` and fabricated `Budget Used = 100−subscore` (honest `Budget coherence` value or `—`); same fix on Analysis page. | `Fable5 L1 Prompt — PATCH 2` |
+| [x]    | P0       | `TASK-FRT-176` | None       | Fix Rules-of-Hooks crash in project Overview (`useMemo` after early returns → crash on loading→data); remove hardcoded `Status: Active` and fabricated `Budget Used = 100−subscore` (honest `Budget coherence` value or `—`); same fix on Analysis page. `[x] Implemented (Overview Hooks + Honest Budget Coherence)` | `Fable5 L1 Prompt — PATCH 2` |
 | [ ]    | P0       | `TASK-FRT-177` | None       | Coherence page SSR with real credentials: thread Clerk server token into `fetchApiJson({server:true})` (today it sends no Authorization/tenant headers → core tab 401s). | `Fable5 L1 Prompt — PATCH 3` |
 | [ ]    | P0       | `TASK-FRT-178` | None       | Purge fabricated UI data: fake assignees + synthesized `clause-${id}` (project alerts), fabricated severity distribution / `alertCount=0` / empty trend (CoherenceClient), fake notifications + dead menu items (AppHeader), internal "v1 active" banner. Real data or honest placeholder. | `Fable5 L1 Prompt — PATCH 4` |
 | [ ]    | P0       | `TASK-FRT-179` | None       | Real reviewer identity: HITL approve/reject and evidence resolve send Clerk user email/id instead of literals `"current-user"` / `"web-evidence-viewer"`; buttons disabled until identity loaded. Audit-trail integrity. | `Fable5 L1 Prompt — PATCH 5` |
@@ -62,8 +62,8 @@
 **Statistics**:
 
 - Total: 197 tasks
-- Active: 23 (11.7%)
-- Completed: 174 (88.3%)
+- Active: 22 (11.2%)
+- Completed: 175 (88.8%)
 - Blocked: 1 (0.5%)
 
 ---
@@ -77,6 +77,8 @@
 - **Task ↔ patch map**: `TASK-FRT-175`=PATCH 1 (typed upload) · 176=P2 (Overview hooks crash + honest metrics) · 177=P3 (coherence SSR auth) · 178=P4 (purge fabricated data) · 179=P5 (real HITL identity) · 180=P6 (analysis progress + polling) · 181=P7 (retry auth) · 182=P8 (landing honesty) · 183=P9 (dashboard shell + admin redirects) · 184=P10 (triplet checklist) · 185=P11 (run/evaluate actions) · 186=P12 (categories_v2 render) · 187=P13 (HITL scoping/cards) · 188=P14 (audit report export) · 189=P15 (global mutation errors) · 190=P16 (nav flags) · 191=P17 (single creation flow) · 192=P18 (CI wedge gates) · 193=P19 (budget reconciliation) · 194=P20 (severity tokens/EmptyState/tabs) · 195=P21 (onboarding mount) · 196=P22 (EN language) · 197=P23 (component consolidation + god-file split).
 - **Definition of Done**: all 23 tasks `[x]` with evidence; `pnpm typecheck && pnpm lint && pnpm test:all && pnpm generate:api:check` green; `journey-3-wedge.spec.ts` (E2E-W1..W5) green in CI; manual demo script passes; zero fabricated data / dead controls / placeholder exports.
 - **Review log — 2026-07-04, TASK-FRT-175 (Codex impl, master review: APPROVED)**: reproduced 37/37 focused tests, `pnpm typecheck`, and upload-path literal scan (0 `"BOM"`/`"CONTRACT"` hits); commits `a39b6309` (feat) + `62c509ce` (docs) on `fix/frt-l1-wave0`. Non-blocking polish for later waves: (a) staged-item ids can collide when the same file is staged in two batches (`name-size-lastModified-index` — use `crypto.randomUUID()`); (b) a mid-batch upload failure leaves already-uploaded files staged, so retry would duplicate them (remove items from staging as each succeeds); (c) `transformDocument` still maps `.bc3` files to `pdf` extension for display (`validExtension` array lacks `bc3`).
+- **Implementation log — 2026-07-04, TASK-FRT-176 (PATCH 2)**: overview no longer declares hooks after loading/error returns; `Budget Used`/`Budget Pressure` are replaced with honest `Budget coherence` values (`sub_scores.BUDGET` or `—` with `Requires budget document` tooltip); overview status badge uses `useProject(id).data.status` and hides the row when unavailable. Verification: RED focused tests first failed on old fabricated labels/values, then `pnpm vitest run "app/(app)/projects/[id]/page.test.tsx" "app/(app)/projects/[id]/analysis"` -> 2 files / 10 tests passed; `pnpm typecheck` -> passed; `pnpm lint` -> passed; `rg "Budget Used|Budget Pressure|100 -|Active" "apps/web/app/(app)/projects/[id]/page.tsx" "apps/web/app/(app)/projects/[id]/analysis/page.tsx"` -> 0 hits; `rg "useMemo" "apps/web/app/(app)/projects/[id]/page.tsx"` -> 0 hits. `pnpm test:all` remains red on the existing unrelated 15 files / 34 tests already cataloged under TASK-FRT-192.
+- **Review log — 2026-07-04, TASK-FRT-176 (Codex impl, master review: APPROVED)**: reproduced 10/10 focused tests + `pnpm typecheck` + honesty scans (no `Budget Used`/`Budget Pressure`/`useMemo`/hardcoded `Active` in the touched routes; the single remaining "Budget Pressure" hit is the negative assertion in the analysis test). Empirical RED proof: with the new test suite run against the **old** implementation (selective stash of `page.tsx`), 3 tests fail — including "does not crash when the overview transitions from loading to backend data" — confirming genuine Rules-of-Hooks regression coverage, not test theater. `useProject(id)` correctly registered before the early returns; sub_scores typing hardened to `number | null | undefined`. No new debt introduced.
 - **Pre-existing test debt quantified (blocks TASK-FRT-192's `test:all` gate)**: `pnpm test:all` fails **15 files / 34 tests identically on `main` (fc863e25) and on the branch** — RACI page (7), AppSidebar (5), WBSTree contract (6), UsageMetricsTable (4), wireframes WF-03/WF-04 (3), and 1 each in app/page, ProjectTabs, useAlerts, useDocumentEntities, lib/api/index.test, global documents page, project budget/settings/wbs pages. These must be fixed or explicitly quarantined as part of TASK-FRT-192 before `test:all` can become a CI gate.
 - **External deps (backend, already tracked)**: `TASK-DOC-REUPLOAD-005` (re-upload PATCH 500), `TASK-COH-BUD-RECON-006` (EN/INR totals). Frontend degrades honestly where these bite.
 
@@ -119,8 +121,8 @@ _ADRs for this category will be documented here_
 
 ## 6. Metrics
 
-- **Total Tasks**: 174
-- **Completed**: 173 (99.4%)
+- **Total Tasks**: 197
+- **Completed**: 175 (88.8%)
 - **Average Completion Time**: TBD
 - **Test Coverage**: TBD
 
