@@ -21,11 +21,10 @@ interface UseProjectDocumentsResult {
 const documentTypeMap: Record<string, DocumentInfo['type']> = {
   contract: 'contract',
   schedule: 'schedule',
-  bom: 'bom',
-  budget: 'bom', // Map budget to bom for now
+  budget: 'budget',
   specification: 'specification',
   drawing: 'drawing',
-  other: 'contract',
+  other: 'other',
 };
 
 /**
@@ -40,7 +39,7 @@ function transformDocument(doc: DocumentListResponse): DocumentInfo {
 
   // Map document type (if provided in response, otherwise default)
   const backendType = doc.document_type?.toLowerCase();
-  const mappedType = backendType ? documentTypeMap[backendType] || 'contract' : 'contract';
+  const mappedType = backendType ? documentTypeMap[backendType] || 'other' : 'other';
 
   return {
     id: doc.id,

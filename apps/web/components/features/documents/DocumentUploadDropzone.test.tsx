@@ -3,6 +3,7 @@
  * Roadmap Reference: S2-09 Document upload (drag-drop, PDF/XLSX/BC3, chunked)
  */
 import { fireEvent, render, screen, waitFor } from "@/src/tests/test-utils";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DocumentUploadDropzone } from "@/components/features/documents/DocumentUploadDropzone";
 
@@ -45,6 +46,65 @@ describe("S2-09 - DocumentUploadDropzone", () => {
       ),
     ).toBeInTheDocument();
     expect(uploadDocumentMock).not.toHaveBeenCalled();
+  });
+
+  it("stages dropped files with extension-based document type defaults", async () => {
+    render(<DocumentUploadDropzone projectId="proj_demo_001" />);
+
+    const dropzone = screen.getByRole("button", { name: /upload documents/i });
+    fireEvent.drop(dropzone, {
+      dataTransfer: {
+        files: [
+          createFile("contract.pdf", "application/pdf"),
+          createFile("budget.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+          createFile("schedule.bc3", "application/octet-stream"),
+        ],
+      },
+    });
+
+    expect(await screen.findByText("contract.pdf")).toBeInTheDocument();
+    expect(screen.getByText("budget.xlsx")).toBeInTheDocument();
+    expect(screen.getByText("schedule.bc3")).toBeInTheDocument();
+    expect(screen.getByLabelText(/document type for contract\.pdf/i)).toHaveTextContent("Contract");
+    expect(screen.getByLabelText(/document type for budget\.xlsx/i)).toHaveTextContent("Budget");
+    expect(screen.getByLabelText(/document type for schedule\.bc3/i)).toHaveTextContent("Budget");
+    expect(uploadDocumentMock).not.toHaveBeenCalled();
+  });
+
+  it("uploads staged files sequentially with the selected document type per file", async () => {
+    const user = userEvent.setup();
+    uploadDocumentMock.mockResolvedValue({ id: "doc-1", task_id: "task-1" });
+    getTokenMock.mockResolvedValue("fresh-token-123");
+
+    render(<DocumentUploadDropzone projectId="proj_live_001" />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, [
+      createFile("contract.pdf", "application/pdf"),
+      createFile("schedule.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    ]);
+
+    const scheduleType = await screen.findByLabelText(/document type for schedule\.xlsx/i);
+    await user.click(scheduleType);
+    await user.click(await screen.findByRole("option", { name: "Schedule" }));
+    await user.click(screen.getByRole("button", { name: /upload 2 files/i }));
+
+    await waitFor(() => {
+      expect(uploadDocumentMock).toHaveBeenNthCalledWith(
+        1,
+        "proj_live_001",
+        expect.objectContaining({ name: "contract.pdf" }),
+        "contract",
+        { token: "fresh-token-123" },
+      );
+      expect(uploadDocumentMock).toHaveBeenNthCalledWith(
+        2,
+        "proj_live_001",
+        expect.objectContaining({ name: "schedule.xlsx" }),
+        "schedule",
+        { token: "fresh-token-123" },
+      );
+    });
   });
 
   it("updates drag state and aria labels during DnD lifecycle", () => {
@@ -110,12 +170,13 @@ describe("S2-09 - DocumentUploadDropzone", () => {
         files: [createFile("contract.pdf", "application/pdf")],
       },
     });
+    fireEvent.click(await screen.findByRole("button", { name: /upload 1 file/i }));
 
     await waitFor(() => {
       expect(uploadDocumentMock).toHaveBeenCalledWith(
         "proj_live_001",
         expect.objectContaining({ name: "contract.pdf" }),
-        "CONTRACT",
+        "contract",
         { token: "fresh-token-123" },
       );
     });
@@ -144,12 +205,13 @@ describe("S2-09 - DocumentUploadDropzone", () => {
         files: [createFile("contract.pdf", "application/pdf")],
       },
     });
+    fireEvent.click(await screen.findByRole("button", { name: /upload 1 file/i }));
 
     await waitFor(() => {
       expect(uploadDocumentMock).toHaveBeenCalledWith(
         "proj_live_002",
         expect.objectContaining({ name: "contract.pdf" }),
-        "CONTRACT",
+        "contract",
         undefined,
       );
     });
@@ -167,6 +229,7 @@ describe("S2-09 - DocumentUploadDropzone", () => {
         files: [createFile("contract.pdf", "application/pdf")],
       },
     });
+    fireEvent.click(await screen.findByRole("button", { name: /upload 1 file/i }));
 
     expect(
       await screen.findByText(/upload could not be completed right now/i),

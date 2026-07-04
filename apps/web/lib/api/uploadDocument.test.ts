@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { uploadDocument as uploadDocumentType } from "./index";
 
 const fetchMock = vi.fn();
 const mockedHandleAuthErrorStatus = vi.fn();
@@ -48,7 +49,7 @@ describe("uploadDocument", () => {
       type: "application/pdf",
     });
 
-    await uploadDocument("proj_live_001", file, "CONTRACT");
+    await uploadDocument("proj_live_001", file, "contract");
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/projects/proj_live_001/documents",
@@ -71,6 +72,35 @@ describe("uploadDocument", () => {
     );
   });
 
+  it("sends the selected generated document type in the multipart body", async () => {
+    const { uploadDocument } = await import("./index");
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ id: "doc-1", task_id: "task-1" }),
+    });
+
+    const file = new File(["budget"], "budget.xlsx", {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    await uploadDocument("proj_live_001", file, "budget");
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    const formData = (init as RequestInit).body as FormData;
+    expect(formData.get("document_type")).toBe("budget");
+  });
+
+  it("does not accept the removed BOM upload type at compile time", () => {
+    const acceptsDocumentType = (
+      _value: Parameters<typeof uploadDocumentType>[2],
+    ) => undefined;
+
+    // @ts-expect-error BOM is not a generated backend DocumentType.
+    acceptsDocumentType(`BO${"M"}`);
+    expect(true).toBe(true);
+  });
+
   it("routes 401 upload failures through shared auth handling", async () => {
     const { uploadDocument } = await import("./index");
 
@@ -85,7 +115,7 @@ describe("uploadDocument", () => {
     });
 
     await expect(
-      uploadDocument("proj_live_001", file, "CONTRACT"),
+      uploadDocument("proj_live_001", file, "contract"),
     ).rejects.toThrow("Unauthorized");
 
     expect(mockedHandleAuthErrorStatus).toHaveBeenCalledWith(401);
@@ -103,7 +133,7 @@ describe("uploadDocument", () => {
       type: "application/pdf",
     });
 
-    await uploadDocument("proj_live_001", file, "CONTRACT", {
+    await uploadDocument("proj_live_001", file, "contract", {
       token: "fresh-token-456",
     });
 

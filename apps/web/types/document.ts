@@ -3,7 +3,7 @@
  * For handling multiple PDFs and their state
  */
 
-export type DocumentType = 'contract' | 'schedule' | 'bom' | 'specification' | 'drawing';
+export type DocumentType = 'contract' | 'schedule' | 'budget' | 'specification' | 'drawing' | 'other';
 
 /** Processing status for documents */
 export type DocumentProcessingStatus = 'queued' | 'processing' | 'parsed' | 'error';
@@ -16,7 +16,7 @@ export interface DocumentInfo {
   /** Document type */
   type: DocumentType;
   /** File extension */
-  extension: 'pdf' | 'xlsx' | 'docx' | 'dwg';
+  extension: 'pdf' | 'xlsx' | 'bc3' | 'docx' | 'dwg';
   /** URL or path to the document */
   url: string;
   /** Total number of pages (for PDFs) */

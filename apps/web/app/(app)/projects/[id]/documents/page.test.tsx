@@ -291,8 +291,10 @@ describe("ProjectDocumentsPage", () => {
     expect(uploadDialog).toHaveClass("text-card-foreground");
     expect(uploadDialog).toHaveClass("shadow-2xl");
     expect(screen.getByTestId("documents-upload-dialog-shell")).toHaveClass("gap-5");
-    expect(screen.getByText(/supported formats/i)).toBeInTheDocument();
-    expect(screen.getByText(/files stay scoped to atlas ridge/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/choose each file role before upload: contract, budget, or schedule/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/pdf, xlsx, bc3/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /finish upload/i }));
 
@@ -324,7 +326,7 @@ describe("ProjectDocumentsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /delete contract\.pdf/i }));
 
     const deleteDialog = screen.getByRole("dialog", { name: /delete document/i });
-    expect(deleteDialog).toHaveClass("bg-background/95");
+    expect(deleteDialog).toHaveClass("bg-card");
     expect(deleteDialog).toHaveClass("shadow-2xl");
     expect(
       screen.getByText(/are you sure you want to delete "Contract\.pdf"\?/i),

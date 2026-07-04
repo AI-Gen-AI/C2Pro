@@ -69,6 +69,38 @@ describe("useProjectDocuments", () => {
     });
   });
 
+  it("keeps generated budget and other document types honest in the register", async () => {
+    getProjectDocumentsMock.mockResolvedValueOnce([
+      {
+        id: "doc-budget",
+        filename: "Budget.xlsx",
+        document_type: "budget",
+        status: "parsed",
+        uploaded_at: "2026-03-18T09:00:00Z",
+        file_size_bytes: 2048,
+      },
+      {
+        id: "doc-other",
+        filename: "Other.pdf",
+        document_type: "other",
+        status: "parsed",
+        uploaded_at: "2026-03-19T09:00:00Z",
+        file_size_bytes: 1024,
+      },
+    ]);
+
+    const { result } = renderHook(() => useProjectDocuments("proj-budget"));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.documents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "doc-budget", type: "budget" }),
+        expect.objectContaining({ id: "doc-other", type: "other" }),
+      ]),
+    );
+  });
+
   it("falls back unknown types and extensions to safe defaults", async () => {
     getProjectDocumentsMock.mockResolvedValueOnce([
       {
@@ -86,7 +118,7 @@ describe("useProjectDocuments", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.documents[0]).toMatchObject({
-      type: "contract",
+      type: "other",
       extension: "pdf",
       status: "queued",
     });
