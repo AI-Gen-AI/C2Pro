@@ -13,14 +13,15 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 22
+**Pending Tasks**: 16
 
 - IDs: `TASK-FRT-041` (blocked — requires Clerk dashboard operator access)
-- IDs: `TASK-FRT-177`-`TASK-FRT-197` — **EPIC-FRT-L1-WEDGE** (Level-1 wedge closure, 2026-07-04). Wave 0/P0: 177-183 · Wave 1/P1: 184-192 · Wave 2/P2: 193-197. Patch-by-patch executable spec: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md`
+- IDs: `TASK-FRT-180`-`TASK-FRT-197` — **EPIC-FRT-L1-WEDGE** (Level-1 wedge closure, 2026-07-04). Wave 0/P0: 180-183 · Wave 1/P1: 184-192 · Wave 2/P2: 193-197. Patch-by-patch executable spec: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md`
+- IDs: `TASK-FRT-198`-`TASK-FRT-202` — **EPIC-FRT-LANDING-SYNC** (c2pro.io landing × AI-Gen brand synchrony, 2026-07-06). Single wave P1: 198-202 complete. Patch-by-patch executable spec: `docs/audits/C2Pro — Landing AI-Gen Sync Implementation Prompt_Fable5.md`
 
-**Completed Tasks**: 175
+**Completed Tasks**: 182
 
-- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-176`
+- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-179`, `TASK-FRT-198`-`TASK-FRT-202`
 
 **Usage Note**:
 
@@ -33,9 +34,9 @@
 | ------ | -------- | -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | [x]    | P0       | `TASK-FRT-175` | None       | Typed document upload: per-file type selector (contract/budget/schedule/…) defaulted by extension; kill hardcoded `"CONTRACT"` in `DocumentUploadDropzone.tsx:81`; align `uploadDocument` union with generated `DocumentType` (remove `BOM`, add `budget`); fix `budget→bom` display mapping. Unblocks the triplet — the product wedge. `[x] Implemented (Typed Staged Upload + Generated DocumentType)` | `Fable5 L1 Prompt — PATCH 1` |
 | [x]    | P0       | `TASK-FRT-176` | None       | Fix Rules-of-Hooks crash in project Overview (`useMemo` after early returns → crash on loading→data); remove hardcoded `Status: Active` and fabricated `Budget Used = 100−subscore` (honest `Budget coherence` value or `—`); same fix on Analysis page. `[x] Implemented (Overview Hooks + Honest Budget Coherence)` | `Fable5 L1 Prompt — PATCH 2` |
-| [ ]    | P0       | `TASK-FRT-177` | None       | Coherence page SSR with real credentials: thread Clerk server token into `fetchApiJson({server:true})` (today it sends no Authorization/tenant headers → core tab 401s). | `Fable5 L1 Prompt — PATCH 3` |
-| [ ]    | P0       | `TASK-FRT-178` | None       | Purge fabricated UI data: fake assignees + synthesized `clause-${id}` (project alerts), fabricated severity distribution / `alertCount=0` / empty trend (CoherenceClient), fake notifications + dead menu items (AppHeader), internal "v1 active" banner. Real data or honest placeholder. | `Fable5 L1 Prompt — PATCH 4` |
-| [ ]    | P0       | `TASK-FRT-179` | None       | Real reviewer identity: HITL approve/reject and evidence resolve send Clerk user email/id instead of literals `"current-user"` / `"web-evidence-viewer"`; buttons disabled until identity loaded. Audit-trail integrity. | `Fable5 L1 Prompt — PATCH 5` |
+| [x]    | P0       | `TASK-FRT-177` | None       | Coherence page SSR with real credentials: thread Clerk server token into `fetchApiJson({server:true})` (today it sends no Authorization/tenant headers → core tab 401s). `[x] Implemented (Clerk Server Token Forwarding)` | `Fable5 L1 Prompt — PATCH 3` |
+| [x]    | P0       | `TASK-FRT-178` | None       | Purge fabricated UI data: fake assignees + synthesized `clause-${id}` (project alerts), fabricated severity distribution / `alertCount=0` / empty trend (CoherenceClient), fake notifications + dead menu items (AppHeader), internal "v1 active" banner. Real data or honest placeholder. `[x] Implemented (Fabricated UI Data Purge)` | `Fable5 L1 Prompt — PATCH 4` |
+| [x]    | P0       | `TASK-FRT-179` | None       | Real reviewer identity: HITL approve/reject and evidence resolve send Clerk user email/id instead of literals `"current-user"` / `"web-evidence-viewer"`; buttons disabled until identity loaded. Audit-trail integrity. `[x] Implemented (Clerk Reviewer Identity)` | `Fable5 L1 Prompt — PATCH 5` |
 | [ ]    | P0       | `TASK-FRT-180` | `TASK-FRT-175` | Visible analysis progress: simplify orphaned `AnalysisProgressTracker` to 4 user-facing stages, mount on Analysis + Documents; convert `useProjectDocuments` to react-query with polling while docs in-flight; delete the raw-SSE `<Link>` dead end. | `Fable5 L1 Prompt — PATCH 6` |
 | [ ]    | P0       | `TASK-FRT-181` | None       | Fix "Retry processing": raw `fetch` sends no Authorization (guaranteed 401, silent failure) → use `apiClient.post` + visible error toast. | `Fable5 L1 Prompt — PATCH 7` |
 | [ ]    | P0       | `TASK-FRT-182` | None       | Landing honesty pass: remove fabricated metrics (94%/6x/$2.4M/<30s) and visible deploy marker; fix `Get Started → /signup` (dead) to `/sign-up`; remove dead Pricing anchor; retitle tab (`C2Pro — Contract Coherence Audit`); triplet-focused hero subhead. | `Fable5 L1 Prompt — PATCH 8` |
@@ -54,6 +55,17 @@
 | [ ]    | P2       | `TASK-FRT-195` | `TASK-FRT-183` | Mount orphaned onboarding: `OnboardingEntry` + sample-project bootstrap on first login (zero projects, not dismissed); persist dismissal. | `Fable5 L1 Prompt — PATCH 21` |
 | [ ]    | P2       | `TASK-FRT-196` | None       | Language unification (EN): translate `"Sesión expirada o inválida"` / `"Sin permisos"` toasts and Spanish form placeholders; grep-clean. Full i18n out of scope. | `Fable5 L1 Prompt — PATCH 22` |
 | [ ]    | P2       | `TASK-FRT-197` | `TASK-FRT-186`, `TASK-FRT-188`, `TASK-FRT-191` | Component-root consolidation (merge `src/components` + `features/coherence` duplicates into one canonical root), split 1,636-line evidence page, delete `GlobalSearch`/`CrossModuleNavigator` RED-phase placeholders + 3D view/no-op templates; enforce <800 lines/file. | `Fable5 L1 Prompt — PATCH 23` |
+
+#### EPIC-FRT-LANDING-SYNC — c2pro.io Landing × AI-Gen Brand Synchrony (2026-07-06)
+
+| Status | Priority | ID | Depends On | Description | Source |
+|--------|----------|----|------------|-------------|--------|
+| [x]    | P1       | `TASK-FRT-198` | None       | Root route restructure: `/` + `/en` server-rendered landing (SEO fix — crawlers currently receive only "Loading..."), Clerk auth island ("Ir al workspace"), admin-bounce relocated to `/dashboard`, "Deploy marker" debug text removed. ✅ Completed 2026-07-08: `/` and `/en` build as static routes; `/en` is public in middleware; `/` HTML contains landing markup, "Iniciar sesión", and "Unirse al piloto" with no auth spinner; signed-in users see "Ir al workspace"; `c2pro_admin` dashboard visits replace-navigate to `/admin/c2pro`; `tenant_admin` still replace-navigates to `/admin/tenant`; explicit fabricated metric scaffold removed; deploy marker scan clean. | `Fable5 Landing Prompt — PATCH 1` |
+| [x]    | P1       | `TASK-FRT-199` | None       | AI-Gen Design System v2 tokens as additive `brand-*` `@theme` block, self-hosted Source Serif 4 + Geist/Geist Mono fonts (no Google CDN), landing primitives (Eyebrow/Display/SectionShell/BrandButton/PilotBadge/CheckList) + Reveal (reduced-motion safe). ✅ Completed 2026-07-09: added bundled `geist` + `@fontsource-variable/source-serif-4`, additive brand tokens, landing font exports, server-compatible primitives, reduced-motion-aware Reveal, and landing barrel exports; `fonts.googleapis` scan clean; build passes with no live-page consumption yet. | `Fable5 Landing Prompt — PATCH 2` |
+| [x]    | P1       | `TASK-FRT-200` | `TASK-FRT-198`, `TASK-FRT-199` | Landing rebuild with verbatim ES/EN Copy Pack: hero + honest console mock (real DET-BUD-SUM 2.8% example, "Vista ilustrativa"), tridimensional audit, human-supervision band, 4-step protocol, origin & limits ("Qué no hace"), navy waitlist shell, ecosystem footer → ai-gen.ai; deletes fabricated-stats scaffold (94%/$2.4M/6x). ✅ Completed 2026-07-08: rebuilt `/` and `/en` with the Copy Pack, labeled illustrative console, waitlist mailto shell for PATCH 4, AI-Gen external links with `rel="noopener"`, no dead `href="#"`, and old fabricated-claim scan clean. | `Fable5 Landing Prompt — PATCH 3` |
+| [x]    | P1       | `TASK-FRT-201` | `TASK-FRT-200` | Pilot waitlist funnel: `waitlist_signups` table (Alembic + Supabase mirror, RLS enabled deny-all, unique email), `/api/waitlist` route handler (zod, honeypot, per-IP throttle, CORS allowlist for ai-gen.ai whose current form captures no leads), bilingual client form with RGPD consent. ✅ Completed 2026-07-08: added additive waitlist migrations, server-only PostgREST route with zod validation/CORS/honeypot/throttle/idempotent upsert, bilingual form mounted into the navy waitlist shell, and server-only env template notes. | `Fable5 Landing Prompt — PATCH 4` |
+| [x]    | P1       | `TASK-FRT-202` | `TASK-FRT-200` | SEO: per-locale metadata + canonical/hreflang (`/` es, `/en` en), JSON-LD Organization (parentOrganization AI-Gen) + SoftwareApplication (no invented ratings), `sitemap.ts`/`robots.ts`, `opengraph-image.tsx` (navy/teal brand card), brand `themeColor #0B1F3A`. ✅ Completed 2026-07-09: added locale metadata for `/` and `/en`, reciprocal canonical/hreflang alternates, landing JSON-LD, sitemap/robots routes, generated `opengraph-image`, and `themeColor #0B1F3A`; build output lists `/`, `/en`, `/opengraph-image`, `/robots.txt`, and `/sitemap.xml` as static routes; old app title scan clean. | `Fable5 Landing Prompt — PATCH 5` |
+
 | [ ]    | P3       | `TASK-FRT-041` | None       | Production email templates and sender verified in Clerk `[-] Blocked: Requires operator Clerk dashboard access. Verification checklist in docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md (TASK-1177). Steps: (1) Verify sender email is noreply@c2pro.app with verified domain, (2) Customize sign-in/sign-up/reset templates with C2Pro branding, (3) Test email delivery from production instance.` | `docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md`        |
 | [x]    | P1       | `TASK-FRT-172` | None       | Add an explicit return path from the dashboard portfolio overview to the Projects list so users are not stranded after entering Dashboard. `[x] Implemented (Dashboard Navigation Recovery)` | `User report 2026-05-16` |
 | [x]    | P1       | `TASK-FRT-173` | `TASK-BCK-053` | Replace raw document-upload failure copy with a plain-language state that tells the user the file was not queued and what to do next. `[x] Implemented (Upload Failure Clarity)` | `User report 2026-05-16` |
@@ -61,9 +73,9 @@
 
 **Statistics**:
 
-- Total: 197 tasks
-- Active: 22 (11.2%)
-- Completed: 175 (88.8%)
+- Total: 202 tasks
+- Active: 20 (9.9%)
+- Completed: 182 (90.1%)
 - Blocked: 1 (0.5%)
 
 ---
@@ -78,6 +90,9 @@
 - **Definition of Done**: all 23 tasks `[x]` with evidence; `pnpm typecheck && pnpm lint && pnpm test:all && pnpm generate:api:check` green; `journey-3-wedge.spec.ts` (E2E-W1..W5) green in CI; manual demo script passes; zero fabricated data / dead controls / placeholder exports.
 - **Review log — 2026-07-04, TASK-FRT-175 (Codex impl, master review: APPROVED)**: reproduced 37/37 focused tests, `pnpm typecheck`, and upload-path literal scan (0 `"BOM"`/`"CONTRACT"` hits); commits `a39b6309` (feat) + `62c509ce` (docs) on `fix/frt-l1-wave0`. Non-blocking polish for later waves: (a) staged-item ids can collide when the same file is staged in two batches (`name-size-lastModified-index` — use `crypto.randomUUID()`); (b) a mid-batch upload failure leaves already-uploaded files staged, so retry would duplicate them (remove items from staging as each succeeds); (c) `transformDocument` still maps `.bc3` files to `pdf` extension for display (`validExtension` array lacks `bc3`).
 - **Implementation log — 2026-07-04, TASK-FRT-176 (PATCH 2)**: overview no longer declares hooks after loading/error returns; `Budget Used`/`Budget Pressure` are replaced with honest `Budget coherence` values (`sub_scores.BUDGET` or `—` with `Requires budget document` tooltip); overview status badge uses `useProject(id).data.status` and hides the row when unavailable. Verification: RED focused tests first failed on old fabricated labels/values, then `pnpm vitest run "app/(app)/projects/[id]/page.test.tsx" "app/(app)/projects/[id]/analysis"` -> 2 files / 10 tests passed; `pnpm typecheck` -> passed; `pnpm lint` -> passed; `rg "Budget Used|Budget Pressure|100 -|Active" "apps/web/app/(app)/projects/[id]/page.tsx" "apps/web/app/(app)/projects/[id]/analysis/page.tsx"` -> 0 hits; `rg "useMemo" "apps/web/app/(app)/projects/[id]/page.tsx"` -> 0 hits. `pnpm test:all` remains red on the existing unrelated 15 files / 34 tests already cataloged under TASK-FRT-192.
+- **Implementation log — 2026-07-04, TASK-FRT-177 (PATCH 3)**: coherence server page now obtains the Clerk server token via `auth().getToken()`, skips the backend call when no token is available, and forwards `Authorization: Bearer <token>` into `getDashboardSummary(..., { server: true, headers })`; dashboard service options now preserve `headers` through to `fetchApiJson`; dev-only `cohV1Scenario` override remains unchanged. Verification: RED page tests first failed because the service call had no `Authorization` header and still ran with a null token; GREEN `pnpm vitest run lib/api/services "app/(app)/projects/[id]/coherence/page.test.tsx"` -> 4 files / 13 tests passed; requested service slice `pnpm vitest run lib/api/services` -> 3 files / 10 tests passed; `pnpm typecheck` -> passed; `pnpm lint` -> passed. `pnpm test:all` remains red on the existing unrelated 15 files / 34 tests already cataloged under TASK-FRT-192. Manual local-backend browser check not run in this non-interactive patch session.
+- **Implementation log — 2026-07-04, TASK-FRT-178 (PATCH 4)**: project alerts no longer synthesize assignees or `clause-${id}` values; `ReviewAlert.assignee` and `ReviewAlert.clauseId` are optional and render honest placeholders when backend data is absent. `CoherenceClient` now derives severity distribution and per-category alert counts from the generated project-alerts query, shows honest loading/no-data states when alert data is unavailable, hides empty trend sparklines, and removes the internal migration banner. `AppHeader` no longer shows fake notification counts/items and links "View all notifications" to `/alerts`; dead Profile/Settings items were removed. Verification: RED focused tests first failed on fabricated alert props, optional placeholder handling, fake notification assertions, and mocked coherence alert counts; GREEN `pnpm vitest run "app/(app)/projects/[id]/alerts" components/coherence components/layout/AppHeader.test.tsx components/features/alerts/AlertReviewCenter.test.tsx` -> 8 files / 50 tests passed; `rg -n "legal\.reviewer|finance\.analyst|clause-\$\{" apps/web/app apps/web/components` -> 0 hits; `rg -n "Coherence Score v1 is active" apps/web/components/coherence/CoherenceClient.tsx` -> 0 hits; `pnpm typecheck` -> passed; `pnpm lint` -> passed; `pnpm generate:api:check` -> passed. `pnpm test:all` remains red on the existing unrelated 15 files / 34 tests already cataloged under TASK-FRT-192.
+- **Implementation log — 2026-07-04, TASK-FRT-179 (PATCH 5)**: HITL review approve/reject and evidence alert resolution now derive reviewer identity from Clerk `useUser()` (`primaryEmailAddress.emailAddress` falling back to `user.id`) instead of literal audit-trail strings; identity-dependent action buttons are disabled with "Loading your identity…" while the user is unavailable. Verification: RED focused tests first failed because mutation bodies still sent `current-user` and `web-evidence-viewer`; GREEN `pnpm vitest run "app/(app)/projects/[id]/review" "app/(app)/projects/[id]/evidence"` -> 2 files / 25 tests passed; `rg -n "current-user|web-evidence-viewer" apps/web` -> 0 hits; `pnpm typecheck` -> passed; `pnpm lint` -> passed. `pnpm test:all` remains red on the existing unrelated 15 files / 34 tests already cataloged under TASK-FRT-192.
 - **Review log — 2026-07-04, TASK-FRT-176 (Codex impl, master review: APPROVED)**: reproduced 10/10 focused tests + `pnpm typecheck` + honesty scans (no `Budget Used`/`Budget Pressure`/`useMemo`/hardcoded `Active` in the touched routes; the single remaining "Budget Pressure" hit is the negative assertion in the analysis test). Empirical RED proof: with the new test suite run against the **old** implementation (selective stash of `page.tsx`), 3 tests fail — including "does not crash when the overview transitions from loading to backend data" — confirming genuine Rules-of-Hooks regression coverage, not test theater. `useProject(id)` correctly registered before the early returns; sub_scores typing hardened to `number | null | undefined`. No new debt introduced.
 - **Pre-existing test debt quantified (blocks TASK-FRT-192's `test:all` gate)**: `pnpm test:all` fails **15 files / 34 tests identically on `main` (fc863e25) and on the branch** — RACI page (7), AppSidebar (5), WBSTree contract (6), UsageMetricsTable (4), wireframes WF-03/WF-04 (3), and 1 each in app/page, ProjectTabs, useAlerts, useDocumentEntities, lib/api/index.test, global documents page, project budget/settings/wbs pages. These must be fixed or explicitly quarantined as part of TASK-FRT-192 before `test:all` can become a CI gate.
 - **External deps (backend, already tracked)**: `TASK-DOC-REUPLOAD-005` (re-upload PATCH 500), `TASK-COH-BUD-RECON-006` (EN/INR totals). Frontend degrades honestly where these bite.
@@ -97,6 +112,20 @@
 ### TASK-FRT-174 - Shared sub-window surface system
 
 - Dialogs, alert dialogs, and sheets should use the same solid elevated surface, foreground color, border treatment, and shadow so secondary windows feel like one system and preserve contrast in both themes.
+
+---
+
+### EPIC-FRT-LANDING-SYNC — c2pro.io Landing × AI-Gen Brand Synchrony (2026-07-06)
+
+**Goal:** c2pro.io serves a crawlable, AI-Gen-branded, honest, bilingual (ES `/` + EN `/en`) landing with a working pilot-waitlist funnel and correct SEO metadata.
+
+**Evidence (2026-07-06):** root `app/page.tsx` is client-gated on `useAuth` → crawlers receive only "Loading..." (verified via live fetch of www.c2pro.io); `components/landing-page-content.tsx` shows fabricated stats (94% detection, $2.4M savings, 6x faster) violating the honesty doctrine (ADR-013) and AI-Gen's "no promete detección perfecta" positioning; dead `#` links (Pricing/Privacy/Terms) + "Deploy marker 2026-03-30-a" debug text; ai-gen.ai's C2Pro pilot-waitlist form captures no leads (its `site.js` intercepts POSTs — "sin backend todavía").
+
+**Brand reference:** AI-Gen Design System v2 "Tech-Editorial B2B Premium" (`AI-Gen-AI/2SB` repo, `assets/site.css`): alabaster `#F7F4ED` / navy `#0B1F3A` / single teal accent `#0F766E`, Source Serif 4 display + Geist + Geist Mono eyebrows, editorial sections, "Vista ilustrativa"-labeled console mockups.
+
+**Owner decisions (2026-07-06):** in-app rewrite (not a separate marketing site); bilingual ES default + `/en`; real waitlist capture on c2pro.io (endpoint CORS-ready so ai-gen.ai's form can POST to it later); `/` stays fully static — authed users get an "Ir al workspace" island instead of an auto-redirect.
+
+**Executable spec:** `docs/audits/C2Pro — Landing AI-Gen Sync Implementation Prompt_Fable5.md` (5 patches, verbatim ES/EN Copy Pack included; Codex executes patch-by-patch, MASTER reviews each).
 
 ---
 
@@ -121,8 +150,8 @@ _ADRs for this category will be documented here_
 
 ## 6. Metrics
 
-- **Total Tasks**: 197
-- **Completed**: 175 (88.8%)
+- **Total Tasks**: 202
+- **Completed**: 182 (90.1%)
 - **Average Completion Time**: TBD
 - **Test Coverage**: TBD
 
