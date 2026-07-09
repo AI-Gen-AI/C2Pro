@@ -219,17 +219,12 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
       "Please review the source evidence and confirm the vendor response or corrective action.",
     ].join("\n");
 
-  const copyMessage = (alert: ReviewAlert) => {
+  const copyMessage = async (alert: ReviewAlert) => {
     setCopiedAlertId(alert.id);
     try {
-      const result = navigator.clipboard?.writeText(buildProcurementMessage(alert));
-      if (result && typeof result.catch === "function") {
-        result.catch(() => {
-          // Browser permission can be denied in QA/demo contexts; keep the UI action visible.
-        });
-      }
+      await navigator.clipboard?.writeText(buildProcurementMessage(alert));
     } catch {
-      // Synchronous failure (no clipboard support); UI feedback already shown.
+      // Browser permission can be denied in QA/demo contexts; keep the UI action visible.
     }
   };
 
@@ -312,7 +307,11 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
                 </button>
                 <button
                   type="button"
-                  onClick={() => void copyMessage(alert)}
+                  onClick={() => {
+                    copyMessage(alert).catch(() => {
+                      // Clipboard failures are already handled by copyMessage.
+                    });
+                  }}
                 >
                   Copy message {alert.id}
                 </button>

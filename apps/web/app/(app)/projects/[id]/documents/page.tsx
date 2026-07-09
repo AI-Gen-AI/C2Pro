@@ -153,7 +153,7 @@ export default function ProjectDocumentsPage() {
   );
 
   const typeOptions = useMemo(
-    () => Array.from(new Set(rows.map((row) => row.type))).sort(),
+    () => Array.from(new Set(rows.map((row) => row.type))).toSorted(),
     [rows]
   );
 
