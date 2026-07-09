@@ -79,6 +79,16 @@ function labelType(type: string): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
+function sortedUniqueTypes(rows: Array<{ type: string }>) {
+  const types = new Set<string>();
+
+  for (const row of rows) {
+    types.add(row.type);
+  }
+
+  return Array.from(types).sort();
+}
+
 export default function ProjectDocumentsPage() {
   const params = useParams();
   const router = useRouter();
@@ -153,7 +163,7 @@ export default function ProjectDocumentsPage() {
   );
 
   const typeOptions = useMemo(
-    () => Array.from(new Set(rows.map((row) => row.type))).toSorted(),
+    () => sortedUniqueTypes(rows),
     [rows]
   );
 
