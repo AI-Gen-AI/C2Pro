@@ -537,6 +537,15 @@ export default function EvidencePage() {
     );
   }, [resolveProjectAlert, reviewerName]);
 
+  const handleResolveAlertClick = useCallback(
+    (alertId: string) => {
+      handleResolveAlert(alertId).catch(() => {
+        setActionError("Unable to resolve alert.");
+      });
+    },
+    [handleResolveAlert],
+  );
+
   const requestApproveEntity = useCallback(
     async (entityId: string) => {
       const entity = entities.find((item) => item.id === entityId);
@@ -609,6 +618,12 @@ export default function EvidencePage() {
     handleReviewAlert,
     pendingAction,
   ]);
+
+  const handleConfirmPendingActionClick = useCallback(() => {
+    confirmPendingAction().catch(() => {
+      setActionError("Unable to complete evidence action.");
+    });
+  }, [confirmPendingAction]);
 
   const requiresValidationNote = useMemo(
     () =>
@@ -1028,7 +1043,7 @@ export default function EvidencePage() {
                               className="rounded-xl shadow-sm"
                               disabled={!reviewerIdentityReady}
                               title={!reviewerIdentityReady ? "Loading your identity…" : undefined}
-                              onClick={() => void handleResolveAlert(alert.id)}
+                              onClick={() => handleResolveAlertClick(alert.id)}
                             >
                               Resolve Alert
                             </Button>
@@ -1572,7 +1587,7 @@ export default function EvidencePage() {
             <Button
               type="button"
               className="rounded-xl shadow-sm"
-              onClick={() => void confirmPendingAction()}
+              onClick={handleConfirmPendingActionClick}
               disabled={requiresValidationNote && !validationNote.trim()}
             >
               Confirm Action

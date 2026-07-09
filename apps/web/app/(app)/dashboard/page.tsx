@@ -107,7 +107,12 @@ export default function AppDashboardPage() {
     }
 
     let active = true;
-    void loadDashboard(active);
+    loadDashboard(active).catch(() => {
+      if (active) {
+        setLoadError("Could not load dashboard data right now.");
+        setIsLoading(false);
+      }
+    });
 
     return () => {
       active = false;

@@ -16,6 +16,56 @@ import { useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet } from '@/lib
 import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from '@/lib/api/generated/alerts/alerts';
 import { useProject } from '@/hooks/useProject';
 
+type DashboardScoreSource = {
+  sub_scores?: unknown;
+};
+
+function numberValue(value: unknown) {
+  return typeof value === 'number' ? value : Number(value ?? 0);
+}
+
+function objectValue(value: unknown) {
+  return value && typeof value === 'object'
+    ? (value as Record<string, number | null | undefined>)
+    : {};
+}
+
+function errorMessage(dashboardError: unknown, alertsError: unknown) {
+  if (dashboardError instanceof Error && dashboardError.message) {
+    return dashboardError.message;
+  }
+
+  if (alertsError instanceof Error && alertsError.message) {
+    return alertsError.message;
+  }
+
+  return 'Failed to load project overview';
+}
+
+function alertDotClass(severity: string | null | undefined) {
+  if (severity === 'critical') {
+    return 'bg-destructive animate-pulse-critical';
+  }
+
+  if (severity === 'high') {
+    return 'bg-warning';
+  }
+
+  return 'bg-warning/60';
+}
+
+function alertBadgeVariant(severity: string | null | undefined) {
+  if (severity === 'critical') {
+    return 'destructive';
+  }
+
+  if (severity === 'high') {
+    return 'warning';
+  }
+
+  return 'secondary';
+}
+
 /**
  * Test Suite ID: TASK-1347
  * Route Coverage: Project overview route uses generated backend queries.
@@ -33,7 +83,7 @@ export default function ProjectOverviewPage() {
     data: alertsResponse,
     isLoading: alertsLoading,
     error: alertsError,
-  } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id, undefined);
+  } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id);
   const { data: project } = useProject(id);
 
   const isLoading = dashboardLoading || alertsLoading;
@@ -50,9 +100,7 @@ export default function ProjectOverviewPage() {
   if (hasError) {
     return (
       <div className="flex items-center justify-center py-24 text-destructive">
-        {(dashboardError instanceof Error && dashboardError.message) ||
-          (alertsError instanceof Error && alertsError.message) ||
-          'Failed to load project overview'}
+        {errorMessage(dashboardError, alertsError)}
       </div>
     );
   }
@@ -61,20 +109,9 @@ export default function ProjectOverviewPage() {
   const openAlerts = alerts.filter((alert) => alert.status === 'open');
   const alertsUnavailable = Boolean(alertsError);
   
-  const coherenceScore =
-    typeof dashboard.coherence_score === 'number'
-      ? dashboard.coherence_score
-      : Number(dashboard.coherence_score ?? 0);
-
-  const documentCount =
-    typeof dashboard.document_count === 'number'
-      ? dashboard.document_count
-      : Number(dashboard.document_count ?? 0);
-
-  const subScores =
-    dashboard.sub_scores && typeof dashboard.sub_scores === 'object'
-      ? (dashboard.sub_scores as Record<string, number | null | undefined>)
-      : {};
+  const coherenceScore = numberValue(dashboard.coherence_score);
+  const documentCount = numberValue(dashboard.document_count);
+  const subScores = objectValue((dashboard as DashboardScoreSource).sub_scores);
   const budgetScore =
     typeof subScores['BUDGET'] === 'number' ? subScores['BUDGET'] : null;
   const budgetValue = budgetScore === null ? '—' : String(budgetScore);
@@ -170,17 +207,21 @@ export default function ProjectOverviewPage() {
                 Recent alerts unavailable right now.
               </p>
             ) : null}
-            {recentAlerts.map((alert, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-md border p-2.5 text-sm">
-                <div className={`h-2 w-2 shrink-0 rounded-full ${
-                  alert.severity === 'critical' ? 'bg-destructive animate-pulse-critical' :
-                  alert.severity === 'high' ? 'bg-warning' : 'bg-warning/60'
-                }`} />
+            {recentAlerts.map((alert) => (
+              <div
+                key={`${alert.severity}-${alert.title}`}
+                className="flex items-center gap-3 rounded-md border p-2.5 text-sm"
+              >
+                <div
+                  className={`h-2 w-2 shrink-0 rounded-full ${alertDotClass(
+                    alert.severity,
+                  )}`}
+                />
                 <span className="flex-1 text-sm">{alert.title}</span>
-                <Badge variant={
-                  alert.severity === 'critical' ? 'destructive' :
-                  alert.severity === 'high' ? 'warning' : 'secondary'
-                } className="text-[10px]">
+                <Badge
+                  variant={alertBadgeVariant(alert.severity)}
+                  className="text-[10px]"
+                >
                   {alert.severity}
                 </Badge>
               </div>
