@@ -83,7 +83,7 @@ export default function ProjectOverviewPage() {
     data: alertsResponse,
     isLoading: alertsLoading,
     error: alertsError,
-  } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id);
+  } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id, undefined);
   const { data: project } = useProject(id);
 
   const isLoading = dashboardLoading || alertsLoading;
@@ -123,6 +123,7 @@ export default function ProjectOverviewPage() {
     : openAlerts.length;
 
   const recentAlerts = openAlerts.slice(0, 3).map((alert) => ({
+    id: alert.id,
     severity: alert.severity,
     title: alert.message.split(' — ')[0],
   }));
@@ -209,7 +210,7 @@ export default function ProjectOverviewPage() {
             ) : null}
             {recentAlerts.map((alert) => (
               <div
-                key={`${alert.severity}-${alert.title}`}
+                key={alert.id}
                 className="flex items-center gap-3 rounded-md border p-2.5 text-sm"
               >
                 <div

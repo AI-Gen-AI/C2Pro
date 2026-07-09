@@ -63,7 +63,7 @@ export default function AnalysisPage() {
     data: alertsResponse,
     isLoading: alertsLoading,
     error: alertsError,
-  } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id);
+  } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id, undefined);
 
   if (dashboardLoading || alertsLoading) {
     return (
