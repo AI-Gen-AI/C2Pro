@@ -5,9 +5,9 @@
 import type { LandingCopy } from "../copy";
 import { SectionIntro, SectionShell } from "../primitives";
 
-type DimensionsProps = {
+type DimensionsProps = Readonly<{
   copy: LandingCopy["dimensions"];
-};
+}>;
 
 export function Dimensions({ copy }: DimensionsProps) {
   return (

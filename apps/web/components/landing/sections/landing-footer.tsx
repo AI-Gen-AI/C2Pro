@@ -5,9 +5,9 @@
 import Link from "next/link";
 import type { LandingCopy } from "../copy";
 
-type LandingFooterProps = {
+type LandingFooterProps = Readonly<{
   copy: LandingCopy["footer"];
-};
+}>;
 
 function isExternal(href: string) {
   return href.startsWith("https://");
@@ -17,7 +17,7 @@ function isAnchorLike(href: string) {
   return href.startsWith("mailto:") || href.startsWith("#");
 }
 
-function FooterLink({ href, label }: { href: string; label: string }) {
+function FooterLink({ href, label }: Readonly<{ href: string; label: string }>) {
   if (isExternal(href)) {
     return (
       <a className="text-brand-on-navy-muted hover:text-brand-on-navy" href={href} rel="noopener">

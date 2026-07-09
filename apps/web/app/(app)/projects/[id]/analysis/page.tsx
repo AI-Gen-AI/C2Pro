@@ -10,6 +10,42 @@ import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from "@/lib/api/g
 import { useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet } from "@/lib/api/generated/coherence-dashboard/coherence-dashboard";
 import { getStreamProjectProcessingUrl } from "@/lib/api/analysis-stream";
 
+type DashboardExtras = {
+  score_version?: unknown;
+  score_missing_dimensions?: unknown;
+};
+
+function numberValue(value: unknown) {
+  return typeof value === "number" ? value : Number(value ?? 0);
+}
+
+function objectValue(value: unknown) {
+  return value && typeof value === "object"
+    ? (value as Record<string, number | null | undefined>)
+    : {};
+}
+
+function stringArrayValue(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function errorMessage(
+  dashboardError: unknown,
+  alertsError: unknown,
+) {
+  if (dashboardError instanceof Error && dashboardError.message) {
+    return dashboardError.message;
+  }
+
+  if (alertsError instanceof Error && alertsError.message) {
+    return alertsError.message;
+  }
+
+  return "Failed to load analysis summary";
+}
+
 /**
  * Test Suite ID: TASK-1347, TASK-OPS-DOCFLOW-010
  * Route Coverage: Project analysis route uses generated backend queries.
@@ -27,7 +63,7 @@ export default function AnalysisPage() {
     data: alertsResponse,
     isLoading: alertsLoading,
     error: alertsError,
-  } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id, undefined);
+  } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id);
 
   if (dashboardLoading || alertsLoading) {
     return (
@@ -40,40 +76,24 @@ export default function AnalysisPage() {
   if (dashboardError || alertsError || !dashboard) {
     return (
       <div className="flex items-center justify-center py-24 text-destructive">
-        {(dashboardError instanceof Error && dashboardError.message) ||
-          (alertsError instanceof Error && alertsError.message) ||
-          "Failed to load analysis summary"}
+        {errorMessage(dashboardError, alertsError)}
       </div>
     );
   }
 
   const alerts = alertsResponse?.items ?? [];
   const openAlerts = alerts.filter((alert) => alert.status === "open");
-  const coherenceScore =
-    typeof dashboard.coherence_score === "number"
-      ? dashboard.coherence_score
-      : Number(dashboard.coherence_score ?? 0);
-  const documentCount =
-    typeof dashboard.document_count === "number"
-      ? dashboard.document_count
-      : Number(dashboard.document_count ?? 0);
-  const subScores =
-    dashboard.sub_scores && typeof dashboard.sub_scores === "object"
-      ? (dashboard.sub_scores as Record<string, number | null | undefined>)
-      : {};
+  const coherenceScore = numberValue(dashboard.coherence_score);
+  const documentCount = numberValue(dashboard.document_count);
+  const subScores = objectValue(dashboard.sub_scores);
+  const dashboardExtras = dashboard as DashboardExtras;
   const scoreVersion =
-    typeof (dashboard as { score_version?: unknown }).score_version === "string"
-      ? (dashboard as { score_version: string }).score_version
+    typeof dashboardExtras.score_version === "string"
+      ? dashboardExtras.score_version
       : null;
-  const missingDimensions = Array.isArray(
-    (dashboard as { score_missing_dimensions?: unknown })
-      .score_missing_dimensions,
-  )
-    ? (dashboard as { score_missing_dimensions: unknown[] })
-        .score_missing_dimensions.filter(
-          (dimension): dimension is string => typeof dimension === "string",
-        )
-    : [];
+  const missingDimensions = stringArrayValue(
+    dashboardExtras.score_missing_dimensions,
+  );
   const budgetScore =
     typeof subScores["BUDGET"] === "number" ? subScores["BUDGET"] : null;
   const budgetValue = budgetScore === null ? "—" : String(budgetScore);
@@ -83,7 +103,7 @@ export default function AnalysisPage() {
     severity: alert.severity,
     title: alert.message.split(" — ")[0],
   }));
-  const formattedScoreVersion = scoreVersion?.replace(/_/g, " ");
+  const formattedScoreVersion = scoreVersion?.replaceAll("_", " ");
 
   const statCards = [
     {

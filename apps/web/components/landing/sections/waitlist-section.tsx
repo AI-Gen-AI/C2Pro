@@ -6,10 +6,10 @@ import type { LandingCopy, LandingLocale } from "../copy";
 import { CheckItem, CheckList, SectionIntro, SectionShell } from "../primitives";
 import { WaitlistForm } from "./waitlist-form";
 
-type WaitlistSectionProps = {
+type WaitlistSectionProps = Readonly<{
   copy: LandingCopy["waitlist"];
   locale: LandingLocale;
-};
+}>;
 
 export function WaitlistSection({ copy, locale }: WaitlistSectionProps) {
   return (

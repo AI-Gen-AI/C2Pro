@@ -83,8 +83,19 @@ function getSource(request: Request) {
   return "c2pro.io";
 }
 
+function trimTrailingSlashes(value: string) {
+  let end = value.length;
+
+  while (end > 0 && value[end - 1] === "/") {
+    end -= 1;
+  }
+
+  return value.slice(0, end);
+}
+
 function supabaseConfig() {
-  const url = process.env.SUPABASE_URL?.replace(/\/+$/, "");
+  const rawUrl = process.env.SUPABASE_URL;
+  const url = rawUrl ? trimTrailingSlashes(rawUrl) : undefined;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) {

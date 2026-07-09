@@ -15,9 +15,9 @@ import { OriginLimits } from "./sections/origin-limits";
 import { Supervision } from "./sections/supervision";
 import { WaitlistSection } from "./sections/waitlist-section";
 
-type LandingPageProps = {
+type LandingPageProps = Readonly<{
   locale: LandingLocale;
-};
+}>;
 
 export function LandingPage({ locale }: LandingPageProps) {
   const copy = landingCopy[locale];

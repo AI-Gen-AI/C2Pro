@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-type EyebrowProps = ComponentPropsWithoutRef<"p"> & {
+type EyebrowProps = Readonly<ComponentPropsWithoutRef<"p">> & {
   onNavy?: boolean;
 };
 
@@ -30,7 +30,7 @@ export function Eyebrow({
   );
 }
 
-type HeadingProps = ComponentPropsWithoutRef<"h1">;
+type HeadingProps = Readonly<ComponentPropsWithoutRef<"h1">>;
 
 export function Display({ children, className, ...props }: HeadingProps) {
   return (
@@ -46,7 +46,11 @@ export function Display({ children, className, ...props }: HeadingProps) {
   );
 }
 
-export function H2({ children, className, ...props }: ComponentPropsWithoutRef<"h2">) {
+export function H2({
+  children,
+  className,
+  ...props
+}: Readonly<ComponentPropsWithoutRef<"h2">>) {
   return (
     <h2
       className={cn(
@@ -60,7 +64,7 @@ export function H2({ children, className, ...props }: ComponentPropsWithoutRef<"
   );
 }
 
-type SectionShellProps = ComponentPropsWithoutRef<"section"> & {
+type SectionShellProps = Readonly<ComponentPropsWithoutRef<"section">> & {
   variant?: "alabaster" | "paper" | "navy";
 };
 
@@ -93,7 +97,7 @@ export function SectionShell({
   );
 }
 
-type SectionIntroProps = {
+type SectionIntroProps = Readonly<{
   eyebrow: ReactNode;
   heading: ReactNode;
   body?: ReactNode;
@@ -101,7 +105,7 @@ type SectionIntroProps = {
   className?: string;
   headingClassName?: string;
   bodyClassName?: string;
-};
+}>;
 
 export function SectionIntro({
   eyebrow,
@@ -131,7 +135,7 @@ export function SectionIntro({
   );
 }
 
-type BrandButtonProps = Omit<ComponentPropsWithoutRef<typeof Link>, "href"> & {
+type BrandButtonProps = Readonly<Omit<ComponentPropsWithoutRef<typeof Link>, "href">> & {
   href: string;
   children: ReactNode;
   variant?: "primary" | "ghost" | "outline";
@@ -195,7 +199,7 @@ function BrandArrow() {
   );
 }
 
-type PilotBadgeProps = ComponentPropsWithoutRef<"span">;
+type PilotBadgeProps = Readonly<ComponentPropsWithoutRef<"span">>;
 
 export function PilotBadge({ children, className, ...props }: PilotBadgeProps) {
   return (
@@ -216,7 +220,7 @@ export function CheckList({
   children,
   className,
   ...props
-}: ComponentPropsWithoutRef<"ul">) {
+}: Readonly<ComponentPropsWithoutRef<"ul">>) {
   return (
     <ul className={cn("space-y-3", className)} {...props}>
       {children}
@@ -228,7 +232,7 @@ export function CheckItem({
   children,
   className,
   ...props
-}: ComponentPropsWithoutRef<"li">) {
+}: Readonly<ComponentPropsWithoutRef<"li">>) {
   return (
     <li className={cn("flex gap-3 text-brand-ink", className)} {...props}>
       <CheckIcon />

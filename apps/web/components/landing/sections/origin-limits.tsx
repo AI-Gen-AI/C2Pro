@@ -5,9 +5,9 @@
 import type { LandingCopy } from "../copy";
 import { SectionIntro, SectionShell } from "../primitives";
 
-type OriginLimitsProps = {
+type OriginLimitsProps = Readonly<{
   copy: LandingCopy["originLimits"];
-};
+}>;
 
 export function OriginLimits({ copy }: OriginLimitsProps) {
   return (

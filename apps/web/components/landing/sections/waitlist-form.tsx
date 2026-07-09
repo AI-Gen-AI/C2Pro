@@ -8,10 +8,10 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import type { LandingCopy, LandingLocale } from "../copy";
 import { waitlistSchema, type WaitlistFormData } from "../waitlist-schema";
 
-type WaitlistFormProps = {
+type WaitlistFormProps = Readonly<{
   copy: LandingCopy["waitlist"];
   locale: LandingLocale;
-};
+}>;
 
 type FormState = {
   name: string;
@@ -252,19 +252,21 @@ export function WaitlistForm({ copy, locale }: WaitlistFormProps) {
   );
 }
 
+type FieldProps = Readonly<{
+  children: ReactNode;
+  className?: string;
+  error?: string;
+  id: string;
+  label: string;
+}>;
+
 function Field({
   children,
   className = "",
   error,
   id,
   label,
-}: {
-  children: ReactNode;
-  className?: string;
-  error?: string;
-  id: string;
-  label: string;
-}) {
+}: FieldProps) {
   return (
     <div className={className}>
       <label className="block text-sm font-medium text-brand-on-navy" htmlFor={id}>
@@ -276,6 +278,6 @@ function Field({
   );
 }
 
-function ErrorText({ children }: { children: ReactNode }) {
+function ErrorText({ children }: Readonly<{ children: ReactNode }>) {
   return <p className="mt-2 text-sm text-brand-accent-on-navy">{children}</p>;
 }

@@ -10,10 +10,10 @@ import type { LandingCopy, LandingLocale } from "../copy";
 import { LandingAuthButtons } from "../landing-auth-buttons";
 import { cn } from "@/lib/utils";
 
-type LandingHeaderProps = {
+type LandingHeaderProps = Readonly<{
   copy: LandingCopy["header"];
   locale: LandingLocale;
-};
+}>;
 
 export function LandingHeader({ copy, locale }: LandingHeaderProps) {
   const [open, setOpen] = useState(false);

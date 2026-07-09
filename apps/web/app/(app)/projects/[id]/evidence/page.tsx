@@ -486,6 +486,13 @@ export default function EvidencePage() {
     await Promise.all([refetchDocuments(), refetchEntities(), refetchAlerts()]);
   }, [refetchDocuments, refetchEntities, refetchAlerts]);
 
+  const handleRefreshClick = useCallback(() => {
+    setActionError(null);
+    handleRefresh().catch(() => {
+      setActionError("Unable to refresh evidence.");
+    });
+  }, [handleRefresh]);
+
   const handleReviewAlert = useCallback(
     async (alertId: string, decision: "approve" | "reject") => {
       setActionError(null);
@@ -781,7 +788,7 @@ export default function EvidencePage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void handleRefresh()}
+            onClick={handleRefreshClick}
             className="rounded-xl bg-background/95 shadow-sm"
           >
             <RefreshCw className="mr-2 h-4 w-4" />
