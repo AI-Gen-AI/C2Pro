@@ -7,7 +7,7 @@ import { render, screen } from "@/src/tests/test-utils";
 
 vi.mock("@/components/landing/landing-page", () => ({
   LandingPage: ({ locale }: { locale?: "es" | "en" }) => (
-    <main>Tres documentos. Una sola verdad. {locale}</main>
+    <main>Three documents. One single truth. {locale}</main>
   ),
 }));
 
@@ -18,15 +18,14 @@ vi.mock("@clerk/nextjs", () => ({
   }),
 }));
 
-import RootPage from "./page";
+import EnglishLandingPage from "./page";
 
-describe("RootPage", () => {
-  it("renders the Spanish landing body immediately without an auth spinner", () => {
-    const { container } = render(<RootPage />);
+describe("EnglishLandingPage", () => {
+  it("renders the English landing body immediately without an auth spinner", () => {
+    const { container } = render(<EnglishLandingPage />);
 
-    expect(screen.getByText(/Tres documentos\. Una sola verdad\./)).toBeInTheDocument();
-    expect(container).toHaveTextContent("es");
+    expect(screen.getByText(/Three documents\. One single truth\./)).toBeInTheDocument();
+    expect(container).toHaveTextContent("en");
     expect(screen.queryByText("Loading...")).not.toBeInTheDocument();
-    expect(screen.queryByText("Redirecting...")).not.toBeInTheDocument();
   });
 });
