@@ -3,7 +3,7 @@
  * Backlog Task: TASK-FRT-200
  */
 import type { LandingCopy } from "../copy";
-import { Eyebrow, H2, SectionShell } from "../primitives";
+import { SectionIntro, SectionShell } from "../primitives";
 
 type OriginLimitsProps = {
   copy: LandingCopy["originLimits"];
@@ -12,8 +12,11 @@ type OriginLimitsProps = {
 export function OriginLimits({ copy }: OriginLimitsProps) {
   return (
     <SectionShell id="origen" variant="alabaster">
-      <Eyebrow>{copy.eyebrow}</Eyebrow>
-      <H2 className="mt-4 max-w-3xl">{copy.h2}</H2>
+      <SectionIntro
+        eyebrow={copy.eyebrow}
+        heading={copy.h2}
+        headingClassName="max-w-3xl"
+      />
       <div className="mt-10 grid gap-6 md:grid-cols-2">
         <article className="rounded-[14px] border border-brand-line bg-brand-paper p-6">
           <h3 className="text-lg font-semibold text-brand-ink">

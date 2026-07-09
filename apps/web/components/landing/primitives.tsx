@@ -93,6 +93,44 @@ export function SectionShell({
   );
 }
 
+type SectionIntroProps = {
+  eyebrow: ReactNode;
+  heading: ReactNode;
+  body?: ReactNode;
+  onNavy?: boolean;
+  className?: string;
+  headingClassName?: string;
+  bodyClassName?: string;
+};
+
+export function SectionIntro({
+  eyebrow,
+  heading,
+  body,
+  onNavy = false,
+  className,
+  headingClassName,
+  bodyClassName,
+}: SectionIntroProps) {
+  return (
+    <div className={className}>
+      <Eyebrow onNavy={onNavy}>{eyebrow}</Eyebrow>
+      <H2 className={cn("mt-4", headingClassName)}>{heading}</H2>
+      {body ? (
+        <p
+          className={cn(
+            "mt-5 text-lg leading-8",
+            onNavy ? "text-brand-on-navy-muted" : "text-brand-slate",
+            bodyClassName,
+          )}
+        >
+          {body}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 type BrandButtonProps = Omit<ComponentPropsWithoutRef<typeof Link>, "href"> & {
   href: string;
   children: ReactNode;

@@ -3,7 +3,7 @@
  * Backlog Task: TASK-FRT-200
  */
 import type { LandingCopy, LandingLocale } from "../copy";
-import { CheckItem, CheckList, Eyebrow, H2, SectionShell } from "../primitives";
+import { CheckItem, CheckList, SectionIntro, SectionShell } from "../primitives";
 import { WaitlistForm } from "./waitlist-form";
 
 type WaitlistSectionProps = {
@@ -16,11 +16,13 @@ export function WaitlistSection({ copy, locale }: WaitlistSectionProps) {
     <SectionShell id="waitlist" variant="navy">
       <div className="grid gap-10 lg:grid-cols-[1fr_0.8fr] lg:items-start">
         <div>
-          <Eyebrow onNavy>{copy.eyebrow}</Eyebrow>
-          <H2 className="mt-4 text-brand-on-navy">{copy.h2}</H2>
-          <p className="mt-5 text-lg leading-8 text-brand-on-navy-muted">
-            {copy.lead}
-          </p>
+          <SectionIntro
+            eyebrow={copy.eyebrow}
+            heading={copy.h2}
+            body={copy.lead}
+            onNavy
+            headingClassName="text-brand-on-navy"
+          />
           <CheckList className="mt-8">
             {copy.checks.map((check) => (
               <CheckItem className="text-brand-on-navy" key={check}>

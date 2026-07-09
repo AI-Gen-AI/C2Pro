@@ -8,7 +8,6 @@ import { waitlistSchema } from "@/components/landing/waitlist-schema";
 const DEFAULT_ALLOWED_ORIGINS = "https://www.ai-gen.ai,https://ai-gen.ai";
 const REQUEST_LIMIT = 5;
 const WINDOW_MS = 10 * 60 * 1000;
-const SERVICE_ROLE_ENV = "SUPABASE_" + "SERVICE_ROLE_KEY";
 
 const requestLog = new Map<string, number[]>();
 
@@ -86,7 +85,7 @@ function getSource(request: Request) {
 
 function supabaseConfig() {
   const url = process.env.SUPABASE_URL?.replace(/\/+$/, "");
-  const serviceRoleKey = process.env[SERVICE_ROLE_ENV];
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) {
     return null;

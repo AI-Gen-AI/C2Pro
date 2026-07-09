@@ -3,7 +3,7 @@
  * Backlog Task: TASK-FRT-200
  */
 import type { LandingCopy } from "../copy";
-import { Eyebrow, H2, SectionShell } from "../primitives";
+import { SectionIntro, SectionShell } from "../primitives";
 
 type DimensionsProps = {
   copy: LandingCopy["dimensions"];
@@ -12,11 +12,12 @@ type DimensionsProps = {
 export function Dimensions({ copy }: DimensionsProps) {
   return (
     <SectionShell id="producto" variant="paper">
-      <div className="max-w-3xl">
-        <Eyebrow>{copy.eyebrow}</Eyebrow>
-        <H2 className="mt-4">{copy.h2}</H2>
-        <p className="mt-5 text-lg leading-8 text-brand-slate">{copy.prose}</p>
-      </div>
+      <SectionIntro
+        className="max-w-3xl"
+        eyebrow={copy.eyebrow}
+        heading={copy.h2}
+        body={copy.prose}
+      />
       <div className="mt-10 grid gap-4 md:grid-cols-3">
         {copy.cards.map((card) => (
           <article
