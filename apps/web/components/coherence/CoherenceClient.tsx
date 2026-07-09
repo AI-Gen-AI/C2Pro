@@ -53,9 +53,17 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
     { critical: 0, high: 0, medium: 0, low: 0 },
   );
   const alertCountByCategory = alerts.reduce<Record<string, number>>((counts, alert) => {
-    counts[alert.category] = (counts[alert.category] ?? 0) + 1;
+    const current = counts[alert.category];
+    counts[alert.category] = (current === undefined ? 0 : current) + 1;
     return counts;
   }, {});
+  // ADR-009 §18: an unloaded/errored alert list means the count is unknown,
+  // not zero — return null so ScoreCard/CategoryDetail render it as absent.
+  const alertCountFor = (category: string): number | null => {
+    if (!alertsAvailable) return null;
+    const count = alertCountByCategory[category];
+    return count === undefined ? 0 : count;
+  };
 
   const barData = Object.entries(summary.sub_scores).map(([k, score]) => ({
     name: LABELS[k] ?? k,
@@ -187,7 +195,7 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
               category={cat}
               score={score}
               weight={summary.weights_used[cat] ?? 0}
-              alertCount={alertsAvailable ? alertCountByCategory[cat] ?? 0 : 0}
+              alertCount={alertCountFor(cat)}
               selected={selectedCat === cat}
               onClick={() => setSelectedCat(selectedCat === cat ? null : cat)}
             />
@@ -200,7 +208,7 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
           category={selectedCat}
           score={summary.sub_scores[selectedCat]}
           weight={summary.weights_used[selectedCat] ?? 0}
-          alertCount={alertsAvailable ? alertCountByCategory[selectedCat] ?? 0 : 0}
+          alertCount={alertCountFor(selectedCat)}
           onClose={() => setSelectedCat(null)}
         />
       )}
