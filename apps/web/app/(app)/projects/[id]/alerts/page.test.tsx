@@ -27,9 +27,27 @@ vi.mock("@/hooks/useProjectAlerts", () => ({
 }));
 
 vi.mock("@/components/features/alerts/AlertReviewCenter", () => ({
-  AlertReviewCenter: (props: { projectId: string; alerts: Array<{ title: string }> }) => {
+  AlertReviewCenter: (props: {
+    projectId: string;
+    alerts: Array<{
+      title: string;
+      assignee?: string;
+      clauseId?: string;
+    }>;
+  }) => {
     alertReviewCenterMock(props);
-    return <div>Alert review for {props.projectId}</div>;
+    return (
+      <div>
+        <div>Alert review for {props.projectId}</div>
+        {props.alerts.map((alert) => (
+          <div key={alert.title}>
+            <span>{alert.title}</span>
+            <span>{alert.assignee ?? "—"}</span>
+            <span>{alert.clauseId ?? "—"}</span>
+          </div>
+        ))}
+      </div>
+    );
   },
 }));
 
@@ -65,7 +83,8 @@ describe("Project alerts route", () => {
     await waitFor(() =>
       expect(useProjectAlertsQueryMock).toHaveBeenCalledWith("proj-real-42", undefined),
     );
-    expect(alertReviewCenterMock).toHaveBeenCalledWith(
+    const reviewProps = alertReviewCenterMock.mock.calls[0][0];
+    expect(reviewProps).toEqual(
       expect.objectContaining({
         projectId: "proj-real-42",
         alerts: [
@@ -77,6 +96,10 @@ describe("Project alerts route", () => {
         ],
       }),
     );
+    expect(reviewProps.alerts[0]).not.toHaveProperty("assignee");
+    expect(reviewProps.alerts[0]).not.toHaveProperty("clauseId");
     expect(screen.getByText(/alert review for proj-real-42/i)).toBeInTheDocument();
+    expect(screen.queryByText(/legal\.reviewer|finance\.analyst|project\.manager/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/clause-alert-1/i)).not.toBeInTheDocument();
   });
 });

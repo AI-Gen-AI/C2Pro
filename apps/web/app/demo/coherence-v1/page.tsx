@@ -126,7 +126,7 @@ export default function DemoCoherenceV1Page() {
             severity: "high",
             status: "pending",
             clauseId: "clause-302",
-            assignee: "legal.reviewer",
+            assignee: "legal.owner",
           },
         ]}
       />

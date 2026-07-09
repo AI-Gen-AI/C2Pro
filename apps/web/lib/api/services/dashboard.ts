@@ -9,6 +9,11 @@ type ListProjectsResponse = {
   items?: Array<Record<string, unknown>>;
 };
 
+type DashboardRequestOptions = {
+  server?: boolean;
+  headers?: HeadersInit;
+};
+
 type DashboardSummaryResponse = Partial<DashboardSummary> & {
   global_score?: number | string | null;
   coherence_score?: number | string | null;
@@ -34,9 +39,7 @@ type ProjectQuickViewSummaryResponse = Partial<ProjectQuickViewSummary> & {
   }> | null;
 };
 
-export async function listProjects(options?: {
-  server?: boolean;
-}): Promise<ProjectListItem[]> {
+export async function listProjects(options?: DashboardRequestOptions): Promise<ProjectListItem[]> {
   const response = await fetchApiJson<ListProjectsResponse>("projects", options);
   return Array.isArray(response.items)
     ? response.items.map((item) => ({
@@ -77,9 +80,7 @@ export async function listProjects(options?: {
 
 export async function getDashboardSummary(
   projectId: string,
-  options?: {
-    server?: boolean;
-  },
+  options?: DashboardRequestOptions,
 ): Promise<DashboardSummary> {
   const summary = await fetchApiJson<DashboardSummaryResponse>(
     `dashboard/${projectId}`,
@@ -111,9 +112,7 @@ export async function getDashboardSummary(
 
 export async function getProjectQuickViewSummary(
   projectId: string,
-  options?: {
-    server?: boolean;
-  },
+  options?: DashboardRequestOptions,
 ): Promise<ProjectQuickViewSummary> {
   const summary = await fetchApiJson<ProjectQuickViewSummaryResponse>(
     `projects/${projectId}/summary`,

@@ -1,8 +1,9 @@
 'use client';
 
-import { Bell, LogOut, Search, User, Menu } from 'lucide-react';
+import { Bell, LogOut, Search, Menu } from 'lucide-react';
 import { useClerk, useUser } from '@clerk/nextjs';
 import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -50,7 +51,7 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
 
   const userName = user?.fullName || user?.emailAddresses?.[0]?.emailAddress || 'User';
   const userEmail = user?.emailAddresses?.[0]?.emailAddress || '';
-  const notificationCount = isDemoMode ? 3 : 0;
+  const notificationCount = 0;
 
   return (
     <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b bg-card px-6">
@@ -149,9 +150,7 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
                 <div className="flex flex-col">
                   <span className="font-semibold text-foreground">Notifications</span>
                   <span className="text-xs font-normal text-muted-foreground">
-                    {isDemoMode
-                      ? 'Sample workspace activity feed'
-                      : 'Workspace alerts and events will appear here'}
+                    Workspace alerts and events will appear here
                   </span>
                 </div>
                 {notificationCount > 0 ? (
@@ -162,41 +161,18 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {isDemoMode ? (
-              <>
-                <DropdownMenuItem className="flex flex-col items-start gap-1 rounded-xl px-3 py-3">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="destructive" className="text-xs">Critical</Badge>
-                    <span className="text-sm font-medium">New alert raised</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    Contract Penalty Clause Violation Risk - 2 hours ago
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex flex-col items-start gap-1 rounded-xl px-3 py-3">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">Update</Badge>
-                    <span className="text-sm font-medium">Score changed</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    PROJ-001 coherence score: 76 → 78 - 1 day ago
-                  </span>
-                </DropdownMenuItem>
-              </>
-            ) : (
-              <DropdownMenuItem
-                disabled
-                className="flex flex-col items-start gap-1 rounded-xl border bg-muted/30 px-3 py-3 opacity-100"
-              >
-                <span className="text-sm font-medium">No new notifications</span>
-                <span className="text-xs text-muted-foreground">
-                  Live workspace notifications will appear here once alerts and events are generated.
-                </span>
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem
+              disabled
+              className="flex flex-col items-start gap-1 rounded-xl border bg-muted/30 px-3 py-3 opacity-100"
+            >
+              <span className="text-sm font-medium">No new notifications</span>
+              <span className="text-xs text-muted-foreground">
+                Live workspace notifications will appear here once alerts and events are generated.
+              </span>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="justify-center rounded-xl px-3 py-2.5 text-sm text-primary">
-              View all notifications
+            <DropdownMenuItem asChild className="justify-center rounded-xl px-3 py-2.5 text-sm text-primary">
+              <Link href="/alerts">View all notifications</Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -229,14 +205,6 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
                 {userEmail}
               </span>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="rounded-xl px-3 py-2.5">
-              <User className="mr-2 h-4 w-4" />
-              Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem className="rounded-xl px-3 py-2.5">
-              Settings
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="rounded-xl px-3 py-2.5 text-destructive focus:bg-destructive/10 focus:text-destructive"

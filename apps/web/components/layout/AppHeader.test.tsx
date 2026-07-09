@@ -87,7 +87,7 @@ describe("AppHeader", () => {
     expect(screen.getByRole("menu")).toHaveClass("shadow-2xl");
     expect(
       screen.getByRole("menuitem", { name: /view all notifications/i }),
-    ).toBeInTheDocument();
+    ).toHaveAttribute("href", "/alerts");
     expect(screen.getByText(/no new notifications/i)).toBeInTheDocument();
     expect(screen.getByText(/workspace alerts and events will appear here/i)).toBeInTheDocument();
 
@@ -97,7 +97,9 @@ describe("AppHeader", () => {
     await user.click(userMenu);
     expect(screen.getByRole("menu")).toHaveClass("rounded-2xl");
     expect(screen.getByRole("menu")).toHaveClass("shadow-2xl");
-    expect(screen.getByRole("menuitem", { name: /profile/i })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /profile/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /^settings$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /sign out/i })).toBeInTheDocument();
   });
 
   it("shows explicit demo badges on demo routes", () => {
@@ -110,15 +112,20 @@ describe("AppHeader", () => {
     expect(screen.getByText(/sample data/i)).toBeInTheDocument();
   });
 
-  it("shows the sample notification badge only on demo routes", async () => {
+  it("keeps notifications honest on demo routes when no notification data exists", async () => {
     pathnameState.value = "/demo/projects";
     appModeState.mode = "demo";
     appModeState.demoEnvironmentEnabled = true;
     const user = userEvent.setup();
     renderWithProviders(<AppHeader title="Projects" />);
 
-    expect(screen.getByText(/^3$/)).toBeInTheDocument();
+    expect(screen.queryByText(/^3$/)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /notifications/i }));
-    expect(screen.getByText(/new alert raised/i)).toBeInTheDocument();
+    expect(screen.queryByText(/new alert raised/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/score changed/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/no new notifications/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: /view all notifications/i }),
+    ).toHaveAttribute("href", "/alerts");
   });
 });

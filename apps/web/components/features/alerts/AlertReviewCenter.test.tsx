@@ -27,7 +27,7 @@ describe("S3-04 RED - AlertReviewCenter", () => {
             severity: "high",
             status: "pending",
             clauseId: "c-101",
-            assignee: "legal.reviewer",
+            assignee: "legal.owner",
           },
         ]}
       />,
@@ -38,6 +38,28 @@ describe("S3-04 RED - AlertReviewCenter", () => {
     expect(screen.getByRole("columnheader", { name: /status/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /clause/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /assignee/i })).toBeInTheDocument();
+  });
+
+  it("[TASK-FRT-178] renders honest placeholders when backend alerts have no clause or assignee", () => {
+    render(
+      <AlertReviewCenter
+        projectId="proj_real_001"
+        alerts={[
+          {
+            id: "alert-real",
+            title: "Backend alert without reviewer metadata",
+            severity: "medium",
+            status: "pending",
+          },
+        ]}
+      />,
+    );
+
+    const row = screen.getByRole("row", {
+      name: /backend alert without reviewer metadata/i,
+    });
+    expect(row).toHaveTextContent("—");
+    expect(row).not.toHaveTextContent(/legal\.reviewer|finance\.analyst|clause-/i);
   });
 
   it("[S3-04-RED-UNIT-02] opens approve modal with selected alert context", () => {
@@ -51,7 +73,7 @@ describe("S3-04 RED - AlertReviewCenter", () => {
             severity: "high",
             status: "pending",
             clauseId: "c-101",
-            assignee: "legal.reviewer",
+            assignee: "legal.owner",
           },
         ]}
       />,
@@ -235,7 +257,7 @@ describe("S3-04 RED - AlertReviewCenter", () => {
             severity: "medium",
             status: "pending",
             clauseId: "c-707",
-            assignee: "finance.analyst",
+            assignee: "cost.owner",
           },
         ]}
       />,
@@ -283,7 +305,7 @@ describe("S3-04 RED - AlertReviewCenter", () => {
             severity: "high",
             status: "pending",
             clauseId: "c-high",
-            assignee: "finance.analyst",
+            assignee: "cost.owner",
           },
         ]}
       />,

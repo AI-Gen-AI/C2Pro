@@ -14,8 +14,8 @@ export interface ReviewAlert {
   title: string;
   severity: AlertSeverity;
   status: AlertStatus;
-  clauseId: string;
-  assignee: string;
+  clauseId?: string;
+  assignee?: string;
   rejectionReason?: string;
   resolutionNotes?: string;
   rootCause?: string;
@@ -202,8 +202,8 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
         title: createTitle.trim(),
         severity: createSeverity,
         status: "pending",
-        clauseId: createClauseId.trim() || "c-new",
-        assignee: "unassigned",
+        clauseId: createClauseId.trim() || undefined,
+        assignee: undefined,
       },
     ]);
     closeModal();
@@ -214,8 +214,8 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
       `C2Pro coherence alert: ${alert.title}`,
       `Severity: ${alert.severity.toUpperCase()}`,
       `Status: ${alert.status}`,
-      `Clause: ${alert.clauseId}`,
-      `Owner: ${alert.assignee}`,
+      `Clause: ${alert.clauseId ?? "—"}`,
+      `Owner: ${alert.assignee ?? "—"}`,
       "Please review the source evidence and confirm the vendor response or corrective action.",
     ].join("\n");
 
@@ -277,8 +277,8 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
               <td>{alert.title}</td>
               <td>{alert.severity}</td>
               <td>{alert.status}</td>
-              <td>{alert.clauseId}</td>
-              <td>{alert.assignee}</td>
+              <td>{alert.clauseId ?? "—"}</td>
+              <td>{alert.assignee ?? "—"}</td>
               <td>
                 <button
                   type="button"

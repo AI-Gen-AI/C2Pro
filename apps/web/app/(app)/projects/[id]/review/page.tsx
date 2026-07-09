@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useUser } from '@clerk/nextjs';
 import { useParams } from 'next/navigation';
 import {
   CheckCircle2,
@@ -125,6 +126,9 @@ function isOverdue(slaDueDate: string): boolean {
 export default function ReviewPage() {
   const params = useParams();
   const projectId = params.id as string;
+  const { isLoaded: isUserLoaded, user } = useUser();
+  const reviewerName = user?.primaryEmailAddress?.emailAddress ?? user?.id;
+  const reviewerIdentityReady = isUserLoaded && Boolean(reviewerName);
   const { data: project } = useProject(projectId);
   const projectName = project?.name?.trim() || projectId;
 
@@ -170,11 +174,11 @@ export default function ReviewPage() {
   };
 
   const handleApprove = async () => {
-    if (modal.kind !== 'approve') return;
+    if (modal.kind !== 'approve' || !reviewerName) return;
     try {
       await approveMutation.mutateAsync({
         itemId: modal.item.item_id,
-        data: { reviewer_name: 'current-user' },
+        data: { reviewer_name: reviewerName },
       });
       closeModal();
       refetch();
@@ -184,12 +188,12 @@ export default function ReviewPage() {
   };
 
   const handleReject = async () => {
-    if (modal.kind !== 'reject' || rejectReason.trim().length === 0) return;
+    if (modal.kind !== 'reject' || rejectReason.trim().length === 0 || !reviewerName) return;
     try {
       await rejectMutation.mutateAsync({
         itemId: modal.item.item_id,
         data: {
-          reviewer_name: 'current-user',
+          reviewer_name: reviewerName,
           reason: rejectReason.trim(),
         },
       });
@@ -324,6 +328,8 @@ export default function ReviewPage() {
                           size="sm"
                           variant="outline"
                           className="text-green-600 hover:bg-green-50"
+                          disabled={!reviewerIdentityReady}
+                          title={!reviewerIdentityReady ? 'Loading your identity…' : undefined}
                           onClick={() => setModal({ kind: 'approve', item })}
                           data-testid={`approve-${item.item_id}`}
                         >
@@ -333,6 +339,8 @@ export default function ReviewPage() {
                           size="sm"
                           variant="outline"
                           className="text-red-600 hover:bg-red-50"
+                          disabled={!reviewerIdentityReady}
+                          title={!reviewerIdentityReady ? 'Loading your identity…' : undefined}
                           onClick={() => setModal({ kind: 'reject', item })}
                           data-testid={`reject-${item.item_id}`}
                         >
@@ -460,7 +468,8 @@ export default function ReviewPage() {
             </Button>
             <Button
               onClick={handleApprove}
-              disabled={approveMutation.isPending}
+              disabled={approveMutation.isPending || !reviewerIdentityReady}
+              title={!reviewerIdentityReady ? 'Loading your identity…' : undefined}
               className="bg-green-600 hover:bg-green-700"
             >
               {approveMutation.isPending ? (
@@ -507,7 +516,12 @@ export default function ReviewPage() {
             <Button
               variant="destructive"
               onClick={handleReject}
-              disabled={rejectMutation.isPending || rejectReason.trim().length === 0}
+              disabled={
+                rejectMutation.isPending ||
+                rejectReason.trim().length === 0 ||
+                !reviewerIdentityReady
+              }
+              title={!reviewerIdentityReady ? 'Loading your identity…' : undefined}
             >
               {rejectMutation.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

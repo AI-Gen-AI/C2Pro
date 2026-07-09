@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Megaphone } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CoherenceGauge } from "@/components/coherence/CoherenceGauge";
 import { ScoreCard } from "@/components/coherence/ScoreCard";
@@ -12,6 +12,7 @@ import { AlertsDistribution } from "@/components/coherence/AlertsDistribution";
 import { CategoryDetail } from "@/components/coherence/CategoryDetail";
 import type { DashboardSummary } from "@/lib/api/contracts";
 import { ScoreVersionBadge } from "@/src/components/coherence/ScoreVersionBadge";
+import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from "@/lib/api/generated/alerts/alerts";
 
 const LABELS: Record<string, string> = {
   SCOPE: "Scope",
@@ -31,9 +32,30 @@ interface CoherenceClientProps {
 export function CoherenceClient({ summary }: CoherenceClientProps) {
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>("breakdown");
+  const {
+    data: alertsResponse,
+    isLoading: alertsLoading,
+    error: alertsError,
+  } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(summary.project_id, undefined);
   const score = typeof summary.coherence_score === "number" ? summary.coherence_score : null;
   const hasScore = score !== null;
   const missingDimensions = summary.score_missing_dimensions ?? [];
+  const alerts = alertsResponse?.items ?? [];
+  const alertsAvailable = !alertsLoading && !alertsError;
+  const severityCounts = alerts.reduce(
+    (counts, alert) => {
+      const severity = alert.severity.toLowerCase();
+      if (severity === "critical" || severity === "high" || severity === "medium" || severity === "low") {
+        counts[severity] += 1;
+      }
+      return counts;
+    },
+    { critical: 0, high: 0, medium: 0, low: 0 },
+  );
+  const alertCountByCategory = alerts.reduce<Record<string, number>>((counts, alert) => {
+    counts[alert.category] = (counts[alert.category] ?? 0) + 1;
+    return counts;
+  }, {});
 
   const barData = Object.entries(summary.sub_scores).map(([k, score]) => ({
     name: LABELS[k] ?? k,
@@ -58,19 +80,6 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
 
   return (
     <>
-      <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
-        <div className="flex gap-3">
-          <Megaphone className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" aria-hidden />
-          <div>
-            <p className="font-semibold">Coherence Score v1 is active</p>
-            <p className="mt-1 text-emerald-900/80">
-              New audits use weighted severity and missing-evidence safeguards. Historical v0 scores
-              remain unchanged.
-            </p>
-          </div>
-        </div>
-      </div>
-
       {!hasScore ? (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-4 text-sm text-amber-950">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -146,12 +155,25 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
           {view === "breakdown" && <BreakdownChart data={barData} />}
           {view === "radar" && <RadarView data={radarData} />}
           {view === "alerts" && (
-            <AlertsDistribution
-              critical={0}
-              high={0}
-              medium={summary.alert_count}
-              low={0}
-            />
+            alertsAvailable && alerts.length > 0 ? (
+              <AlertsDistribution
+                critical={severityCounts.critical}
+                high={severityCounts.high}
+                medium={severityCounts.medium}
+                low={severityCounts.low}
+              />
+            ) : (
+              <div className="flex min-h-[190px] flex-col items-center justify-center rounded-md border border-dashed bg-muted/20 p-6 text-center">
+                <p className="text-sm font-medium text-foreground">
+                  {alertsLoading ? "Loading alert data" : "No alert data"}
+                </p>
+                <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                  {alertsLoading
+                    ? "Alert distribution will appear when the backend response is available."
+                    : "Alert distribution requires live project alerts from the backend."}
+                </p>
+              </div>
+            )
           )}
         </div>
       </div>
@@ -165,7 +187,7 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
               category={cat}
               score={score}
               weight={summary.weights_used[cat] ?? 0}
-              alertCount={0}
+              alertCount={alertsAvailable ? alertCountByCategory[cat] ?? 0 : 0}
               selected={selectedCat === cat}
               onClick={() => setSelectedCat(selectedCat === cat ? null : cat)}
             />
@@ -178,8 +200,7 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
           category={selectedCat}
           score={summary.sub_scores[selectedCat]}
           weight={summary.weights_used[selectedCat] ?? 0}
-          alertCount={0}
-          trend={[]}
+          alertCount={alertsAvailable ? alertCountByCategory[selectedCat] ?? 0 : 0}
           onClose={() => setSelectedCat(null)}
         />
       )}

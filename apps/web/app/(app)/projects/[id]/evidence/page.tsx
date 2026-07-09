@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useUser } from "@clerk/nextjs";
 import { useParams, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -185,6 +186,9 @@ export default function EvidencePage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const requestedDocumentId = searchParams.get("documentId");
+  const { isLoaded: isUserLoaded, user } = useUser();
+  const reviewerName = user?.primaryEmailAddress?.emailAddress ?? user?.id;
+  const reviewerIdentityReady = isUserLoaded && Boolean(reviewerName);
   const { data: project } = useProject(id);
   const projectName = project?.name?.trim() || id;
 
@@ -504,12 +508,16 @@ export default function EvidencePage() {
   );
 
   const handleResolveAlert = useCallback(async (alertId: string) => {
+    if (!reviewerName) {
+      return;
+    }
+
     setActionError(null);
     const updatedAlert = await resolveProjectAlert.mutateAsync({
       alertId,
       data: {
         resolution: "Resolved from evidence viewer",
-        resolved_by: "web-evidence-viewer",
+        resolved_by: reviewerName,
         root_cause: "other",
       },
     });
@@ -520,7 +528,7 @@ export default function EvidencePage() {
           : alert,
       ),
     );
-  }, [resolveProjectAlert]);
+  }, [resolveProjectAlert, reviewerName]);
 
   const requestApproveEntity = useCallback(
     async (entityId: string) => {
@@ -988,6 +996,8 @@ export default function EvidencePage() {
                               size="sm"
                               variant="outline"
                               className="rounded-xl bg-background/95 shadow-sm"
+                              disabled={!reviewerIdentityReady}
+                              title={!reviewerIdentityReady ? "Loading your identity…" : undefined}
                               onClick={() =>
                                 requestReviewAlert(alert.id, "approve")
                               }
@@ -998,6 +1008,8 @@ export default function EvidencePage() {
                               size="sm"
                               variant="outline"
                               className="rounded-xl bg-background/95 shadow-sm"
+                              disabled={!reviewerIdentityReady}
+                              title={!reviewerIdentityReady ? "Loading your identity…" : undefined}
                               onClick={() =>
                                 requestReviewAlert(alert.id, "reject")
                               }
@@ -1007,6 +1019,8 @@ export default function EvidencePage() {
                             <Button
                               size="sm"
                               className="rounded-xl shadow-sm"
+                              disabled={!reviewerIdentityReady}
+                              title={!reviewerIdentityReady ? "Loading your identity…" : undefined}
                               onClick={() => void handleResolveAlert(alert.id)}
                             >
                               Resolve Alert

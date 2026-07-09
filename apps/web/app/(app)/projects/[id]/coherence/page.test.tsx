@@ -7,9 +7,16 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import ProjectCoherencePage from "./page";
 
 const getCoherenceDashboardMock = vi.fn();
+const getTokenMock = vi.fn();
 
 vi.mock("@/lib/api/services/dashboard", () => ({
   getDashboardSummary: (...args: unknown[]) => getCoherenceDashboardMock(...args),
+}));
+
+vi.mock("@clerk/nextjs/server", () => ({
+  auth: async () => ({
+    getToken: getTokenMock,
+  }),
 }));
 
 vi.mock("@/components/coherence/CoherenceClient", () => ({
@@ -21,9 +28,11 @@ vi.mock("@/components/coherence/CoherenceClient", () => ({
 describe("ProjectCoherencePage", () => {
   beforeEach(() => {
     getCoherenceDashboardMock.mockReset();
+    getTokenMock.mockReset();
+    getTokenMock.mockResolvedValue("clerk-server-token");
   });
 
-  it("loads coherence data through the dashboard service", async () => {
+  it("loads coherence data through the dashboard service with the Clerk server token", async () => {
     getCoherenceDashboardMock.mockResolvedValue({
       project_id: "proj-1",
       tenant_id: "tenant-1",
@@ -41,8 +50,20 @@ describe("ProjectCoherencePage", () => {
 
     expect(getCoherenceDashboardMock).toHaveBeenCalledWith("proj-1", {
       server: true,
+      headers: {
+        Authorization: "Bearer clerk-server-token",
+      },
     });
     expect(screen.getByText(/coherence summary 87/i)).toBeInTheDocument();
+  });
+
+  it("renders the empty coherence state without calling the API when no Clerk token is available", async () => {
+    getTokenMock.mockResolvedValue(null);
+
+    renderWithProviders(await ProjectCoherencePage({ params: Promise.resolve({ id: "proj-1" }) }));
+
+    expect(getCoherenceDashboardMock).not.toHaveBeenCalled();
+    expect(screen.getByText(/no coherence data yet/i)).toBeInTheDocument();
   });
 
   it("shows the backend error banner when coherence loading fails", async () => {

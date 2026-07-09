@@ -132,4 +132,29 @@ describe("dashboard service contract alignment", () => {
       {},
     );
   });
+
+  it("passes server authorization headers through to coherence dashboard requests", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          project_id: "proj-auth",
+          tenant_id: "tenant-1",
+          coherence_score: 77,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await getDashboardSummary("proj-auth", {
+      server: true,
+      headers: { Authorization: "Bearer clerk-server-token" },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/coherence/dashboard/proj-auth",
+      {
+        headers: { Authorization: "Bearer clerk-server-token" },
+      },
+    );
+  });
 });

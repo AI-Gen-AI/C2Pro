@@ -1,6 +1,7 @@
 import type { DashboardSummary } from "@/lib/api/contracts";
 import { CoherenceClient } from "@/components/coherence/CoherenceClient";
 import { getDashboardSummary } from "@/lib/api/services/dashboard";
+import { auth } from "@clerk/nextjs/server";
 import { BarChart3 } from "lucide-react";
 
 export default async function ProjectCoherencePage({
@@ -17,10 +18,21 @@ export default async function ProjectCoherencePage({
   let loadError: string | null = null;
 
   try {
-    summary =
-      process.env.NODE_ENV !== "production" && scenario
-        ? buildCoherenceV1Scenario(id, scenario)
-        : await getDashboardSummary(id, { server: true });
+    if (process.env.NODE_ENV !== "production" && scenario) {
+      summary = buildCoherenceV1Scenario(id, scenario);
+    } else {
+      const { getToken } = await auth();
+      const token = await getToken();
+
+      if (token) {
+        summary = await getDashboardSummary(id, {
+          server: true,
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
+    }
   } catch (error) {
     loadError =
       error instanceof Error

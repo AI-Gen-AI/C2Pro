@@ -17,6 +17,16 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => useSearchParamsMock(),
 }));
 
+vi.mock("@clerk/nextjs", () => ({
+  useUser: () => ({
+    isLoaded: true,
+    user: {
+      id: "user_123",
+      primaryEmailAddress: { emailAddress: "jane@acme.com" },
+    },
+  }),
+}));
+
 vi.mock("@/hooks/useProjectDocuments", () => ({
   useProjectDocuments: (...args: unknown[]) => useProjectDocumentsMock(...args),
 }));
@@ -470,7 +480,7 @@ describe("EvidencePage highlight mapping", () => {
         alertId: "alert-1",
         data: {
           resolution: "Resolved from evidence viewer",
-          resolved_by: "web-evidence-viewer",
+          resolved_by: "jane@acme.com",
           root_cause: "other",
         },
       });
