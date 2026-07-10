@@ -1,7 +1,8 @@
-import { renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
+import { createTestWrapper } from "@/src/tests/test-utils";
 
 const { getProjectDocumentsMock } = vi.hoisted(() => ({
   getProjectDocumentsMock: vi.fn(),
@@ -14,10 +15,17 @@ vi.mock("@/lib/api", () => ({
 describe("useProjectDocuments", () => {
   beforeEach(() => {
     getProjectDocumentsMock.mockReset();
+    vi.useRealTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("returns an empty stable state when project id is missing", async () => {
-    const { result } = renderHook(() => useProjectDocuments(null));
+    const { result } = renderHook(() => useProjectDocuments(null), {
+      wrapper: createTestWrapper(),
+    });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -46,7 +54,9 @@ describe("useProjectDocuments", () => {
       },
     ]);
 
-    const { result } = renderHook(() => useProjectDocuments("proj-1"));
+    const { result } = renderHook(() => useProjectDocuments("proj-1"), {
+      wrapper: createTestWrapper(),
+    });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -89,7 +99,9 @@ describe("useProjectDocuments", () => {
       },
     ]);
 
-    const { result } = renderHook(() => useProjectDocuments("proj-budget"));
+    const { result } = renderHook(() => useProjectDocuments("proj-budget"), {
+      wrapper: createTestWrapper(),
+    });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -113,7 +125,9 @@ describe("useProjectDocuments", () => {
       },
     ]);
 
-    const { result } = renderHook(() => useProjectDocuments("proj-2"));
+    const { result } = renderHook(() => useProjectDocuments("proj-2"), {
+      wrapper: createTestWrapper(),
+    });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -127,7 +141,9 @@ describe("useProjectDocuments", () => {
   it("surfaces fetch failures", async () => {
     getProjectDocumentsMock.mockRejectedValueOnce(new Error("documents down"));
 
-    const { result } = renderHook(() => useProjectDocuments("proj-3"));
+    const { result } = renderHook(() => useProjectDocuments("proj-3"), {
+      wrapper: createTestWrapper(),
+    });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -158,7 +174,9 @@ describe("useProjectDocuments", () => {
         },
       ]);
 
-    const { result } = renderHook(() => useProjectDocuments("proj-4"));
+    const { result } = renderHook(() => useProjectDocuments("proj-4"), {
+      wrapper: createTestWrapper(),
+    });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     await result.current.refetch();
@@ -166,6 +184,52 @@ describe("useProjectDocuments", () => {
     await waitFor(() =>
       expect(result.current.documents[0]).toMatchObject({ id: "doc-2", name: "Two.pdf" }),
     );
+    expect(getProjectDocumentsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("polls while documents are in flight and stops after analysis completes", async () => {
+    vi.useFakeTimers();
+    getProjectDocumentsMock
+      .mockResolvedValueOnce([
+        {
+          id: "doc-processing",
+          filename: "Schedule.xlsx",
+          document_type: "schedule",
+          status: "processing",
+          uploaded_at: "2026-03-19T09:00:00Z",
+          file_size_bytes: 4096,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "doc-processing",
+          filename: "Schedule.xlsx",
+          document_type: "schedule",
+          status: "analyzed",
+          uploaded_at: "2026-03-19T09:00:00Z",
+          file_size_bytes: 4096,
+        },
+      ]);
+
+    const { result } = renderHook(() => useProjectDocuments("proj-polling"), {
+      wrapper: createTestWrapper(),
+    });
+
+    await vi.waitFor(() =>
+      expect(result.current.documents[0]?.status).toBe("processing"),
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    await vi.waitFor(() =>
+      expect(result.current.documents[0]?.status).toBe("analyzed"),
+    );
+    expect(getProjectDocumentsMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
     expect(getProjectDocumentsMock).toHaveBeenCalledTimes(2);
   });
 });

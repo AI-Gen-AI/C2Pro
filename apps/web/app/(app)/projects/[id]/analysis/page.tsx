@@ -1,14 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AlertTriangle, Gauge, RadioTower, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { AnalysisProgressTracker } from "@/components/features/analysis/AnalysisProgressTracker";
 import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from "@/lib/api/generated/alerts/alerts";
 import { useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet } from "@/lib/api/generated/coherence-dashboard/coherence-dashboard";
-import { getStreamProjectProcessingUrl } from "@/lib/api/analysis-stream";
 
 type DashboardExtras = {
   score_version?: unknown;
@@ -145,12 +143,9 @@ export default function AnalysisPage() {
             points for this project.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href={getStreamProjectProcessingUrl(id)}>
-            Open Processing Stream
-          </Link>
-        </Button>
       </div>
+
+      <AnalysisProgressTracker projectId={id} />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {statCards.map((stat) => {
@@ -215,10 +210,6 @@ export default function AnalysisPage() {
                 Missing evidence: {missingDimensions.join(", ")}
               </p>
             ) : null}
-            <p>
-              Use the processing stream link to watch the project pipeline emit
-              live analysis state from the backend.
-            </p>
           </CardContent>
         </Card>
 

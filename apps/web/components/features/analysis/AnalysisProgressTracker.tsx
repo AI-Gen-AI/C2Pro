@@ -8,11 +8,19 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/stores/auth";
 
+type StageStatus = "pending" | "running" | "completed" | "error";
+
 export interface AnalysisNode {
   id: string;
   name: string;
   description: string;
-  status: "pending" | "running" | "completed" | "error";
+  status: StageStatus;
+}
+
+interface ProgressStage {
+  id: string;
+  name: string;
+  range: [number, number];
 }
 
 const NODES: AnalysisNode[] = [
@@ -114,6 +122,52 @@ const NODES: AnalysisNode[] = [
   },
 ];
 
+const USER_FACING_STAGES: ProgressStage[] = [
+  {
+    id: "reading",
+    name: "Reading documents",
+    range: [1, 3],
+  },
+  {
+    id: "extracting",
+    name: "Extracting & cross-checking",
+    range: [4, 11],
+  },
+  {
+    id: "quality",
+    name: "Quality review",
+    range: [12, 15],
+  },
+  {
+    id: "finalizing",
+    name: "Finalizing",
+    range: [16, 17],
+  },
+];
+
+function stageForStep(step: unknown) {
+  const stageNumber = typeof step === "number" ? step : Number(step ?? 1);
+  const safeStage = Number.isFinite(stageNumber) ? stageNumber : 1;
+
+  return (
+    USER_FACING_STAGES.find(
+      (stage) => safeStage >= stage.range[0] && safeStage <= stage.range[1],
+    ) ?? USER_FACING_STAGES[0]
+  );
+}
+
+function statusForStage(stage: ProgressStage, currentStage: ProgressStage | null): StageStatus {
+  if (!currentStage) {
+    return "pending";
+  }
+
+  if (stage.id === currentStage.id) {
+    return "running";
+  }
+
+  return stage.range[1] < currentStage.range[0] ? "completed" : "pending";
+}
+
 interface AnalysisProgressTrackerProps {
   projectId: string;
   onComplete?: (result: unknown) => void;
@@ -126,7 +180,7 @@ export function AnalysisProgressTracker({
   onError,
 }: AnalysisProgressTrackerProps) {
   const [nodes, setNodes] = useState<AnalysisNode[]>(NODES);
-  const [currentStep, setCurrentStep] = useState<string | null>(null);
+  const [currentStage, setCurrentStage] = useState<ProgressStage | null>(null);
   const [overallProgress, setOverallProgress] = useState(0);
   const [error, setLocalError] = useState<string | null>(null);
 
@@ -144,11 +198,12 @@ export function AnalysisProgressTracker({
     eventSource.addEventListener("stage", (event) => {
       try {
         const data = JSON.parse(event.data);
+        const stage = stageForStep(data.stage);
         const node = NODES[Math.max(0, (data.stage ?? 1) - 1)];
         if (node) {
           updateNodeStatus(node.id, "completed");
-          setCurrentStep(data.name || node.name);
         }
+        setCurrentStage(stage);
         setOverallProgress(data.progress ?? 0);
       } catch (e) {
         console.error("Error parsing SSE data", e);
@@ -159,6 +214,7 @@ export function AnalysisProgressTracker({
       try {
         const data = JSON.parse(event.data);
         setOverallProgress(100);
+        setCurrentStage(USER_FACING_STAGES[USER_FACING_STAGES.length - 1]);
         if (onComplete) onComplete(data);
         eventSource.close();
       } catch (e) {
@@ -181,7 +237,7 @@ export function AnalysisProgressTracker({
     return () => eventSource.close();
   }, [projectId]);
 
-  const updateNodeStatus = (nodeId: string, status: AnalysisNode["status"]) => {
+  const updateNodeStatus = (nodeId: string, status: StageStatus) => {
     setNodes((prev) =>
       prev.map((node) => (node.id === nodeId ? { ...node, status } : node)),
     );
@@ -191,9 +247,9 @@ export function AnalysisProgressTracker({
     <div className="space-y-6 rounded-xl border bg-card p-6 shadow-sm">
       <div className="flex items-center justify-between">
         <div className="space-y-1">
-          <h3 className="text-lg font-semibold">LLM Orchestration Progress</h3>
+          <h3 className="text-lg font-semibold">Analysis Progress</h3>
           <p className="text-sm text-muted-foreground">
-            Processing through 17-node LangGraph pipeline
+            Track document reading, extraction, quality review, and finalization.
           </p>
         </div>
         <Badge
@@ -213,8 +269,8 @@ export function AnalysisProgressTracker({
           <span>
             {error
               ? error
-              : currentStep
-                ? `Currently: ${currentStep}`
+              : currentStage
+                ? `Currently: ${currentStage.name}`
                 : "Starting..."}
           </span>
           <span>{Math.round(overallProgress)}%</span>
@@ -222,8 +278,40 @@ export function AnalysisProgressTracker({
         <Progress value={overallProgress} className="h-2" />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-9">
-        {nodes.map((node) => (
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {USER_FACING_STAGES.map((stage) => {
+          const status = statusForStage(stage, currentStage);
+
+          return (
+            <div
+              key={stage.id}
+              className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${
+                status === "completed"
+                  ? "border-primary/20 bg-primary/5"
+                  : status === "running"
+                    ? "border-primary bg-primary/5"
+                    : "border-muted bg-muted/30"
+              }`}
+            >
+              {status === "completed" ? (
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+              ) : status === "running" ? (
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              ) : (
+                <Circle className="h-4 w-4 text-muted-foreground" />
+              )}
+              <span className="text-sm font-medium">{stage.name}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <details className="rounded-lg border bg-muted/20 p-3 text-sm">
+        <summary className="cursor-pointer font-medium text-muted-foreground">
+          Technical detail
+        </summary>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-9">
+          {nodes.map((node) => (
           <div
             key={node.id}
             className={`flex flex-col items-center gap-1 rounded-lg border p-2 text-center transition-colors ${
@@ -261,8 +349,9 @@ export function AnalysisProgressTracker({
               {node.name}
             </span>
           </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </details>
     </div>
   );
 }

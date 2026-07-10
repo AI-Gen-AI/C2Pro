@@ -40,6 +40,15 @@ class MockEventSource {
   }
 
   close() {}
+
+  emit(type: string, data: unknown) {
+    const event = new MessageEvent("message", {
+      data: JSON.stringify(data),
+    });
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener(event);
+    }
+  }
 }
 
 describe("AnalysisProgressTracker", () => {
@@ -63,5 +72,26 @@ describe("AnalysisProgressTracker", () => {
 
     expect(handleAuthErrorStatus).toHaveBeenCalledWith(401);
     expect(screen.getByText(/session expired/i)).toBeInTheDocument();
+  });
+
+  it("maps technical stage events into four user-facing progress buckets", () => {
+    render(<AnalysisProgressTracker projectId="proj-123" />);
+
+    expect(screen.getByText("Reading documents")).toBeInTheDocument();
+    expect(screen.getByText("Extracting & cross-checking")).toBeInTheDocument();
+    expect(screen.getByText("Quality review")).toBeInTheDocument();
+    expect(screen.getByText("Finalizing")).toBeInTheDocument();
+    expect(screen.queryByText(/17-node LangGraph pipeline/i)).not.toBeInTheDocument();
+
+    act(() => {
+      MockEventSource.instances[0]?.emit("stage", {
+        stage: 5,
+        name: "WBS Extraction",
+        progress: 35,
+      });
+    });
+
+    expect(screen.getByText(/currently: extracting & cross-checking/i)).toBeInTheDocument();
+    expect(screen.getByText("35%")).toBeInTheDocument();
   });
 });

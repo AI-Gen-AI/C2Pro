@@ -22,8 +22,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { AnalysisProgressTracker } from '@/components/features/analysis/AnalysisProgressTracker';
 import { useProjectDocuments } from '@/hooks/useProjectDocuments';
+import { apiClient } from '@/lib/api/client';
 import { useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete } from '@/lib/api/generated/documents/documents';
+import { showToast } from '@/lib/ui/toast';
 import { formatFileSize } from '@/types/document';
 import { DocumentUploadDropzone } from '@/components/features/documents/DocumentUploadDropzone';
 import { useProject } from '@/hooks/useProject';
@@ -89,6 +92,27 @@ function sortedUniqueTypes(rows: Array<{ type: string }>) {
   return Array.from(types).sort();
 }
 
+function isInFlightStatus(status: string | undefined): boolean {
+  return ['uploaded', 'queued', 'processing'].includes(
+    String(status ?? '').toLowerCase(),
+  );
+}
+
+function retryFailureMessage(error: unknown): string {
+  const maybeResponse = error as {
+    response?: { data?: { detail?: unknown } };
+  };
+  const detail = maybeResponse.response?.data?.detail;
+
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail;
+  }
+
+  return error instanceof Error && error.message
+    ? error.message
+    : 'Failed to retry document processing.';
+}
+
 export default function ProjectDocumentsPage() {
   const params = useParams();
   const router = useRouter();
@@ -110,15 +134,11 @@ export default function ProjectDocumentsPage() {
   const handleRetryProcessing = async (docId: string) => {
     setRetryingDocumentId(docId);
     try {
-      const response = await fetch(`/api/v1/projects/${projectId}/documents/${docId}/reprocess`, {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        console.error('Reprocess request failed:', response.status);
-      }
-      refetch();
+      await apiClient.post(`/projects/${projectId}/documents/${docId}/reprocess`);
+      await refetch();
     } catch (error) {
       console.error('Failed to reprocess document:', error);
+      showToast(retryFailureMessage(error));
     } finally {
       setRetryingDocumentId(null);
     }
@@ -183,6 +203,9 @@ export default function ProjectDocumentsPage() {
   const errorCount = rows.filter((row) => row.status === 'Error').length;
   const hasBackendDocuments = rows.length > 0;
   const uploadedCount = rows.filter((row) => row.status === 'Uploaded').length;
+  const hasInFlightDocuments = documents.some((doc) =>
+    isInFlightStatus(doc.status),
+  );
 
   return (
     <div className="space-y-6" data-testid="documents-page">
@@ -213,6 +236,10 @@ export default function ProjectDocumentsPage() {
           Upload Document
         </Button>
       </div>
+
+      {hasInFlightDocuments ? (
+        <AnalysisProgressTracker projectId={projectId} />
+      ) : null}
 
       {/* Upload Dialog */}
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>

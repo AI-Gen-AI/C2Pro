@@ -3191,7 +3191,7 @@
     "rev_006_progress": "Phase A complete - hexagonal structure created",
     "audit_pending": 4
   },
-  "contexto_paso_anterior": "",
+  "contexto_paso_anterior": "2026-07-10T22:11:05.4809547Z: TASK-FRT-180 and TASK-FRT-181 completed on feat/frt-l1-wave0-cont. Result: four-stage analysis progress mounted on Analysis/Documents, useProjectDocuments converted to React Query polling while docs are in-flight, raw stream link removed, retry processing uses authenticated apiClient.post and visible error toast. Verification: focused Vitest 4 files / 30 tests passed, pnpm typecheck passed, pnpm lint passed; broader app/(app)/projects/[id] + components/coherence guard has 91 passing tests and 3 unrelated TASK-FRT-192 debt failures in untouched budget/settings/wbs tests.",
   "trazas_de_error": [
     {
       "timestamp": "2026-04-10T20:54:00+00:00",
