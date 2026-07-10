@@ -3,7 +3,7 @@
  * Fetches and manages project documents from the backend
  */
 
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { getProjectDocuments } from '@/lib/api';
 import type { DocumentListResponse } from '@/types/backend';
 import type { DocumentInfo } from '@/types/document';
@@ -54,44 +54,46 @@ function transformDocument(doc: DocumentListResponse): DocumentInfo {
   };
 }
 
+function hasInFlightDocs(documents: DocumentInfo[] | undefined): boolean {
+  return (documents ?? []).some((doc) =>
+    ['uploaded', 'queued', 'processing'].includes(
+      String(doc.status ?? '').toLowerCase(),
+    ),
+  );
+}
+
 /**
  * Hook to fetch documents for a specific project
  */
 export function useProjectDocuments(projectId: string | null): UseProjectDocumentsResult {
-  const [documents, setDocuments] = useState<DocumentInfo[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const documentsQuery = useQuery({
+    queryKey: ['project-documents', projectId],
+    enabled: Boolean(projectId),
+    queryFn: async () => {
+      if (!projectId) {
+        return [];
+      }
 
-  const fetchDocuments = async () => {
-    if (!projectId) {
-      setDocuments([]);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
       const fetchedDocs = await getProjectDocuments(projectId);
-      const transformed = fetchedDocs.map(transformDocument);
-      setDocuments(transformed);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error('Failed to fetch documents');
-      setError(error);
-      console.error('Error fetching project documents:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return fetchedDocs.map(transformDocument);
+    },
+    refetchInterval: (query) =>
+      hasInFlightDocs(query.state.data) ? 5000 : false,
+  });
 
-  useEffect(() => {
-    fetchDocuments();
-  }, [projectId]);
+  const error =
+    documentsQuery.error instanceof Error
+      ? documentsQuery.error
+      : documentsQuery.error
+        ? new Error('Failed to fetch documents')
+        : null;
 
   return {
-    documents,
-    loading,
+    documents: documentsQuery.data ?? [],
+    loading: documentsQuery.isLoading,
     error,
-    refetch: fetchDocuments,
+    refetch: async () => {
+      await documentsQuery.refetch();
+    },
   };
 }
