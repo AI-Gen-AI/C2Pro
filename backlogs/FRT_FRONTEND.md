@@ -13,15 +13,15 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 16
+**Pending Tasks**: 14
 
 - IDs: `TASK-FRT-041` (blocked — requires Clerk dashboard operator access)
-- IDs: `TASK-FRT-180`-`TASK-FRT-197` — **EPIC-FRT-L1-WEDGE** (Level-1 wedge closure, 2026-07-04). Wave 0/P0: 180-183 · Wave 1/P1: 184-192 · Wave 2/P2: 193-197. Patch-by-patch executable spec: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md`
+- IDs: `TASK-FRT-182`-`TASK-FRT-197` — **EPIC-FRT-L1-WEDGE** (Level-1 wedge closure, 2026-07-04). Wave 0/P0: 182-183 · Wave 1/P1: 184-192 · Wave 2/P2: 193-197. Patch-by-patch executable spec: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md`
 - IDs: `TASK-FRT-198`-`TASK-FRT-202` — **EPIC-FRT-LANDING-SYNC** (c2pro.io landing × AI-Gen brand synchrony, 2026-07-06). Single wave P1: 198-202 complete. Patch-by-patch executable spec: `docs/audits/C2Pro — Landing AI-Gen Sync Implementation Prompt_Fable5.md`
 
-**Completed Tasks**: 182
+**Completed Tasks**: 184
 
-- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-179`, `TASK-FRT-198`-`TASK-FRT-202`
+- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-181`, `TASK-FRT-198`-`TASK-FRT-202`
 
 **Usage Note**:
 
@@ -74,8 +74,8 @@
 **Statistics**:
 
 - Total: 202 tasks
-- Active: 20 (9.9%)
-- Completed: 182 (90.1%)
+- Active: 18 (8.9%)
+- Completed: 184 (91.1%)
 - Blocked: 1 (0.5%)
 
 ---
@@ -93,6 +93,7 @@
 - **Implementation log — 2026-07-04, TASK-FRT-177 (PATCH 3)**: coherence server page now obtains the Clerk server token via `auth().getToken()`, skips the backend call when no token is available, and forwards `Authorization: Bearer <token>` into `getDashboardSummary(..., { server: true, headers })`; dashboard service options now preserve `headers` through to `fetchApiJson`; dev-only `cohV1Scenario` override remains unchanged. Verification: RED page tests first failed because the service call had no `Authorization` header and still ran with a null token; GREEN `pnpm vitest run lib/api/services "app/(app)/projects/[id]/coherence/page.test.tsx"` -> 4 files / 13 tests passed; requested service slice `pnpm vitest run lib/api/services` -> 3 files / 10 tests passed; `pnpm typecheck` -> passed; `pnpm lint` -> passed. `pnpm test:all` remains red on the existing unrelated 15 files / 34 tests already cataloged under TASK-FRT-192. Manual local-backend browser check not run in this non-interactive patch session.
 - **Implementation log — 2026-07-04, TASK-FRT-178 (PATCH 4)**: project alerts no longer synthesize assignees or `clause-${id}` values; `ReviewAlert.assignee` and `ReviewAlert.clauseId` are optional and render honest placeholders when backend data is absent. `CoherenceClient` now derives severity distribution and per-category alert counts from the generated project-alerts query, shows honest loading/no-data states when alert data is unavailable, hides empty trend sparklines, and removes the internal migration banner. `AppHeader` no longer shows fake notification counts/items and links "View all notifications" to `/alerts`; dead Profile/Settings items were removed. Verification: RED focused tests first failed on fabricated alert props, optional placeholder handling, fake notification assertions, and mocked coherence alert counts; GREEN `pnpm vitest run "app/(app)/projects/[id]/alerts" components/coherence components/layout/AppHeader.test.tsx components/features/alerts/AlertReviewCenter.test.tsx` -> 8 files / 50 tests passed; `rg -n "legal\.reviewer|finance\.analyst|clause-\$\{" apps/web/app apps/web/components` -> 0 hits; `rg -n "Coherence Score v1 is active" apps/web/components/coherence/CoherenceClient.tsx` -> 0 hits; `pnpm typecheck` -> passed; `pnpm lint` -> passed; `pnpm generate:api:check` -> passed. `pnpm test:all` remains red on the existing unrelated 15 files / 34 tests already cataloged under TASK-FRT-192.
 - **Implementation log — 2026-07-04, TASK-FRT-179 (PATCH 5)**: HITL review approve/reject and evidence alert resolution now derive reviewer identity from Clerk `useUser()` (`primaryEmailAddress.emailAddress` falling back to `user.id`) instead of literal audit-trail strings; identity-dependent action buttons are disabled with "Loading your identity…" while the user is unavailable. Verification: RED focused tests first failed because mutation bodies still sent `current-user` and `web-evidence-viewer`; GREEN `pnpm vitest run "app/(app)/projects/[id]/review" "app/(app)/projects/[id]/evidence"` -> 2 files / 25 tests passed; `rg -n "current-user|web-evidence-viewer" apps/web` -> 0 hits; `pnpm typecheck` -> passed; `pnpm lint` -> passed. `pnpm test:all` remains red on the existing unrelated 15 files / 34 tests already cataloged under TASK-FRT-192.
+- **Implementation log — 2026-07-10, TASK-FRT-180 + TASK-FRT-181 (PATCH 6 + PATCH 7)**: `AnalysisProgressTracker` now exposes four user-facing stages while retaining the existing SSE/token helper and optional technical detail; Analysis mounts the tracker and no longer links to the raw process stream; Documents mounts progress while documents are uploaded/queued/processing; `useProjectDocuments` now uses React Query polling while documents are in-flight; Retry processing now uses `apiClient.post` and surfaces failures through `showToast`. Verification: RED focused tests first failed on the old 17-node copy, raw stream link, no polling, raw unauthenticated fetch, and silent retry failure; GREEN `pnpm vitest run components/features/analysis hooks/useProjectDocuments.test.ts "app/(app)/projects/[id]/analysis" "app/(app)/projects/[id]/documents"` -> 4 files / 30 tests passed; `pnpm typecheck` -> passed; `pnpm lint` -> passed. Broader guard `pnpm vitest run "app/(app)/projects/[id]" components/coherence` -> 13 files / 91 tests passed and 3 unrelated failures in untouched budget/settings/wbs tests, matching already-cataloged TASK-FRT-192 debt scope.
 - **Review log — 2026-07-04, TASK-FRT-176 (Codex impl, master review: APPROVED)**: reproduced 10/10 focused tests + `pnpm typecheck` + honesty scans (no `Budget Used`/`Budget Pressure`/`useMemo`/hardcoded `Active` in the touched routes; the single remaining "Budget Pressure" hit is the negative assertion in the analysis test). Empirical RED proof: with the new test suite run against the **old** implementation (selective stash of `page.tsx`), 3 tests fail — including "does not crash when the overview transitions from loading to backend data" — confirming genuine Rules-of-Hooks regression coverage, not test theater. `useProject(id)` correctly registered before the early returns; sub_scores typing hardened to `number | null | undefined`. No new debt introduced.
 - **Pre-existing test debt quantified (blocks TASK-FRT-192's `test:all` gate)**: `pnpm test:all` fails **15 files / 34 tests identically on `main` (fc863e25) and on the branch** — RACI page (7), AppSidebar (5), WBSTree contract (6), UsageMetricsTable (4), wireframes WF-03/WF-04 (3), and 1 each in app/page, ProjectTabs, useAlerts, useDocumentEntities, lib/api/index.test, global documents page, project budget/settings/wbs pages. These must be fixed or explicitly quarantined as part of TASK-FRT-192 before `test:all` can become a CI gate.
 - **External deps (backend, already tracked)**: `TASK-DOC-REUPLOAD-005` (re-upload PATCH 500), `TASK-COH-BUD-RECON-006` (EN/INR totals). Frontend degrades honestly where these bite.

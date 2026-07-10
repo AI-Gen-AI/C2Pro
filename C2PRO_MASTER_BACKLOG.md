@@ -22,6 +22,18 @@
 | Quality Assurance  | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md)   | qa       | 120   | 108    | 12        |
 | Code Review        | [backlogs/REV_CODE_REVIEW.md](backlogs/REV_CODE_REVIEW.md)             | reviewer | 25    | 0      | 25        |
 | Security           | [backlogs/SEC_SECURITY.md](backlogs/SEC_SECURITY.md)                   | security | 1     | 1      | 0         |
+| Category | File | Owner | Total | Active | Completed |
+| -------- | ---- | ----- | ----- | ------ | --------- |
+| AI/ML Intelligence | [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md) | ai | 78 | 43 | 35 |
+| Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 53 | 6 | 47 |
+| DevOps | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md) | devops | 2 | 0 | 2 |
+| Documentation | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md) | shared | 0 | 0 | 0 |
+| Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 202 | 18 | 184 |
+| Infrastructure | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md) | infra | 59 | 17 | 42 |
+| Planning | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md) | planner | 0 | 0 | 0 |
+| Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 120 | 108 | 12 |
+| Code Review | [backlogs/REV_CODE_REVIEW.md](backlogs/REV_CODE_REVIEW.md) | reviewer | 25 | 0 | 25 |
+| Security | [backlogs/SEC_SECURITY.md](backlogs/SEC_SECURITY.md) | security | 1 | 1 | 0 |
 
 ---
 
