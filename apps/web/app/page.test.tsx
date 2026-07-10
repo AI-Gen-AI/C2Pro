@@ -1,53 +1,32 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, waitFor } from "@/src/tests/test-utils";
+/**
+ * Test Suite ID: TASK-FRT-200
+ * Backlog Task: TASK-FRT-200
+ */
+import { describe, expect, it, vi } from "vitest";
+import { render, screen } from "@/src/tests/test-utils";
 
-const pushMock = vi.fn();
-const authMock = vi.fn();
+vi.mock("@/components/landing/landing-page", () => ({
+  LandingPage: ({ locale }: { locale?: "es" | "en" }) => (
+    <main>Tres documentos. Una sola verdad. {locale}</main>
+  ),
+}));
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: pushMock,
+vi.mock("@clerk/nextjs", () => ({
+  useAuth: () => ({
+    isLoaded: true,
+    isSignedIn: false,
   }),
-}));
-
-vi.mock("@/contexts/AuthContext", () => ({
-  useAuth: () => authMock(),
-}));
-
-vi.mock("@/components/landing-page-content", () => ({
-  default: () => <div>Landing</div>,
 }));
 
 import RootPage from "./page";
 
 describe("RootPage", () => {
-  beforeEach(() => {
-    pushMock.mockReset();
-    authMock.mockReset();
-  });
+  it("renders the Spanish landing body immediately without an auth spinner", () => {
+    const { container } = render(<RootPage />);
 
-  it("redirects authenticated users with null role to default dashboard", async () => {
-    authMock.mockReturnValue({
-      isAuthenticated: true,
-      isLoading: false,
-      userRole: null,
-    });
-
-    render(<RootPage />);
-
-    await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith("/projects");
-    });
-  });
-
-  it("shows landing page when user is not authenticated", async () => {
-    authMock.mockReturnValue({
-      isAuthenticated: false,
-      isLoading: false,
-      userRole: null,
-    });
-
-    const { findByText } = render(<RootPage />);
-    expect(await findByText("Landing")).toBeInTheDocument();
+    expect(screen.getByText(/Tres documentos\. Una sola verdad\./)).toBeInTheDocument();
+    expect(container).toHaveTextContent("es");
+    expect(screen.queryByText("Loading...")).not.toBeInTheDocument();
+    expect(screen.queryByText("Redirecting...")).not.toBeInTheDocument();
   });
 });

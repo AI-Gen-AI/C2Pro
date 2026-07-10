@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useUser } from "@clerk/nextjs";
 import { useParams, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -185,6 +186,9 @@ export default function EvidencePage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const requestedDocumentId = searchParams.get("documentId");
+  const { isLoaded: isUserLoaded, user } = useUser();
+  const reviewerName = user?.primaryEmailAddress?.emailAddress ?? user?.id;
+  const reviewerIdentityReady = isUserLoaded && Boolean(reviewerName);
   const { data: project } = useProject(id);
   const projectName = project?.name?.trim() || id;
 
@@ -482,6 +486,13 @@ export default function EvidencePage() {
     await Promise.all([refetchDocuments(), refetchEntities(), refetchAlerts()]);
   }, [refetchDocuments, refetchEntities, refetchAlerts]);
 
+  const handleRefreshClick = useCallback(() => {
+    setActionError(null);
+    handleRefresh().catch(() => {
+      setActionError("Unable to refresh evidence.");
+    });
+  }, [handleRefresh]);
+
   const handleReviewAlert = useCallback(
     async (alertId: string, decision: "approve" | "reject") => {
       setActionError(null);
@@ -504,12 +515,16 @@ export default function EvidencePage() {
   );
 
   const handleResolveAlert = useCallback(async (alertId: string) => {
+    if (!reviewerName) {
+      return;
+    }
+
     setActionError(null);
     const updatedAlert = await resolveProjectAlert.mutateAsync({
       alertId,
       data: {
         resolution: "Resolved from evidence viewer",
-        resolved_by: "web-evidence-viewer",
+        resolved_by: reviewerName,
         root_cause: "other",
       },
     });
@@ -520,7 +535,16 @@ export default function EvidencePage() {
           : alert,
       ),
     );
-  }, [resolveProjectAlert]);
+  }, [resolveProjectAlert, reviewerName]);
+
+  const handleResolveAlertClick = useCallback(
+    (alertId: string) => {
+      handleResolveAlert(alertId).catch(() => {
+        setActionError("Unable to resolve alert.");
+      });
+    },
+    [handleResolveAlert],
+  );
 
   const requestApproveEntity = useCallback(
     async (entityId: string) => {
@@ -594,6 +618,12 @@ export default function EvidencePage() {
     handleReviewAlert,
     pendingAction,
   ]);
+
+  const handleConfirmPendingActionClick = useCallback(() => {
+    confirmPendingAction().catch(() => {
+      setActionError("Unable to complete evidence action.");
+    });
+  }, [confirmPendingAction]);
 
   const requiresValidationNote = useMemo(
     () =>
@@ -773,7 +803,7 @@ export default function EvidencePage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void handleRefresh()}
+            onClick={handleRefreshClick}
             className="rounded-xl bg-background/95 shadow-sm"
           >
             <RefreshCw className="mr-2 h-4 w-4" />
@@ -988,6 +1018,8 @@ export default function EvidencePage() {
                               size="sm"
                               variant="outline"
                               className="rounded-xl bg-background/95 shadow-sm"
+                              disabled={!reviewerIdentityReady}
+                              title={!reviewerIdentityReady ? "Loading your identity…" : undefined}
                               onClick={() =>
                                 requestReviewAlert(alert.id, "approve")
                               }
@@ -998,6 +1030,8 @@ export default function EvidencePage() {
                               size="sm"
                               variant="outline"
                               className="rounded-xl bg-background/95 shadow-sm"
+                              disabled={!reviewerIdentityReady}
+                              title={!reviewerIdentityReady ? "Loading your identity…" : undefined}
                               onClick={() =>
                                 requestReviewAlert(alert.id, "reject")
                               }
@@ -1007,7 +1041,9 @@ export default function EvidencePage() {
                             <Button
                               size="sm"
                               className="rounded-xl shadow-sm"
-                              onClick={() => void handleResolveAlert(alert.id)}
+                              disabled={!reviewerIdentityReady}
+                              title={!reviewerIdentityReady ? "Loading your identity…" : undefined}
+                              onClick={() => handleResolveAlertClick(alert.id)}
                             >
                               Resolve Alert
                             </Button>
@@ -1551,7 +1587,7 @@ export default function EvidencePage() {
             <Button
               type="button"
               className="rounded-xl shadow-sm"
-              onClick={() => void confirmPendingAction()}
+              onClick={handleConfirmPendingActionClick}
               disabled={requiresValidationNote && !validationNote.trim()}
             >
               Confirm Action

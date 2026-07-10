@@ -79,6 +79,16 @@ function labelType(type: string): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
+function sortedUniqueTypes(rows: Array<{ type: string }>) {
+  const types = new Set<string>();
+
+  for (const row of rows) {
+    types.add(row.type);
+  }
+
+  return Array.from(types).sort();
+}
+
 export default function ProjectDocumentsPage() {
   const params = useParams();
   const router = useRouter();
@@ -153,7 +163,7 @@ export default function ProjectDocumentsPage() {
   );
 
   const typeOptions = useMemo(
-    () => Array.from(new Set(rows.map((row) => row.type))).sort(),
+    () => sortedUniqueTypes(rows),
     [rows]
   );
 
@@ -215,7 +225,8 @@ export default function ProjectDocumentsPage() {
             <DialogDescription>
               Files will be scoped to{" "}
               <span className="font-medium text-foreground">{projectName}</span> and will
-              appear in the document register once queued.
+              appear in the document register once queued. Choose each file role before
+              upload: contract, budget, or schedule.
             </DialogDescription>
             <div className="mt-3 flex flex-wrap gap-2">
               <span className="rounded-full border bg-background px-3 py-1 text-xs font-medium text-foreground shadow-sm">

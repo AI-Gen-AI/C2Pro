@@ -22,15 +22,6 @@ const STATUS_MAP: Record<string, ReviewAlert["status"]> = {
   rejected: "rejected",
 };
 
-const ASSIGNEE_MAP: Record<string, string> = {
-  LEGAL: "legal.reviewer",
-  BUDGET: "finance.analyst",
-  TECHNICAL: "tech.lead",
-  TIME: "scheduler",
-  SCOPE: "project.manager",
-  QUALITY: "qa.manager",
-};
-
 function mapAlertToReviewAlert(alert: {
   id: string;
   category: string;
@@ -43,8 +34,6 @@ function mapAlertToReviewAlert(alert: {
     title: alert.message,
     severity: SEVERITY_MAP[alert.severity] ?? "medium",
     status: STATUS_MAP[alert.status] ?? "pending",
-    clauseId: `clause-${alert.id}`,
-    assignee: ASSIGNEE_MAP[alert.category] ?? "project.manager",
   };
 }
 

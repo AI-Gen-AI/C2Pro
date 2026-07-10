@@ -7,10 +7,12 @@
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Loader2, ArrowLeft, BarChart3, AlertTriangle, FileText } from "lucide-react";
 import type { DashboardSummary, ProjectListItem } from "@/lib/api/contracts";
 import { getDashboardSummary, listProjects } from "@/lib/api/services/dashboard";
 import { useAuthStore } from "@/stores/auth";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -24,12 +26,20 @@ const DashboardClient = dynamic(() => import("@/components/coherence/DashboardCl
 });
 
 export default function AppDashboardPage() {
+  const router = useRouter();
+  const { isAuthenticated, isLoading: authLoading, userRole } = useAuth();
   const token = useAuthStore((state) => state.token);
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [summaries, setSummaries] = useState<Record<string, DashboardSummary>>({});
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const adminRedirectPath =
+    isAuthenticated && userRole === "c2pro_admin"
+      ? "/admin/c2pro"
+      : isAuthenticated && userRole === "tenant_admin"
+        ? "/admin/tenant"
+        : null;
 
   const loadDashboard = useCallback(async (active: boolean) => {
     setIsLoading(true);
@@ -82,7 +92,13 @@ export default function AppDashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!token) {
+    if (!authLoading && adminRedirectPath) {
+      router.replace(adminRedirectPath);
+    }
+  }, [adminRedirectPath, authLoading, router]);
+
+  useEffect(() => {
+    if (adminRedirectPath || !token) {
       setProjects([]);
       setSummaries({});
       setLoadError(null);
@@ -91,23 +107,28 @@ export default function AppDashboardPage() {
     }
 
     let active = true;
-    void loadDashboard(active);
+    loadDashboard(active).catch(() => {
+      if (active) {
+        setLoadError("Could not load dashboard data right now.");
+        setIsLoading(false);
+      }
+    });
 
     return () => {
       active = false;
     };
-  }, [token, loadDashboard]);
+  }, [adminRedirectPath, token, loadDashboard]);
 
   const handleBackToOverview = useCallback(() => {
     setSelectedProjectId(null);
   }, []);
 
-  if (!token) {
+  if (authLoading || adminRedirectPath || !token) {
     return (
       <div className="flex min-h-[200px] items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         <span className="ml-2 text-sm text-muted-foreground">
-          Authenticating...
+          {adminRedirectPath ? "Redirecting..." : "Authenticating..."}
         </span>
       </div>
     );

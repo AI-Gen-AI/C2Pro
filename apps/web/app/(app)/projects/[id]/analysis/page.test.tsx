@@ -126,7 +126,9 @@ describe("Project analysis page real-data boundary", () => {
     expect(screen.getAllByText("84").length).toBeGreaterThan(0);
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
     expect(screen.getAllByText("9").length).toBeGreaterThan(0);
-    expect(screen.getByText("41%")).toBeInTheDocument();
+    expect(screen.getByText("Budget coherence")).toBeInTheDocument();
+    expect(screen.getByText("59")).toBeInTheDocument();
+    expect(screen.queryByText("41%")).not.toBeInTheDocument();
     expect(screen.getByText(/date mismatch/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /open processing stream/i })).toHaveAttribute(
       "href",
@@ -135,5 +137,33 @@ describe("Project analysis page real-data boundary", () => {
     expect(
       screen.queryByText(/centro de alertas, riesgos y hallazgos automatizados/i),
     ).not.toBeInTheDocument();
+  });
+
+  it("renders an honest budget coherence placeholder when budget evidence is missing", () => {
+    getDashboardMock.mockReturnValue({
+      data: {
+        coherence_score: 84,
+        sub_scores: { SCOPE: 80 },
+        alert_count: 0,
+        document_count: 2,
+      },
+      isLoading: false,
+      error: null,
+    });
+    listProjectAlertsMock.mockReturnValue({
+      data: { items: [] },
+      isLoading: false,
+      error: null,
+    });
+    getStreamProjectProcessingUrlMock.mockReturnValue(
+      "/api/v1/analysis/projects/proj-real-7/process/stream",
+    );
+
+    renderWithProviders(<AnalysisPage />);
+
+    expect(screen.getByText("Budget coherence")).toBeInTheDocument();
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.getByTitle("Requires budget document")).toBeInTheDocument();
+    expect(screen.queryByText("Budget Pressure")).not.toBeInTheDocument();
   });
 });

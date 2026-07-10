@@ -11,6 +11,7 @@ import { env } from "@/config/env";
 import type {
   ApprovalResponse,
   ApprovalStatus,
+  DocumentType,
 } from "@/lib/api/generated/models";
 import { reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch } from "@/lib/api/generated/approvals/approvals";
 import { createHighlight, getHighlightColor } from "@/types/highlight";
@@ -207,13 +208,7 @@ export async function getProjectDocuments(
 export async function uploadDocument(
   projectId: string,
   file: File,
-  documentType:
-    | "CONTRACT"
-    | "SCHEDULE"
-    | "BOM"
-    | "SPECIFICATION"
-    | "DRAWING"
-    | "OTHER" = "CONTRACT",
+  documentType: DocumentType = "contract",
   authOverride?: {
     token?: string | null;
     tenantId?: string | null;
@@ -221,8 +216,7 @@ export async function uploadDocument(
 ): Promise<{ id: string; task_id: string }> {
   const formData = new FormData();
   formData.append("file", file);
-  // Backend enum expects lowercase values (contract, schedule, etc.)
-  formData.append("document_type", documentType.toLowerCase());
+  formData.append("document_type", documentType);
 
   // Import auth store to get token - file uploads go directly to backend
   const { useAuthStore } = await import("@/stores/auth");

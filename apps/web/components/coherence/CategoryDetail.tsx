@@ -17,8 +17,10 @@ interface CategoryDetailProps {
   category: string;
   score: number | null;
   weight: number;
-  alertCount: number;
-  trend: number[];
+  /** ADR-009 §18: null means the count is unknown (not yet loaded / failed to
+   * load) and must render as absent, never a fabricated zero. */
+  alertCount: number | null;
+  trend?: number[];
   onClose: () => void;
 }
 
@@ -29,7 +31,7 @@ export function CategoryDetail({
   score,
   weight,
   alertCount,
-  trend,
+  trend = [],
   onClose,
 }: CategoryDetailProps) {
   const meta = CATEGORY_META[category] ?? CATEGORY_META.SCOPE;
@@ -44,7 +46,9 @@ export function CategoryDetail({
           <h3 className="text-base font-semibold">{meta.label} Analysis</h3>
           <span className="text-xs text-muted-foreground">
             Score: {score === null ? '— (pending evidence)' : `${score}/100`} &middot; Weight: {Math.round(weight * 100)}%
-            {" \u00b7 "}{alertCount} alert{alertCount !== 1 ? 's' : ''}
+            {alertCount !== null && (
+              <>{" \u00b7 "}{alertCount} alert{alertCount !== 1 ? 's' : ''}</>
+            )}
           </span>
         </div>
         <Button variant="outline" size="sm" onClick={onClose}>
@@ -53,34 +57,36 @@ export function CategoryDetail({
         </Button>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
-        {trend.map((v, i) => (
-          <div
-            key={i}
-            className="rounded-md border p-2.5 text-center"
-            style={{
-              backgroundColor:
-                i === trend.length - 1 ? `${meta.color}10` : 'hsl(240, 10%, 98%)',
-              borderColor:
-                i === trend.length - 1 ? `${meta.color}30` : 'hsl(240, 6%, 90%)',
-            }}
-          >
-            <div className="mb-1 text-[10px] text-muted-foreground">
-              {TREND_LABELS[i] || `Period ${i + 1}`}
-            </div>
+      {trend.length > 0 ? (
+        <div className="grid grid-cols-4 gap-3">
+          {trend.map((v, i) => (
             <div
-              className="font-mono text-lg font-semibold"
+              key={i}
+              className="rounded-md border p-2.5 text-center"
               style={{
-                color: i === trend.length - 1 ? meta.color : undefined,
+                backgroundColor:
+                  i === trend.length - 1 ? `${meta.color}10` : 'hsl(240, 10%, 98%)',
+                borderColor:
+                  i === trend.length - 1 ? `${meta.color}30` : 'hsl(240, 6%, 90%)',
               }}
             >
-              {v}
+              <div className="mb-1 text-[10px] text-muted-foreground">
+                {TREND_LABELS[i] || `Period ${i + 1}`}
+              </div>
+              <div
+                className="font-mono text-lg font-semibold"
+                style={{
+                  color: i === trend.length - 1 ? meta.color : undefined,
+                }}
+              >
+                {v}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : null}
 
-      {alertCount > 0 && (
+      {alertCount !== null && alertCount > 0 && (
         <div className="mt-3.5 flex items-center gap-2 rounded-md border border-warning/20 bg-warning-bg px-3.5 py-2.5 text-xs text-warning">
           <FileText className="h-3.5 w-3.5 shrink-0" />
           <span>

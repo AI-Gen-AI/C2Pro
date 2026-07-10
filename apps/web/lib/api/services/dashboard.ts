@@ -9,6 +9,11 @@ type ListProjectsResponse = {
   items?: Array<Record<string, unknown>>;
 };
 
+type DashboardRequestOptions = {
+  server?: boolean;
+  headers?: HeadersInit;
+};
+
 type DashboardSummaryResponse = Partial<DashboardSummary> & {
   global_score?: number | string | null;
   coherence_score?: number | string | null;
@@ -34,28 +39,26 @@ type ProjectQuickViewSummaryResponse = Partial<ProjectQuickViewSummary> & {
   }> | null;
 };
 
-export async function listProjects(options?: {
-  server?: boolean;
-}): Promise<ProjectListItem[]> {
+export async function listProjects(options?: DashboardRequestOptions): Promise<ProjectListItem[]> {
   const response = await fetchApiJson<ListProjectsResponse>("projects", options);
   return Array.isArray(response.items)
     ? response.items.map((item) => ({
-        id: String(item.id ?? ""),
-        tenant_id: String(item.tenant_id ?? ""),
-        name: String(item.name ?? ""),
-        code: item.code ? String(item.code) : null,
-        description: item.description ? String(item.description) : null,
-        project_type: item.project_type ? String(item.project_type) : undefined,
-        status: item.status ? String(item.status) : undefined,
+        id: primitiveString(item.id, ""),
+        tenant_id: primitiveString(item.tenant_id, ""),
+        name: primitiveString(item.name, ""),
+        code: nullablePrimitiveString(item.code),
+        description: nullablePrimitiveString(item.description),
+        project_type: optionalPrimitiveString(item.project_type),
+        status: optionalPrimitiveString(item.status),
         coherence_score:
           item.coherence_score == null ? null : Number(item.coherence_score),
-        location: item.location ? String(item.location) : null,
-        client_name: item.client_name ? String(item.client_name) : null,
+        location: nullablePrimitiveString(item.location),
+        client_name: nullablePrimitiveString(item.client_name),
         budget_planned:
           item.budget_planned == null ? null : Number(item.budget_planned),
         estimated_budget:
           item.estimated_budget == null ? null : Number(item.estimated_budget),
-        currency: item.currency ? String(item.currency) : undefined,
+        currency: optionalPrimitiveString(item.currency),
         version: item.version == null ? undefined : Number(item.version),
         alert_count: item.alert_count == null ? null : Number(item.alert_count),
         critical_alert_count:
@@ -70,16 +73,14 @@ export async function listProjects(options?: {
           item.alert_count_delta == null
             ? null
             : Number(item.alert_count_delta),
-        updated_at: item.updated_at ? String(item.updated_at) : null,
+        updated_at: nullablePrimitiveString(item.updated_at),
       }))
     : [];
 }
 
 export async function getDashboardSummary(
   projectId: string,
-  options?: {
-    server?: boolean;
-  },
+  options?: DashboardRequestOptions,
 ): Promise<DashboardSummary> {
   const summary = await fetchApiJson<DashboardSummaryResponse>(
     `dashboard/${projectId}`,
@@ -111,9 +112,7 @@ export async function getDashboardSummary(
 
 export async function getProjectQuickViewSummary(
   projectId: string,
-  options?: {
-    server?: boolean;
-  },
+  options?: DashboardRequestOptions,
 ): Promise<ProjectQuickViewSummary> {
   const summary = await fetchApiJson<ProjectQuickViewSummaryResponse>(
     `projects/${projectId}/summary`,
@@ -158,6 +157,27 @@ function normalizeNumberMap(value: unknown): Record<string, number> {
 
 function normalizeNullableNumber(value: number | string | null | undefined): number | null {
   return value == null ? null : Number(value);
+}
+
+function primitiveString(value: unknown, fallback: string) {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint"
+  ) {
+    return String(value);
+  }
+
+  return fallback;
+}
+
+function nullablePrimitiveString(value: unknown) {
+  return value == null ? null : primitiveString(value, "");
+}
+
+function optionalPrimitiveString(value: unknown) {
+  return value == null ? undefined : primitiveString(value, "");
 }
 
 function normalizeStringList(value: unknown): string[] {

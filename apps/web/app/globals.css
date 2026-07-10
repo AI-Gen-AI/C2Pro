@@ -34,6 +34,34 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Landing brand tokens — AI-Gen DS v2 (EPIC-FRT-LANDING-SYNC) */
+@theme {
+  --color-brand-alabaster: #F7F4ED;
+  --color-brand-paper: #FFFFFF;
+  --color-brand-ink: #111827;
+  --color-brand-slate: #344054;
+  --color-brand-muted: #667085;
+  --color-brand-muted-2: #98A2B3;
+  --color-brand-navy: #0B1F3A;
+  --color-brand-navy-2: #081628;
+  --color-brand-navy-panel: #08172B;
+  --color-brand-line: #D8DEE6;
+  --color-brand-line-soft: #E7EAF0;
+  --color-brand-accent: #0F766E;
+  --color-brand-accent-dark: #115E59;
+  --color-brand-accent-soft: #DDF5F1;
+  --color-brand-accent-ink: #0E6A62;
+  --color-brand-accent-bright: #5FC9BD;
+  --color-brand-accent-on-navy: #8FD8CF;
+  --color-brand-warning-soft: #F8E8C8;
+  --color-brand-warning-ink: #8A6D2F;
+  --color-brand-risk-soft: #F4D7D7;
+  --color-brand-risk-ink: #9B3B3B;
+  --color-brand-on-navy: #E7EEF6;
+  --color-brand-on-navy-muted: #94A3B8;
+  --font-brand-display: "Source Serif 4 Variable", Georgia, "Times New Roman", serif;
+}
+
 @layer base {
   :root {
     --background: oklch(0.99 0 0);

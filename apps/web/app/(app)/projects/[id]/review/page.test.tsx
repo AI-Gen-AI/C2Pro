@@ -9,6 +9,16 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
 }));
 
+vi.mock('@clerk/nextjs', () => ({
+  useUser: () => ({
+    isLoaded: true,
+    user: {
+      id: 'user_123',
+      primaryEmailAddress: { emailAddress: 'jane@acme.com' },
+    },
+  }),
+}));
+
 // Mock hooks
 const mockRefetch = vi.fn();
 const mockApproveMutate = vi.fn();
@@ -156,7 +166,7 @@ describe('ReviewPage', () => {
     await waitFor(() => {
       expect(mockApproveMutate).toHaveBeenCalledWith({
         itemId: 'item-1',
-        data: { reviewer_name: 'current-user' },
+        data: { reviewer_name: 'jane@acme.com' },
       });
     });
   });
@@ -184,7 +194,7 @@ describe('ReviewPage', () => {
       expect(mockRejectMutate).toHaveBeenCalledWith({
         itemId: 'item-1',
         data: {
-          reviewer_name: 'current-user',
+          reviewer_name: 'jane@acme.com',
           reason: 'Insufficient evidence',
         },
       });

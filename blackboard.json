@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-06-27T22:00:00Z",
+  "updated_at": "2026-07-09T00:11:44Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,437 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T126",
+      "backlog_id": "TASK-FRT-198",
+      "tipo": "frontend",
+      "descripcion": "Server-render the public landing root and /en, add Clerk auth island, relocate admin bounce, and remove deploy marker.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "The root landing is present in emitted HTML without an auth spinner; /en is public and static; signed-out visitors see Iniciar sesión and Unirse al piloto; signed-in users see Ir al workspace; c2pro_admin dashboard navigation redirects to /admin/c2pro; tenant_admin still redirects to /admin/tenant; Deploy marker has zero hits.",
+      "archivos_modificados": [
+        "apps/web/app/page.tsx",
+        "apps/web/app/page.test.tsx",
+        "apps/web/app/en/page.tsx",
+        "apps/web/app/en/page.test.tsx",
+        "apps/web/app/(app)/dashboard/page.tsx",
+        "apps/web/app/(app)/dashboard/page.test.tsx",
+        "apps/web/components/landing-page-content.tsx",
+        "apps/web/components/landing-page-content.test.tsx",
+        "apps/web/components/landing/landing-auth-buttons.tsx",
+        "apps/web/components/landing/landing-auth-buttons.test.tsx",
+        "apps/web/proxy.ts",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-08T23:10:00Z",
+        "completado": "2026-07-08T23:45:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-198 completed locally: landing root and /en are static/crawlable, Clerk auth actions are state-aware, admin bounce moved to dashboard, explicit fabricated metric scaffold removed, and deploy marker text is gone.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: focused landing/admin tests failed first for client auth spinner, missing auth island, missing admin dashboard redirect, and fabricated metric scaffold.",
+          "GREEN: pnpm vitest run app/page.test.tsx app/en components/landing && pnpm typecheck && pnpm lint -> 4 files / 8 tests passed; typecheck passed; lint passed.",
+          "GREEN: pnpm vitest run \"app/(app)/dashboard/page.test.tsx\" -> 1 file / 3 tests passed.",
+          "pnpm build -> passed; / and /en listed as static routes.",
+          "Emitted .next/server/app/index.html contains Detect contract conflicts, Iniciar sesión, and Unirse al piloto and has no Loading..., Redirecting..., Deploy marker, 94%, $2.4M, <30s, or millions in savings.",
+          "rg -n \"Deploy marker\" apps/web -> 0 hits"
+        ]
+      }
+    },
+    {
+      "tarea_id": "T127",
+      "backlog_id": "TASK-FRT-199",
+      "tipo": "frontend",
+      "descripcion": "Add AI-Gen Design System v2 landing tokens, self-hosted font exports, and landing primitives for PATCH 3 consumption.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "Additive brand-* Tailwind tokens exist without changing product-app theme values; Geist and Source Serif 4 are bundled; landing primitives and Reveal are tested; no Google Fonts CDN references exist; build passes.",
+      "archivos_modificados": [
+        "apps/web/app/globals.css",
+        "apps/web/components/landing/fonts.ts",
+        "apps/web/components/landing/index.ts",
+        "apps/web/components/landing/primitives.tsx",
+        "apps/web/components/landing/primitives.test.tsx",
+        "apps/web/components/landing/reveal.tsx",
+        "apps/web/components/landing/reveal.test.tsx",
+        "apps/web/package.json",
+        "pnpm-lock.yaml",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-08T22:05:00Z",
+        "completado": "2026-07-08T22:22:38Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-199 completed locally: AI-Gen DS v2 brand tokens, bundled font exports, server-compatible primitives, reduced-motion-aware Reveal, and landing barrel exports are ready for PATCH 3.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: pnpm vitest run components/landing failed first because ./primitives and ./reveal did not exist.",
+          "GREEN: pnpm vitest run components/landing -> 4 files / 14 tests passed.",
+          "pnpm typecheck -> passed inside the PATCH verify chain.",
+          "pnpm lint -> passed inside the PATCH verify chain.",
+          "pnpm build -> passed with / and /en listed as static routes.",
+          "rg -n \"fonts\\.googleapis\" apps/web -> 0 hits.",
+          "rg brand token scan confirmed bg-brand-navy, text-brand-accent-ink, and font-brand-display usage."
+        ]
+      }
+    },
+    {
+      "tarea_id": "T128",
+      "backlog_id": "TASK-FRT-200",
+      "tipo": "frontend",
+      "descripcion": "Rebuild the public landing with the verbatim ES/EN Copy Pack and AI-Gen landing sections.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "The root and /en landing pages render the bilingual Copy Pack as static HTML, with honest illustrative console labeling, no fabricated metrics, no dead href=\"#\" links, and AI-Gen external links rendered with rel=\"noopener\".",
+      "archivos_modificados": [
+        "apps/web/app/page.tsx",
+        "apps/web/app/page.test.tsx",
+        "apps/web/app/en/page.tsx",
+        "apps/web/app/en/page.test.tsx",
+        "apps/web/components/landing/copy.ts",
+        "apps/web/components/landing/index.ts",
+        "apps/web/components/landing/landing-page.tsx",
+        "apps/web/components/landing/landing-page.test.tsx",
+        "apps/web/components/landing/sections/console-mock.tsx",
+        "apps/web/components/landing/sections/console-mock.test.tsx",
+        "apps/web/components/landing/sections/dimensions.tsx",
+        "apps/web/components/landing/sections/hero.tsx",
+        "apps/web/components/landing/sections/how-it-works.tsx",
+        "apps/web/components/landing/sections/landing-footer.tsx",
+        "apps/web/components/landing/sections/landing-header.tsx",
+        "apps/web/components/landing/sections/landing-header.test.tsx",
+        "apps/web/components/landing/sections/origin-limits.tsx",
+        "apps/web/components/landing/sections/supervision.tsx",
+        "apps/web/components/landing/sections/waitlist-section.tsx",
+        "apps/web/components/landing-page-content.tsx",
+        "apps/web/components/landing-page-content.test.tsx",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-08T22:25:00Z",
+        "completado": "2026-07-08T22:47:39Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-200 completed locally: / and /en render the rebuilt bilingual landing from the provided Copy Pack, with honest illustrative console labeling and clean fabricated-copy/dead-link scans.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: pnpm vitest run components/landing app/page.test.tsx app/en failed first because the new landing modules did not exist.",
+          "GREEN: pnpm vitest run components/landing app/page.test.tsx app/en -> 8 files / 20 tests passed.",
+          "pnpm typecheck -> passed.",
+          "pnpm lint -> passed.",
+          "pnpm build -> passed with / and /en listed as static routes.",
+          ".next/server/app/index.html contains Tres documentos. Una sola verdad. and no Loading....",
+          ".next/server/app/en.html contains Three documents. One single truth. and no Loading....",
+          "rg -n \"94%|2\\\\.4M|6x Faster|Join enterprise|Access Real Workspace\" apps/web -> 0 hits.",
+          "rg -n 'href=\"#\"' apps/web/components/landing apps/web/app/page.tsx apps/web/app/en -> 0 hits."
+        ]
+      }
+    },
+    {
+      "tarea_id": "T129",
+      "backlog_id": "TASK-FRT-201",
+      "tipo": "frontend",
+      "descripcion": "Implement the pilot waitlist funnel with RLS-backed persistence, a public Next route, and a bilingual landing form.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "waitlist_signups exists in Alembic and Supabase mirror migrations with RLS enabled and zero policies; /api/waitlist validates, throttles, handles honeypot submissions, supports ai-gen.ai CORS, and upserts via service-role PostgREST; the landing form posts localized submissions without exposing the service key.",
+      "archivos_modificados": [
+        "apps/api/alembic/versions/20260708_0001_add_waitlist_signups.py",
+        "supabase/migrations/20260708000100_add_waitlist_signups.sql",
+        "apps/web/app/api/waitlist/route.ts",
+        "apps/web/app/api/waitlist/route.test.ts",
+        "apps/web/components/landing/waitlist-schema.ts",
+        "apps/web/components/landing/copy.ts",
+        "apps/web/components/landing/index.ts",
+        "apps/web/components/landing/landing-page.tsx",
+        "apps/web/components/landing/sections/waitlist-section.tsx",
+        "apps/web/components/landing/sections/waitlist-form.tsx",
+        "apps/web/components/landing/sections/waitlist-form.test.tsx",
+        "apps/web/proxy.ts",
+        "apps/web/.env.example",
+        "apps/web/package.json",
+        "pnpm-lock.yaml",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-08T22:50:00Z",
+        "completado": "2026-07-08T23:06:22Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-201 completed locally: pilot waitlist capture is backed by fail-closed RLS migrations, a server-only PostgREST route, and a bilingual RGPD form mounted on the landing.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: pnpm vitest run app/api/waitlist components/landing/sections/waitlist-form.test.tsx failed first because the route and form modules did not exist.",
+          "GREEN: pnpm vitest run app/api/waitlist components/landing/sections/waitlist-form.test.tsx -> 2 files / 13 tests passed.",
+          "pnpm vitest run components/landing -> 7 files / 24 tests passed.",
+          "pnpm typecheck -> passed.",
+          "pnpm lint -> passed.",
+          "cd apps/api && alembic heads -> 20260708_0001 (head).",
+          "From apps/web: rg -n \"SUPABASE_SERVICE_ROLE_KEY\" components app --glob \"!app/api/**\" -> 0 hits."
+        ]
+      }
+    },
+    {
+      "tarea_id": "T130",
+      "backlog_id": "TASK-FRT-202",
+      "tipo": "frontend",
+      "descripcion": "Implement landing SEO metadata, reciprocal hreflang, JSON-LD, sitemap/robots, and Open Graph image for the bilingual public landing.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "Root layout and locale routes expose C2Pro landing metadata, canonical/hreflang alternates, JSON-LD Organization and SoftwareApplication without invented ratings, sitemap and robots routes, static Open Graph image metadata, and brand themeColor #0B1F3A.",
+      "archivos_modificados": [
+        "apps/web/app/layout.tsx",
+        "apps/web/app/page.tsx",
+        "apps/web/app/en/page.tsx",
+        "apps/web/app/sitemap.ts",
+        "apps/web/app/robots.ts",
+        "apps/web/app/opengraph-image.tsx",
+        "apps/web/app/seo.test.ts",
+        "apps/web/components/landing/json-ld.tsx",
+        "apps/web/components/landing/index.ts",
+        "apps/web/components/landing/landing-page.tsx",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-08T23:20:00Z",
+        "completado": "2026-07-09T00:11:44Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-202 completed locally: the bilingual landing now has per-locale SEO metadata, reciprocal hreflang, JSON-LD, sitemap/robots, a static OG image route, and brand theme color.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: pnpm vitest run app/seo.test.ts failed first because ./sitemap did not exist.",
+          "GREEN: pnpm vitest run app/seo.test.ts -> 1 file / 7 tests passed.",
+          "pnpm typecheck -> passed.",
+          "pnpm lint -> passed.",
+          "pnpm build -> passed with /, /en, /opengraph-image, /robots.txt, and /sitemap.xml listed as static routes.",
+          "Generated HTML contains canonical/alternate metadata, theme-color #0B1F3A, OG image metadata, and JSON-LD.",
+          "rg -n \"C2Pro v3\\.0 - Coherence Monitor\" .next/server/app/index.html .next/server/app/en.html app components/landing -> 0 hits.",
+          "rg -n \"#00ACC1\" app/layout.tsx .next/server/app/index.html .next/server/app/en.html -> 0 hits."
+        ]
+      }
+    },
+    {
+      "tarea_id": "T121",
+      "backlog_id": "TASK-FRT-175",
+      "tipo": "frontend",
+      "descripcion": "Implement typed staged document upload with per-file generated DocumentType selection.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "Users can stage PDF/XLSX/BC3 files, confirm contract/budget/schedule roles per file, upload sequentially with lowercase generated DocumentType values, and see budget/other document types honestly in the register.",
+      "archivos_modificados": [
+        "apps/web/lib/api/index.ts",
+        "apps/web/components/features/documents/DocumentUploadDropzone.tsx",
+        "apps/web/hooks/useProjectDocuments.ts",
+        "apps/web/types/document.ts",
+        "apps/web/app/(app)/projects/[id]/documents/page.tsx",
+        "apps/web/components/features/documents/DocumentUploadDropzone.test.tsx",
+        "apps/web/lib/api/uploadDocument.test.ts",
+        "apps/web/hooks/useProjectDocuments.test.ts",
+        "apps/web/app/(app)/projects/[id]/documents/page.test.tsx",
+        "apps/web/src/tests/integration/uploads/TASK-FRT-175-staged-upload.integration.test.tsx",
+        "apps/web/scripts/vitest-run-all.mjs",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-03T22:45:00Z",
+        "completado": "2026-07-03T23:28:26Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-175 completed locally on fix/frt-l1-wave0: typed staged upload unblocks contract+budget+schedule triplet from the UI.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "Focused RED/GREEN slice: 5 files / 37 tests passed for documents page, dropzone, uploadDocument, useProjectDocuments, and TASK-FRT-175 integration.",
+          "pnpm typecheck -> passed",
+          "pnpm lint -> passed",
+          "pnpm generate:api:check -> passed",
+          "rg '\"BOM\"|\"CONTRACT\"' apps/web/lib apps/web/components -> 0 hits",
+          "pnpm test:all -> runner config repaired, then known unrelated suite failures remain: 15 files / 34 tests failed outside the TASK-FRT-175 touched surface."
+        ]
+      }
+    },
+    {
+      "tarea_id": "T122",
+      "backlog_id": "TASK-FRT-176",
+      "tipo": "frontend",
+      "descripcion": "Fix project overview hook-order crash and replace fabricated budget/status metrics with honest backend-backed values.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "Project overview can transition from loading to backend data without a Rules-of-Hooks crash; Overview and Analysis render Budget coherence from sub_scores.BUDGET or an honest placeholder; the overview status badge reflects the project status from useProject(id).",
+      "archivos_modificados": [
+        "apps/web/app/(app)/projects/[id]/page.tsx",
+        "apps/web/app/(app)/projects/[id]/page.test.tsx",
+        "apps/web/app/(app)/projects/[id]/analysis/page.tsx",
+        "apps/web/app/(app)/projects/[id]/analysis/page.test.tsx",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-04T07:05:00Z",
+        "completado": "2026-07-04T07:15:39Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-176 completed locally on fix/frt-l1-wave0: overview hook-order hazard removed and budget/status metrics now degrade honestly.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: focused tests failed on old Budget Used/Budget Pressure labels and missing honest placeholders.",
+          "GREEN: pnpm vitest run \"app/(app)/projects/[id]/page.test.tsx\" \"app/(app)/projects/[id]/analysis\" -> 2 files / 10 tests passed.",
+          "pnpm typecheck -> passed",
+          "pnpm lint -> passed",
+          "rg \"Budget Used|Budget Pressure|100 -|Active\" touched overview/analysis routes -> 0 hits",
+          "rg \"useMemo\" overview route -> 0 hits",
+          "pnpm test:all -> known unrelated suite failures remain: 15 files / 34 tests failed, already cataloged under TASK-FRT-192."
+        ]
+      }
+    },
+    {
+      "tarea_id": "T123",
+      "backlog_id": "TASK-FRT-177",
+      "tipo": "frontend",
+      "descripcion": "Forward Clerk server credentials when SSR-loading the project coherence dashboard.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "The project coherence server page forwards Authorization: Bearer <Clerk token> to getDashboardSummary for live data, skips the backend call when no token is available, and keeps the dev cohV1Scenario override untouched.",
+      "archivos_modificados": [
+        "apps/web/app/(app)/projects/[id]/coherence/page.tsx",
+        "apps/web/app/(app)/projects/[id]/coherence/page.test.tsx",
+        "apps/web/lib/api/services/dashboard.ts",
+        "apps/web/lib/api/services/dashboard.test.ts",
+        "apps/web/lib/api/services/http.test.ts",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-04T07:31:00Z",
+        "completado": "2026-07-04T07:38:11Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-177 completed locally on fix/frt-l1-wave0: coherence SSR now forwards Clerk bearer credentials and avoids unauthenticated backend calls.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: page-level tests failed because getDashboardSummary was called without Authorization and still ran when getToken returned null.",
+          "GREEN: pnpm vitest run lib/api/services \"app/(app)/projects/[id]/coherence/page.test.tsx\" -> 4 files / 13 tests passed.",
+          "Requested service slice: pnpm vitest run lib/api/services -> 3 files / 10 tests passed.",
+          "pnpm typecheck -> passed",
+          "pnpm lint -> passed",
+          "pnpm test:all -> known unrelated suite failures remain: 15 files / 34 tests failed, already cataloged under TASK-FRT-192.",
+          "Manual local-backend browser check not run in this non-interactive patch session."
+        ]
+      }
+    },
+    {
+      "tarea_id": "T124",
+      "backlog_id": "TASK-FRT-178",
+      "tipo": "frontend",
+      "descripcion": "Purge fabricated UI data from project alerts, coherence alert charts, and the app header.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "Project alerts do not synthesize assignees or clause ids; coherence alert counts are derived from real project-alert responses or honest placeholders; header notifications no longer render fake counts/items or dead menu actions.",
+      "archivos_modificados": [
+        "apps/web/app/(app)/projects/[id]/alerts/page.tsx",
+        "apps/web/app/(app)/projects/[id]/alerts/page.test.tsx",
+        "apps/web/components/features/alerts/AlertReviewCenter.tsx",
+        "apps/web/components/features/alerts/AlertReviewCenter.test.tsx",
+        "apps/web/components/coherence/CoherenceClient.tsx",
+        "apps/web/components/coherence/CoherenceClient.test.tsx",
+        "apps/web/components/coherence/CategoryDetail.tsx",
+        "apps/web/components/layout/AppHeader.tsx",
+        "apps/web/components/layout/AppHeader.test.tsx",
+        "apps/web/app/demo/coherence-v1/page.tsx",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-04T07:45:00Z",
+        "completado": "2026-07-04T08:01:04Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-178 completed locally on fix/frt-l1-wave0: fabricated alert metadata, coherence chart counts, and header notifications were replaced with real API-backed values or honest empty states.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: focused tests failed on old fabricated alert props, optional metadata placeholders, fake notification expectations, and coherence alert distribution counts.",
+          "GREEN: pnpm vitest run \"app/(app)/projects/[id]/alerts\" components/coherence components/layout/AppHeader.test.tsx components/features/alerts/AlertReviewCenter.test.tsx -> 8 files / 50 tests passed.",
+          "rg -n \"legal\\.reviewer|finance\\.analyst|clause-\\$\\{\" apps/web/app apps/web/components -> 0 hits",
+          "rg -n \"Coherence Score v1 is active\" apps/web/components/coherence/CoherenceClient.tsx -> 0 hits",
+          "pnpm typecheck -> passed",
+          "pnpm lint -> passed",
+          "pnpm generate:api:check -> passed",
+          "pnpm test:all -> known unrelated suite failures remain: 15 files / 34 tests failed, already cataloged under TASK-FRT-192."
+        ]
+      }
+    },
+    {
+      "tarea_id": "T125",
+      "backlog_id": "TASK-FRT-179",
+      "tipo": "frontend",
+      "descripcion": "Use real Clerk reviewer identity for HITL review and evidence alert resolution actions.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "HITL approve/reject mutations and evidence alert resolution send the signed-in user's email or Clerk id instead of literal placeholder identities, and identity-dependent controls are disabled while the user identity is loading.",
+      "archivos_modificados": [
+        "apps/web/app/(app)/projects/[id]/review/page.tsx",
+        "apps/web/app/(app)/projects/[id]/review/page.test.tsx",
+        "apps/web/app/(app)/projects/[id]/evidence/page.tsx",
+        "apps/web/app/(app)/projects/[id]/evidence/page.test.tsx",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-04T08:12:00Z",
+        "completado": "2026-07-04T08:19:47Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-179 completed locally on fix/frt-l1-wave0: HITL/evidence audit actions now use Clerk email/id and no longer record placeholder reviewer strings.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: pnpm vitest run \"app/(app)/projects/[id]/review\" \"app/(app)/projects/[id]/evidence\" failed because payloads still sent current-user and web-evidence-viewer.",
+          "GREEN: pnpm vitest run \"app/(app)/projects/[id]/review\" \"app/(app)/projects/[id]/evidence\" -> 2 files / 25 tests passed.",
+          "rg -n \"current-user|web-evidence-viewer\" apps/web -> 0 hits",
+          "pnpm typecheck -> passed",
+          "pnpm lint -> passed",
+          "pnpm test:all -> known unrelated suite failures remain: 15 files / 34 tests failed, already cataloged under TASK-FRT-192."
+        ]
+      }
+    },
     {
       "tarea_id": "T120",
       "backlog_id": "TASK-COH-EVAL-TENANT-008",

@@ -1,57 +1,38 @@
-'use client';
+/**
+ * Test Suite ID: TASK-FRT-202
+ * Backlog Task: TASK-FRT-202
+ */
+import type { Metadata } from "next";
+import { LandingPage } from "@/components/landing/landing-page";
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import { Loader2 } from 'lucide-react';
-import LandingPageContent from '@/components/landing-page-content';
-import AppDashboardPage from '@/app/(app)/dashboard/page';
+export const metadata: Metadata = {
+  title: {
+    absolute: "C2Pro · Inteligencia documental para compras y contratos",
+  },
+  description:
+    "C2Pro cruza contrato, cronograma y presupuesto para detectar incoherencias, desviaciones y riesgos, con evidencia citada y validación humana experta. Únete al piloto.",
+  alternates: {
+    canonical: "/",
+    languages: {
+      es: "/",
+      en: "/en",
+      "x-default": "/",
+    },
+  },
+  openGraph: {
+    type: "website",
+    locale: "es_ES",
+    siteName: "C2Pro",
+    url: "/",
+    title: "C2Pro · Inteligencia documental para compras y contratos",
+    description:
+      "C2Pro cruza contrato, cronograma y presupuesto para detectar incoherencias, desviaciones y riesgos, con evidencia citada y validación humana experta. Únete al piloto.",
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
+};
 
 export default function RootPage() {
-  const { isAuthenticated, isLoading, userRole } = useAuth();
-  const router = useRouter();
-  const [showLanding, setShowLanding] = useState(false);
-
-  useEffect(() => {
-    if (isLoading) return;
-
-    if (isAuthenticated) {
-      if (userRole === 'c2pro_admin') {
-        router.replace('/admin/c2pro');
-      } else if (userRole === 'tenant_admin') {
-        router.replace('/admin/tenant');
-      }
-      return;
-    }
-
-    setShowLanding(true);
-  }, [isAuthenticated, isLoading, userRole, router]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (showLanding) {
-    return <LandingPageContent />;
-  }
-
-  if (isAuthenticated) {
-    return <AppDashboardPage />;
-  }
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-white">
-      <div className="text-center space-y-4">
-        <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-        <p className="text-sm text-muted-foreground">Redirecting...</p>
-      </div>
-    </div>
-  );
+  return <LandingPage locale="es" />;
 }

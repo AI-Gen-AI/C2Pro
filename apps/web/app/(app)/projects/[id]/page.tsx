@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -15,6 +14,57 @@ import {
 } from 'lucide-react';
 import { useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet } from '@/lib/api/generated/coherence-dashboard/coherence-dashboard';
 import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from '@/lib/api/generated/alerts/alerts';
+import { useProject } from '@/hooks/useProject';
+
+type DashboardScoreSource = {
+  sub_scores?: unknown;
+};
+
+function numberValue(value: unknown) {
+  return typeof value === 'number' ? value : Number(value ?? 0);
+}
+
+function objectValue(value: unknown) {
+  return value && typeof value === 'object'
+    ? (value as Record<string, number | null | undefined>)
+    : {};
+}
+
+function errorMessage(dashboardError: unknown, alertsError: unknown) {
+  if (dashboardError instanceof Error && dashboardError.message) {
+    return dashboardError.message;
+  }
+
+  if (alertsError instanceof Error && alertsError.message) {
+    return alertsError.message;
+  }
+
+  return 'Failed to load project overview';
+}
+
+function alertDotClass(severity: string | null | undefined) {
+  if (severity === 'critical') {
+    return 'bg-destructive animate-pulse-critical';
+  }
+
+  if (severity === 'high') {
+    return 'bg-warning';
+  }
+
+  return 'bg-warning/60';
+}
+
+function alertBadgeVariant(severity: string | null | undefined) {
+  if (severity === 'critical') {
+    return 'destructive';
+  }
+
+  if (severity === 'high') {
+    return 'warning';
+  }
+
+  return 'secondary';
+}
 
 /**
  * Test Suite ID: TASK-1347
@@ -34,6 +84,7 @@ export default function ProjectOverviewPage() {
     isLoading: alertsLoading,
     error: alertsError,
   } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id, undefined);
+  const { data: project } = useProject(id);
 
   const isLoading = dashboardLoading || alertsLoading;
   const hasError = dashboardError || !dashboard;
@@ -49,9 +100,7 @@ export default function ProjectOverviewPage() {
   if (hasError) {
     return (
       <div className="flex items-center justify-center py-24 text-destructive">
-        {(dashboardError instanceof Error && dashboardError.message) ||
-          (alertsError instanceof Error && alertsError.message) ||
-          'Failed to load project overview'}
+        {errorMessage(dashboardError, alertsError)}
       </div>
     );
   }
@@ -60,46 +109,31 @@ export default function ProjectOverviewPage() {
   const openAlerts = alerts.filter((alert) => alert.status === 'open');
   const alertsUnavailable = Boolean(alertsError);
   
-  const coherenceScore = useMemo(() => 
-    typeof dashboard.coherence_score === 'number'
-      ? dashboard.coherence_score
-      : Number(dashboard.coherence_score ?? 0),
-    [dashboard.coherence_score]
-  );
-
-  const documentCount = useMemo(() => 
-    typeof dashboard.document_count === 'number'
-      ? dashboard.document_count
-      : Number(dashboard.document_count ?? 0),
-    [dashboard.document_count]
-  );
-
-  const budgetScore = useMemo(() => {
-    const subScores =
-      dashboard.sub_scores && typeof dashboard.sub_scores === 'object'
-        ? (dashboard.sub_scores as Record<string, number>)
-        : {};
-    return subScores['BUDGET'] ?? 0;
-  }, [dashboard.sub_scores]);
+  const coherenceScore = numberValue(dashboard.coherence_score);
+  const documentCount = numberValue(dashboard.document_count);
+  const subScores = objectValue((dashboard as DashboardScoreSource).sub_scores);
+  const budgetScore =
+    typeof subScores['BUDGET'] === 'number' ? subScores['BUDGET'] : null;
+  const budgetValue = budgetScore === null ? '—' : String(budgetScore);
+  const budgetTitle =
+    budgetScore === null ? 'Requires budget document' : undefined;
 
   const openAlertCount = alertsUnavailable
     ? Number(dashboard.alert_count ?? 0)
     : openAlerts.length;
 
-  const recentAlerts = useMemo(() => 
-    openAlerts.slice(0, 3).map((alert) => ({
-      severity: alert.severity,
-      title: alert.message.split(' — ')[0],
-    })),
-    [openAlerts]
-  );
+  const recentAlerts = openAlerts.slice(0, 3).map((alert) => ({
+    id: alert.id,
+    severity: alert.severity,
+    title: alert.message.split(' — ')[0],
+  }));
 
-  const statCards = useMemo(() => [
+  const statCards = [
     { label: 'Coherence Score', value: String(coherenceScore), icon: Gauge, color: 'text-primary' },
     { label: 'Open Alerts', value: String(openAlertCount), icon: AlertTriangle, color: 'text-warning' },
     { label: 'Documents', value: String(documentCount), icon: FileText, color: 'text-chart-quality' },
-    { label: 'Budget Used', value: `${100 - budgetScore}%`, icon: DollarSign, color: 'text-chart-budget' },
-  ], [coherenceScore, openAlertCount, documentCount, budgetScore]);
+    { label: 'Budget coherence', value: budgetValue, title: budgetTitle, icon: DollarSign, color: 'text-chart-budget' },
+  ];
 
   return (
     <div className="space-y-5">
@@ -114,7 +148,9 @@ export default function ProjectOverviewPage() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
-                  <p className="font-mono text-2xl font-bold">{stat.value}</p>
+                  <p className="font-mono text-2xl font-bold" title={stat.title}>
+                    {stat.value}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -128,15 +164,24 @@ export default function ProjectOverviewPage() {
             <CardTitle className="text-sm font-semibold">Project Summary</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
+            {project?.status ? (
+              <div className="flex justify-between">
+                <span>Status</span>
+                <Badge variant="default">{project.status}</Badge>
+              </div>
+            ) : null}
             <div className="flex justify-between">
-              <span>Status</span>
-              <Badge variant="default">Active</Badge>
+              <span>Budget coherence</span>
+              <span
+                className="font-mono font-medium text-foreground"
+                title={budgetTitle}
+              >
+                {budgetValue}
+              </span>
             </div>
-            <div className="flex justify-between">
-              <span>Budget Utilization</span>
-              <span className="font-mono font-medium text-foreground">{100 - budgetScore}%</span>
-            </div>
-            <Progress value={100 - budgetScore} className="h-1.5" />
+            {budgetScore === null ? null : (
+              <Progress value={budgetScore} className="h-1.5" />
+            )}
             <div className="flex justify-between">
               <span>Coherence Score</span>
               <span className="font-mono font-medium text-foreground">{coherenceScore}</span>
@@ -163,17 +208,21 @@ export default function ProjectOverviewPage() {
                 Recent alerts unavailable right now.
               </p>
             ) : null}
-            {recentAlerts.map((alert, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-md border p-2.5 text-sm">
-                <div className={`h-2 w-2 shrink-0 rounded-full ${
-                  alert.severity === 'critical' ? 'bg-destructive animate-pulse-critical' :
-                  alert.severity === 'high' ? 'bg-warning' : 'bg-warning/60'
-                }`} />
+            {recentAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                className="flex items-center gap-3 rounded-md border p-2.5 text-sm"
+              >
+                <div
+                  className={`h-2 w-2 shrink-0 rounded-full ${alertDotClass(
+                    alert.severity,
+                  )}`}
+                />
                 <span className="flex-1 text-sm">{alert.title}</span>
-                <Badge variant={
-                  alert.severity === 'critical' ? 'destructive' :
-                  alert.severity === 'high' ? 'warning' : 'secondary'
-                } className="text-[10px]">
+                <Badge
+                  variant={alertBadgeVariant(alert.severity)}
+                  className="text-[10px]"
+                >
                   {alert.severity}
                 </Badge>
               </div>

@@ -42,7 +42,9 @@ interface ScoreCardProps {
   category: string;
   score: number | null;
   weight: number;
-  alertCount: number;
+  /** ADR-009 §18: null means the count is unknown (not yet loaded / failed to
+   * load) and must render as absent, never a fabricated zero. */
+  alertCount: number | null;
   selected?: boolean;
   onClick?: () => void;
 }
@@ -76,7 +78,7 @@ export function ScoreCard({
       onClick={onClick}
       tabIndex={0}
       role="button"
-      aria-label={`${config.label} score ${score === null ? 'pending' : `${score}/100`}, ${alertCount} alerts, ${severity.label}`}
+      aria-label={`${config.label} score ${score === null ? 'pending' : `${score}/100`}, ${alertCount === null ? 'alert count unknown' : `${alertCount} alerts`}, ${severity.label}`}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -120,7 +122,7 @@ export function ScoreCard({
           {severity.label}
         </Badge>
 
-        {alertCount > 0 && (
+        {alertCount !== null && alertCount > 0 && (
           <span
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-destructive/10 font-mono text-[11px] font-semibold text-destructive"
             aria-label={`${alertCount} alerts`}

@@ -9,6 +9,18 @@ import AppDashboardPage from "./page";
 const getProjectsMock = vi.fn();
 const getSummaryMock = vi.fn();
 const useAuthStoreMock = vi.fn();
+const replaceMock = vi.fn();
+const useAuthMock = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    replace: replaceMock,
+  }),
+}));
+
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => useAuthMock(),
+}));
 
 vi.mock("@/stores/auth", () => ({
   useAuthStore: (selector: (state: { token: string | null }) => unknown) =>
@@ -29,6 +41,11 @@ vi.mock("@/components/coherence/DashboardClient", () => ({
 describe("AppDashboardPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useAuthMock.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+      userRole: null,
+    });
   });
 
   it("shows a route back to the projects list from the portfolio overview", async () => {
@@ -58,5 +75,43 @@ describe("AppDashboardPage", () => {
     expect(
       screen.getByRole("link", { name: /back to projects/i }),
     ).toHaveAttribute("href", "/projects");
+  });
+
+  it("redirects c2pro admins to the admin workspace from the dashboard route", async () => {
+    useAuthMock.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+      userRole: "c2pro_admin",
+    });
+    useAuthStoreMock.mockImplementation(
+      (selector: (state: { token: string | null }) => unknown) =>
+        selector({ token: "token-123" }),
+    );
+
+    renderWithProviders(<AppDashboardPage />);
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/admin/c2pro");
+    });
+    expect(getProjectsMock).not.toHaveBeenCalled();
+  });
+
+  it("redirects tenant admins to the tenant admin workspace from the dashboard route", async () => {
+    useAuthMock.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+      userRole: "tenant_admin",
+    });
+    useAuthStoreMock.mockImplementation(
+      (selector: (state: { token: string | null }) => unknown) =>
+        selector({ token: "token-123" }),
+    );
+
+    renderWithProviders(<AppDashboardPage />);
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/admin/tenant");
+    });
+    expect(getProjectsMock).not.toHaveBeenCalled();
   });
 });

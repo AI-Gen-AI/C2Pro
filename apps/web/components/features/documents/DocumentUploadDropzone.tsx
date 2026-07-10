@@ -1,12 +1,35 @@
 "use client";
 
 import { useRef, useState, type DragEvent, type KeyboardEvent } from "react";
-import { Loader2, Upload } from "lucide-react";
+import { FileText, Loader2, Upload, X } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { uploadDocument } from "@/lib/api";
+import type { DocumentType } from "@/lib/api/generated/models";
+import { formatFileSize } from "@/types/document";
 
 const ALLOWED_EXTENSIONS = new Set(["pdf", "xlsx", "bc3"]);
+const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
+  { value: "contract", label: "Contract" },
+  { value: "budget", label: "Budget" },
+  { value: "schedule", label: "Schedule" },
+  { value: "drawing", label: "Drawing" },
+  { value: "specification", label: "Specification" },
+  { value: "other", label: "Other" },
+];
+
+type StagedUpload = {
+  id: string;
+  file: File;
+  documentType: DocumentType;
+};
 
 type DocumentUploadDropzoneProps = {
   projectId: string;
@@ -17,6 +40,17 @@ type DocumentUploadDropzoneProps = {
 function getExtension(fileName: string): string {
   const parts = fileName.split(".");
   return parts.length > 1 ? parts[parts.length - 1]!.toLowerCase() : "";
+}
+
+function defaultDocumentTypeForFile(fileName: string): DocumentType {
+  const extension = getExtension(fileName);
+  if (extension === "pdf") {
+    return "contract";
+  }
+  if (extension === "xlsx" || extension === "bc3") {
+    return "budget";
+  }
+  return "other";
 }
 
 function formatUploadFailureMessage(error: unknown): string {
@@ -44,12 +78,13 @@ export function DocumentUploadDropzone({
   const [message, setMessage] = useState<string>("");
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [uploading, setUploading] = useState(false);
+  const [stagedUploads, setStagedUploads] = useState<StagedUpload[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const ariaLabel =
     dragState === "active" ? "Drop files to upload" : "Upload documents";
 
-  const handleUpload = async (files: File[]): Promise<void> => {
+  const stageFiles = (files: File[]): void => {
     if (files.length === 0) {
       setMessage("No files selected");
       return;
@@ -71,19 +106,54 @@ export function DocumentUploadDropzone({
       return;
     }
 
+    setStagedUploads((current) => [
+      ...current,
+      ...files.map((file, index) => ({
+        id: `${file.name}-${file.size}-${file.lastModified}-${index}`,
+        file,
+        documentType: defaultDocumentTypeForFile(file.name),
+      })),
+    ]);
+    setMessage(`${files.length} file(s) staged. Confirm each document type before uploading.`);
+    setStatusMessage(`${files.length} file(s) staged for upload`);
+  };
+
+  const updateStagedDocumentType = (id: string, documentType: DocumentType): void => {
+    setStagedUploads((current) =>
+      current.map((item) => (item.id === id ? { ...item, documentType } : item)),
+    );
+  };
+
+  const removeStagedUpload = (id: string): void => {
+    setStagedUploads((current) => current.filter((item) => item.id !== id));
+  };
+
+  const uploadStagedFiles = async (): Promise<void> => {
+    if (stagedUploads.length === 0) {
+      setMessage("No files selected");
+      return;
+    }
+
     setUploading(true);
-    setMessage(`Uploading ${files.length} file(s)...`);
+    setMessage(`Uploading ${stagedUploads.length} file(s)...`);
 
     try {
-      for (const file of files) {
+      for (const staged of stagedUploads) {
+        const { file, documentType } = staged;
         setStatusMessage(`Uploading: ${file.name}`);
         const freshToken = await getToken();
-        await uploadDocument(projectId, file, "CONTRACT", freshToken ? { token: freshToken } : undefined);
+        await uploadDocument(
+          projectId,
+          file,
+          documentType,
+          freshToken ? { token: freshToken } : undefined,
+        );
       }
       setMessage(
-        `Upload accepted for ${files.length} file(s). Backend processing is still required.`,
+        `Upload accepted for ${stagedUploads.length} file(s). Backend processing is still required.`,
       );
       setStatusMessage("Upload request accepted");
+      setStagedUploads([]);
       onUploadComplete?.();
     } catch (error) {
       setMessage(formatUploadFailureMessage(error));
@@ -98,7 +168,7 @@ export function DocumentUploadDropzone({
     event.stopPropagation();
     setDragState("idle");
     const files = Array.from(event.dataTransfer.files ?? []);
-    handleUpload(files);
+    stageFiles(files);
   };
 
   const onDragEnter = (event: DragEvent<HTMLButtonElement>): void => {
@@ -171,6 +241,63 @@ export function DocumentUploadDropzone({
         )}
       </button>
 
+      {stagedUploads.length > 0 ? (
+        <div className="space-y-3 border-b border-border/70 px-5 py-4">
+          {stagedUploads.map((staged) => (
+            <div
+              key={staged.id}
+              className="grid gap-3 rounded-2xl border border-border/70 bg-muted/20 p-3 sm:grid-cols-[1fr_180px_auto] sm:items-center"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-background">
+                  <FileText className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {staged.file.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatFileSize(staged.file.size)}
+                  </p>
+                </div>
+              </div>
+              <Select
+                value={staged.documentType}
+                onValueChange={(value) =>
+                  updateStagedDocumentType(staged.id, value as DocumentType)
+                }
+                disabled={uploading}
+              >
+                <SelectTrigger
+                  aria-label={`Document type for ${staged.file.name}`}
+                  className="h-10 rounded-xl bg-background"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DOCUMENT_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={`Remove ${staged.file.name}`}
+                className="rounded-xl"
+                disabled={uploading}
+                onClick={() => removeStagedUpload(staged.id)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {/* Footer: privacy badge + browse button */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
         <div
@@ -179,16 +306,27 @@ export function DocumentUploadDropzone({
         >
           Files stay private to this project workspace.
         </div>
-        <Button
-          type="button"
-          onClick={openPicker}
-          onKeyDown={onBrowseKeyDown}
-          disabled={uploading}
-          variant="default"
-        >
-          <Upload className="mr-2 h-4 w-4" />
-          Browse files
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            onClick={openPicker}
+            onKeyDown={onBrowseKeyDown}
+            disabled={uploading}
+            variant="outline"
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Browse files
+          </Button>
+          <Button
+            type="button"
+            onClick={() => void uploadStagedFiles()}
+            disabled={uploading || stagedUploads.length === 0}
+            variant="default"
+          >
+            {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Upload {stagedUploads.length} file{stagedUploads.length === 1 ? "" : "s"}
+          </Button>
+        </div>
       </div>
 
       <input
@@ -198,7 +336,10 @@ export function DocumentUploadDropzone({
         accept=".pdf,.xlsx,.bc3"
         className="sr-only"
         disabled={uploading}
-        onChange={(event) => handleUpload(Array.from(event.target.files ?? []))}
+        onChange={(event) => {
+          stageFiles(Array.from(event.target.files ?? []));
+          event.currentTarget.value = "";
+        }}
       />
 
       <p role="status" aria-live="polite" className="sr-only">

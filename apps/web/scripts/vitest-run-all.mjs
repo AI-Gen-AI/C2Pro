@@ -9,7 +9,7 @@ const commands = [
       "--exclude",
       "src/tests/integration/**",
       "--config",
-      "vitest.config.ts",
+      "vitest.config.mts",
     ],
   ],
   [

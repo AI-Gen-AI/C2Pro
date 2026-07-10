@@ -98,4 +98,27 @@ describe("fetchApiJson", () => {
       {},
     );
   });
+
+  it("forwards caller-provided authorization headers during server-side loading", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const { fetchApiJson } = await import("@/lib/api/services/http");
+
+    await fetchApiJson("projects", {
+      server: true,
+      headers: { Authorization: "Bearer clerk-server-token" },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/projects",
+      {
+        headers: { Authorization: "Bearer clerk-server-token" },
+      },
+    );
+  });
 });

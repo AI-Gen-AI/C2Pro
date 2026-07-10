@@ -1,3 +1,7 @@
+/**
+ * Test Suite ID: TASK-FRT-202
+ * Backlog Task: TASK-FRT-202
+ */
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import type { ReactNode } from "react";
@@ -34,9 +38,13 @@ const jetbrains = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "C2Pro v3.0 - Coherence Monitor",
+  metadataBase: new URL("https://www.c2pro.io"),
+  title: {
+    default: "C2Pro · Inteligencia documental para compras y contratos",
+    template: "%s · C2Pro",
+  },
   description:
-    "Enterprise Contract & Project Coherence Monitoring Platform. AI-powered cross-document analysis for construction and engineering projects.",
+    "C2Pro cruza contrato, cronograma y presupuesto para detectar incoherencias, desviaciones y riesgos, con evidencia citada y validación humana experta. Únete al piloto.",
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",
@@ -44,7 +52,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#00ACC1",
+  themeColor: "#0B1F3A",
   width: "device-width",
   initialScale: 1,
 };
