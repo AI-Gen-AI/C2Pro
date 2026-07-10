@@ -8,7 +8,6 @@ import AnalysisPage from "./page";
 
 const getDashboardMock = vi.fn();
 const listProjectAlertsMock = vi.fn();
-const getStreamProjectProcessingUrlMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "proj-real-7" }),
@@ -24,9 +23,10 @@ vi.mock("@/lib/api/generated/alerts/alerts", () => ({
     listProjectAlertsMock(...args),
 }));
 
-vi.mock("@/lib/api/analysis-stream", () => ({
-  getStreamProjectProcessingUrl: (...args: unknown[]) =>
-    getStreamProjectProcessingUrlMock(...args),
+vi.mock("@/components/features/analysis/AnalysisProgressTracker", () => ({
+  AnalysisProgressTracker: ({ projectId }: { projectId: string }) => (
+    <div>Reading documents for {projectId}</div>
+  ),
 }));
 
 describe("Project analysis page real-data boundary", () => {
@@ -65,10 +65,6 @@ describe("Project analysis page real-data boundary", () => {
       isLoading: false,
       error: null,
     });
-    getStreamProjectProcessingUrlMock.mockReturnValue(
-      "/api/v1/analysis/projects/proj-real-7/process/stream",
-    );
-
     renderWithProviders(<AnalysisPage />);
 
     expect(screen.getByText(/v1 exponential decay/i)).toBeInTheDocument();
@@ -114,10 +110,6 @@ describe("Project analysis page real-data boundary", () => {
       isLoading: false,
       error: null,
     });
-    getStreamProjectProcessingUrlMock.mockReturnValue(
-      "/api/v1/analysis/projects/proj-real-7/process/stream",
-    );
-
     renderWithProviders(<AnalysisPage />);
 
     expect(getDashboardMock).toHaveBeenCalledWith("proj-real-7");
@@ -130,10 +122,9 @@ describe("Project analysis page real-data boundary", () => {
     expect(screen.getByText("59")).toBeInTheDocument();
     expect(screen.queryByText("41%")).not.toBeInTheDocument();
     expect(screen.getByText(/date mismatch/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /open processing stream/i })).toHaveAttribute(
-      "href",
-      "/api/v1/analysis/projects/proj-real-7/process/stream",
-    );
+    expect(screen.queryByRole("link", { name: /open processing stream/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /process\/stream/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/reading documents/i)).toBeInTheDocument();
     expect(
       screen.queryByText(/centro de alertas, riesgos y hallazgos automatizados/i),
     ).not.toBeInTheDocument();
@@ -155,10 +146,6 @@ describe("Project analysis page real-data boundary", () => {
       isLoading: false,
       error: null,
     });
-    getStreamProjectProcessingUrlMock.mockReturnValue(
-      "/api/v1/analysis/projects/proj-real-7/process/stream",
-    );
-
     renderWithProviders(<AnalysisPage />);
 
     expect(screen.getByText("Budget coherence")).toBeInTheDocument();

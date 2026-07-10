@@ -6,6 +6,8 @@ const useProjectDocumentsMock = vi.fn();
 const useProjectMock = vi.fn();
 const mutateAsyncMock = vi.fn();
 const useDeleteDocumentMock = vi.fn();
+const apiClientPostMock = vi.fn();
+const showToastMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "proj_real_001" }),
@@ -25,6 +27,22 @@ vi.mock("@/hooks/useProject", () => ({
 vi.mock("@/lib/api/generated/documents/documents", () => ({
   useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete: (...args: unknown[]) =>
     useDeleteDocumentMock(...args),
+}));
+
+vi.mock("@/lib/api/client", () => ({
+  apiClient: {
+    post: (...args: unknown[]) => apiClientPostMock(...args),
+  },
+}));
+
+vi.mock("@/lib/ui/toast", () => ({
+  showToast: (...args: unknown[]) => showToastMock(...args),
+}));
+
+vi.mock("@/components/features/analysis/AnalysisProgressTracker", () => ({
+  AnalysisProgressTracker: ({ projectId }: { projectId: string }) => (
+    <div>Analysis progress for {projectId}</div>
+  ),
 }));
 
 vi.mock("@/components/features/documents/DocumentUploadDropzone", () => ({
@@ -51,6 +69,8 @@ describe("ProjectDocumentsPage", () => {
     useProjectMock.mockReset();
     mutateAsyncMock.mockReset();
     useDeleteDocumentMock.mockReset();
+    apiClientPostMock.mockReset();
+    showToastMock.mockReset();
     useProjectMock.mockReturnValue({
       data: {
         id: "proj_real_001",
@@ -160,6 +180,28 @@ describe("ProjectDocumentsPage", () => {
     expect(
       screen.queryByText("No documents found for this project"),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows analysis progress while documents are still processing", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_real_002",
+          name: "Schedule.xlsx",
+          type: "schedule",
+          fileSize: 4096,
+          uploadedAt: new Date("2026-03-17T09:00:00Z"),
+          status: "processing",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    expect(screen.getByText("Analysis progress for proj_real_001")).toBeInTheDocument();
   });
 
   it("renders summary counters from backend document statuses", () => {
@@ -446,5 +488,63 @@ describe("ProjectDocumentsPage", () => {
       "Showing 1 of 1 documents",
     );
     expect(screen.getByTestId("documents-results-summary")).toHaveClass("border-t");
+  });
+
+  it("retries processing through the authenticated API client", async () => {
+    const refetch = vi.fn();
+    apiClientPostMock.mockResolvedValueOnce({ status: 202 });
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_error_001",
+          name: "Budget.xlsx",
+          type: "budget",
+          fileSize: 1024,
+          uploadedAt: new Date("2026-03-18T09:00:00Z"),
+          status: "error",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch,
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /retry processing budget\.xlsx/i }));
+
+    await waitFor(() =>
+      expect(apiClientPostMock).toHaveBeenCalledWith(
+        "/projects/proj_real_001/documents/doc_error_001/reprocess",
+      ),
+    );
+    await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1));
+  });
+
+  it("shows a visible toast when retry processing fails", async () => {
+    apiClientPostMock.mockRejectedValueOnce({
+      response: { data: { detail: "worker unavailable" } },
+    });
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_error_001",
+          name: "Budget.xlsx",
+          type: "budget",
+          fileSize: 1024,
+          uploadedAt: new Date("2026-03-18T09:00:00Z"),
+          status: "error",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /retry processing budget\.xlsx/i }));
+
+    await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("worker unavailable"));
   });
 });
