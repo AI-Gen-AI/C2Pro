@@ -2,12 +2,14 @@
  * Test Suite ID: TASK-1347, TASK-OPS-DOCFLOW-010
  * Route Coverage: Project analysis backend summary
  */
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen } from "@/src/tests/test-utils";
 import AnalysisPage from "./page";
 
 const getDashboardMock = vi.fn();
 const listProjectAlertsMock = vi.fn();
+const useProjectDocumentsMock = vi.fn();
+const rerunAnalysisMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "proj-real-7" }),
@@ -29,7 +31,31 @@ vi.mock("@/components/features/analysis/AnalysisProgressTracker", () => ({
   ),
 }));
 
+vi.mock("@/hooks/useProjectDocuments", () => ({
+  useProjectDocuments: (...args: unknown[]) => useProjectDocumentsMock(...args),
+}));
+
+vi.mock("@/hooks/useProjectCoherenceActions", () => ({
+  useProjectCoherenceActions: () => ({
+    rerunAnalysis: rerunAnalysisMock,
+    evaluateCoherence: vi.fn(),
+    isRerunningAnalysis: false,
+    isEvaluating: false,
+  }),
+}));
+
 describe("Project analysis page real-data boundary", () => {
+  beforeEach(() => {
+    useProjectDocumentsMock.mockReset();
+    rerunAnalysisMock.mockReset();
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+  });
+
   it("renders real backend-shaped coherence metadata and alert payloads", () => {
     getDashboardMock.mockReturnValue({
       data: {
@@ -152,5 +178,41 @@ describe("Project analysis page real-data boundary", () => {
     expect(screen.getByText("—")).toBeInTheDocument();
     expect(screen.getByTitle("Requires budget document")).toBeInTheDocument();
     expect(screen.queryByText("Budget Pressure")).not.toBeInTheDocument();
+  });
+
+  it("disables re-run analysis until the triplet is complete", () => {
+    getDashboardMock.mockReturnValue({
+      data: {
+        coherence_score: 84,
+        sub_scores: { BUDGET: 59 },
+        alert_count: 0,
+        document_count: 1,
+      },
+      isLoading: false,
+      error: null,
+    });
+    listProjectAlertsMock.mockReturnValue({
+      data: { items: [] },
+      isLoading: false,
+      error: null,
+    });
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "contract",
+          name: "Contract.pdf",
+          type: "contract",
+          status: "parsed",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    renderWithProviders(<AnalysisPage />);
+
+    expect(screen.getByRole("button", { name: /re-run analysis/i })).toBeDisabled();
+    expect(screen.getByText(/upload contract, budget, and schedule/i)).toBeInTheDocument();
   });
 });

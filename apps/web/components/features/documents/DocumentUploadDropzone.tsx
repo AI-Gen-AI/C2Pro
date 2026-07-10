@@ -34,6 +34,7 @@ type StagedUpload = {
 type DocumentUploadDropzoneProps = {
   projectId: string;
   maxFileSizeBytes?: number;
+  defaultType?: DocumentType;
   onUploadComplete?: () => void;
 };
 
@@ -71,6 +72,7 @@ function formatUploadFailureMessage(error: unknown): string {
 export function DocumentUploadDropzone({
   projectId,
   maxFileSizeBytes,
+  defaultType,
   onUploadComplete,
 }: DocumentUploadDropzoneProps) {
   const { getToken } = useAuth();
@@ -111,7 +113,7 @@ export function DocumentUploadDropzone({
       ...files.map((file, index) => ({
         id: `${file.name}-${file.size}-${file.lastModified}-${index}`,
         file,
-        documentType: defaultDocumentTypeForFile(file.name),
+        documentType: defaultType ?? defaultDocumentTypeForFile(file.name),
       })),
     ]);
     setMessage(`${files.length} file(s) staged. Confirm each document type before uploading.`);

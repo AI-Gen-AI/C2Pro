@@ -8,6 +8,7 @@ import { renderWithProviders, screen } from "@/src/tests/test-utils";
 const getDashboardMock = vi.fn();
 const listProjectAlertsMock = vi.fn();
 const useProjectMock = vi.fn();
+const useProjectDocumentsMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "proj_real_001" }),
@@ -27,6 +28,10 @@ vi.mock("@/hooks/useProject", () => ({
   useProject: (...args: unknown[]) => useProjectMock(...args),
 }));
 
+vi.mock("@/hooks/useProjectDocuments", () => ({
+  useProjectDocuments: (...args: unknown[]) => useProjectDocumentsMock(...args),
+}));
+
 import ProjectOverviewPage from "./page";
 
 describe("ProjectOverviewPage", () => {
@@ -38,6 +43,12 @@ describe("ProjectOverviewPage", () => {
       data: { status: "active" },
       isLoading: false,
       error: null,
+    });
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
     });
   });
 
@@ -200,6 +211,53 @@ describe("ProjectOverviewPage", () => {
     expect(screen.getAllByText("Budget coherence")).toHaveLength(2);
     expect(screen.getAllByText("—")).toHaveLength(2);
     expect(screen.getAllByTitle("Requires budget document")).toHaveLength(2);
+  });
+
+  it("renders the compact triplet checklist on the overview", () => {
+    getDashboardMock.mockReturnValue({
+      data: {
+        coherence_score: 91,
+        sub_scores: { BUDGET: 60 },
+        alert_count: 2,
+        document_count: 2,
+      },
+      isLoading: false,
+      error: null,
+    });
+    listProjectAlertsMock.mockReturnValue({
+      data: { items: [] },
+      isLoading: false,
+      error: null,
+    });
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc-contract",
+          name: "Contract.pdf",
+          type: "contract",
+          fileSize: 2048,
+          status: "parsed",
+        },
+        {
+          id: "doc-budget",
+          name: "Budget.xlsx",
+          type: "budget",
+          fileSize: 2048,
+          status: "processing",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    renderWithProviders(<ProjectOverviewPage />);
+
+    expect(useProjectDocumentsMock).toHaveBeenCalledWith("proj_real_001");
+    expect(screen.getByText(/required document triplet/i)).toBeInTheDocument();
+    expect(screen.getByText(/contract ready/i)).toBeInTheDocument();
+    expect(screen.getByText(/budget processing/i)).toBeInTheDocument();
+    expect(screen.getByText(/schedule missing/i)).toBeInTheDocument();
   });
 
   it("links to the alerts route from the recent alerts panel", () => {

@@ -15,6 +15,8 @@ import {
 import { useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet } from '@/lib/api/generated/coherence-dashboard/coherence-dashboard';
 import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from '@/lib/api/generated/alerts/alerts';
 import { useProject } from '@/hooks/useProject';
+import { useProjectDocuments } from '@/hooks/useProjectDocuments';
+import { TripletChecklist } from '@/components/features/documents/TripletChecklist';
 
 type DashboardScoreSource = {
   sub_scores?: unknown;
@@ -85,6 +87,7 @@ export default function ProjectOverviewPage() {
     error: alertsError,
   } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id, undefined);
   const { data: project } = useProject(id);
+  const { documents } = useProjectDocuments(id);
 
   const isLoading = dashboardLoading || alertsLoading;
   const hasError = dashboardError || !dashboard;
@@ -157,6 +160,8 @@ export default function ProjectOverviewPage() {
           );
         })}
       </div>
+
+      <TripletChecklist documents={documents} compact />
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>

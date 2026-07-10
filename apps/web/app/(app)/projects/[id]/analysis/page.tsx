@@ -4,7 +4,11 @@ import { useParams } from "next/navigation";
 import { AlertTriangle, Gauge, RadioTower, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { AnalysisProgressTracker } from "@/components/features/analysis/AnalysisProgressTracker";
+import { deriveTripletChecklist } from "@/components/features/documents/TripletChecklist";
+import { useProjectCoherenceActions } from "@/hooks/useProjectCoherenceActions";
+import { useProjectDocuments } from "@/hooks/useProjectDocuments";
 import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from "@/lib/api/generated/alerts/alerts";
 import { useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet } from "@/lib/api/generated/coherence-dashboard/coherence-dashboard";
 
@@ -62,6 +66,9 @@ export default function AnalysisPage() {
     isLoading: alertsLoading,
     error: alertsError,
   } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id, undefined);
+  const { documents } = useProjectDocuments(id);
+  const { rerunAnalysis, isRerunningAnalysis } = useProjectCoherenceActions(id);
+  const triplet = deriveTripletChecklist(documents);
 
   if (dashboardLoading || alertsLoading) {
     return (
@@ -142,6 +149,26 @@ export default function AnalysisPage() {
             Live backend-backed view of coherence, alerts, and analysis entry
             points for this project.
           </p>
+        </div>
+        <div className="space-y-2">
+          <Button
+            type="button"
+            className="rounded-xl"
+            disabled={!triplet.complete || isRerunningAnalysis}
+            title={
+              triplet.complete
+                ? undefined
+                : "Upload contract, budget, and schedule before re-running analysis."
+            }
+            onClick={() => void rerunAnalysis()}
+          >
+            {isRerunningAnalysis ? "Re-running..." : "Re-run analysis"}
+          </Button>
+          {!triplet.complete ? (
+            <p className="max-w-xs text-xs text-muted-foreground">
+              Upload contract, budget, and schedule before re-running analysis.
+            </p>
+          ) : null}
         </div>
       </div>
 

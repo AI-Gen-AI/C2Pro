@@ -3191,7 +3191,7 @@
     "rev_006_progress": "Phase A complete - hexagonal structure created",
     "audit_pending": 4
   },
-  "contexto_paso_anterior": "2026-07-10T22:11:05.4809547Z: TASK-FRT-180 and TASK-FRT-181 completed on feat/frt-l1-wave0-cont. Result: four-stage analysis progress mounted on Analysis/Documents, useProjectDocuments converted to React Query polling while docs are in-flight, raw stream link removed, retry processing uses authenticated apiClient.post and visible error toast. Verification: focused Vitest 4 files / 30 tests passed, pnpm typecheck passed, pnpm lint passed; broader app/(app)/projects/[id] + components/coherence guard has 91 passing tests and 3 unrelated TASK-FRT-192 debt failures in untouched budget/settings/wbs tests.",
+  "contexto_paso_anterior": "2026-07-11T01:41:41.5998647+02:00: TASK-FRT-184 and TASK-FRT-185 completed on feat/frt-l1-wave1-a. Result: triplet checklist added to Documents and Overview; missing-slot CTAs open upload with the requested document type preselected; complete triplet shows success row; Evaluate coherence and Re-run analysis actions use generated mutation hooks, invalidate dashboard/alerts/documents queries on success, and remain disabled until triplet completion. Verification: RED focused tests failed first; GREEN focused Vitest 8 files / 52 tests passed; pnpm typecheck passed after restoring generated-client line-ending noise; pnpm lint passed; pnpm generate:api:check passed; broader app/(app)/projects/[id] + components/coherence guard has 96 passing tests and 3 known TASK-FRT-192 debt failures in untouched budget/settings/wbs tests.",
   "trazas_de_error": [
     {
       "timestamp": "2026-04-10T20:54:00+00:00",

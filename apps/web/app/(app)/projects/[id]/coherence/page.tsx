@@ -3,6 +3,7 @@ import { CoherenceClient } from "@/components/coherence/CoherenceClient";
 import { getDashboardSummary } from "@/lib/api/services/dashboard";
 import { auth } from "@clerk/nextjs/server";
 import { BarChart3 } from "lucide-react";
+import { CoherenceActions } from "./coherence-actions";
 
 export default async function ProjectCoherencePage({
   params,
@@ -42,6 +43,8 @@ export default async function ProjectCoherencePage({
 
   return (
     <div className="space-y-5">
+      <CoherenceActions projectId={id} />
+
       {loadError ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           {loadError}. Verify the backend service is available and try again.
