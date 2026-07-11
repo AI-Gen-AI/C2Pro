@@ -11,6 +11,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,7 @@ import {
   Trash2,
   Download,
   Loader2,
+  ScrollText,
 } from "lucide-react";
 import {
   useBudget,
@@ -188,10 +190,6 @@ export default function ProjectBudgetPage() {
     URL.revokeObjectURL(url);
   };
 
-  const exportToPDF = () => {
-    alert("PDF export - implement with jsPDF or similar");
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -262,9 +260,11 @@ export default function ProjectBudgetPage() {
             <Download className="mr-2 h-4 w-4" />
             Export CSV
           </Button>
-          <Button variant="outline" onClick={exportToPDF}>
-            <Download className="mr-2 h-4 w-4" />
-            Export PDF
+          <Button variant="outline" asChild>
+            <Link href={`/projects/${projectId}/report`}>
+              <ScrollText className="mr-2 h-4 w-4" />
+              Open audit report
+            </Link>
           </Button>
           <Button onClick={() => setCreateModalOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
