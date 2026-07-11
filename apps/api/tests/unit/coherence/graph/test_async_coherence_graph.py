@@ -46,7 +46,7 @@ def _disable_langsmith_tracing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         langsmith_run_helpers,
         "get_tracing_context",
-        lambda: {"parent": None, "project_name": None, "enabled": False},
+        lambda: {"parent": None, "project_name": None, "enabled": False, "metadata": {}, "tags": []},
     )
     monkeypatch.setattr(langsmith_utils, "tracing_is_enabled", lambda: False)
     monkeypatch.setattr(

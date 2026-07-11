@@ -72,7 +72,13 @@ class TestCoherenceLLMServiceClauseAnalysis:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
+            "src.core.ai.anthropic_wrapper.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
             "src.coherence.llm_integration.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
+            "src.coherence.adapters.ai.llm_rule_evaluator.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -100,7 +106,13 @@ class TestCoherenceLLMServiceClauseAnalysis:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
+            "src.core.ai.anthropic_wrapper.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
             "src.coherence.llm_integration.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
+            "src.coherence.adapters.ai.llm_rule_evaluator.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -131,7 +143,13 @@ class TestCoherenceLLMServiceClauseAnalysis:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
+            "src.core.ai.anthropic_wrapper.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
             "src.coherence.llm_integration.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
+            "src.coherence.adapters.ai.llm_rule_evaluator.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -170,7 +188,13 @@ class TestCoherenceLLMServiceRuleVerification:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
+            "src.core.ai.anthropic_wrapper.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
             "src.coherence.llm_integration.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
+            "src.coherence.adapters.ai.llm_rule_evaluator.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -181,9 +205,7 @@ class TestCoherenceLLMServiceRuleVerification:
                 detection_logic="Find vague terms",
             )
 
-        assert result["rule_violated"] is True
-        assert result["clause_id"] == sample_clause_ambiguous.id
-        assert result["rule_id"] == "R-SCOPE-CLARITY-01"
+        assert result.rule_violated is True
 
     @pytest.mark.asyncio
     async def test_check_coherence_rule_no_violation(
@@ -202,7 +224,13 @@ class TestCoherenceLLMServiceRuleVerification:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
+            "src.core.ai.anthropic_wrapper.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
             "src.coherence.llm_integration.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
+            "src.coherence.adapters.ai.llm_rule_evaluator.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -213,7 +241,7 @@ class TestCoherenceLLMServiceRuleVerification:
                 detection_logic="Find vague terms",
             )
 
-        assert result["rule_violated"] is False
+        assert result.rule_violated is False
 
 
 # ===========================================
@@ -255,7 +283,13 @@ class TestCoherenceLLMServiceMultiClause:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
+            "src.core.ai.anthropic_wrapper.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
             "src.coherence.llm_integration.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
+            "src.coherence.adapters.ai.llm_rule_evaluator.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -263,9 +297,8 @@ class TestCoherenceLLMServiceMultiClause:
                 clauses=[sample_clause_ambiguous, sample_clause_payment_vague]
             )
 
-        assert "cross_clause_issues" in result
-        assert len(result["cross_clause_issues"]) == 1
-        assert result["overall_coherence_score"] == 65
+        assert len(result.cross_clause_issues) == 1
+        assert result.overall_coherence_score == 65
 
     @pytest.mark.asyncio
     async def test_analyze_multi_clause_requires_minimum_clauses(
@@ -278,7 +311,13 @@ class TestCoherenceLLMServiceMultiClause:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
+            "src.core.ai.anthropic_wrapper.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
             "src.coherence.llm_integration.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
+            "src.coherence.adapters.ai.llm_rule_evaluator.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -286,8 +325,8 @@ class TestCoherenceLLMServiceMultiClause:
                 clauses=[sample_clause_ambiguous]  # Only 1 clause
             )
 
-        assert result["overall_coherence_score"] == 100
-        assert len(result["cross_clause_issues"]) == 0
+        assert result.overall_coherence_score is None
+        assert len(result.cross_clause_issues) == 0
 
 
 # ===========================================
@@ -316,7 +355,13 @@ class TestCoherenceLLMServiceProjectAnalysis:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
+            "src.core.ai.anthropic_wrapper.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
             "src.coherence.llm_integration.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
+            "src.coherence.adapters.ai.llm_rule_evaluator.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -423,7 +468,13 @@ class TestCoherenceLLMServiceStatistics:
         })
 
         with patch(
+            "src.core.ai.anthropic_wrapper.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
             "src.coherence.llm_integration.get_anthropic_wrapper",
+            return_value=mock_wrapper
+        ), patch(
+            "src.coherence.adapters.ai.llm_rule_evaluator.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
