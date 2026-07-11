@@ -3,18 +3,10 @@
 import { useMemo, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useParams } from 'next/navigation';
-import {
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  XCircle,
-  ArrowUpCircle,
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-} from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ReviewItemCard } from '@/components/features/review/ReviewItemCard';
 import {
   Dialog,
   DialogContent,
@@ -24,6 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useProject } from '@/hooks/useProject';
+import { showToast } from '@/lib/ui/toast';
 import {
   useListReviewQueueApiV1HitlQueueGet,
   useApproveItemApiV1HitlQueueItemIdApprovePost,
@@ -32,6 +25,9 @@ import {
 import type { ReviewItemResponse } from '@/lib/api/generated/models';
 import { ReviewStatus } from '@/lib/api/generated/models/reviewStatus';
 import { ImpactLevel } from '@/lib/api/generated/models/impactLevel';
+
+const PAGE_LIMIT_STEP = 50;
+const MAX_PAGE_LIMIT = 200;
 
 type ModalState =
   | { kind: 'none' }
@@ -59,40 +55,6 @@ function statusLabel(status: string): string {
   }
 }
 
-function statusColor(status: string): string {
-  switch (status) {
-    case ReviewStatus.APPROVED:
-      return 'bg-green-100 text-green-700 border-green-200';
-    case ReviewStatus.REJECTED:
-      return 'bg-red-100 text-red-700 border-red-200';
-    case ReviewStatus.ESCALATED:
-      return 'bg-orange-100 text-orange-700 border-orange-200';
-    case ReviewStatus.PENDING_REVIEW_REQUIRED:
-    case ReviewStatus.PENDING_REVIEW_CONDITIONAL:
-      return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-    case ReviewStatus.CLOSED:
-      return 'bg-gray-100 text-gray-500 border-gray-200';
-    default:
-      return 'bg-blue-100 text-blue-700 border-blue-200';
-  }
-}
-
-function StatusIcon({ status }: { status: string }) {
-  switch (status) {
-    case ReviewStatus.APPROVED:
-      return <CheckCircle2 className="h-4 w-4 text-green-600" />;
-    case ReviewStatus.REJECTED:
-      return <XCircle className="h-4 w-4 text-red-600" />;
-    case ReviewStatus.ESCALATED:
-      return <ArrowUpCircle className="h-4 w-4 text-orange-600" />;
-    case ReviewStatus.PENDING_REVIEW_REQUIRED:
-    case ReviewStatus.PENDING_REVIEW_CONDITIONAL:
-      return <Clock className="h-4 w-4 text-yellow-600" />;
-    default:
-      return <AlertTriangle className="h-4 w-4 text-gray-400" />;
-  }
-}
-
 function impactColor(impact: string): string {
   switch (impact) {
     case ImpactLevel.CRITICAL:
@@ -108,19 +70,10 @@ function impactColor(impact: string): string {
   }
 }
 
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function isOverdue(slaDueDate: string): boolean {
-  return new Date(slaDueDate) < new Date();
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message.trim().length > 0
+    ? error.message
+    : fallback;
 }
 
 export default function ReviewPage() {
@@ -130,10 +83,7 @@ export default function ReviewPage() {
   const reviewerName = user?.primaryEmailAddress?.emailAddress ?? user?.id;
   const reviewerIdentityReady = isUserLoaded && Boolean(reviewerName);
   const { data: project } = useProject(projectId);
-  const projectName = project?.name?.trim() || projectId;
-
-  const { data: queueData, isLoading, error, refetch } =
-    useListReviewQueueApiV1HitlQueueGet(undefined);
+  const projectName = project?.name?.trim();
 
   const approveMutation = useApproveItemApiV1HitlQueueItemIdApprovePost();
   const rejectMutation = useRejectItemApiV1HitlQueueItemIdRejectPost();
@@ -141,17 +91,23 @@ export default function ReviewPage() {
   const [modal, setModal] = useState<ModalState>({ kind: 'none' });
   const [rejectReason, setRejectReason] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [pageLimit, setPageLimit] = useState(PAGE_LIMIT_STEP);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const queueParams = useMemo(
+    () => ({
+      skip: 0,
+      limit: pageLimit,
+      ...(statusFilter === 'all' ? {} : { status: statusFilter as ReviewStatus }),
+    }),
+    [pageLimit, statusFilter],
+  );
+
+  const { data: queueData, isLoading, error, refetch } =
+    useListReviewQueueApiV1HitlQueueGet(queueParams);
 
   const items = useMemo(() => queueData?.items ?? [], [queueData]);
-
-  const filteredItems = useMemo(
-    () =>
-      statusFilter === 'all'
-        ? items
-        : items.filter((item) => item.current_status === statusFilter),
-    [items, statusFilter],
-  );
+  const canLoadMore = items.length === pageLimit && pageLimit < MAX_PAGE_LIMIT;
 
   const pendingCount = items.filter(
     (i) =>
@@ -171,10 +127,12 @@ export default function ReviewPage() {
   const closeModal = () => {
     setModal({ kind: 'none' });
     setRejectReason('');
+    setActionError(null);
   };
 
   const handleApprove = async () => {
     if (modal.kind !== 'approve' || !reviewerName) return;
+    setActionError(null);
     try {
       await approveMutation.mutateAsync({
         itemId: modal.item.item_id,
@@ -182,13 +140,16 @@ export default function ReviewPage() {
       });
       closeModal();
       refetch();
-    } catch {
-      // Error handled by mutation state
+    } catch (error) {
+      const message = errorMessage(error, 'Failed to approve review item');
+      setActionError(message);
+      showToast(message);
     }
   };
 
   const handleReject = async () => {
     if (modal.kind !== 'reject' || rejectReason.trim().length === 0 || !reviewerName) return;
+    setActionError(null);
     try {
       await rejectMutation.mutateAsync({
         itemId: modal.item.item_id,
@@ -199,13 +160,16 @@ export default function ReviewPage() {
       });
       closeModal();
       refetch();
-    } catch {
-      // Error handled by mutation state
+    } catch (error) {
+      const message = errorMessage(error, 'Failed to reject review item');
+      setActionError(message);
+      showToast(message);
     }
   };
 
-  const toggleExpand = (itemId: string) => {
-    setExpandedItemId((prev) => (prev === itemId ? null : itemId));
+  const setFilter = (filter: string) => {
+    setStatusFilter(filter);
+    setPageLimit(PAGE_LIMIT_STEP);
   };
 
   if (isLoading) {
@@ -229,9 +193,11 @@ export default function ReviewPage() {
     <div className="space-y-6" data-testid="review-page">
       {/* Header */}
       <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight">HITL Review Queue</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Organization review queue</h1>
         <p className="text-sm text-muted-foreground">
-          Human-in-the-loop review for {projectName} - approve or reject analysis findings
+          Tenant-wide HITL queue. The current API supports status and pagination filters, but
+          does not support project filtering yet.
+          {projectName ? ` Opened from ${projectName}.` : ''}
         </p>
       </div>
 
@@ -263,7 +229,7 @@ export default function ReviewPage() {
               key={filter}
               variant={statusFilter === filter ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setStatusFilter(filter)}
+              onClick={() => setFilter(filter)}
             >
               {filter === 'all' ? 'All' : statusLabel(filter)}
             </Button>
@@ -272,166 +238,38 @@ export default function ReviewPage() {
       </div>
 
       {/* Queue List */}
-      {filteredItems.length === 0 ? (
+      {items.length === 0 ? (
         <div className="rounded-lg border bg-card p-12 text-center text-muted-foreground" data-testid="review-empty">
           No review items found
         </div>
       ) : (
         <div className="space-y-3" data-testid="review-queue">
-          {filteredItems.map((item) => {
-            const overdue = isOverdue(item.sla_due_date);
-            const expanded = expandedItemId === item.item_id;
-            const isPending =
-              item.current_status === ReviewStatus.PENDING_REVIEW_REQUIRED ||
-              item.current_status === ReviewStatus.PENDING_REVIEW_CONDITIONAL;
-
-            return (
-              <div
-                key={item.item_id}
-                className="rounded-lg border bg-card"
-                data-testid={`review-item-${item.item_id}`}
+          {items.map((item) => (
+            <ReviewItemCard
+              key={item.item_id}
+              item={item}
+              projectId={projectId}
+              reviewerIdentityReady={reviewerIdentityReady}
+              onApprove={(reviewItem) => {
+                setActionError(null);
+                setModal({ kind: 'approve', item: reviewItem });
+              }}
+              onReject={(reviewItem) => {
+                setActionError(null);
+                setModal({ kind: 'reject', item: reviewItem });
+              }}
+            />
+          ))}
+          {canLoadMore ? (
+            <div className="flex justify-center pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setPageLimit((current) => Math.min(current + PAGE_LIMIT_STEP, MAX_PAGE_LIMIT))}
               >
-                {/* Main row */}
-                <div className="flex items-center gap-4 p-4">
-                  <StatusIcon status={item.current_status} />
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">
-                        {item.item_type}
-                      </span>
-                      <Badge className={statusColor(item.current_status)}>
-                        {statusLabel(item.current_status)}
-                      </Badge>
-                      <Badge className={impactColor(item.impact_level)}>
-                        {item.impact_level}
-                      </Badge>
-                      {overdue && isPending && (
-                        <Badge variant="destructive">Overdue</Badge>
-                      )}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      Confidence: {(item.confidence * 100).toFixed(0)}% | SLA:{' '}
-                      {formatDate(item.sla_due_date)} | Created:{' '}
-                      {formatDate(item.created_at)}
-                      {item.approved_by && (
-                        <> | Reviewed by: {item.approved_by} at {formatDate(item.approved_at)}</>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2">
-                    {isPending && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-green-600 hover:bg-green-50"
-                          disabled={!reviewerIdentityReady}
-                          title={!reviewerIdentityReady ? 'Loading your identity…' : undefined}
-                          onClick={() => setModal({ kind: 'approve', item })}
-                          data-testid={`approve-${item.item_id}`}
-                        >
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-red-600 hover:bg-red-50"
-                          disabled={!reviewerIdentityReady}
-                          title={!reviewerIdentityReady ? 'Loading your identity…' : undefined}
-                          onClick={() => setModal({ kind: 'reject', item })}
-                          data-testid={`reject-${item.item_id}`}
-                        >
-                          Reject
-                        </Button>
-                      </>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => toggleExpand(item.item_id)}
-                      data-testid={`expand-${item.item_id}`}
-                    >
-                      {expanded ? (
-                        <ChevronUp className="h-4 w-4" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Expanded detail */}
-                {expanded && (
-                  <div className="border-t px-4 py-3 text-sm" data-testid={`detail-${item.item_id}`}>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <span className="font-medium text-muted-foreground">Item ID:</span>{' '}
-                        <code className="text-xs">{item.item_id}</code>
-                      </div>
-                      <div>
-                        <span className="font-medium text-muted-foreground">Item Type:</span>{' '}
-                        {item.item_type}
-                      </div>
-                      <div>
-                        <span className="font-medium text-muted-foreground">Confidence:</span>{' '}
-                        {(item.confidence * 100).toFixed(1)}%
-                      </div>
-                      <div>
-                        <span className="font-medium text-muted-foreground">Impact Level:</span>{' '}
-                        {item.impact_level}
-                      </div>
-                    </div>
-
-                    {/* Review history timeline */}
-                    <div className="mt-4">
-                      <h4 className="font-medium text-muted-foreground mb-2">Review Timeline</h4>
-                      <div className="space-y-2 border-l-2 border-muted pl-4">
-                        <div className="relative">
-                          <div className="absolute -left-[1.3rem] top-1 h-2.5 w-2.5 rounded-full bg-blue-500" />
-                          <div className="text-xs text-muted-foreground">
-                            {formatDate(item.created_at)}
-                          </div>
-                          <div>Item created and queued for review</div>
-                        </div>
-                        {item.approved_by && (
-                          <div className="relative">
-                            <div
-                              className={`absolute -left-[1.3rem] top-1 h-2.5 w-2.5 rounded-full ${
-                                item.current_status === ReviewStatus.APPROVED
-                                  ? 'bg-green-500'
-                                  : 'bg-red-500'
-                              }`}
-                            />
-                            <div className="text-xs text-muted-foreground">
-                              {formatDate(item.approved_at)}
-                            </div>
-                            <div>
-                              {item.current_status === ReviewStatus.APPROVED
-                                ? `Approved by ${item.approved_by}`
-                                : `Rejected by ${item.approved_by}`}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Item data if available */}
-                    {item.item_data && (
-                      <div className="mt-4">
-                        <h4 className="font-medium text-muted-foreground mb-2">Item Data</h4>
-                        <pre className="rounded bg-muted p-3 text-xs overflow-auto max-h-48">
-                          {JSON.stringify(item.item_data, null, 2)}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                Load more
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -462,6 +300,11 @@ export default function ReviewPage() {
               </div>
             </div>
           )}
+          {actionError ? (
+            <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              {actionError}
+            </div>
+          ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={closeModal}>
               Cancel
@@ -509,6 +352,11 @@ export default function ReviewPage() {
               {rejectReason.length}/2000
             </div>
           </div>
+          {actionError ? (
+            <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              {actionError}
+            </div>
+          ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={closeModal}>
               Cancel

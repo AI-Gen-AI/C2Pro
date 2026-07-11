@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-11T18:25:00Z",
+  "updated_at": "2026-07-11T21:55:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -99,6 +99,43 @@
           "Forbidden zero-default grep in components/coherence and contracts.ts -> 0 hits.",
           "Broader guard pnpm vitest run \"app/(app)/projects/[id]\" shows only known TASK-FRT-192 budget/settings/wbs failures."
         ]
+      }
+    },
+    {
+      "tarea_id": "T133",
+      "backlog_id": "TASK-FRT-187",
+      "tipo": "frontend",
+      "descripcion": "Implement HITL review queue project-scope honesty, readable review cards, visible mutation errors, and supported pagination.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "The project Review tab does not claim project scoping when the API lacks a project filter; review items render human-readable summaries with evidence links and raw data behind disclosure; approve/reject failures remain visible; queue calls use supported status/skip/limit parameters.",
+      "archivos_modificados": [
+        "apps/web/app/(app)/projects/[id]/review/page.tsx",
+        "apps/web/app/(app)/projects/[id]/review/page.test.tsx",
+        "apps/web/components/features/review/ReviewItemCard.tsx",
+        "apps/web/components/features/review/ReviewItemCard.test.tsx",
+        "backlogs/FRT_FRONTEND.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-11T21:35:00Z",
+        "completado": "2026-07-11T21:55:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-187 completed on feat/frt-187-hitl-queue: no backend project filter exists, so the UI is honestly tenant-wide; ReviewItemCard renders readable queue items, evidence links, collapsed raw data, visible mutation errors, and supported status/skip/limit pagination.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "Contract finding: generated review queue params are status, skip, and limit only; backend list_review_queue exposes status, skip, and limit only and repository list_by_status filters tenant/status only.",
+          "RED: pnpm vitest run \"app/(app)/projects/[id]/review\" components/features/review failed first for missing ReviewItemCard, old project-scoped copy, undefined params, silent mutation errors, and no Load more.",
+          "GREEN: pnpm vitest run \"app/(app)/projects/[id]/review\" components/features/review -> 2 files / 15 tests passed.",
+          "pnpm typecheck -> passed.",
+          "pnpm lint -> passed.",
+          "Broader guard pnpm vitest run \"app/(app)\" --silent -> 18 files / 126 tests passed; 5 unrelated files / 11 tests failed in raci, global documents, budget, settings, and wbs. The HITL touched scopes remained green; no unrelated code was changed under the PATCH 13 scope rule."
+        ],
+        "follow_up": "Registered TASK-BCK-092 for tenant-safe backend project_id filtering on GET /api/v1/hitl/queue."
       }
     },
     {
@@ -3232,7 +3269,7 @@
     "rev_006_progress": "Phase A complete - hexagonal structure created",
     "audit_pending": 4
   },
-  "contexto_paso_anterior": "2026-07-11T18:25:00Z: TASK-FRT-186 completed on feat/frt-186-categories-v2. Result: categories_v2 maps through getDashboardSummary, coherence renders evidence-aware category details without fabricated zero defaults, INSUFFICIENT_EVIDENCE is neutral, and AUDIT_INCOMPLETE copy is humanized. Focused coherence/service tests, requested coherence slice, typecheck, lint, and zero-default grep passed; broader project guard only shows known TASK-FRT-192 budget/settings/wbs failures.",
+  "contexto_paso_anterior": "2026-07-11T21:55:00Z: TASK-FRT-187 completed on feat/frt-187-hitl-queue. Contract inspection found no review-queue project filter in the generated client or backend router, so the project Review tab now honestly labels the surface as an organization queue. ReviewItemCard renders human-readable item summaries, evidence links, collapsed raw data, visible approve/reject errors, and supported status/skip/limit pagination. Backend follow-up TASK-BCK-092 registered for true project filtering.",
   "trazas_de_error": [
     {
       "timestamp": "2026-04-10T20:54:00+00:00",
