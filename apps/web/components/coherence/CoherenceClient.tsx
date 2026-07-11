@@ -10,6 +10,7 @@ import { BreakdownChart } from "@/components/coherence/BreakdownChart";
 import { RadarView } from "@/components/coherence/RadarView";
 import { AlertsDistribution } from "@/components/coherence/AlertsDistribution";
 import { CategoryDetail } from "@/components/coherence/CategoryDetail";
+import { CategoryV2Panel } from "@/components/coherence/CategoryV2Panel";
 import type { DashboardSummary } from "@/lib/api/contracts";
 import { ScoreVersionBadge } from "@/src/components/coherence/ScoreVersionBadge";
 import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from "@/lib/api/generated/alerts/alerts";
@@ -98,13 +99,13 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
                   Supply missing dimensions to unlock full Coherence Score
                 </p>
                 <p className="mt-1 text-amber-900/80">
-                  AUDIT_INCOMPLETE is active because this audit is missing{" "}
+                  Score withheld: this audit is missing{" "}
                   <span className="font-semibold">
                     {missingDimensions.length > 0
                       ? missingDimensions.join(", ")
                       : "required schedule or budget evidence"}
                   </span>
-                  .
+                  . Upload them to unlock the full Coherence Score.
                 </p>
               </div>
             </div>
@@ -186,31 +187,37 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
         </div>
       </div>
 
-      <div>
-        <h3 className="mb-3 text-sm font-semibold">Sub-Category Breakdown</h3>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {catEntries.map(([cat, score]) => (
-            <ScoreCard
-              key={cat}
-              category={cat}
-              score={score}
-              weight={summary.weights_used[cat] ?? 0}
-              alertCount={alertCountFor(cat)}
-              selected={selectedCat === cat}
-              onClick={() => setSelectedCat(selectedCat === cat ? null : cat)}
-            />
-          ))}
-        </div>
-      </div>
+      {summary.categories_v2 ? (
+        <CategoryV2Panel payload={summary.categories_v2} />
+      ) : (
+        <>
+          <div>
+            <h3 className="mb-3 text-sm font-semibold">Sub-Category Breakdown</h3>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {catEntries.map(([cat, score]) => (
+                <ScoreCard
+                  key={cat}
+                  category={cat}
+                  score={score}
+                  weight={summary.weights_used[cat] ?? 0}
+                  alertCount={alertCountFor(cat)}
+                  selected={selectedCat === cat}
+                  onClick={() => setSelectedCat(selectedCat === cat ? null : cat)}
+                />
+              ))}
+            </div>
+          </div>
 
-      {selectedCat && summary.sub_scores[selectedCat] != null && (
-        <CategoryDetail
-          category={selectedCat}
-          score={summary.sub_scores[selectedCat]}
-          weight={summary.weights_used[selectedCat] ?? 0}
-          alertCount={alertCountFor(selectedCat)}
-          onClose={() => setSelectedCat(null)}
-        />
+          {selectedCat && summary.sub_scores[selectedCat] != null && (
+            <CategoryDetail
+              category={selectedCat}
+              score={summary.sub_scores[selectedCat]}
+              weight={summary.weights_used[selectedCat] ?? 0}
+              alertCount={alertCountFor(selectedCat)}
+              onClose={() => setSelectedCat(null)}
+            />
+          )}
+        </>
       )}
     </>
   );

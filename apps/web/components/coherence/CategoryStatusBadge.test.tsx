@@ -23,10 +23,10 @@ describe("CategoryStatusBadge", () => {
     expect(badge.className).toMatch(/red/);
   });
 
-  it("renders amber for insufficient_evidence (NOT red)", () => {
+  it("renders neutral gray for insufficient_evidence (NOT red)", () => {
     render(<CategoryStatusBadge status="insufficient_evidence" />);
-    const badge = screen.getByTestId("status-badge-warning");
-    expect(badge.className).toMatch(/amber/);
+    const badge = screen.getByTestId("status-badge-neutral");
+    expect(badge.className).toMatch(/gray/);
     expect(badge.className).not.toMatch(/red-1|red-9/);
   });
 
@@ -39,7 +39,7 @@ describe("CategoryStatusBadge", () => {
 
   it("renders neutral gray for not_applicable", () => {
     render(<CategoryStatusBadge status="not_applicable" />);
-    const badge = screen.getByTestId("status-badge-neutral");
+    const badge = screen.getByTestId("status-badge-not-applicable");
     expect(badge.className).toMatch(/gray/);
   });
 
