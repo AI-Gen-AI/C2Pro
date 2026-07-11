@@ -4,11 +4,9 @@
  * Stable helpers around generated analysis endpoints.
  */
 
-import type { StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams } from "@/lib/api/generated/models";
-
 export function getStreamProjectProcessingUrl(
   projectId: string,
-  params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
+  params?: { access_token?: string },
 ): string {
   const base = "/api/v1/analysis/projects";
   let url = `${base}/${projectId}/process/stream`;

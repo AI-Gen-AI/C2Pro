@@ -63,7 +63,7 @@ vi.mock("@/components/coherence/ScoreCard", () => ({
 }));
 
 vi.mock("@/lib/api/generated/alerts/alerts", () => ({
-  useListProjectAlertsApiV1ProjectsProjectIdAlertsGet: (...args: unknown[]) =>
+  useListProjectAlertsApiV1AlertsProjectsProjectIdGet: (...args: unknown[]) =>
     listProjectAlertsMock(...args),
 }));
 

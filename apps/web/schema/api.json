@@ -2,13 +2,13 @@
   "openapi": "3.1.0",
   "info": {
     "title": "C2Pro API",
-    "description": "\n        **C2Pro - Contract Intelligence Platform**\n\n        Plataforma de inteligencia contractual para proyectos de construcci\u00f3n e ingenier\u00eda.\n\n        ## Caracter\u00edsticas\n\n        - \ud83d\udd0d **Auditor\u00eda Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto\n        - \ud83e\udd16 **IA Especializada**: Claude 4 entrenado en documentos de construcci\u00f3n\n        - \ud83d\udcca **Coherence Score**: Indicador 0-100 de alineaci\u00f3n entre documentos\n        - \ud83d\udc65 **Stakeholder Intelligence**: Extracci\u00f3n y mapeo autom\u00e1tico de stakeholders\n        - \ud83d\udcc8 **Multi-tenant**: Aislamiento completo de datos por organizaci\u00f3n\n\n        ## Autenticaci\u00f3n\n\n        La API usa JWT (JSON Web Tokens) para autenticaci\u00f3n.\n\n        1. **Registro**: `POST /api/v1/auth/register`\n        2. **Login**: `POST /api/v1/auth/login`\n        3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`\n\n        ## L\u00edmites de Uso\n\n        - **Rate Limit**: 60 requests/minuto\n        - **AI Budget**: $50 USD/mes (plan free)\n        - **File Upload**: Max 50 MB\n\n        ## Soporte\n\n        - \ud83d\udce7 Email: support@c2pro.app\n        - \ud83d\udcd6 Docs: https://docs.c2pro.app\n        - \ud83d\udcac Discord: https://discord.gg/c2pro\n        ",
+    "description": "\n        **C2Pro - Contract Intelligence Platform**\n\n        Plataforma de inteligencia contractual para proyectos de construcci\u00c3\u00b3n e ingenier\u00c3\u00ada.\n\n        ## Caracter\u00c3\u00adsticas\n\n        - \u00f0\u0178\u201d **Auditor\u00c3\u00ada Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto\n        - \u00f0\u0178\u00a4\u2013 **IA Especializada**: Claude 4 entrenado en documentos de construcci\u00c3\u00b3n\n        - \u00f0\u0178\u201c\u0160 **Coherence Score**: Indicador 0-100 de alineaci\u00c3\u00b3n entre documentos\n        - \u00f0\u0178\u2018\u00a5 **Stakeholder Intelligence**: Extracci\u00c3\u00b3n y mapeo autom\u00c3\u00a1tico de stakeholders\n        - \u00f0\u0178\u201c\u02c6 **Multi-tenant**: Aislamiento completo de datos por organizaci\u00c3\u00b3n\n\n        ## Autenticaci\u00c3\u00b3n\n\n        La API usa JWT (JSON Web Tokens) para autenticaci\u00c3\u00b3n.\n\n        1. **Registro**: `POST /api/v1/auth/register`\n        2. **Login**: `POST /api/v1/auth/login`\n        3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`\n\n        ## L\u00c3\u00admites de Uso\n\n        - **Rate Limit**: 60 requests/minuto\n        - **AI Budget**: $50 USD/mes (plan free)\n        - **File Upload**: Max 50 MB\n\n        ## Soporte\n\n        - \u00f0\u0178\u201c\u00a7 Email: support@c2pro.app\n        - \u00f0\u0178\u201c\u2013 Docs: https://docs.c2pro.app\n        - \u00f0\u0178\u2019\u00ac Discord: https://discord.gg/c2pro\n        ",
     "version": "1.0.0"
   },
   "paths": {
     "/": {
       "get": {
-        "tags": ["Root"],
+        "tags": ["Public"],
         "summary": "Root",
         "description": "Root endpoint.\n\nRedirects to API documentation.",
         "operationId": "root__get",
@@ -26,9 +26,9 @@
     },
     "/api/v1/health/worker": {
       "get": {
-        "tags": ["Health"],
+        "tags": ["Health", "Public"],
         "summary": "Celery Worker Health",
-        "description": "Checks Celery worker availability for document parsing jobs.",
+        "description": "Checks that a Celery worker is online and consuming the document_parsing queue.",
         "operationId": "worker_health_check_api_v1_health_worker_get",
         "responses": {
           "200": {
@@ -46,9 +46,175 @@
         }
       }
     },
+    "/health/live": {
+      "get": {
+        "tags": ["Health", "Public"],
+        "summary": "Liveness Probe",
+        "description": "Checks if the application process is running. This should not have external dependencies.",
+        "operationId": "liveness_check_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": ["Health", "Public", "Public"],
+        "summary": "Readiness Probe",
+        "description": "Checks if the application is ready to accept traffic by verifying connections to dependencies.",
+        "operationId": "readiness_check_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/circuit-breakers": {
+      "get": {
+        "tags": ["Health", "Public"],
+        "summary": "Circuit Breaker Status",
+        "description": "Detailed status of all circuit breakers for external services.",
+        "operationId": "circuit_breaker_status_health_circuit_breakers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["Health", "Public"],
+        "summary": "Generic Health Check",
+        "description": "Simple uptime check. Returns {status: ok} for basic monitoring.",
+        "operationId": "generic_health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/worker": {
+      "get": {
+        "tags": ["Health", "Public"],
+        "summary": "Celery Worker Health",
+        "description": "Checks that a Celery worker is online and consuming the document_parsing queue.",
+        "operationId": "worker_health_check_health_worker_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Worker Health Check Health Worker Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/live": {
+      "get": {
+        "tags": ["Health", "Public"],
+        "summary": "Liveness Probe",
+        "description": "Checks if the application process is running. This should not have external dependencies.",
+        "operationId": "liveness_check_api_v1_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "tags": ["Health", "Public", "Public"],
+        "summary": "Readiness Probe",
+        "description": "Checks if the application is ready to accept traffic by verifying connections to dependencies.",
+        "operationId": "readiness_check_api_v1_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/circuit-breakers": {
+      "get": {
+        "tags": ["Health", "Public"],
+        "summary": "Circuit Breaker Status",
+        "description": "Detailed status of all circuit breakers for external services.",
+        "operationId": "circuit_breaker_status_api_v1_health_circuit_breakers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": ["Health", "Public"],
+        "summary": "Generic Health Check",
+        "description": "Simple uptime check. Returns {status: ok} for basic monitoring.",
+        "operationId": "generic_health_check_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/register": {
       "post": {
-        "tags": ["Authentication"],
+        "tags": ["Authentication", "Authentication", "Public"],
         "summary": "Register new user and company",
         "description": "Registers a new user and creates a new company (tenant).\n\n    The first user registered for a company becomes the admin.\n    Returns user info, company info, and authentication tokens.\n\n    **Requirements:**\n    - Email must be unique\n    - Password must be at least 8 characters with uppercase, lowercase, and digit\n    - Must accept terms and conditions",
         "operationId": "register_api_v1_auth_register_post",
@@ -150,7 +316,7 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
-        "tags": ["Authentication"],
+        "tags": ["Authentication", "Authentication", "Public"],
         "summary": "Refresh access token",
         "description": "Refreshes the access token using a valid refresh token.\n\n    Use this endpoint when your access token expires to get a new one\n    without requiring the user to log in again.",
         "operationId": "refresh_token_api_v1_auth_refresh_post",
@@ -231,7 +397,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       },
       "put": {
         "tags": ["Authentication"],
@@ -289,7 +460,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/auth/logout": {
@@ -322,7 +498,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/auth/change-password": {
@@ -375,7 +556,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/projects/health": {
@@ -488,6 +674,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "minimum": 1,
               "default": 1,
               "title": "Page"
             }
@@ -498,6 +685,8 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
               "default": 20,
               "title": "Page Size"
             }
@@ -532,6 +721,56 @@
                 }
               ],
               "title": "Search"
+            }
+          },
+          {
+            "name": "project_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Type"
+            }
+          },
+          {
+            "name": "created_after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created After"
+            }
+          },
+          {
+            "name": "created_before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created Before"
             }
           }
         ],
@@ -740,6 +979,53 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/summary": {
+      "get": {
+        "tags": ["projects"],
+        "summary": "Get Project Summary",
+        "description": "Return a compact tenant-scoped project summary for the frontend quick-view sheet.",
+        "operationId": "get_project_summary_api_v1_projects__project_id__summary_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectQuickViewSummaryResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1032,6 +1318,99 @@
         }
       }
     },
+    "/api/v1/projects/{project_id}/wbs": {
+      "get": {
+        "tags": ["wbs"],
+        "summary": "Get Wbs",
+        "description": "Get WBS items for a project.\n\nReturns all WBS items with their hierarchy and coverage information.",
+        "operationId": "get_wbs_api_v1_projects__project_id__wbs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WBSOutput"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/health": {
+      "get": {
+        "tags": ["project-health"],
+        "summary": "Get latest project health vector",
+        "description": "Return latest tenant-scoped project HealthVector or honest insufficient data.",
+        "operationId": "get_project_health_api_v1_projects__project_id__health_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthVector"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{project_id}/documents": {
       "post": {
         "tags": ["Documents"],
@@ -1173,6 +1552,72 @@
         }
       }
     },
+    "/api/v1/documents/{document_id}/file": {
+      "patch": {
+        "tags": ["Documents"],
+        "summary": "Re-upload a document file (creates new version)",
+        "description": "Re-upload a document with a new file.\n\nTASK-BCK-023: Document versioning\n- Calculates file hash and compares with existing\n- Increments version if content changed\n- Resets status to UPLOADED for re-processing\n- Returns existing document if content unchanged",
+        "operationId": "reupload_document_file_api_v1_documents__document_id__file_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_reupload_document_file_api_v1_documents__document_id__file_patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/documents/{document_id}": {
       "get": {
         "tags": ["Documents"],
@@ -1274,6 +1719,175 @@
         }
       }
     },
+    "/api/v1/documents/{document_id}/history": {
+      "get": {
+        "tags": ["Documents"],
+        "summary": "Get persisted evidence history for a document",
+        "operationId": "get_document_history_endpoint_api_v1_documents__document_id__history_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentHistoryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/relationship-explanation": {
+      "get": {
+        "tags": ["Documents"],
+        "summary": "Get a grounded relationship explanation for a document",
+        "operationId": "get_document_relationship_explanation_endpoint_api_v1_documents__document_id__relationship_explanation_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRelationshipExplanationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/entities": {
+      "get": {
+        "tags": ["Documents"],
+        "summary": "Get extracted entities for a document",
+        "operationId": "get_document_entities_endpoint_api_v1_documents__document_id__entities_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentEntityResponse"
+                  },
+                  "title": "Response Get Document Entities Endpoint Api V1 Documents  Document Id  Entities Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/documents/{document_id}/download": {
       "get": {
         "tags": ["Documents"],
@@ -1327,11 +1941,11 @@
         }
       }
     },
-    "/api/v1/{document_id}/parse": {
+    "/api/v1/documents/{document_id}/parse": {
       "post": {
         "tags": ["Documents"],
         "summary": "Parse a document by ID",
-        "operationId": "parse_document_endpoint_canonical",
+        "operationId": "parse_document_endpoint_api_v1_documents__document_id__parse_post",
         "security": [
           {
             "HTTPBearer": []
@@ -1356,6 +1970,72 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DocumentUploadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/documents/{document_id}/reprocess": {
+      "post": {
+        "tags": ["Documents"],
+        "summary": "Re-trigger async processing for a stuck or errored document",
+        "description": "Re-dispatch a Celery processing task for a document stuck in queued, uploaded,\nor error state. Resets the document status to UPLOADED and enqueues a fresh\nparse + analysis run.",
+        "operationId": "reprocess_document_endpoint_api_v1_projects__project_id__documents__document_id__reprocess_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentQueuedResponse"
                 }
               }
             }
@@ -1447,10 +2127,76 @@
         }
       }
     },
+    "/api/v1/alerts/workspace-settings": {
+      "get": {
+        "tags": ["alerts"],
+        "summary": "Get alert workspace settings",
+        "operationId": "get_alert_workspace_settings_api_v1_alerts_workspace_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertWorkspaceSettingsPayload"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": ["alerts"],
+        "summary": "Save alert workspace settings",
+        "operationId": "put_alert_workspace_settings_api_v1_alerts_workspace_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertWorkspaceSettingsPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertWorkspaceSettingsPayload"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/alerts": {
       "post": {
         "tags": ["alerts"],
-        "summary": "Create Alert",
+        "summary": "Create alert",
         "operationId": "create_alert_api_v1_alerts_post",
         "requestBody": {
           "content": {
@@ -1491,12 +2237,11 @@
         ]
       }
     },
-    "/api/v1/projects/{project_id}/alerts": {
+    "/api/v1/alerts/projects/{project_id}": {
       "get": {
         "tags": ["alerts"],
-        "summary": "List Project Alerts",
-        "description": "List alerts for a project.\n\nReturns alerts from the database.",
-        "operationId": "list_project_alerts_api_v1_projects__project_id__alerts_get",
+        "summary": "List alerts for a project",
+        "operationId": "list_project_alerts_api_v1_alerts_projects__project_id__get",
         "security": [
           {
             "HTTPBearer": []
@@ -1514,7 +2259,7 @@
             }
           },
           {
-            "name": "status",
+            "name": "status_filter",
             "in": "query",
             "required": false,
             "schema": {
@@ -1526,7 +2271,125 @@
                   "type": "null"
                 }
               ],
-              "title": "Status"
+              "title": "Status Filter"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Severity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/alerts/tenant": {
+      "get": {
+        "tags": ["alerts"],
+        "summary": "List alerts for tenant",
+        "operationId": "list_tenant_alerts_api_v1_alerts_tenant_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "status_filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status Filter"
             }
           },
           {
@@ -1589,7 +2452,7 @@
     "/api/v1/alerts/{alert_id}/review": {
       "post": {
         "tags": ["alerts"],
-        "summary": "Review Alert",
+        "summary": "Review alert (approve/reject)",
         "operationId": "review_alert_api_v1_alerts__alert_id__review_post",
         "security": [
           {
@@ -1645,7 +2508,7 @@
     "/api/v1/alerts/bulk-review": {
       "post": {
         "tags": ["alerts"],
-        "summary": "Bulk Review Alerts",
+        "summary": "Bulk approve/reject alerts",
         "operationId": "bulk_review_alerts_api_v1_alerts_bulk_review_post",
         "requestBody": {
           "content": {
@@ -1663,9 +2526,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Bulk Review Alerts Api V1 Alerts Bulk Review Post"
+                  "$ref": "#/components/schemas/BulkOperationResponse"
                 }
               }
             }
@@ -1688,68 +2549,10 @@
         ]
       }
     },
-    "/api/v1/alerts/{alert_id}/evidence": {
-      "post": {
-        "tags": ["alerts"],
-        "summary": "Attach Evidence",
-        "operationId": "attach_evidence_api_v1_alerts__alert_id__evidence_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "alert_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Alert Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AttachEvidenceRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Attach Evidence Api V1 Alerts  Alert Id  Evidence Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/alerts/{alert_id}/resolve": {
       "post": {
         "tags": ["alerts"],
-        "summary": "Resolve Alert",
+        "summary": "Resolve alert",
         "operationId": "resolve_alert_api_v1_alerts__alert_id__resolve_post",
         "security": [
           {
@@ -1802,10 +2605,54 @@
         }
       }
     },
+    "/api/v1/alerts/bulk-resolve": {
+      "post": {
+        "tags": ["alerts"],
+        "summary": "Bulk resolve alerts",
+        "operationId": "bulk_resolve_alerts_api_v1_alerts_bulk_resolve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkOperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/alerts/{alert_id}/history": {
       "get": {
         "tags": ["alerts"],
-        "summary": "Get Alert History",
+        "summary": "Get alert status history",
         "operationId": "get_alert_history_api_v1_alerts__alert_id__history_get",
         "security": [
           {
@@ -1830,9 +2677,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Get Alert History Api V1 Alerts  Alert Id  History Get"
+                  "$ref": "#/components/schemas/AlertHistoryResponse"
                 }
               }
             }
@@ -1850,30 +2695,122 @@
         }
       }
     },
-    "/api/v1/alerts/bulk-delete": {
-      "post": {
+    "/api/v1/alerts/{alert_id}": {
+      "delete": {
         "tags": ["alerts"],
-        "summary": "Bulk Delete Alerts",
-        "operationId": "bulk_delete_alerts_api_v1_alerts_bulk_delete_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BulkDeleteRequest"
+        "summary": "Delete alert",
+        "operationId": "delete_alert_api_v1_alerts__alert_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Alert Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/alerts": {
+      "get": {
+        "tags": ["alerts"],
+        "summary": "List alerts for a project",
+        "operationId": "list_project_alerts_compatibility_api_v1_projects__project_id__alerts_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
           },
-          "required": true
-        },
+          {
+            "name": "status_filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status Filter"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Severity"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Bulk Delete Alerts Api V1 Alerts Bulk Delete Post"
+                  "$ref": "#/components/schemas/AlertListResponse"
                 }
               }
             }
@@ -1888,12 +2825,101 @@
               }
             }
           }
-        },
+        }
+      }
+    },
+    "/api/projects/{project_id}/alerts": {
+      "get": {
+        "tags": ["alerts"],
+        "summary": "List alerts for a project",
+        "operationId": "list_project_alerts_compatibility_api_projects__project_id__alerts_get",
         "security": [
           {
             "HTTPBearer": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "status_filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status Filter"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Severity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/bulk-operations/{job_id}/progress": {
@@ -1961,15 +2987,25 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/observability/analyses": {
       "get": {
         "tags": ["Observability"],
         "summary": "Get recent coherence analyses",
-        "description": "Retrieves a list of recent coherence analysis runs with their status and key metrics.",
+        "description": "Retrieves a list of recent coherence analysis runs with their status and key metrics.\nResults are filtered by tenant.",
         "operationId": "get_recent_analyses_api_v1_observability_analyses_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "limit",
@@ -2016,30 +3052,6 @@
         }
       }
     },
-    "/api/v1/observability/observability/performance/snapshot": {
-      "get": {
-        "tags": ["Observability"],
-        "summary": "Get performance snapshot",
-        "description": "Refers to Suite ID: TS-E2E-PER-LRG-001.",
-        "operationId": "get_performance_snapshot_api_v1_observability_observability_performance_snapshot_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "number"
-                  },
-                  "type": "object",
-                  "title": "Response Get Performance Snapshot Api V1 Observability Observability Performance Snapshot Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/observability/performance/snapshot": {
       "get": {
         "tags": ["Observability"],
@@ -2057,6 +3069,840 @@
                   },
                   "type": "object",
                   "title": "Response Get Performance Snapshot Api V1 Observability Performance Snapshot Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/feedback": {
+      "post": {
+        "tags": ["AI Feedback"],
+        "summary": "Submit Ai Feedback",
+        "description": "Submits feedback about an AI interaction.\n\nThis endpoint accepts user feedback (e.g., ratings, corrections) and\nassociates it with a specific AI interaction trace in LangSmith.",
+        "operationId": "submit_ai_feedback_api_v1_ai_feedback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIFeedbackCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIFeedbackResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/analytics/cost": {
+      "get": {
+        "tags": ["AI Analytics"],
+        "summary": "Cost and token analytics over time",
+        "operationId": "get_cost_analytics_api_v1_ai_analytics_cost_get",
+        "parameters": [
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "examples": ["24h", "7d", "30d"],
+              "default": "7d",
+              "title": "Timeframe"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Cost Analytics Api V1 Ai Analytics Cost Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/analytics/versions": {
+      "get": {
+        "tags": ["AI Analytics"],
+        "summary": "Prompt version leaderboard and quality performance",
+        "operationId": "get_version_analytics_api_v1_ai_analytics_versions_get",
+        "parameters": [
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "examples": ["7d", "30d", "90d"],
+              "default": "30d",
+              "title": "Timeframe"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Version Analytics Api V1 Ai Analytics Versions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/analytics/comparison": {
+      "get": {
+        "tags": ["AI Analytics"],
+        "summary": "Compare two prompt versions",
+        "operationId": "compare_prompt_versions_api_v1_ai_analytics_comparison_get",
+        "parameters": [
+          {
+            "name": "baseline_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Baseline Version"
+            }
+          },
+          {
+            "name": "candidate_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Candidate Version"
+            }
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "examples": ["7d", "30d", "90d"],
+              "default": "30d",
+              "title": "Timeframe"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Compare Prompt Versions Api V1 Ai Analytics Comparison Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/analytics/quality-drift": {
+      "get": {
+        "tags": ["AI Analytics"],
+        "summary": "Detect quality and latency drift",
+        "operationId": "get_quality_drift_api_v1_ai_analytics_quality_drift_get",
+        "parameters": [
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "examples": ["7d", "30d", "90d"],
+              "default": "30d",
+              "title": "Timeframe"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Quality Drift Api V1 Ai Analytics Quality Drift Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/dlq": {
+      "get": {
+        "tags": ["Admin", "DLQ"],
+        "summary": "List DLQ entries by status",
+        "description": "TS-BCK-042-001: List DLQ entries for organization administrators.",
+        "operationId": "list_dlq_entries_api_v1_admin_dlq_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["pending", "retrying", "exhausted"],
+              "type": "string",
+              "default": "pending",
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DLQListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/dlq/{dlq_id}/retry": {
+      "post": {
+        "tags": ["Admin", "DLQ"],
+        "summary": "Retry a DLQ entry",
+        "description": "TS-BCK-042-001: Retry a DLQ entry for organization administrators.",
+        "operationId": "retry_dlq_entry_api_v1_admin_dlq__dlq_id__retry_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dlq_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Dlq Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DLQRetryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/compliance/cookies/consent": {
+      "post": {
+        "tags": ["frontend-support"],
+        "summary": "Create Cookie Consent",
+        "operationId": "create_cookie_consent_api_v1_compliance_cookies_consent_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CookieConsentCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Create Cookie Consent Api V1 Compliance Cookies Consent Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["frontend-support"],
+        "summary": "Get Cookie Consent",
+        "operationId": "get_cookie_consent_api_v1_compliance_cookies_consent_get",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenantid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Userid"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Cookie Consent Api V1 Compliance Cookies Consent Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["frontend-support"],
+        "summary": "Update Cookie Consent",
+        "operationId": "update_cookie_consent_api_v1_compliance_cookies_consent_patch",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CookieConsentUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Update Cookie Consent Api V1 Compliance Cookies Consent Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/gates/gate-8/disclaimer/status": {
+      "get": {
+        "tags": ["frontend-support"],
+        "summary": "Get Legal Disclaimer Status",
+        "operationId": "get_legal_disclaimer_status_api_v1_projects__project_id__gates_gate_8_disclaimer_status_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Legal Disclaimer Status Api V1 Projects  Project Id  Gates Gate 8 Disclaimer Status Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/gates/gate-8/disclaimer/accept": {
+      "post": {
+        "tags": ["frontend-support"],
+        "summary": "Accept Legal Disclaimer",
+        "operationId": "accept_legal_disclaimer_api_v1_projects__project_id__gates_gate_8_disclaimer_accept_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisclaimerAcceptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Accept Legal Disclaimer Api V1 Projects  Project Id  Gates Gate 8 Disclaimer Accept Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/sample-project/start": {
+      "post": {
+        "tags": ["frontend-support"],
+        "summary": "Start Sample Project",
+        "operationId": "start_sample_project_api_v1_onboarding_sample_project_start_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Start Sample Project Api V1 Onboarding Sample Project Start Post"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/onboarding/sample-project/ready": {
+      "get": {
+        "tags": ["frontend-support"],
+        "summary": "Get Sample Project Ready",
+        "operationId": "get_sample_project_ready_api_v1_onboarding_sample_project_ready_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "_projectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": " Projectid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Sample Project Ready Api V1 Onboarding Sample Project Ready Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/sample-project/retry": {
+      "post": {
+        "tags": ["frontend-support"],
+        "summary": "Retry Sample Project",
+        "operationId": "retry_sample_project_api_v1_onboarding_sample_project_retry_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingRetryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Retry Sample Project Api V1 Onboarding Sample Project Retry Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/onboarding/sample-project/telemetry": {
+      "get": {
+        "tags": ["frontend-support"],
+        "summary": "Get Sample Project Telemetry",
+        "operationId": "get_sample_project_telemetry_api_v1_onboarding_sample_project_telemetry_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "_sessionId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": " Sessionid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Sample Project Telemetry Api V1 Onboarding Sample Project Telemetry Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/security/secret-channel/clerk": {
+      "get": {
+        "tags": ["frontend-support"],
+        "summary": "Get Clerk Secret Channel Bundle",
+        "operationId": "get_clerk_secret_channel_bundle_api_v1_security_secret_channel_clerk_get",
+        "parameters": [
+          {
+            "name": "X-Secret-Channel-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Secret-Channel-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretChannelClerkResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -2475,33 +4321,151 @@
         ]
       }
     },
-    "/api/v1/projects/{project_id}/wbs": {
-      "get": {
-        "tags": ["wbs"],
-        "summary": "Get Wbs",
-        "description": "Get WBS items for a project.\n\nReturns all WBS items with their hierarchy and coverage information.",
-        "operationId": "get_wbs_api_v1_projects__project_id__wbs_get",
+    "/api/v1/hitl/resume/{review_id}": {
+      "post": {
+        "tags": ["HITL", "HITL", "Workflow"],
+        "summary": "Resume workflow after HITL approval/rejection",
+        "description": "Resume a LangGraph workflow after HITL review decision.\n\n    This endpoint handles both approval and rejection decisions from human reviewers:\n\n    - **Approve**: The workflow resumes from the interrupt point with the approved status.\n      Human feedback is injected into the workflow state and execution continues.\n\n    - **Reject**: The workflow terminates gracefully. The rejection reason is stored\n      for audit purposes but no further workflow steps are executed.\n\n    **Prerequisites**:\n    - Review item must exist and be in `PENDING_REVIEW_REQUIRED` or `PENDING_REVIEW_CONDITIONAL` status\n    - Review item must have a valid `checkpoint_id` and `thread_id` from the interrupted workflow\n\n    **Metrics**: This endpoint emits Prometheus metrics for monitoring:\n    - `c2pro_hitl_resume_total` - Total resume attempts by decision and status\n    - `c2pro_hitl_resume_latency_seconds` - Resume operation latency\n    - `c2pro_hitl_resume_errors_total` - Errors by type",
+        "operationId": "resumeHitlWorkflow",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
-            "name": "project_id",
+            "name": "review_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Project Id"
+              "format": "uuid",
+              "title": "Review Id"
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResumeWorkflowRequest"
+              },
+              "examples": {
+                "approve": {
+                  "summary": "Approve and resume workflow",
+                  "value": {
+                    "decision": "approve",
+                    "feedback": "Approved by PM reviewer"
+                  }
+                },
+                "reject": {
+                  "summary": "Reject and terminate workflow",
+                  "value": {
+                    "decision": "reject",
+                    "feedback": "Rejected - legal clause is ambiguous"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workflow resume operation completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumeWorkflowResponse"
+                },
+                "examples": {
+                  "approved": {
+                    "summary": "Workflow resumed after approval",
+                    "value": {
+                      "review_id": "45cc5455-8770-4949-9fb2-9a9426851c20",
+                      "status": "resumed",
+                      "message": "Workflow resumed with feedback: Approved by PM reviewer"
+                    }
+                  },
+                  "rejected": {
+                    "summary": "Workflow terminated after rejection",
+                    "value": {
+                      "review_id": "45cc5455-8770-4949-9fb2-9a9426851c20",
+                      "status": "rejected",
+                      "message": "Workflow rejected with feedback: Rejected - requires legal review"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Review item not found"
+          },
+          "400": {
+            "description": "Invalid request - review item not pending or missing checkpoint data"
+          },
+          "422": {
+            "description": "Validation error - invalid decision value or feedback too long"
+          }
+        }
+      }
+    },
+    "/api/v1/settings/notifications": {
+      "get": {
+        "tags": ["HITL Settings"],
+        "summary": "Get tenant notification configuration",
+        "description": "Get current notification configuration for the tenant.",
+        "operationId": "get_notification_config_api_v1_settings_notifications_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WBSOutput"
+                  "$ref": "#/components/schemas/NotificationConfigResponse"
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": ["HITL Settings"],
+        "summary": "Create or update notification configuration",
+        "description": "Create or update notification configuration for the tenant.",
+        "operationId": "save_notification_config_api_v1_settings_notifications_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationConfigResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
           },
           "422": {
             "description": "Validation Error",
@@ -2513,7 +4477,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/projects/{project_id}/wbs/items": {
@@ -2522,6 +4491,11 @@
         "summary": "Create Wbs Item",
         "description": "Create a new WBS item.\n\nAuto-generates code if not provided.",
         "operationId": "create_wbs_item_api_v1_projects__project_id__wbs_items_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "project_id",
@@ -2554,6 +4528,9 @@
               }
             }
           },
+          "404": {
+            "description": "Not Found"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -2573,6 +4550,11 @@
         "summary": "Update Wbs Item",
         "description": "Update a WBS item.\n\nPartial update - only provided fields are updated.",
         "operationId": "update_wbs_item_api_v1_projects__project_id__wbs_items__item_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "project_id",
@@ -2614,6 +4596,9 @@
               }
             }
           },
+          "404": {
+            "description": "Not Found"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -2631,6 +4616,11 @@
         "summary": "Delete Wbs Item",
         "description": "Delete a WBS item.\n\nRequires cascade=True if the item has children.",
         "operationId": "delete_wbs_item_api_v1_projects__project_id__wbs_items__item_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "project_id",
@@ -2667,6 +4657,9 @@
           "204": {
             "description": "Successful Response"
           },
+          "404": {
+            "description": "Not Found"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -2684,6 +4677,11 @@
         "summary": "Get Wbs Item",
         "description": "Get a single WBS item by ID.",
         "operationId": "get_wbs_item_api_v1_projects__project_id__wbs_items__item_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "project_id",
@@ -2715,6 +4713,9 @@
               }
             }
           },
+          "404": {
+            "description": "Not Found"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -2734,6 +4735,11 @@
         "summary": "Move Wbs Item",
         "description": "Move a WBS item to a new parent.\n\nValidates against circular references and maximum depth.",
         "operationId": "move_wbs_item_api_v1_projects__project_id__wbs_items__item_id__move_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "project_id",
@@ -2774,6 +4780,104 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/analyze": {
+      "post": {
+        "tags": ["analysis"],
+        "summary": "Preview document analysis without persistence",
+        "description": "Runs a synchronous non-persisting analysis preview. This endpoint may stop at critique/HITL and does not create Analysis rows, alerts, or coherence records. Use the document reprocess/full pipeline path for persisted analysis and alert generation.",
+        "operationId": "analyze_document_api_v1_analysis_analyze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/analysis/projects/{project_id}/process/stream": {
+      "get": {
+        "tags": ["analysis"],
+        "summary": "Stream Project Processing",
+        "operationId": "stream_project_processing_api_v1_analysis_projects__project_id__process_stream_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
           },
           "422": {
             "description": "Validation Error",
@@ -2986,11 +5090,232 @@
         }
       }
     },
+    "/api/v1/coherence/evaluate": {
+      "post": {
+        "tags": ["Coherence Engine"],
+        "summary": "Evaluate Project Coherence",
+        "description": "Accepts a project's context and evaluates it against a predefined set of coherence rules.\n    Returns a list of alerts and a calculated coherence score.\n\n    Can work in two modes:\n    1. With project_id: Fetches document clauses from RAG automatically\n    2. With explicit clauses: Uses the provided clauses directly\n\n    **v0.3 Features:**\n    - Granular scoring (5-97 range) instead of binary 0/100\n    - 27 deterministic evaluators across 6 categories + CROSS\n    - Optional LLM semantic evaluation (disabled in low_budget_mode)\n    - Optional RAG similarity detection for cross-document analysis\n    - Add ?include_diagnostics=true to get detailed diagnostic information",
+        "operationId": "evaluate_project_coherence_api_v1_coherence_evaluate_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "include_diagnostics",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include detailed diagnostics in response",
+              "default": false,
+              "title": "Include Diagnostics"
+            },
+            "description": "Include detailed diagnostics in response"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CoherenceEvaluateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoherenceResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coherence/evaluate/diagnostics": {
+      "post": {
+        "tags": ["Coherence Engine"],
+        "summary": "Evaluate with Full Diagnostics",
+        "description": "Same as /evaluate but always returns full diagnostic information.\n\n    Includes:\n    - finding_signals: All deterministic + LLM signals with impact scores\n    - diagnostics: Detailed breakdown of scoring logic\n    - cross_pairs: RAG-detected cross-document relationships\n    - cost_usd: LLM API cost (if LLM evaluation was enabled)",
+        "operationId": "evaluate_with_diagnostics_api_v1_coherence_evaluate_diagnostics_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CoherenceEvaluateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrichedCoherenceResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/coherence/dashboard/{project_id}": {
+      "get": {
+        "tags": ["Coherence Dashboard"],
+        "summary": "Get Coherence Dashboard",
+        "description": "Returns coherence dashboard data for a project.\n    Derived from the latest Analysis or CoherenceResult records.",
+        "operationId": "get_coherence_dashboard_api_v1_coherence_dashboard__project_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/coherence/dashboard/{project_id}": {
+      "get": {
+        "tags": ["Coherence Dashboard"],
+        "summary": "Get Coherence Dashboard",
+        "description": "Returns coherence dashboard data for a project.\n    Derived from the latest Analysis or CoherenceResult records.",
+        "operationId": "get_coherence_dashboard_api_coherence_dashboard__project_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/stakeholders/projects/{project_id}": {
       "get": {
         "tags": ["Stakeholders"],
         "summary": "List stakeholders for a project",
         "operationId": "list_project_stakeholders_api_v1_stakeholders_projects__project_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "project_id",
@@ -3037,6 +5362,11 @@
         "tags": ["Stakeholders"],
         "summary": "Create stakeholder manually",
         "operationId": "create_project_stakeholder_api_v1_stakeholders_projects__project_id__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "project_id",
@@ -3091,6 +5421,11 @@
         "tags": ["Stakeholders"],
         "summary": "Update stakeholder",
         "operationId": "update_stakeholder_api_v1_stakeholders__stakeholder_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "stakeholder_id",
@@ -3143,6 +5478,220 @@
         "tags": ["Stakeholders"],
         "summary": "Delete stakeholder",
         "operationId": "delete_stakeholder_api_v1_stakeholders__stakeholder_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stakeholder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Stakeholder Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stakeholders/projects/{project_id}": {
+      "get": {
+        "tags": ["Stakeholders"],
+        "summary": "List stakeholders for a project",
+        "operationId": "list_project_stakeholders_api_stakeholders_projects__project_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StakeholderResponseOut"
+                  },
+                  "title": "Response List Project Stakeholders Api Stakeholders Projects  Project Id  Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Stakeholders"],
+        "summary": "Create stakeholder manually",
+        "operationId": "create_project_stakeholder_api_stakeholders_projects__project_id__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StakeholderCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StakeholderResponseOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stakeholders/{stakeholder_id}": {
+      "patch": {
+        "tags": ["Stakeholders"],
+        "summary": "Update stakeholder",
+        "operationId": "update_stakeholder_api_stakeholders__stakeholder_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stakeholder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Stakeholder Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StakeholderUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StakeholderResponseOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Stakeholders"],
+        "summary": "Delete stakeholder",
+        "operationId": "delete_stakeholder_api_stakeholders__stakeholder_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "stakeholder_id",
@@ -3180,6 +5729,11 @@
         "tags": ["Approvals"],
         "summary": "Approve, reject, or correct AI-generated resources",
         "operationId": "review_resource_api_v1_approvals__resource_type___resource_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "resource_type",
@@ -3237,299 +5791,70 @@
           }
         }
       }
-    },
-    "/api/v1/documents/{document_id}/parse": {
-      "post": {
-        "tags": ["Documents"],
-        "summary": "Parse a document by ID",
-        "operationId": "parse_document_endpoint_canonical",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "document_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Document Id"
-            }
-          }
-        ],
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentUploadResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/coherence/evaluate": {
-      "post": {
-        "tags": ["Coherence Engine"],
-        "summary": "Evaluate Project Coherence",
-        "description": "Accepts a project's context and evaluates it against a predefined set of coherence rules.\n    Returns a list of alerts and a calculated coherence score.",
-        "operationId": "evaluate_project_coherence_v0_coherence_evaluate_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ProjectContext"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CoherenceResult"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/coherence/dashboard/{project_id}": {
-      "get": {
-        "tags": ["Coherence Dashboard"],
-        "summary": "Get Coherence Dashboard",
-        "description": "Returns coherence dashboard data for a project.\n\n    **For TS-E2E-FLW-DOC-001 E2E tests.**\n\n    Dashboard includes:\n    - Global coherence score (0-100)\n    - Sub-scores by category (SCOPE, BUDGET, QUALITY, TECHNICAL, LEGAL, TIME)\n    - Alert count\n    - Document count\n    - Methodology version\n\n    This is the final step in the document-to-coherence flow.",
-        "operationId": "get_coherence_dashboard_api_coherence_dashboard__project_id__get",
-        "parameters": [
-          {
-            "name": "project_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Project Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Get Coherence Dashboard Api Coherence Dashboard  Project Id  Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/analysis/analyze": {
-      "post": {
-        "tags": ["analysis"],
-        "summary": "Analyze Document",
-        "operationId": "analyze_document_api_v1_analyze_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AnalyzeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AnalyzeResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/analysis/projects/{project_id}/process/stream": {
-      "get": {
-        "tags": ["analysis"],
-        "summary": "Stream Project Processing Progress",
-        "description": "SSE endpoint that streams real-time processing stage updates and completion status for a project.",
-        "operationId": "stream_project_processing_api_v1_analysis_projects_project_id_process_stream_get",
-        "parameters": [
-          {
-            "name": "project_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Project Id"
-            }
-          },
-          {
-            "name": "access_token",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "title": "Access Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "SSE stream of processing events",
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "type": "string",
-                  "description": "SSE data frame containing stage or completion event"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized — authenticated SSE session required"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/health": {
-      "get": {
-        "summary": "Generic Health Check",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
-    "/api/v1/health/live": {
-      "get": {
-        "summary": "Liveness Probe",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
-    "/api/v1/health/ready": {
-      "get": {
-        "summary": "Readiness Probe",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
-    "/api/v1/health/circuit-breakers": {
-      "get": {
-        "summary": "Circuit Breaker Status",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
     }
   },
   "components": {
     "schemas": {
+      "AIFeedbackCreate": {
+        "properties": {
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "The LangSmith trace ID of the AI interaction that this feedback refers to.",
+            "examples": ["e2a6f3b6-1b6a-4b0a-8a0a-9c7d8f3b6a1e"]
+          },
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "The key or name for the feedback, used for grouping in LangSmith.",
+            "default": "user_feedback",
+            "examples": ["user_rating", "correction"]
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score",
+            "description": "A numerical score for the feedback, e.g., a rating from 0.0 to 1.0."
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment",
+            "description": "A free-text comment providing qualitative feedback or a correction."
+          }
+        },
+        "type": "object",
+        "required": ["trace_id"],
+        "title": "AIFeedbackCreate",
+        "description": "Schema for creating a new AI feedback entry."
+      },
+      "AIFeedbackResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "Feedback submitted successfully."
+          }
+        },
+        "type": "object",
+        "title": "AIFeedbackResponse",
+        "description": "Schema for the response after submitting feedback."
+      },
       "Alert": {
         "properties": {
           "rule_id": {
@@ -3545,6 +5870,12 @@
           "category": {
             "type": "string",
             "enum": [
+              "LEGAL",
+              "SCHEDULE",
+              "QUALITY",
+              "SCOPE",
+              "TECHNICAL",
+              "BUDGET",
               "legal",
               "financial",
               "technical",
@@ -3572,6 +5903,25 @@
         "title": "Alert",
         "description": "Represents an alert generated by a rule."
       },
+      "AlertHistoryResponse": {
+        "properties": {
+          "alert_id": {
+            "type": "string",
+            "title": "Alert Id"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": ["alert_id", "items"],
+        "title": "AlertHistoryResponse"
+      },
       "AlertListResponse": {
         "properties": {
           "items": {
@@ -3588,8 +5938,7 @@
         },
         "type": "object",
         "required": ["items", "total"],
-        "title": "AlertListResponse",
-        "description": "Alert list response."
+        "title": "AlertListResponse"
       },
       "AlertResponse": {
         "properties": {
@@ -3657,6 +6006,40 @@
             ],
             "title": "Reviewed At"
           },
+          "root_cause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root Cause"
+          },
+          "sla_policy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sla Policy Name"
+          },
+          "sla_due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sla Due At"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -3675,8 +6058,94 @@
           "status",
           "created_at"
         ],
-        "title": "AlertResponse",
-        "description": "Alert response model."
+        "title": "AlertResponse"
+      },
+      "AlertRuleConfigPayload": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "threshold": {
+            "type": "integer",
+            "title": "Threshold"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "enabled",
+          "threshold",
+          "severity"
+        ],
+        "title": "AlertRuleConfigPayload"
+      },
+      "AlertSubscriptionConfigPayload": {
+        "properties": {
+          "emailEnabled": {
+            "type": "boolean",
+            "title": "Emailenabled",
+            "default": false
+          },
+          "emailAddress": {
+            "type": "string",
+            "title": "Emailaddress",
+            "default": ""
+          },
+          "slackEnabled": {
+            "type": "boolean",
+            "title": "Slackenabled",
+            "default": false
+          },
+          "slackChannel": {
+            "type": "string",
+            "title": "Slackchannel",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "AlertSubscriptionConfigPayload"
+      },
+      "AlertWorkspaceSettingsPayload": {
+        "properties": {
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/AlertRuleConfigPayload"
+            },
+            "type": "array",
+            "title": "Rules"
+          },
+          "subscriptions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AlertSubscriptionConfigPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "AlertWorkspaceSettingsPayload"
       },
       "AnalysisStatus": {
         "properties": {
@@ -3746,30 +6215,34 @@
       },
       "AnalyzeRequest": {
         "properties": {
-          "document_text": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Document Text"
-          },
           "project_id": {
             "type": "string",
-            "minLength": 1,
-            "title": "Project Id"
+            "format": "uuid",
+            "title": "Project Id",
+            "description": "Project ID to analyze documents from"
           },
           "document_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "format": "uuid"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Document Id"
+            "title": "Document Id",
+            "description": "Optional specific document ID. If not provided, analyzes all project documents."
+          },
+          "analysis_prompt": {
+            "type": "string",
+            "title": "Analysis Prompt",
+            "description": "Analysis prompt/question for the documents",
+            "default": "Analiza todos los documentos del proyecto y extrae: 1) Partes contratantes, 2) Objeto del contrato, 3) Duraci\u00f3n, 4) Importe, 5) Posibles riesgos"
           }
         },
         "type": "object",
-        "required": ["document_text", "project_id"],
+        "required": ["project_id"],
         "title": "AnalyzeRequest"
       },
       "AnalyzeResponse": {
@@ -3788,6 +6261,21 @@
               }
             ],
             "title": "Analysis Id"
+          },
+          "persisted": {
+            "type": "boolean",
+            "title": "Persisted",
+            "default": false
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode",
+            "default": "preview"
+          },
+          "persistence_message": {
+            "type": "string",
+            "title": "Persistence Message",
+            "default": "Preview only - not persisted; alerts and coherence are produced by the full analysis pipeline. Trigger it via document reprocess."
           },
           "risks": {
             "items": {
@@ -3917,28 +6405,6 @@
         "required": ["reviewer_name"],
         "title": "ApproveRequest"
       },
-      "AttachEvidenceRequest": {
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": ["note", "screenshot", "document_excerpt"],
-            "title": "Type"
-          },
-          "content": {
-            "type": "string",
-            "title": "Content"
-          },
-          "source": {
-            "type": "string",
-            "title": "Source",
-            "default": "manual_review"
-          }
-        },
-        "type": "object",
-        "required": ["type", "content"],
-        "title": "AttachEvidenceRequest",
-        "description": "Request to attach evidence to alert."
-      },
       "AuthErrorResponse": {
         "properties": {
           "detail": {
@@ -3965,6 +6431,18 @@
           "detail": "Invalid credentials",
           "error_code": "INVALID_CREDENTIALS"
         }
+      },
+      "Body_reupload_document_file_api_v1_documents__document_id__file_patch": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": ["file"],
+        "title": "Body_reupload_document_file_api_v1_documents__document_id__file_patch"
       },
       "Body_upload_document_for_processing_api_v1_projects__project_id__documents_post": {
         "properties": {
@@ -3998,32 +6476,6 @@
         "required": ["amount"],
         "title": "BudgetInput",
         "description": "Budget input model."
-      },
-      "BulkDeleteRequest": {
-        "properties": {
-          "alert_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Alert Ids"
-          },
-          "status_filter": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status Filter"
-          }
-        },
-        "type": "object",
-        "required": ["alert_ids"],
-        "title": "BulkDeleteRequest",
-        "description": "Request to bulk delete alerts."
       },
       "BulkDocumentItem": {
         "properties": {
@@ -4080,6 +6532,93 @@
         "title": "BulkExportRequest",
         "description": "Bulk export request."
       },
+      "BulkOperationResponse": {
+        "properties": {
+          "processed_count": {
+            "type": "integer",
+            "title": "Processed Count"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "alert_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alert Ids"
+          }
+        },
+        "type": "object",
+        "required": ["processed_count"],
+        "title": "BulkOperationResponse"
+      },
+      "BulkResolveRequest": {
+        "properties": {
+          "alert_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Alert Ids"
+          },
+          "resolution": {
+            "type": "string",
+            "title": "Resolution"
+          },
+          "root_cause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root Cause"
+          }
+        },
+        "type": "object",
+        "required": ["alert_ids", "resolution"],
+        "title": "BulkResolveRequest"
+      },
       "BulkReviewRequest": {
         "properties": {
           "alert_ids": {
@@ -4102,8 +6641,7 @@
         },
         "type": "object",
         "required": ["alert_ids", "decision"],
-        "title": "BulkReviewRequest",
-        "description": "Request to bulk review alerts."
+        "title": "BulkReviewRequest"
       },
       "BulkWBSItem": {
         "properties": {
@@ -4192,6 +6730,12 @@
           "category": {
             "type": "string",
             "enum": [
+              "LEGAL",
+              "SCHEDULE",
+              "QUALITY",
+              "SCOPE",
+              "TECHNICAL",
+              "BUDGET",
               "legal",
               "financial",
               "technical",
@@ -4204,9 +6748,16 @@
             "description": "The alert category."
           },
           "score": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Score",
-            "description": "The coherence score for this category (0-100)."
+            "description": "Category score (null when UNASSESSED)."
           },
           "alert_count": {
             "type": "integer",
@@ -4221,18 +6772,156 @@
             "type": "number",
             "title": "Impact Percentage",
             "description": "Percentage of impact this category has on the overall score."
+          },
+          "state": {
+            "type": "string",
+            "title": "State",
+            "description": "unassessed | assessed_clean | assessed_findings",
+            "default": "assessed_findings"
+          },
+          "baseline_estimated": {
+            "type": "boolean",
+            "title": "Baseline Estimated",
+            "description": "True when score is the inherent-risk baseline (clean).",
+            "default": false
           }
         },
         "type": "object",
         "required": [
           "category",
-          "score",
           "alert_count",
           "severity_breakdown",
           "impact_percentage"
         ],
         "title": "CategoryBreakdown",
         "description": "Represents the coherence score breakdown for a specific category."
+      },
+      "CategoryStatus": {
+        "type": "string",
+        "enum": [
+          "pending_documents",
+          "insufficient_evidence",
+          "scored",
+          "conflicting_evidence",
+          "not_applicable",
+          "processing_error"
+        ],
+        "title": "CategoryStatus"
+      },
+      "CategoryV2": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CategoryStatus"
+          },
+          "coherence_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coherence Score"
+          },
+          "evidence_coverage": {
+            "type": "number",
+            "title": "Evidence Coverage",
+            "default": 0.0
+          },
+          "technical_reliability": {
+            "type": "number",
+            "title": "Technical Reliability",
+            "default": 0.0
+          },
+          "evidence_freshness": {
+            "type": "number",
+            "title": "Evidence Freshness",
+            "default": 0.0
+          },
+          "applicability_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicability Reason"
+          },
+          "score_explanation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScoreExplanation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence_count": {
+            "type": "integer",
+            "title": "Evidence Count",
+            "default": 0
+          },
+          "evidence_references": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence References"
+          },
+          "missing_evidence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Evidence"
+          },
+          "detected_conflicts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Detected Conflicts"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "recommendation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation"
+          },
+          "calculation_metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Calculation Metadata"
+          }
+        },
+        "type": "object",
+        "required": ["category", "status"],
+        "title": "CategoryV2"
       },
       "Clause": {
         "properties": {
@@ -4258,12 +6947,84 @@
         "title": "Clause",
         "description": "Represents a specific clause or segment of a document."
       },
+      "CoherenceEvaluateRequest": {
+        "properties": {
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id",
+            "description": "Project ID to fetch document clauses from RAG. If provided, clauses are auto-fetched."
+          },
+          "analysis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Id",
+            "description": "Optional analysis ID for context."
+          },
+          "clauses": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Clause"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clauses",
+            "description": "Optional explicit clauses. If provided, project_id is ignored."
+          },
+          "max_chunks": {
+            "type": "integer",
+            "title": "Max Chunks",
+            "description": "Maximum RAG chunks to fetch for clause extraction.",
+            "default": 50
+          },
+          "low_budget_mode": {
+            "type": "boolean",
+            "title": "Low Budget Mode",
+            "description": "Enable low-budget mode (skip LLM evaluators, default: True)",
+            "default": true
+          },
+          "include_rag_similarity": {
+            "type": "boolean",
+            "title": "Include Rag Similarity",
+            "description": "Enable RAG similarity detection (default: True)",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "CoherenceEvaluateRequest",
+        "description": "Request model that accepts either project_id (to fetch from RAG) or clauses directly."
+      },
       "CoherenceResult": {
         "properties": {
           "overall_score": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Overall Score",
-            "description": "The overall calculated coherence score for the project."
+            "description": "The overall calculated coherence score for the project, or null when evidence is insufficient."
           },
           "alerts": {
             "items": {
@@ -4286,12 +7047,156 @@
             "format": "date-time",
             "title": "Calculated At",
             "description": "Timestamp when the score was calculated."
+          },
+          "score_version": {
+            "type": "string",
+            "enum": ["coherence-v1", "coherence-v2"],
+            "title": "Score Version",
+            "description": "Immutable scoring algorithm version used for this result.",
+            "default": "coherence-v1"
+          },
+          "score_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Reason",
+            "description": "Machine-readable reason when a score is unavailable or version-specific handling applies."
+          },
+          "score_missing_dimensions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Missing Dimensions",
+            "description": "Dimensions that prevented a complete score, when applicable."
           }
         },
         "type": "object",
         "required": ["overall_score", "alerts"],
         "title": "CoherenceResult",
         "description": "Represents the complete result of a coherence evaluation, including alerts and the final score."
+      },
+      "CoherenceV2Payload": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "version": {
+            "type": "string",
+            "const": "coherence-v2",
+            "title": "Version",
+            "default": "coherence-v2"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "global": {
+            "$ref": "#/components/schemas/GlobalV2"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryV2"
+            },
+            "type": "array",
+            "title": "Categories"
+          }
+        },
+        "type": "object",
+        "required": ["project_id", "generated_at", "global"],
+        "title": "CoherenceV2Payload"
+      },
+      "ConsentCategories": {
+        "properties": {
+          "necessary": {
+            "type": "boolean",
+            "title": "Necessary",
+            "default": true
+          },
+          "analytics": {
+            "type": "boolean",
+            "title": "Analytics",
+            "default": false
+          },
+          "marketing": {
+            "type": "boolean",
+            "title": "Marketing",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ConsentCategories"
+      },
+      "CookieConsentCreateRequest": {
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "title": "Tenantid"
+          },
+          "userId": {
+            "type": "string",
+            "title": "Userid"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "forceError": {
+            "type": "boolean",
+            "title": "Forceerror",
+            "default": false
+          },
+          "categories": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConsentCategories"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["tenantId", "userId", "version"],
+        "title": "CookieConsentCreateRequest"
+      },
+      "CookieConsentUpdateRequest": {
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "title": "Tenantid"
+          },
+          "userId": {
+            "type": "string",
+            "title": "Userid"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "categories": {
+            "$ref": "#/components/schemas/ConsentCategories"
+          }
+        },
+        "type": "object",
+        "required": ["tenantId", "userId", "version", "categories"],
+        "title": "CookieConsentUpdateRequest"
       },
       "CreateAlertRequest": {
         "properties": {
@@ -4339,8 +7244,7 @@
           "severity",
           "message"
         ],
-        "title": "CreateAlertRequest",
-        "description": "Request to create an alert."
+        "title": "CreateAlertRequest"
       },
       "CreateWBSItemInput": {
         "properties": {
@@ -4430,6 +7334,313 @@
         "title": "CreateWBSItemInput",
         "description": "Input model for creating a WBS item."
       },
+      "DLQEntryResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tenant Id"
+          },
+          "task_type": {
+            "type": "string",
+            "title": "Task Type"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "payload_json": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload Json"
+          },
+          "error_message": {
+            "type": "string",
+            "title": "Error Message"
+          },
+          "error_traceback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Traceback"
+          },
+          "retry_count": {
+            "type": "integer",
+            "title": "Retry Count"
+          },
+          "max_retries": {
+            "type": "integer",
+            "title": "Max Retries"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "next_retry_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Retry At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tenant_id",
+          "task_type",
+          "document_id",
+          "payload_json",
+          "error_message",
+          "error_traceback",
+          "retry_count",
+          "max_retries",
+          "status",
+          "created_at",
+          "updated_at",
+          "next_retry_at"
+        ],
+        "title": "DLQEntryResponse",
+        "description": "TS-BCK-042-001: Serialized DLQ entry for admin responses."
+      },
+      "DLQListResponse": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/DLQEntryResponse"
+            },
+            "type": "array",
+            "title": "Entries"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More"
+          }
+        },
+        "type": "object",
+        "required": ["entries", "total", "limit", "offset", "has_more"],
+        "title": "DLQListResponse",
+        "description": "TS-BCK-042-001: Admin DLQ list response with pagination metadata."
+      },
+      "DLQRetryResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "const": "retrying",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": ["id", "status"],
+        "title": "DLQRetryResponse",
+        "description": "TS-BCK-042-001: Admin DLQ retry response."
+      },
+      "DashboardSummary": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "tenant_id": {
+            "type": "string",
+            "title": "Tenant Id"
+          },
+          "global_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Global Score"
+          },
+          "coherence_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coherence Score"
+          },
+          "sub_scores": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Sub Scores"
+          },
+          "weights_used": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Weights Used"
+          },
+          "alert_count": {
+            "type": "integer",
+            "title": "Alert Count"
+          },
+          "document_count": {
+            "type": "integer",
+            "title": "Document Count"
+          },
+          "methodology_version": {
+            "type": "string",
+            "title": "Methodology Version",
+            "default": "3.0"
+          },
+          "score_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["coherence-v1", "coherence-v2"]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Version"
+          },
+          "score_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Reason"
+          },
+          "score_missing_dimensions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Missing Dimensions"
+          },
+          "last_updated": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Updated"
+          },
+          "categories_v2": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoherenceV2Payload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "tenant_id",
+          "global_score",
+          "coherence_score",
+          "sub_scores",
+          "weights_used",
+          "alert_count",
+          "document_count",
+          "last_updated"
+        ],
+        "title": "DashboardSummary",
+        "description": "Consolidated view of project coherence for the dashboard.\n\nECOA v2 (ADR-009 \u00a77.2 step 1): the optional `categories_v2` field carries\nthe locked v2 contract. Defaults to None so v1 clients are unaffected."
+      },
+      "DisclaimerAcceptRequest": {
+        "properties": {
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "forceError": {
+            "type": "boolean",
+            "title": "Forceerror",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "DisclaimerAcceptRequest"
+      },
       "DocumentDetailResponse": {
         "properties": {
           "id": {
@@ -4441,6 +7652,11 @@
             "type": "string",
             "format": "uuid",
             "title": "Project Id"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tenant Id"
           },
           "document_type": {
             "$ref": "#/components/schemas/DocumentType"
@@ -4537,6 +7753,22 @@
             ],
             "title": "Updated At"
           },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
+          "file_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Hash"
+          },
           "clauses": {
             "anyOf": [
               {
@@ -4557,12 +7789,67 @@
         "required": [
           "id",
           "project_id",
+          "tenant_id",
           "document_type",
           "filename",
           "upload_status"
         ],
         "title": "DocumentDetailResponse",
         "description": "Detailed document response."
+      },
+      "DocumentEntityResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata"
+          }
+        },
+        "type": "object",
+        "required": ["id", "type", "text", "page", "confidence"],
+        "title": "DocumentEntityResponse",
+        "description": "Entity extracted or derived from a persisted document."
+      },
+      "DocumentHistoryResponse": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceHistoryEventResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": ["document_id", "items"],
+        "title": "DocumentHistoryResponse",
+        "description": "Ordered history events for a single document."
       },
       "DocumentListItem": {
         "properties": {
@@ -4588,6 +7875,10 @@
           },
           "status": {
             "$ref": "#/components/schemas/DocumentPollingStatus"
+          },
+          "status_detail": {
+            "type": "string",
+            "title": "Status Detail"
           },
           "error_message": {
             "anyOf": [
@@ -4625,7 +7916,7 @@
           }
         },
         "type": "object",
-        "required": ["id", "filename", "status"],
+        "required": ["id", "filename", "status", "status_detail"],
         "title": "DocumentListItem",
         "description": "List item for documents."
       },
@@ -4674,6 +7965,11 @@
             "format": "uuid",
             "title": "Project Id"
           },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tenant Id"
+          },
           "document_type": {
             "$ref": "#/components/schemas/DocumentType"
           },
@@ -4769,6 +8065,31 @@
             ],
             "title": "Updated At"
           },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
+          "file_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Hash"
+          },
+          "processing_status": {
+            "$ref": "#/components/schemas/DocumentPollingStatus",
+            "default": "queued"
+          },
+          "status_detail": {
+            "type": "string",
+            "title": "Status Detail",
+            "default": "Upload accepted. Ingestion is queued; analysis has not started."
+          },
           "task_id": {
             "anyOf": [
               {
@@ -4785,6 +8106,7 @@
         "required": [
           "id",
           "project_id",
+          "tenant_id",
           "document_type",
           "filename",
           "upload_status"
@@ -4792,9 +8114,201 @@
         "title": "DocumentQueuedResponse",
         "description": "Response for async document upload."
       },
+      "DocumentRelationshipExplanationResponse": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "strongest_cluster": {
+            "type": "string",
+            "title": "Strongest Cluster"
+          },
+          "review_priority": {
+            "type": "string",
+            "title": "Review Priority"
+          },
+          "latest_signal": {
+            "type": "string",
+            "title": "Latest Signal"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/RelationshipExplanationCitationResponse"
+            },
+            "type": "array",
+            "title": "Citations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "summary",
+          "strongest_cluster",
+          "review_priority",
+          "latest_signal",
+          "citations"
+        ],
+        "title": "DocumentRelationshipExplanationResponse",
+        "description": "Structured relationship explanation payload for a document."
+      },
+      "DocumentResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tenant Id"
+          },
+          "document_type": {
+            "$ref": "#/components/schemas/DocumentType"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "upload_status": {
+            "$ref": "#/components/schemas/DocumentStatus"
+          },
+          "file_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Format"
+          },
+          "storage_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Url"
+          },
+          "storage_encrypted": {
+            "type": "boolean",
+            "title": "Storage Encrypted",
+            "default": true
+          },
+          "file_size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Size Bytes"
+          },
+          "parsed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parsed At"
+          },
+          "parsing_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parsing Error"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
+          "file_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Hash"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "tenant_id",
+          "document_type",
+          "filename",
+          "upload_status"
+        ],
+        "title": "DocumentResponse",
+        "description": "Base response DTO for documents."
+      },
       "DocumentStatus": {
         "type": "string",
-        "enum": ["uploaded", "queued", "processing", "parsed", "error"],
+        "enum": [
+          "uploaded",
+          "queued",
+          "processing",
+          "parsed",
+          "parsed_pending_analysis",
+          "analyzed",
+          "error"
+        ],
         "title": "DocumentStatus",
         "description": "Represents the status of a document during its lifecycle."
       },
@@ -4806,7 +8320,7 @@
           "budget",
           "drawing",
           "specification",
-          "specification",
+          "technical_spec",
           "other"
         ],
         "title": "DocumentType",
@@ -4832,6 +8346,140 @@
         "title": "DocumentUploadResponse",
         "description": "Response for parse endpoints."
       },
+      "EnrichedCoherenceResult": {
+        "properties": {
+          "overall_score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overall Score",
+            "description": "The granular coherence score (5.0-97.0 typical range), or null when evidence is insufficient"
+          },
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/Alert"
+            },
+            "type": "array",
+            "title": "Alerts",
+            "description": "List of alerts (backward compat)"
+          },
+          "category_breakdown": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryBreakdown"
+            },
+            "type": "array",
+            "title": "Category Breakdown",
+            "description": "Breakdown by alert category"
+          },
+          "calculated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Calculated At",
+            "description": "Timestamp of calculation"
+          },
+          "score_version": {
+            "type": "string",
+            "enum": ["coherence-v1", "coherence-v2"],
+            "title": "Score Version",
+            "description": "Immutable scoring algorithm version used for this result.",
+            "default": "coherence-v1"
+          },
+          "score_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Reason",
+            "description": "Machine-readable reason when a score is unavailable or version-specific handling applies."
+          },
+          "score_missing_dimensions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Missing Dimensions",
+            "description": "Dimensions that prevented a complete score, when applicable."
+          },
+          "finding_signals": {
+            "items": {
+              "$ref": "#/components/schemas/FindingSignal"
+            },
+            "type": "array",
+            "title": "Finding Signals",
+            "description": "Raw signals from all evaluators (det + llm)"
+          },
+          "deterministic_findings_count": {
+            "type": "integer",
+            "title": "Deterministic Findings Count",
+            "description": "Number of findings from deterministic rules",
+            "default": 0
+          },
+          "llm_findings_count": {
+            "type": "integer",
+            "title": "Llm Findings Count",
+            "description": "Number of findings from LLM analysis",
+            "default": 0
+          },
+          "scope_factor": {
+            "type": "number",
+            "title": "Scope Factor",
+            "description": "Scope normalization factor used in scoring",
+            "default": 1.0
+          },
+          "penalty_density": {
+            "type": "number",
+            "title": "Penalty Density",
+            "description": "Raw weighted penalty density before decay",
+            "default": 0.0
+          },
+          "avg_impact": {
+            "type": "number",
+            "title": "Avg Impact",
+            "description": "Average impact_score across all findings",
+            "default": 0.0
+          },
+          "avg_confidence": {
+            "type": "number",
+            "title": "Avg Confidence",
+            "description": "Average confidence across all findings",
+            "default": 0.0
+          },
+          "llm_cost_usd": {
+            "type": "number",
+            "title": "Llm Cost Usd",
+            "description": "Total LLM cost for this evaluation",
+            "default": 0.0
+          },
+          "evaluation_mode": {
+            "type": "string",
+            "title": "Evaluation Mode",
+            "description": "low_budget_mode or standard",
+            "default": "standard"
+          }
+        },
+        "type": "object",
+        "required": ["overall_score"],
+        "title": "EnrichedCoherenceResult",
+        "description": "Extended coherence result with diagnostic fields for v0.3 scoring.\n\nCoherenceResult remains the public API shape; this adds internal diagnostics\nfor debugging, dashboards, and score curve validation."
+      },
       "Evidence": {
         "properties": {
           "source_clause_id": {
@@ -4854,6 +8502,90 @@
         "required": ["source_clause_id", "claim", "quote"],
         "title": "Evidence",
         "description": "Represents the specific evidence supporting an alert."
+      },
+      "EvidenceHistoryEventResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          }
+        },
+        "type": "object",
+        "required": ["id", "title", "detail", "occurred_at"],
+        "title": "EvidenceHistoryEventResponse",
+        "description": "A persisted evidence-history event for a document timeline."
+      },
+      "EvidenceRef": {
+        "properties": {
+          "ref_id": {
+            "type": "string",
+            "title": "Ref Id"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "tier": {
+            "$ref": "#/components/schemas/EvidenceTier"
+          },
+          "locator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locator"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["ref_id", "source", "tier"],
+        "title": "EvidenceRef",
+        "description": "Reference to evidence supporting or withholding a critical output."
+      },
+      "EvidenceTier": {
+        "type": "string",
+        "enum": ["verified", "weak", "inferred", "unverified"],
+        "title": "EvidenceTier",
+        "description": "Evidence confidence tier used by Runtime Trust and downstream health."
       },
       "ExecuteDecisionRequestDTO": {
         "properties": {
@@ -4957,6 +8689,86 @@
         "title": "ExecuteDecisionResponseDTO",
         "description": "Refers to Suite ID: TS-I13-E2E-REAL-001."
       },
+      "FindingSignal": {
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "title": "Rule Id",
+            "description": "Rule identifier (e.g., DET-BUD-OVERRUN)"
+          },
+          "clause_id": {
+            "type": "string",
+            "title": "Clause Id",
+            "description": "ID of the evaluated clause"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["deterministic", "llm"],
+            "title": "Source",
+            "description": "deterministic or llm",
+            "default": "deterministic"
+          },
+          "impact_score": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Impact Score",
+            "description": "Continuous severity: 0.0 = no issue, 1.0 = catastrophic"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "description": "Evaluator confidence: 1.0 = certain, 0.5 = borderline",
+            "default": 1.0
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low", "info"],
+            "title": "Severity",
+            "description": "Categorical severity for backward compatibility",
+            "default": "medium"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "BUDGET",
+              "TIME",
+              "LEGAL",
+              "SCOPE",
+              "TECHNICAL",
+              "QUALITY",
+              "CROSS"
+            ],
+            "title": "Category",
+            "description": "One of the 6 coherence categories",
+            "default": "SCOPE"
+          },
+          "evidence_summary": {
+            "type": "string",
+            "title": "Evidence Summary",
+            "description": "One-sentence explanation of the finding",
+            "default": ""
+          },
+          "quote": {
+            "type": "string",
+            "title": "Quote",
+            "description": "Exact text from clause that triggered the rule",
+            "default": ""
+          },
+          "raw_data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Raw Data",
+            "description": "Structured data for diagnostics"
+          }
+        },
+        "type": "object",
+        "required": ["rule_id", "clause_id", "impact_score"],
+        "title": "FindingSignal",
+        "description": "Unified signal format for the Scoring Arbiter (Agent C).\n\nReplaces binary rule_violated with continuous impact_score (0.0-1.0).\nUsed by both deterministic evaluators (Agent A) and LLM evaluators (Agent B).\n\nAttributes:\n    rule_id: Identifier of the rule that generated this signal (e.g., DET-BUD-OVERRUN)\n    clause_id: ID of the clause that was evaluated\n    source: Whether this came from deterministic rules or LLM analysis\n    impact_score: Continuous severity from 0.0 (no issue) to 1.0 (catastrophic)\n    confidence: How certain the evaluator is (1.0 for deterministic, 0.0-1.0 for LLM)\n    severity: Categorical severity for backward compatibility\n    category: Which of the 6 coherence categories this belongs to\n    evidence_summary: One-sentence explanation of the finding\n    quote: Exact text from the clause that triggered the rule\n    raw_data: Structured data relevant to the finding (for diagnostics)"
+      },
       "FunctionCallRequest": {
         "properties": {
           "function_name": {
@@ -4974,6 +8786,60 @@
         "title": "FunctionCallRequest",
         "description": "Request para llamada a funci\u00f3n."
       },
+      "GlobalV2": {
+        "properties": {
+          "coherence_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coherence Score"
+          },
+          "completeness_score": {
+            "type": "number",
+            "title": "Completeness Score",
+            "default": 0.0
+          },
+          "technical_reliability_index": {
+            "type": "number",
+            "title": "Technical Reliability Index",
+            "default": 0.0
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scored",
+              "partial",
+              "insufficient_active_weight",
+              "pending_documents"
+            ],
+            "title": "Status"
+          },
+          "score_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Reason"
+          },
+          "active_weight": {
+            "type": "number",
+            "title": "Active Weight",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": ["status"],
+        "title": "GlobalV2"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -4986,6 +8852,148 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HealthBand": {
+        "type": "string",
+        "enum": ["healthy", "watch", "at_risk", "critical", "unknown"],
+        "title": "HealthBand"
+      },
+      "HealthDimension": {
+        "type": "string",
+        "enum": [
+          "contract",
+          "risk",
+          "documentation",
+          "governance",
+          "schedule",
+          "cost",
+          "deliverables"
+        ],
+        "title": "HealthDimension"
+      },
+      "HealthNullReason": {
+        "type": "string",
+        "enum": ["insufficient_evidence", "not_applicable", "budget_exhausted"],
+        "title": "HealthNullReason"
+      },
+      "HealthSignal": {
+        "properties": {
+          "dimension": {
+            "$ref": "#/components/schemas/HealthDimension"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "band": {
+            "$ref": "#/components/schemas/HealthBand"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceRef"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "trend": {
+            "$ref": "#/components/schemas/HealthTrend",
+            "default": "unknown"
+          },
+          "missing_data": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Data"
+          },
+          "null_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HealthNullReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["dimension", "band", "confidence"],
+        "title": "HealthSignal",
+        "description": "One dimension's health result.\n\nA non-null score must be backed by concrete evidence. Confidence remains a\nseparate evidence-quality axis and cannot substitute for provenance."
+      },
+      "HealthTrend": {
+        "type": "string",
+        "enum": ["up", "down", "flat", "unknown"],
+        "title": "HealthTrend"
+      },
+      "HealthVector": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tenant Id"
+          },
+          "dimensions": {
+            "items": {
+              "$ref": "#/components/schemas/HealthSignal"
+            },
+            "type": "array",
+            "title": "Dimensions"
+          },
+          "composite_score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composite Score"
+          },
+          "composite_band": {
+            "$ref": "#/components/schemas/HealthBand",
+            "default": "unknown"
+          },
+          "composite_trend": {
+            "$ref": "#/components/schemas/HealthTrend",
+            "default": "unknown"
+          },
+          "computed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Computed At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["project_id", "tenant_id", "dimensions", "computed_at"],
+        "title": "HealthVector",
+        "description": "Project-level health vector across supported dimensions."
       },
       "ImpactLevel": {
         "type": "string",
@@ -5129,6 +9137,198 @@
         "title": "MoveWBSItemInput",
         "description": "Input model for moving a WBS item."
       },
+      "NotificationChannel": {
+        "type": "string",
+        "enum": ["email", "slack", "webhook"],
+        "title": "NotificationChannel",
+        "description": "Valid notification channel types."
+      },
+      "NotificationConfigRequest": {
+        "properties": {
+          "notification_channels": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationChannel"
+            },
+            "type": "array",
+            "title": "Notification Channels",
+            "description": "List of enabled notification channels"
+          },
+          "email_recipients": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Recipients",
+            "description": "Email recipients for email notifications (required if email channel enabled)"
+          },
+          "slack_webhook_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2083,
+                "minLength": 1,
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slack Webhook Url",
+            "description": "Slack webhook URL (required if slack channel enabled)"
+          },
+          "webhook_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2083,
+                "minLength": 1,
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook Url",
+            "description": "Generic webhook URL (required if webhook channel enabled)"
+          },
+          "webhook_auth_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook Auth Token",
+            "description": "Optional webhook authentication token (Bearer token)"
+          },
+          "custom_headers": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Headers",
+            "description": "Optional custom headers for webhook requests"
+          }
+        },
+        "type": "object",
+        "title": "NotificationConfigRequest",
+        "description": "Request schema for creating/updating notification configuration."
+      },
+      "NotificationConfigResponse": {
+        "properties": {
+          "notification_channels": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationChannel"
+            },
+            "type": "array",
+            "title": "Notification Channels",
+            "description": "List of enabled notification channels"
+          },
+          "email_recipients": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Recipients",
+            "description": "Email recipients for email notifications"
+          },
+          "slack_webhook_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slack Webhook Url",
+            "description": "Slack webhook URL (partial masking for security)"
+          },
+          "webhook_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook Url",
+            "description": "Generic webhook URL"
+          },
+          "webhook_auth_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook Auth Token",
+            "description": "Webhook authentication token (masked)"
+          },
+          "custom_headers": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Headers",
+            "description": "Custom headers for webhook requests (values masked)"
+          }
+        },
+        "type": "object",
+        "title": "NotificationConfigResponse",
+        "description": "Response schema for notification configuration."
+      },
+      "OnboardingRetryRequest": {
+        "properties": {
+          "sessionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionid"
+          }
+        },
+        "type": "object",
+        "title": "OnboardingRetryRequest"
+      },
       "PasswordChangeRequest": {
         "properties": {
           "current_password": {
@@ -5166,27 +9366,6 @@
         "enum": ["low", "medium", "high"],
         "title": "PowerLevel",
         "description": "Level of power of the stakeholder."
-      },
-      "ProjectContext": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id",
-            "description": "Unique identifier for the project."
-          },
-          "clauses": {
-            "items": {
-              "$ref": "#/components/schemas/Clause"
-            },
-            "type": "array",
-            "title": "Clauses",
-            "description": "List of structured clauses from documents relevant to the project."
-          }
-        },
-        "type": "object",
-        "required": ["id"],
-        "title": "ProjectContext",
-        "description": "Represents the full context of a project to be evaluated, now with structured clauses."
       },
       "ProjectCreateRequest": {
         "properties": {
@@ -5309,6 +9488,139 @@
         "required": ["items", "total"],
         "title": "ProjectListResponse",
         "description": "Project list response."
+      },
+      "ProjectQuickViewAlertResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": ["id", "title", "severity", "status", "created_at"],
+        "title": "ProjectQuickViewAlertResponse",
+        "description": "Compact alert payload for the project quick-view sheet."
+      },
+      "ProjectQuickViewSummaryResponse": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tenant Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "project_type": {
+            "type": "string",
+            "title": "Project Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "coherence_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coherence Score"
+          },
+          "client_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Name"
+          },
+          "open_alert_count": {
+            "type": "integer",
+            "title": "Open Alert Count",
+            "default": 0
+          },
+          "critical_alert_count": {
+            "type": "integer",
+            "title": "Critical Alert Count",
+            "default": 0
+          },
+          "top_alerts": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectQuickViewAlertResponse"
+            },
+            "type": "array",
+            "title": "Top Alerts"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "tenant_id",
+          "name",
+          "project_type",
+          "status",
+          "updated_at"
+        ],
+        "title": "ProjectQuickViewSummaryResponse",
+        "description": "Project quick-view summary used by the frontend sheet."
       },
       "ProjectResponse": {
         "properties": {
@@ -5823,6 +10135,42 @@
         "required": ["reviewer_name"],
         "title": "RejectRequest"
       },
+      "RelationshipExplanationCitationResponse": {
+        "properties": {
+          "clause_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Clause Id"
+          },
+          "clause_code": {
+            "type": "string",
+            "title": "Clause Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": ["clause_id", "clause_code", "label", "reason"],
+        "title": "RelationshipExplanationCitationResponse",
+        "description": "Citation payload for a relationship explanation."
+      },
       "ResolveAlertRequest": {
         "properties": {
           "resolution": {
@@ -5830,8 +10178,15 @@
             "title": "Resolution"
           },
           "resolved_by": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Resolved By"
           },
           "root_cause": {
@@ -5847,9 +10202,59 @@
           }
         },
         "type": "object",
-        "required": ["resolution", "resolved_by"],
-        "title": "ResolveAlertRequest",
-        "description": "Request to resolve an alert."
+        "required": ["resolution"],
+        "title": "ResolveAlertRequest"
+      },
+      "ResumeWorkflowRequest": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": ["approve", "reject"],
+            "title": "Decision",
+            "description": "The reviewer's decision: 'approve' to resume workflow, 'reject' to terminate",
+            "examples": ["approve", "reject"]
+          },
+          "feedback": {
+            "type": "string",
+            "maxLength": 5000,
+            "title": "Feedback",
+            "description": "Optional feedback or reason for the decision (required for rejections)",
+            "default": "",
+            "examples": [
+              "Approved - clause looks correct",
+              "Rejected - clause needs revision"
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["decision"],
+        "title": "ResumeWorkflowRequest",
+        "description": "Request to resume workflow after HITL decision.\n\nAfter a human reviewer makes a decision on a pending review item,\nthis endpoint resumes the LangGraph workflow with the decision.\n\n- **approve**: Workflow resumes from interrupt point with approved status\n- **reject**: Workflow terminates gracefully with rejection reason"
+      },
+      "ResumeWorkflowResponse": {
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Review Id",
+            "description": "The ID of the review item that was processed"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Result status: 'resumed' (approved), 'rejected' (terminated), or 'terminated_with_errors'",
+            "examples": ["resumed", "rejected"]
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Human-readable message describing the outcome"
+          }
+        },
+        "type": "object",
+        "required": ["review_id", "status", "message"],
+        "title": "ResumeWorkflowResponse",
+        "description": "Response from workflow resumption.\n\nReturns the outcome of the resume operation including the final status."
       },
       "ReviewAlertRequest": {
         "properties": {
@@ -5866,8 +10271,7 @@
         },
         "type": "object",
         "required": ["decision"],
-        "title": "ReviewAlertRequest",
-        "description": "Request to review an alert."
+        "title": "ReviewAlertRequest"
       },
       "ReviewDecisionDTO": {
         "properties": {
@@ -6032,6 +10436,59 @@
         "required": ["item_id", "item_type", "confidence", "impact_level"],
         "title": "RouteForReviewRequest"
       },
+      "ScoreExplanation": {
+        "properties": {
+          "positive_factors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Positive Factors"
+          },
+          "negative_factors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Negative Factors"
+          },
+          "dominant_rules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dominant Rules"
+          },
+          "score_path": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Score Path"
+          }
+        },
+        "type": "object",
+        "title": "ScoreExplanation"
+      },
+      "SecretChannelClerkResponse": {
+        "properties": {
+          "bundle_version": {
+            "type": "string",
+            "title": "Bundle Version"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Values"
+          }
+        },
+        "type": "object",
+        "required": ["bundle_version", "values"],
+        "title": "SecretChannelClerkResponse"
+      },
       "SeverityCount": {
         "properties": {
           "critical": {
@@ -6057,11 +10514,17 @@
             "title": "Low",
             "description": "Number of low severity alerts.",
             "default": 0
+          },
+          "info": {
+            "type": "integer",
+            "title": "Info",
+            "description": "Number of info severity alerts.",
+            "default": 0
           }
         },
         "type": "object",
         "title": "SeverityCount",
-        "description": "Represents the count of alerts by severity level."
+        "description": "Represents the count of alerts by severity level.\n\nTASK-504: Strict 5-level severity taxonomy (Critical, High, Medium, Low, Info)."
       },
       "StakeholderCreateRequest": {
         "properties": {
@@ -6275,8 +10738,7 @@
           "email": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "email"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -6296,11 +10758,25 @@
             "title": "Phone"
           },
           "power_score": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Power Score"
           },
           "interest_score": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Interest Score"
           },
           "power_level": {

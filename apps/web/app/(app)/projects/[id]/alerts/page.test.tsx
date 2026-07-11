@@ -14,7 +14,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/api/generated/alerts/alerts", () => ({
-  useListProjectAlertsApiV1ProjectsProjectIdAlertsGet: (...args: unknown[]) =>
+  useListProjectAlertsApiV1AlertsProjectsProjectIdGet: (...args: unknown[]) =>
     useProjectAlertsQueryMock(...args),
 }));
 

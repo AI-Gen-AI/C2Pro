@@ -9,14 +9,14 @@ const invalidateQueriesMock = vi.fn();
 const showToastMock = vi.fn();
 
 vi.mock("@/lib/api/generated/coherence-engine/coherence-engine", () => ({
-  useEvaluateProjectCoherenceV0CoherenceEvaluatePost: () => ({
+  useEvaluateProjectCoherenceApiV1CoherenceEvaluatePost: () => ({
     mutateAsync: evaluateMutateAsyncMock,
     isPending: false,
   }),
 }));
 
 vi.mock("@/lib/api/generated/analysis/analysis", () => ({
-  useAnalyzeDocumentApiV1AnalyzePost: () => ({
+  useAnalyzeDocumentApiV1AnalysisAnalyzePost: () => ({
     mutateAsync: analyzeMutateAsyncMock,
     isPending: false,
   }),
@@ -60,10 +60,10 @@ describe("useProjectCoherenceActions", () => {
       data: { project_id: "proj-real-1" },
     });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
-      queryKey: ["/coherence/dashboard/proj-real-1"],
+      queryKey: ["/api/coherence/dashboard/proj-real-1"],
     });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
-      queryKey: ["/api/v1/projects/proj-real-1/alerts"],
+      queryKey: ["/api/v1/alerts/projects/proj-real-1"],
     });
     expect(showToastMock).toHaveBeenCalledWith("Evaluated 0 clauses, 2 findings.");
   });
@@ -84,10 +84,10 @@ describe("useProjectCoherenceActions", () => {
       data: { project_id: "proj-real-2" },
     });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
-      queryKey: ["/coherence/dashboard/proj-real-2"],
+      queryKey: ["/api/coherence/dashboard/proj-real-2"],
     });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
-      queryKey: ["/api/v1/projects/proj-real-2/alerts"],
+      queryKey: ["/api/v1/alerts/projects/proj-real-2"],
     });
     expect(showToastMock).toHaveBeenCalledWith("Analysis preview completed.");
   });

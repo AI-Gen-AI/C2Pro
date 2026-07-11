@@ -5,25 +5,25 @@
  *
  *         **C2Pro - Contract Intelligence Platform**
  *
- *         Plataforma de inteligencia contractual para proyectos de construcción e ingeniería.
+ *         Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.
  *
- *         ## Características
+ *         ## CaracterÃ­sticas
  *
- *         - 🔍 **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
- *         - 🤖 **IA Especializada**: Claude 4 entrenado en documentos de construcción
- *         - 📊 **Coherence Score**: Indicador 0-100 de alineación entre documentos
- *         - 👥 **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
- *         - 📈 **Multi-tenant**: Aislamiento completo de datos por organización
+ *         - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
+ *         - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n
+ *         - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos
+ *         - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders
+ *         - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n
  *
- *         ## Autenticación
+ *         ## AutenticaciÃ³n
  *
- *         La API usa JWT (JSON Web Tokens) para autenticación.
+ *         La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.
  *
  *         1. **Registro**: `POST /api/v1/auth/register`
  *         2. **Login**: `POST /api/v1/auth/login`
  *         3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`
  *
- *         ## Límites de Uso
+ *         ## LÃ­mites de Uso
  *
  *         - **Rate Limit**: 60 requests/minuto
  *         - **AI Budget**: $50 USD/mes (plan free)
@@ -31,9 +31,9 @@
  *
  *         ## Soporte
  *
- *         - 📧 Email: support@c2pro.app
- *         - 📖 Docs: https://docs.c2pro.app
- *         - 💬 Discord: https://discord.gg/c2pro
+ *         - ðŸ“§ Email: support@c2pro.app
+ *         - ðŸ“– Docs: https://docs.c2pro.app
+ *         - ðŸ’¬ Discord: https://discord.gg/c2pro
  *
  * OpenAPI spec version: 1.0.0
  */
@@ -51,7 +51,6 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
-  GetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet200,
   GetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet200,
   GetRecentAnalysesApiV1ObservabilityAnalysesGetParams,
   HTTPValidationError,
@@ -246,6 +245,7 @@ export function useGetSystemStatusApiV1ObservabilityStatusGet<
 
 /**
  * Retrieves a list of recent coherence analysis runs with their status and key metrics.
+ * Results are filtered by tenant.
  * @summary Get recent coherence analyses
  */
 export const getRecentAnalysesApiV1ObservabilityAnalysesGet = (
@@ -432,237 +432,6 @@ export function useGetRecentAnalysesApiV1ObservabilityAnalysesGet<
   const queryOptions =
     getGetRecentAnalysesApiV1ObservabilityAnalysesGetQueryOptions(
       params,
-      options,
-    );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-/**
- * Refers to Suite ID: TS-E2E-PER-LRG-001.
- * @summary Get performance snapshot
- */
-export const getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet =
-  (signal?: AbortSignal) => {
-    return orvalApiClient<GetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet200>(
-      {
-        url: `/api/v1/observability/observability/performance/snapshot`,
-        method: "GET",
-        signal,
-      },
-    );
-  };
-
-export const getGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetQueryKey =
-  () => {
-    return [
-      `/api/v1/observability/observability/performance/snapshot`,
-    ] as const;
-  };
-
-export const getGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetQueryOptions =
-  <
-    TData = Awaited<
-      ReturnType<
-        typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-      >
-    >,
-    TError = unknown,
-  >(options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-          >
-        >,
-        TError,
-        TData
-      >
-    >;
-  }) => {
-    const { query: queryOptions } = options ?? {};
-
-    const queryKey =
-      queryOptions?.queryKey ??
-      getGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetQueryKey();
-
-    const queryFn: QueryFunction<
-      Awaited<
-        ReturnType<
-          typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-        >
-      >
-    > = ({ signal }) =>
-      getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet(
-        signal,
-      );
-
-    return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-      Awaited<
-        ReturnType<
-          typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-        >
-      >,
-      TError,
-      TData
-    > & { queryKey: DataTag<QueryKey, TData, TError> };
-  };
-
-export type GetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetQueryResult =
-  NonNullable<
-    Awaited<
-      ReturnType<
-        typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-      >
-    >
-  >;
-export type GetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetQueryError =
-  unknown;
-
-export function useGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet<
-  TData = Awaited<
-    ReturnType<
-      typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-    >
-  >,
-  TError = unknown,
->(
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-          >
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<
-            ReturnType<
-              typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-            >
-          >,
-          TError,
-          Awaited<
-            ReturnType<
-              typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-            >
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet<
-  TData = Awaited<
-    ReturnType<
-      typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-    >
-  >,
-  TError = unknown,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-          >
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<
-            ReturnType<
-              typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-            >
-          >,
-          TError,
-          Awaited<
-            ReturnType<
-              typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-            >
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet<
-  TData = Awaited<
-    ReturnType<
-      typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-    >
-  >,
-  TError = unknown,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-          >
-        >,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-/**
- * @summary Get performance snapshot
- */
-
-export function useGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet<
-  TData = Awaited<
-    ReturnType<
-      typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-    >
-  >,
-  TError = unknown,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-          >
-        >,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetQueryOptions(
       options,
     );
 
