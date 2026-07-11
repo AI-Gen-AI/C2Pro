@@ -5,25 +5,25 @@
  *
  *         **C2Pro - Contract Intelligence Platform**
  *
- *         Plataforma de inteligencia contractual para proyectos de construcción e ingeniería.
+ *         Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.
  *
- *         ## Características
+ *         ## CaracterÃ­sticas
  *
- *         - 🔍 **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
- *         - 🤖 **IA Especializada**: Claude 4 entrenado en documentos de construcción
- *         - 📊 **Coherence Score**: Indicador 0-100 de alineación entre documentos
- *         - 👥 **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
- *         - 📈 **Multi-tenant**: Aislamiento completo de datos por organización
+ *         - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
+ *         - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n
+ *         - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos
+ *         - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders
+ *         - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n
  *
- *         ## Autenticación
+ *         ## AutenticaciÃ³n
  *
- *         La API usa JWT (JSON Web Tokens) para autenticación.
+ *         La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.
  *
  *         1. **Registro**: `POST /api/v1/auth/register`
  *         2. **Login**: `POST /api/v1/auth/login`
  *         3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`
  *
- *         ## Límites de Uso
+ *         ## LÃ­mites de Uso
  *
  *         - **Rate Limit**: 60 requests/minuto
  *         - **AI Budget**: $50 USD/mes (plan free)
@@ -31,9 +31,9 @@
  *
  *         ## Soporte
  *
- *         - 📧 Email: support@c2pro.app
- *         - 📖 Docs: https://docs.c2pro.app
- *         - 💬 Discord: https://discord.gg/c2pro
+ *         - ðŸ“§ Email: support@c2pro.app
+ *         - ðŸ“– Docs: https://docs.c2pro.app
+ *         - ðŸ’¬ Discord: https://discord.gg/c2pro
  *
  * OpenAPI spec version: 1.0.0
  */
@@ -54,10 +54,15 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  BodyReuploadDocumentFileApiV1DocumentsDocumentIdFilePatch,
   BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost,
   DocumentDetailResponse,
+  DocumentEntityResponse,
+  DocumentHistoryResponse,
   DocumentListResponse,
   DocumentQueuedResponse,
+  DocumentRelationshipExplanationResponse,
+  DocumentResponse,
   DocumentUploadResponse,
   HTTPValidationError,
   ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams,
@@ -482,6 +487,141 @@ export function useListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet<
 }
 
 /**
+ * Re-upload a document with a new file.
+ *
+ * TASK-BCK-023: Document versioning
+ * - Calculates file hash and compares with existing
+ * - Increments version if content changed
+ * - Resets status to UPLOADED for re-processing
+ * - Returns existing document if content unchanged
+ * @summary Re-upload a document file (creates new version)
+ */
+export const reuploadDocumentFileApiV1DocumentsDocumentIdFilePatch = (
+  documentId: string,
+  bodyReuploadDocumentFileApiV1DocumentsDocumentIdFilePatch: BodyReuploadDocumentFileApiV1DocumentsDocumentIdFilePatch,
+  signal?: AbortSignal,
+) => {
+  const formData = new FormData();
+  formData.append(
+    `file`,
+    bodyReuploadDocumentFileApiV1DocumentsDocumentIdFilePatch.file,
+  );
+
+  return orvalApiClient<DocumentResponse>({
+    url: `/api/v1/documents/${documentId}/file`,
+    method: "PATCH",
+    headers: { "Content-Type": "multipart/form-data" },
+    data: formData,
+    signal,
+  });
+};
+
+export const getReuploadDocumentFileApiV1DocumentsDocumentIdFilePatchMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof reuploadDocumentFileApiV1DocumentsDocumentIdFilePatch>
+      >,
+      TError,
+      {
+        documentId: string;
+        data: BodyReuploadDocumentFileApiV1DocumentsDocumentIdFilePatch;
+      },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof reuploadDocumentFileApiV1DocumentsDocumentIdFilePatch>
+    >,
+    TError,
+    {
+      documentId: string;
+      data: BodyReuploadDocumentFileApiV1DocumentsDocumentIdFilePatch;
+    },
+    TContext
+  > => {
+    const mutationKey = [
+      "reuploadDocumentFileApiV1DocumentsDocumentIdFilePatch",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof reuploadDocumentFileApiV1DocumentsDocumentIdFilePatch>
+      >,
+      {
+        documentId: string;
+        data: BodyReuploadDocumentFileApiV1DocumentsDocumentIdFilePatch;
+      }
+    > = (props) => {
+      const { documentId, data } = props ?? {};
+
+      return reuploadDocumentFileApiV1DocumentsDocumentIdFilePatch(
+        documentId,
+        data,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type ReuploadDocumentFileApiV1DocumentsDocumentIdFilePatchMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof reuploadDocumentFileApiV1DocumentsDocumentIdFilePatch>
+    >
+  >;
+export type ReuploadDocumentFileApiV1DocumentsDocumentIdFilePatchMutationBody =
+  BodyReuploadDocumentFileApiV1DocumentsDocumentIdFilePatch;
+export type ReuploadDocumentFileApiV1DocumentsDocumentIdFilePatchMutationError =
+  void | HTTPValidationError;
+
+/**
+ * @summary Re-upload a document file (creates new version)
+ */
+export const useReuploadDocumentFileApiV1DocumentsDocumentIdFilePatch = <
+  TError = void | HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof reuploadDocumentFileApiV1DocumentsDocumentIdFilePatch>
+      >,
+      TError,
+      {
+        documentId: string;
+        data: BodyReuploadDocumentFileApiV1DocumentsDocumentIdFilePatch;
+      },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof reuploadDocumentFileApiV1DocumentsDocumentIdFilePatch>
+  >,
+  TError,
+  {
+    documentId: string;
+    data: BodyReuploadDocumentFileApiV1DocumentsDocumentIdFilePatch;
+  },
+  TContext
+> => {
+  return useMutation(
+    getReuploadDocumentFileApiV1DocumentsDocumentIdFilePatchMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
+/**
  * @summary Get document details by ID
  */
 export const getDocumentEndpointApiV1DocumentsDocumentIdGet = (
@@ -781,6 +921,738 @@ export const useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete = <
   );
 };
 /**
+ * @summary Get persisted evidence history for a document
+ */
+export const getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet = (
+  documentId: string,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<DocumentHistoryResponse>({
+    url: `/api/v1/documents/${documentId}/history`,
+    method: "GET",
+    signal,
+  });
+};
+
+export const getGetDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGetQueryKey =
+  (documentId: string) => {
+    return [`/api/v1/documents/${documentId}/history`] as const;
+  };
+
+export const getGetDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+      >
+    >,
+    TError = void | HTTPValidationError,
+  >(
+    documentId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGetQueryKey(
+        documentId,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+        >
+      >
+    > = ({ signal }) =>
+      getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet(
+        documentId,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: documentId !== null && documentId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type GetDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+      >
+    >
+  >;
+export type GetDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGetQueryError =
+  void | HTTPValidationError;
+
+export function useGetDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get persisted evidence history for a document
+ */
+
+export function useGetDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGetQueryOptions(
+      documentId,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * @summary Get a grounded relationship explanation for a document
+ */
+export const getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet =
+  (documentId: string, signal?: AbortSignal) => {
+    return orvalApiClient<DocumentRelationshipExplanationResponse>({
+      url: `/api/v1/documents/${documentId}/relationship-explanation`,
+      method: "GET",
+      signal,
+    });
+  };
+
+export const getGetDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGetQueryKey =
+  (documentId: string) => {
+    return [
+      `/api/v1/documents/${documentId}/relationship-explanation`,
+    ] as const;
+  };
+
+export const getGetDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+      >
+    >,
+    TError = void | HTTPValidationError,
+  >(
+    documentId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGetQueryKey(
+        documentId,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+        >
+      >
+    > = ({ signal }) =>
+      getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet(
+        documentId,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: documentId !== null && documentId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type GetDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+      >
+    >
+  >;
+export type GetDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGetQueryError =
+  void | HTTPValidationError;
+
+export function useGetDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get a grounded relationship explanation for a document
+ */
+
+export function useGetDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetDocumentRelationshipExplanationEndpointApiV1DocumentsDocumentIdRelationshipExplanationGetQueryOptions(
+      documentId,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * @summary Get extracted entities for a document
+ */
+export const getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet = (
+  documentId: string,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<DocumentEntityResponse[]>({
+    url: `/api/v1/documents/${documentId}/entities`,
+    method: "GET",
+    signal,
+  });
+};
+
+export const getGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetQueryKey =
+  (documentId: string) => {
+    return [`/api/v1/documents/${documentId}/entities`] as const;
+  };
+
+export const getGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+      >
+    >,
+    TError = void | HTTPValidationError,
+  >(
+    documentId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetQueryKey(
+        documentId,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+        >
+      >
+    > = ({ signal }) =>
+      getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet(
+        documentId,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: documentId !== null && documentId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type GetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+      >
+    >
+  >;
+export type GetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetQueryError =
+  void | HTTPValidationError;
+
+export function useGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get extracted entities for a document
+ */
+
+export function useGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetQueryOptions(
+      documentId,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
  * @summary Download document file by ID
  */
 export const downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet = (
@@ -1027,7 +1899,7 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
 /**
  * @summary Parse a document by ID
  */
-export const parseDocumentEndpointCanonical = (
+export const parseDocumentEndpointApiV1DocumentsDocumentIdParsePost = (
   documentId: string,
   signal?: AbortSignal,
 ) => {
@@ -1038,60 +1910,77 @@ export const parseDocumentEndpointCanonical = (
   });
 };
 
-export const getParseDocumentEndpointCanonicalMutationOptions = <
-  TError = void | HTTPValidationError,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>,
+export const getParseDocumentEndpointApiV1DocumentsDocumentIdParsePostMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof parseDocumentEndpointApiV1DocumentsDocumentIdParsePost
+        >
+      >,
+      TError,
+      { documentId: string },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof parseDocumentEndpointApiV1DocumentsDocumentIdParsePost>
+    >,
     TError,
     { documentId: string },
     TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>,
-  TError,
-  { documentId: string },
-  TContext
-> => {
-  const mutationKey = ["parseDocumentEndpointCanonical"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
+  > => {
+    const mutationKey = [
+      "parseDocumentEndpointApiV1DocumentsDocumentIdParsePost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
 
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>,
-    { documentId: string }
-  > = (props) => {
-    const { documentId } = props ?? {};
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof parseDocumentEndpointApiV1DocumentsDocumentIdParsePost
+        >
+      >,
+      { documentId: string }
+    > = (props) => {
+      const { documentId } = props ?? {};
 
-    return parseDocumentEndpointCanonical(documentId);
+      return parseDocumentEndpointApiV1DocumentsDocumentIdParsePost(documentId);
+    };
+
+    return { mutationFn, ...mutationOptions };
   };
 
-  return { mutationFn, ...mutationOptions };
-};
+export type ParseDocumentEndpointApiV1DocumentsDocumentIdParsePostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof parseDocumentEndpointApiV1DocumentsDocumentIdParsePost>
+    >
+  >;
 
-export type ParseDocumentEndpointCanonicalMutationResult = NonNullable<
-  Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>
->;
-
-export type ParseDocumentEndpointCanonicalMutationError =
+export type ParseDocumentEndpointApiV1DocumentsDocumentIdParsePostMutationError =
   void | HTTPValidationError;
 
 /**
  * @summary Parse a document by ID
  */
-export const useParseDocumentEndpointCanonical = <
+export const useParseDocumentEndpointApiV1DocumentsDocumentIdParsePost = <
   TError = void | HTTPValidationError,
   TContext = unknown,
 >(
   options?: {
     mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>,
+      Awaited<
+        ReturnType<
+          typeof parseDocumentEndpointApiV1DocumentsDocumentIdParsePost
+        >
+      >,
       TError,
       { documentId: string },
       TContext
@@ -1099,16 +1988,134 @@ export const useParseDocumentEndpointCanonical = <
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
-  Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>,
+  Awaited<
+    ReturnType<typeof parseDocumentEndpointApiV1DocumentsDocumentIdParsePost>
+  >,
   TError,
   { documentId: string },
   TContext
 > => {
   return useMutation(
-    getParseDocumentEndpointCanonicalMutationOptions(options),
+    getParseDocumentEndpointApiV1DocumentsDocumentIdParsePostMutationOptions(
+      options,
+    ),
     queryClient,
   );
 };
+/**
+ * Re-dispatch a Celery processing task for a document stuck in queued, uploaded,
+ * or error state. Resets the document status to UPLOADED and enqueues a fresh
+ * parse + analysis run.
+ * @summary Re-trigger async processing for a stuck or errored document
+ */
+export const reprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPost =
+  (projectId: string, documentId: string, signal?: AbortSignal) => {
+    return orvalApiClient<DocumentQueuedResponse>({
+      url: `/api/v1/projects/${projectId}/documents/${documentId}/reprocess`,
+      method: "POST",
+      signal,
+    });
+  };
+
+export const getReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof reprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPost
+        >
+      >,
+      TError,
+      { projectId: string; documentId: string },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof reprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPost
+      >
+    >,
+    TError,
+    { projectId: string; documentId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      "reprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof reprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPost
+        >
+      >,
+      { projectId: string; documentId: string }
+    > = (props) => {
+      const { projectId, documentId } = props ?? {};
+
+      return reprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPost(
+        projectId,
+        documentId,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof reprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPost
+      >
+    >
+  >;
+
+export type ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostMutationError =
+  void | HTTPValidationError;
+
+/**
+ * @summary Re-trigger async processing for a stuck or errored document
+ */
+export const useReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPost =
+  <TError = void | HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof reprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPost
+          >
+        >,
+        TError,
+        { projectId: string; documentId: string },
+        TContext
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof reprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPost
+      >
+    >,
+    TError,
+    { projectId: string; documentId: string },
+    TContext
+  > => {
+    return useMutation(
+      getReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };
 /**
  * @summary Ask a question about project documents (RAG)
  */

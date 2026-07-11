@@ -5,25 +5,25 @@
  *
  *         **C2Pro - Contract Intelligence Platform**
  *
- *         Plataforma de inteligencia contractual para proyectos de construcción e ingeniería.
+ *         Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.
  *
- *         ## Características
+ *         ## CaracterÃ­sticas
  *
- *         - 🔍 **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
- *         - 🤖 **IA Especializada**: Claude 4 entrenado en documentos de construcción
- *         - 📊 **Coherence Score**: Indicador 0-100 de alineación entre documentos
- *         - 👥 **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
- *         - 📈 **Multi-tenant**: Aislamiento completo de datos por organización
+ *         - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
+ *         - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n
+ *         - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos
+ *         - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders
+ *         - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n
  *
- *         ## Autenticación
+ *         ## AutenticaciÃ³n
  *
- *         La API usa JWT (JSON Web Tokens) para autenticación.
+ *         La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.
  *
  *         1. **Registro**: `POST /api/v1/auth/register`
  *         2. **Login**: `POST /api/v1/auth/login`
  *         3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`
  *
- *         ## Límites de Uso
+ *         ## LÃ­mites de Uso
  *
  *         - **Rate Limit**: 60 requests/minuto
  *         - **AI Budget**: $50 USD/mes (plan free)
@@ -31,9 +31,9 @@
  *
  *         ## Soporte
  *
- *         - 📧 Email: support@c2pro.app
- *         - 📖 Docs: https://docs.c2pro.app
- *         - 💬 Discord: https://discord.gg/c2pro
+ *         - ðŸ“§ Email: support@c2pro.app
+ *         - ðŸ“– Docs: https://docs.c2pro.app
+ *         - ðŸ’¬ Discord: https://discord.gg/c2pro
  *
  * OpenAPI spec version: 1.0.0
  */
@@ -59,6 +59,8 @@ import type {
   HTTPValidationError,
   ListReviewQueueApiV1HitlQueueGetParams,
   RejectRequest,
+  ResumeWorkflowRequest,
+  ResumeWorkflowResponse,
   ReviewItemResponse,
   ReviewQueueResponse,
   RouteForReviewRequest,
@@ -846,6 +848,108 @@ export const useCheckAndEscalateApiV1HitlEscalatePost = <
 > => {
   return useMutation(
     getCheckAndEscalateApiV1HitlEscalatePostMutationOptions(options),
+    queryClient,
+  );
+};
+/**
+ * Resume a LangGraph workflow after HITL review decision.
+ *
+ *     This endpoint handles both approval and rejection decisions from human reviewers:
+ *
+ *     - **Approve**: The workflow resumes from the interrupt point with the approved status.
+ *       Human feedback is injected into the workflow state and execution continues.
+ *
+ *     - **Reject**: The workflow terminates gracefully. The rejection reason is stored
+ *       for audit purposes but no further workflow steps are executed.
+ *
+ *     **Prerequisites**:
+ *     - Review item must exist and be in `PENDING_REVIEW_REQUIRED` or `PENDING_REVIEW_CONDITIONAL` status
+ *     - Review item must have a valid `checkpoint_id` and `thread_id` from the interrupted workflow
+ *
+ *     **Metrics**: This endpoint emits Prometheus metrics for monitoring:
+ *     - `c2pro_hitl_resume_total` - Total resume attempts by decision and status
+ *     - `c2pro_hitl_resume_latency_seconds` - Resume operation latency
+ *     - `c2pro_hitl_resume_errors_total` - Errors by type
+ * @summary Resume workflow after HITL approval/rejection
+ */
+export const resumeHitlWorkflow = (
+  reviewId: string,
+  resumeWorkflowRequest: ResumeWorkflowRequest,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<ResumeWorkflowResponse>({
+    url: `/api/v1/hitl/resume/${reviewId}`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: resumeWorkflowRequest,
+    signal,
+  });
+};
+
+export const getResumeHitlWorkflowMutationOptions = <
+  TError = void,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resumeHitlWorkflow>>,
+    TError,
+    { reviewId: string; data: ResumeWorkflowRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resumeHitlWorkflow>>,
+  TError,
+  { reviewId: string; data: ResumeWorkflowRequest },
+  TContext
+> => {
+  const mutationKey = ["resumeHitlWorkflow"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resumeHitlWorkflow>>,
+    { reviewId: string; data: ResumeWorkflowRequest }
+  > = (props) => {
+    const { reviewId, data } = props ?? {};
+
+    return resumeHitlWorkflow(reviewId, data);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResumeHitlWorkflowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resumeHitlWorkflow>>
+>;
+export type ResumeHitlWorkflowMutationBody = ResumeWorkflowRequest;
+export type ResumeHitlWorkflowMutationError = void;
+
+/**
+ * @summary Resume workflow after HITL approval/rejection
+ */
+export const useResumeHitlWorkflow = <TError = void, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof resumeHitlWorkflow>>,
+      TError,
+      { reviewId: string; data: ResumeWorkflowRequest },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof resumeHitlWorkflow>>,
+  TError,
+  { reviewId: string; data: ResumeWorkflowRequest },
+  TContext
+> => {
+  return useMutation(
+    getResumeHitlWorkflowMutationOptions(options),
     queryClient,
   );
 };

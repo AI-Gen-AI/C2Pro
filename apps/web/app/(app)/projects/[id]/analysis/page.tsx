@@ -9,8 +9,9 @@ import { AnalysisProgressTracker } from "@/components/features/analysis/Analysis
 import { deriveTripletChecklist } from "@/components/features/documents/TripletChecklist";
 import { useProjectCoherenceActions } from "@/hooks/useProjectCoherenceActions";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
-import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from "@/lib/api/generated/alerts/alerts";
+import { useListProjectAlertsApiV1AlertsProjectsProjectIdGet } from "@/lib/api/generated/alerts/alerts";
 import { useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet } from "@/lib/api/generated/coherence-dashboard/coherence-dashboard";
+import type { AlertResponse } from "@/lib/api/generated/models";
 
 type DashboardExtras = {
   score_version?: unknown;
@@ -65,7 +66,7 @@ export default function AnalysisPage() {
     data: alertsResponse,
     isLoading: alertsLoading,
     error: alertsError,
-  } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id, undefined);
+  } = useListProjectAlertsApiV1AlertsProjectsProjectIdGet(id, undefined);
   const { documents } = useProjectDocuments(id);
   const { rerunAnalysis, isRerunningAnalysis } = useProjectCoherenceActions(id);
   const triplet = deriveTripletChecklist(documents);
@@ -87,7 +88,7 @@ export default function AnalysisPage() {
   }
 
   const alerts = alertsResponse?.items ?? [];
-  const openAlerts = alerts.filter((alert) => alert.status === "open");
+  const openAlerts = alerts.filter((alert: AlertResponse) => alert.status === "open");
   const coherenceScore = numberValue(dashboard.coherence_score);
   const documentCount = numberValue(dashboard.document_count);
   const subScores = objectValue(dashboard.sub_scores);
@@ -104,7 +105,7 @@ export default function AnalysisPage() {
   const budgetValue = budgetScore === null ? "—" : String(budgetScore);
   const budgetTitle =
     budgetScore === null ? "Requires budget document" : undefined;
-  const recentAlerts = openAlerts.slice(0, 3).map((alert) => ({
+  const recentAlerts = openAlerts.slice(0, 3).map((alert: AlertResponse) => ({
     severity: alert.severity,
     title: alert.message.split(" — ")[0],
   }));

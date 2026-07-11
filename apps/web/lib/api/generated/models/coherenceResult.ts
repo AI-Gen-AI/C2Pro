@@ -5,25 +5,25 @@
  *
  *         **C2Pro - Contract Intelligence Platform**
  *
- *         Plataforma de inteligencia contractual para proyectos de construcción e ingeniería.
+ *         Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.
  *
- *         ## Características
+ *         ## CaracterÃ­sticas
  *
- *         - 🔍 **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
- *         - 🤖 **IA Especializada**: Claude 4 entrenado en documentos de construcción
- *         - 📊 **Coherence Score**: Indicador 0-100 de alineación entre documentos
- *         - 👥 **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
- *         - 📈 **Multi-tenant**: Aislamiento completo de datos por organización
+ *         - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
+ *         - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n
+ *         - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos
+ *         - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders
+ *         - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n
  *
- *         ## Autenticación
+ *         ## AutenticaciÃ³n
  *
- *         La API usa JWT (JSON Web Tokens) para autenticación.
+ *         La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.
  *
  *         1. **Registro**: `POST /api/v1/auth/register`
  *         2. **Login**: `POST /api/v1/auth/login`
  *         3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`
  *
- *         ## Límites de Uso
+ *         ## LÃ­mites de Uso
  *
  *         - **Rate Limit**: 60 requests/minuto
  *         - **AI Budget**: $50 USD/mes (plan free)
@@ -31,25 +31,32 @@
  *
  *         ## Soporte
  *
- *         - 📧 Email: support@c2pro.app
- *         - 📖 Docs: https://docs.c2pro.app
- *         - 💬 Discord: https://discord.gg/c2pro
+ *         - ðŸ“§ Email: support@c2pro.app
+ *         - ðŸ“– Docs: https://docs.c2pro.app
+ *         - ðŸ’¬ Discord: https://discord.gg/c2pro
  *
  * OpenAPI spec version: 1.0.0
  */
 import type { Alert } from "./alert";
 import type { CategoryBreakdown } from "./categoryBreakdown";
+import type { CoherenceResultScoreVersion } from "./coherenceResultScoreVersion";
 
 /**
  * Represents the complete result of a coherence evaluation, including alerts and the final score.
  */
 export interface CoherenceResult {
-  /** The overall calculated coherence score for the project. */
-  overall_score: number;
+  /** The overall calculated coherence score for the project, or null when evidence is insufficient. */
+  overall_score: number | null;
   /** List of alerts generated during the evaluation. */
   alerts: Alert[];
   /** Breakdown of the score by alert category. */
   category_breakdown?: CategoryBreakdown[];
   /** Timestamp when the score was calculated. */
   calculated_at?: string;
+  /** Immutable scoring algorithm version used for this result. */
+  score_version?: CoherenceResultScoreVersion;
+  /** Machine-readable reason when a score is unavailable or version-specific handling applies. */
+  score_reason?: string | null;
+  /** Dimensions that prevented a complete score, when applicable. */
+  score_missing_dimensions?: string[] | null;
 }

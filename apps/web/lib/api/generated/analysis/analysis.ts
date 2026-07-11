@@ -5,25 +5,25 @@
  *
  *         **C2Pro - Contract Intelligence Platform**
  *
- *         Plataforma de inteligencia contractual para proyectos de construcción e ingeniería.
+ *         Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.
  *
- *         ## Características
+ *         ## CaracterÃ­sticas
  *
- *         - 🔍 **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
- *         - 🤖 **IA Especializada**: Claude 4 entrenado en documentos de construcción
- *         - 📊 **Coherence Score**: Indicador 0-100 de alineación entre documentos
- *         - 👥 **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
- *         - 📈 **Multi-tenant**: Aislamiento completo de datos por organización
+ *         - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
+ *         - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n
+ *         - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos
+ *         - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders
+ *         - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n
  *
- *         ## Autenticación
+ *         ## AutenticaciÃ³n
  *
- *         La API usa JWT (JSON Web Tokens) para autenticación.
+ *         La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.
  *
  *         1. **Registro**: `POST /api/v1/auth/register`
  *         2. **Login**: `POST /api/v1/auth/login`
  *         3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`
  *
- *         ## Límites de Uso
+ *         ## LÃ­mites de Uso
  *
  *         - **Rate Limit**: 60 requests/minuto
  *         - **AI Budget**: $50 USD/mes (plan free)
@@ -31,9 +31,9 @@
  *
  *         ## Soporte
  *
- *         - 📧 Email: support@c2pro.app
- *         - 📖 Docs: https://docs.c2pro.app
- *         - 💬 Discord: https://discord.gg/c2pro
+ *         - ðŸ“§ Email: support@c2pro.app
+ *         - ðŸ“– Docs: https://docs.c2pro.app
+ *         - ðŸ’¬ Discord: https://discord.gg/c2pro
  *
  * OpenAPI spec version: 1.0.0
  */
@@ -57,7 +57,6 @@ import type {
   AnalyzeRequest,
   AnalyzeResponse,
   HTTPValidationError,
-  StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
 } from "../models";
 
 import { orvalApiClient } from "../../client";
@@ -81,9 +80,10 @@ const withQueryKey = <T extends object, K>(
 };
 
 /**
- * @summary Analyze Document
+ * Runs a synchronous non-persisting analysis preview. This endpoint may stop at critique/HITL and does not create Analysis rows, alerts, or coherence records. Use the document reprocess/full pipeline path for persisted analysis and alert generation.
+ * @summary Preview document analysis without persistence
  */
-export const analyzeDocumentApiV1AnalyzePost = (
+export const analyzeDocumentApiV1AnalysisAnalyzePost = (
   analyzeRequest: AnalyzeRequest,
   signal?: AbortSignal,
 ) => {
@@ -96,23 +96,23 @@ export const analyzeDocumentApiV1AnalyzePost = (
   });
 };
 
-export const getAnalyzeDocumentApiV1AnalyzePostMutationOptions = <
+export const getAnalyzeDocumentApiV1AnalysisAnalyzePostMutationOptions = <
   TError = void | HTTPValidationError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
+    Awaited<ReturnType<typeof analyzeDocumentApiV1AnalysisAnalyzePost>>,
     TError,
     { data: AnalyzeRequest },
     TContext
   >;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
+  Awaited<ReturnType<typeof analyzeDocumentApiV1AnalysisAnalyzePost>>,
   TError,
   { data: AnalyzeRequest },
   TContext
 > => {
-  const mutationKey = ["analyzeDocumentApiV1AnalyzePost"];
+  const mutationKey = ["analyzeDocumentApiV1AnalysisAnalyzePost"];
   const { mutation: mutationOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -122,34 +122,35 @@ export const getAnalyzeDocumentApiV1AnalyzePostMutationOptions = <
     : { mutation: { mutationKey } };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
+    Awaited<ReturnType<typeof analyzeDocumentApiV1AnalysisAnalyzePost>>,
     { data: AnalyzeRequest }
   > = (props) => {
     const { data } = props ?? {};
 
-    return analyzeDocumentApiV1AnalyzePost(data);
+    return analyzeDocumentApiV1AnalysisAnalyzePost(data);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type AnalyzeDocumentApiV1AnalyzePostMutationResult = NonNullable<
-  Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>
+export type AnalyzeDocumentApiV1AnalysisAnalyzePostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof analyzeDocumentApiV1AnalysisAnalyzePost>>
 >;
-export type AnalyzeDocumentApiV1AnalyzePostMutationBody = AnalyzeRequest;
-export type AnalyzeDocumentApiV1AnalyzePostMutationError =
+export type AnalyzeDocumentApiV1AnalysisAnalyzePostMutationBody =
+  AnalyzeRequest;
+export type AnalyzeDocumentApiV1AnalysisAnalyzePostMutationError =
   void | HTTPValidationError;
 
 /**
- * @summary Analyze Document
+ * @summary Preview document analysis without persistence
  */
-export const useAnalyzeDocumentApiV1AnalyzePost = <
+export const useAnalyzeDocumentApiV1AnalysisAnalyzePost = <
   TError = void | HTTPValidationError,
   TContext = unknown,
 >(
   options?: {
     mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
+      Awaited<ReturnType<typeof analyzeDocumentApiV1AnalysisAnalyzePost>>,
       TError,
       { data: AnalyzeRequest },
       TContext
@@ -157,43 +158,31 @@ export const useAnalyzeDocumentApiV1AnalyzePost = <
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
-  Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
+  Awaited<ReturnType<typeof analyzeDocumentApiV1AnalysisAnalyzePost>>,
   TError,
   { data: AnalyzeRequest },
   TContext
 > => {
   return useMutation(
-    getAnalyzeDocumentApiV1AnalyzePostMutationOptions(options),
+    getAnalyzeDocumentApiV1AnalysisAnalyzePostMutationOptions(options),
     queryClient,
   );
 };
 /**
- * SSE endpoint that streams real-time processing stage updates and completion status for a project.
- * @summary Stream Project Processing Progress
+ * @summary Stream Project Processing
  */
 export const streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet =
-  (
-    projectId: string,
-    params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
-    signal?: AbortSignal,
-  ) => {
-    return orvalApiClient<string>({
+  (projectId: string, signal?: AbortSignal) => {
+    return orvalApiClient<unknown>({
       url: `/api/v1/analysis/projects/${projectId}/process/stream`,
       method: "GET",
-      params,
       signal,
     });
   };
 
 export const getStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetQueryKey =
-  (
-    projectId: string,
-    params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
-  ) => {
-    return [
-      `/api/v1/analysis/projects/${projectId}/process/stream`,
-      ...(params ? [params] : []),
-    ] as const;
+  (projectId: string) => {
+    return [`/api/v1/analysis/projects/${projectId}/process/stream`] as const;
   };
 
 export const getStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetQueryOptions =
@@ -206,7 +195,6 @@ export const getStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStre
     TError = void | HTTPValidationError,
   >(
     projectId: string,
-    params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
     options?: {
       query?: Partial<
         UseQueryOptions<
@@ -227,7 +215,6 @@ export const getStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStre
       queryOptions?.queryKey ??
       getStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetQueryKey(
         projectId,
-        params,
       );
 
     const queryFn: QueryFunction<
@@ -239,7 +226,6 @@ export const getStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStre
     > = ({ signal }) =>
       streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet(
         projectId,
-        params,
         signal,
       );
 
@@ -279,9 +265,6 @@ export function useStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessS
   TError = void | HTTPValidationError,
 >(
   projectId: string,
-  params:
-    | undefined
-    | StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -324,7 +307,6 @@ export function useStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessS
   TError = void | HTTPValidationError,
 >(
   projectId: string,
-  params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -367,7 +349,6 @@ export function useStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessS
   TError = void | HTTPValidationError,
 >(
   projectId: string,
-  params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -386,7 +367,7 @@ export function useStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessS
   queryKey: DataTag<QueryKey, TData, TError>;
 };
 /**
- * @summary Stream Project Processing Progress
+ * @summary Stream Project Processing
  */
 
 export function useStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet<
@@ -398,7 +379,6 @@ export function useStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessS
   TError = void | HTTPValidationError,
 >(
   projectId: string,
-  params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -419,7 +399,6 @@ export function useStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessS
   const queryOptions =
     getStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetQueryOptions(
       projectId,
-      params,
       options,
     );
 

@@ -5,25 +5,25 @@
  *
  *         **C2Pro - Contract Intelligence Platform**
  *
- *         Plataforma de inteligencia contractual para proyectos de construcción e ingeniería.
+ *         Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.
  *
- *         ## Características
+ *         ## CaracterÃ­sticas
  *
- *         - 🔍 **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
- *         - 🤖 **IA Especializada**: Claude 4 entrenado en documentos de construcción
- *         - 📊 **Coherence Score**: Indicador 0-100 de alineación entre documentos
- *         - 👥 **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
- *         - 📈 **Multi-tenant**: Aislamiento completo de datos por organización
+ *         - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
+ *         - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n
+ *         - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos
+ *         - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders
+ *         - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n
  *
- *         ## Autenticación
+ *         ## AutenticaciÃ³n
  *
- *         La API usa JWT (JSON Web Tokens) para autenticación.
+ *         La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.
  *
  *         1. **Registro**: `POST /api/v1/auth/register`
  *         2. **Login**: `POST /api/v1/auth/login`
  *         3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`
  *
- *         ## Límites de Uso
+ *         ## LÃ­mites de Uso
  *
  *         - **Rate Limit**: 60 requests/minuto
  *         - **AI Budget**: $50 USD/mes (plan free)
@@ -31,9 +31,9 @@
  *
  *         ## Soporte
  *
- *         - 📧 Email: support@c2pro.app
- *         - 📖 Docs: https://docs.c2pro.app
- *         - 💬 Discord: https://discord.gg/c2pro
+ *         - ðŸ“§ Email: support@c2pro.app
+ *         - ðŸ“– Docs: https://docs.c2pro.app
+ *         - ðŸ’¬ Discord: https://discord.gg/c2pro
  *
  * OpenAPI spec version: 1.0.0
  */
@@ -66,6 +66,7 @@ import type {
   ListProjectsApiV1ProjectsGetParams,
   ProjectCreateRequest,
   ProjectListResponse,
+  ProjectQuickViewSummaryResponse,
   ProjectResponse,
   ProjectUpdateRequest,
   UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchParams,
@@ -1081,6 +1082,213 @@ export const useDeleteProjectApiV1ProjectsProjectIdDelete = <
     queryClient,
   );
 };
+/**
+ * Return a compact tenant-scoped project summary for the frontend quick-view sheet.
+ * @summary Get Project Summary
+ */
+export const getProjectSummaryApiV1ProjectsProjectIdSummaryGet = (
+  projectId: string,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<ProjectQuickViewSummaryResponse>({
+    url: `/api/v1/projects/${projectId}/summary`,
+    method: "GET",
+    signal,
+  });
+};
+
+export const getGetProjectSummaryApiV1ProjectsProjectIdSummaryGetQueryKey = (
+  projectId: string,
+) => {
+  return [`/api/v1/projects/${projectId}/summary`] as const;
+};
+
+export const getGetProjectSummaryApiV1ProjectsProjectIdSummaryGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+    >,
+    TError = HTTPValidationError,
+  >(
+    projectId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+          >,
+          TError,
+          TData
+        >
+      >;
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetProjectSummaryApiV1ProjectsProjectIdSummaryGetQueryKey(projectId);
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+      >
+    > = ({ signal }) =>
+      getProjectSummaryApiV1ProjectsProjectIdSummaryGet(projectId, signal);
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: projectId !== null && projectId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type GetProjectSummaryApiV1ProjectsProjectIdSummaryGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+    >
+  >;
+export type GetProjectSummaryApiV1ProjectsProjectIdSummaryGetQueryError =
+  HTTPValidationError;
+
+export function useGetProjectSummaryApiV1ProjectsProjectIdSummaryGet<
+  TData = Awaited<
+    ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetProjectSummaryApiV1ProjectsProjectIdSummaryGet<
+  TData = Awaited<
+    ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetProjectSummaryApiV1ProjectsProjectIdSummaryGet<
+  TData = Awaited<
+    ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get Project Summary
+ */
+
+export function useGetProjectSummaryApiV1ProjectsProjectIdSummaryGet<
+  TData = Awaited<
+    ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getProjectSummaryApiV1ProjectsProjectIdSummaryGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetProjectSummaryApiV1ProjectsProjectIdSummaryGetQueryOptions(
+      projectId,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * Update only project status.
  * @summary Update Project Status

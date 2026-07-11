@@ -5,25 +5,25 @@
  *
  *         **C2Pro - Contract Intelligence Platform**
  *
- *         Plataforma de inteligencia contractual para proyectos de construcción e ingeniería.
+ *         Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.
  *
- *         ## Características
+ *         ## CaracterÃ­sticas
  *
- *         - 🔍 **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
- *         - 🤖 **IA Especializada**: Claude 4 entrenado en documentos de construcción
- *         - 📊 **Coherence Score**: Indicador 0-100 de alineación entre documentos
- *         - 👥 **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
- *         - 📈 **Multi-tenant**: Aislamiento completo de datos por organización
+ *         - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
+ *         - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n
+ *         - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos
+ *         - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders
+ *         - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n
  *
- *         ## Autenticación
+ *         ## AutenticaciÃ³n
  *
- *         La API usa JWT (JSON Web Tokens) para autenticación.
+ *         La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.
  *
  *         1. **Registro**: `POST /api/v1/auth/register`
  *         2. **Login**: `POST /api/v1/auth/login`
  *         3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`
  *
- *         ## Límites de Uso
+ *         ## LÃ­mites de Uso
  *
  *         - **Rate Limit**: 60 requests/minuto
  *         - **AI Budget**: $50 USD/mes (plan free)
@@ -31,18 +31,26 @@
  *
  *         ## Soporte
  *
- *         - 📧 Email: support@c2pro.app
- *         - 📖 Docs: https://docs.c2pro.app
- *         - 💬 Discord: https://discord.gg/c2pro
+ *         - ðŸ“§ Email: support@c2pro.app
+ *         - ðŸ“– Docs: https://docs.c2pro.app
+ *         - ðŸ’¬ Discord: https://discord.gg/c2pro
  *
  * OpenAPI spec version: 1.0.0
  */
 
+export * from "./acceptLegalDisclaimerApiV1ProjectsProjectIdGatesGate8DisclaimerAcceptPost200";
+export * from "./aIFeedbackCreate";
+export * from "./aIFeedbackResponse";
 export * from "./alert";
 export * from "./alertCategory";
+export * from "./alertHistoryResponse";
+export * from "./alertHistoryResponseItemsItem";
 export * from "./alertListResponse";
 export * from "./alertResponse";
 export * from "./alertResponseAffectedEntities";
+export * from "./alertRuleConfigPayload";
+export * from "./alertSubscriptionConfigPayload";
+export * from "./alertWorkspaceSettingsPayload";
 export * from "./analysisStatus";
 export * from "./analyzeRequest";
 export * from "./analyzeResponse";
@@ -53,19 +61,16 @@ export * from "./approvalReview";
 export * from "./approvalReviewCorrectionData";
 export * from "./approvalStatus";
 export * from "./approveRequest";
-export * from "./attachEvidenceApiV1AlertsAlertIdEvidencePost201";
-export * from "./attachEvidenceRequest";
-export * from "./attachEvidenceRequestType";
 export * from "./authErrorResponse";
+export * from "./bodyReuploadDocumentFileApiV1DocumentsDocumentIdFilePatch";
 export * from "./bodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost";
 export * from "./budgetInput";
-export * from "./bulkDeleteAlertsApiV1AlertsBulkDeletePost200";
-export * from "./bulkDeleteRequest";
 export * from "./bulkDocumentItem";
 export * from "./bulkDocumentRequest";
 export * from "./bulkExportRequest";
 export * from "./bulkExportRequestFormat";
-export * from "./bulkReviewAlertsApiV1AlertsBulkReviewPost200";
+export * from "./bulkOperationResponse";
+export * from "./bulkResolveRequest";
 export * from "./bulkReviewRequest";
 export * from "./bulkReviewRequestDecision";
 export * from "./bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost202";
@@ -73,63 +78,131 @@ export * from "./bulkWBSItem";
 export * from "./bulkWBSRequest";
 export * from "./categoryBreakdown";
 export * from "./categoryBreakdownCategory";
+export * from "./categoryStatus";
+export * from "./categoryV2";
+export * from "./categoryV2CalculationMetadata";
+export * from "./categoryV2DetectedConflictsItem";
 export * from "./checkAndEscalateApiV1HitlEscalatePost200";
 export * from "./clause";
 export * from "./clauseData";
+export * from "./coherenceEvaluateRequest";
 export * from "./coherenceResult";
+export * from "./coherenceResultScoreVersion";
+export * from "./coherenceV2Payload";
+export * from "./comparePromptVersionsApiV1AiAnalyticsComparisonGet200";
+export * from "./comparePromptVersionsApiV1AiAnalyticsComparisonGetParams";
+export * from "./consentCategories";
+export * from "./cookieConsentCreateRequest";
+export * from "./cookieConsentUpdateRequest";
 export * from "./createAlertRequest";
 export * from "./createAlertRequestAffectedEntities";
 export * from "./createAlertRequestCategory";
 export * from "./createAlertRequestSeverity";
+export * from "./createCookieConsentApiV1ComplianceCookiesConsentPost200";
 export * from "./createWBSItemInput";
+export * from "./dashboardSummary";
+export * from "./dashboardSummaryScoreVersion";
+export * from "./dashboardSummarySubScores";
+export * from "./dashboardSummaryWeightsUsed";
 export * from "./deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams";
+export * from "./disclaimerAcceptRequest";
+export * from "./dLQEntryResponse";
+export * from "./dLQEntryResponsePayloadJson";
+export * from "./dLQListResponse";
+export * from "./dLQRetryResponse";
 export * from "./documentDetailResponse";
 export * from "./documentDetailResponseClauses";
+export * from "./documentEntityResponse";
+export * from "./documentEntityResponseMetadata";
+export * from "./documentHistoryResponse";
 export * from "./documentListItem";
 export * from "./documentListResponse";
 export * from "./documentPollingStatus";
 export * from "./documentQueuedResponse";
+export * from "./documentRelationshipExplanationResponse";
+export * from "./documentResponse";
 export * from "./documentStatus";
 export * from "./documentType";
 export * from "./documentUploadResponse";
+export * from "./enrichedCoherenceResult";
+export * from "./enrichedCoherenceResultScoreVersion";
+export * from "./evaluateProjectCoherenceApiV1CoherenceEvaluatePostParams";
 export * from "./evidence";
+export * from "./evidenceHistoryEventResponse";
+export * from "./evidenceRef";
+export * from "./evidenceTier";
 export * from "./executeDecisionRequestDTO";
 export * from "./executeDecisionResponseDTO";
 export * from "./executeDecisionResponseDTORisksItem";
 export * from "./executeMcpOperationApiV1McpExecutePost200";
 export * from "./exportProjectDataApiV1ProjectsProjectIdExportPost202";
+export * from "./findingSignal";
+export * from "./findingSignalCategory";
+export * from "./findingSignalRawData";
+export * from "./findingSignalSeverity";
+export * from "./findingSignalSource";
 export * from "./functionCallRequest";
 export * from "./functionCallRequestParams";
-export * from "./getAlertHistoryApiV1AlertsAlertIdHistoryGet200";
 export * from "./getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet200";
-export * from "./getCoherenceDashboardApiCoherenceDashboardProjectIdGet200";
-export * from "./getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet200";
+export * from "./getCookieConsentApiV1ComplianceCookiesConsentGet200";
+export * from "./getCookieConsentApiV1ComplianceCookiesConsentGetParams";
+export * from "./getCostAnalyticsApiV1AiAnalyticsCostGet200";
+export * from "./getCostAnalyticsApiV1AiAnalyticsCostGetParams";
+export * from "./getLegalDisclaimerStatusApiV1ProjectsProjectIdGatesGate8DisclaimerStatusGet200";
 export * from "./getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet200";
 export * from "./getProjectBudgetApiV1ProjectsProjectIdBudgetGet200";
 export * from "./getProjectStatsApiV1ProjectsStatsGet200";
+export * from "./getQualityDriftApiV1AiAnalyticsQualityDriftGet200";
+export * from "./getQualityDriftApiV1AiAnalyticsQualityDriftGetParams";
 export * from "./getRateLimitStatusApiV1McpRateLimitStatusGet200";
 export * from "./getRecentAnalysesApiV1ObservabilityAnalysesGetParams";
+export * from "./getSampleProjectReadyApiV1OnboardingSampleProjectReadyGet200";
+export * from "./getSampleProjectReadyApiV1OnboardingSampleProjectReadyGetParams";
+export * from "./getSampleProjectTelemetryApiV1OnboardingSampleProjectTelemetryGet200";
+export * from "./getSampleProjectTelemetryApiV1OnboardingSampleProjectTelemetryGetParams";
+export * from "./getVersionAnalyticsApiV1AiAnalyticsVersionsGet200";
+export * from "./getVersionAnalyticsApiV1AiAnalyticsVersionsGetParams";
+export * from "./globalV2";
+export * from "./globalV2Status";
+export * from "./healthBand";
 export * from "./healthCheckApiV1ProjectsHealthGet200";
+export * from "./healthDimension";
+export * from "./healthNullReason";
+export * from "./healthSignal";
+export * from "./healthTrend";
+export * from "./healthVector";
 export * from "./hTTPValidationError";
 export * from "./impactLevel";
 export * from "./interestLevel";
 export * from "./listAllowedFunctionsApiV1McpFunctionsGet200";
 export * from "./listAllowedViewsApiV1McpViewsGet200";
+export * from "./listDlqEntriesApiV1AdminDlqGetParams";
+export * from "./listDlqEntriesApiV1AdminDlqGetStatus";
 export * from "./listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams";
-export * from "./listProjectAlertsApiV1ProjectsProjectIdAlertsGetParams";
+export * from "./listProjectAlertsApiV1AlertsProjectsProjectIdGetParams";
+export * from "./listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetParams";
+export * from "./listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetParams";
 export * from "./listProjectsApiV1ProjectsGetParams";
 export * from "./listReviewQueueApiV1HitlQueueGetParams";
+export * from "./listTenantAlertsApiV1AlertsTenantGetParams";
 export * from "./loginRequest";
 export * from "./loginResponse";
 export * from "./mCPExecuteRequest";
 export * from "./mCPExecuteRequestParams";
 export * from "./meResponse";
 export * from "./moveWBSItemInput";
+export * from "./notificationChannel";
+export * from "./notificationConfigRequest";
+export * from "./notificationConfigRequestCustomHeaders";
+export * from "./notificationConfigResponse";
+export * from "./notificationConfigResponseCustomHeaders";
+export * from "./onboardingRetryRequest";
 export * from "./passwordChangeRequest";
 export * from "./powerLevel";
-export * from "./projectContext";
 export * from "./projectCreateRequest";
 export * from "./projectListResponse";
+export * from "./projectQuickViewAlertResponse";
+export * from "./projectQuickViewSummaryResponse";
 export * from "./projectResponse";
 export * from "./projectUpdateRequest";
 export * from "./queryResult";
@@ -142,7 +215,12 @@ export * from "./refreshTokenRequest";
 export * from "./registerRequest";
 export * from "./registerResponse";
 export * from "./rejectRequest";
+export * from "./relationshipExplanationCitationResponse";
 export * from "./resolveAlertRequest";
+export * from "./resumeWorkflowRequest";
+export * from "./resumeWorkflowRequestDecision";
+export * from "./resumeWorkflowResponse";
+export * from "./retrySampleProjectApiV1OnboardingSampleProjectRetryPost200";
 export * from "./reviewAlertRequest";
 export * from "./reviewAlertRequestDecision";
 export * from "./reviewDecisionDTO";
@@ -153,6 +231,10 @@ export * from "./reviewQueueResponse";
 export * from "./reviewStatus";
 export * from "./routeForReviewRequest";
 export * from "./routeForReviewRequestItemData";
+export * from "./scoreExplanation";
+export * from "./scoreExplanationScorePathItem";
+export * from "./secretChannelClerkResponse";
+export * from "./secretChannelClerkResponseValues";
 export * from "./severityCount";
 export * from "./stakeholderCreateRequest";
 export * from "./stakeholderCreateRequestStakeholderMetadata";
@@ -160,11 +242,12 @@ export * from "./stakeholderQuadrant";
 export * from "./stakeholderResponseOut";
 export * from "./stakeholderUpdateRequest";
 export * from "./stakeholderUpdateRequestStakeholderMetadata";
-export * from "./streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams";
+export * from "./startSampleProjectApiV1OnboardingSampleProjectStartPost200";
 export * from "./subscriptionPlan";
 export * from "./systemStatusResponse";
 export * from "./tenantResponse";
 export * from "./tokenResponse";
+export * from "./updateCookieConsentApiV1ComplianceCookiesConsentPatch200";
 export * from "./updateProjectStatusApiV1ProjectsProjectIdStatusPatchParams";
 export * from "./updateWBSItemInput";
 export * from "./userResponse";
@@ -181,3 +264,4 @@ export * from "./wBSItemOutputBudget";
 export * from "./wBSOutput";
 export * from "./wBSOutputAlertsItem";
 export * from "./workerHealthCheckApiV1HealthWorkerGet200";
+export * from "./workerHealthCheckHealthWorkerGet200";

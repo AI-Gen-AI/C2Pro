@@ -5,25 +5,25 @@
  *
  *         **C2Pro - Contract Intelligence Platform**
  *
- *         Plataforma de inteligencia contractual para proyectos de construcción e ingeniería.
+ *         Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.
  *
- *         ## Características
+ *         ## CaracterÃ­sticas
  *
- *         - 🔍 **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
- *         - 🤖 **IA Especializada**: Claude 4 entrenado en documentos de construcción
- *         - 📊 **Coherence Score**: Indicador 0-100 de alineación entre documentos
- *         - 👥 **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
- *         - 📈 **Multi-tenant**: Aislamiento completo de datos por organización
+ *         - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
+ *         - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n
+ *         - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos
+ *         - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders
+ *         - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n
  *
- *         ## Autenticación
+ *         ## AutenticaciÃ³n
  *
- *         La API usa JWT (JSON Web Tokens) para autenticación.
+ *         La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.
  *
  *         1. **Registro**: `POST /api/v1/auth/register`
  *         2. **Login**: `POST /api/v1/auth/login`
  *         3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`
  *
- *         ## Límites de Uso
+ *         ## LÃ­mites de Uso
  *
  *         - **Rate Limit**: 60 requests/minuto
  *         - **AI Budget**: $50 USD/mes (plan free)
@@ -31,9 +31,9 @@
  *
  *         ## Soporte
  *
- *         - 📧 Email: support@c2pro.app
- *         - 📖 Docs: https://docs.c2pro.app
- *         - 💬 Discord: https://discord.gg/c2pro
+ *         - ðŸ“§ Email: support@c2pro.app
+ *         - ðŸ“– Docs: https://docs.c2pro.app
+ *         - ðŸ’¬ Discord: https://discord.gg/c2pro
  *
  * OpenAPI spec version: 1.0.0
  */
@@ -50,10 +50,7 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type {
-  GetCoherenceDashboardApiCoherenceDashboardProjectIdGet200,
-  HTTPValidationError,
-} from "../models";
+import type { DashboardSummary, HTTPValidationError } from "../models";
 
 import { orvalApiClient } from "../../client";
 
@@ -77,31 +74,261 @@ const withQueryKey = <T extends object, K>(
 
 /**
  * Returns coherence dashboard data for a project.
- *
- *     **For TS-E2E-FLW-DOC-001 E2E tests.**
- *
- *     Dashboard includes:
- *     - Global coherence score (0-100)
- *     - Sub-scores by category (SCOPE, BUDGET, QUALITY, TECHNICAL, LEGAL, TIME)
- *     - Alert count
- *     - Document count
- *     - Methodology version
- *
- *     This is the final step in the document-to-coherence flow.
+ *     Derived from the latest Analysis or CoherenceResult records.
+ * @summary Get Coherence Dashboard
+ */
+export const getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet = (
+  projectId: string,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<DashboardSummary>({
+    url: `/api/v1/coherence/dashboard/${projectId}`,
+    method: "GET",
+    signal,
+  });
+};
+
+export const getGetCoherenceDashboardApiV1CoherenceDashboardProjectIdGetQueryKey =
+  (projectId: string) => {
+    return [`/api/v1/coherence/dashboard/${projectId}`] as const;
+  };
+
+export const getGetCoherenceDashboardApiV1CoherenceDashboardProjectIdGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet
+      >
+    >,
+    TError = HTTPValidationError,
+  >(
+    projectId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetCoherenceDashboardApiV1CoherenceDashboardProjectIdGetQueryKey(
+        projectId,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet
+        >
+      >
+    > = ({ signal }) =>
+      getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet(
+        projectId,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: projectId !== null && projectId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type GetCoherenceDashboardApiV1CoherenceDashboardProjectIdGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet
+      >
+    >
+  >;
+export type GetCoherenceDashboardApiV1CoherenceDashboardProjectIdGetQueryError =
+  HTTPValidationError;
+
+export function useGetCoherenceDashboardApiV1CoherenceDashboardProjectIdGet<
+  TData = Awaited<
+    ReturnType<typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetCoherenceDashboardApiV1CoherenceDashboardProjectIdGet<
+  TData = Awaited<
+    ReturnType<typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetCoherenceDashboardApiV1CoherenceDashboardProjectIdGet<
+  TData = Awaited<
+    ReturnType<typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get Coherence Dashboard
+ */
+
+export function useGetCoherenceDashboardApiV1CoherenceDashboardProjectIdGet<
+  TData = Awaited<
+    ReturnType<typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getCoherenceDashboardApiV1CoherenceDashboardProjectIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetCoherenceDashboardApiV1CoherenceDashboardProjectIdGetQueryOptions(
+      projectId,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * Returns coherence dashboard data for a project.
+ *     Derived from the latest Analysis or CoherenceResult records.
  * @summary Get Coherence Dashboard
  */
 export const getCoherenceDashboardApiCoherenceDashboardProjectIdGet = (
   projectId: string,
   signal?: AbortSignal,
 ) => {
-  return orvalApiClient<GetCoherenceDashboardApiCoherenceDashboardProjectIdGet200>(
-    { url: `/coherence/dashboard/${projectId}`, method: "GET", signal },
-  );
+  return orvalApiClient<DashboardSummary>({
+    url: `/api/coherence/dashboard/${projectId}`,
+    method: "GET",
+    signal,
+  });
 };
 
 export const getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryKey =
   (projectId: string) => {
-    return [`/coherence/dashboard/${projectId}`] as const;
+    return [`/api/coherence/dashboard/${projectId}`] as const;
   };
 
 export const getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryOptions =
