@@ -77,6 +77,69 @@ describe("AppDashboardPage", () => {
     ).toHaveAttribute("href", "/projects");
   });
 
+  it("shows a guided empty state with Create project CTA when no projects exist", async () => {
+    useAuthStoreMock.mockImplementation(
+      (selector: (state: { token: string | null }) => unknown) =>
+        selector({ token: "token-123" }),
+    );
+    getProjectsMock.mockResolvedValue([]);
+
+    renderWithProviders(<AppDashboardPage />);
+
+    await waitFor(() => {
+      expect(getProjectsMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(screen.getByText(/no projects yet/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /create project/i }),
+    ).toHaveAttribute("href", "/projects");
+  });
+
+  it("does not show the Create CTA empty state when projects load successfully", async () => {
+    useAuthStoreMock.mockImplementation(
+      (selector: (state: { token: string | null }) => unknown) =>
+        selector({ token: "token-123" }),
+    );
+    getProjectsMock.mockResolvedValue([
+      { id: "project-1", name: "Alpha Project" },
+    ]);
+    getSummaryMock.mockResolvedValue({
+      coherence_score: 91,
+      sub_scores: { BUDGET: 88 },
+      weights_used: { BUDGET: 0.3 },
+      alert_count: 2,
+      document_count: 4,
+      last_updated: null,
+    });
+
+    renderWithProviders(<AppDashboardPage />);
+
+    await waitFor(() => {
+      expect(getSummaryMock).toHaveBeenCalledWith("project-1");
+    });
+
+    expect(screen.queryByText(/no projects yet/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the load error box for real failures, not the zero-projects state", async () => {
+    useAuthStoreMock.mockImplementation(
+      (selector: (state: { token: string | null }) => unknown) =>
+        selector({ token: "token-123" }),
+    );
+    getProjectsMock.mockRejectedValue(new Error("Network down"));
+
+    renderWithProviders(<AppDashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/network down/i)).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole("link", { name: /create project/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("redirects c2pro admins to the admin workspace from the dashboard route", async () => {
     useAuthMock.mockReturnValue({
       isAuthenticated: true,

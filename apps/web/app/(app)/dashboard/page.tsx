@@ -8,30 +8,52 @@ import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2, ArrowLeft, BarChart3, AlertTriangle, FileText } from "lucide-react";
+import {
+  Loader2,
+  ArrowLeft,
+  BarChart3,
+  AlertTriangle,
+  FileText,
+  Plus,
+} from "lucide-react";
 import type { DashboardSummary, ProjectListItem } from "@/lib/api/contracts";
-import { getDashboardSummary, listProjects } from "@/lib/api/services/dashboard";
+import {
+  getDashboardSummary,
+  listProjects,
+} from "@/lib/api/services/dashboard";
 import { useAuthStore } from "@/stores/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-const DashboardClient = dynamic(() => import("@/components/coherence/DashboardClient").then(mod => mod.DashboardClient), {
-  loading: () => (
-    <div className="flex min-h-[400px] items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      <span className="ml-3 text-muted-foreground">Loading interactive dashboard...</span>
-    </div>
-  ),
-});
+const DashboardClient = dynamic(
+  () =>
+    import("@/components/coherence/DashboardClient").then(
+      (mod) => mod.DashboardClient,
+    ),
+  {
+    loading: () => (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <span className="ml-3 text-muted-foreground">
+          Loading interactive dashboard...
+        </span>
+      </div>
+    ),
+  },
+);
 
 export default function AppDashboardPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading, userRole } = useAuth();
   const token = useAuthStore((state) => state.token);
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
-  const [summaries, setSummaries] = useState<Record<string, DashboardSummary>>({});
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [summaries, setSummaries] = useState<Record<string, DashboardSummary>>(
+    {},
+  );
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    null,
+  );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const adminRedirectPath =
@@ -52,9 +74,6 @@ export default function AppDashboardPage() {
         if (active) {
           setProjects([]);
           setSummaries({});
-          setLoadError(
-            "No projects found. Create a project to see coherence data.",
-          );
         }
         return;
       }
@@ -72,7 +91,7 @@ export default function AppDashboardPage() {
           } catch (e) {
             console.error(`Failed to load summary for project ${p.id}`, e);
           }
-        })
+        }),
       );
 
       if (!active) return;
@@ -145,6 +164,31 @@ export default function AppDashboardPage() {
     );
   }
 
+  if (!isLoading && projects.length === 0 && !loadError) {
+    return (
+      <div className="flex min-h-[400px] flex-col items-center justify-center space-y-4 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+          <BarChart3 className="h-8 w-8 text-muted-foreground" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-xl font-semibold text-foreground">
+            No projects yet
+          </h2>
+          <p className="max-w-md text-sm text-muted-foreground">
+            Create your first project to start analysing contracts, schedules,
+            and budgets with coherence scoring.
+          </p>
+        </div>
+        <Button asChild>
+          <Link href="/projects">
+            <Plus className="mr-2 h-4 w-4" />
+            Create project
+          </Link>
+        </Button>
+      </div>
+    );
+  }
+
   if (loadError) {
     return (
       <div className="space-y-5">
@@ -166,7 +210,11 @@ export default function AppDashboardPage() {
     if (!project || !data) {
       return (
         <div className="space-y-5">
-          <Button variant="ghost" onClick={handleBackToOverview} className="-ml-2">
+          <Button
+            variant="ghost"
+            onClick={handleBackToOverview}
+            className="-ml-2"
+          >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Overview
           </Button>
@@ -179,7 +227,11 @@ export default function AppDashboardPage() {
 
     return (
       <div className="space-y-5">
-        <Button variant="ghost" onClick={handleBackToOverview} className="-ml-2 mb-2 text-muted-foreground hover:text-foreground">
+        <Button
+          variant="ghost"
+          onClick={handleBackToOverview}
+          className="-ml-2 mb-2 text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Overview
         </Button>
@@ -216,8 +268,8 @@ export default function AppDashboardPage() {
           const docs = summary?.document_count ?? 0;
 
           return (
-            <Card 
-              key={project.id} 
+            <Card
+              key={project.id}
               className="cursor-pointer transition-all hover:border-primary/50 hover:shadow-sm"
               onClick={() => setSelectedProjectId(project.id)}
             >
@@ -231,22 +283,32 @@ export default function AppDashboardPage() {
                   <div className="space-y-1 rounded-md bg-muted/50 p-2">
                     <BarChart3 className="mx-auto h-4 w-4 text-primary" />
                     <div className="text-xl font-bold">{score}</div>
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Score</div>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Score
+                    </div>
                   </div>
                   <div className="space-y-1 rounded-md bg-muted/50 p-2">
-                    <AlertTriangle className={`mx-auto h-4 w-4 ${alerts > 0 ? 'text-warning' : 'text-muted-foreground'}`} />
+                    <AlertTriangle
+                      className={`mx-auto h-4 w-4 ${alerts > 0 ? "text-warning" : "text-muted-foreground"}`}
+                    />
                     <div className="text-xl font-bold">{alerts}</div>
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Alerts</div>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Alerts
+                    </div>
                   </div>
                   <div className="space-y-1 rounded-md bg-muted/50 p-2">
                     <FileText className="mx-auto h-4 w-4 text-chart-quality" />
                     <div className="text-xl font-bold">{docs}</div>
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Docs</div>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Docs
+                    </div>
                   </div>
                 </div>
                 <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
                   <span>Click to view drill-down</span>
-                  <span className="text-primary group-hover:underline">View details &rarr;</span>
+                  <span className="text-primary group-hover:underline">
+                    View details &rarr;
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -256,4 +318,3 @@ export default function AppDashboardPage() {
     </div>
   );
 }
-
