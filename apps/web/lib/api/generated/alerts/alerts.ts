@@ -5,25 +5,25 @@
  *
  *         **C2Pro - Contract Intelligence Platform**
  *
- *         Plataforma de inteligencia contractual para proyectos de construcción e ingeniería.
+ *         Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.
  *
- *         ## Características
+ *         ## CaracterÃ­sticas
  *
- *         - 🔍 **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
- *         - 🤖 **IA Especializada**: Claude 4 entrenado en documentos de construcción
- *         - 📊 **Coherence Score**: Indicador 0-100 de alineación entre documentos
- *         - 👥 **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
- *         - 📈 **Multi-tenant**: Aislamiento completo de datos por organización
+ *         - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
+ *         - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n
+ *         - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos
+ *         - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders
+ *         - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n
  *
- *         ## Autenticación
+ *         ## AutenticaciÃ³n
  *
- *         La API usa JWT (JSON Web Tokens) para autenticación.
+ *         La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.
  *
  *         1. **Registro**: `POST /api/v1/auth/register`
  *         2. **Login**: `POST /api/v1/auth/login`
  *         3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`
  *
- *         ## Límites de Uso
+ *         ## LÃ­mites de Uso
  *
  *         - **Rate Limit**: 60 requests/minuto
  *         - **AI Budget**: $50 USD/mes (plan free)
@@ -31,9 +31,9 @@
  *
  *         ## Soporte
  *
- *         - 📧 Email: support@c2pro.app
- *         - 📖 Docs: https://docs.c2pro.app
- *         - 💬 Discord: https://discord.gg/c2pro
+ *         - ðŸ“§ Email: support@c2pro.app
+ *         - ðŸ“– Docs: https://docs.c2pro.app
+ *         - ðŸ’¬ Discord: https://discord.gg/c2pro
  *
  * OpenAPI spec version: 1.0.0
  */
@@ -54,18 +54,19 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AlertHistoryResponse,
   AlertListResponse,
   AlertResponse,
-  AttachEvidenceApiV1AlertsAlertIdEvidencePost201,
-  AttachEvidenceRequest,
-  BulkDeleteAlertsApiV1AlertsBulkDeletePost200,
-  BulkDeleteRequest,
-  BulkReviewAlertsApiV1AlertsBulkReviewPost200,
+  AlertWorkspaceSettingsPayload,
+  BulkOperationResponse,
+  BulkResolveRequest,
   BulkReviewRequest,
   CreateAlertRequest,
-  GetAlertHistoryApiV1AlertsAlertIdHistoryGet200,
   HTTPValidationError,
-  ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams,
+  ListProjectAlertsApiV1AlertsProjectsProjectIdGetParams,
+  ListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetParams,
+  ListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetParams,
+  ListTenantAlertsApiV1AlertsTenantGetParams,
   ResolveAlertRequest,
   ReviewAlertRequest,
 } from "../models";
@@ -91,7 +92,337 @@ const withQueryKey = <T extends object, K>(
 };
 
 /**
- * @summary Create Alert
+ * @summary Get alert workspace settings
+ */
+export const getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet = (
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<AlertWorkspaceSettingsPayload>({
+    url: `/api/v1/alerts/workspace-settings`,
+    method: "GET",
+    signal,
+  });
+};
+
+export const getGetAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGetQueryKey =
+  () => {
+    return [`/api/v1/alerts/workspace-settings`] as const;
+  };
+
+export const getGetAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet
+      >
+    >,
+    TError = unknown,
+  >(options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  }) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGetQueryKey();
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet
+        >
+      >
+    > = ({ signal }) =>
+      getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet(signal);
+
+    return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type GetAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet
+      >
+    >
+  >;
+export type GetAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGetQueryError =
+  unknown;
+
+export function useGetAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet<
+  TData = Awaited<
+    ReturnType<typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet>
+  >,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet<
+  TData = Awaited<
+    ReturnType<typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet<
+  TData = Awaited<
+    ReturnType<typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get alert workspace settings
+ */
+
+export function useGetAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet<
+  TData = Awaited<
+    ReturnType<typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsGetQueryOptions(
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * @summary Save alert workspace settings
+ */
+export const putAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPut = (
+  alertWorkspaceSettingsPayload: AlertWorkspaceSettingsPayload,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<AlertWorkspaceSettingsPayload>({
+    url: `/api/v1/alerts/workspace-settings`,
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    data: alertWorkspaceSettingsPayload,
+    signal,
+  });
+};
+
+export const getPutAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPutMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof putAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPut
+        >
+      >,
+      TError,
+      { data: AlertWorkspaceSettingsPayload },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof putAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPut
+      >
+    >,
+    TError,
+    { data: AlertWorkspaceSettingsPayload },
+    TContext
+  > => {
+    const mutationKey = [
+      "putAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPut",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof putAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPut
+        >
+      >,
+      { data: AlertWorkspaceSettingsPayload }
+    > = (props) => {
+      const { data } = props ?? {};
+
+      return putAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPut(data);
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type PutAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPutMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof putAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPut
+      >
+    >
+  >;
+export type PutAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPutMutationBody =
+  AlertWorkspaceSettingsPayload;
+export type PutAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPutMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Save alert workspace settings
+ */
+export const usePutAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPut = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof putAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPut
+        >
+      >,
+      TError,
+      { data: AlertWorkspaceSettingsPayload },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof putAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPut>
+  >,
+  TError,
+  { data: AlertWorkspaceSettingsPayload },
+  TContext
+> => {
+  return useMutation(
+    getPutAlertWorkspaceSettingsApiV1AlertsWorkspaceSettingsPutMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
+/**
+ * @summary Create alert
  */
 export const createAlertApiV1AlertsPost = (
   createAlertRequest: CreateAlertRequest,
@@ -150,7 +481,7 @@ export type CreateAlertApiV1AlertsPostMutationBody = CreateAlertRequest;
 export type CreateAlertApiV1AlertsPostMutationError = HTTPValidationError;
 
 /**
- * @summary Create Alert
+ * @summary Create alert
  */
 export const useCreateAlertApiV1AlertsPost = <
   TError = HTTPValidationError,
@@ -177,47 +508,44 @@ export const useCreateAlertApiV1AlertsPost = <
   );
 };
 /**
- * List alerts for a project.
- *
- * Returns alerts from the database.
- * @summary List Project Alerts
+ * @summary List alerts for a project
  */
-export const listProjectAlertsApiV1ProjectsProjectIdAlertsGet = (
+export const listProjectAlertsApiV1AlertsProjectsProjectIdGet = (
   projectId: string,
-  params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams,
+  params?: ListProjectAlertsApiV1AlertsProjectsProjectIdGetParams,
   signal?: AbortSignal,
 ) => {
   return orvalApiClient<AlertListResponse>({
-    url: `/api/v1/projects/${projectId}/alerts`,
+    url: `/api/v1/alerts/projects/${projectId}`,
     method: "GET",
     params,
     signal,
   });
 };
 
-export const getListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryKey = (
+export const getListProjectAlertsApiV1AlertsProjectsProjectIdGetQueryKey = (
   projectId: string,
-  params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams,
+  params?: ListProjectAlertsApiV1AlertsProjectsProjectIdGetParams,
 ) => {
   return [
-    `/api/v1/projects/${projectId}/alerts`,
+    `/api/v1/alerts/projects/${projectId}`,
     ...(params ? [params] : []),
   ] as const;
 };
 
-export const getListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryOptions = <
+export const getListProjectAlertsApiV1AlertsProjectsProjectIdGetQueryOptions = <
   TData = Awaited<
-    ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+    ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
   >,
   TError = HTTPValidationError,
 >(
   projectId: string,
-  params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams,
+  params?: ListProjectAlertsApiV1AlertsProjectsProjectIdGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
         Awaited<
-          ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+          ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
         >,
         TError,
         TData
@@ -229,15 +557,15 @@ export const getListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryOptions = <
 
   const queryKey =
     queryOptions?.queryKey ??
-    getListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryKey(
+    getListProjectAlertsApiV1AlertsProjectsProjectIdGetQueryKey(
       projectId,
       params,
     );
 
   const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>>
+    Awaited<ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>>
   > = ({ signal }) =>
-    listProjectAlertsApiV1ProjectsProjectIdAlertsGet(projectId, params, signal);
+    listProjectAlertsApiV1AlertsProjectsProjectIdGet(projectId, params, signal);
 
   return {
     queryKey,
@@ -246,33 +574,33 @@ export const getListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryOptions = <
     ...queryOptions,
   } as UseQueryOptions<
     Awaited<
-      ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+      ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
     >,
     TError,
     TData
   > & { queryKey: DataTag<QueryKey, TData, TError> };
 };
 
-export type ListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryResult =
+export type ListProjectAlertsApiV1AlertsProjectsProjectIdGetQueryResult =
   NonNullable<
-    Awaited<ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>>
+    Awaited<ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>>
   >;
-export type ListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryError =
+export type ListProjectAlertsApiV1AlertsProjectsProjectIdGetQueryError =
   HTTPValidationError;
 
-export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
+export function useListProjectAlertsApiV1AlertsProjectsProjectIdGet<
   TData = Awaited<
-    ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+    ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
   >,
   TError = HTTPValidationError,
 >(
   projectId: string,
-  params: undefined | ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams,
+  params: undefined | ListProjectAlertsApiV1AlertsProjectsProjectIdGetParams,
   options: {
     query: Partial<
       UseQueryOptions<
         Awaited<
-          ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+          ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
         >,
         TError,
         TData
@@ -281,11 +609,11 @@ export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
       Pick<
         DefinedInitialDataOptions<
           Awaited<
-            ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+            ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
           >,
           TError,
           Awaited<
-            ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+            ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
           >
         >,
         "initialData"
@@ -295,19 +623,19 @@ export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
 ): DefinedUseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 };
-export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
+export function useListProjectAlertsApiV1AlertsProjectsProjectIdGet<
   TData = Awaited<
-    ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+    ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
   >,
   TError = HTTPValidationError,
 >(
   projectId: string,
-  params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams,
+  params?: ListProjectAlertsApiV1AlertsProjectsProjectIdGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
         Awaited<
-          ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+          ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
         >,
         TError,
         TData
@@ -316,11 +644,11 @@ export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
       Pick<
         UndefinedInitialDataOptions<
           Awaited<
-            ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+            ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
           >,
           TError,
           Awaited<
-            ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+            ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
           >
         >,
         "initialData"
@@ -330,19 +658,19 @@ export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
 ): UseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 };
-export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
+export function useListProjectAlertsApiV1AlertsProjectsProjectIdGet<
   TData = Awaited<
-    ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+    ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
   >,
   TError = HTTPValidationError,
 >(
   projectId: string,
-  params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams,
+  params?: ListProjectAlertsApiV1AlertsProjectsProjectIdGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
         Awaited<
-          ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+          ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
         >,
         TError,
         TData
@@ -354,22 +682,22 @@ export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
   queryKey: DataTag<QueryKey, TData, TError>;
 };
 /**
- * @summary List Project Alerts
+ * @summary List alerts for a project
  */
 
-export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
+export function useListProjectAlertsApiV1AlertsProjectsProjectIdGet<
   TData = Awaited<
-    ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+    ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
   >,
   TError = HTTPValidationError,
 >(
   projectId: string,
-  params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams,
+  params?: ListProjectAlertsApiV1AlertsProjectsProjectIdGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
         Awaited<
-          ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+          ReturnType<typeof listProjectAlertsApiV1AlertsProjectsProjectIdGet>
         >,
         TError,
         TData
@@ -381,7 +709,7 @@ export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
   queryKey: DataTag<QueryKey, TData, TError>;
 } {
   const queryOptions =
-    getListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryOptions(
+    getListProjectAlertsApiV1AlertsProjectsProjectIdGetQueryOptions(
       projectId,
       params,
       options,
@@ -396,7 +724,171 @@ export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
 }
 
 /**
- * @summary Review Alert
+ * @summary List alerts for tenant
+ */
+export const listTenantAlertsApiV1AlertsTenantGet = (
+  params?: ListTenantAlertsApiV1AlertsTenantGetParams,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<AlertListResponse>({
+    url: `/api/v1/alerts/tenant`,
+    method: "GET",
+    params,
+    signal,
+  });
+};
+
+export const getListTenantAlertsApiV1AlertsTenantGetQueryKey = (
+  params?: ListTenantAlertsApiV1AlertsTenantGetParams,
+) => {
+  return [`/api/v1/alerts/tenant`, ...(params ? [params] : [])] as const;
+};
+
+export const getListTenantAlertsApiV1AlertsTenantGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListTenantAlertsApiV1AlertsTenantGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListTenantAlertsApiV1AlertsTenantGetQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>
+  > = ({ signal }) => listTenantAlertsApiV1AlertsTenantGet(params, signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListTenantAlertsApiV1AlertsTenantGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>
+>;
+export type ListTenantAlertsApiV1AlertsTenantGetQueryError =
+  HTTPValidationError;
+
+export function useListTenantAlertsApiV1AlertsTenantGet<
+  TData = Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>,
+  TError = HTTPValidationError,
+>(
+  params: undefined | ListTenantAlertsApiV1AlertsTenantGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>,
+          TError,
+          Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListTenantAlertsApiV1AlertsTenantGet<
+  TData = Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListTenantAlertsApiV1AlertsTenantGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>,
+          TError,
+          Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListTenantAlertsApiV1AlertsTenantGet<
+  TData = Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListTenantAlertsApiV1AlertsTenantGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List alerts for tenant
+ */
+
+export function useListTenantAlertsApiV1AlertsTenantGet<
+  TData = Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListTenantAlertsApiV1AlertsTenantGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTenantAlertsApiV1AlertsTenantGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getListTenantAlertsApiV1AlertsTenantGetQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * @summary Review alert (approve/reject)
  */
 export const reviewAlertApiV1AlertsAlertIdReviewPost = (
   alertId: string,
@@ -458,7 +950,7 @@ export type ReviewAlertApiV1AlertsAlertIdReviewPostMutationError =
   HTTPValidationError;
 
 /**
- * @summary Review Alert
+ * @summary Review alert (approve/reject)
  */
 export const useReviewAlertApiV1AlertsAlertIdReviewPost = <
   TError = HTTPValidationError,
@@ -485,13 +977,13 @@ export const useReviewAlertApiV1AlertsAlertIdReviewPost = <
   );
 };
 /**
- * @summary Bulk Review Alerts
+ * @summary Bulk approve/reject alerts
  */
 export const bulkReviewAlertsApiV1AlertsBulkReviewPost = (
   bulkReviewRequest: BulkReviewRequest,
   signal?: AbortSignal,
 ) => {
-  return orvalApiClient<BulkReviewAlertsApiV1AlertsBulkReviewPost200>({
+  return orvalApiClient<BulkOperationResponse>({
     url: `/api/v1/alerts/bulk-review`,
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -547,7 +1039,7 @@ export type BulkReviewAlertsApiV1AlertsBulkReviewPostMutationError =
   HTTPValidationError;
 
 /**
- * @summary Bulk Review Alerts
+ * @summary Bulk approve/reject alerts
  */
 export const useBulkReviewAlertsApiV1AlertsBulkReviewPost = <
   TError = HTTPValidationError,
@@ -574,97 +1066,7 @@ export const useBulkReviewAlertsApiV1AlertsBulkReviewPost = <
   );
 };
 /**
- * @summary Attach Evidence
- */
-export const attachEvidenceApiV1AlertsAlertIdEvidencePost = (
-  alertId: string,
-  attachEvidenceRequest: AttachEvidenceRequest,
-  signal?: AbortSignal,
-) => {
-  return orvalApiClient<AttachEvidenceApiV1AlertsAlertIdEvidencePost201>({
-    url: `/api/v1/alerts/${alertId}/evidence`,
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    data: attachEvidenceRequest,
-    signal,
-  });
-};
-
-export const getAttachEvidenceApiV1AlertsAlertIdEvidencePostMutationOptions = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>>,
-    TError,
-    { alertId: string; data: AttachEvidenceRequest },
-    TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>>,
-  TError,
-  { alertId: string; data: AttachEvidenceRequest },
-  TContext
-> => {
-  const mutationKey = ["attachEvidenceApiV1AlertsAlertIdEvidencePost"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>>,
-    { alertId: string; data: AttachEvidenceRequest }
-  > = (props) => {
-    const { alertId, data } = props ?? {};
-
-    return attachEvidenceApiV1AlertsAlertIdEvidencePost(alertId, data);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type AttachEvidenceApiV1AlertsAlertIdEvidencePostMutationResult =
-  NonNullable<
-    Awaited<ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>>
-  >;
-export type AttachEvidenceApiV1AlertsAlertIdEvidencePostMutationBody =
-  AttachEvidenceRequest;
-export type AttachEvidenceApiV1AlertsAlertIdEvidencePostMutationError =
-  HTTPValidationError;
-
-/**
- * @summary Attach Evidence
- */
-export const useAttachEvidenceApiV1AlertsAlertIdEvidencePost = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>>,
-      TError,
-      { alertId: string; data: AttachEvidenceRequest },
-      TContext
-    >;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>>,
-  TError,
-  { alertId: string; data: AttachEvidenceRequest },
-  TContext
-> => {
-  return useMutation(
-    getAttachEvidenceApiV1AlertsAlertIdEvidencePostMutationOptions(options),
-    queryClient,
-  );
-};
-/**
- * @summary Resolve Alert
+ * @summary Resolve alert
  */
 export const resolveAlertApiV1AlertsAlertIdResolvePost = (
   alertId: string,
@@ -727,7 +1129,7 @@ export type ResolveAlertApiV1AlertsAlertIdResolvePostMutationError =
   HTTPValidationError;
 
 /**
- * @summary Resolve Alert
+ * @summary Resolve alert
  */
 export const useResolveAlertApiV1AlertsAlertIdResolvePost = <
   TError = HTTPValidationError,
@@ -754,13 +1156,102 @@ export const useResolveAlertApiV1AlertsAlertIdResolvePost = <
   );
 };
 /**
- * @summary Get Alert History
+ * @summary Bulk resolve alerts
+ */
+export const bulkResolveAlertsApiV1AlertsBulkResolvePost = (
+  bulkResolveRequest: BulkResolveRequest,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<BulkOperationResponse>({
+    url: `/api/v1/alerts/bulk-resolve`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: bulkResolveRequest,
+    signal,
+  });
+};
+
+export const getBulkResolveAlertsApiV1AlertsBulkResolvePostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkResolveAlertsApiV1AlertsBulkResolvePost>>,
+    TError,
+    { data: BulkResolveRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkResolveAlertsApiV1AlertsBulkResolvePost>>,
+  TError,
+  { data: BulkResolveRequest },
+  TContext
+> => {
+  const mutationKey = ["bulkResolveAlertsApiV1AlertsBulkResolvePost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkResolveAlertsApiV1AlertsBulkResolvePost>>,
+    { data: BulkResolveRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bulkResolveAlertsApiV1AlertsBulkResolvePost(data);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BulkResolveAlertsApiV1AlertsBulkResolvePostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof bulkResolveAlertsApiV1AlertsBulkResolvePost>>
+  >;
+export type BulkResolveAlertsApiV1AlertsBulkResolvePostMutationBody =
+  BulkResolveRequest;
+export type BulkResolveAlertsApiV1AlertsBulkResolvePostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Bulk resolve alerts
+ */
+export const useBulkResolveAlertsApiV1AlertsBulkResolvePost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof bulkResolveAlertsApiV1AlertsBulkResolvePost>>,
+      TError,
+      { data: BulkResolveRequest },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof bulkResolveAlertsApiV1AlertsBulkResolvePost>>,
+  TError,
+  { data: BulkResolveRequest },
+  TContext
+> => {
+  return useMutation(
+    getBulkResolveAlertsApiV1AlertsBulkResolvePostMutationOptions(options),
+    queryClient,
+  );
+};
+/**
+ * @summary Get alert status history
  */
 export const getAlertHistoryApiV1AlertsAlertIdHistoryGet = (
   alertId: string,
   signal?: AbortSignal,
 ) => {
-  return orvalApiClient<GetAlertHistoryApiV1AlertsAlertIdHistoryGet200>({
+  return orvalApiClient<AlertHistoryResponse>({
     url: `/api/v1/alerts/${alertId}/history`,
     method: "GET",
     signal,
@@ -905,7 +1396,7 @@ export function useGetAlertHistoryApiV1AlertsAlertIdHistoryGet<
   queryKey: DataTag<QueryKey, TData, TError>;
 };
 /**
- * @summary Get Alert History
+ * @summary Get alert status history
  */
 
 export function useGetAlertHistoryApiV1AlertsAlertIdHistoryGet<
@@ -943,38 +1434,36 @@ export function useGetAlertHistoryApiV1AlertsAlertIdHistoryGet<
 }
 
 /**
- * @summary Bulk Delete Alerts
+ * @summary Delete alert
  */
-export const bulkDeleteAlertsApiV1AlertsBulkDeletePost = (
-  bulkDeleteRequest: BulkDeleteRequest,
+export const deleteAlertApiV1AlertsAlertIdDelete = (
+  alertId: string,
   signal?: AbortSignal,
 ) => {
-  return orvalApiClient<BulkDeleteAlertsApiV1AlertsBulkDeletePost200>({
-    url: `/api/v1/alerts/bulk-delete`,
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    data: bulkDeleteRequest,
+  return orvalApiClient<void>({
+    url: `/api/v1/alerts/${alertId}`,
+    method: "DELETE",
     signal,
   });
 };
 
-export const getBulkDeleteAlertsApiV1AlertsBulkDeletePostMutationOptions = <
+export const getDeleteAlertApiV1AlertsAlertIdDeleteMutationOptions = <
   TError = HTTPValidationError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
+    Awaited<ReturnType<typeof deleteAlertApiV1AlertsAlertIdDelete>>,
     TError,
-    { data: BulkDeleteRequest },
+    { alertId: string },
     TContext
   >;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
+  Awaited<ReturnType<typeof deleteAlertApiV1AlertsAlertIdDelete>>,
   TError,
-  { data: BulkDeleteRequest },
+  { alertId: string },
   TContext
 > => {
-  const mutationKey = ["bulkDeleteAlertsApiV1AlertsBulkDeletePost"];
+  const mutationKey = ["deleteAlertApiV1AlertsAlertIdDelete"];
   const { mutation: mutationOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -984,50 +1473,571 @@ export const getBulkDeleteAlertsApiV1AlertsBulkDeletePostMutationOptions = <
     : { mutation: { mutationKey } };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
-    { data: BulkDeleteRequest }
+    Awaited<ReturnType<typeof deleteAlertApiV1AlertsAlertIdDelete>>,
+    { alertId: string }
   > = (props) => {
-    const { data } = props ?? {};
+    const { alertId } = props ?? {};
 
-    return bulkDeleteAlertsApiV1AlertsBulkDeletePost(data);
+    return deleteAlertApiV1AlertsAlertIdDelete(alertId);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type BulkDeleteAlertsApiV1AlertsBulkDeletePostMutationResult =
-  NonNullable<
-    Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>
-  >;
-export type BulkDeleteAlertsApiV1AlertsBulkDeletePostMutationBody =
-  BulkDeleteRequest;
-export type BulkDeleteAlertsApiV1AlertsBulkDeletePostMutationError =
+export type DeleteAlertApiV1AlertsAlertIdDeleteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteAlertApiV1AlertsAlertIdDelete>>
+>;
+
+export type DeleteAlertApiV1AlertsAlertIdDeleteMutationError =
   HTTPValidationError;
 
 /**
- * @summary Bulk Delete Alerts
+ * @summary Delete alert
  */
-export const useBulkDeleteAlertsApiV1AlertsBulkDeletePost = <
+export const useDeleteAlertApiV1AlertsAlertIdDelete = <
   TError = HTTPValidationError,
   TContext = unknown,
 >(
   options?: {
     mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
+      Awaited<ReturnType<typeof deleteAlertApiV1AlertsAlertIdDelete>>,
       TError,
-      { data: BulkDeleteRequest },
+      { alertId: string },
       TContext
     >;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
-  Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
+  Awaited<ReturnType<typeof deleteAlertApiV1AlertsAlertIdDelete>>,
   TError,
-  { data: BulkDeleteRequest },
+  { alertId: string },
   TContext
 > => {
   return useMutation(
-    getBulkDeleteAlertsApiV1AlertsBulkDeletePostMutationOptions(options),
+    getDeleteAlertApiV1AlertsAlertIdDeleteMutationOptions(options),
     queryClient,
   );
 };
+/**
+ * @summary List alerts for a project
+ */
+export const listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet = (
+  projectId: string,
+  params?: ListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetParams,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<AlertListResponse>({
+    url: `/api/v1/projects/${projectId}/alerts`,
+    method: "GET",
+    params,
+    signal,
+  });
+};
+
+export const getListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetQueryKey =
+  (
+    projectId: string,
+    params?: ListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetParams,
+  ) => {
+    return [
+      `/api/v1/projects/${projectId}/alerts`,
+      ...(params ? [params] : []),
+    ] as const;
+  };
+
+export const getListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+      >
+    >,
+    TError = HTTPValidationError,
+  >(
+    projectId: string,
+    params?: ListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetParams,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetQueryKey(
+        projectId,
+        params,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+        >
+      >
+    > = ({ signal }) =>
+      listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet(
+        projectId,
+        params,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: projectId !== null && projectId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type ListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+      >
+    >
+  >;
+export type ListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetQueryError =
+  HTTPValidationError;
+
+export function useListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  params:
+    | undefined
+    | ListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List alerts for a project
+ */
+
+export function useListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetQueryOptions(
+      projectId,
+      params,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * @summary List alerts for a project
+ */
+export const listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet = (
+  projectId: string,
+  params?: ListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetParams,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<AlertListResponse>({
+    url: `/api/projects/${projectId}/alerts`,
+    method: "GET",
+    params,
+    signal,
+  });
+};
+
+export const getListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetQueryKey =
+  (
+    projectId: string,
+    params?: ListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetParams,
+  ) => {
+    return [
+      `/api/projects/${projectId}/alerts`,
+      ...(params ? [params] : []),
+    ] as const;
+  };
+
+export const getListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+      >
+    >,
+    TError = HTTPValidationError,
+  >(
+    projectId: string,
+    params?: ListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetParams,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetQueryKey(
+        projectId,
+        params,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+        >
+      >
+    > = ({ signal }) =>
+      listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet(
+        projectId,
+        params,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: projectId !== null && projectId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type ListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+      >
+    >
+  >;
+export type ListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetQueryError =
+  HTTPValidationError;
+
+export function useListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  params:
+    | undefined
+    | ListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List alerts for a project
+ */
+
+export function useListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetQueryOptions(
+      projectId,
+      params,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}

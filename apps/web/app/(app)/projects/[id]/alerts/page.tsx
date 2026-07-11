@@ -7,7 +7,7 @@
 import { useParams } from "next/navigation";
 import { useMemo } from "react";
 import { AlertReviewCenter, type ReviewAlert } from "@/components/features/alerts/AlertReviewCenter";
-import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from "@/lib/api/generated/alerts/alerts";
+import { useListProjectAlertsApiV1AlertsProjectsProjectIdGet } from "@/lib/api/generated/alerts/alerts";
 
 const SEVERITY_MAP: Record<string, ReviewAlert["severity"]> = {
   critical: "critical",
@@ -41,7 +41,7 @@ export default function AlertsPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const { data, isLoading, error } =
-    useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id, undefined);
+    useListProjectAlertsApiV1AlertsProjectsProjectIdGet(id, undefined);
 
   const alerts = useMemo(() => 
     (data?.items ?? []).map(mapAlertToReviewAlert),

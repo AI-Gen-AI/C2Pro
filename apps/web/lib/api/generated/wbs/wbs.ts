@@ -5,25 +5,25 @@
  *
  *         **C2Pro - Contract Intelligence Platform**
  *
- *         Plataforma de inteligencia contractual para proyectos de construcción e ingeniería.
+ *         Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.
  *
- *         ## Características
+ *         ## CaracterÃ­sticas
  *
- *         - 🔍 **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
- *         - 🤖 **IA Especializada**: Claude 4 entrenado en documentos de construcción
- *         - 📊 **Coherence Score**: Indicador 0-100 de alineación entre documentos
- *         - 👥 **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
- *         - 📈 **Multi-tenant**: Aislamiento completo de datos por organización
+ *         - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
+ *         - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n
+ *         - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos
+ *         - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders
+ *         - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n
  *
- *         ## Autenticación
+ *         ## AutenticaciÃ³n
  *
- *         La API usa JWT (JSON Web Tokens) para autenticación.
+ *         La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.
  *
  *         1. **Registro**: `POST /api/v1/auth/register`
  *         2. **Login**: `POST /api/v1/auth/login`
  *         3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`
  *
- *         ## Límites de Uso
+ *         ## LÃ­mites de Uso
  *
  *         - **Rate Limit**: 60 requests/minuto
  *         - **AI Budget**: $50 USD/mes (plan free)
@@ -31,9 +31,9 @@
  *
  *         ## Soporte
  *
- *         - 📧 Email: support@c2pro.app
- *         - 📖 Docs: https://docs.c2pro.app
- *         - 💬 Discord: https://discord.gg/c2pro
+ *         - ðŸ“§ Email: support@c2pro.app
+ *         - ðŸ“– Docs: https://docs.c2pro.app
+ *         - ðŸ’¬ Discord: https://discord.gg/c2pro
  *
  * OpenAPI spec version: 1.0.0
  */
@@ -274,7 +274,7 @@ export const createWbsItemApiV1ProjectsProjectIdWbsItemsPost = (
 };
 
 export const getCreateWbsItemApiV1ProjectsProjectIdWbsItemsPostMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<
       Awaited<
         ReturnType<typeof createWbsItemApiV1ProjectsProjectIdWbsItemsPost>
@@ -319,13 +319,13 @@ export type CreateWbsItemApiV1ProjectsProjectIdWbsItemsPostMutationResult =
 export type CreateWbsItemApiV1ProjectsProjectIdWbsItemsPostMutationBody =
   CreateWBSItemInput;
 export type CreateWbsItemApiV1ProjectsProjectIdWbsItemsPostMutationError =
-  HTTPValidationError;
+  void | HTTPValidationError;
 
 /**
  * @summary Create Wbs Item
  */
 export const useCreateWbsItemApiV1ProjectsProjectIdWbsItemsPost = <
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
   TContext = unknown,
 >(
   options?: {
@@ -372,7 +372,7 @@ export const updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch = (
 };
 
 export const getUpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatchMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<
       Awaited<
         ReturnType<
@@ -431,13 +431,13 @@ export type UpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatchMutationResult
 export type UpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatchMutationBody =
   UpdateWBSItemInput;
 export type UpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatchMutationError =
-  HTTPValidationError;
+  void | HTTPValidationError;
 
 /**
  * @summary Update Wbs Item
  */
 export const useUpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch = <
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
   TContext = unknown,
 >(
   options?: {
@@ -489,7 +489,7 @@ export const deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete = (
 };
 
 export const getDeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<
       Awaited<
         ReturnType<
@@ -559,13 +559,13 @@ export type DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteMutationResul
   >;
 
 export type DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteMutationError =
-  HTTPValidationError;
+  void | HTTPValidationError;
 
 /**
  * @summary Delete Wbs Item
  */
 export const useDeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete = <
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
   TContext = unknown,
 >(
   options?: {
@@ -632,7 +632,7 @@ export const getGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryOptions =
     TData = Awaited<
       ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
     >,
-    TError = HTTPValidationError,
+    TError = void | HTTPValidationError,
   >(
     projectId: string,
     itemId: string,
@@ -693,13 +693,13 @@ export type GetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryResult =
     >
   >;
 export type GetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryError =
-  HTTPValidationError;
+  void | HTTPValidationError;
 
 export function useGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet<
   TData = Awaited<
     ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
   >,
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
 >(
   projectId: string,
   itemId: string,
@@ -734,7 +734,7 @@ export function useGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet<
   TData = Awaited<
     ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
   >,
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
 >(
   projectId: string,
   itemId: string,
@@ -769,7 +769,7 @@ export function useGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet<
   TData = Awaited<
     ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
   >,
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
 >(
   projectId: string,
   itemId: string,
@@ -796,7 +796,7 @@ export function useGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet<
   TData = Awaited<
     ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
   >,
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
 >(
   projectId: string,
   itemId: string,
@@ -852,7 +852,7 @@ export const moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost = (
 };
 
 export const getMoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePostMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<
       Awaited<
         ReturnType<
@@ -911,13 +911,13 @@ export type MoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePostMutationResul
 export type MoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePostMutationBody =
   MoveWBSItemInput;
 export type MoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePostMutationError =
-  HTTPValidationError;
+  void | HTTPValidationError;
 
 /**
  * @summary Move Wbs Item
  */
 export const useMoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost = <
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
   TContext = unknown,
 >(
   options?: {

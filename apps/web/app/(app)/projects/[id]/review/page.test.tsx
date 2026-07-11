@@ -1,3 +1,6 @@
+/**
+ * Test Suite ID: TS-FRT-HITL-QUEUE-001
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -23,6 +26,7 @@ vi.mock('@clerk/nextjs', () => ({
 const mockRefetch = vi.fn();
 const mockApproveMutate = vi.fn();
 const mockRejectMutate = vi.fn();
+const mockShowToast = vi.fn();
 
 vi.mock('@/hooks/useProject', () => ({
   useProject: () => ({
@@ -41,6 +45,10 @@ vi.mock('@/lib/api/generated/hitl/hitl', () => ({
     mutateAsync: mockRejectMutate,
     isPending: false,
   }),
+}));
+
+vi.mock('@/lib/ui/toast', () => ({
+  showToast: (...args: unknown[]) => mockShowToast(...args),
 }));
 
 // Import after mocking
@@ -100,6 +108,22 @@ function setupMock(overrides: Record<string, unknown> = {}) {
 describe('ReviewPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('labels the queue as tenant-wide because the API has no project filter', () => {
+    setupMock();
+    render(<ReviewPage />);
+
+    expect(screen.getByRole('heading', { name: 'Organization review queue' })).toBeInTheDocument();
+    expect(screen.getByText(/tenant-wide HITL queue/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Human-in-the-loop review for Test Project/i)).not.toBeInTheDocument();
+  });
+
+  it('requests the queue with supported status and pagination params only', () => {
+    setupMock();
+    render(<ReviewPage />);
+
+    expect(mockUseQueue).toHaveBeenCalledWith({ skip: 0, limit: 50 });
   });
 
   it('shows loading state', () => {
@@ -171,6 +195,19 @@ describe('ReviewPage', () => {
     });
   });
 
+  it('keeps approve dialog open and surfaces mutation errors', async () => {
+    setupMock();
+    mockApproveMutate.mockRejectedValue(new Error('Approval failed'));
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    await userEvent.click(screen.getByText('Confirm Approve'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Approval failed');
+    expect(screen.getByText('Approve Review Item')).toBeInTheDocument();
+    expect(mockShowToast).toHaveBeenCalledWith('Approval failed');
+  });
+
   it('opens reject dialog and requires reason', async () => {
     setupMock();
     mockRejectMutate.mockResolvedValue({});
@@ -199,5 +236,16 @@ describe('ReviewPage', () => {
         },
       });
     });
+  });
+
+  it('shows load more when the current page fills the supported limit', () => {
+    const fullPage = Array.from({ length: 50 }, (_, index) => ({
+      ...MOCK_ITEMS[0],
+      item_id: `item-${index}`,
+    }));
+    setupMock({ data: { items: fullPage, total: 50 } });
+    render(<ReviewPage />);
+
+    expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument();
   });
 });

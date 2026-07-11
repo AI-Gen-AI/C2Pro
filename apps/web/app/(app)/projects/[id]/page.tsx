@@ -13,10 +13,11 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet } from '@/lib/api/generated/coherence-dashboard/coherence-dashboard';
-import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from '@/lib/api/generated/alerts/alerts';
+import { useListProjectAlertsApiV1AlertsProjectsProjectIdGet } from '@/lib/api/generated/alerts/alerts';
 import { useProject } from '@/hooks/useProject';
 import { useProjectDocuments } from '@/hooks/useProjectDocuments';
 import { TripletChecklist } from '@/components/features/documents/TripletChecklist';
+import type { AlertResponse } from '@/lib/api/generated/models';
 
 type DashboardScoreSource = {
   sub_scores?: unknown;
@@ -85,7 +86,7 @@ export default function ProjectOverviewPage() {
     data: alertsResponse,
     isLoading: alertsLoading,
     error: alertsError,
-  } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id, undefined);
+  } = useListProjectAlertsApiV1AlertsProjectsProjectIdGet(id, undefined);
   const { data: project } = useProject(id);
   const { documents } = useProjectDocuments(id);
 
@@ -109,7 +110,7 @@ export default function ProjectOverviewPage() {
   }
 
   const alerts = alertsResponse?.items ?? [];
-  const openAlerts = alerts.filter((alert) => alert.status === 'open');
+  const openAlerts = alerts.filter((alert: AlertResponse) => alert.status === 'open');
   const alertsUnavailable = Boolean(alertsError);
   
   const coherenceScore = numberValue(dashboard.coherence_score);
@@ -125,7 +126,7 @@ export default function ProjectOverviewPage() {
     ? Number(dashboard.alert_count ?? 0)
     : openAlerts.length;
 
-  const recentAlerts = openAlerts.slice(0, 3).map((alert) => ({
+  const recentAlerts = openAlerts.slice(0, 3).map((alert: AlertResponse) => ({
     id: alert.id,
     severity: alert.severity,
     title: alert.message.split(' — ')[0],

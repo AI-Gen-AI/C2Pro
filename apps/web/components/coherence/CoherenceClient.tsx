@@ -13,7 +13,8 @@ import { CategoryDetail } from "@/components/coherence/CategoryDetail";
 import { CategoryV2Panel } from "@/components/coherence/CategoryV2Panel";
 import type { DashboardSummary } from "@/lib/api/contracts";
 import { ScoreVersionBadge } from "@/src/components/coherence/ScoreVersionBadge";
-import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from "@/lib/api/generated/alerts/alerts";
+import { useListProjectAlertsApiV1AlertsProjectsProjectIdGet } from "@/lib/api/generated/alerts/alerts";
+import type { AlertResponse } from "@/lib/api/generated/models";
 
 const LABELS: Record<string, string> = {
   SCOPE: "Scope",
@@ -37,14 +38,14 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
     data: alertsResponse,
     isLoading: alertsLoading,
     error: alertsError,
-  } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(summary.project_id, undefined);
+  } = useListProjectAlertsApiV1AlertsProjectsProjectIdGet(summary.project_id, undefined);
   const score = typeof summary.coherence_score === "number" ? summary.coherence_score : null;
   const hasScore = score !== null;
   const missingDimensions = summary.score_missing_dimensions ?? [];
   const alerts = alertsResponse?.items ?? [];
   const alertsAvailable = !alertsLoading && !alertsError;
   const severityCounts = alerts.reduce(
-    (counts, alert) => {
+    (counts: { critical: number; high: number; medium: number; low: number }, alert: AlertResponse) => {
       const severity = alert.severity.toLowerCase();
       if (severity === "critical" || severity === "high" || severity === "medium" || severity === "low") {
         counts[severity] += 1;
@@ -53,7 +54,7 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
     },
     { critical: 0, high: 0, medium: 0, low: 0 },
   );
-  const alertCountByCategory = alerts.reduce<Record<string, number>>((counts, alert) => {
+  const alertCountByCategory = alerts.reduce<Record<string, number>>((counts: Record<string, number>, alert: AlertResponse) => {
     const current = counts[alert.category];
     counts[alert.category] = (current === undefined ? 0 : current) + 1;
     return counts;

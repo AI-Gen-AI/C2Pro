@@ -5,25 +5,25 @@
  *
  *         **C2Pro - Contract Intelligence Platform**
  *
- *         Plataforma de inteligencia contractual para proyectos de construcción e ingeniería.
+ *         Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.
  *
- *         ## Características
+ *         ## CaracterÃ­sticas
  *
- *         - 🔍 **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
- *         - 🤖 **IA Especializada**: Claude 4 entrenado en documentos de construcción
- *         - 📊 **Coherence Score**: Indicador 0-100 de alineación entre documentos
- *         - 👥 **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
- *         - 📈 **Multi-tenant**: Aislamiento completo de datos por organización
+ *         - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
+ *         - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n
+ *         - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos
+ *         - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders
+ *         - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n
  *
- *         ## Autenticación
+ *         ## AutenticaciÃ³n
  *
- *         La API usa JWT (JSON Web Tokens) para autenticación.
+ *         La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.
  *
  *         1. **Registro**: `POST /api/v1/auth/register`
  *         2. **Login**: `POST /api/v1/auth/login`
  *         3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`
  *
- *         ## Límites de Uso
+ *         ## LÃ­mites de Uso
  *
  *         - **Rate Limit**: 60 requests/minuto
  *         - **AI Budget**: $50 USD/mes (plan free)
@@ -31,9 +31,9 @@
  *
  *         ## Soporte
  *
- *         - 📧 Email: support@c2pro.app
- *         - 📖 Docs: https://docs.c2pro.app
- *         - 💬 Discord: https://discord.gg/c2pro
+ *         - ðŸ“§ Email: support@c2pro.app
+ *         - ðŸ“– Docs: https://docs.c2pro.app
+ *         - ðŸ’¬ Discord: https://discord.gg/c2pro
  *
  * OpenAPI spec version: 1.0.0
  */
@@ -46,9 +46,11 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  CoherenceEvaluateRequest,
   CoherenceResult,
+  EnrichedCoherenceResult,
+  EvaluateProjectCoherenceApiV1CoherenceEvaluatePostParams,
   HTTPValidationError,
-  ProjectContext,
 } from "../models";
 
 import { orvalApiClient } from "../../client";
@@ -56,38 +58,59 @@ import { orvalApiClient } from "../../client";
 /**
  * Accepts a project's context and evaluates it against a predefined set of coherence rules.
  *     Returns a list of alerts and a calculated coherence score.
+ *
+ *     Can work in two modes:
+ *     1. With project_id: Fetches document clauses from RAG automatically
+ *     2. With explicit clauses: Uses the provided clauses directly
+ *
+ *     **v0.3 Features:**
+ *     - Granular scoring (5-97 range) instead of binary 0/100
+ *     - 27 deterministic evaluators across 6 categories + CROSS
+ *     - Optional LLM semantic evaluation (disabled in low_budget_mode)
+ *     - Optional RAG similarity detection for cross-document analysis
+ *     - Add ?include_diagnostics=true to get detailed diagnostic information
  * @summary Evaluate Project Coherence
  */
-export const evaluateProjectCoherenceV0CoherenceEvaluatePost = (
-  projectContext: ProjectContext,
+export const evaluateProjectCoherenceApiV1CoherenceEvaluatePost = (
+  coherenceEvaluateRequest: CoherenceEvaluateRequest,
+  params?: EvaluateProjectCoherenceApiV1CoherenceEvaluatePostParams,
   signal?: AbortSignal,
 ) => {
   return orvalApiClient<CoherenceResult>({
-    url: `/coherence/evaluate`,
+    url: `/api/v1/coherence/evaluate`,
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    data: projectContext,
+    data: coherenceEvaluateRequest,
+    params,
     signal,
   });
 };
 
-export const getEvaluateProjectCoherenceV0CoherenceEvaluatePostMutationOptions =
+export const getEvaluateProjectCoherenceApiV1CoherenceEvaluatePostMutationOptions =
   <TError = void | HTTPValidationError, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<
       Awaited<
-        ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
+        ReturnType<typeof evaluateProjectCoherenceApiV1CoherenceEvaluatePost>
       >,
       TError,
-      { data: ProjectContext },
+      {
+        data: CoherenceEvaluateRequest;
+        params?: EvaluateProjectCoherenceApiV1CoherenceEvaluatePostParams;
+      },
       TContext
     >;
   }): UseMutationOptions<
-    Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>,
+    Awaited<
+      ReturnType<typeof evaluateProjectCoherenceApiV1CoherenceEvaluatePost>
+    >,
     TError,
-    { data: ProjectContext },
+    {
+      data: CoherenceEvaluateRequest;
+      params?: EvaluateProjectCoherenceApiV1CoherenceEvaluatePostParams;
+    },
     TContext
   > => {
-    const mutationKey = ["evaluateProjectCoherenceV0CoherenceEvaluatePost"];
+    const mutationKey = ["evaluateProjectCoherenceApiV1CoherenceEvaluatePost"];
     const { mutation: mutationOptions } = options
       ? options.mutation &&
         "mutationKey" in options.mutation &&
@@ -98,53 +121,190 @@ export const getEvaluateProjectCoherenceV0CoherenceEvaluatePostMutationOptions =
 
     const mutationFn: MutationFunction<
       Awaited<
-        ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
+        ReturnType<typeof evaluateProjectCoherenceApiV1CoherenceEvaluatePost>
       >,
-      { data: ProjectContext }
+      {
+        data: CoherenceEvaluateRequest;
+        params?: EvaluateProjectCoherenceApiV1CoherenceEvaluatePostParams;
+      }
     > = (props) => {
-      const { data } = props ?? {};
+      const { data, params } = props ?? {};
 
-      return evaluateProjectCoherenceV0CoherenceEvaluatePost(data);
+      return evaluateProjectCoherenceApiV1CoherenceEvaluatePost(data, params);
     };
 
     return { mutationFn, ...mutationOptions };
   };
 
-export type EvaluateProjectCoherenceV0CoherenceEvaluatePostMutationResult =
+export type EvaluateProjectCoherenceApiV1CoherenceEvaluatePostMutationResult =
   NonNullable<
-    Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>
+    Awaited<
+      ReturnType<typeof evaluateProjectCoherenceApiV1CoherenceEvaluatePost>
+    >
   >;
-export type EvaluateProjectCoherenceV0CoherenceEvaluatePostMutationBody =
-  ProjectContext;
-export type EvaluateProjectCoherenceV0CoherenceEvaluatePostMutationError =
+export type EvaluateProjectCoherenceApiV1CoherenceEvaluatePostMutationBody =
+  CoherenceEvaluateRequest;
+export type EvaluateProjectCoherenceApiV1CoherenceEvaluatePostMutationError =
   void | HTTPValidationError;
 
 /**
  * @summary Evaluate Project Coherence
  */
-export const useEvaluateProjectCoherenceV0CoherenceEvaluatePost = <
+export const useEvaluateProjectCoherenceApiV1CoherenceEvaluatePost = <
   TError = void | HTTPValidationError,
   TContext = unknown,
 >(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<
-        ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
+        ReturnType<typeof evaluateProjectCoherenceApiV1CoherenceEvaluatePost>
       >,
       TError,
-      { data: ProjectContext },
+      {
+        data: CoherenceEvaluateRequest;
+        params?: EvaluateProjectCoherenceApiV1CoherenceEvaluatePostParams;
+      },
       TContext
     >;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
-  Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>,
+  Awaited<
+    ReturnType<typeof evaluateProjectCoherenceApiV1CoherenceEvaluatePost>
+  >,
   TError,
-  { data: ProjectContext },
+  {
+    data: CoherenceEvaluateRequest;
+    params?: EvaluateProjectCoherenceApiV1CoherenceEvaluatePostParams;
+  },
   TContext
 > => {
   return useMutation(
-    getEvaluateProjectCoherenceV0CoherenceEvaluatePostMutationOptions(options),
+    getEvaluateProjectCoherenceApiV1CoherenceEvaluatePostMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
+/**
+ * Same as /evaluate but always returns full diagnostic information.
+ *
+ *     Includes:
+ *     - finding_signals: All deterministic + LLM signals with impact scores
+ *     - diagnostics: Detailed breakdown of scoring logic
+ *     - cross_pairs: RAG-detected cross-document relationships
+ *     - cost_usd: LLM API cost (if LLM evaluation was enabled)
+ * @summary Evaluate with Full Diagnostics
+ */
+export const evaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPost = (
+  coherenceEvaluateRequest: CoherenceEvaluateRequest,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<EnrichedCoherenceResult>({
+    url: `/api/v1/coherence/evaluate/diagnostics`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: coherenceEvaluateRequest,
+    signal,
+  });
+};
+
+export const getEvaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPostMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof evaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPost
+        >
+      >,
+      TError,
+      { data: CoherenceEvaluateRequest },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof evaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPost
+      >
+    >,
+    TError,
+    { data: CoherenceEvaluateRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      "evaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof evaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPost
+        >
+      >,
+      { data: CoherenceEvaluateRequest }
+    > = (props) => {
+      const { data } = props ?? {};
+
+      return evaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPost(data);
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type EvaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof evaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPost
+      >
+    >
+  >;
+export type EvaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPostMutationBody =
+  CoherenceEvaluateRequest;
+export type EvaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPostMutationError =
+  void | HTTPValidationError;
+
+/**
+ * @summary Evaluate with Full Diagnostics
+ */
+export const useEvaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPost = <
+  TError = void | HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof evaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPost
+        >
+      >,
+      TError,
+      { data: CoherenceEvaluateRequest },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<
+      typeof evaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPost
+    >
+  >,
+  TError,
+  { data: CoherenceEvaluateRequest },
+  TContext
+> => {
+  return useMutation(
+    getEvaluateWithDiagnosticsApiV1CoherenceEvaluateDiagnosticsPostMutationOptions(
+      options,
+    ),
     queryClient,
   );
 };

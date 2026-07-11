@@ -1,11 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  useEvaluateProjectCoherenceV0CoherenceEvaluatePost,
+  useEvaluateProjectCoherenceApiV1CoherenceEvaluatePost,
 } from "@/lib/api/generated/coherence-engine/coherence-engine";
-import { useAnalyzeDocumentApiV1AnalyzePost } from "@/lib/api/generated/analysis/analysis";
-import type { AnalyzeRequest, ProjectContext } from "@/lib/api/generated/models";
+import { useAnalyzeDocumentApiV1AnalysisAnalyzePost } from "@/lib/api/generated/analysis/analysis";
 import { getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryKey } from "@/lib/api/generated/coherence-dashboard/coherence-dashboard";
-import { getListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryKey } from "@/lib/api/generated/alerts/alerts";
+import { getListProjectAlertsApiV1AlertsProjectsProjectIdGetQueryKey } from "@/lib/api/generated/alerts/alerts";
 import { showToast } from "@/lib/ui/toast";
 
 type CoherenceResultSummary = {
@@ -31,15 +30,15 @@ function evaluatedToastMessage(result: unknown): string {
 
 export function useProjectCoherenceActions(projectId: string) {
   const queryClient = useQueryClient();
-  const evaluateMutation = useEvaluateProjectCoherenceV0CoherenceEvaluatePost();
-  const analyzeMutation = useAnalyzeDocumentApiV1AnalyzePost();
+  const evaluateMutation = useEvaluateProjectCoherenceApiV1CoherenceEvaluatePost();
+  const analyzeMutation = useAnalyzeDocumentApiV1AnalysisAnalyzePost();
 
   const invalidateProjectCoherence = async () => {
     await queryClient.invalidateQueries({
       queryKey: getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryKey(projectId),
     });
     await queryClient.invalidateQueries({
-      queryKey: getListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryKey(projectId),
+      queryKey: getListProjectAlertsApiV1AlertsProjectsProjectIdGetQueryKey(projectId),
     });
     await queryClient.invalidateQueries({
       queryKey: ["project-documents", projectId],
@@ -48,7 +47,7 @@ export function useProjectCoherenceActions(projectId: string) {
 
   const evaluateCoherence = async () => {
     const result = await evaluateMutation.mutateAsync({
-      data: { project_id: projectId } as unknown as ProjectContext,
+      data: { project_id: projectId },
     });
     await invalidateProjectCoherence();
     showToast(evaluatedToastMessage(result));
@@ -56,7 +55,7 @@ export function useProjectCoherenceActions(projectId: string) {
 
   const rerunAnalysis = async () => {
     await analyzeMutation.mutateAsync({
-      data: { project_id: projectId } as unknown as AnalyzeRequest,
+      data: { project_id: projectId },
     });
     await invalidateProjectCoherence();
     showToast("Analysis preview completed.");
