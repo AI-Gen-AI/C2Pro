@@ -25,6 +25,12 @@ vi.mock("@/components/coherence/CoherenceClient", () => ({
   ),
 }));
 
+vi.mock("./coherence-actions", () => ({
+  CoherenceActions: ({ projectId }: { projectId: string }) => (
+    <div>Coherence actions for {projectId}</div>
+  ),
+}));
+
 describe("ProjectCoherencePage", () => {
   beforeEach(() => {
     getCoherenceDashboardMock.mockReset();

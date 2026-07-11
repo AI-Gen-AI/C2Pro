@@ -8,6 +8,7 @@ const mutateAsyncMock = vi.fn();
 const useDeleteDocumentMock = vi.fn();
 const apiClientPostMock = vi.fn();
 const showToastMock = vi.fn();
+const evaluateCoherenceMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "proj_real_001" }),
@@ -22,6 +23,15 @@ vi.mock("@/hooks/useProjectDocuments", () => ({
 
 vi.mock("@/hooks/useProject", () => ({
   useProject: (...args: unknown[]) => useProjectMock(...args),
+}));
+
+vi.mock("@/hooks/useProjectCoherenceActions", () => ({
+  useProjectCoherenceActions: () => ({
+    evaluateCoherence: evaluateCoherenceMock,
+    rerunAnalysis: vi.fn(),
+    isEvaluating: false,
+    isRerunningAnalysis: false,
+  }),
 }));
 
 vi.mock("@/lib/api/generated/documents/documents", () => ({
@@ -48,11 +58,14 @@ vi.mock("@/components/features/analysis/AnalysisProgressTracker", () => ({
 vi.mock("@/components/features/documents/DocumentUploadDropzone", () => ({
   DocumentUploadDropzone: ({
     onUploadComplete,
+    defaultType,
   }: {
     onUploadComplete?: () => void;
+    defaultType?: string;
   }) => (
     <div>
       <div>Upload Dropzone</div>
+      <div>Default upload type: {defaultType ?? "none"}</div>
       <button type="button" onClick={onUploadComplete}>
         Finish Upload
       </button>
@@ -71,6 +84,7 @@ describe("ProjectDocumentsPage", () => {
     useDeleteDocumentMock.mockReset();
     apiClientPostMock.mockReset();
     showToastMock.mockReset();
+    evaluateCoherenceMock.mockReset();
     useProjectMock.mockReturnValue({
       data: {
         id: "proj_real_001",
@@ -344,6 +358,31 @@ describe("ProjectDocumentsPage", () => {
     await waitFor(() =>
       expect(screen.queryByText("Upload Documents")).not.toBeInTheDocument(),
     );
+  });
+
+  it("opens upload with the checklist-selected document type", async () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_contract_001",
+          name: "Contract.pdf",
+          type: "contract",
+          fileSize: 2048,
+          uploadedAt: new Date("2026-03-18T09:00:00Z"),
+          status: "parsed",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /upload budget/i }));
+
+    expect(screen.getByRole("dialog", { name: /upload documents/i })).toBeInTheDocument();
+    expect(screen.getByText("Default upload type: budget")).toBeInTheDocument();
   });
 
   it("opens the delete confirmation dialog for a selected document", () => {

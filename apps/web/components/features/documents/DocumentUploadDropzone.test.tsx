@@ -71,6 +71,27 @@ describe("S2-09 - DocumentUploadDropzone", () => {
     expect(uploadDocumentMock).not.toHaveBeenCalled();
   });
 
+  it("uses the provided default document type when a checklist CTA opens upload", async () => {
+    render(
+      <DocumentUploadDropzone
+        projectId="proj_demo_001"
+        defaultType="schedule"
+      />,
+    );
+
+    const dropzone = screen.getByRole("button", { name: /upload documents/i });
+    fireEvent.drop(dropzone, {
+      dataTransfer: {
+        files: [createFile("lookahead.pdf", "application/pdf")],
+      },
+    });
+
+    expect(await screen.findByText("lookahead.pdf")).toBeInTheDocument();
+    expect(screen.getByLabelText(/document type for lookahead\.pdf/i)).toHaveTextContent(
+      "Schedule",
+    );
+  });
+
   it("uploads staged files sequentially with the selected document type per file", async () => {
     const user = userEvent.setup();
     uploadDocumentMock.mockResolvedValue({ id: "doc-1", task_id: "task-1" });

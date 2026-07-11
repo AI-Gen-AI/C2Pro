@@ -23,7 +23,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { AnalysisProgressTracker } from '@/components/features/analysis/AnalysisProgressTracker';
+import { TripletChecklist, type TripletSlotType } from '@/components/features/documents/TripletChecklist';
 import { useProjectDocuments } from '@/hooks/useProjectDocuments';
+import { useProjectCoherenceActions } from '@/hooks/useProjectCoherenceActions';
 import { apiClient } from '@/lib/api/client';
 import { useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete } from '@/lib/api/generated/documents/documents';
 import { showToast } from '@/lib/ui/toast';
@@ -119,6 +121,7 @@ export default function ProjectDocumentsPage() {
   const projectId = params.id as string;
   const { data: project } = useProject(projectId);
   const { documents, loading, error, refetch } = useProjectDocuments(projectId);
+  const { evaluateCoherence, isEvaluating } = useProjectCoherenceActions(projectId);
   const deleteDocument = useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete();
   const projectName = project?.name?.trim() || projectId;
 
@@ -130,6 +133,7 @@ export default function ProjectDocumentsPage() {
   const [documentToDelete, setDocumentToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [retryingDocumentId, setRetryingDocumentId] = useState<string | null>(null);
+  const [defaultUploadType, setDefaultUploadType] = useState<TripletSlotType | null>(null);
 
   const handleRetryProcessing = async (docId: string) => {
     setRetryingDocumentId(docId);
@@ -146,7 +150,13 @@ export default function ProjectDocumentsPage() {
 
   const handleUploadComplete = () => {
     setUploadDialogOpen(false);
+    setDefaultUploadType(null);
     refetch();
+  };
+
+  const handleOpenUploadDialog = (type?: TripletSlotType) => {
+    setDefaultUploadType(type ?? null);
+    setUploadDialogOpen(true);
   };
 
   const handleDeleteClick = (docId: string, docName: string) => {
@@ -231,7 +241,7 @@ export default function ProjectDocumentsPage() {
             </span>
           </div>
         </div>
-        <Button className="rounded-xl shadow-sm" onClick={() => setUploadDialogOpen(true)}>
+        <Button className="rounded-xl shadow-sm" onClick={() => handleOpenUploadDialog()}>
           <Upload className="mr-2 h-4 w-4" />
           Upload Document
         </Button>
@@ -241,8 +251,24 @@ export default function ProjectDocumentsPage() {
         <AnalysisProgressTracker projectId={projectId} />
       ) : null}
 
+      <TripletChecklist
+        documents={documents}
+        coherenceHref={`/projects/${projectId}/coherence`}
+        onUploadType={handleOpenUploadDialog}
+        onEvaluateCoherence={() => void evaluateCoherence()}
+        evaluatePending={isEvaluating}
+      />
+
       {/* Upload Dialog */}
-      <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+      <Dialog
+        open={uploadDialogOpen}
+        onOpenChange={(open) => {
+          setUploadDialogOpen(open);
+          if (!open) {
+            setDefaultUploadType(null);
+          }
+        }}
+      >
         <DialogContent
           className="gap-5 bg-card p-6 text-card-foreground sm:max-w-[680px] sm:rounded-[28px]"
           data-testid="documents-upload-dialog-shell"
@@ -267,6 +293,7 @@ export default function ProjectDocumentsPage() {
           <DocumentUploadDropzone
             projectId={projectId}
             maxFileSizeBytes={50 * 1024 * 1024}
+            defaultType={defaultUploadType ?? undefined}
             onUploadComplete={handleUploadComplete}
           />
         </DialogContent>
