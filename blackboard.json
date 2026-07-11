@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-11T18:25:00Z",
+  "updated_at": "2026-07-11T22:55:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -98,6 +98,45 @@
           "pnpm lint -> passed.",
           "Forbidden zero-default grep in components/coherence and contracts.ts -> 0 hits.",
           "Broader guard pnpm vitest run \"app/(app)/projects/[id]\" shows only known TASK-FRT-192 budget/settings/wbs failures."
+        ]
+      }
+    },
+    {
+      "tarea_id": "T134",
+      "backlog_id": "TASK-FRT-189",
+      "tipo": "frontend",
+      "descripcion": "Add a global mutation error surface and remove mutation swallow patterns from the Level-1 frontend.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "Unhandled mutation failures produce a visible toast through the shared QueryClient, local mutation onError handlers are not duplicated, and the identified budget/WBS/document delete write paths no longer fail silently.",
+      "archivos_modificados": [
+        "apps/web/lib/api/queryClient.ts",
+        "apps/web/lib/api/queryClient.test.ts",
+        "apps/web/hooks/useBudget.ts",
+        "apps/web/hooks/useBudget.test.ts",
+        "apps/web/hooks/useWBSTree.ts",
+        "apps/web/hooks/useWBSTree.test.ts",
+        "apps/web/app/(app)/projects/[id]/documents/page.tsx",
+        "apps/web/app/(app)/projects/[id]/documents/page.test.tsx",
+        "backlogs/FRT_FRONTEND.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-11T22:35:00Z",
+        "completado": "2026-07-11T22:55:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-189 completed on feat/frt-189-mutation-errors: createQueryClient now surfaces unhandled mutation failures with a toast while respecting local onError handlers; useBudget/useWBSTree rethrow write failures; document deletion shows a visible toast.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: focused run failed first on missing global mutation toast, useBudget/useWBSTree resolving null/false, and document delete missing a toast.",
+          "GREEN: pnpm vitest run lib/api/queryClient.test.ts hooks/useBudget.test.ts hooks/useWBSTree.test.ts \"app/(app)/projects/[id]/documents/page.test.tsx\" -> 4 files / 25 tests passed.",
+          "Targeted swallow grep -> no empty catch blocks and no console.error hits in patched mutation paths.",
+          "pnpm typecheck -> passed.",
+          "pnpm lint -> passed."
         ]
       }
     },
@@ -3232,7 +3271,7 @@
     "rev_006_progress": "Phase A complete - hexagonal structure created",
     "audit_pending": 4
   },
-  "contexto_paso_anterior": "2026-07-11T18:25:00Z: TASK-FRT-186 completed on feat/frt-186-categories-v2. Result: categories_v2 maps through getDashboardSummary, coherence renders evidence-aware category details without fabricated zero defaults, INSUFFICIENT_EVIDENCE is neutral, and AUDIT_INCOMPLETE copy is humanized. Focused coherence/service tests, requested coherence slice, typecheck, lint, and zero-default grep passed; broader project guard only shows known TASK-FRT-192 budget/settings/wbs failures.",
+  "contexto_paso_anterior": "2026-07-11T22:55:00Z: TASK-FRT-189 completed on feat/frt-189-mutation-errors. Result: createQueryClient surfaces unhandled mutation failures with a visible toast while respecting local onError handlers; useBudget and useWBSTree write helpers now rethrow instead of returning null/false; document deletion failure shows a toast. Focused tests, typecheck, lint, and targeted swallow grep passed.",
   "trazas_de_error": [
     {
       "timestamp": "2026-04-10T20:54:00+00:00",

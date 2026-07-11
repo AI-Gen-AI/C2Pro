@@ -501,6 +501,7 @@ describe("ProjectDocumentsPage", () => {
     );
     expect(screen.getByText("Delete Document")).toBeInTheDocument();
     expect(refetch).not.toHaveBeenCalled();
+    expect(showToastMock).toHaveBeenCalledWith("Delete failed");
   });
 
   it("separates filter controls from the results count to avoid dropdown overlap", () => {
