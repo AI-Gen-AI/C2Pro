@@ -187,28 +187,23 @@ export function useWBSTree({
   // Create item
   const createItem = useCallback(
     async (input: CreateWBSItemInput): Promise<WBSTreeItem | null> => {
-      try {
-        const result = await createMutation.mutateAsync({
-          projectId,
-          data: input,
-        });
-        refetch();
-        return result
-          ? {
-              id: result.id,
-              code: result.code,
-              name: result.name,
-              level: result.level ?? 0,
-              completion: result.completion ?? 0,
-              plannedStart: result.start_date ?? undefined,
-              plannedEnd: result.end_date ?? undefined,
-              children: [],
-            }
-          : null;
-      } catch (err) {
-        console.error("Failed to create WBS item:", err);
-        return null;
-      }
+      const result = await createMutation.mutateAsync({
+        projectId,
+        data: input,
+      });
+      refetch();
+      return result
+        ? {
+            id: result.id,
+            code: result.code,
+            name: result.name,
+            level: result.level ?? 0,
+            completion: result.completion ?? 0,
+            plannedStart: result.start_date ?? undefined,
+            plannedEnd: result.end_date ?? undefined,
+            children: [],
+          }
+        : null;
     },
     [projectId, createMutation, refetch],
   );
@@ -219,29 +214,24 @@ export function useWBSTree({
       itemId: string,
       input: UpdateWBSItemInput,
     ): Promise<WBSTreeItem | null> => {
-      try {
-        const result = await updateMutation.mutateAsync({
-          projectId,
-          itemId,
-          data: input,
-        });
-        refetch();
-        return result
-          ? {
-              id: result.id,
-              code: result.code,
-              name: result.name,
-              level: result.level ?? 0,
-              completion: result.completion ?? 0,
-              plannedStart: result.start_date ?? undefined,
-              plannedEnd: result.end_date ?? undefined,
-              children: [],
-            }
-          : null;
-      } catch (err) {
-        console.error("Failed to update WBS item:", err);
-        return null;
-      }
+      const result = await updateMutation.mutateAsync({
+        projectId,
+        itemId,
+        data: input,
+      });
+      refetch();
+      return result
+        ? {
+            id: result.id,
+            code: result.code,
+            name: result.name,
+            level: result.level ?? 0,
+            completion: result.completion ?? 0,
+            plannedStart: result.start_date ?? undefined,
+            plannedEnd: result.end_date ?? undefined,
+            children: [],
+          }
+        : null;
     },
     [projectId, updateMutation, refetch],
   );
@@ -249,21 +239,16 @@ export function useWBSTree({
   // Delete item
   const deleteItem = useCallback(
     async (itemId: string, cascade = false): Promise<boolean> => {
-      try {
-        await deleteMutation.mutateAsync({
-          projectId,
-          itemId,
-          params: { cascade },
-        });
-        refetch();
-        if (selectedItem?.id === itemId) {
-          setSelectedItem(null);
-        }
-        return true;
-      } catch (err) {
-        console.error("Failed to delete WBS item:", err);
-        return false;
+      await deleteMutation.mutateAsync({
+        projectId,
+        itemId,
+        params: { cascade },
+      });
+      refetch();
+      if (selectedItem?.id === itemId) {
+        setSelectedItem(null);
       }
+      return true;
     },
     [projectId, deleteMutation, refetch, selectedItem],
   );
@@ -271,17 +256,12 @@ export function useWBSTree({
   // Move item (drag-drop)
   const moveItem = useCallback(
     async (itemId: string, newParentId: string | null): Promise<boolean> => {
-      try {
-        const input: MoveWBSItemInput = {
-          new_parent_id: newParentId,
-        };
-        await moveMutation.mutateAsync({ projectId, itemId, data: input });
-        refetch();
-        return true;
-      } catch (err) {
-        console.error("Failed to move WBS item:", err);
-        return false;
-      }
+      const input: MoveWBSItemInput = {
+        new_parent_id: newParentId,
+      };
+      await moveMutation.mutateAsync({ projectId, itemId, data: input });
+      refetch();
+      return true;
     },
     [projectId, moveMutation, refetch],
   );

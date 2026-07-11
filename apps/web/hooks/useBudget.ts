@@ -126,13 +126,7 @@ export function useBudget({
   // Create item
   const createItem = useCallback(
     async (item: Partial<BudgetItem>): Promise<BudgetItem | null> => {
-      try {
-        const result = await createMutation.mutateAsync(item);
-        return result;
-      } catch (err) {
-        console.error("Failed to create budget item:", err);
-        return null;
-      }
+      return createMutation.mutateAsync(item);
     },
     [createMutation],
   );
@@ -143,13 +137,7 @@ export function useBudget({
       itemId: string,
       item: Partial<BudgetItem>,
     ): Promise<BudgetItem | null> => {
-      try {
-        const result = await updateMutation.mutateAsync({ itemId, item });
-        return result;
-      } catch (err) {
-        console.error("Failed to update budget item:", err);
-        return null;
-      }
+      return updateMutation.mutateAsync({ itemId, item });
     },
     [updateMutation],
   );
@@ -157,16 +145,11 @@ export function useBudget({
   // Delete item
   const deleteItem = useCallback(
     async (itemId: string): Promise<boolean> => {
-      try {
-        await deleteMutation.mutateAsync(itemId);
-        if (selectedItem?.id === itemId) {
-          setSelectedItem(null);
-        }
-        return true;
-      } catch (err) {
-        console.error("Failed to delete budget item:", err);
-        return false;
+      await deleteMutation.mutateAsync(itemId);
+      if (selectedItem?.id === itemId) {
+        setSelectedItem(null);
       }
+      return true;
     },
     [deleteMutation, selectedItem],
   );

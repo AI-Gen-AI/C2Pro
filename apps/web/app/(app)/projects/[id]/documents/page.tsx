@@ -100,7 +100,7 @@ function isInFlightStatus(status: string | undefined): boolean {
   );
 }
 
-function retryFailureMessage(error: unknown): string {
+function mutationFailureMessage(error: unknown, fallback: string): string {
   const maybeResponse = error as {
     response?: { data?: { detail?: unknown } };
   };
@@ -112,7 +112,7 @@ function retryFailureMessage(error: unknown): string {
 
   return error instanceof Error && error.message
     ? error.message
-    : 'Failed to retry document processing.';
+    : fallback;
 }
 
 export default function ProjectDocumentsPage() {
@@ -141,8 +141,7 @@ export default function ProjectDocumentsPage() {
       await apiClient.post(`/projects/${projectId}/documents/${docId}/reprocess`);
       await refetch();
     } catch (error) {
-      console.error('Failed to reprocess document:', error);
-      showToast(retryFailureMessage(error));
+      showToast(mutationFailureMessage(error, 'Failed to retry document processing.'));
     } finally {
       setRetryingDocumentId(null);
     }
@@ -173,7 +172,7 @@ export default function ProjectDocumentsPage() {
       setDocumentToDelete(null);
       refetch();
     } catch (error) {
-      console.error('Failed to delete document:', error);
+      showToast(mutationFailureMessage(error, 'Failed to delete document.'));
     } finally {
       setIsDeleting(false);
     }
