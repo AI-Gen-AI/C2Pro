@@ -119,6 +119,7 @@ def mock_llm_response_violation():
     """Mock LLM response indicating a rule violation."""
     return {
         "rule_violated": True,
+        "impact_score": 0.75,
         "severity": "high",
         "evidence": {
             "quote": "según sea necesario",
@@ -369,12 +370,27 @@ def patch_anthropic_wrapper(mock_llm_rule_port):
 
 @pytest.fixture
 def patch_anthropic_wrapper_for_integration(mock_anthropic_wrapper):
-    """Patch get_anthropic_wrapper in llm_integration module."""
+    """Patch get_anthropic_wrapper in all relevant namespaces to ensure total consistency."""
     with patch(
+        "src.core.ai.anthropic_wrapper.get_anthropic_wrapper",
+        return_value=mock_anthropic_wrapper
+    ), patch(
         "src.coherence.llm_integration.get_anthropic_wrapper",
+        return_value=mock_anthropic_wrapper
+    ), patch(
+        "src.coherence.adapters.ai.llm_rule_evaluator.get_anthropic_wrapper",
         return_value=mock_anthropic_wrapper
     ):
         yield mock_anthropic_wrapper
+
+
+@pytest.fixture(autouse=True)
+def clean_anthropic_wrapper_singleton():
+    """Autouse fixture to reset the anthropic wrapper singleton before and after each test."""
+    from src.core.ai.anthropic_wrapper import reset_wrapper
+    reset_wrapper()
+    yield
+    reset_wrapper()
 
 
 # ===========================================
