@@ -47,6 +47,7 @@ router = APIRouter(
 
 # -- Endpoints ----------------------------------------------------------------
 
+
 @router.post(
     "/route",
     response_model=ReviewItemResponse,
@@ -97,9 +98,19 @@ async def list_review_queue(
     status_filter: ReviewStatus | None = Query(None, alias="status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    project_id: UUID | None = Query(None, description="Filter by project"),
     repo: SqlAlchemyReviewQueueRepository = Depends(get_review_queue_repo),
 ) -> ReviewQueueResponse:
-    items = await repo.list_by_status(status=status_filter, skip=skip, limit=limit)
+    items = await repo.list_by_status(
+        status=status_filter,
+        skip=skip,
+        limit=limit,
+        project_id=project_id,
+    )
+    total = await repo.count_by_status(
+        status=status_filter,
+        project_id=project_id,
+    )
     return ReviewQueueResponse(
         items=[
             ReviewItemResponse(
@@ -116,7 +127,7 @@ async def list_review_queue(
             )
             for i in items
         ],
-        total=len(items),
+        total=total,
     )
 
 
@@ -331,7 +342,9 @@ async def check_and_escalate(
                 }
             },
         },
-        400: {"description": "Invalid request - review item not pending or missing checkpoint data"},
+        400: {
+            "description": "Invalid request - review item not pending or missing checkpoint data"
+        },
         404: {"description": "Review item not found"},
         422: {"description": "Validation error - invalid decision value or feedback too long"},
     },
@@ -393,6 +406,7 @@ async def resume_workflow(
         from src.modules.hitl.application.resume_workflow_use_case import (
             ResumeWorkflowRequest as UseCaseRequest,
         )
+
         request = UseCaseRequest(decision=decision, feedback=payload.feedback)
 
         # Execute use case
