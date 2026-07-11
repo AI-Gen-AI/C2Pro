@@ -1,4 +1,5 @@
 import type {
+  CoherenceV2Payload,
   DashboardSummary,
   ProjectListItem,
   ProjectQuickViewSummary,
@@ -24,6 +25,7 @@ type DashboardSummaryResponse = Partial<DashboardSummary> & {
   score_version?: string | null;
   score_reason?: string | null;
   score_missing_dimensions?: unknown;
+  categories_v2?: CoherenceV2Payload | null;
 };
 
 type ProjectQuickViewSummaryResponse = Partial<ProjectQuickViewSummary> & {
@@ -105,6 +107,9 @@ export async function getDashboardSummary(
     score_reason:
       typeof summary.score_reason === "string" ? summary.score_reason : null,
     score_missing_dimensions: normalizeStringList(summary.score_missing_dimensions),
+    ...("categories_v2" in summary
+      ? { categories_v2: summary.categories_v2 ?? null }
+      : {}),
     last_updated:
       typeof summary.last_updated === "string" ? summary.last_updated : null,
   };

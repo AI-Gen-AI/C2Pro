@@ -3,7 +3,8 @@
  *
  * Renders the per-category status with the ECOA color contract:
  *   - red (destructive) is RESERVED for `conflicting_evidence` only.
- *   - amber for `insufficient_evidence` and `processing_error`.
+ *   - neutral gray for `insufficient_evidence` and `not_applicable`.
+ *   - amber-orange for `processing_error`.
  *   - blue for `pending_documents`.
  *   - neutral gray for `not_applicable`.
  *   - success green for `scored`.
@@ -27,8 +28,8 @@ const STATUS_CONFIG: Record<
   },
   insufficient_evidence: {
     label: "Insufficient evidence",
-    className: "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-900/30 dark:text-amber-100 dark:border-amber-700",
-    testid: "status-badge-warning",
+    className: "bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-800/60 dark:text-gray-100 dark:border-gray-700",
+    testid: "status-badge-neutral",
   },
   processing_error: {
     label: "Processing error",
@@ -43,7 +44,7 @@ const STATUS_CONFIG: Record<
   not_applicable: {
     label: "Not applicable",
     className: "bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-800/60 dark:text-gray-200 dark:border-gray-700",
-    testid: "status-badge-neutral",
+    testid: "status-badge-not-applicable",
   },
 };
 

@@ -179,6 +179,61 @@ describe("CoherenceClient v1 UX", () => {
     expect(screen.getByText(/no alert data/i)).toBeInTheDocument();
     expect(screen.queryByText(/alerts chart/i)).not.toBeInTheDocument();
   });
+
+  it("renders categories_v2 instead of the v1 sub-category grid when the v2 payload is present", () => {
+    render(
+      <CoherenceClient
+        summary={{
+          project_id: "proj-1",
+          tenant_id: "tenant-1",
+          coherence_score: 82,
+          global_score: 82,
+          sub_scores: { BUDGET: 80 },
+          weights_used: { BUDGET: 1 },
+          alert_count: 2,
+          document_count: 3,
+          methodology_version: "v2",
+          score_version: "coherence-v2",
+          score_reason: null,
+          score_missing_dimensions: [],
+          last_updated: "2026-05-01T00:00:00Z",
+          categories_v2: {
+            project_id: "proj-1",
+            version: "coherence-v2",
+            generated_at: "2026-07-11T00:00:00Z",
+            global: {
+              coherence_score: 82,
+              completeness_score: 90,
+              technical_reliability_index: 95,
+              status: "scored",
+              score_reason: null,
+              active_weight: 1,
+            },
+            categories: [
+              {
+                category: "BUDGET",
+                status: "scored",
+                coherence_score: 80,
+                evidence_coverage: 0.8,
+                technical_reliability: 0.9,
+                evidence_freshness: 0.75,
+                applicability_reason: null,
+                score_explanation: null,
+                missing_evidence: [],
+                detected_conflicts: [],
+                recommendation: "Review budget deltas.",
+              },
+            ],
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Evidence-aware categories")).toBeInTheDocument();
+    expect(screen.getByText("Review budget deltas.")).toBeInTheDocument();
+    expect(screen.queryByText("Sub-Category Breakdown")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /budget 80 alerts/i })).not.toBeInTheDocument();
+  });
 });
 
 describe("CoherenceClient v1 incomplete score UX", () => {
@@ -190,7 +245,7 @@ describe("CoherenceClient v1 incomplete score UX", () => {
       error: null,
     });
   });
-  it("withholds the gauge and shows an AUDIT_INCOMPLETE banner when score is null", () => {
+  it("withholds the gauge and shows a human audit-incomplete banner when score is null", () => {
     render(
       <CoherenceClient
         summary={{
@@ -211,8 +266,9 @@ describe("CoherenceClient v1 incomplete score UX", () => {
       />,
     );
 
-    expect(screen.getByText(/supply missing dimensions to unlock full coherence score/i)).toBeInTheDocument();
+    expect(screen.getByText(/score withheld: this audit is missing/i)).toBeInTheDocument();
     expect(screen.getByText(/schedule, budget/i)).toBeInTheDocument();
+    expect(screen.queryByText(/AUDIT_INCOMPLETE/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /upload schedule and budget/i })).toHaveAttribute(
       "href",
       "/projects/proj-1/documents",

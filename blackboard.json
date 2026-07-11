@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-09T00:11:44Z",
+  "updated_at": "2026-07-11T18:25:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -57,6 +57,47 @@
           "pnpm build -> passed; / and /en listed as static routes.",
           "Emitted .next/server/app/index.html contains Detect contract conflicts, Iniciar sesión, and Unirse al piloto and has no Loading..., Redirecting..., Deploy marker, 94%, $2.4M, <30s, or millions in savings.",
           "rg -n \"Deploy marker\" apps/web -> 0 hits"
+        ]
+      }
+    },
+    {
+      "tarea_id": "T132",
+      "backlog_id": "TASK-FRT-186",
+      "tipo": "frontend",
+      "descripcion": "Render categories_v2 in the coherence surface with honest per-category status, evidence coverage, missing evidence, conflicts, recommendation, dashboard summary mapping, and humanized audit-incomplete copy.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "categories_v2 maps through getDashboardSummary and renders in components/coherence without fabricated score/count defaults; INSUFFICIENT_EVIDENCE is neutral; missing payloads keep the existing honest fallback; focused tests, typecheck, lint, and the zero-default grep pass.",
+      "archivos_modificados": [
+        "apps/web/components/coherence/CategoryV2Panel.tsx",
+        "apps/web/components/coherence/CategoryV2Panel.test.tsx",
+        "apps/web/components/coherence/CategoryStatusBadge.tsx",
+        "apps/web/components/coherence/CategoryStatusBadge.test.tsx",
+        "apps/web/components/coherence/CoherenceClient.tsx",
+        "apps/web/components/coherence/CoherenceClient.test.tsx",
+        "apps/web/lib/api/services/dashboard.ts",
+        "apps/web/lib/api/services/dashboard.test.ts",
+        "backlogs/FRT_FRONTEND.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-11T17:55:00Z",
+        "completado": "2026-07-11T18:25:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-186 completed on feat/frt-186-categories-v2: nullable categories_v2 is mapped through the dashboard service and rendered in the coherence surface with honest per-category detail and neutral insufficient-evidence styling.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: focused tests failed first for missing CategoryV2Panel, missing dashboard categories_v2 mapping, and old AUDIT_INCOMPLETE copy.",
+          "GREEN: pnpm vitest run components/coherence lib/api/services/dashboard.test.ts -> 7 files / 42 tests passed.",
+          "GREEN: pnpm vitest run components/coherence \"app/(app)/projects/[id]/coherence\" -> 8 files / 41 tests passed.",
+          "pnpm typecheck -> passed.",
+          "pnpm lint -> passed.",
+          "Forbidden zero-default grep in components/coherence and contracts.ts -> 0 hits.",
+          "Broader guard pnpm vitest run \"app/(app)/projects/[id]\" shows only known TASK-FRT-192 budget/settings/wbs failures."
         ]
       }
     },
@@ -3191,7 +3232,7 @@
     "rev_006_progress": "Phase A complete - hexagonal structure created",
     "audit_pending": 4
   },
-  "contexto_paso_anterior": "2026-07-11T01:41:41.5998647+02:00: TASK-FRT-184 and TASK-FRT-185 completed on feat/frt-l1-wave1-a. Result: triplet checklist added to Documents and Overview; missing-slot CTAs open upload with the requested document type preselected; complete triplet shows success row; Evaluate coherence and Re-run analysis actions use generated mutation hooks, invalidate dashboard/alerts/documents queries on success, and remain disabled until triplet completion. Verification: RED focused tests failed first; GREEN focused Vitest 8 files / 52 tests passed; pnpm typecheck passed after restoring generated-client line-ending noise; pnpm lint passed; pnpm generate:api:check passed; broader app/(app)/projects/[id] + components/coherence guard has 96 passing tests and 3 known TASK-FRT-192 debt failures in untouched budget/settings/wbs tests.",
+  "contexto_paso_anterior": "2026-07-11T18:25:00Z: TASK-FRT-186 completed on feat/frt-186-categories-v2. Result: categories_v2 maps through getDashboardSummary, coherence renders evidence-aware category details without fabricated zero defaults, INSUFFICIENT_EVIDENCE is neutral, and AUDIT_INCOMPLETE copy is humanized. Focused coherence/service tests, requested coherence slice, typecheck, lint, and zero-default grep passed; broader project guard only shows known TASK-FRT-192 budget/settings/wbs failures.",
   "trazas_de_error": [
     {
       "timestamp": "2026-04-10T20:54:00+00:00",

@@ -117,6 +117,64 @@ describe("dashboard service contract alignment", () => {
     });
   });
 
+  it("maps the nullable categories_v2 payload through the dashboard summary", async () => {
+    const categoriesV2 = {
+      project_id: "proj-v2",
+      version: "coherence-v2",
+      generated_at: "2026-07-11T00:00:00Z",
+      global: {
+        coherence_score: null,
+        completeness_score: 45,
+        technical_reliability_index: 92,
+        status: "partial",
+        score_reason: "missing active evidence",
+        active_weight: 0.4,
+      },
+      categories: [
+        {
+          category: "BUDGET",
+          status: "scored",
+          coherence_score: 82,
+          evidence_coverage: 0.75,
+          technical_reliability: 0.9,
+          evidence_freshness: 0.8,
+          applicability_reason: "Budget evidence found",
+          score_explanation: null,
+          missing_evidence: [],
+          detected_conflicts: [{ title: "Budget total mismatch" }],
+          recommendation: "Review contract and budget totals.",
+        },
+      ],
+    };
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          project_id: "proj-v2",
+          tenant_id: "tenant-1",
+          coherence_score: null,
+          global_score: null,
+          sub_scores: null,
+          weights_used: null,
+          alert_count: 1,
+          document_count: 3,
+          methodology_version: "v2",
+          score_version: "coherence-v2",
+          categories_v2: categoriesV2,
+          last_updated: "2026-07-11T00:00:00Z",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await expect(getDashboardSummary("proj-v2")).resolves.toEqual(
+      expect.objectContaining({
+        project_id: "proj-v2",
+        categories_v2: categoriesV2,
+      }),
+    );
+  });
+
   it("uses backend URLs when server-side loading is requested", async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ items: [] }), {
