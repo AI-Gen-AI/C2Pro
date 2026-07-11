@@ -50,4 +50,8 @@ export type ListReviewQueueApiV1HitlQueueGetParams = {
    * @maximum 200
    */
   limit?: number;
+  /**
+   * Filter by project
+   */
+  project_id?: string | null;
 };

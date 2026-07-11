@@ -98,9 +98,10 @@ export default function ReviewPage() {
     () => ({
       skip: 0,
       limit: pageLimit,
+      project_id: projectId,
       ...(statusFilter === 'all' ? {} : { status: statusFilter as ReviewStatus }),
     }),
-    [pageLimit, statusFilter],
+    [projectId, pageLimit, statusFilter],
   );
 
   const { data: queueData, isLoading, error, refetch } =
@@ -193,12 +194,16 @@ export default function ReviewPage() {
     <div className="space-y-6" data-testid="review-page">
       {/* Header */}
       <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight">Organization review queue</h1>
-        <p className="text-sm text-muted-foreground">
-          Tenant-wide HITL queue. The current API supports status and pagination filters, but
-          does not support project filtering yet.
-          {projectName ? ` Opened from ${projectName}.` : ''}
-        </p>
+        <h1 className="text-2xl font-bold tracking-tight">Review queue</h1>
+        {projectName ? (
+          <p className="text-sm text-muted-foreground">
+            Human-in-the-loop review for {projectName}. Items requiring manual inspection and approval.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Human-in-the-loop review queue. Inspect and approve or reject flagged items.
+          </p>
+        )}
       </div>
 
       {/* Stats Cards */}
