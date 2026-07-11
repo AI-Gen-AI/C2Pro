@@ -388,6 +388,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         )
         return {
             "coherence_score": None,
+            "coherence_score_version": None,
             "coherence_breakdown": {},
             "coherence_reason": "missing_project_id",
             "coherence_missing_dimensions": ["schedule", "budget"],
@@ -448,6 +449,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
             seed_coverage=bridge_result.coverage_seed,
         )
         score = result.overall_score
+        score_version = result.score_version
         breakdown: dict[str, Any] = {
             item.category: item.score
             for item in result.category_breakdown
@@ -473,6 +475,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         node_result = _failed_node_result("coherence_scorer", exc)
         await _maybe_await(_persist_node_error(state, node_result))
         score = None
+        score_version = None
         breakdown = {}
         quality_note = ""
         reason = "node_failed"
@@ -484,6 +487,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
 
     return {
         "coherence_score": score,
+        "coherence_score_version": score_version,
         "coherence_breakdown": breakdown,
         "coherence_reason": reason,
         "coherence_missing_dimensions": result_missing_dimensions,
@@ -640,6 +644,7 @@ async def decision_intelligence_node(state: ProjectState) -> ProjectState:
     package = DecisionPackageAssemblyService().assemble(
         DecisionPackageInput(
             coherence_score=state.get("coherence_score", 0),
+            coherence_score_version=state.get("coherence_score_version"),
             extracted_risks=state.get("extracted_risks", []),
             extracted_stakeholders=state.get("extracted_stakeholders", []),
             extracted_wbs=state.get("extracted_wbs", []),
@@ -737,6 +742,7 @@ async def final_assembler_node(state: ProjectState) -> ProjectState:
             extracted_stakeholders=state.get("extracted_stakeholders", []),
             bom_items=state.get("bom_items", []),
             coherence_score=state.get("coherence_score", 0),
+            coherence_score_version=state.get("coherence_score_version"),
             confidence_score=state.get("confidence_score", 0.0),
             citation_validation_passed=state.get("citation_validation_passed", False),
             pii_redactions=state.get("pii_redactions", []),

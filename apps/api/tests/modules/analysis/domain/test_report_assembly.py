@@ -29,6 +29,7 @@ class TestReportAssemblyService:
             extracted_stakeholders=[{"name": "Alice"}],
             bom_items=[{"name": "Steel"}],
             coherence_score=72,
+            coherence_score_version="coherence-v1",
             confidence_score=0.88,
             citation_validation_passed=True,
             pii_redactions=[{"type": "EMAIL"}],
@@ -48,6 +49,7 @@ class TestReportAssemblyService:
         assert report["summary"]["total_stakeholders"] == 1
         assert report["summary"]["total_bom_items"] == 1
         assert report["summary"]["coherence_score"] == 72
+        assert report["summary"]["coherence_score_version"] == "coherence-v1"
         assert report["summary"]["confidence_score"] == 0.88
         assert report["summary"]["pii_items_redacted"] == 1
         assert report["summary"]["citation_validation_passed"] is True
@@ -66,6 +68,7 @@ class TestReportAssemblyService:
             extracted_stakeholders=[],
             bom_items=[],
             coherence_score=0,
+            coherence_score_version=None,
             confidence_score=0.0,
             citation_validation_passed=False,
             pii_redactions=[],
@@ -96,6 +99,7 @@ class TestReportAssemblyService:
             extracted_stakeholders=[],
             bom_items=[],
             coherence_score=0,
+            coherence_score_version=None,
             confidence_score=0.0,
             citation_validation_passed=False,
             pii_redactions=[],
@@ -129,6 +133,7 @@ class TestDecisionPackageAssemblyService:
     def test_assembles_package(self):
         inp = DecisionPackageInput(
             coherence_score=85,
+            coherence_score_version="coherence-v1",
             extracted_risks=[{"title": "Risk A"}],
             extracted_stakeholders=[{"name": "Alice"}],
             extracted_wbs=[{"code": "W1"}],
@@ -140,6 +145,7 @@ class TestDecisionPackageAssemblyService:
         pkg = self.service.assemble(inp)
 
         assert pkg["coherence_score"] == 85
+        assert pkg["coherence_score_version"] == "coherence-v1"
         assert len(pkg["risks"]) == 1
         assert len(pkg["stakeholders"]) == 1
         assert pkg["approved_by"] is None
@@ -147,6 +153,7 @@ class TestDecisionPackageAssemblyService:
     def test_marks_human_approval(self):
         inp = DecisionPackageInput(
             coherence_score=50,
+            coherence_score_version="coherence-v1",
             extracted_risks=[],
             extracted_stakeholders=[],
             extracted_wbs=[],
@@ -162,6 +169,7 @@ class TestDecisionPackageAssemblyService:
     def test_no_approval_without_feedback(self):
         inp = DecisionPackageInput(
             coherence_score=90,
+            coherence_score_version="coherence-v1",
             extracted_risks=[],
             extracted_stakeholders=[],
             extracted_wbs=[],
@@ -178,6 +186,7 @@ class TestDecisionPackageAssemblyService:
     def test_citation_quotes_extracted(self):
         inp = DecisionPackageInput(
             coherence_score=75,
+            coherence_score_version="coherence-v1",
             extracted_risks=[],
             extracted_stakeholders=[],
             extracted_wbs=[],
