@@ -31,18 +31,43 @@ def isolate_langsmith_and_langchain_sdks(monkeypatch: pytest.MonkeyPatch) -> Sim
         run_helpers=SimpleNamespace(
             get_tracing_context=mock.MagicMock(return_value=isolated_tracing_context),
             tracing_context=mock.MagicMock(),
+            get_current_run_tree=mock.MagicMock(),
         ),
         run_trees=SimpleNamespace(RunTree=mock.MagicMock),
         utils=SimpleNamespace(
             get_tracer_project=mock.MagicMock(return_value="test"),
             tracing_is_enabled=mock.MagicMock(return_value=False),
         ),
+        schemas=SimpleNamespace(
+            Run=mock.MagicMock,
+        ),
     )
     langchain_hub = mock.MagicMock(name="langchain_hub")
     langchain_module = SimpleNamespace(hub=langchain_hub)
 
     monkeypatch.setitem(sys.modules, "langsmith", langsmith_module)
+    monkeypatch.setitem(sys.modules, "langsmith.run_helpers", langsmith_module.run_helpers)
+    monkeypatch.setitem(sys.modules, "langsmith.utils", langsmith_module.utils)
+    monkeypatch.setitem(sys.modules, "langsmith.schemas", langsmith_module.schemas)
     monkeypatch.setitem(sys.modules, "langchain", langchain_module)
+
+    # Neutralize any langchain_core / langgraph tracer context parent KeyError or flakiness
+    monkeypatch.setattr(
+        "langchain_core.tracers.context._get_tracer_project",
+        lambda *_args, **_kwargs: "c2pro-test",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "langchain_core.tracers.context._tracing_v2_is_enabled",
+        lambda *_args, **_kwargs: False,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "langchain_core.callbacks.manager._get_tracer_project",
+        lambda *_args, **_kwargs: "c2pro-test",
+        raising=False,
+    )
+
     return SimpleNamespace(langsmith_client=sdk_client, langchain_hub=langchain_hub)
 
 
