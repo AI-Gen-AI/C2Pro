@@ -22,34 +22,38 @@ import pytest
 @pytest.fixture(autouse=True)
 def isolate_langsmith_and_langchain_sdks(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     """TS-AI-LANGSMITH-VALIDATION-FIXTURE: Prevent external SDK HTTP leakage during tests."""
-    sdk_client = mock.MagicMock(name="langsmith_client")
-    isolated_tracing_context = {"parent": None, "project_name": None, "enabled": False}
-    langsmith_module = SimpleNamespace(
-        Client=mock.MagicMock(return_value=sdk_client),
-        RunTree=mock.MagicMock,
-        get_tracing_context=mock.MagicMock(return_value=isolated_tracing_context),
-        run_helpers=SimpleNamespace(
-            get_tracing_context=mock.MagicMock(return_value=isolated_tracing_context),
-            tracing_context=mock.MagicMock(),
-            get_current_run_tree=mock.MagicMock(),
-        ),
-        run_trees=SimpleNamespace(RunTree=mock.MagicMock),
-        utils=SimpleNamespace(
-            get_tracer_project=mock.MagicMock(return_value="test"),
-            tracing_is_enabled=mock.MagicMock(return_value=False),
-        ),
-        schemas=SimpleNamespace(
-            Run=mock.MagicMock,
-        ),
-    )
-    langchain_hub = mock.MagicMock(name="langchain_hub")
-    langchain_module = SimpleNamespace(hub=langchain_hub)
+    import langsmith
+    import langsmith.run_helpers
+    import langsmith.run_trees
+    import langsmith.utils
+    import langsmith.schemas
+    try:
+        import langchain
+    except ImportError:
+        langchain = None
 
-    monkeypatch.setitem(sys.modules, "langsmith", langsmith_module)
-    monkeypatch.setitem(sys.modules, "langsmith.run_helpers", langsmith_module.run_helpers)
-    monkeypatch.setitem(sys.modules, "langsmith.utils", langsmith_module.utils)
-    monkeypatch.setitem(sys.modules, "langsmith.schemas", langsmith_module.schemas)
-    monkeypatch.setitem(sys.modules, "langchain", langchain_module)
+    sdk_client = mock.MagicMock(name="langsmith_client")
+    isolated_tracing_context = {"parent": None, "project_name": None, "enabled": False, "metadata": {}, "tags": []}
+
+    # Patch precise attributes on the real langsmith package/submodules directly
+    monkeypatch.setattr(langsmith, "Client", mock.MagicMock(return_value=sdk_client), raising=False)
+    monkeypatch.setattr(langsmith, "RunTree", mock.MagicMock, raising=False)
+    monkeypatch.setattr(langsmith, "get_tracing_context", mock.MagicMock(return_value=isolated_tracing_context), raising=False)
+
+    monkeypatch.setattr(langsmith.run_helpers, "get_tracing_context", mock.MagicMock(return_value=isolated_tracing_context), raising=False)
+    monkeypatch.setattr(langsmith.run_helpers, "tracing_context", mock.MagicMock(), raising=False)
+    monkeypatch.setattr(langsmith.run_helpers, "get_current_run_tree", mock.MagicMock(), raising=False)
+
+    monkeypatch.setattr(langsmith.run_trees, "RunTree", mock.MagicMock, raising=False)
+
+    monkeypatch.setattr(langsmith.utils, "get_tracer_project", mock.MagicMock(return_value="test"), raising=False)
+    monkeypatch.setattr(langsmith.utils, "tracing_is_enabled", mock.MagicMock(return_value=False), raising=False)
+
+    monkeypatch.setattr(langsmith.schemas, "Run", mock.MagicMock, raising=False)
+
+    langchain_hub = mock.MagicMock(name="langchain_hub")
+    if langchain is not None:
+        monkeypatch.setattr(langchain, "hub", langchain_hub, raising=False)
 
     # Neutralize any langchain_core / langgraph tracer context parent KeyError or flakiness
     monkeypatch.setattr(
