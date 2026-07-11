@@ -52,6 +52,7 @@ class ProjectState(TypedDict):
 
     # ── N8: Coherence Scorer ──
     coherence_score: int | float | None
+    coherence_score_version: str | None
     coherence_reason: str | None
     coherence_missing_dimensions: list[str]
     coherence_breakdown: CoherenceBreakdown
