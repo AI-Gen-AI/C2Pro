@@ -45,6 +45,7 @@ async def test_parallel_branches_return_only_branch_local_updates(monkeypatch: p
         class Result:
             overall_score = 88
             category_breakdown: list[object] = []
+            score_version = "coherence-v1"
             score_reason = "ok"
             score_missing_dimensions: list[str] = []
 
@@ -197,6 +198,7 @@ async def test_compiled_workflow_accepts_contract_validated_dict_payloads_with_r
         class _Result:
             overall_score = 82
             category_breakdown: list[object] = []
+            score_version = "coherence-v1"
             score_reason = "seeded_risk_signals"
             score_missing_dimensions: list[str] = []
 
@@ -352,6 +354,7 @@ async def test_compiled_workflow_merges_node_results_with_tenant(
         class _Result:
             overall_score = None
             category_breakdown: list[object] = []
+            score_version = "coherence-v1"
             score_reason = "insufficient_evidence"
             score_missing_dimensions = ["schedule", "budget"]
 

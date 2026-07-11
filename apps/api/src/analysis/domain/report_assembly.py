@@ -25,6 +25,7 @@ class ReportInput:
     extracted_stakeholders: list[dict[str, Any]]
     bom_items: list[dict[str, Any]]
     coherence_score: int | float | None
+    coherence_score_version: str | None
     confidence_score: float
     citation_validation_passed: bool
     pii_redactions: list[dict[str, Any]]
@@ -43,6 +44,7 @@ class DecisionPackageInput:
     """Input data for decision package assembly."""
 
     coherence_score: int | float | None
+    coherence_score_version: str | None
     extracted_risks: list[dict[str, Any]]
     extracted_stakeholders: list[dict[str, Any]]
     extracted_wbs: list[dict[str, Any]]
@@ -68,6 +70,7 @@ class ReportAssemblyService:
                 "total_stakeholders": len(inp.extracted_stakeholders),
                 "total_bom_items": len(inp.bom_items),
                 "coherence_score": inp.coherence_score,
+                "coherence_score_version": inp.coherence_score_version,
                 "confidence_score": inp.confidence_score,
                 "citation_validation_passed": inp.citation_validation_passed,
                 "pii_items_redacted": len(inp.pii_redactions),
@@ -95,6 +98,7 @@ class DecisionPackageAssemblyService:
     def assemble(self, inp: DecisionPackageInput) -> dict[str, Any]:
         return {
             "coherence_score": inp.coherence_score,
+            "coherence_score_version": inp.coherence_score_version,
             "risks": inp.extracted_risks,
             "stakeholders": inp.extracted_stakeholders,
             "wbs_items": inp.extracted_wbs,

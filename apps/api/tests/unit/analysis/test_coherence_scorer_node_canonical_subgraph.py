@@ -35,6 +35,7 @@ async def test_coherence_scorer_invokes_canonical_subgraph_for_contract_only(
         calls.append((clauses, project_id))
         return EnrichedCoherenceResult(
             overall_score=None,
+            score_version="coherence-v1",
             score_reason="insufficient_evidence",
             score_missing_dimensions=["schedule", "budget"],
             calculated_at=datetime.now(UTC),
@@ -66,5 +67,6 @@ async def test_coherence_scorer_invokes_canonical_subgraph_for_contract_only(
     assert calls
     assert calls[0][1] == project_id
     assert result["coherence_score"] is None
+    assert result["coherence_score_version"] == "coherence-v1"
     assert result["coherence_reason"] == "insufficient_evidence"
     assert result["coherence_missing_dimensions"] == ["schedule", "budget"]
