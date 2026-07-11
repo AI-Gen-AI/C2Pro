@@ -79,6 +79,7 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
 
         # Convert string UUIDs back to UUID objects
         from uuid import UUID as UUIDType
+
         project_id = UUIDType(project_id_str) if project_id_str else None
         document_id = UUIDType(document_id_str) if document_id_str else None
 
@@ -138,8 +139,15 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         review_decision = metadata.pop("review_decision", None)
 
         from uuid import UUID as UUIDType
-        project_id = UUIDType(project_id_str) if project_id_str and isinstance(project_id_str, str) else None
-        document_id = UUIDType(document_id_str) if document_id_str and isinstance(document_id_str, str) else None
+
+        project_id = (
+            UUIDType(project_id_str) if project_id_str and isinstance(project_id_str, str) else None
+        )
+        document_id = (
+            UUIDType(document_id_str)
+            if document_id_str and isinstance(document_id_str, str)
+            else None
+        )
 
         orm.current_status = item.current_status
         orm.confidence = item.confidence
@@ -166,15 +174,14 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
 
     async def get_overdue_items(self) -> list[ReviewItem]:
         now = self._normalize_naive_utc(datetime.now(UTC))
-        stmt = (
-            select(ReviewItemORM)
-            .where(
-                ReviewItemORM.sla_due_date < now,
-                ReviewItemORM.current_status.in_([
+        stmt = select(ReviewItemORM).where(
+            ReviewItemORM.sla_due_date < now,
+            ReviewItemORM.current_status.in_(
+                [
                     ReviewStatus.PENDING_REVIEW_REQUIRED,
                     ReviewStatus.PENDING_REVIEW_CONDITIONAL,
-                ]),
-            )
+                ]
+            ),
         )
         if self.tenant_id is not None:
             stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
@@ -187,12 +194,34 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         *,
         skip: int = 0,
         limit: int = 50,
+        project_id: UUID | None = None,
     ) -> list[ReviewItem]:
         stmt = select(ReviewItemORM)
         if self.tenant_id is not None:
             stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
+        if project_id is not None:
+            stmt = stmt.where(ReviewItemORM.project_id == project_id)
         if status is not None:
             stmt = stmt.where(ReviewItemORM.current_status == status)
         stmt = stmt.order_by(ReviewItemORM.created_at.desc()).offset(skip).limit(limit)
         result = await self.session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
+
+    async def count_by_status(
+        self,
+        status: ReviewStatus | None = None,
+        *,
+        project_id: UUID | None = None,
+    ) -> int:
+        """TASK-BCK-092: Return true filtered count, not page size."""
+        from sqlalchemy import func
+
+        stmt = select(func.count()).select_from(ReviewItemORM)
+        if self.tenant_id is not None:
+            stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
+        if project_id is not None:
+            stmt = stmt.where(ReviewItemORM.project_id == project_id)
+        if status is not None:
+            stmt = stmt.where(ReviewItemORM.current_status == status)
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0

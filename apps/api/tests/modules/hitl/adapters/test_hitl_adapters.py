@@ -85,16 +85,25 @@ class TestLogNotificationService:
 # ── ORM Model (requires settings) ────────────────────────────────────────────
 
 
-
 class TestReviewItemORM:
     def test_orm_model_has_required_columns(self):
         from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 
         columns = {c.name for c in ReviewItemORM.__table__.columns}
         expected = {
-            "id", "item_id", "item_type", "current_status", "confidence",
-            "impact_level", "tenant_id", "approved_by", "approved_at",
-            "sla_due_date", "item_data", "review_metadata", "created_at",
+            "id",
+            "item_id",
+            "item_type",
+            "current_status",
+            "confidence",
+            "impact_level",
+            "tenant_id",
+            "approved_by",
+            "approved_at",
+            "sla_due_date",
+            "item_data",
+            "review_metadata",
+            "created_at",
             "updated_at",
         }
         assert expected.issubset(columns), f"Missing columns: {expected - columns}"
@@ -122,7 +131,8 @@ class TestRepositoryMappers:
 
         tenant_id = uuid4()
         repo = SqlAlchemyReviewQueueRepository(
-            session=MagicMock(), tenant_id=tenant_id,
+            session=MagicMock(),
+            tenant_id=tenant_id,
         )
         item = _make_review_item()
         orm = repo._to_orm(item)
@@ -175,9 +185,7 @@ class TestRepositoryMappers:
 
 class TestHITLServiceIntegration:
     @pytest.mark.asyncio
-    async def test_route_low_confidence_to_required_review(
-        self, hitl_service, mock_repo
-    ):
+    async def test_route_low_confidence_to_required_review(self, hitl_service, mock_repo):
         status = await hitl_service.route_for_review(
             item_id=uuid4(),
             item_type="risk_extraction",
@@ -189,9 +197,7 @@ class TestHITLServiceIntegration:
         mock_repo.add_review_item.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_route_high_confidence_low_impact_auto_approves(
-        self, hitl_service, mock_repo
-    ):
+    async def test_route_high_confidence_low_impact_auto_approves(self, hitl_service, mock_repo):
         status = await hitl_service.route_for_review(
             item_id=uuid4(),
             item_type="wbs_extraction",
@@ -203,9 +209,7 @@ class TestHITLServiceIntegration:
         mock_repo.add_review_item.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_route_high_impact_always_requires_review(
-        self, hitl_service, mock_repo
-    ):
+    async def test_route_high_impact_always_requires_review(self, hitl_service, mock_repo):
         status = await hitl_service.route_for_review(
             item_id=uuid4(),
             item_type="coherence_alert",
@@ -247,9 +251,7 @@ class TestHITLServiceIntegration:
             )
 
     @pytest.mark.asyncio
-    async def test_escalate_overdue_items(
-        self, hitl_service, mock_repo, mock_notification
-    ):
+    async def test_escalate_overdue_items(self, hitl_service, mock_repo, mock_notification):
         tenant_id = uuid4()
         overdue = _make_review_item(
             sla_due_date=datetime.now(UTC) - timedelta(days=1),
@@ -298,7 +300,14 @@ class TestMigration:
         from pathlib import Path
 
         repo_root = Path(__file__).resolve().parents[6]
-        return repo_root / "apps" / "api" / "alembic" / "versions" / "20260225_0001_create_review_items.py"
+        return (
+            repo_root
+            / "apps"
+            / "api"
+            / "alembic"
+            / "versions"
+            / "20260225_0001_create_review_items.py"
+        )
 
     def test_migration_file_exists(self):
         migration = self._migration_path()
@@ -426,9 +435,7 @@ class TestHITLServiceAdapter:
         assert result == "PENDING_REVIEW_REQUIRED"  # critical always requires review
 
     @pytest.mark.asyncio
-    async def test_approve_item_returns_dict_not_review_item(
-        self, mock_repo, mock_notification
-    ):
+    async def test_approve_item_returns_dict_not_review_item(self, mock_repo, mock_notification):
         from src.modules.hitl.adapters.hitl_port_adapter import HITLServiceAdapter
 
         pending = _make_review_item(
@@ -470,3 +477,146 @@ class TestHITLServiceAdapter:
         assert hasattr(adapter, "approve_item")
         assert callable(adapter.route_for_review)
         assert callable(adapter.approve_item)
+
+
+# ── TASK-BCK-092: Queue project filtering + true count ────────────────────────
+
+
+class TestReviewQueueProjectFiltering:
+    """TASK-BCK-092: Verify project_id filtering and true total count."""
+
+    def test_repository_list_by_status_accepts_project_id(self):
+        """Repository list_by_status signature accepts optional project_id."""
+        from uuid import uuid4
+
+        from src.modules.hitl.adapters.persistence.repository import (
+            SqlAlchemyReviewQueueRepository,
+        )
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_session = MagicMock()
+        mock_session.execute = AsyncMock()
+        repo = SqlAlchemyReviewQueueRepository(session=mock_session, tenant_id=uuid4())
+        assert hasattr(repo, "list_by_status")
+
+        import inspect
+
+        sig = inspect.signature(repo.list_by_status)
+        params = list(sig.parameters.keys())
+        assert "project_id" in params, f"list_by_status missing project_id param: {params}"
+
+    def test_repository_list_by_status_applies_project_id_filter(self):
+        """When project_id is provided, the SQL query includes it."""
+        from uuid import uuid4
+
+        from src.modules.hitl.adapters.persistence.models import ReviewItemORM
+        from src.modules.hitl.adapters.persistence.repository import (
+            SqlAlchemyReviewQueueRepository,
+        )
+        from unittest.mock import AsyncMock, MagicMock
+
+        tenant_id = uuid4()
+        project_id = uuid4()
+        mock_session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        repo = SqlAlchemyReviewQueueRepository(session=mock_session, tenant_id=tenant_id)
+        import asyncio
+
+        asyncio.get_event_loop().run_until_complete(repo.list_by_status(project_id=project_id))
+
+        call_args = mock_session.execute.call_args[0][0]
+        sql_str = str(call_args.compile(compile_kwargs={"literal_binds": True}))
+        # SQLAlchemy literal_binds formats UUID without dashes
+        tid_hex = str(tenant_id).replace("-", "")
+        pid_hex = str(project_id).replace("-", "")
+        assert tid_hex in sql_str, f"tenant_id not in SQL: {sql_str}"
+        assert pid_hex in sql_str, f"project_id filter not present in SQL: {sql_str}"
+
+    def test_repository_list_by_status_omits_project_id_when_none(self):
+        """When project_id is None, the filter is not applied (backward compat)."""
+        from uuid import uuid4
+
+        from src.modules.hitl.adapters.persistence.models import ReviewItemORM
+        from src.modules.hitl.adapters.persistence.repository import (
+            SqlAlchemyReviewQueueRepository,
+        )
+        from unittest.mock import AsyncMock, MagicMock
+
+        tenant_id = uuid4()
+        mock_session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        repo = SqlAlchemyReviewQueueRepository(session=mock_session, tenant_id=tenant_id)
+        import asyncio
+
+        asyncio.get_event_loop().run_until_complete(repo.list_by_status(project_id=None))
+
+        call_args = mock_session.execute.call_args[0][0]
+        sql_str = str(call_args.compile(compile_kwargs={"literal_binds": True}))
+        tid_hex = str(tenant_id).replace("-", "")
+        assert tid_hex in sql_str
+        # project_id should NOT be in WHERE clause when None was passed
+        # (but .project_id may appear in SELECT column list)
+        # Check that the WHERE does not contain a project_id filter
+        where_part = sql_str.split("WHERE")[1].split("ORDER BY")[0] if "WHERE" in sql_str else ""
+        assert "project_id" not in where_part, (
+            f"project_id filter found in WHERE when None: {where_part}"
+        )
+
+    def test_repository_count_by_status_returns_true_count(self):
+        """Repository count_by_status returns total matching rows not page size."""
+        from uuid import uuid4
+
+        from src.modules.hitl.adapters.persistence.repository import (
+            SqlAlchemyReviewQueueRepository,
+        )
+        from unittest.mock import AsyncMock, MagicMock
+
+        tenant_id = uuid4()
+        mock_session = MagicMock()
+        mock_result = MagicMock()
+        # Simulate 7 total rows in the DB, but query returns only 3 due to pagination
+        mock_result.scalar.return_value = 7
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        repo = SqlAlchemyReviewQueueRepository(session=mock_session, tenant_id=tenant_id)
+        assert hasattr(repo, "count_by_status")
+
+        import asyncio
+
+        count = asyncio.get_event_loop().run_until_complete(repo.count_by_status())
+        assert count == 7, f"Expected true count 7, got {count}"
+
+    def test_repository_count_by_status_cross_tenant_returns_zero(self):
+        """Cross-tenant project_id returns zero (tenant isolation preserved)."""
+        from uuid import uuid4
+
+        from src.modules.hitl.adapters.persistence.repository import (
+            SqlAlchemyReviewQueueRepository,
+        )
+        from unittest.mock import AsyncMock, MagicMock
+
+        tenant_id = uuid4()
+        other_project_id = uuid4()
+        mock_session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.scalar.return_value = 0
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        repo = SqlAlchemyReviewQueueRepository(session=mock_session, tenant_id=tenant_id)
+        import asyncio
+
+        count = asyncio.get_event_loop().run_until_complete(
+            repo.count_by_status(project_id=other_project_id)
+        )
+        call_args = mock_session.execute.call_args[0][0]
+        sql_str = str(call_args.compile(compile_kwargs={"literal_binds": True}))
+        tid_hex = str(tenant_id).replace("-", "")
+        pid_hex = str(other_project_id).replace("-", "")
+        assert tid_hex in sql_str
+        assert pid_hex in sql_str
