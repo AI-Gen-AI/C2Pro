@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-12T16:17:25Z",
+  "updated_at": "2026-07-12T17:10:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -142,6 +142,45 @@
           "Broader guard pnpm vitest run \"app/(app)/projects/[id]\" -> 11 files / 69 tests passed; only known TASK-FRT-192 debt failed in untouched settings and wbs tests."
         ],
         "deviacion": "Generated HITL queue params expose status, skip, and limit only; no project_id filter is available, so project report HITL decisions are omitted rather than faked."
+      }
+    },
+    {
+      "tarea_id": "T136",
+      "backlog_id": "TASK-FRT-193",
+      "tipo": "frontend",
+      "descripcion": "Implement the Budget reconciliation block with honest data sourcing and typed budget calculations.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "The Budget tab renders stated/computed/contract totals and delta only when the live categories_v2.BUDGET payload carries all required structured totals; absent totals do not fabricate numbers; useBudget category calculations use real interfaces.",
+      "archivos_modificados": [
+        "apps/web/app/(app)/projects/[id]/budget/page.tsx",
+        "apps/web/app/(app)/projects/[id]/budget/page.test.tsx",
+        "apps/web/components/features/budget/ReconciliationCard.tsx",
+        "apps/web/components/features/budget/ReconciliationCard.test.tsx",
+        "apps/web/hooks/useBudget.ts",
+        "apps/web/hooks/useBudget.test.ts",
+        "backlogs/FRT_FRONTEND.md",
+        "backlogs/BCK_BACKEND.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-12T16:55:00Z",
+        "completado": "2026-07-12T17:10:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-193 completed on feat/frt-193-budget-reconciliation: exact contract audit found DET-BUD totals exist in backend FindingSignal.raw_data but are not reliably exposed by dashboard/alerts, so the frontend renders reconciliation only from structured category payload totals and registered TASK-BCK-093 for typed backend fields.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: pnpm vitest run components/features/budget \"app/(app)/projects/[id]/budget\" failed first on missing ReconciliationCard and missing Budget page reconciliation wiring.",
+          "GREEN: pnpm vitest run components/features/budget \"app/(app)/projects/[id]/budget\" hooks/useBudget.test.ts -> 3 files / 6 tests passed.",
+          "pnpm test:all -> 218 files / 724 tests passed plus 51 files / 126 tests passed.",
+          "pnpm typecheck -> passed.",
+          "pnpm lint -> passed."
+        ],
+        "follow_up": "Registered TASK-BCK-093 for first-class typed budget reconciliation fields in categories_v2.BUDGET and/or project alerts."
       }
     },
     {

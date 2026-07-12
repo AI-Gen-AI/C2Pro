@@ -31,6 +31,25 @@ export interface BudgetSummary {
   items: BudgetItem[];
 }
 
+export interface BudgetCategoryTotals {
+  planned: number;
+  actual: number;
+}
+
+export interface BudgetCategoryBreakdown {
+  name: string;
+  planned: number;
+  actual: number;
+  variance: number;
+}
+
+export interface BudgetVariancePoint {
+  name: string;
+  planned: number;
+  actual: number;
+  variance: number;
+}
+
 interface UseBudgetOptions {
   projectId: string;
   enabled?: boolean;
@@ -171,8 +190,10 @@ export function useBudget({
 /**
  * Calculate category breakdown from budget items
  */
-export function calculateCategoryBreakdown(items: BudgetItem[]) {
-  const categories: Record<string, { planned: number; actual: number }> = {};
+export function calculateCategoryBreakdown(
+  items: BudgetItem[],
+): BudgetCategoryBreakdown[] {
+  const categories: Record<string, BudgetCategoryTotals> = {};
 
   items.forEach((item) => {
     if (!categories[item.category]) {
@@ -193,7 +214,7 @@ export function calculateCategoryBreakdown(items: BudgetItem[]) {
 /**
  * Calculate variance data for charts
  */
-export function calculateVarianceData(items: BudgetItem[]) {
+export function calculateVarianceData(items: BudgetItem[]): BudgetVariancePoint[] {
   return items.map((item) => ({
     name: item.name,
     planned: item.amount,
