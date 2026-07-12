@@ -11,7 +11,7 @@ from pathlib import Path
 
 def test_unit_workflow_excludes_integration_marked_tests() -> None:
     repo_root = Path(__file__).resolve().parents[4]
-    workflow = repo_root / ".github" / "workflows" / "tests.yml"
+    workflow = repo_root / ".github" / "workflows" / "ci.yml"
     contents = workflow.read_text(encoding="utf-8")
 
     assert '-m "not integration"' in contents
@@ -24,8 +24,7 @@ def test_database_backed_ci_workflows_export_test_database_url() -> None:
 
     repo_root = Path(__file__).resolve().parents[4]
     workflow_paths = [
-        repo_root / ".github" / "workflows" / "tests.yml",
-        repo_root / ".github" / "workflows" / "e2e-security-tests.yml",
+        repo_root / ".github" / "workflows" / "ci.yml",
         repo_root / ".github" / "workflows" / "real-document-operability.yml",
     ]
 
@@ -82,8 +81,7 @@ def test_frontend_e2e_workflows_export_clerk_test_keys() -> None:
 
     repo_root = Path(__file__).resolve().parents[4]
     workflows = [
-        repo_root / ".github" / "workflows" / "frontend-ci.yml",
-        repo_root / ".github" / "workflows" / "frontend-e2e.yml",
+        repo_root / ".github" / "workflows" / "ci.yml",
     ]
 
     for workflow in workflows:
@@ -283,7 +281,7 @@ def _uses_explicit_pnpm_version(contents: str) -> bool:
     lines = [line.strip() for line in contents.splitlines()]
     for index in range(len(lines) - 2):
         if (
-            lines[index] == "uses: pnpm/action-setup@v4"
+            lines[index].startswith("uses: pnpm/action-setup@")
             and lines[index + 1] == "with:"
             and lines[index + 2].startswith("version:")
         ):
@@ -298,7 +296,7 @@ def test_wireframe_coverage_installs_pnpm_before_node_cache_setup() -> None:
     workflow = repo_root / ".github" / "workflows" / "wireframe-coverage.yml"
     contents = workflow.read_text(encoding="utf-8")
 
-    assert contents.index("uses: pnpm/action-setup@v4") < contents.index("uses: actions/setup-node@v4")
+    assert contents.index("uses: pnpm/action-setup@") < contents.index("uses: actions/setup-node@")
 
 
 def test_gitleaks_config_is_valid_toml() -> None:
