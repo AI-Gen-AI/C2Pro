@@ -53,9 +53,19 @@ export function AppSidebar() {
   const isDemoMode = pathname.startsWith('/demo');
   const basePrefix = isDemoMode ? '/demo' : '';
   const workspaceLabel = isDemoMode ? 'Demo Workspace' : organization?.name ?? 'Workspace';
+  const filteredNavItems = navItems.filter(item => {
+    if (item.href === '/ai-analytics' || item.href === '/observability') {
+      return env.FEATURE_INTERNAL_DASHBOARDS;
+    }
+    if (item.href === '/stakeholders') {
+      return env.FEATURE_PHASE2_MODULES;
+    }
+    return true;
+  });
+
   const visibleNavItems = env.FEATURE_RACI_GENERATION
-    ? [...navItems, { href: '/raci', label: 'RACI Matrix', icon: Grid3X3 }]
-    : navItems;
+    ? [...filteredNavItems, { href: '/raci', label: 'RACI Matrix', icon: Grid3X3 }]
+    : filteredNavItems;
 
   const getHref = (href: string) => {
     if (href === '/dashboard') {

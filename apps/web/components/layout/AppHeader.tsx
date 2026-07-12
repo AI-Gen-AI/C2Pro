@@ -1,11 +1,10 @@
 'use client';
 
-import { Bell, LogOut, Search, Menu } from 'lucide-react';
+import { Bell, LogOut, Menu } from 'lucide-react';
 import { useClerk, useUser } from '@clerk/nextjs';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -109,14 +108,7 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
 
       {/* Right: Search, Notifications, Avatar */}
       <div className="flex items-center gap-4">
-        <div className="relative hidden lg:block">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search..."
-            className="w-64 pl-9"
-            aria-label="Search"
-          />
-        </div>
+
 
         <ThemeToggle />
 

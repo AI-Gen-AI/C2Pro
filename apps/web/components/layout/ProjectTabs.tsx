@@ -1,3 +1,4 @@
+import { env } from "@/config/env";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -30,7 +31,12 @@ interface ProjectTabsProps {
 export function ProjectTabs({ projectId }: ProjectTabsProps) {
   return (
     <nav className="mt-3 flex flex-wrap gap-1" aria-label="Project tabs">
-      {tabs.map((tab) => {
+      {tabs.filter(tab => {
+        if (tab.href === "/stakeholders" || tab.href === "/wbs") {
+          return env.FEATURE_PHASE2_MODULES;
+        }
+        return true;
+      }).map((tab) => {
         const Icon = tab.icon;
         return (
           <Link

@@ -6,11 +6,8 @@ import { useRouter } from "next/navigation";
 import { useProjects } from "@/hooks/useProjects";
 import { useProjectQuickViewSummary } from "@/hooks/useProjectQuickViewSummary";
 import { useUpdateProject } from "@/hooks/useUpdateProject";
-import { useCreateProjectApiV1ProjectsPost } from "@/lib/api/generated/projects/projects";
-import {
-  LazyProjectBatchImportDialog,
-  LazyProjectTemplatesDialog,
-} from "@/components/features/projects/LazyProjectDialogs";
+import { useSearchParams } from "next/navigation";
+import { CreateProjectWizard } from "@/components/features/projects/CreateProjectWizard";
 import {
   PROJECT_TABLE_OPTIONAL_COLUMNS,
   ProjectListTable,
@@ -43,22 +40,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Loader2, Plus, Settings2, Upload } from "lucide-react";
+import { Loader2, Plus, Settings2 } from "lucide-react";
 import type { ProjectListItem } from "@/lib/api/contracts";
 
-type BatchImportRow = {
-  name: string;
-  type: string;
-  code: string;
-};
 
-type ProjectTemplate = {
-  id: string;
-  name: string;
-  summary: string;
-  phaseFocus: string[];
-  tags: string[];
-};
 
 type ProjectFilterPreset = {
   id: string;
@@ -87,44 +72,12 @@ type ProjectTypeFilter =
   | "oil_gas"
   | "mining";
 
-type CreateProjectStep = 0 | 1 | 2;
 
-type CreateProjectDraft = {
-  name: string;
-  code: string;
-  projectType: string;
-  clientName: string;
-  description: string;
-  currency: string;
-};
 
 type SavePresetDraft = {
   name: string;
 };
 
-const PROJECT_TEMPLATES: ProjectTemplate[] = [
-  {
-    id: "epc-megaproject",
-    name: "EPC Megaproject",
-    summary: "Large-scale EPC delivery with multi-lot governance and long-lead procurement tracking.",
-    phaseFocus: ["Contract baseline", "Procurement controls", "Risk alignment"],
-    tags: ["greenfield", "epc", "multi-package"],
-  },
-  {
-    id: "industrial-retrofit",
-    name: "Industrial Retrofit",
-    summary: "Industrial retrofit recovery",
-    phaseFocus: ["Shutdown planning", "Interface control", "Commissioning readiness"],
-    tags: ["brownfield", "turnaround", "fast-track"],
-  },
-  {
-    id: "public-infrastructure",
-    name: "Public Infrastructure",
-    summary: "Public-sector delivery with milestone governance and stakeholder reporting cadence.",
-    phaseFocus: ["Permitting", "Claims controls", "Public reporting"],
-    tags: ["infrastructure", "public", "compliance"],
-  },
-];
 
 const PROJECT_COLUMN_LABELS: Record<ProjectTableOptionalColumn, string> = {
   description: "Description",
@@ -159,33 +112,11 @@ const PROJECT_TYPE_FILTER_OPTIONS: Array<{
   { value: "mining", label: "Mining" },
 ];
 
-const DEFAULT_CREATE_PROJECT_DRAFT: CreateProjectDraft = {
-  name: "",
-  code: "",
-  projectType: "",
-  clientName: "",
-  description: "",
-  currency: "EUR",
-};
 
 const DEFAULT_SAVE_PRESET_DRAFT: SavePresetDraft = {
   name: "",
 };
 
-function parseBatchImportRows(value: string): BatchImportRow[] {
-  return value
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [name = "", type = "", code = ""] = line
-        .split(",")
-        .map((segment) => segment.trim());
-
-      return { name, type, code };
-    })
-    .filter((row) => row.name.length > 0);
-}
 
 function sanitizeFilename(value: string): string {
   return value
@@ -280,21 +211,30 @@ function persistProjectFilterPresets(presets: ProjectFilterPreset[]) {
 
 export default function ProjectsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const createParam = searchParams.get("create");
+  const [isCreateWizardOpen, setIsCreateWizardOpenState] = useState(createParam === "1");
+
+  useEffect(() => {
+    setIsCreateWizardOpenState(createParam === "1");
+  }, [createParam]);
+
+  const setIsCreateWizardOpen = (open: boolean) => {
+    setIsCreateWizardOpenState(open);
+    if (!open) {
+      router.replace("/projects");
+    } else {
+      router.replace("/projects?create=1");
+    }
+  };
   const token = useAuthStore((s) => s.token);
   const { data, isLoading, error } = useProjects(!!token);
-  const createProject = useCreateProjectApiV1ProjectsPost();
   const {
     mutateAsync: updateProject,
     isPending: isSavingProject,
     error: updateProjectError,
   } = useUpdateProject();
   const [searchQuery, setSearchQuery] = useState("");
-  const [importDraft, setImportDraft] = useState("");
-  const [isImportOpen, setIsImportOpen] = useState(false);
-  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
-    PROJECT_TEMPLATES[0]?.id ?? "",
-  );
   const [visibleColumns, setVisibleColumns] = useState<
     ProjectTableOptionalColumn[]
   >([...PROJECT_TABLE_OPTIONAL_COLUMNS]);
@@ -304,12 +244,6 @@ export default function ProjectsPage() {
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
   const [statusFilter, setStatusFilter] = useState<ProjectStatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<ProjectTypeFilter>("all");
-  const [isCreateWizardOpen, setIsCreateWizardOpen] = useState(false);
-  const [createProjectStep, setCreateProjectStep] = useState<CreateProjectStep>(0);
-  const [createProjectDraft, setCreateProjectDraft] = useState<CreateProjectDraft>(
-    DEFAULT_CREATE_PROJECT_DRAFT,
-  );
-  const [createProjectError, setCreateProjectError] = useState<string | null>(null);
   const [isSavePresetOpen, setIsSavePresetOpen] = useState(false);
   const [savePresetDraft, setSavePresetDraft] = useState<SavePresetDraft>(
     DEFAULT_SAVE_PRESET_DRAFT,
@@ -356,19 +290,11 @@ export default function ProjectsPage() {
     (updateProjectError instanceof Error ? updateProjectError.message : null);
   const loadError =
     error instanceof Error ? error.message : error ? String(error) : null;
-  const importPreview = useMemo(
-    () => parseBatchImportRows(importDraft),
-    [importDraft],
-  );
-  const canAdvanceCreateProjectStep = createProjectDraft.name.trim().length > 0;
   const {
     data: quickViewSummary,
     isLoading: isQuickViewLoading,
     error: quickViewError,
   } = useProjectQuickViewSummary(quickViewProject?.id ?? null);
-  const selectedTemplate =
-    PROJECT_TEMPLATES.find((template) => template.id === selectedTemplateId) ??
-    PROJECT_TEMPLATES[0];
 
   useEffect(() => {
     setSavedPresets(loadProjectFilterPresets());
@@ -545,53 +471,6 @@ export default function ProjectsPage() {
     setTypeFilter("all");
   }
 
-  function openCreateProjectWizard() {
-    setCreateProjectDraft(DEFAULT_CREATE_PROJECT_DRAFT);
-    setCreateProjectStep(0);
-    setCreateProjectError(null);
-    setIsCreateWizardOpen(true);
-  }
-
-  function updateCreateProjectDraft(
-    field: keyof CreateProjectDraft,
-    value: string,
-  ) {
-    setCreateProjectDraft((currentDraft) => ({
-      ...currentDraft,
-      [field]: value,
-    }));
-  }
-
-  async function submitCreateProjectWizard() {
-    const trimmedName = createProjectDraft.name.trim();
-    if (!trimmedName) {
-      setCreateProjectError("Project name is required.");
-      return;
-    }
-
-    try {
-      setCreateProjectError(null);
-      const project = await createProject.mutateAsync({
-        data: {
-          name: trimmedName,
-          code: createProjectDraft.code.trim() || undefined,
-          description: createProjectDraft.description.trim() || undefined,
-          client_name: createProjectDraft.clientName.trim() || undefined,
-          currency: createProjectDraft.currency,
-          project_type: createProjectDraft.projectType || undefined,
-        },
-      });
-
-      setIsCreateWizardOpen(false);
-      router.push(`/projects/${project.id}/documents`);
-    } catch (mutationError) {
-      const message =
-        mutationError instanceof Error
-          ? mutationError.message
-          : "Project creation failed.";
-      setCreateProjectError(message);
-    }
-  }
 
   async function saveProjectEdits() {
     if (!editingProjectId) {
@@ -660,14 +539,7 @@ export default function ProjectsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 xl:justify-end">
-          <Button variant="outline" onClick={() => setIsTemplatesOpen(true)}>
-            Project Templates
-          </Button>
-          <Button variant="outline" onClick={() => setIsImportOpen(true)}>
-            <Upload className="mr-2 h-4 w-4" />
-            Batch Import
-          </Button>
-          <Button type="button" onClick={openCreateProjectWizard}>
+          <Button type="button" onClick={() => setIsCreateWizardOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             New Project
           </Button>
@@ -888,21 +760,9 @@ export default function ProjectsPage() {
         />
       )}
 
-      <LazyProjectBatchImportDialog
-        open={isImportOpen}
-        importDraft={importDraft}
-        importPreview={importPreview}
-        onImportDraftChange={setImportDraft}
-        onOpenChange={setIsImportOpen}
-      />
-
-      <LazyProjectTemplatesDialog
-        open={isTemplatesOpen}
-        selectedTemplateId={selectedTemplateId}
-        selectedTemplate={selectedTemplate}
-        templates={PROJECT_TEMPLATES}
-        onSelectTemplate={setSelectedTemplateId}
-        onOpenChange={setIsTemplatesOpen}
+      <CreateProjectWizard
+        open={isCreateWizardOpen}
+        onOpenChange={setIsCreateWizardOpen}
       />
 
       <Dialog
@@ -977,224 +837,7 @@ export default function ProjectsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={isCreateWizardOpen}
-        onOpenChange={(open) => {
-          setIsCreateWizardOpen(open);
-          if (!open) {
-            setCreateProjectStep(0);
-            setCreateProjectError(null);
-          }
-        }}
-      >
-        <DialogContent
-          aria-describedby="create-project-description"
-          className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-2xl sm:rounded-2xl"
-        >
-          <DialogHeader className="rounded-2xl border bg-muted/35 px-4 py-4">
-            <DialogTitle>Create project</DialogTitle>
-            <DialogDescription id="create-project-description">
-              Step {createProjectStep + 1} of 3. Capture the project essentials, then review before creating it.
-            </DialogDescription>
-          </DialogHeader>
-
-          {createProjectStep === 0 ? (
-            <div className="grid gap-4 rounded-2xl border bg-background/90 p-4 shadow-sm">
-              <label className="grid gap-2 text-sm text-foreground">
-                <span>Project Name</span>
-                <Input
-                  aria-label="Project name"
-                  value={createProjectDraft.name}
-                  onChange={(event) =>
-                    updateCreateProjectDraft("name", event.target.value)
-                  }
-                  className="rounded-xl border-border/80 bg-background/95"
-                />
-              </label>
-              <label className="grid gap-2 text-sm text-foreground">
-                <span>Project Code</span>
-                <Input
-                  aria-label="Project code"
-                  value={createProjectDraft.code}
-                  onChange={(event) =>
-                    updateCreateProjectDraft("code", event.target.value)
-                  }
-                  className="rounded-xl border-border/80 bg-background/95"
-                />
-              </label>
-              <label className="grid gap-2 text-sm text-foreground">
-                <span>Project Type</span>
-                <select
-                  aria-label="Project type"
-                  className="h-10 rounded-xl border border-border/80 bg-background/95 px-3 py-2 text-sm"
-                  value={createProjectDraft.projectType}
-                  onChange={(event) =>
-                    updateCreateProjectDraft("projectType", event.target.value)
-                  }
-                >
-                  <option value="">Select project type</option>
-                  {PROJECT_TYPE_FILTER_OPTIONS.filter((option) => option.value !== "all").map(
-                    (option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ),
-                  )}
-                </select>
-              </label>
-            </div>
-          ) : null}
-
-          {createProjectStep === 1 ? (
-            <div className="grid gap-4 rounded-2xl border bg-background/90 p-4 shadow-sm">
-              <label className="grid gap-2 text-sm text-foreground">
-                <span>Client Name</span>
-                <Input
-                  aria-label="Client name"
-                  value={createProjectDraft.clientName}
-                  onChange={(event) =>
-                    updateCreateProjectDraft("clientName", event.target.value)
-                  }
-                  className="rounded-xl border-border/80 bg-background/95"
-                />
-              </label>
-              <label className="grid gap-2 text-sm text-foreground">
-                <span>Project Description</span>
-                <textarea
-                  aria-label="Project description"
-                  className="min-h-28 rounded-xl border border-border/80 bg-background/95 px-3 py-2 text-sm"
-                  value={createProjectDraft.description}
-                  onChange={(event) =>
-                    updateCreateProjectDraft("description", event.target.value)
-                  }
-                />
-              </label>
-              <label className="grid gap-2 text-sm text-foreground">
-                <span>Currency</span>
-                <select
-                  aria-label="Currency"
-                  className="h-10 rounded-xl border border-border/80 bg-background/95 px-3 py-2 text-sm"
-                  value={createProjectDraft.currency}
-                  onChange={(event) =>
-                    updateCreateProjectDraft("currency", event.target.value)
-                  }
-                >
-                  <option value="EUR">EUR</option>
-                  <option value="USD">USD</option>
-                  <option value="GBP">GBP</option>
-                </select>
-              </label>
-            </div>
-          ) : null}
-
-          {createProjectStep === 2 ? (
-            <div className="grid gap-4 rounded-2xl border bg-muted/25 p-4 shadow-sm">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Project name
-                </div>
-                <div className="mt-1 text-sm font-medium">
-                  {createProjectDraft.name || "Not provided"}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Project code
-                </div>
-                <div className="mt-1 text-sm font-medium">
-                  {createProjectDraft.code || "Not provided"}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Project type
-                </div>
-                <div className="mt-1 text-sm font-medium uppercase">
-                  {createProjectDraft.projectType || "Not provided"}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Client name
-                </div>
-                <div className="mt-1 text-sm font-medium">
-                  {createProjectDraft.clientName || "Not provided"}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Description
-                </div>
-                <div className="mt-1 text-sm font-medium">
-                  {createProjectDraft.description || "Not provided"}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Currency
-                </div>
-                <div className="mt-1 text-sm font-medium">
-                  {createProjectDraft.currency}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {createProjectError ? (
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive shadow-sm">
-              {createProjectError}
-            </div>
-          ) : null}
-
-          <DialogFooter className="flex flex-wrap gap-2 rounded-2xl border bg-background/80 px-4 py-4">
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-xl"
-              onClick={() =>
-                createProjectStep === 0
-                  ? setIsCreateWizardOpen(false)
-                  : setCreateProjectStep((currentStep) =>
-                      Math.max(0, currentStep - 1) as CreateProjectStep,
-                    )
-              }
-            >
-              {createProjectStep === 0 ? "Cancel" : "Previous step"}
-            </Button>
-            {createProjectStep < 2 ? (
-              <Button
-                type="button"
-                className="rounded-xl"
-                onClick={() =>
-                  setCreateProjectStep((currentStep) =>
-                    Math.min(2, currentStep + 1) as CreateProjectStep,
-                  )
-                }
-                disabled={createProjectStep === 0 && !canAdvanceCreateProjectStep}
-              >
-                {createProjectStep === 1 ? "Review project" : "Next step"}
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                className="rounded-xl"
-                onClick={submitCreateProjectWizard}
-                disabled={createProject.isPending}
-              >
-                {createProject.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  "Create project"
-                )}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
+      
       <Sheet
         open={quickViewProject !== null}
         onOpenChange={(open) => {
