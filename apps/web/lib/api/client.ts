@@ -82,7 +82,7 @@ const handleAuthFailure = () => {
   }
 
   authRedirectInFlight = true;
-  showToast("Sesión expirada o inválida");
+  showToast("Session expired or invalid");
   browserLocationAdapter.redirectToSignIn();
 };
 
@@ -102,7 +102,7 @@ export const handleAuthErrorStatus = (status: number | undefined) => {
   }
 
   if (status === 403) {
-    showToast("Sin permisos");
+    showToast("Access denied");
   }
 };
 
