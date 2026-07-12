@@ -8,21 +8,16 @@ name: QA Swarm — Autonomous Test Generation
 # Modes:
 #   1. Schedule (weekly):  Scans the full unit test suite's coverage report and
 #      generates test files for all P0/P1 coverage gaps.
-#   2. Pull Request:       Reads the PR diff and generates tests only for Python
-#      source files that were added or modified in the PR.
-#   3. Manual (dispatch):  Target a specific source file via workflow_dispatch.
+#   2. Manual (dispatch):  Target a specific source file via workflow_dispatch.
+#
+# NOTE (2026-07-12): the pull_request mode was removed — it re-ran the whole
+# unit suite (~4.5 min, the slowest PR job) and spent Anthropic API tokens on
+# every backend PR push. Weekly schedule + manual dispatch cover its purpose.
 
 on:
   schedule:
     # Every Monday at 02:00 UTC
     - cron: '0 2 * * 1'
-
-  pull_request:
-    branches: [main, develop]
-    types: [opened, synchronize]
-    paths:
-      # Only run when Python backend source files change
-      - 'apps/api/src/**/*.py'
 
   workflow_dispatch:
     inputs:
@@ -60,12 +55,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0   # Full history needed for PR diff computation
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -102,7 +97,7 @@ jobs:
             || true   # Do not fail this job on test failures — coverage is what matters
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: coverage-report
           path: apps/api/coverage.xml
@@ -115,16 +110,9 @@ jobs:
           coverage-glob: "apps/api/coverage.xml"
           output: quality-report.md
 
-      - name: Comment quality gate report
-        if: always() && github.event_name == 'pull_request'
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: c2pro-quality-report-qa-swarm
-          path: quality-report.md
-
       - name: Upload quality gate report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: qa-swarm-quality-report
           path: quality-report.md
@@ -141,12 +129,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -159,28 +147,10 @@ jobs:
           pip install -r scripts/agents/qa_swarm/requirements.txt
 
       - name: Download coverage report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: coverage-report
           path: coverage-artifacts
-
-      # ── PR mode: process files changed in the PR ────────────────────
-      - name: Run QA Swarm (PR mode)
-        if: github.event_name == 'pull_request'
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ -z "${ANTHROPIC_API_KEY}" ]; then
-            echo "ANTHROPIC_API_KEY is not configured; skipping QA Swarm generation for this PR."
-            exit 0
-          fi
-          python -m scripts.agents.qa_swarm.qa_swarm_orchestrator \
-            --repo "${{ github.repository }}" \
-            --pr-number "${{ github.event.pull_request.number }}" \
-            --base-sha "${{ github.event.pull_request.base.sha }}" \
-            --head-sha "${{ github.event.pull_request.head.sha }}" \
-            --coverage-xml coverage-artifacts/coverage.xml
 
       # ── Scheduled / dispatch with explicit target ───────────────────
       - name: Run QA Swarm (target file)
@@ -230,7 +200,7 @@ jobs:
           done
 
       - name: Upload QA Swarm logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: qa-swarm-logs-${{ github.run_id }}

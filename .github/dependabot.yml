@@ -1,0 +1,44 @@
+# Dependabot: keeps GitHub Actions pins, backend pip deps, and the pnpm
+# workspace fresh. Minor/patch updates are grouped into one weekly PR per
+# ecosystem to keep noise down; majors arrive as individual PRs.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      actions-all:
+        patterns:
+          - "*"
+
+  - package-ecosystem: pip
+    directory: "/apps/api"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      python-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      js-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

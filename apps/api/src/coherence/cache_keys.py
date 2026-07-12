@@ -3,7 +3,7 @@ Coherence cache key registry — single source of truth (ADR-009 §G, spec §6).
 
 All coherence-related Redis cache keys MUST be built through this module.
 No inline ``f"coherence:..."`` literals are permitted anywhere else in
-``apps/api/src/``.  The CI guard step in ``.github/workflows/tests.yml``
+``apps/api/src/``.  The CI guard step in ``.github/workflows/ci.yml``
 enforces this rule on every pull request.
 
 Format

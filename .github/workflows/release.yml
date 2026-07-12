@@ -1,0 +1,141 @@
+# Tag-driven release certification + publication.
+#
+# Deploys are platform-owned (Railway and Vercel auto-deploy pushes to main;
+# branch protection on main is the deploy gate). This workflow provides the
+# auditable release trail on top of that:
+#
+#   1. certify — the tag points at a commit on main whose "CI Status" check
+#      succeeded; if a Gate 7 evidence bundle exists at evidence/releases/<tag>,
+#      it is validated with scripts/validate_release_evidence.py.
+#   2. publish — gated by the "Production" GitHub environment (add required
+#      reviewers there for a human approval step), creates the GitHub Release
+#      with auto-generated notes.
+#
+# Usage: git tag v1.2.3 <sha-on-main> && git push origin v1.2.3
+# (or run manually via workflow_dispatch with an existing tag name).
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to certify and release (e.g. v1.2.3)"
+        required: true
+        type: string
+      allow_missing_ci:
+        description: "Allow releasing a commit that predates the CI Status check (escape hatch)"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    name: Certify Release Candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - name: Resolve tag
+        id: resolve
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="$REF_NAME"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Releasing tag: $TAG"
+
+      - name: Checkout tag
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ steps.resolve.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Verify tag commit is on main
+        run: |
+          git fetch origin main --quiet
+          SHA=$(git rev-parse HEAD)
+          if git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "✓ $SHA is on main."
+          else
+            echo "::error::Tag commit $SHA is not an ancestor of origin/main. Release tags must point at commits on main."
+            exit 1
+          fi
+
+      - name: Verify CI Status check succeeded for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALLOW_MISSING_CI: ${{ inputs.allow_missing_ci }}
+        run: |
+          SHA=$(git rev-parse HEAD)
+          CONCLUSION=$(gh api "repos/${{ github.repository }}/commits/${SHA}/check-runs" --paginate \
+            --jq '[.check_runs[] | select(.name == "CI Status")] | first | .conclusion // empty')
+          echo "CI Status conclusion for $SHA: ${CONCLUSION:-<none>}"
+          if [ "$CONCLUSION" = "success" ]; then
+            echo "✓ CI Status is green."
+          elif [ -z "$CONCLUSION" ] && [ "$ALLOW_MISSING_CI" = "true" ]; then
+            echo "::warning::No CI Status check found for $SHA — proceeding because allow_missing_ci=true."
+          else
+            echo "::error::CI Status check for $SHA is '${CONCLUSION:-missing}'. Only green commits can be released."
+            exit 1
+          fi
+
+      - name: Validate Gate 7 evidence bundle (if present)
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          BUNDLE_DIR="evidence/releases/${TAG}"
+          if [ -d "$BUNDLE_DIR" ]; then
+            echo "Found evidence bundle at $BUNDLE_DIR — validating."
+            python -m pip install --quiet pyyaml
+            python scripts/validate_release_evidence.py \
+              --bundle-dir "$BUNDLE_DIR" \
+              --commit-sha "$(git rev-parse HEAD)"
+          else
+            echo "::notice::No Gate 7 evidence bundle at $BUNDLE_DIR — skipping evidence validation."
+          fi
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: certify
+    environment: Production
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.certify.outputs.tag }}
+
+      - name: Create GitHub Release with generated notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.certify.outputs.tag }}
+        run: |
+          if gh release view "$TAG" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            echo "::notice::Release $TAG already exists — nothing to do."
+            exit 0
+          fi
+          gh release create "$TAG" \
+            --repo "${{ github.repository }}" \
+            --title "$TAG" \
+            --verify-tag \
+            --generate-notes
+          echo "✓ Release $TAG published."
