@@ -325,7 +325,7 @@ export default function SettingsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="es">Español</SelectItem>
+                    <SelectItem value="es">Spanish</SelectItem>
                     <SelectItem value="fr">Français</SelectItem>
                   </SelectContent>
                 </Select>

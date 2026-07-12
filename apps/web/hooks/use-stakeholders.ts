@@ -139,7 +139,7 @@ export const useUpdateStakeholder = (projectId?: string) => {
       if (context?.previous) {
         queryClient.setQueryData(queryKey, context.previous);
       }
-      showToast("No se pudo actualizar el stakeholder.");
+      showToast("Failed to update stakeholder.");
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey });

@@ -197,7 +197,7 @@ describe("apiClient auth interceptor", () => {
     });
 
     expect(mockedStore.clear).toHaveBeenCalledTimes(1);
-    expect(mockedToast).toHaveBeenCalledWith("Sesión expirada o inválida");
+    expect(mockedToast).toHaveBeenCalledWith("Session expired or invalid");
     expect(redirectSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -212,7 +212,7 @@ describe("apiClient auth interceptor", () => {
     });
 
     expect(mockedStore.clear).toHaveBeenCalledTimes(1);
-    expect(mockedToast).toHaveBeenCalledWith("Sesión expirada o inválida");
+    expect(mockedToast).toHaveBeenCalledWith("Session expired or invalid");
     expect(redirectSpy).toHaveBeenCalledTimes(1);
   });
 

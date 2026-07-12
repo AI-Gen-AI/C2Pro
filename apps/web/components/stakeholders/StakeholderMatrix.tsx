@@ -35,25 +35,25 @@ const quadrantConfig: Array<{
   {
     id: "manage_closely",
     title: "Manage Closely",
-    description: "Poder alto • Interes alto",
+    description: "High power • High interest",
     gradient: "bg-gradient-to-br from-red-50 to-orange-50",
   },
   {
     id: "keep_satisfied",
     title: "Keep Satisfied",
-    description: "Poder alto • Interes bajo",
+    description: "High power • Low interest",
     gradient: "bg-gradient-to-br from-amber-50 to-yellow-50",
   },
   {
     id: "keep_informed",
     title: "Keep Informed",
-    description: "Poder bajo • Interes alto",
+    description: "Low power • High interest",
     gradient: "bg-gradient-to-br from-emerald-50 to-teal-50",
   },
   {
     id: "monitor",
     title: "Monitor",
-    description: "Poder bajo • Interes bajo",
+    description: "Low power • Low interest",
     gradient: "bg-gradient-to-br from-slate-50 to-zinc-50",
   },
 ];
@@ -107,7 +107,7 @@ const StakeholderCard = ({
           </p>
           {isCritical ? (
             <Badge variant="destructive" className="text-[10px]">
-              Critico
+              Critical
             </Badge>
           ) : null}
         </div>
@@ -184,18 +184,18 @@ export function StakeholderMatrix({ projectId }: StakeholderMatrixProps) {
       <div>
         <h2 className="text-lg font-semibold">Stakeholder Matrix</h2>
         <p className="text-sm text-muted-foreground">
-          Arrastra stakeholders entre cuadrantes para actualizar poder e interes.
+          Drag stakeholders between quadrants to update power and interest.
         </p>
       </div>
 
       {isLoading ? (
         <div className="text-sm text-muted-foreground">
-          Cargando stakeholders...
+          Loading stakeholders...
         </div>
       ) : null}
       {isError ? (
         <div className="text-sm text-muted-foreground">
-          No se pudieron cargar los stakeholders.
+          Failed to load stakeholders.
         </div>
       ) : null}
 
@@ -233,7 +233,7 @@ export function StakeholderMatrix({ projectId }: StakeholderMatrixProps) {
                   ))
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    Sin stakeholders en este cuadrante.
+                    No stakeholders in this quadrant.
                   </p>
                 )}
               </QuadrantDropZone>
