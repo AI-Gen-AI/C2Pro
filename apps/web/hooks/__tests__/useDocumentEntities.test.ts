@@ -46,7 +46,7 @@ describe("useDocumentEntities", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(getDocumentEntitiesMock).toHaveBeenCalledWith("doc-1", undefined);
+    expect(getDocumentEntitiesMock).toHaveBeenCalledWith("doc-1");
     expect(createHighlightsFromEntitiesMock).toHaveBeenCalledWith(entities);
     expect(result.current.entities).toEqual(entities);
     expect(result.current.highlights).toEqual(highlights);

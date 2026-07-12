@@ -200,8 +200,9 @@ describe("WF-04  Alerts — Alert Review Center component", () => {
     );
 
     const titles = screen
-      .getAllByRole("heading")
-      .map((h) => h.textContent ?? "");
+      .getAllByRole("row")
+      .filter((row) => row.querySelectorAll("td").length > 0)
+      .map((row) => row.textContent ?? "");
 
     const criticalIdx = titles.findIndex((t) => /date mismatch/i.test(t));
     const highIdx = titles.findIndex((t) => /budget overrun/i.test(t));

@@ -16,7 +16,7 @@
 | Backend            | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md)                     | backend  | 54    | 7      | 47        |
 | DevOps             | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md)                       | devops   | 2     | 0      | 2         |
 | Documentation      | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md)         | shared   | 0     | 0      | 0         |
-| Frontend           | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md)                   | frontend | 202   | 13     | 189       |
+| Frontend           | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md)                   | frontend | 202   | 12     | 190       |
 | Infrastructure     | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md)       | infra    | 59    | 17     | 42        |
 | Planning           | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md)                   | planner  | 0     | 0      | 0         |
 | Quality Assurance  | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md)   | qa       | 120   | 108    | 12        |
@@ -28,7 +28,7 @@
 | Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 54 | 7 | 47 |
 | DevOps | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md) | devops | 2 | 0 | 2 |
 | Documentation | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md) | shared | 0 | 0 | 0 |
-| Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 202 | 13 | 189 |
+| Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 202 | 12 | 190 |
 | Infrastructure | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md) | infra | 59 | 17 | 42 |
 | Planning | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md) | planner | 0 | 0 | 0 |
 | Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 120 | 108 | 12 |
@@ -467,6 +467,8 @@ FOLLOW-UPS (open):
 ---
 
 ## Change Log
+
+**2026-07-12**: Completed `TASK-FRT-192` (PATCH 18 CI wedge gates + repair test debt) on branch `feat/frt-192-ci-wedge-gates`. Repaired stale AppSidebar/RACI/settings/WBS assertions and the hidden full-suite drift surfaced after enabling the full gate: global documents backend error copy, waitlist fake-timer bleed, alert/entity/generated-API contracts, analytics sorting expectations, WBS contract label matching, and wireframe guard selectors. Fixed the AppSidebar route itself where Dashboard still emitted `/` instead of `/dashboard`. Frontend CI now runs `pnpm test:all` instead of the subset `pnpm test`, and the E2E smoke step includes the new deterministic `journey-3-wedge.spec.ts` (typed triplet -> progress/evaluate -> evidence -> identity approve -> report export) with a skipped `@real-backend` TODO under `TASK-FRT-192`. Verification: RED focused run first failed 4 files / 14 tests; focused GREEN passed 4 files / 18 tests; final `pnpm test:all` passed 216 files / 717 tests plus 51 files / 126 tests; `pnpm typecheck` passed; `pnpm lint` passed. Local Playwright was attempted but blocked before spec execution: first by occupied port 3100, then by missing `CLERK_PUBLISHABLE_KEY` when rerun with the existing server.
 
 **2026-07-12**: Completed `TASK-FRT-188` (PATCH 14 Audit Report export v1) on branch `feat/frt-188-report-export`. Added `/projects/[id]/report` with a client-side composed payload sourced from `useProject`, `getDashboardSummary`, generated project-alerts hook, and `useProjectDocuments`; the report includes project identity, generation timestamp, nullable Coherence Score with `Pending evidence` for null, `score_version`, `categories_v2` rendered through `CategoryV2Panel`, findings grouped into open/approved/rejected with backend evidence references, and document register rows. Added print-optimized A4 CSS with browser `window.print()` as the v1 PDF path and JSON download of the same payload. Removed the Budget page `alert()` PDF placeholder and replaced it with an "Open audit report" link to the Report tab. Contract deviation: generated `ListReviewQueueApiV1HitlQueueGetParams` exposes only `status`, `skip`, and `limit`; there is no `project_id`, so HITL decisions are not included rather than falsely client-filtering a tenant-wide queue. Verification: RED focused tests failed first on missing report modules/page, missing report tab, and Budget placeholder behavior; GREEN `pnpm vitest run "app/(app)/projects/[id]/report" components/features/report "app/(app)/projects/[id]/budget" components/layout/ProjectTabs.test.tsx` passed 5 files / 8 tests; `pnpm typecheck` passed; `pnpm lint` passed; `rg -n "alert\\(" -- apps/web/app/(app)/projects/[id]/budget/page.tsx apps/web/components/features/report apps/web/app/(app)/projects/[id]/report` returned 0 hits. Broader guard `pnpm vitest run "app/(app)/projects/[id]"` passed 11 files / 69 tests and only failed the known TASK-FRT-192 debt in untouched `settings` and `wbs`.
 

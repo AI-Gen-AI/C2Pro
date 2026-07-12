@@ -140,14 +140,14 @@ jobs:
         working-directory: .
 
       - name: Unit and integration tests
-        run: pnpm test
+        run: pnpm test:all
 
       - name: Install Playwright Browsers
         run: pnpm exec playwright install --with-deps
 
       - name: E2E smoke tests
         if: ${{ env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '' }}
-        run: pnpm test:e2e -- src/tests/e2e/coherence-v1.spec.ts --project=chromium
+        run: pnpm test:e2e -- src/tests/e2e/coherence-v1.spec.ts src/tests/e2e/journeys/journey-3-wedge.spec.ts --project=chromium
 
       - name: Skip E2E smoke tests when Clerk credentials are unavailable
         if: ${{ env.CLERK_SECRET_KEY == '' && env.CLERK_TESTING_TOKEN == '' }}

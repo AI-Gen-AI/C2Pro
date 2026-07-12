@@ -72,12 +72,12 @@ describe("WBSTree Component Contract", () => {
       const { container } = render(<WBSTree items={mockWBSItems} />);
 
       // Should render root items
-      expect(screen.getByText("Project Management")).toBeInTheDocument();
-      expect(screen.getByText("Construction")).toBeInTheDocument();
+      expect(screen.getByText(/Project Management/)).toBeInTheDocument();
+      expect(screen.getByText(/Construction/)).toBeInTheDocument();
 
       // Should render nested children
-      expect(screen.getByText("Planning")).toBeInTheDocument();
-      expect(screen.getByText("Execution")).toBeInTheDocument();
+      expect(screen.getByText(/Planning/)).toBeInTheDocument();
+      expect(screen.getByText(/Execution/)).toBeInTheDocument();
 
       // Should have correct ARIA tree structure
       const treeElement = container.querySelector('[role="tree"]');
@@ -109,7 +109,7 @@ describe("WBSTree Component Contract", () => {
       render(<WBSTree items={mockWBSItems} onSelect={handleSelect} />);
 
       // Click on an item
-      const item = screen.getByText("Planning");
+      const item = screen.getByText(/Planning/);
       fireEvent.click(item);
 
       // Should call onSelect with item data
@@ -135,11 +135,11 @@ describe("WBSTree Component Contract", () => {
       render(<WBSTree items={mockWBSItems} filter={filter} />);
 
       // Should show filtered items
-      expect(screen.getByText("Planning")).toBeInTheDocument(); // 50% complete
-      expect(screen.getByText("Execution")).toBeInTheDocument(); // 25% complete
+      expect(screen.getByText(/Planning/)).toBeInTheDocument(); // 50% complete
+      expect(screen.getByText(/Execution/)).toBeInTheDocument(); // 25% complete
 
       // Should hide items not matching filter
-      expect(screen.queryByText("Project Management")).not.toBeInTheDocument(); // 0% complete
+      expect(screen.queryByText(/Project Management/)).not.toBeInTheDocument(); // 0% complete
     });
 
     it("should filter items by searchQuery [TEST-05]", () => {
@@ -151,11 +151,11 @@ describe("WBSTree Component Contract", () => {
       render(<WBSTree items={mockWBSItems} searchQuery="plan" />);
 
       // Should show matching items (case insensitive)
-      expect(screen.getByText("Planning")).toBeInTheDocument();
+      expect(screen.getByText(/Planning/)).toBeInTheDocument();
 
       // Should hide non-matching items
-      expect(screen.queryByText("Execution")).not.toBeInTheDocument();
-      expect(screen.queryByText("Construction")).not.toBeInTheDocument();
+      expect(screen.queryByText(/Execution/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Construction/)).not.toBeInTheDocument();
     });
   });
 
@@ -179,7 +179,7 @@ describe("WBSTree Component Contract", () => {
       expect(dragHandles).toHaveLength(0);
 
       // Items should still be selectable (for viewing)
-      expect(screen.getByText("Project Management")).toBeInTheDocument();
+      expect(screen.getByText(/Project Management/)).toBeInTheDocument();
     });
   });
 
@@ -194,8 +194,8 @@ describe("WBSTree Component Contract", () => {
       render(<WBSTree items={mockWBSItems} expandedItems={expandedItems} />);
 
       // Children of expanded item should be visible
-      expect(screen.getByText("Planning")).toBeVisible();
-      expect(screen.getByText("Execution")).toBeVisible();
+      expect(screen.getByText(/Planning/)).toBeVisible();
+      expect(screen.getByText(/Execution/)).toBeVisible();
 
       // Item '2' should be collapsed (no children shown)
       // (Construction has no children in mock data)

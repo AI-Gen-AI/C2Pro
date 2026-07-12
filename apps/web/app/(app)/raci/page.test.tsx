@@ -17,6 +17,12 @@ vi.mock("@/hooks/useProjects", () => ({
   useProjects: (...args: unknown[]) => useProjectsMock(...args),
 }));
 
+vi.mock("@/config/env", () => ({
+  env: {
+    FEATURE_RACI_GENERATION: true,
+  },
+}));
+
 vi.mock("@/components/ui/select", () => ({
   Select: ({
     value,

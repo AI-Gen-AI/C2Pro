@@ -74,6 +74,7 @@ describe("ProjectSettingsPage", () => {
           status: "active",
           estimated_budget: 1500000,
           currency: "EUR",
+          expected_version: 1,
         },
       });
     });

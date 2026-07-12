@@ -82,7 +82,7 @@ describe("alerts hooks contract alignment", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(getMock).toHaveBeenNthCalledWith(1, "/alerts");
+    expect(getMock).toHaveBeenNthCalledWith(1, "/alerts/tenant");
     expect(result.current.alerts).toEqual([
       {
         id: "a-1",
@@ -90,6 +90,7 @@ describe("alerts hooks contract alignment", () => {
         type: "Legal",
         title: "Missing permit",
         description: "Missing permit",
+        project_id: "proj-1",
         project: "Project One",
         status: "Open",
         created_at: "2026-04-01T08:30:00Z",
