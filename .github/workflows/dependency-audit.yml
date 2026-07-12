@@ -1,0 +1,76 @@
+# Full-dependency vulnerability audit (existing deps, not just PR-introduced
+# ones — that is dependency-review.yml's job).
+#
+#   * pip-audit: advisory — reports to the job summary, never blocks.
+#   * pnpm audit: blocks on CRITICAL findings in production dependencies.
+
+name: Dependency Audit
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  pull_request:
+    paths:
+      - "apps/api/requirements*.txt"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "apps/web/package.json"
+      - ".github/workflows/dependency-audit.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: dependency-audit-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  pip-audit:
+    name: pip-audit (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit backend requirements
+        run: |
+          set -o pipefail
+          pip-audit -r apps/api/requirements.txt --disable-pip 2>&1 | tee pip-audit.log || AUDIT_FAILED=1
+          {
+            echo "## pip-audit (advisory)"
+            echo ""
+            echo '```'
+            tail -n 50 pip-audit.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "${AUDIT_FAILED:-0}"
+
+  pnpm-audit:
+    name: pnpm audit (blocks on critical)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Audit production dependencies
+        run: pnpm audit --audit-level critical --prod

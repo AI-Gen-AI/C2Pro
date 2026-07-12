@@ -1,8 +1,0 @@
-schema: spec-driven
-rules:
-  verify:
-    required_report_sections:
-      - artifact presence
-      - scenario coverage
-      - rules compliance
-      - overall verdict

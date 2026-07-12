@@ -95,6 +95,7 @@ claves postgre.txt
 # Test artifacts
 .pytest-tmp/
 .pytest-tmp-local/
+.mypy_cache/
 ruff_errors.json
 
 # Local copies

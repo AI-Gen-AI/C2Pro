@@ -1,0 +1,670 @@
+# C2Pro CI — single PR/push validation pipeline.
+#
+# Replaces the former tests.yml, e2e-security-tests.yml, frontend-ci.yml and
+# frontend-e2e.yml. Design notes:
+#
+#   * detect-changes path-filters the monorepo (backend / frontend / migrations)
+#     so docs-only PRs finish in under a minute. The workflow itself has NO
+#     `paths:` trigger filter on purpose: the final `ci-status` join job must
+#     always report, because it is the single required branch-protection check.
+#   * Advisory (non-gating) jobs: backend-typecheck (mypy baseline not clean yet)
+#     and backend-integration (14 failures + 10 errors on main as of 2026-07-12,
+#     previously hidden by continue-on-error — now visibly red but not blocking).
+#     ci-status enumerates required jobs explicitly; advisory jobs are excluded.
+#   * Secret scanning is owned by secret-scan.yml; OpenAPI drift by
+#     openapi-drift.yml; deeper eval/E2E suites by their dedicated workflows.
+#
+# Adding a new app/service later: add a filter key in detect-changes, add jobs
+# that `needs: detect-changes` + use the setup composites, and list the new
+# gating jobs in ci-status `needs` + REQUIRED_JOBS. See docs/runbooks/ci-cd-setup.md.
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# Cancel superseded PR runs; never cancel main/develop pushes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.backend }}
+      frontend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.frontend }}
+      migrations: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.migrations }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Filter changed paths
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
+        with:
+          filters: |
+            backend:
+              - "apps/api/**"
+              - "docker-compose.test.yml"
+              - "infrastructure/database/**"
+              - ".github/workflows/ci.yml"
+              - ".github/actions/setup-python-backend/**"
+            frontend:
+              - "apps/web/**"
+              - "package.json"
+              - "pnpm-lock.yaml"
+              - "pnpm-workspace.yaml"
+              - ".github/workflows/ci.yml"
+              - ".github/actions/setup-node-web/**"
+            migrations:
+              - "apps/api/alembic/**"
+              - "supabase/migrations/**"
+
+  # ──────────────────────────── Backend lane ────────────────────────────
+
+  backend-lint:
+    name: Backend Lint (ruff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      # Same ruff version as apps/api/requirements.txt and the Husky pre-commit hook.
+      - name: Install ruff
+        run: pip install ruff==0.2.1
+
+      - name: Ruff check
+        working-directory: apps/api
+        run: python -m ruff check .
+
+  backend-typecheck:
+    name: Backend Typecheck (mypy, advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      # Same mypy version as apps/api/requirements.txt. Config lives in
+      # apps/api/pyproject.toml (strict mode, ignore_missing_imports).
+      - name: Install mypy
+        run: pip install mypy==1.8.0
+
+      - name: Mypy (advisory — baseline not clean yet)
+        working-directory: apps/api
+        run: |
+          set -o pipefail
+          mypy src | tee mypy-report.txt || true
+          {
+            echo "## Mypy (advisory)"
+            echo ""
+            echo '```'
+            tail -n 30 mypy-report.txt
+            echo '```'
+            echo ""
+            echo "_This job is informational until the mypy baseline is clean (see backlog)._"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  backend-unit:
+    name: Backend Unit Tests (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        # PRs run the production Python only; pushes to main/develop keep the
+        # forward-compat 3.12 leg.
+        python-version: ${{ github.event_name == 'pull_request' && fromJSON('["3.11"]') || fromJSON('["3.11", "3.12"]') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Coherence cache-key SoT guard (ADR-009 §G)
+        run: |
+          set -euo pipefail
+          MATCHES=$(grep -rEn 'f"coherence:|f'\''coherence:' apps/api/src/ \
+            --include='*.py' \
+            | grep -v 'src/coherence/cache_keys.py' \
+            | grep -v 'src/coherence/cache_invalidation.py' || true)
+          if [ -n "$MATCHES" ]; then
+            echo "::error::ADR-009 §G violation — ad-hoc coherence cache key literal detected. Use cache_keys.key() instead:"
+            echo "$MATCHES"
+            exit 1
+          fi
+          echo "✓ All coherence cache keys go through cache_keys.key()."
+
+      - name: ADR-013 graph node contract gate
+        working-directory: apps/api
+        run: python -m pytest tests/contract/test_graph_node_contracts.py -v --tb=short
+
+      - name: S5 core AI gates (I10-I12 + security)
+        working-directory: apps/api
+        run: |
+          python -m pytest \
+            tests/modules/stakeholders/domain/test_i10_stakeholder_resolution.py \
+            tests/modules/stakeholders/application/test_i10_ports_contract.py \
+            tests/modules/hitl/domain/test_i11_confidence_gate_routing.py \
+            tests/modules/hitl/application/test_i11_review_queue_service.py \
+            tests/modules/observability/domain/test_i12_trace_envelope_completeness.py \
+            tests/modules/observability/application/test_i12_langsmith_adapter.py \
+            tests/modules/observability/application/test_i12_eval_drift_detection.py \
+            tests/security/test_i10_stakeholder_raci_security_red.py \
+            --tb=short --junit-xml=s5-core-ai-gates.xml
+
+      - name: Run unit tests
+        working-directory: apps/api
+        run: |
+          python -m pytest \
+            tests/unit/ \
+            -m "not integration" \
+            --tb=short \
+            --junit-xml=unit-test-results.xml \
+            --cov=src \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing:skip-covered \
+            --cov-fail-under=0
+
+      - name: Upload unit test results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: unit-test-results-py${{ matrix.python-version }}
+          path: |
+            apps/api/unit-test-results.xml
+            apps/api/s5-core-ai-gates.xml
+          retention-days: 14
+
+      - name: Upload unit coverage report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: unit-coverage-py${{ matrix.python-version }}
+          path: apps/api/coverage.xml
+          retention-days: 14
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.11'
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        with:
+          files: apps/api/coverage.xml
+          flags: backend
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  backend-security:
+    name: Backend Security Suite (multi-tenant isolation)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      ENVIRONMENT: test
+      DEBUG: "true"
+      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+      AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
+      SUPABASE_URL: https://test.supabase.co
+      SUPABASE_ANON_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock
+      SUPABASE_SERVICE_ROLE_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock.service
+      ANTHROPIC_API_KEY: sk-ant-test-mock-key
+      REDIS_URL: redis://localhost:6379/0
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_PER_MINUTE: "100"
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Bootstrap test infrastructure
+        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
+
+      - name: Run multi-tenant isolation and auth security tests
+        working-directory: apps/api
+        run: |
+          python -m pytest \
+            tests/e2e/security/test_multi_tenant_isolation.py \
+            tests/core/auth/test_jwt_validator.py \
+            tests/core/test_middleware.py \
+            tests/core/test_clerk_auth_and_rate_limiter.py \
+            --tb=short \
+            --cov=src/core/middleware \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=60 \
+            --junit-xml=security-test-results.xml
+
+      - name: Upload security test results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: backend-security-results
+          path: apps/api/security-test-results.xml
+          retention-days: 14
+
+      - name: Database logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose.test.yml ps || true
+          docker compose -f docker-compose.test.yml logs postgres-test || true
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+  # Advisory: the integration suite has pre-existing failures on main
+  # (14 failed / 10 errors, sqlalchemy pool teardown — see backlog task).
+  # It runs visibly red but is intentionally NOT part of the required gate.
+  # Flip it to required by moving it into REQUIRED_JOBS in ci-status once green.
+  backend-integration:
+    name: Backend Integration Tests (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      ENVIRONMENT: test
+      DEBUG: "true"
+      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
+      REDIS_URL: redis://localhost:6379/0
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Bootstrap test infrastructure
+        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
+
+      - name: Run integration tests
+        working-directory: apps/api
+        run: python -m pytest tests/integration/ --tb=short --junit-xml=integration-test-results.xml
+
+      - name: Advisory notice
+        if: failure()
+        run: |
+          {
+            echo "## Backend integration tests (advisory)"
+            echo ""
+            echo "This suite has known pre-existing failures and does not block merges yet."
+            echo "Track and fix via the backlog task in C2PRO_MASTER_BACKLOG.md, then move"
+            echo "backend-integration into REQUIRED_JOBS in ci-status."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload integration test results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: integration-test-results
+          path: apps/api/integration-test-results.xml
+          retention-days: 14
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+  backend-migrations:
+    name: Migrations Check (Alembic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: detect-changes
+    if: needs.detect-changes.outputs.migrations == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+
+      # bootstrap_test_infra.py recreates the DB, runs `alembic upgrade head`
+      # from scratch, asserts the applied revision is the single head, and
+      # validates the migration graph is linear. This turns the "dual Alembic
+      # heads crash-loop on Railway boot" failure mode into a PR-time failure.
+      - name: Apply migrations from scratch and validate single head
+        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --recreate-db
+
+      - name: Single-head regression test
+        working-directory: apps/api
+        run: python -m pytest tests/unit/test_alembic_single_head.py -q
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+  # ─────────────────────────── Frontend lane ───────────────────────────
+
+  frontend-quality:
+    name: Frontend Lint + Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsubW9jay5sb2NhbCQ
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup web environment
+        uses: ./.github/actions/setup-node-web
+
+      - name: Typecheck
+        working-directory: apps/web
+        run: pnpm typecheck
+
+      - name: Lint
+        working-directory: apps/web
+        run: pnpm lint
+
+      # ADR-009 §18: Coherence Score™ paths must never collapse null → 0.
+      # Bans `?? 0` / `|| 0` in coherence components. Weight fallbacks
+      # (`weights_used[cat] ?? 0`) are allowed because they apply to
+      # percentages, not score values.
+      - name: Coherence score-path null-fallback guard (ADR-009 §18)
+        run: |
+          set -euo pipefail
+          MATCHES=$(grep -rEn '\?\? *0([^.0-9]|$)|\|\| *0([^.0-9]|$)' \
+            apps/web/components/coherence/ \
+            apps/web/lib/api/contracts.ts \
+            --include='*.tsx' --include='*.ts' \
+            | grep -v 'weights_used' \
+            | grep -v '\.test\.' \
+            | grep -v 'test-utils' || true)
+          if [ -n "$MATCHES" ]; then
+            echo "::error::ADR-009 §18 violation — '?? 0' or '|| 0' detected on a Coherence Score™ path:"
+            echo "$MATCHES"
+            exit 1
+          fi
+          echo "✓ No null→0 collapses on coherence score paths."
+
+  frontend-test:
+    name: Frontend Tests + API Drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsubW9jay5sb2NhbCQ' }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsubW9jay5sb2NhbCQ' }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup web environment
+        uses: ./.github/actions/setup-node-web
+
+      - name: Unit and integration tests
+        working-directory: apps/web
+        run: pnpm test:all
+
+      - name: API generation drift check
+        working-directory: apps/web
+        run: pnpm generate:api:check
+
+  frontend-e2e-smoke:
+    name: Frontend E2E Smoke (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsubW9jay5sb2NhbCQ' }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsubW9jay5sb2NhbCQ' }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup web environment
+        uses: ./.github/actions/setup-node-web
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E smoke tests
+        if: ${{ env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '' }}
+        working-directory: apps/web
+        run: pnpm test:e2e -- src/tests/e2e/coherence-v1.spec.ts src/tests/e2e/journeys/journey-3-wedge.spec.ts --project=chromium
+
+      - name: Skip E2E smoke tests when Clerk credentials are unavailable
+        if: ${{ env.CLERK_SECRET_KEY == '' && env.CLERK_TESTING_TOKEN == '' }}
+        run: echo "::notice::Skipping Clerk-backed E2E smoke tests because CLERK_SECRET_KEY and CLERK_TESTING_TOKEN are not configured for this workflow run."
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
+
+  # ──────────────────────────── Join gate ───────────────────────────────
+  # The ONLY check that branch protection should require. Skipped lanes are
+  # fine (path filtering); failed or cancelled required lanes are not.
+
+  ci-status:
+    name: CI Status
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - detect-changes
+      - backend-lint
+      - backend-typecheck
+      - backend-unit
+      - backend-security
+      - backend-integration
+      - backend-migrations
+      - frontend-quality
+      - frontend-test
+      - frontend-e2e-smoke
+    if: always()
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download all test artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: test-results
+
+      - name: Publish test summary
+        continue-on-error: true
+        shell: python
+        run: |
+          import glob
+          import os
+          import xml.etree.ElementTree as ET
+
+          total_files = 0
+          total_tests = 0
+          total_failures = 0
+          total_errors = 0
+          total_skipped = 0
+
+          for path in glob.glob("test-results/**/*.xml", recursive=True):
+              try:
+                  root = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
+              if not suites:
+                  continue
+              total_files += 1
+              for suite in suites:
+                  total_tests += int(suite.attrib.get("tests", 0) or 0)
+                  total_failures += int(suite.attrib.get("failures", 0) or 0)
+                  total_errors += int(suite.attrib.get("errors", 0) or 0)
+                  total_skipped += int(suite.attrib.get("skipped", 0) or 0)
+
+          passed = max(total_tests - total_failures - total_errors - total_skipped, 0)
+          lines = [
+              "## Test Results Summary",
+              f"- Parsed reports: {total_files}",
+              f"- Total tests: {total_tests}",
+              f"- Passed: {passed}",
+              f"- Failed: {total_failures}",
+              f"- Errors: {total_errors}",
+              f"- Skipped: {total_skipped}",
+          ]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+              f.write("\n".join(lines) + "\n")
+
+      - name: Render quality gate report
+        continue-on-error: true
+        uses: ./.github/actions/quality-report
+        with:
+          coverage-glob: "test-results/**/coverage.xml"
+          junit-glob: "test-results/**/*.xml"
+          wireframe-coverage-json: apps/web/wireframe-coverage.json
+          output: quality-report.md
+          fail-on-contract-drop: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' }}
+
+      - name: Comment quality gate report
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405 # v2.9.4
+        with:
+          header: c2pro-quality-report
+          path: quality-report.md
+
+      - name: Upload quality gate report
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-quality-report
+          path: quality-report.md
+          retention-days: 90
+
+      - name: Evaluate required gates
+        env:
+          RESULT_DETECT: ${{ needs.detect-changes.result }}
+          RESULT_BACKEND_LINT: ${{ needs.backend-lint.result }}
+          RESULT_BACKEND_UNIT: ${{ needs.backend-unit.result }}
+          RESULT_BACKEND_SECURITY: ${{ needs.backend-security.result }}
+          RESULT_BACKEND_MIGRATIONS: ${{ needs.backend-migrations.result }}
+          RESULT_FRONTEND_QUALITY: ${{ needs.frontend-quality.result }}
+          RESULT_FRONTEND_TEST: ${{ needs.frontend-test.result }}
+          RESULT_FRONTEND_E2E: ${{ needs.frontend-e2e-smoke.result }}
+          RESULT_BACKEND_TYPECHECK: ${{ needs.backend-typecheck.result }}
+          RESULT_BACKEND_INTEGRATION: ${{ needs.backend-integration.result }}
+        run: |
+          set -euo pipefail
+
+          # Required jobs: must be success or skipped (skipped = lane not affected
+          # by this change). Advisory jobs are reported but never gate.
+          REQUIRED_JOBS=(
+            "detect-changes:$RESULT_DETECT"
+            "backend-lint:$RESULT_BACKEND_LINT"
+            "backend-unit:$RESULT_BACKEND_UNIT"
+            "backend-security:$RESULT_BACKEND_SECURITY"
+            "backend-migrations:$RESULT_BACKEND_MIGRATIONS"
+            "frontend-quality:$RESULT_FRONTEND_QUALITY"
+            "frontend-test:$RESULT_FRONTEND_TEST"
+            "frontend-e2e-smoke:$RESULT_FRONTEND_E2E"
+          )
+          ADVISORY_JOBS=(
+            "backend-typecheck:$RESULT_BACKEND_TYPECHECK"
+            "backend-integration:$RESULT_BACKEND_INTEGRATION"
+          )
+
+          {
+            echo "## CI Gate"
+            echo ""
+            echo "| Job | Result | Gating |"
+            echo "|-----|--------|--------|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          FAILED=0
+          for entry in "${REQUIRED_JOBS[@]}"; do
+            job="${entry%%:*}"
+            result="${entry#*:}"
+            echo "| $job | $result | required |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "::error::Required job '$job' finished with result '$result'."
+              FAILED=1
+            fi
+          done
+          for entry in "${ADVISORY_JOBS[@]}"; do
+            job="${entry%%:*}"
+            result="${entry#*:}"
+            echo "| $job | $result | advisory |" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            exit 1
+          fi
+          echo "✓ All required CI gates passed."

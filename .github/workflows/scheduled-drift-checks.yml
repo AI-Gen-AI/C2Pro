@@ -5,6 +5,9 @@ on:
     - cron: "0 */6 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   drift-checks:
     name: Drift Checks + Escalation Hook
@@ -15,10 +18,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
           cache: "pip"
@@ -35,9 +38,11 @@ jobs:
         id: drift_tests
         working-directory: apps/api
         run: |
+          # NOTE (2026-07-12): tests/security/test_s5_stakeholders_hitl_observability_security.py
+          # was deleted from the repo; referencing it made this workflow fail on every
+          # scheduled run. The surviving i12 drift-detection suite covers escalation logic.
           python -m pytest \
             tests/modules/observability/application/test_i12_eval_drift_detection.py \
-            tests/security/test_s5_stakeholders_hitl_observability_security.py::test_s5_i12_drift_escalation_only_triggers_on_true_drift \
             -q --maxfail=1 \
             --junit-xml=scheduled-drift-checks.xml
 
@@ -86,7 +91,7 @@ jobs:
 
       - name: Upload scheduled drift report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: scheduled-drift-check-report
           path: apps/api/scheduled-drift-checks.xml
