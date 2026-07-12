@@ -7,7 +7,13 @@
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { OnboardingEntry } from "@/components/features/onboarding/OnboardingEntry";
+import {
+  shouldShowOnboarding,
+  storeOnboardingPreference,
+} from "@/components/features/onboarding/onboarding-preferences";
+import { useStartSampleProjectApiV1OnboardingSampleProjectStartPost } from "@/lib/api/generated/frontend-support/frontend-support";
 import {
   Loader2,
   ArrowLeft,
@@ -56,6 +62,48 @@ export default function AppDashboardPage() {
   );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const searchParams = useSearchParams();
+  const onboardingFail = searchParams?.get("onboardingFail") === "1";
+
+  const [onboardingState, setOnboardingState] = useState<"idle" | "failed">("idle");
+  const [onboardingError, setOnboardingError] = useState<string | undefined>(undefined);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    setShowOnboarding(shouldShowOnboarding());
+  }, []);
+
+  useEffect(() => {
+    if (onboardingFail) {
+      setOnboardingState("failed");
+      setOnboardingError("Provisioning timed out");
+    }
+  }, [onboardingFail]);
+
+  const startSampleProjectMutation = useStartSampleProjectApiV1OnboardingSampleProjectStartPost();
+
+  const handleStartSampleProject = async () => {
+    setOnboardingState("idle");
+    setOnboardingError(undefined);
+    try {
+      const response = await startSampleProjectMutation.mutateAsync();
+      if (response && response.projectId) {
+        router.push(`/projects/${response.projectId}`);
+      }
+    } catch (error) {
+      console.error("Failed to start sample project:", error);
+      setOnboardingState("failed");
+      setOnboardingError(
+        error instanceof Error ? error.message : "Sample workspace setup failed",
+      );
+    }
+  };
+
+  const handleDismissOnboarding = () => {
+    storeOnboardingPreference({ dismissed: true, resumeLater: false });
+    setShowOnboarding(false);
+  };
   const adminRedirectPath =
     isAuthenticated && userRole === "c2pro_admin"
       ? "/admin/c2pro"
@@ -165,6 +213,21 @@ export default function AppDashboardPage() {
   }
 
   if (!isLoading && projects.length === 0 && !loadError) {
+    if (showOnboarding) {
+      return (
+        <div className="flex min-h-[400px] flex-col items-center justify-center space-y-6 text-center py-12 max-w-lg mx-auto">
+          <OnboardingEntry
+            onStartSampleProject={handleStartSampleProject}
+            initialState={onboardingState}
+            errorMessage={onboardingError}
+          />
+          <Button variant="ghost" size="sm" onClick={handleDismissOnboarding} className="text-muted-foreground hover:text-foreground">
+            Dismiss onboarding
+          </Button>
+        </div>
+      );
+    }
+
     return (
       <div className="flex min-h-[400px] flex-col items-center justify-center space-y-4 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">

@@ -483,7 +483,7 @@ You are a Senior Frontend Engineer working on `apps/web/` (Next.js 16 App Router
 
 ---
 
-## PATCH 21 — First-run onboarding (mount the orphan)
+## PATCH 21 — First-run onboarding (mount the orphan) ✅ COMPLETED 2026-07-09
 
 **Backlog ID:** `TASK-FRT-195` · **Priority:** P2 · **Depends on:** PATCH 9
 

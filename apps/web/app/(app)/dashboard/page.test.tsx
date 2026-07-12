@@ -12,9 +12,20 @@ const useAuthStoreMock = vi.fn();
 const replaceMock = vi.fn();
 const useAuthMock = vi.fn();
 
+const startSampleProjectMutateMock = vi.fn();
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     replace: replaceMock,
+    push: vi.fn(),
+  }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+vi.mock("@/lib/api/generated/frontend-support/frontend-support", () => ({
+  useStartSampleProjectApiV1OnboardingSampleProjectStartPost: () => ({
+    mutateAsync: startSampleProjectMutateMock,
+    isPending: false,
   }),
 }));
 
@@ -78,6 +89,7 @@ describe("AppDashboardPage", () => {
   });
 
   it("shows a guided empty state with Create project CTA when no projects exist", async () => {
+    sessionStorage.setItem("s3-11-onboarding-preference", JSON.stringify({ dismissed: true, resumeLater: false }));
     useAuthStoreMock.mockImplementation(
       (selector: (state: { token: string | null }) => unknown) =>
         selector({ token: "token-123" }),
@@ -94,6 +106,26 @@ describe("AppDashboardPage", () => {
     expect(
       screen.getByRole("link", { name: /create project/i }),
     ).toHaveAttribute("href", "/projects");
+  });
+
+  it("shows onboarding entry when no projects exist and onboarding is not dismissed", async () => {
+    sessionStorage.clear();
+    useAuthStoreMock.mockImplementation(
+      (selector: (state: { token: string | null }) => unknown) =>
+        selector({ token: "token-123" }),
+    );
+    getProjectsMock.mockResolvedValue([]);
+
+    renderWithProviders(<AppDashboardPage />);
+
+    await waitFor(() => {
+      expect(getProjectsMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(screen.getByRole("heading", { name: /get started fast/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /start with sample project/i }),
+    ).toBeInTheDocument();
   });
 
   it("does not show the Create CTA empty state when projects load successfully", async () => {
