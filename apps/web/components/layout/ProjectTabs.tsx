@@ -1,5 +1,9 @@
+"use client";
+
 import { env } from "@/config/env";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
   ClipboardCheck,
@@ -31,6 +35,8 @@ interface ProjectTabsProps {
 }
 
 export function ProjectTabs({ projectId }: ProjectTabsProps) {
+  const pathname = usePathname() || "";
+
   return (
     <nav className="mt-3 flex flex-wrap gap-1" aria-label="Project tabs">
       {tabs.filter(tab => {
@@ -40,11 +46,21 @@ export function ProjectTabs({ projectId }: ProjectTabsProps) {
         return true;
       }).map((tab) => {
         const Icon = tab.icon;
+        const isActive = tab.href === "" 
+          ? pathname === `/projects/${projectId}` || pathname === `/projects/${projectId}/`
+          : pathname.endsWith(tab.href) || pathname.includes(`${tab.href}/`);
+
         return (
           <Link
             key={tab.href}
             href={`/projects/${projectId}${tab.href}`}
-            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:bg-accent hover:text-foreground"
+            aria-current={isActive ? "page" : undefined}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium transition-colors",
+              isActive 
+                ? "bg-slate-900 text-white border-slate-900" 
+                : "text-muted-foreground hover:border-primary/30 hover:bg-accent hover:text-foreground"
+            )}
           >
             <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
             {tab.label}

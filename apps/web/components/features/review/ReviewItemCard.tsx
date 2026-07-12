@@ -17,8 +17,9 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { ReviewItemResponse } from '@/lib/api/generated/models';
-import { ImpactLevel } from '@/lib/api/generated/models/impactLevel';
 import { ReviewStatus } from '@/lib/api/generated/models/reviewStatus';
+
+import { statusToToken, severityToToken } from '@/lib/ui/severity-tokens';
 
 type ReviewItemCardProps = {
   item: ReviewItemResponse;
@@ -50,36 +51,11 @@ function statusLabel(status: string): string {
 }
 
 function statusColor(status: string): string {
-  switch (status) {
-    case ReviewStatus.APPROVED:
-      return 'bg-green-100 text-green-700 border-green-200';
-    case ReviewStatus.REJECTED:
-      return 'bg-red-100 text-red-700 border-red-200';
-    case ReviewStatus.ESCALATED:
-      return 'bg-orange-100 text-orange-700 border-orange-200';
-    case ReviewStatus.PENDING_REVIEW_REQUIRED:
-    case ReviewStatus.PENDING_REVIEW_CONDITIONAL:
-      return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-    case ReviewStatus.CLOSED:
-      return 'bg-gray-100 text-gray-500 border-gray-200';
-    default:
-      return 'bg-blue-100 text-blue-700 border-blue-200';
-  }
+  return statusToToken(status);
 }
 
 function impactColor(impact: string): string {
-  switch (impact) {
-    case ImpactLevel.CRITICAL:
-      return 'bg-red-100 text-red-800';
-    case ImpactLevel.HIGH:
-      return 'bg-orange-100 text-orange-800';
-    case ImpactLevel.MEDIUM:
-      return 'bg-yellow-100 text-yellow-800';
-    case ImpactLevel.LOW:
-      return 'bg-green-100 text-green-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
+  return severityToToken(impact);
 }
 
 function StatusIcon({ status }: { status: string }) {

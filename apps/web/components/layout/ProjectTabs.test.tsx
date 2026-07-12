@@ -60,4 +60,14 @@ describe("ProjectTabs", () => {
     expect(screen.queryByRole("link", { name: /stakeholders/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /wbs/i })).not.toBeInTheDocument();
   });
+
+  it("sets aria-current='page' on the active tab", () => {
+    renderWithProviders(<ProjectTabs projectId="proj_demo_001" />);
+
+    const overviewTab = screen.getByRole("link", { name: /overview/i });
+    expect(overviewTab).toHaveAttribute("aria-current", "page");
+
+    const coherenceTab = screen.getByRole("link", { name: /coherence/i });
+    expect(coherenceTab).not.toHaveAttribute("aria-current");
+  });
 });

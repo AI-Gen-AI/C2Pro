@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, FileText, Loader2, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { statusToToken } from '@/lib/ui/severity-tokens';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -65,16 +66,7 @@ function getStatusIcon(status: DocumentStatus) {
 }
 
 function getStatusColor(status: DocumentStatus): string {
-  switch (status) {
-    case 'Analyzed':
-      return 'bg-green-100 text-green-700 border-green-200';
-    case 'Processing':
-      return 'bg-blue-100 text-blue-700 border-blue-200';
-    case 'Uploaded':
-      return 'bg-gray-100 text-gray-700 border-gray-200';
-    default:
-      return 'bg-red-100 text-red-700 border-red-200';
-  }
+  return statusToToken(status);
 }
 
 function labelType(type: string): string {

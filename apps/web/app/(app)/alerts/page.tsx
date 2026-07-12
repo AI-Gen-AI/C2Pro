@@ -7,6 +7,7 @@ import {
   saveAlertWorkspaceSettings,
 } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { statusToToken, severityToToken } from '@/lib/ui/severity-tokens';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -524,29 +525,11 @@ export default function AlertsPage() {
   ];
 
   const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'Critical':
-        return 'bg-red-100 text-red-700 border-red-200';
-      case 'High':
-        return 'bg-orange-100 text-orange-700 border-orange-200';
-      case 'Medium':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
+    return severityToToken(severity);
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Open':
-        return 'bg-slate-900 text-white';
-      case 'In Progress':
-        return 'bg-blue-100 text-blue-700';
-      case 'Resolved':
-        return 'bg-green-100 text-green-700';
-      default:
-        return 'bg-gray-100 text-gray-700';
-    }
+    return statusToToken(status);
   };
 
   return (
