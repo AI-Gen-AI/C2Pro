@@ -7,9 +7,11 @@
 #     so docs-only PRs finish in under a minute. The workflow itself has NO
 #     `paths:` trigger filter on purpose: the final `ci-status` join job must
 #     always report, because it is the single required branch-protection check.
-#   * Advisory (non-gating) jobs: backend-typecheck (mypy baseline not clean yet)
-#     and backend-integration (14 failures + 10 errors on main as of 2026-07-12,
-#     previously hidden by continue-on-error — now visibly red but not blocking).
+#   * Advisory (non-gating) jobs: backend-typecheck (mypy baseline not clean yet),
+#     backend-integration (14 failures + 10 errors on main as of 2026-07-12,
+#     previously hidden by continue-on-error — now visibly red but not blocking),
+#     and backend-lint (ruff==0.2.1 finds ~57 pre-existing violations; `ruff
+#     check .` was never enforced in CI — cleanup tracked as TASK-DEV-009).
 #     ci-status enumerates required jobs explicitly; advisory jobs are excluded.
 #   * Secret scanning is owned by secret-scan.yml; OpenAPI drift by
 #     openapi-drift.yml; deeper eval/E2E suites by their dedicated workflows.
@@ -73,8 +75,11 @@ jobs:
 
   # ──────────────────────────── Backend lane ────────────────────────────
 
+  # Advisory: the repo has ~57 pre-existing ruff violations (`ruff check .` was
+  # never a CI gate; the Husky hook does not reliably run). Clean them up via
+  # TASK-DEV-009, then move this job into REQUIRED_JOBS in ci-status.
   backend-lint:
-    name: Backend Lint (ruff)
+    name: Backend Lint (ruff, advisory)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: detect-changes
@@ -95,6 +100,18 @@ jobs:
       - name: Ruff check
         working-directory: apps/api
         run: python -m ruff check .
+
+      - name: Advisory notice
+        if: failure()
+        run: |
+          {
+            echo "## Backend lint (advisory)"
+            echo ""
+            echo "ruff==0.2.1 reports pre-existing violations; this job does not block"
+            echo "merges yet. Clean the baseline via TASK-DEV-009 in"
+            echo "C2PRO_MASTER_BACKLOG.md, then move backend-lint into REQUIRED_JOBS"
+            echo "in ci-status."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   backend-typecheck:
     name: Backend Typecheck (mypy, advisory)
@@ -628,7 +645,6 @@ jobs:
           # by this change). Advisory jobs are reported but never gate.
           REQUIRED_JOBS=(
             "detect-changes:$RESULT_DETECT"
-            "backend-lint:$RESULT_BACKEND_LINT"
             "backend-unit:$RESULT_BACKEND_UNIT"
             "backend-security:$RESULT_BACKEND_SECURITY"
             "backend-migrations:$RESULT_BACKEND_MIGRATIONS"
@@ -637,6 +653,7 @@ jobs:
             "frontend-e2e-smoke:$RESULT_FRONTEND_E2E"
           )
           ADVISORY_JOBS=(
+            "backend-lint:$RESULT_BACKEND_LINT"
             "backend-typecheck:$RESULT_BACKEND_TYPECHECK"
             "backend-integration:$RESULT_BACKEND_INTEGRATION"
           )

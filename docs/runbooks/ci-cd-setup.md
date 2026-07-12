@@ -13,7 +13,7 @@ PR / push to main
 │
 ├── ci.yml ──────────────── detect-changes (paths-filter)
 │     ├─ backend lane (apps/api/** changed)
-│     │    ├─ backend-lint          ruff                    ~40s   required
+│     │    ├─ backend-lint          ruff                    ~40s   ADVISORY
 │     │    ├─ backend-typecheck     mypy                    ~2m    ADVISORY
 │     │    ├─ backend-unit          pytest unit + ADR/S5    ~3m    required
 │     │    ├─ backend-security      multi-tenant isolation  ~3m    required
@@ -61,12 +61,13 @@ Typical PR wall-clock: **~3–3.5 min** (docs-only PRs: **<1 min** — every lan
 
 ## Advisory (non-blocking) jobs
 
-Two jobs run but do not gate merges. Both are tracked in `backlogs/DEV_DEVOPS.md`:
+Three jobs run but do not gate merges. All are tracked in `backlogs/DEV_DEVOPS.md`:
 
 | Job | Why advisory | How to promote to required |
 |---|---|---|
-| `backend-integration` | 14 failures + 10 errors pre-existing on main (sqlalchemy pool teardown), previously hidden by `continue-on-error` | Fix the suite, then move the job entry from `ADVISORY_JOBS` to `REQUIRED_JOBS` in the `ci-status` gate step of `ci.yml` |
-| `backend-typecheck` (mypy) | strict-mode baseline never enforced; large error count expected | Clean the baseline, then remove `continue-on-error: true` and move it into `REQUIRED_JOBS` |
+| `backend-integration` | 14 failures + 10 errors pre-existing on main (sqlalchemy pool teardown), previously hidden by `continue-on-error` | Fix the suite (TASK-DEV-004), then move the job entry from `ADVISORY_JOBS` to `REQUIRED_JOBS` in the `ci-status` gate step of `ci.yml` |
+| `backend-typecheck` (mypy) | strict-mode baseline never enforced; large error count expected | Clean the baseline (TASK-DEV-006), then remove `continue-on-error: true` and move it into `REQUIRED_JOBS` |
+| `backend-lint` (ruff) | ~57 pre-existing violations under ruff==0.2.1 (`ruff check .` was never a CI gate; the Husky pre-commit hook does not reliably run) | Clean the baseline — 35 of 57 are `--fix`-able (TASK-DEV-009) — then move it into `REQUIRED_JOBS` |
 
 ## Required Secrets and Variables
 

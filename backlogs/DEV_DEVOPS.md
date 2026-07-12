@@ -13,7 +13,7 @@
 
 ## Status View
 
-**Pending Tasks**: 5 (TASK-DEV-004 … TASK-DEV-008)
+**Pending Tasks**: 6 (TASK-DEV-004 … TASK-DEV-009)
 
 **Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — and `TASK-DEV-003` (CI/CD overhaul, below).
 
@@ -44,6 +44,17 @@ The integration suite fails on main (as of 2026-07-12: `14 failed, 74 passed, 3 
 
 `ci.yml` now runs `mypy src` (mypy 1.8.0, strict per `apps/api/pyproject.toml`) as an advisory job with the report in the step summary. Burn down the baseline (or adopt a baseline tool / relax strictness deliberately), then remove `continue-on-error: true` and add the job to `REQUIRED_JOBS` in `ci-status`.
 
+
+
+### TASK-DEV-009: Clean ruff baseline → promote `backend-lint` to required gate
+
+**Priority**: P2 · **Owner**: backend · **Depends on**: —
+
+`ruff check .` (ruff==0.2.1, config in `apps/api/pyproject.toml`) reports ~57 pre-existing violations across `apps/api` (SIM105/SIM102 in src, I001/F401/F841/E402 mostly in tests, plus stray root files `test.py` / `test_document_repository.py`); 35 are `--fix`-able. It was never a CI gate before TASK-DEV-003 and the Husky pre-commit hook does not reliably run (verified: local commits passed while `ruff check .` fails). `ci.yml` runs `backend-lint` as advisory. Fix the violations (or explicitly ignore rules that are deliberate), then move `backend-lint` from `ADVISORY_JOBS` to `REQUIRED_JOBS` in `ci-status`.
+
+### TASK-DEV-008: Repair corrupted Makefile `help`/`openapi` targets
+
+**Priority**: P3 · **Owner**: devops · **Depends on**: —
 ### TASK-DEV-007: GitHub settings manual follow-ups (owner action)
 
 **Priority**: P0 (branch protection) · **Owner**: repo owner · **Depends on**: TASK-DEV-003 merged to main
@@ -54,11 +65,6 @@ Actions only the repo owner can do in GitHub settings — full instructions in `
 - [ ] `Production` environment: add Required reviewers (approval gate for `release.yml` publish).
 - [ ] Delete stale `staging` environment.
 - [ ] Optional cleanup: delete now-unused secrets `RAILWAY_TOKEN_PRODUCTION`, `VERCEL_TOKEN`, `PRODUCTION_API_URL`, `SUPABASE_*_PRODUCTION`/staging family.
-
-### TASK-DEV-008: Repair corrupted Makefile `help`/`openapi` targets
-
-**Priority**: P3 · **Owner**: devops · **Depends on**: —
-
 The `openapi` target text is embedded *inside* the `help` recipe (Makefile lines 25–33, bad merge), so `make openapi` — documented in CLAUDE.md — does not exist and `make help` echoes garbage. Extract `openapi:` into a real target. CI does not depend on the Makefile, so this is DX-only.
 
 ---
