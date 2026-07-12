@@ -38,6 +38,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * TASK-BCK-093: Typed reconciliation fields from DET-BUD FindingSignal.raw_data.
+ */
 export interface BudgetReconciliation {
   items_sum: number;
   stated_total?: number | null;
