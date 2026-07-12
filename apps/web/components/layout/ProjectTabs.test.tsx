@@ -20,14 +20,14 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/api/generated", () => ({}));
 
 describe("ProjectTabs", () => {
-  it("renders the 7 project detail tabs with correct links", () => {
+  it("renders the project detail tabs with the audit report link", () => {
     renderWithProviders(<ProjectTabs projectId="proj_demo_001" />);
 
     const nav = screen.getByRole("navigation", { name: /project tabs/i });
     const links = screen.getAllByRole("link");
 
     expect(nav).toBeInTheDocument();
-    expect(links).toHaveLength(7);
+    expect(links).toHaveLength(11);
     expect(
       screen.getByRole("link", { name: /overview/i }),
     ).toHaveAttribute("href", "/projects/proj_demo_001");
@@ -49,5 +49,8 @@ describe("ProjectTabs", () => {
     expect(
       screen.getByRole("link", { name: /settings/i }),
     ).toHaveAttribute("href", "/projects/proj_demo_001/settings");
+    expect(
+      screen.getByRole("link", { name: /report/i }),
+    ).toHaveAttribute("href", "/projects/proj_demo_001/report");
   });
 });
