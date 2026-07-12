@@ -466,7 +466,7 @@ You are a Senior Frontend Engineer working on `apps/web/` (Next.js 16 App Router
 
 ## PATCH 20 — Design-system consolidation: severity tokens, EmptyState, active tabs
 
-**Backlog ID:** `TASK-FRT-194` · **Priority:** P2 · **Depends on:** —
+**Backlog ID:** `TASK-FRT-194` · **Priority:** P2 · **Depends on:** — · **Status:** ✅ Completed 2026-07-09
 
 **Evidence:** ≥4 divergent `getStatusColor`/severity maps using raw Tailwind palettes (`documents:62-73`, `review:61-77`, `budget:238-249`, alerts) vs semantic tokens elsewhere; `ProjectTabs.tsx:36-44` has no active state / `aria-current`; empty states are ad-hoc (dashboard's is styled as an error).
 

@@ -5,6 +5,7 @@ import { useUser } from '@clerk/nextjs';
 import { useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { severityToToken } from '@/lib/ui/severity-tokens';
 import { Button } from '@/components/ui/button';
 import { ReviewItemCard } from '@/components/features/review/ReviewItemCard';
 import {
@@ -24,7 +25,6 @@ import {
 } from '@/lib/api/generated/hitl/hitl';
 import type { ReviewItemResponse } from '@/lib/api/generated/models';
 import { ReviewStatus } from '@/lib/api/generated/models/reviewStatus';
-import { ImpactLevel } from '@/lib/api/generated/models/impactLevel';
 
 const PAGE_LIMIT_STEP = 50;
 const MAX_PAGE_LIMIT = 200;
@@ -56,18 +56,7 @@ function statusLabel(status: string): string {
 }
 
 function impactColor(impact: string): string {
-  switch (impact) {
-    case ImpactLevel.CRITICAL:
-      return 'bg-red-100 text-red-800';
-    case ImpactLevel.HIGH:
-      return 'bg-orange-100 text-orange-800';
-    case ImpactLevel.MEDIUM:
-      return 'bg-yellow-100 text-yellow-800';
-    case ImpactLevel.LOW:
-      return 'bg-green-100 text-green-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
+  return severityToToken(impact);
 }
 
 function errorMessage(error: unknown, fallback: string): string {

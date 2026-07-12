@@ -35,6 +35,9 @@ import type {
   DocumentPollingStatus,
   ProjectDocumentsGroup,
 } from "@/lib/api/contracts";
+import { statusToToken } from "@/lib/ui/severity-tokens";
+
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface DocumentsListClientProps {
   groups: ProjectDocumentsGroup[];
@@ -63,18 +66,7 @@ function getStatusIcon(status: DocumentPollingStatus) {
 }
 
 function getStatusColor(status: DocumentPollingStatus) {
-  switch (status) {
-    case "parsed":
-      return "bg-green-100 text-green-700 border-green-200";
-    case "processing":
-      return "bg-blue-100 text-blue-700 border-blue-200";
-    case "queued":
-      return "bg-gray-100 text-gray-700 border-gray-200";
-    case "error":
-      return "bg-red-100 text-red-700 border-red-200";
-    default:
-      return "bg-gray-100 text-gray-700 border-gray-200";
-  }
+  return statusToToken(status);
 }
 
 function getTypeColor(docType: string | null | undefined) {
@@ -121,16 +113,11 @@ export function DocumentsListClient({ groups }: DocumentsListClientProps) {
   // Empty state: no documents across any project
   if (groups.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-card py-16 text-center">
-        <FolderOpen className="mb-3 h-10 w-10 text-muted-foreground/50" />
-        <h3 className="text-sm font-medium text-foreground">
-          No documents yet
-        </h3>
-        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-          Upload documents to your projects to start analyzing them. Documents
-          will appear here grouped by project.
-        </p>
-      </div>
+      <EmptyState
+        icon={FolderOpen}
+        title="No documents yet"
+        description="Upload documents to your projects to start analyzing them. Documents will appear here grouped by project."
+      />
     );
   }
 
