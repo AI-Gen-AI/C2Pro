@@ -5,6 +5,7 @@ Source of truth: ADR-009 §5 (locked contract with TRI terminology).
 
 Refers to Suite ID: TS-UA-COH-V2-DTO-001.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -41,6 +42,16 @@ class ScoreExplanation(BaseModel):
     score_path: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class BudgetReconciliation(BaseModel):
+    """TASK-BCK-093: Typed reconciliation fields from DET-BUD FindingSignal.raw_data."""
+
+    items_sum: float
+    stated_total: float | None = None
+    contract_total: float | None = None
+    deviation_pct: float
+    direction: str
+
+
 class CategoryV2(BaseModel):
     category: str
     status: CategoryStatus
@@ -57,13 +68,12 @@ class CategoryV2(BaseModel):
     rationale: str | None = None
     recommendation: str | None = None
     calculation_metadata: dict[str, Any] = Field(default_factory=dict)
+    budget_reconciliation: BudgetReconciliation | None = None
 
     @model_validator(mode="after")
     def _null_score_when_no_evidence(self) -> CategoryV2:
         if self.status in _NULL_SCORE_STATES and self.coherence_score is not None:
-            raise ValueError(
-                f"coherence_score must be None when status={self.status.value!r}"
-            )
+            raise ValueError(f"coherence_score must be None when status={self.status.value!r}")
         return self
 
 
@@ -87,6 +97,7 @@ class CoherenceV2Payload(BaseModel):
 
 
 __all__ = [
+    "BudgetReconciliation",
     "CategoryStatus",
     "CategoryV2",
     "CoherenceV2Payload",

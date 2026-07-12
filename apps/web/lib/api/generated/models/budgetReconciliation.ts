@@ -37,27 +37,14 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { BudgetReconciliation } from "./budgetReconciliation";
-import type { CategoryStatus } from "./categoryStatus";
-import type { CategoryV2CalculationMetadata } from "./categoryV2CalculationMetadata";
-import type { CategoryV2DetectedConflictsItem } from "./categoryV2DetectedConflictsItem";
-import type { ScoreExplanation } from "./scoreExplanation";
 
-export interface CategoryV2 {
-  category: string;
-  status: CategoryStatus;
-  coherence_score?: number | null;
-  evidence_coverage?: number;
-  technical_reliability?: number;
-  evidence_freshness?: number;
-  applicability_reason?: string | null;
-  score_explanation?: ScoreExplanation | null;
-  evidence_count?: number;
-  evidence_references?: string[];
-  missing_evidence?: string[];
-  detected_conflicts?: CategoryV2DetectedConflictsItem[];
-  rationale?: string | null;
-  recommendation?: string | null;
-  calculation_metadata?: CategoryV2CalculationMetadata;
-  budget_reconciliation?: BudgetReconciliation | null;
+/**
+ * TASK-BCK-093: Typed reconciliation fields from DET-BUD FindingSignal.raw_data.
+ */
+export interface BudgetReconciliation {
+  items_sum: number;
+  stated_total?: number | null;
+  contract_total?: number | null;
+  deviation_pct: number;
+  direction: string;
 }

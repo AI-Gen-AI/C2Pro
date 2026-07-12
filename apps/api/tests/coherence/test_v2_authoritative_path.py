@@ -8,6 +8,7 @@ Suite IDs:
                           score_reason="insufficient_active_weight",
                           score_version="coherence-v2"
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -66,12 +67,14 @@ def _make_v2_payload(
     return CoherenceV2Payload(
         project_id=PROJECT_ID,
         generated_at=datetime.now(UTC),
-        **{"global": _make_global(
-            score=global_score,
-            status=status,
-            score_reason=score_reason,
-            active_weight=active_weight,
-        )},
+        **{
+            "global": _make_global(
+                score=global_score,
+                status=status,
+                score_reason=score_reason,
+                active_weight=active_weight,
+            )
+        },
         categories=categories,
     )
 
@@ -213,14 +216,16 @@ class TestV2ScopeOnlyProject:
         payload = CoherenceV2Payload(
             project_id=PROJECT_ID,
             generated_at=datetime.now(UTC),
-            **{"global": GlobalV2(
-                coherence_score=None,
-                completeness_score=0.1,
-                technical_reliability_index=0.0,
-                status="insufficient_active_weight",
-                score_reason="insufficient_active_weight",
-                active_weight=0.1,
-            )},
+            **{
+                "global": GlobalV2(
+                    coherence_score=None,
+                    completeness_score=0.1,
+                    technical_reliability_index=0.0,
+                    status="insufficient_active_weight",
+                    score_reason="insufficient_active_weight",
+                    active_weight=0.1,
+                )
+            },
             categories=[scope_cat],
         )
         summary = map_v2_to_dashboard_summary(
@@ -245,14 +250,16 @@ class TestV2ScopeOnlyProject:
         payload = CoherenceV2Payload(
             project_id=PROJECT_ID,
             generated_at=datetime.now(UTC),
-            **{"global": GlobalV2(
-                coherence_score=None,
-                completeness_score=0.1,
-                technical_reliability_index=0.0,
-                status="insufficient_active_weight",
-                score_reason="insufficient_active_weight",
-                active_weight=0.1,
-            )},
+            **{
+                "global": GlobalV2(
+                    coherence_score=None,
+                    completeness_score=0.1,
+                    technical_reliability_index=0.0,
+                    status="insufficient_active_weight",
+                    score_reason="insufficient_active_weight",
+                    active_weight=0.1,
+                )
+            },
             categories=[scope_cat],
         )
         summary = map_v2_to_dashboard_summary(
@@ -264,3 +271,43 @@ class TestV2ScopeOnlyProject:
         )
         # SCOPE has no score — sub_scores should not include it with a float value
         assert summary.sub_scores.get("SCOPE") is None
+
+
+# ── TASK-BCK-093: Budget Reconciliation in CategoryV2 ─────────────────────────
+
+
+class TestBudgetReconciliationFields:
+    """CategoryV2.BUDGET exposes reconciliation fields from DET-BUD raw_data."""
+
+    def test_category_v2_accepts_budget_reconciliation_field(self):
+        """CategoryV2 model has optional budget_reconciliation: BudgetReconciliation | None."""
+        from src.coherence.application.dtos.coherence_v2_dtos import (
+            BudgetReconciliation,
+        )
+
+        rec = BudgetReconciliation(
+            items_sum=150000.0,
+            contract_total=160000.0,
+            stated_total=None,
+            deviation_pct=6.25,
+            direction="over",
+        )
+        cat = CategoryV2(
+            category="BUDGET",
+            status=CategoryStatus.SCORED,
+            budget_reconciliation=rec,
+        )
+        assert cat.budget_reconciliation is not None
+        assert cat.budget_reconciliation.items_sum == 150000.0
+        assert cat.budget_reconciliation.contract_total == 160000.0
+        assert cat.budget_reconciliation.deviation_pct == 6.25
+
+    def test_category_v2_budget_reconciliation_is_none_by_default(self):
+        """When no reconciliation provided, the field is None (backward compat)."""
+        cat = CategoryV2(category="BUDGET", status=CategoryStatus.SCORED)
+        assert cat.budget_reconciliation is None
+
+    def test_non_budget_category_budget_reconciliation_is_none(self):
+        """Non-BUDGET categories keep budget_reconciliation as None."""
+        cat = CategoryV2(category="SCOPE", status=CategoryStatus.SCORED)
+        assert cat.budget_reconciliation is None
