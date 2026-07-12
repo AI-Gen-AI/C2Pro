@@ -29,10 +29,14 @@ describe("API generation drift safeguards", () => {
     );
   });
 
-  it("runs the frontend drift check when backend API files change", () => {
-    const workflow = readRepoFile(".github", "workflows", "frontend-ci.yml");
+  it("keeps drift gates wired for backend and frontend API changes", () => {
+    // Since TASK-DEV-003 the drift topology is split: openapi-drift.yml gates
+    // backend spec drift on apps/api changes, and ci.yml's frontend lane runs
+    // the Orval generation drift check (schema/api.json lives in apps/web).
+    const openapiDrift = readRepoFile(".github", "workflows", "openapi-drift.yml");
+    const ci = readRepoFile(".github", "workflows", "ci.yml");
 
-    expect(workflow).toContain('- "apps/api/**"');
-    expect(workflow).toContain("pnpm generate:api:check");
+    expect(openapiDrift).toContain('- "apps/api/src/**"');
+    expect(ci).toContain("pnpm generate:api:check");
   });
 });
