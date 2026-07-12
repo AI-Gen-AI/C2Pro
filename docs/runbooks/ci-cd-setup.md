@@ -1,251 +1,172 @@
-# CI/CD Setup Guide
+# CI/CD Runbook
 
-This document describes the GitHub Actions workflows and required secrets configuration for C2Pro.
+How C2Pro's GitHub Actions CI/CD works: pipelines, triggers, secrets, environments, branch protection, the release process, and how to extend CI for new apps/services.
 
-## Workflows Overview
-
-| Workflow                | Trigger                    | Purpose                             |
-| ----------------------- | -------------------------- | ----------------------------------- |
-| `ci.yml`                | PR to main, Push to main   | Run tests, linting, security checks |
-| `deploy-staging.yml`    | Push to main               | Auto-deploy to staging              |
-| `deploy-production.yml` | Manual (workflow_dispatch) | Deploy to production with approval  |
-
-## Required GitHub Secrets
-
-### Supabase
-
-| Secret                         | Description                | Environment |
-| ------------------------------ | -------------------------- | ----------- |
-| `SUPABASE_URL`                 | Supabase project URL       | All         |
-| `SUPABASE_ANON_KEY`            | Supabase anonymous key     | All         |
-| `SUPABASE_SERVICE_ROLE_KEY`    | Supabase service role key  | All         |
-| `SUPABASE_DB_URL_STAGING`      | Database connection string | Staging     |
-| `SUPABASE_DB_URL_PRODUCTION`   | Database connection string | Production  |
-| `SUPABASE_URL_PRODUCTION`      | Production Supabase URL    | Production  |
-| `SUPABASE_ANON_KEY_PRODUCTION` | Production anon key        | Production  |
-
-### Railway (Backend)
-
-| Secret                        | Description                        | Environment |
-| ----------------------------- | ---------------------------------- | ----------- |
-| `RAILWAY_TOKEN`               | Railway API token                  | Staging     |
-| `RAILWAY_SERVICE_API_STAGING` | Railway backend service identifier | Staging     |
-| `RAILWAY_TOKEN_PRODUCTION`    | Railway API token                  | Production  |
-
-### Vercel (Frontend)
-
-| Secret                         | Description                    | Environment |
-| ------------------------------ | ------------------------------ | ----------- |
-| `VERCEL_TOKEN`                 | Vercel API token               | All         |
-| `VERCEL_ORG_ID`                | Vercel organization ID         | All         |
-| `VERCEL_PROJECT_ID`            | Vercel project ID (staging)    | Staging     |
-| `VERCEL_PROJECT_ID_PRODUCTION` | Vercel project ID (production) | Production  |
-
-### API URLs
-
-| Secret               | Description                    | Environment |
-| -------------------- | ------------------------------ | ----------- |
-| `STAGING_API_URL`    | Backend API URL for staging    | Staging     |
-| `PRODUCTION_API_URL` | Backend API URL for production | Production  |
-
-### External Services
-
-| Secret              | Description    | Environment |
-| ------------------- | -------------- | ----------- |
-| `ANTHROPIC_API_KEY` | Claude API key | All         |
-
-## How to Configure Secrets
-
-1. Go to your GitHub repository
-2. Navigate to **Settings** > **Secrets and variables** > **Actions**
-3. Click **New repository secret**
-4. Add each secret from the tables above
-
-## Environment Protection Rules
-
-For production deployments, configure environment protection:
-
-1. Go to **Settings** > **Environments**
-2. Create `production` environment
-3. Enable **Required reviewers** and add approvers
-4. Optionally enable **Wait timer** for deployment delay
-
-## Workflow Details
-
-### CI Workflow (`ci.yml`)
-
-Runs on every PR and push to main:
-
-1. **Backend Lint** - Ruff, Bandit security scan
-2. **Backend Tests** - pytest with PostgreSQL service
-3. **Security Tests** - CTO Gates validation (RLS, MCP)
-4. **Frontend Lint** - ESLint, TypeScript check
-5. **Frontend Build** - Next.js production build
-
-### Staging Deployment (`deploy-staging.yml`)
-
-Automatic deployment on push to main:
-
-1. **Validate** - Check which components changed
-2. **Migrate Database** - Run Supabase migrations (if changed)
-3. **Deploy Backend** - Railway deployment + health check
-4. **Deploy Frontend** - Vercel preview deployment
-
-### Production Deployment (`deploy-production.yml`)
-
-Manual trigger with approval:
-
-1. **Pre-checks** - Version validation, staging health check
-2. **Migrate Database** - Production migrations with backup
-3. **Deploy Backend** - Railway production + extended health check
-4. **Deploy Frontend** - Vercel production deployment
-5. **Post-deploy** - Create Git tag, summary
-6. **Rollback** - Notify on failure with rollback steps
-
-## Leadership Gap Closure
-
-- [x] `LEAD-GAP-RELEASE-GOVERNANCE` Define release promotion, rollback, and environment signoff workflow for staging-to-production releases.
-
-## Release Promotion Workflow
-
-Promotion path:
-
-1. Code merges to `main` only after CI passes and required reviewers approve.
-2. `deploy-staging.yml` deploys the changed backend/frontend services to staging.
-3. Staging validation is executed against the changed surfaces: API health, frontend build/load, critical auth path, and any feature-specific smoke checks.
-4. Release candidate evidence is assembled in `evidence/releases/<release-id>/` with commit SHA, workflow references, validation notes, performance results, and DR records.
-5. Production deployment is triggered manually through `deploy-production.yml` only after the Gate 7 bundle is complete and required signoff is collected.
-
-Promotion prerequisites:
-
-- latest `main` commit is green in CI
-- staging deployment is healthy
-- release bundle exists at `evidence/releases/<release-id>/`
-- `manifest.yaml` references the exact candidate commit SHA
-- required suite matrix is green for backend, frontend, security, evaluation, and release-time I13 reliability validation
-- no open Sev-1 or Sev-2 incident affecting release-critical systems
-- rollback path is confirmed for the components being changed
-- on-call coverage is confirmed per `docs/runbooks/incident-response.md`
-
-## Environment Signoff Workflow
-
-Required signoff before production:
-
-| Area                 | Signoff Owner          | Required Confirmation                                                   |
-| :------------------- | :--------------------- | :---------------------------------------------------------------------- |
-| Staging health       | Team Alpha (Sentinel)  | deploy completed, health checks pass, infra dependencies stable         |
-| Backend/API behavior | Team Bravo (Nexus)     | release-critical API flows verified, no blocking data or AI regressions |
-| Frontend/user flows  | Team Charlie (Prism)   | protected routes, auth flows, and affected UI paths verified in staging |
-| Release authority    | Engineering Leadership | evidence reviewed, rollback owner named, production window approved     |
-
-Signoff rules:
-
-- Signoff must be explicit in the release ticket, workflow summary, or designated release channel.
-- Missing signoff from any required owner blocks production promotion.
-- If the release touches only one surface, the unaffected teams may mark "no-impact reviewed" instead of full execution, but Engineering Leadership must still approve.
-
-## Rollback Workflow
-
-Rollback triggers:
-
-- failed production health checks after deploy
-- tenant isolation, auth, or security regression
-- data-integrity concern during or after migration
-- user-facing critical path unavailable after release
-- Sev-1 or Sev-2 incident attributed to the fresh deployment
-
-Rollback responsibilities:
-
-| Area                | Rollback Owner                                   | Validation After Rollback                                       |
-| :------------------ | :----------------------------------------------- | :-------------------------------------------------------------- |
-| Database migrations | Team Alpha (Sentinel)                            | schema version stable, app reconnects, no integrity alarms      |
-| Backend service     | Team Alpha (Sentinel) with service owner support | `/health` and worker health green, core API smoke checks pass   |
-| Frontend deployment | Team Charlie (Prism)                             | application loads, auth path works, affected UI recovers        |
-| Business validation | Team Bravo (Nexus)                               | analysis/coherence critical path works against restored runtime |
-
-Rollback execution rules:
-
-1. Do not retry the same production deploy until root cause is understood.
-2. Declare rollback decision in the incident/release channel with owner and reason.
-3. Restore the affected layer in this order when applicable: database safety first, backend second, frontend third.
-4. Re-run critical health and smoke checks after rollback.
-5. Record the rollback outcome and whether a new release candidate is required.
-
-## Minimum Release Evidence
-
-Each production release must retain:
-
-- commit SHA / tag promoted
-- staging validation result
-- required suite matrix with workflow or artifact references
-- Swagger workbook status and unresolved item list
-- named release approver
-- named product, security, and operations approvers
-- named rollback owner
-- performance acceptance record
-- backup/restore verification record
-- production deploy timestamp
-- post-deploy validation result
-- incident or rollback reference if anything deviated
-
-Recommended bundle layout:
-
-```text
-evidence/releases/<release-id>/
-├── manifest.yaml
-├── signoff.md
-├── performance.md
-└── disaster-recovery.md
-```
-
-## Troubleshooting
-
-### CI Fails on PR
-
-1. Check the specific job that failed in GitHub Actions
-2. Review the logs for error messages
-3. Common issues:
-   - Linting errors: Run `ruff check` locally
-   - Test failures: Run `pytest` locally with same env vars
-   - Build failures: Run `npm run build` locally
-
-### Staging Deploy Fails
-
-1. Check if migrations ran successfully
-2. Verify Railway deployment status
-3. Check health endpoint manually
-4. Review Vercel deployment logs
-
-### Production Deploy Fails
-
-1. **DO NOT** re-run immediately
-2. Check which step failed
-3. If migrations failed, check Supabase dashboard
-4. Use Railway/Vercel dashboards to rollback if needed
-5. Create incident report
-
-## Local Testing
-
-To test workflows locally, use [act](https://github.com/nektos/act):
-
-```bash
-# Install act
-brew install act  # macOS
-# or
-curl -s https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash
-
-# Run CI workflow
-act pull_request
-
-# Run with secrets
-act -s SUPABASE_URL=xxx -s SUPABASE_ANON_KEY=xxx
-```
+**Architecture in one paragraph**: deploys are platform-owned — Railway auto-deploys `apps/api` and Vercel auto-deploys `apps/web` on every push to `main` (Vercel also builds a preview per PR). The deploy gate is therefore **branch protection on `main`**: nothing merges without the required `CI Status` check. Releases are certified and published (tag + changelog + optional Gate 7 evidence validation) by `release.yml`, which does **not** deploy. All third-party actions are pinned to full commit SHAs; Dependabot keeps the pins fresh.
 
 ---
 
-Last Updated: 2026-03-22
+## Pipeline Overview
+
+```
+PR / push to main
+│
+├── ci.yml ──────────────── detect-changes (paths-filter)
+│     ├─ backend lane (apps/api/** changed)
+│     │    ├─ backend-lint          ruff                    ~40s   required
+│     │    ├─ backend-typecheck     mypy                    ~2m    ADVISORY
+│     │    ├─ backend-unit          pytest unit + ADR/S5    ~3m    required
+│     │    ├─ backend-security      multi-tenant isolation  ~3m    required
+│     │    ├─ backend-integration   pytest integration      ~3m    ADVISORY
+│     │    └─ backend-migrations    alembic from scratch    ~2.5m  required (only on migration changes)
+│     ├─ frontend lane (apps/web/** changed)
+│     │    ├─ frontend-quality      tsc + eslint + ADR-009  ~1.5m  required
+│     │    ├─ frontend-test         vitest + orval drift    ~2m    required
+│     │    └─ frontend-e2e-smoke    2 Playwright specs      ~3m    required
+│     └─ ci-status ← THE single required branch-protection check
+│
+├── secret-scan.yml          gitleaks worktree scan         ~10s
+├── openapi-drift.yml        spec ↔ runtime drift           ~1m    (backend paths)
+├── wireframe-coverage.yml   TC coverage gate               ~30s   (web paths)
+├── evaluation-regression.yml eval suites                   ~1m    (eval paths)
+├── golden-corpus-evals.yml  15-bundle corpus               ~1m    (evals/** paths)
+├── codeql.yml               SAST python + JS/TS            ~4-8m  (not required yet)
+├── dependency-review.yml    new-dep vulnerability gate     ~20s
+└── dependency-audit.yml     pip-audit + pnpm audit         (dep-file changes only)
+
+push to main additionally:  Railway deploy (api) + Vercel deploy (web) [platform-side]
+tag v* :                    release.yml → certify → [Production approval] → GitHub Release
+```
+
+Typical PR wall-clock: **~3–3.5 min** (docs-only PRs: **<1 min** — every lane skips). Path filtering happens *inside* `ci.yml` via the `detect-changes` job so that `ci-status` always reports — required checks must never be left "expected" forever by a `paths:`-filtered workflow.
+
+## Trigger Matrix
+
+| Workflow | PR | push main | schedule | dispatch | tag |
+|---|---|---|---|---|---|
+| `ci.yml` | ✓ | ✓ (+py3.12 leg) | — | ✓ (runs all lanes) | — |
+| `secret-scan.yml` | ✓ | ✓ (+`feat/**`) | — | — | — |
+| `openapi-drift.yml` | ✓ (backend paths) | — | — | ✓ | — |
+| `wireframe-coverage.yml` | ✓ (web paths) | — | — | — | — |
+| `evaluation-regression.yml` | ✓ (eval paths) | ✓ (eval paths) | daily 05:00 | ✓ | — |
+| `golden-corpus-evals.yml` | ✓ (`evals/**`) | ✓ (`evals/**`) | — | ✓ | — |
+| `codeql.yml` | ✓ | ✓ | weekly Mon | — | — |
+| `dependency-review.yml` | ✓ | — | — | — | — |
+| `dependency-audit.yml` | ✓ (dep files) | — | weekly Mon | ✓ | — |
+| `qa-swarm.yml` | — | — | weekly Mon | ✓ | — |
+| `scheduled-drift-checks.yml` | — | — | every 6h | ✓ | — |
+| `i13-real-e2e-scheduled.yml` | — | — | **paused** | ✓ | — |
+| `real-document-operability.yml` | — | — | — | ✓ (operator) | — |
+| `release.yml` | — | — | — | ✓ | ✓ `v*` |
+
+## Advisory (non-blocking) jobs
+
+Two jobs run but do not gate merges. Both are tracked in `backlogs/DEV_DEVOPS.md`:
+
+| Job | Why advisory | How to promote to required |
+|---|---|---|
+| `backend-integration` | 14 failures + 10 errors pre-existing on main (sqlalchemy pool teardown), previously hidden by `continue-on-error` | Fix the suite, then move the job entry from `ADVISORY_JOBS` to `REQUIRED_JOBS` in the `ci-status` gate step of `ci.yml` |
+| `backend-typecheck` (mypy) | strict-mode baseline never enforced; large error count expected | Clean the baseline, then remove `continue-on-error: true` and move it into `REQUIRED_JOBS` |
+
+## Required Secrets and Variables
+
+Configure under **Settings → Secrets and variables → Actions**.
+
+| Name | Kind | Used by | Notes |
+|---|---|---|---|
+| `CLERK_SECRET_KEY` | secret | ci.yml (frontend-test, e2e-smoke) | E2E smoke skips gracefully if absent |
+| `CLERK_TESTING_TOKEN` | secret | ci.yml (e2e-smoke) | Alternative to secret key for Playwright |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | secret or variable | ci.yml frontend lane | Falls back to a mock `pk_test_…` value |
+| `CODECOV_TOKEN` | secret | ci.yml (backend-unit) | **New** — upload is non-fatal if missing |
+| `ANTHROPIC_API_KEY` | secret | qa-swarm, evaluation-regression | Real API spend — schedule/dispatch only |
+| `LANGSMITH_API_KEY` | secret | evaluation-regression | Tracing for eval runs |
+| `SLACK_WEBHOOK_URL` | secret | evaluation-regression (drift notify) | Optional |
+| `DRIFT_ALERT_WEBHOOK_URL` | secret | scheduled-drift-checks | Optional escalation hook |
+
+No longer needed by any workflow (were used by the retired `deploy-production.yml`): `RAILWAY_TOKEN_PRODUCTION`, `VERCEL_TOKEN`, `PRODUCTION_API_URL`, and the `SUPABASE_*_PRODUCTION` / staging family. Safe to delete from repo secrets.
+
+## GitHub Environments
+
+| Environment | Purpose | Action needed |
+|---|---|---|
+| `Production` | Approval gate for `release.yml` → publish | Add **Required reviewers** so releases pause for a human |
+| `Preview` / `c2pro-api / production` | Created by the Vercel / Railway GitHub apps | Leave alone |
+| `staging` | Leftover from deleted `deploy-staging.yml` | Delete |
+
+## Branch Protection for `main` (do this — currently unprotected)
+
+**Settings → Branches → Add branch ruleset** (or classic protection rule) for `main`:
+
+1. Require a pull request before merging (approvals: per team size; 0 is acceptable solo, the check gate still applies).
+2. Require status checks to pass:
+   - **`CI Status`** (the `ci-status` join job — the only check from `ci.yml` you should require)
+   - **`gitleaks`** (from Secret Scan)
+   - Optionally **`Vercel`** (preview build = the frontend production-build gate; CI deliberately does not duplicate `next build`)
+3. Block force pushes (default in rulesets).
+4. Do **not** require individual lane jobs (`backend-unit`, etc.) — they legitimately skip on unrelated changes; `CI Status` accounts for that.
+
+With auto-deploy on `main`, this ruleset *is* the production deploy gate.
+
+## Deploys, Migrations, Rollback
+
+- **Railway** (`c2pro-api` project, `C2Pro` service): builds from GitHub `apps/api` (Railpack), health check `/api/v1/health`. `start.sh` runs `alembic upgrade head` at boot — migrations apply on every backend deploy.
+- **Vercel** (`v0-c2-pro` → c2pro.io): Git integration on `main`; PR pushes build preview deployments.
+- **Migration safety in CI**: any PR touching `apps/api/alembic/**` or `supabase/migrations/**` triggers `backend-migrations`, which recreates a scratch Postgres, applies the full chain from zero, and asserts a **single Alembic head** (the dual-head crash-loop of 2026-06 is now a PR-time failure).
+- **Rollback**: use the platform dashboards (Railway → previous deployment → Redeploy; Vercel → Deployments → Promote previous). For migration rollbacks follow `docs/runbooks/RUNBOOK_DATABASE_MIGRATION_AUTHORITY_2026-03-19.md`. Database safety first, backend second, frontend third. Do not retry a failed deploy until root cause is understood.
+
+## Release Process
+
+```bash
+git tag v1.2.3 <sha-on-main>
+git push origin v1.2.3        # → release.yml
+```
+
+1. **certify** — verifies the tag commit is on `main`, its `CI Status` check succeeded, and (if `evidence/releases/<tag>/` exists) validates the Gate 7 bundle via `scripts/validate_release_evidence.py`.
+2. **publish** — waits for `Production` environment approval (if reviewers configured), then creates the GitHub Release with auto-generated notes (PR-based; conventional-commit titles keep them readable).
+
+Manual path: **Actions → Release → Run workflow** with the tag name; `allow_missing_ci` exists as an escape hatch for pre-overhaul commits that have no `CI Status` check.
+
+Gate 7 evidence bundles keep their existing layout (`manifest.yaml`, `signoff.md`, `performance.md`, `disaster-recovery.md`) under `evidence/releases/<tag>/` — name the bundle directory after the tag to get automatic validation. The signoff/rollback-owner governance defined in the 2026-03-22 release-governance pass still applies; the promotion mechanics changed (staging deploys and CLI-driven production deploys were retired), the accountability model did not.
+
+## Adding CI for a New App/Service (Phase 3+)
+
+Everything is additive — no pipeline rewrites:
+
+1. **Filter**: add a key in `detect-changes` (in `ci.yml`), e.g. `worker: ["apps/worker/**"]`, and expose it in the job `outputs`.
+2. **Jobs**: add lane jobs with `needs: detect-changes` + `if: needs.detect-changes.outputs.worker == 'true'`. Reuse the setup composites:
+   - `.github/actions/setup-python-backend` (Python toolchain + libmagic + cached pip install)
+   - `.github/actions/setup-node-web` (pnpm + Node + frozen install)
+   For a new Python service, generalize the composite with an input for the requirements path rather than duplicating it.
+3. **Gate**: add the new jobs to `ci-status.needs` **and** to `REQUIRED_JOBS` (or `ADVISORY_JOBS` while stabilizing) in the gate step.
+4. **Security**: if it's a new language, add it to the `codeql.yml` matrix; if it has its own manifest, add a `dependabot.yml` entry and a path in `dependency-audit.yml`.
+5. Branch protection needs no change — `CI Status` already covers the new lane.
+
+## Scheduled Workflow Health
+
+| Workflow | Cadence | State (2026-07-12) |
+|---|---|---|
+| evaluation-regression | daily 05:00 | green |
+| scheduled-drift-checks | every 6h | fixed in the CI/CD overhaul (was failing 100% on a deleted-test reference) |
+| qa-swarm | weekly Mon 02:00 | opens draft PRs with generated tests; consumes `ANTHROPIC_API_KEY` |
+| dependency-audit | weekly Mon 06:00 | new |
+| codeql | weekly Mon 03:26 | new |
+| i13-real-e2e-scheduled | **paused** | fixture connects to Postgres 5432 instead of 5433 — re-enable the cron in the workflow after the app-side fix (`backlogs/DEV_DEVOPS.md`) |
+
+## Troubleshooting
+
+- **`CI Status` failed but all visible jobs are green** — a required lane was *cancelled* (e.g. superseded push race). Re-run the workflow.
+- **Lint/type failures**: `cd apps/api && ruff check .` / `mypy src`; frontend `pnpm typecheck && pnpm lint` in `apps/web`.
+- **backend-security / backend-integration infra failures**: reproduce with `python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db`, then run the pytest command from the job. Postgres runs on **5433** (`docker-compose.test.yml`), Redis on 6379 (service container in CI).
+- **openapi-drift failures**: `make openapi` (or `python apps/api/scripts/generate_openapi.py`) and commit, or add `[openapi]` to the commit message when intentional.
+- **E2E smoke skipped**: `CLERK_SECRET_KEY` / `CLERK_TESTING_TOKEN` not configured for that run context (expected on forks).
+- **Workflow lint before pushing workflow changes**: `actionlint` (all workflows are actionlint-clean as of the overhaul).
+
+---
+
+Last Updated: 2026-07-12
 
 Changelog:
 
+- 2026-07-12: Full rewrite for the CI/CD overhaul — consolidated ci.yml + ci-status gate, SHA-pinned actions, CodeQL/dependency-review/dependency-audit/dependabot added, release.yml (tag-driven certification, platform-owned deploys), deploy-production.yml retired, artifact purge, advisory-job policy, extension recipe.
 - 2026-03-22: Added release promotion, rollback, and environment signoff workflow to close the release-governance leadership gap.
 - 2026-02-13: Added metadata block during repository-wide docs format pass.
