@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, renderWithProviders, screen } from "@/src/tests/test-utils";
-import { WeightAdjuster } from "./WeightAdjuster";
+import { WeightAdjuster } from "@/components/coherence/WeightAdjuster";
 
 vi.mock("@clerk/nextjs", () => ({
   ClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,

@@ -3,51 +3,28 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { useParams, useSearchParams } from "next/navigation";
-import {
-  AlertTriangle,
-  CheckCircle,
-  ChevronDown,
-  Clock,
-  Columns2,
-  Database,
-  Download,
-  FileJson,
-  FileText,
-  RefreshCw,
-} from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { type ExtractedEntity } from "@/components/evidence";
+import { EvidenceActionDialog } from "@/components/features/evidence/EvidenceActionDialog";
+import { EvidenceDocumentsCard } from "@/components/features/evidence/EvidenceDocumentsCard";
+import { EvidenceHeader } from "@/components/features/evidence/EvidenceHeader";
+import { EvidenceTemplateDialog } from "@/components/features/evidence/EvidenceTemplateDialog";
+import { EvidenceWorkspace } from "@/components/features/evidence/EvidenceWorkspace";
+import { type PdfHighlight } from "@/components/features/evidence/PdfEvidenceViewer";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { EntityValidationList, ExtractedEntity } from "@/components/evidence";
-import {
-  PdfHighlight,
-} from "@/components/features/evidence/PdfEvidenceViewer";
-import { LazyPdfEvidenceViewer } from "@/components/features/evidence/LazyPdfEvidenceViewer";
-import { env } from "@/config/env";
+  EVIDENCE_TEMPLATES,
+  downloadBlob,
+  escapeXml,
+  extractAlertEvidenceLocation,
+  mapAlertSeverityToPdfSeverity,
+  mapEntityTypeToApprovalResourceType,
+  mapHighlightColorToSeverity,
+  normalizeConfidence,
+  normalizeEntityType,
+  sanitizeFilename,
+  type EvidencePanelTab,
+  type PendingEvidenceAction,
+} from "@/components/features/evidence/evidence-page-utils";
 import { useDocumentAlerts } from "@/hooks/useDocumentAlerts";
 import { useDocumentEntities } from "@/hooks/useDocumentEntities";
 import { useDocumentHistory } from "@/hooks/useDocumentHistory";
@@ -59,128 +36,7 @@ import {
   useResolveAlertApiV1AlertsAlertIdResolvePost,
   useReviewAlertApiV1AlertsAlertIdReviewPost,
 } from "@/lib/api/generated/alerts/alerts";
-import { cn } from "@/lib/utils";
 import type { AlertResponse as BackendAlertResponse } from "@/types/backend";
-import type { Alert as ProjectAlert } from "@/types/project";
-
-type EvidenceTemplate = {
-  id: string;
-  name: string;
-  summary: string;
-  reviewFocus: string[];
-  tags: string[];
-};
-
-type PendingEvidenceAction =
-  | {
-      kind: "entity-approve";
-      entityId: string;
-      label: string;
-      confidence: number;
-    }
-  | {
-      kind: "entity-reject";
-      entityId: string;
-      label: string;
-      reason: string;
-    }
-  | {
-      kind: "alert-review";
-      alertId: string;
-      label: string;
-      decision: "approve" | "reject";
-    };
-
-type EvidencePanelTab = "entities" | "alerts" | "search";
-
-const EVIDENCE_TEMPLATES: EvidenceTemplate[] = [
-  {
-    id: "claims-review",
-    name: "Claims Review",
-    summary: "Claims review focus",
-    reviewFocus: [
-      "Delay-event support",
-      "Notice compliance",
-      "Commercial exposure",
-    ],
-    tags: ["claims", "time-impact", "commercial"],
-  },
-  {
-    id: "technical-audit",
-    name: "Technical Audit",
-    summary: "Technical audit focus",
-    reviewFocus: [
-      "Specification compliance",
-      "Design-change evidence",
-      "Quality deviation traceability",
-    ],
-    tags: ["technical", "quality", "design"],
-  },
-  {
-    id: "executive-brief",
-    name: "Executive Brief",
-    summary: "Executive brief focus",
-    reviewFocus: [
-      "Critical findings only",
-      "Decision-ready evidence",
-      "Alert prioritization",
-    ],
-    tags: ["executive", "summary", "risk"],
-  },
-];
-
-function sanitizeFilename(value: string): string {
-  return value
-    .trim()
-    .replace(/[^a-z0-9_.-]+/gi, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_|_$/g, "")
-    .toLowerCase();
-}
-
-function escapeXml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
-}
-
-function downloadBlob(filename: string, content: string, type: string) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
-
-function normalizeConfidence(value: number): number {
-  if (value <= 1) {
-    return Math.round(value * 100);
-  }
-  return Math.round(value);
-}
-
-function normalizeEntityType(value: string): string {
-  if (!value) {
-    return "Entity";
-  }
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-function formatEvidenceTimelineDate(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-
-  return parsed.toISOString().slice(0, 10);
-}
 
 export default function EvidencePage() {
   const { id } = useParams<{ id: string }>();
@@ -780,92 +636,19 @@ export default function EvidencePage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-border/70 bg-card/85 p-5 shadow-sm">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="space-y-3">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Evidence Viewer</h1>
-              <p className="text-muted-foreground">Project: {projectName}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
-                {documents.length} document{documents.length === 1 ? "" : "s"}
-              </Badge>
-              <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
-                {entities.length} entities
-              </Badge>
-              <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
-                {alertsState.length} alerts
-              </Badge>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefreshClick}
-            className="rounded-xl bg-background/95 shadow-sm"
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="rounded-xl bg-background/95 shadow-sm">
-                <Download className="mr-2 h-4 w-4" />
-                Export
-                <ChevronDown className="ml-2 h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="w-56 rounded-2xl border-border/80 bg-background/95 p-2 shadow-2xl backdrop-blur-md"
-            >
-              <div className="mb-2 rounded-xl border border-border/70 bg-muted/35 px-3 py-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Export Evidence
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Download the active evidence view.
-                </p>
-              </div>
-              <DropdownMenuItem onClick={handleExportJson} className="rounded-xl">
-                <FileJson className="mr-2 h-4 w-4" />
-                Export JSON
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportCsv} className="rounded-xl">
-                <Database className="mr-2 h-4 w-4" />
-                Export CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportPdf} className="rounded-xl">
-                <FileText className="mr-2 h-4 w-4" />
-                Export PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsTemplateOpen(true)}
-            className="rounded-xl bg-background/95 shadow-sm"
-          >
-            Evidence Templates
-          </Button>
-          <Button
-            variant={splitView ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSplitView((value) => !value)}
-            className={cn(
-              "rounded-xl shadow-sm",
-              splitView ? "" : "bg-background/95",
-            )}
-          >
-            <Columns2 className="mr-2 h-4 w-4" />
-            Split View
-          </Button>
-        </div>
-      </div>
-      </section>
+      <EvidenceHeader
+        projectName={projectName}
+        documentCount={documents.length}
+        entityCount={entities.length}
+        alertCount={alertsState.length}
+        splitView={splitView}
+        onRefresh={handleRefreshClick}
+        onExportJson={handleExportJson}
+        onExportCsv={handleExportCsv}
+        onExportPdf={handleExportPdf}
+        onOpenTemplates={() => setIsTemplateOpen(true)}
+        onToggleSplitView={() => setSplitView((value) => !value)}
+      />
 
       {documentsError ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -879,793 +662,66 @@ export default function EvidencePage() {
         </Alert>
       ) : null}
 
-      <ResizablePanelGroup
-        direction="horizontal"
-        className="min-h-[calc(100vh-12rem)]"
-      >
-        <ResizablePanel defaultSize={splitView ? 50 : 70} minSize={30}>
-          <Card className="h-full rounded-2xl border-border/80 bg-card/85 shadow-sm">
-            <CardHeader className="border-b border-border/70">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  {selectedDocument?.name ?? "No document selected"}
-                </CardTitle>
-                {selectedDocument ? (
-                  <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
-                    {selectedDocument.type}
-                  </Badge>
-                ) : null}
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              {selectedDocumentId ? (
-                <LazyPdfEvidenceViewer
-                  fileUrl={buildDocumentDownloadUrl(selectedDocumentId)}
-                  highlights={highlights}
-                  activeHighlightId={activeHighlightId}
-                  onHighlightClick={handleHighlightClick}
-                />
-              ) : (
-                <div className="m-6 flex h-full flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-border/80 bg-background/80 p-10 shadow-inner">
-                  <div className="rounded-2xl border border-border/70 bg-muted/35 p-4 shadow-sm">
-                    <FileText className="h-12 w-12 text-muted-foreground" />
-                  </div>
-                  <div className="text-center">
-                    <h3 className="text-lg font-semibold">
-                      No Document Selected
-                    </h3>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Select a document from the list below to view evidence.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </ResizablePanel>
+      <EvidenceWorkspace
+        splitView={splitView}
+        selectedDocument={selectedDocument}
+        selectedDocumentId={selectedDocumentId}
+        highlights={highlights}
+        activeHighlightId={activeHighlightId}
+        activePanelTab={activePanelTab}
+        entities={entities}
+        entitiesLoading={entitiesLoading}
+        entitiesError={entitiesError}
+        alertsState={alertsState}
+        alertsLoading={alertsLoading}
+        alertsError={alertsError}
+        activeEntityId={activeEntityId}
+        highlightSearchQuery={highlightSearchQuery}
+        filteredHighlightResults={filteredHighlightResults}
+        relationshipViewMode={relationshipViewMode}
+        relationshipGraph={relationshipGraph}
+        relationshipExplanation={relationshipExplanation}
+        evidenceTimeline={evidenceTimeline}
+        reviewerIdentityReady={reviewerIdentityReady}
+        onHighlightClick={handleHighlightClick}
+        onActivePanelTabChange={setActivePanelTab}
+        onApproveEntity={requestApproveEntity}
+        onRejectEntity={requestRejectEntity}
+        onEntityClick={handleEntityClick}
+        onSearchQueryChange={setHighlightSearchQuery}
+        onSelectPanelItem={syncPanelSelection}
+        onRelationshipViewModeChange={setRelationshipViewMode}
+        onReviewAlert={requestReviewAlert}
+        onResolveAlert={handleResolveAlertClick}
+      />
 
-        <ResizableHandle withHandle />
+      <EvidenceTemplateDialog
+        open={isTemplateOpen}
+        templates={EVIDENCE_TEMPLATES}
+        selectedTemplate={selectedTemplate}
+        onOpenChange={setIsTemplateOpen}
+        onSelectTemplate={setSelectedTemplateId}
+      />
 
-        <ResizablePanel defaultSize={splitView ? 50 : 30} minSize={20}>
-          <Card className="h-full rounded-2xl border-border/80 bg-card/85 shadow-sm">
-            <CardHeader className="border-b border-border/70">
-              <CardTitle>Extracted Entities</CardTitle>
-            </CardHeader>
-            <CardContent className="p-5">
-              <Tabs
-                value={activePanelTab}
-                onValueChange={(value) =>
-                  setActivePanelTab(value as EvidencePanelTab)
-                }
-                className="w-full"
-              >
-                <TabsList className="grid w-full grid-cols-3 rounded-2xl border border-border/80 bg-muted/35 p-1 shadow-sm">
-                  <TabsTrigger value="entities" className="rounded-xl">
-                    Entities
-                  </TabsTrigger>
-                  <TabsTrigger value="alerts" className="rounded-xl">
-                    Alerts
-                  </TabsTrigger>
-                  <TabsTrigger value="search" className="rounded-xl">
-                    Search
-                  </TabsTrigger>
-                </TabsList>
+      <EvidenceDocumentsCard
+        documents={documents}
+        documentsLoading={documentsLoading}
+        selectedDocumentId={selectedDocumentId}
+        onSelectDocument={setSelectedDocumentId}
+      />
 
-                <TabsContent value="entities" className="space-y-4">
-                  {entitiesError ? (
-                    <Alert>
-                      <AlertTriangle className="h-4 w-4" />
-                      <AlertDescription>
-                        Failed to load entities: {entitiesError.message}
-                      </AlertDescription>
-                    </Alert>
-                  ) : (
-                    <EntityValidationList
-                      entities={entities}
-                      onApprove={requestApproveEntity}
-                      onReject={requestRejectEntity}
-                      onEntityClick={handleEntityClick}
-                      activeEntityId={activeEntityId}
-                      isLoading={entitiesLoading}
-                    />
-                  )}
-                </TabsContent>
-
-                <TabsContent value="alerts" className="space-y-4">
-                  {alertsError ? (
-                    <Alert>
-                      <AlertDescription>
-                        Failed to load alerts: {alertsError.message}
-                      </AlertDescription>
-                    </Alert>
-                  ) : alertsLoading ? (
-                    <Alert>
-                      <AlertDescription>Loading alerts...</AlertDescription>
-                    </Alert>
-                  ) : alertsState.length === 0 ? (
-                    <Alert>
-                      <AlertDescription>
-                        No alerts for this document.
-                      </AlertDescription>
-                    </Alert>
-                  ) : (
-                    <div className="space-y-2">
-                      {alertsState.map((alert) => (
-                        <div
-                          key={alert.id}
-                          className={cn(
-                            "rounded-2xl border bg-background/90 p-4 shadow-sm transition-colors",
-                            activeEntityId === alert.id
-                              ? "border-primary bg-primary/5"
-                              : "border-border",
-                          )}
-                        >
-                          <button
-                            type="button"
-                            className="w-full text-left"
-                            aria-pressed={activeEntityId === alert.id}
-                            aria-label={`Focus alert ${alert.title}`}
-                            onClick={() => syncPanelSelection(alert.id)}
-                          >
-                            <p className="font-medium">{alert.title}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {alert.description}
-                            </p>
-                          </button>
-                          <div className="mt-3 flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="rounded-xl bg-background/95 shadow-sm"
-                              disabled={!reviewerIdentityReady}
-                              title={!reviewerIdentityReady ? "Loading your identity…" : undefined}
-                              onClick={() =>
-                                requestReviewAlert(alert.id, "approve")
-                              }
-                            >
-                              Approve Alert
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="rounded-xl bg-background/95 shadow-sm"
-                              disabled={!reviewerIdentityReady}
-                              title={!reviewerIdentityReady ? "Loading your identity…" : undefined}
-                              onClick={() =>
-                                requestReviewAlert(alert.id, "reject")
-                              }
-                            >
-                              Reject Alert
-                            </Button>
-                            <Button
-                              size="sm"
-                              className="rounded-xl shadow-sm"
-                              disabled={!reviewerIdentityReady}
-                              title={!reviewerIdentityReady ? "Loading your identity…" : undefined}
-                              onClick={() => handleResolveAlertClick(alert.id)}
-                            >
-                              Resolve Alert
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="search" className="space-y-4">
-                  <Input
-                    aria-label="Search highlights"
-                    placeholder="Search highlights in this document..."
-                    value={highlightSearchQuery}
-                    onChange={(event) =>
-                      setHighlightSearchQuery(event.target.value)
-                    }
-                    className="rounded-xl border-border/80 bg-background/95 shadow-sm"
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    {filteredHighlightResults.length} matches
-                  </p>
-                  {filteredHighlightResults.length === 0 ? (
-                    <Alert>
-                      <AlertDescription>
-                        No highlights match the current search.
-                      </AlertDescription>
-                    </Alert>
-                  ) : (
-                    <div className="space-y-2">
-                      {filteredHighlightResults.map((highlight) => (
-                        <button
-                          key={highlight.id}
-                          type="button"
-                          className={cn(
-                            "w-full rounded-2xl border bg-background/90 p-4 text-left shadow-sm transition-colors",
-                            activeHighlightId === highlight.id
-                              ? "border-primary bg-primary/5"
-                              : "border-border hover:border-primary/50",
-                          )}
-                          onClick={() => syncPanelSelection(highlight.clauseId)}
-                        >
-                          <p className="font-medium">{highlight.text}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {highlight.clauseId} - page {highlight.page}
-                          </p>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </TabsContent>
-              </Tabs>
-
-              <div className="mt-6 rounded-2xl border border-border/80 bg-muted/25 p-5 shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">
-                      {relationshipViewMode === "3d"
-                        ? "3D Relationship Viewer"
-                        : "Relationship Graph"}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      {relationshipViewMode === "3d"
-                        ? "Depth layers"
-                        : `${relationshipGraph.linkedAlertCount} linked alert${
-                            relationshipGraph.linkedAlertCount === 1 ? "" : "s"
-                          }`}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={
-                        relationshipViewMode === "graph"
-                          ? "default"
-                          : "outline"
-                      }
-                      className={cn(
-                        "rounded-xl shadow-sm",
-                        relationshipViewMode === "graph" ? "" : "bg-background/95",
-                      )}
-                      onClick={() => setRelationshipViewMode("graph")}
-                    >
-                      Graph View
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={
-                        relationshipViewMode === "3d" ? "default" : "outline"
-                      }
-                      className={cn(
-                        "rounded-xl shadow-sm",
-                        relationshipViewMode === "3d" ? "" : "bg-background/95",
-                      )}
-                      onClick={() => setRelationshipViewMode("3d")}
-                    >
-                      3D Relationship View
-                    </Button>
-                    <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
-                      {relationshipGraph.entityNodes.length} entities /{" "}
-                      {relationshipGraph.alertNodes.length} alerts
-                    </Badge>
-                  </div>
-                </div>
-
-                {relationshipViewMode === "3d" ? (
-                  <div className="mt-4 space-y-4">
-                    <div className="grid gap-4 lg:grid-cols-3" style={{ perspective: "1200px" }}>
-                      <div
-                        className="rounded-2xl border border-border/80 bg-background/95 p-4 shadow-sm"
-                        style={{ transform: "rotateY(18deg) translateZ(24px)" }}
-                      >
-                        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Layer 1 · Entities
-                        </p>
-                        <div className="space-y-2">
-                          {relationshipGraph.entityNodes.map((node) => (
-                            <button
-                              key={node.id}
-                              type="button"
-                              aria-label={`Graph node ${node.id}`}
-                              className={cn(
-                                "w-full rounded-md border bg-background px-3 py-2 text-left transition-colors",
-                                "shadow-sm",
-                                activeEntityId === node.id
-                                  ? "border-primary bg-primary/5"
-                                  : "border-border hover:border-primary/50",
-                              )}
-                              onClick={() => syncPanelSelection(node.id)}
-                            >
-                              <div className="text-sm font-medium text-foreground">
-                                {node.label}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                Entity · page {node.page}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div
-                        className="rounded-2xl border border-dashed border-border/80 bg-background/80 p-4 shadow-sm"
-                        style={{ transform: "translateZ(48px)" }}
-                      >
-                        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Layer 2 · Relationship Depth
-                        </p>
-                        <div className="space-y-2 text-sm text-muted-foreground">
-                          <p>Contract entities project forward into active alerts.</p>
-                          <p>
-                            Click any node to focus the linked highlight in the
-                            evidence viewer.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div
-                        className="rounded-2xl border border-border/80 bg-background/95 p-4 shadow-sm"
-                        style={{ transform: "rotateY(-18deg) translateZ(24px)" }}
-                      >
-                        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Layer 3 · Alerts
-                        </p>
-                        <div className="space-y-2">
-                          {relationshipGraph.alertNodes.map((node) => (
-                            <button
-                              key={node.id}
-                              type="button"
-                              aria-label={`Graph node ${node.id}`}
-                              className={cn(
-                                "w-full rounded-xl border bg-background px-3 py-2 text-left shadow-sm transition-colors",
-                                activeEntityId === node.id
-                                  ? "border-primary bg-primary/5"
-                                  : "border-border hover:border-primary/50",
-                              )}
-                              onClick={() => syncPanelSelection(node.id)}
-                            >
-                              <div className="text-sm font-medium text-foreground">
-                                {node.label}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                Alert · {String(node.severity).toLowerCase()}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-start">
-                    <div className="space-y-2">
-                      {relationshipGraph.entityNodes.map((node) => (
-                        <button
-                          key={node.id}
-                          type="button"
-                          aria-label={`Graph node ${node.id}`}
-                          className={cn(
-                            "w-full rounded-xl border bg-background px-3 py-2 text-left shadow-sm transition-colors",
-                            activeEntityId === node.id
-                              ? "border-primary bg-primary/5"
-                              : "border-border hover:border-primary/50",
-                          )}
-                          onClick={() => syncPanelSelection(node.id)}
-                        >
-                          <div className="text-sm font-medium text-foreground">
-                            {node.label}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Entity · page {node.page}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="hidden items-center justify-center lg:flex">
-                      <div className="h-full min-h-[120px] w-px bg-border" />
-                    </div>
-
-                    <div className="space-y-2">
-                      {relationshipGraph.alertNodes.map((node) => (
-                        <button
-                          key={node.id}
-                          type="button"
-                          aria-label={`Graph node ${node.id}`}
-                          className={cn(
-                            "w-full rounded-xl border bg-background px-3 py-2 text-left shadow-sm transition-colors",
-                            activeEntityId === node.id
-                              ? "border-primary bg-primary/5"
-                              : "border-border hover:border-primary/50",
-                          )}
-                          onClick={() => syncPanelSelection(node.id)}
-                        >
-                          <div className="text-sm font-medium text-foreground">
-                            {node.label}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Alert · {String(node.severity).toLowerCase()}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-6 rounded-2xl border border-border/80 bg-muted/25 p-5 shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">
-                      AI Relationship Explanation
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      Backend-generated explanation grounded in evidence graph citations
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
-                    Model-backed
-                  </Badge>
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  {relationshipExplanation ? (
-                    <>
-                      <p className="text-sm text-foreground">
-                        {relationshipExplanation.summary}
-                      </p>
-                      <div className="grid gap-3 md:grid-cols-3">
-                        <div className="rounded-2xl border border-border/80 bg-background/95 p-3 shadow-sm">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Strongest Cluster
-                          </p>
-                          <p className="mt-2 text-sm text-foreground">
-                            {relationshipExplanation.strongestCluster}
-                          </p>
-                        </div>
-                        <div className="rounded-2xl border border-border/80 bg-background/95 p-3 shadow-sm">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Review Priority
-                          </p>
-                          <p className="mt-2 text-sm text-foreground">
-                            {relationshipExplanation.reviewPriority}
-                          </p>
-                        </div>
-                        <div className="rounded-2xl border border-border/80 bg-background/95 p-3 shadow-sm">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Latest Signal
-                          </p>
-                          <p className="mt-2 text-sm text-foreground">
-                            {relationshipExplanation.latestSignal}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="rounded-2xl border border-border/80 bg-background/95 p-3 shadow-sm">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Evidence Citations
-                        </p>
-                        <div className="mt-3 space-y-2">
-                          {relationshipExplanation.citations.map((citation) => (
-                            <div
-                              key={`${citation.clauseId}-${citation.clauseCode}`}
-                              className="rounded-xl border border-border/70 bg-muted/25 p-2 shadow-sm"
-                            >
-                              <p className="text-sm font-medium text-foreground">
-                                {citation.clauseCode} · {citation.label}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {citation.page ? `Page ${citation.page}` : "Page N/A"} · {citation.reason}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <Alert>
-                      <AlertDescription>
-                        No relationship explanation is available until entities or alerts are present.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-6 rounded-2xl border border-border/80 bg-muted/25 p-5 shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">
-                      Evidence Evolution Timeline
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      Persisted document lifecycle and alert history events
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
-                    {evidenceTimeline.length} events
-                  </Badge>
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  {evidenceTimeline.length > 0 ? (
-                    evidenceTimeline.map((event) => (
-                      <div
-                        key={event.id}
-                        className="flex items-start gap-3 rounded-2xl border border-border/80 bg-background/95 p-3 shadow-sm"
-                      >
-                        <div className="mt-1 h-2.5 w-2.5 rounded-full bg-primary" />
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm">{event.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatEvidenceTimelineDate(event.occurredAt)}
-                          </p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {event.detail}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <Alert>
-                      <AlertDescription>
-                        No evidence history is available for the current document.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-
-      <Dialog open={isTemplateOpen} onOpenChange={setIsTemplateOpen}>
-        <DialogContent className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-3xl sm:rounded-2xl">
-          <DialogHeader className="rounded-2xl border border-border/70 bg-muted/35 px-4 py-4">
-            <DialogTitle>Start from an evidence template</DialogTitle>
-            <DialogDescription>
-              Use a guided review lens to focus the current evidence session.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-            <div className="space-y-2">
-              {EVIDENCE_TEMPLATES.map((template) => (
-                <Button
-                  key={template.id}
-                  type="button"
-                  variant={selectedTemplate?.id === template.id ? "default" : "outline"}
-                  className={cn(
-                    "w-full justify-start rounded-xl shadow-sm",
-                    selectedTemplate?.id === template.id ? "" : "bg-background/95",
-                  )}
-                  onClick={() => setSelectedTemplateId(template.id)}
-                >
-                  {template.name}
-                </Button>
-              ))}
-            </div>
-
-            {selectedTemplate ? (
-              <div className="rounded-2xl border border-border/80 bg-muted/25 p-5 shadow-sm">
-                <div className="space-y-2">
-                  <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Template Summary
-                  </div>
-                  <h3 className="text-lg font-semibold text-foreground">
-                    {selectedTemplate.summary}
-                  </h3>
-                </div>
-
-                <div className="mt-5 grid gap-5 md:grid-cols-2">
-                  <div>
-                    <div className="text-sm font-medium text-foreground">
-                      Review focus
-                    </div>
-                    <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
-                      {selectedTemplate.reviewFocus.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-foreground">Tags</div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {selectedTemplate.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="rounded-full border border-border/80 bg-background px-3 py-1 text-xs text-muted-foreground shadow-sm"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          <DialogFooter className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
-            <Button variant="outline" className="rounded-xl bg-background/95 shadow-sm" onClick={() => setIsTemplateOpen(false)}>
-              Close
-            </Button>
-            <Button className="rounded-xl shadow-sm" onClick={() => setIsTemplateOpen(false)}>
-              Use Template
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Card className="rounded-2xl border-border/80 bg-card/85 shadow-sm">
-        <CardHeader className="border-b border-border/70">
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Project Documents
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {documentsLoading ? (
-            <p className="text-sm text-muted-foreground">
-              Loading documents...
-            </p>
-          ) : documents.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No documents available for this project.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              {documents.map((doc) => (
-                <button
-                  key={doc.id}
-                  onClick={() => setSelectedDocumentId(doc.id)}
-                  className={cn(
-                    "flex items-center gap-3 rounded-2xl border bg-background/90 p-4 text-left shadow-sm transition-colors",
-                    selectedDocumentId === doc.id
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50",
-                  )}
-                >
-                  <FileText className="h-8 w-8 text-muted-foreground" />
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{doc.name}</p>
-                    <p className="text-xs text-muted-foreground">{doc.id}</p>
-                  </div>
-                  {selectedDocumentId === doc.id ? (
-                    <CheckCircle className="h-5 w-5 text-primary" />
-                  ) : null}
-                </button>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Dialog
-        open={pendingAction !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPendingAction(null);
-            setValidationNote("");
-          }
+      <EvidenceActionDialog
+        pendingAction={pendingAction}
+        pendingActionDescription={pendingActionDescription}
+        requiresValidationNote={requiresValidationNote}
+        validationNote={validationNote}
+        onValidationNoteChange={setValidationNote}
+        onCancel={() => {
+          setPendingAction(null);
+          setValidationNote("");
         }}
-      >
-        <DialogContent className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:rounded-2xl">
-          <DialogHeader className="rounded-2xl border border-border/70 bg-muted/35 px-4 py-4">
-            <DialogTitle>Confirm evidence action</DialogTitle>
-            <DialogDescription>{pendingActionDescription}</DialogDescription>
-          </DialogHeader>
-          {requiresValidationNote ? (
-            <div className="space-y-2">
-              <p className="text-sm text-amber-700">
-                Confidence below 90% requires a validation note before
-                approval.
-              </p>
-              <Label htmlFor="evidence-validation-note">Validation note</Label>
-              <Textarea
-                id="evidence-validation-note"
-                value={validationNote}
-                onChange={(event) => setValidationNote(event.target.value)}
-                placeholder="Document why this low-confidence extraction is still acceptable."
-                rows={3}
-              />
-            </div>
-          ) : null}
-          <DialogFooter className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-xl bg-background/95 shadow-sm"
-              onClick={() => {
-                setPendingAction(null);
-                setValidationNote("");
-              }}
-            >
-              Cancel Action
-            </Button>
-            <Button
-              type="button"
-              className="rounded-xl shadow-sm"
-              onClick={handleConfirmPendingActionClick}
-              disabled={requiresValidationNote && !validationNote.trim()}
-            >
-              Confirm Action
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onConfirm={handleConfirmPendingActionClick}
+      />
     </div>
   );
-}
-
-function mapHighlightColorToSeverity(color: string): PdfHighlight["severity"] {
-  switch (color) {
-    case "red":
-      return "critical";
-    case "orange":
-      return "high";
-    case "yellow":
-      return "medium";
-    case "green":
-    case "blue":
-    default:
-      return "low";
-  }
-}
-
-function mapEntityTypeToApprovalResourceType(
-  entityType: string,
-): string | null {
-  switch (entityType) {
-    case "stakeholder":
-      return "stakeholders";
-    default:
-      return null;
-  }
-}
-
-function extractAlertEvidenceLocation(alert: ProjectAlert): {
-  page_number: number;
-  bbox: [number, number, number, number];
-  normalized?: boolean;
-} | null {
-  const evidence = (alert.evidence_json as { evidence_location?: {
-    page_number: number;
-    bbox: [number, number, number, number];
-    normalized?: boolean;
-  } } | undefined)?.evidence_location;
-
-  if (!evidence || !Array.isArray(evidence.bbox)) {
-    return null;
-  }
-
-  const normalized =
-    evidence.normalized ??
-    evidence.bbox.every((value) => value >= 0 && value <= 1);
-
-  return {
-    page_number: evidence.page_number,
-    bbox: evidence.bbox,
-    normalized,
-  };
-}
-
-function mapAlertSeverityToPdfSeverity(
-  severity: ProjectAlert["severity"],
-): PdfHighlight["severity"] {
-  switch (String(severity).toLowerCase()) {
-    case "critical":
-      return "critical";
-    case "high":
-      return "high";
-    case "medium":
-      return "medium";
-    default:
-      return "low";
-  }
-}
-
-function buildDocumentDownloadUrl(documentId: string): string {
-  return `${env.API_BASE_URL}/documents/${documentId}/download`;
 }

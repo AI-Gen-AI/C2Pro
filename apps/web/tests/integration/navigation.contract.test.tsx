@@ -14,10 +14,8 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { CrossModuleNavigator } from "../../components/navigation/CrossModuleNavigator";
 import { WBSDetailWithLinks } from "../../components/wbs/WBSDetailWithLinks";
 import { AlertDetailWithLinks } from "../../components/alerts/AlertDetailWithLinks";
-import { GlobalSearch } from "../../components/search/GlobalSearch";
 
 // ===========================================
 // FIXTURES
@@ -60,33 +58,6 @@ const mockAlertWithEntities = {
     },
   ],
 };
-
-const mockCoherenceCategory = {
-  category: "BUDGET",
-  score: 85,
-  issues: 3,
-};
-
-const mockSearchResults = [
-  {
-    type: "wbs",
-    id: "1.1",
-    title: "Construction Materials",
-    module: "WBS",
-  },
-  {
-    type: "procurement",
-    id: "proc-1",
-    title: "Steel Beams Supply",
-    module: "Procurement",
-  },
-  {
-    type: "document",
-    id: "doc-1",
-    title: "Project Specs.pdf",
-    module: "Documents",
-  },
-];
 
 // ===========================================
 // CONTRACT TESTS
@@ -185,76 +156,6 @@ describe("TS-INT-NAV-001: Cross-Module Navigation", () => {
     });
   });
 
-  describe("Coherence Score Navigation", () => {
-    it("should navigate to category detail when coherence score clicked [TEST-05]", async () => {
-      /**
-       * RED Phase: Coherence score navigation
-       *
-       * Expected: Clicking coherence score calls onNavigate with category
-       */
-      const handleNavigate = vi.fn();
-      render(
-        <CrossModuleNavigator
-          coherenceData={mockCoherenceCategory}
-          onNavigate={handleNavigate}
-        />,
-      );
-
-      // Find coherence score
-      const coherenceScore = screen.getByText(/85/);
-      expect(coherenceScore).toBeInTheDocument();
-
-      // Click the score
-      fireEvent.click(coherenceScore);
-
-      // Should call onNavigate with coherence category
-      await waitFor(() => {
-        expect(handleNavigate).toHaveBeenCalledWith("coherence", "BUDGET");
-      });
-    });
-  });
-
-  describe("Global Search", () => {
-    it("should search across all modules [TEST-06]", async () => {
-      /**
-       * RED Phase: Global search integration
-       *
-       * Expected: Search returns results from WBS, Procurement, Documents, etc.
-       */
-      const handleSearch = vi.fn().mockResolvedValue(mockSearchResults);
-      const handleSelect = vi.fn();
-
-      render(
-        <GlobalSearch
-          onSearch={handleSearch}
-          onSelect={handleSelect}
-          results={mockSearchResults}
-        />,
-      );
-
-      // Type search query
-      const searchInput = screen.getByPlaceholderText(/search/i);
-      fireEvent.change(searchInput, { target: { value: "steel" } });
-
-      // Submit search
-      fireEvent.submit(searchInput);
-
-      // Should call search handler
-      await waitFor(() => {
-        expect(handleSearch).toHaveBeenCalledWith("steel");
-      });
-
-      // Should show results from different modules
-      expect(screen.getByText("Construction Materials")).toBeInTheDocument();
-      expect(screen.getByText("WBS")).toBeInTheDocument();
-
-      expect(screen.getByText("Steel Beams Supply")).toBeInTheDocument();
-      expect(screen.getByText("Procurement")).toBeInTheDocument();
-
-      expect(screen.getByText("Project Specs.pdf")).toBeInTheDocument();
-      expect(screen.getByText("Documents")).toBeInTheDocument();
-    });
-  });
 });
 
 // ===========================================

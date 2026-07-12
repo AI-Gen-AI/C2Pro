@@ -12,7 +12,7 @@ import { AlertsDistribution } from "@/components/coherence/AlertsDistribution";
 import { CategoryDetail } from "@/components/coherence/CategoryDetail";
 import { CategoryV2Panel } from "@/components/coherence/CategoryV2Panel";
 import type { DashboardSummary } from "@/lib/api/contracts";
-import { ScoreVersionBadge } from "@/src/components/coherence/ScoreVersionBadge";
+import { ScoreVersionBadge } from "@/components/coherence/ScoreVersionBadge";
 import { useListProjectAlertsApiV1AlertsProjectsProjectIdGet } from "@/lib/api/generated/alerts/alerts";
 import type { AlertResponse } from "@/lib/api/generated/models";
 

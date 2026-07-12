@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-12T17:10:00Z",
+  "updated_at": "2026-07-12T20:25:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -200,6 +200,29 @@
         "apps/web/hooks/useWBSTree.test.ts",
         "apps/web/app/(app)/projects/[id]/documents/page.tsx",
         "apps/web/app/(app)/projects/[id]/documents/page.test.tsx",
+        "backlogs/FRT_FRONTEND.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-11T23:35:00Z",
+        "completado": "2026-07-11T23:55:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-189 completed on feat/frt-189-mutation-errors: createQueryClient now surfaces unhandled mutation failures with a toast while respecting local onError handlers; useBudget/useWBSTree rethrow write failures; document deletion shows a visible toast.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: focused run failed first on missing global mutation toast, useBudget/useWBSTree resolving null/false, and document delete missing a toast.",
+          "GREEN: pnpm vitest run lib/api/queryClient.test.ts hooks/useBudget.test.ts hooks/useWBSTree.test.ts \"app/(app)/projects/[id]/documents/page.test.tsx\" -> 4 files / 25 tests passed.",
+          "Targeted swallow grep -> no empty catch blocks and no console.error hits in patched mutation paths.",
+          "pnpm typecheck -> passed.",
+          "pnpm lint -> passed."
+        ]
+      }
+    },
+    {
       "tarea_id": "T133",
       "backlog_id": "TASK-FRT-187",
       "tipo": "frontend",
@@ -217,21 +240,6 @@
         "blackboard.json"
       ],
       "timestamps": {
-        "inicio": "2026-07-11T22:35:00Z",
-        "completado": "2026-07-11T22:55:00Z"
-      },
-      "resultado": {
-        "exitoso": true,
-        "mensaje": "TASK-FRT-189 completed on feat/frt-189-mutation-errors: createQueryClient now surfaces unhandled mutation failures with a toast while respecting local onError handlers; useBudget/useWBSTree rethrow write failures; document deletion shows a visible toast.",
-        "tests_pasados": true,
-        "validacion_lint": true,
-        "tests": [
-          "RED: focused run failed first on missing global mutation toast, useBudget/useWBSTree resolving null/false, and document delete missing a toast.",
-          "GREEN: pnpm vitest run lib/api/queryClient.test.ts hooks/useBudget.test.ts hooks/useWBSTree.test.ts \"app/(app)/projects/[id]/documents/page.test.tsx\" -> 4 files / 25 tests passed.",
-          "Targeted swallow grep -> no empty catch blocks and no console.error hits in patched mutation paths.",
-          "pnpm typecheck -> passed.",
-          "pnpm lint -> passed."
-        ]
         "inicio": "2026-07-11T21:35:00Z",
         "completado": "2026-07-11T21:55:00Z"
       },
@@ -3158,6 +3166,40 @@
         "tests_pasados": true,
         "validacion_lint": true
       }
+    },
+    {
+      "tarea_id": "T141",
+      "backlog_id": "TASK-FRT-197",
+      "tipo": "frontend",
+      "descripcion": "Component-root consolidation, evidence-page split, and RED-phase placeholder deletion without behavior change.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "Canonical component root is apps/web/components, evidence page and extracted files stay under 800 lines, unused RED-phase placeholders are removed after import grep, and the full frontend suite/typecheck/lint pass.",
+      "archivos_modificados": [
+        "apps/web/app/(app)/projects/[id]/evidence/page.tsx",
+        "apps/web/components/coherence",
+        "apps/web/components/features/evidence",
+        "apps/web/tests/integration/navigation.contract.test.tsx",
+        "backlogs/FRT_FRONTEND.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-12T19:35:00Z",
+        "completado": "2026-07-12T20:25:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-197 completed on feat/frt-197-component-consolidation: coherence roots consolidated, evidence page split, unused GlobalSearch/CrossModuleNavigator placeholders deleted, and behavior-preserving gates passed.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "pnpm vitest run \"app/(app)/projects/[id]/evidence\" components/coherence tests/integration/navigation.contract.test.tsx -> 11 files / 60 tests passed",
+          "pnpm test:all -> 218 files / 723 tests plus 51 files / 126 tests passed",
+          "pnpm typecheck -> passed",
+          "pnpm lint -> passed"
+        ]
+      }
     }
   ],
   "backlog_sync": {
@@ -3382,7 +3424,7 @@
     "rev_006_progress": "Phase A complete - hexagonal structure created",
     "audit_pending": 4
   },
-  "contexto_paso_anterior": "2026-07-12T16:17:25Z: TASK-FRT-192 completed on feat/frt-192-ci-wedge-gates. Result: repaired stale and hidden frontend test debt blocking pnpm test:all, changed frontend CI to run pnpm test:all, added deterministic journey-3-wedge Playwright smoke with a skipped @real-backend TODO, and verified pnpm test:all/typecheck/lint green. Local Playwright execution is blocked by missing CLERK_PUBLISHABLE_KEY after the existing 3100 port conflict was bypassed.",
+  "contexto_paso_anterior": "2026-07-12T20:25:00Z: TASK-FRT-197 completed on feat/frt-197-component-consolidation. Result: consolidated duplicate coherence component roots into apps/web/components/coherence, split the evidence page into focused components under components/features/evidence with all touched files below 800 lines, deleted unused GlobalSearch and CrossModuleNavigator RED-phase placeholders after grep proof, preserved 3D/template evidence behavior to satisfy zero-behavior-change, and verified pnpm test:all/typecheck/lint green.",
   "contexto_paso_anterior": "2026-07-11T21:55:00Z: TASK-FRT-187 completed on feat/frt-187-hitl-queue. Contract inspection found no review-queue project filter in the generated client or backend router, so the project Review tab now honestly labels the surface as an organization queue. ReviewItemCard renders human-readable item summaries, evidence links, collapsed raw data, visible approve/reject errors, and supported status/skip/limit pagination. Backend follow-up TASK-BCK-092 registered for true project filtering.",
   "trazas_de_error": [
     {
