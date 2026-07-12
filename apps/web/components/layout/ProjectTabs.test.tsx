@@ -20,14 +20,15 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/api/generated", () => ({}));
 
 describe("ProjectTabs", () => {
-  it("renders the project detail tabs with the audit report link", () => {
+  it("renders the Level-1 project tabs (incl. report) with phase2 modules gated off", () => {
     renderWithProviders(<ProjectTabs projectId="proj_demo_001" />);
 
     const nav = screen.getByRole("navigation", { name: /project tabs/i });
     const links = screen.getAllByRole("link");
 
     expect(nav).toBeInTheDocument();
-    expect(links).toHaveLength(11);
+    // 11 defined tabs minus the two phase2 tabs (Stakeholders, WBS) gated off by default.
+    expect(links).toHaveLength(9);
     expect(
       screen.getByRole("link", { name: /overview/i }),
     ).toHaveAttribute("href", "/projects/proj_demo_001");
@@ -44,13 +45,19 @@ describe("ProjectTabs", () => {
       screen.getByRole("link", { name: /alerts/i }),
     ).toHaveAttribute("href", "/projects/proj_demo_001/alerts");
     expect(
-      screen.getByRole("link", { name: /stakeholders/i }),
-    ).toHaveAttribute("href", "/projects/proj_demo_001/stakeholders");
+      screen.getByRole("link", { name: /review/i }),
+    ).toHaveAttribute("href", "/projects/proj_demo_001/review");
+    expect(
+      screen.getByRole("link", { name: /budget/i }),
+    ).toHaveAttribute("href", "/projects/proj_demo_001/budget");
     expect(
       screen.getByRole("link", { name: /settings/i }),
     ).toHaveAttribute("href", "/projects/proj_demo_001/settings");
     expect(
       screen.getByRole("link", { name: /report/i }),
     ).toHaveAttribute("href", "/projects/proj_demo_001/report");
+
+    expect(screen.queryByRole("link", { name: /stakeholders/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /wbs/i })).not.toBeInTheDocument();
   });
 });

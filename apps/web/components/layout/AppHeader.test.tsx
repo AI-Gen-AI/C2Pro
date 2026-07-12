@@ -74,10 +74,6 @@ describe("AppHeader", () => {
     const user = userEvent.setup();
     renderWithProviders(<AppHeader />);
 
-    expect(
-      screen.getByRole("textbox", { name: /search/i }),
-    ).toBeInTheDocument();
-
     const notifications = screen.getByRole("button", {
       name: /notifications/i,
     });

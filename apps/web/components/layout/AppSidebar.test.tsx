@@ -131,4 +131,13 @@ describe("AppSidebar", () => {
 
     expect(screen.queryByText(/^7$/)).not.toBeInTheDocument();
   });
+
+  it("prunes stakeholders, ai-analytics and observability links when feature flags are off", () => {
+    pathnameState.value = "/projects";
+    renderWithProviders(<AppSidebar />);
+
+    expect(screen.queryByRole("link", { name: /stakeholders/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /ai-analytics/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /observability/i })).not.toBeInTheDocument();
+  });
 });

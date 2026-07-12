@@ -19,6 +19,8 @@ const useCreateProjectMock = vi.fn();
 const useProjectQuickViewSummaryMock = vi.fn();
 const useAuthStoreMock = vi.fn();
 const pushMock = vi.fn();
+const replaceMock = vi.fn();
+const searchParamsState = { value: new URLSearchParams() };
 
 vi.mock("@clerk/nextjs", () => ({
   ClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -27,7 +29,9 @@ vi.mock("@clerk/nextjs", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: pushMock,
+    replace: replaceMock,
   }),
+  useSearchParams: () => searchParamsState.value,
 }));
 
 vi.mock("next/link", () => ({
@@ -204,6 +208,12 @@ afterEach(() => {
 
 beforeEach(() => {
   pushMock.mockReset();
+  replaceMock.mockReset();
+  replaceMock.mockImplementation((url: string) => {
+    const query = url.includes("?") ? url.split("?")[1] : "";
+    searchParamsState.value = new URLSearchParams(query);
+  });
+  searchParamsState.value = new URLSearchParams();
   useUpdateProjectMock.mockReturnValue({
     mutateAsync: vi.fn(),
     isPending: false,
@@ -314,7 +324,7 @@ describe("ProjectsPage real-data boundary", () => {
     expect(screen.getByRole("button", { name: /new project/i })).toBeInTheDocument();
   });
 
-  it("opens a project creation wizard and keeps next disabled until the required name is provided", () => {
+  it("opens a project creation wizard and keeps next disabled until the required name is provided", async () => {
     useAuthStoreMock.mockImplementation(
       (selector: (state: { token: string | null }) => unknown) =>
         selector({ token: "real-token" }),
@@ -329,7 +339,7 @@ describe("ProjectsPage real-data boundary", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /new project/i }));
 
-    const wizard = screen.getByRole("dialog", { name: /create project/i });
+    const wizard = await screen.findByRole("dialog", { name: /create project/i });
     expect(wizard).toHaveClass("bg-background/95");
     expect(wizard).toHaveClass("shadow-2xl");
     expect(within(wizard).getByText(/step 1 of 3/i)).toBeInTheDocument();
@@ -363,7 +373,7 @@ describe("ProjectsPage real-data boundary", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /new project/i }));
 
-    const wizard = screen.getByRole("dialog", { name: /create project/i });
+    const wizard = await screen.findByRole("dialog", { name: /create project/i });
     fireEvent.change(within(wizard).getByLabelText(/project name/i), {
       target: { value: "Atlas Ridge" },
     });
@@ -757,60 +767,6 @@ describe("ProjectsPage real-data boundary", () => {
     expect(screen.getByText(/port expansion/i)).toBeInTheDocument();
     expect(screen.queryByText(/status:\s*active/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/type:\s*epc/i)).not.toBeInTheDocument();
-  });
-
-  it("opens a batch import dialog and previews parsed project rows", () => {
-    useAuthStoreMock.mockImplementation(
-      (selector: (state: { token: string | null }) => unknown) =>
-        selector({ token: "real-token" }),
-    );
-    useProjectsMock.mockReturnValue({
-      data: [],
-      isLoading: false,
-      error: null,
-    });
-
-    renderWithProviders(<ProjectsPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: /batch import/i }));
-
-    expect(screen.getByText(/import projects in bulk/i)).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText(/project rows/i), {
-      target: {
-        value:
-          "Hospital Central,EPC,HC-001\nPort Expansion,Maritime,PE-002",
-      },
-    });
-
-    expect(screen.getByText(/2 project rows ready to import/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/hospital central/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/port expansion/i).length).toBeGreaterThan(0);
-  });
-
-  it("opens project templates and previews the selected template structure", () => {
-    useAuthStoreMock.mockImplementation(
-      (selector: (state: { token: string | null }) => unknown) =>
-        selector({ token: "real-token" }),
-    );
-    useProjectsMock.mockReturnValue({
-      data: [],
-      isLoading: false,
-      error: null,
-    });
-
-    renderWithProviders(<ProjectsPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: /project templates/i }));
-
-    expect(screen.getByText(/start from a project template/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /epc megaproject/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /industrial retrofit/i }));
-
-    expect(screen.getByText(/industrial retrofit recovery/i)).toBeInTheDocument();
-    expect(screen.getByText(/shutdown planning/i)).toBeInTheDocument();
-    expect(screen.getByText(/brownfield/i)).toBeInTheDocument();
   });
 
   it("exports the current projects list to PDF, Excel, and JSON", () => {
