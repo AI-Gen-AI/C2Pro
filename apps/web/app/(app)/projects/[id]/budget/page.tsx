@@ -11,8 +11,10 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { ReconciliationCard } from "@/components/features/budget/ReconciliationCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -59,44 +61,9 @@ import {
   useBudget,
   calculateCategoryBreakdown,
   calculateVarianceData,
+  type BudgetItem,
 } from "@/hooks/useBudget";
-
-type BudgetItem = {
-  id: string;
-  name: string;
-  category: string;
-  amount: number;
-  actualAmount?: number;
-  variance?: number;
-  description?: string;
-  status: string;
-};
-
-function readNumber(
-  data: Record<string, unknown> | undefined,
-  ...keys: string[]
-) {
-  for (const key of keys) {
-    const value = data?.[key];
-    if (typeof value === "number") return value;
-    if (typeof value === "string" && value.trim()) {
-      const parsed = Number(value);
-      if (!Number.isNaN(parsed)) return parsed;
-    }
-  }
-  return 0;
-}
-
-function readString(
-  data: Record<string, unknown> | undefined,
-  ...keys: string[]
-) {
-  for (const key of keys) {
-    const value = data?.[key];
-    if (typeof value === "string" && value.trim()) return value;
-  }
-  return "";
-}
+import { getDashboardSummary } from "@/lib/api/services/dashboard";
 
 export default function ProjectBudgetPage() {
   const params = useParams<{ id: string }>();
@@ -123,6 +90,11 @@ export default function ProjectBudgetPage() {
     actualAmount: 0,
     description: "",
     status: "planned",
+  });
+  const dashboardQuery = useQuery({
+    queryKey: ["budget-dashboard-summary", projectId],
+    queryFn: () => getDashboardSummary(projectId),
+    enabled: Boolean(projectId),
   });
 
   const handleEdit = (item: BudgetItem) => {
@@ -206,13 +178,16 @@ export default function ProjectBudgetPage() {
     );
   }
 
-  const data = (budget ?? {}) as Record<string, unknown>;
-  const totalBudget = readNumber(data, "total_budget", "totalBudget");
-  const spentAmount = readNumber(data, "spent_amount", "spent");
-  const utilization = readNumber(data, "utilization_percentage", "utilization");
-  const varianceStatus = readString(data, "variance_status", "variance");
-  const currency = readString(data, "currency") || "EUR";
-  const items = (data.items as BudgetItem[]) ?? [];
+  const totalBudget = budget ? budget.total_budget : 0;
+  const spentAmount = budget ? budget.spent_amount : 0;
+  const utilization = budget ? budget.utilization_percentage : 0;
+  const varianceStatus = budget ? budget.variance_status : "";
+  const currency = budget?.currency || "EUR";
+  const items = budget?.items ?? [];
+  const budgetCategory =
+    dashboardQuery.data?.categories_v2?.categories.find(
+      (category) => category.category === "BUDGET",
+    ) ?? null;
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const remainingBudget = Math.max(totalBudget - spentAmount, 0); // Phase 2: variance display
@@ -323,6 +298,8 @@ export default function ProjectBudgetPage() {
           </CardContent>
         </Card>
       </div>
+
+      <ReconciliationCard category={budgetCategory} />
 
       {/* Category Breakdown */}
       {categoryBreakdown.length > 0 && (
