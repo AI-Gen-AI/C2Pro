@@ -11,7 +11,7 @@ describe("S3-11 RED - OnboardingEntry", () => {
     render(<OnboardingEntry onStartSampleProject={() => {}} />);
 
     expect(
-      screen.getByRole("button", { name: /open demo sample project/i }),
+      screen.getByRole("button", { name: /start with sample project/i }),
     ).toBeInTheDocument();
     expect(screen.getByRole("list", { name: /onboarding checklist/i })).toBeInTheDocument();
     expect(
@@ -30,7 +30,7 @@ describe("S3-11 RED - OnboardingEntry", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent(/provisioning timed out/i);
     expect(
-      screen.getByRole("button", { name: /retry demo setup/i }),
+      screen.getByRole("button", { name: /retry setup/i }),
     ).toBeInTheDocument();
   });
 
@@ -41,7 +41,7 @@ describe("S3-11 RED - OnboardingEntry", () => {
     expect(screen.getByRole("heading", { name: /get started fast/i })).toBeInTheDocument();
     expect(screen.getByRole("status")).toBeInTheDocument();
 
-    const cta = screen.getByRole("button", { name: /open demo sample project/i });
+    const cta = screen.getByRole("button", { name: /start with sample project/i });
     cta.focus();
     fireEvent.keyDown(cta, { key: "Enter" });
     expect(onStart).toHaveBeenCalled();
