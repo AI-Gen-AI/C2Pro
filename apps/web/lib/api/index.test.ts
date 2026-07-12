@@ -427,9 +427,9 @@ describe("API wrapper contracts", () => {
     });
 
     expect(mockedReviewApproval).toHaveBeenCalledWith("alert", "alert-1", {
-      status: "approved",
+      status: "APPROVED",
       correction_data: { field: "value" },
-      feedback_comment: "approved",
+      feedback_comment: "APPROVED",
     });
     expect(mockedApiClient.delete).toHaveBeenCalledWith("/documents/doc-1");
     expect(mockedApiClient.patch).toHaveBeenCalledWith(

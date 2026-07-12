@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-12T00:05:00Z",
+  "updated_at": "2026-07-12T16:17:25Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -3318,8 +3318,8 @@
   },
   "metricas": {
     "total_tareas": 22,
-    "tareas_completadas": 21,
-    "tareas_en_progreso": 1,
+    "tareas_completadas": 22,
+    "tareas_en_progreso": 0,
     "tareas_pendientes": 0,
     "total_horas_estimadas": 229,
     "horas_consumidas": 80,
@@ -3343,7 +3343,7 @@
     "rev_006_progress": "Phase A complete - hexagonal structure created",
     "audit_pending": 4
   },
-  "contexto_paso_anterior": "2026-07-12T00:05:00Z: TASK-FRT-188 completed on feat/frt-188-report-export. Result: project Audit Report route composes backend-sourced project identity, nullable coherence score/version, categories_v2, grouped alerts with evidence refs, and document register; export uses browser print plus JSON download; Budget now links to the report instead of alert() PDF placeholder. HITL decisions omitted because the generated queue client has no project_id filter. Focused tests, typecheck, lint, and alert() grep passed.",
+  "contexto_paso_anterior": "2026-07-12T16:17:25Z: TASK-FRT-192 completed on feat/frt-192-ci-wedge-gates. Result: repaired stale and hidden frontend test debt blocking pnpm test:all, changed frontend CI to run pnpm test:all, added deterministic journey-3-wedge Playwright smoke with a skipped @real-backend TODO, and verified pnpm test:all/typecheck/lint green. Local Playwright execution is blocked by missing CLERK_PUBLISHABLE_KEY after the existing 3100 port conflict was bypassed.",
   "contexto_paso_anterior": "2026-07-11T21:55:00Z: TASK-FRT-187 completed on feat/frt-187-hitl-queue. Contract inspection found no review-queue project filter in the generated client or backend router, so the project Review tab now honestly labels the surface as an organization queue. ReviewItemCard renders human-readable item summaries, evidence links, collapsed raw data, visible approve/reject errors, and supported status/skip/limit pagination. Backend follow-up TASK-BCK-092 registered for true project filtering.",
   "trazas_de_error": [
     {

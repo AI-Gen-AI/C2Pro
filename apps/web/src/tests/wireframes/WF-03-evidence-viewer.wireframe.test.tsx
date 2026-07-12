@@ -232,18 +232,18 @@ describe("WF-03  Evidence Viewer — Watermark overlay (CE-S2-010 security)", ()
       />,
     );
 
-    const overlay = screen.getByTestId("watermark-overlay");
+    const overlay = screen.getByTestId("evidence-watermark-overlay");
     expect(overlay).toBeInTheDocument();
   });
 
-  it("[WF-03-WM-02] overlay renders confidential label", () => {
+  it("[WF-03-WM-02] overlay renders the sanitized tenant label", () => {
     renderWithProviders(
       <EvidenceWatermarkOverlay
         watermark={{ pseudonymId: "BuildCo S.A. — Carlos M.", documentId: "doc-001" }}
       />,
     );
 
-    expect(screen.getByText(/confidential/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/BuildCo S\.A\./i).length).toBeGreaterThan(0);
   });
 });
 

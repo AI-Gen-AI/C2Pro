@@ -47,6 +47,6 @@ describe("DocumentsPage backend aggregation", () => {
     renderWithProviders(await DocumentsPage());
 
     expect(screen.getByText(/documents offline/i)).toBeInTheDocument();
-    expect(screen.getByText(/verify backend api is running at/i)).toBeInTheDocument();
+    expect(screen.getByText(/verify the backend service is available/i)).toBeInTheDocument();
   });
 });

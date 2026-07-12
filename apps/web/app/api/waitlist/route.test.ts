@@ -42,8 +42,6 @@ function makeRequest(body: unknown, init: RequestInit = {}) {
 
 describe("POST /api/waitlist", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-08T22:00:00Z"));
     process.env.SUPABASE_URL = "https://supabase.example";
     process.env["SUPABASE_" + "SERVICE_ROLE_KEY"] = "service-role-secret";
     process.env.WAITLIST_ALLOWED_ORIGINS =
@@ -54,7 +52,6 @@ describe("POST /api/waitlist", () => {
   });
 
   afterEach(() => {
-    vi.useRealTimers();
     vi.restoreAllMocks();
     process.env.SUPABASE_URL = ORIGINAL_ENV.SUPABASE_URL;
     process.env["SUPABASE_" + "SERVICE_ROLE_KEY"] =

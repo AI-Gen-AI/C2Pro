@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders, screen } from "@/src/tests/test-utils";
+import { useSidebarStore } from "@/stores/sidebar";
 import { AppSidebar } from "./AppSidebar";
 
 const pathnameState = { value: "/projects" };
@@ -31,6 +32,10 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/api/generated", () => ({}));
 
 describe("AppSidebar", () => {
+  beforeEach(() => {
+    useSidebarStore.setState({ isCollapsed: false, width: 240 });
+  });
+
   it("renders primary navigation with active link state", () => {
     pathnameState.value = "/projects";
     renderWithProviders(<AppSidebar />);
@@ -88,13 +93,13 @@ describe("AppSidebar", () => {
     );
   });
 
-  it("routes the dashboard nav item to the canonical root path", () => {
-    pathnameState.value = "/";
+  it("routes the dashboard nav item to the authenticated home", () => {
+    pathnameState.value = "/dashboard";
     renderWithProviders(<AppSidebar />);
 
     expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute(
       "href",
-      "/",
+      "/dashboard",
     );
     expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute(
       "aria-current",
@@ -102,18 +107,15 @@ describe("AppSidebar", () => {
     );
   });
 
-  it("keeps the dashboard nav item active for the legacy /dashboard route during migration", () => {
-    pathnameState.value = "/dashboard";
+  it("keeps the dashboard nav item inactive on the public landing root", () => {
+    pathnameState.value = "/";
     renderWithProviders(<AppSidebar />);
 
     expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute(
       "href",
-      "/",
+      "/dashboard",
     );
-    expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(screen.getByRole("link", { name: /dashboard/i })).not.toHaveAttribute("aria-current");
   });
 
   it("keeps the active projects item readable against the sidebar accent background", () => {

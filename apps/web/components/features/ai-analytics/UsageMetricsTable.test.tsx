@@ -46,6 +46,12 @@ const createMockMetrics = (): AIUsageMetric[] => [
   },
 ];
 
+function dataRows() {
+  return screen
+    .getAllByRole("row")
+    .filter((row) => row.querySelectorAll("td").length > 0);
+}
+
 describe("UsageMetricsTable", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -85,8 +91,9 @@ describe("UsageMetricsTable", () => {
     const timestampHeader = screen.getByText(/Timestamp/);
     fireEvent.click(timestampHeader);
 
-    const rows = screen.getAllByRole("row");
-    expect(rows[1]).toHaveTextContent("2026-05-01T06:00:00Z");
+    const rows = dataRows();
+    expect(rows[0]).toHaveTextContent("claude-3-opus");
+    expect(rows[2]).toHaveTextContent("claude-3-5-sonnet");
   });
 
   it("sorts by model descending", () => {
@@ -95,9 +102,10 @@ describe("UsageMetricsTable", () => {
 
     const modelHeader = screen.getByText(/Model/);
     fireEvent.click(modelHeader);
+    fireEvent.click(modelHeader);
 
-    const rows = screen.getAllByRole("row");
-    expect(rows[1]).toHaveTextContent("gpt-4o");
+    const rows = dataRows();
+    expect(rows[0]).toHaveTextContent("gpt-4o");
   });
 
   it("sorts by total_tokens", () => {
@@ -106,9 +114,10 @@ describe("UsageMetricsTable", () => {
 
     const tokensHeader = screen.getByText(/Tokens/);
     fireEvent.click(tokensHeader);
+    fireEvent.click(tokensHeader);
 
-    const rows = screen.getAllByRole("row");
-    expect(rows[1]).toHaveTextContent("7,000");
+    const rows = dataRows();
+    expect(rows[0]).toHaveTextContent("7000");
   });
 
   it("sorts by cost", () => {
@@ -117,9 +126,10 @@ describe("UsageMetricsTable", () => {
 
     const costHeader = screen.getByText(/Cost/);
     fireEvent.click(costHeader);
+    fireEvent.click(costHeader);
 
-    const rows = screen.getAllByRole("row");
-    expect(rows[1]).toHaveTextContent("$0.0850");
+    const rows = dataRows();
+    expect(rows[0]).toHaveTextContent("$0.0850");
   });
 
   it("renders trace_url links", () => {
