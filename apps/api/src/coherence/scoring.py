@@ -31,9 +31,7 @@ from typing import Any
 
 # Temporarily add the parent directory to sys.path to allow relative imports when run directly
 script_dir = os.path.dirname(__file__)
-project_root = os.path.abspath(
-    os.path.join(script_dir, "../../../../../")
-)
+project_root = os.path.abspath(os.path.join(script_dir, "../../../../../"))
 sys.path.insert(0, project_root)
 
 from src.coherence.config import (  # noqa: E402
@@ -82,7 +80,11 @@ class ScoringResult:
         return self._numeric_score()
 
     def __round__(self, ndigits: int | None = None) -> float:
-        return round(self._numeric_score(), ndigits) if ndigits is not None else round(self._numeric_score())
+        return (
+            round(self._numeric_score(), ndigits)
+            if ndigits is not None
+            else round(self._numeric_score())
+        )
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, ScoringResult):
@@ -112,6 +114,7 @@ class ScoringDiagnostics:
 
     Useful for debugging, dashboards, and score curve validation.
     """
+
     score: float | None
     total_findings: int
     deterministic_findings: int
@@ -359,16 +362,25 @@ class ScoringService:
 
         if not assessed or poor_extraction_quality:
             return ScoringDiagnostics(
-                score=None, total_findings=0, deterministic_findings=0,
+                score=None,
+                total_findings=0,
+                deterministic_findings=0,
                 llm_findings=0,
                 severity_distribution={"critical": 0, "high": 0, "medium": 0, "low": 0},
-                avg_impact=0.0, avg_confidence=0.0, scope_factor=1.0,
-                penalty_density=0.0, raw_penalty_sum=0.0,
-                category_contributions={}, reason="insufficient_evidence",
+                avg_impact=0.0,
+                avg_confidence=0.0,
+                scope_factor=1.0,
+                penalty_density=0.0,
+                raw_penalty_sum=0.0,
+                category_contributions={},
+                reason="insufficient_evidence",
                 missing_dimensions=unassessed,
                 category_scores={c: None for c in self._ALL_CATEGORIES},
-                audit_coverage={"assessed": len(assessed), "total": 6,
-                                "pct": round(len(assessed) / 6 * 100, 1)},
+                audit_coverage={
+                    "assessed": len(assessed),
+                    "total": 6,
+                    "pct": round(len(assessed) / 6 * 100, 1),
+                },
             )
 
         provider = HeuristicBaselineProvider()
@@ -394,16 +406,12 @@ class ScoringService:
             baseline = provider.baseline_for(category, ctx)
             density = cat_penalty[category] / scope_factor
             raw = baseline * math.exp(-self.config.decay_lambda * density)
-            category_scores[category] = round(
-                max(self.config.min_score, min(raw, baseline)), 1
-            )
+            category_scores[category] = round(max(self.config.min_score, min(raw, baseline)), 1)
 
         # §14 — ADR-009: compute active_weight from DEFAULT_CATEGORY_WEIGHTS.
         # Do NOT use mean × coverage_ratio (that was the ADR-009 §1 P1 violation).
         total_weight = sum(DEFAULT_CATEGORY_WEIGHTS.values())
-        active_weight = sum(
-            DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) for c in assessed
-        ) / total_weight
+        active_weight = sum(DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) for c in assessed) / total_weight
 
         sev = {"critical": 0, "high": 0, "medium": 0, "low": 0}
         for s in signals:
@@ -418,12 +426,12 @@ class ScoringService:
                 deterministic_findings=sum(1 for s in signals if s.source == "deterministic"),
                 llm_findings=sum(1 for s in signals if s.source == "llm"),
                 severity_distribution=sev,
-                avg_impact=round(
-                    sum(s.impact_score for s in signals) / total_findings, 3
-                ) if total_findings else 0.0,
-                avg_confidence=round(
-                    sum(s.confidence for s in signals) / total_findings, 3
-                ) if total_findings else 0.0,
+                avg_impact=round(sum(s.impact_score for s in signals) / total_findings, 3)
+                if total_findings
+                else 0.0,
+                avg_confidence=round(sum(s.confidence for s in signals) / total_findings, 3)
+                if total_findings
+                else 0.0,
                 scope_factor=round(scope_factor, 3),
                 penalty_density=round(sum(cat_penalty.values()) / scope_factor, 4),
                 raw_penalty_sum=round(sum(cat_penalty.values()), 4),
@@ -431,17 +439,18 @@ class ScoringService:
                 reason="insufficient_active_weight",
                 missing_dimensions=unassessed,
                 category_scores=category_scores,
-                audit_coverage={"assessed": len(assessed), "total": 6,
-                                "pct": round(len(assessed) / 6 * 100, 1)},
+                audit_coverage={
+                    "assessed": len(assessed),
+                    "total": 6,
+                    "pct": round(len(assessed) / 6 * 100, 1),
+                },
             )
 
         # Weighted mean over assessed categories only (no coverage_ratio multiplier)
         assessed_weight_sum = sum(DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) for c in assessed)
         global_score = round(
-            sum(
-                DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) * category_scores[c]
-                for c in assessed
-            ) / assessed_weight_sum,
+            sum(DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) * category_scores[c] for c in assessed)
+            / assessed_weight_sum,
             1,
         )
 
@@ -455,12 +464,12 @@ class ScoringService:
             deterministic_findings=sum(1 for s in signals if s.source == "deterministic"),
             llm_findings=sum(1 for s in signals if s.source == "llm"),
             severity_distribution=sev,
-            avg_impact=round(
-                sum(s.impact_score for s in signals) / total_findings, 3
-            ) if total_findings else 0.0,
-            avg_confidence=round(
-                sum(s.confidence for s in signals) / total_findings, 3
-            ) if total_findings else 0.0,
+            avg_impact=round(sum(s.impact_score for s in signals) / total_findings, 3)
+            if total_findings
+            else 0.0,
+            avg_confidence=round(sum(s.confidence for s in signals) / total_findings, 3)
+            if total_findings
+            else 0.0,
             scope_factor=round(scope_factor, 3),
             penalty_density=round(sum(cat_penalty.values()) / scope_factor, 4),
             raw_penalty_sum=round(sum(cat_penalty.values()), 4),
@@ -468,8 +477,11 @@ class ScoringService:
             reason=reason,
             missing_dimensions=unassessed,
             category_scores=category_scores,
-            audit_coverage={"assessed": len(assessed), "total": 6,
-                            "pct": round(len(assessed) / 6 * 100, 1)},
+            audit_coverage={
+                "assessed": len(assessed),
+                "total": 6,
+                "pct": round(len(assessed) / 6 * 100, 1),
+            },
         )
 
     def _compute_signal_contribution(self, signal: FindingSignal) -> float:
@@ -673,7 +685,7 @@ class ScoringService:
                     score=category_score,
                     alert_count=len(cat_alerts),
                     severity_breakdown=severity_breakdown,
-                    impact_percentage=impact_percentage
+                    impact_percentage=impact_percentage,
                 )
             )
 
@@ -732,12 +744,7 @@ class ScoringService:
         Returns:
             SeverityCount object with counts by severity
         """
-        counts = {
-            "critical": 0,
-            "high": 0,
-            "medium": 0,
-            "low": 0
-        }
+        counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
 
         for alert in alerts:
             severity = alert.severity.lower()
@@ -838,6 +845,7 @@ def calculate_v2_from_signals(
     from datetime import UTC, datetime  # noqa: PLC0415
 
     from src.coherence.application.dtos.coherence_v2_dtos import (  # noqa: PLC0415
+        BudgetReconciliation,
         CoherenceV2Payload,
     )
     from src.coherence.domain.category_state_machine import (  # noqa: PLC0415
@@ -859,8 +867,8 @@ def calculate_v2_from_signals(
     global_agg = GlobalAggregatorV2()
 
     signals_by_category: dict[str, list[tuple[str, float]]] = {}
+    budget_reconciliation_raw: dict[str, dict[str, Any]] = {}
     for s in signals or []:
-        # Accept either FindingSignal or (rule_id, score) tuples
         if isinstance(s, tuple):
             rule_id, score = s
             cat = "SCOPE"  # fallback bucket if no category attribute
@@ -868,6 +876,15 @@ def calculate_v2_from_signals(
             rule_id = getattr(s, "rule_id", "unknown")
             score = float(getattr(s, "impact_score", 0.0)) * 100.0
             cat = str(getattr(s, "category", "SCOPE")).upper()
+            # TASK-BCK-093: capture DET-BUD reconciliation raw_data
+            raw = getattr(s, "raw_data", {}) or {}
+            if (
+                cat == "BUDGET"
+                and isinstance(raw, dict)
+                and ("DET-BUD-SUM" in rule_id or "DET-BUD-INTERNAL" in rule_id)
+            ):
+                if "items_sum" in raw:
+                    budget_reconciliation_raw.setdefault("BUDGET", {}).update(raw)
         signals_by_category.setdefault(cat, []).append((str(rule_id), float(score)))
 
     categories = []
@@ -878,6 +895,8 @@ def calculate_v2_from_signals(
             EvidenceBundle(0, 0.0, 0.0, 0.0, [], []),
         )
         conflict = ConflictReport("none", False, [], 1.0)
+        recon_data = budget_reconciliation_raw.get(cat)
+        budget_recon = BudgetReconciliation(**recon_data) if recon_data else None
         categories.append(
             cat_agg.aggregate(
                 category=cat,
@@ -886,6 +905,7 @@ def calculate_v2_from_signals(
                 rule_signals=signals_by_category.get(cat, []),
                 applicable=applicable,
                 applicability_reason=reason,
+                budget_reconciliation=budget_recon,
             )
         )
 

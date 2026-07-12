@@ -9,6 +9,7 @@ formula:
 
 Refers to Suite ID: TS-UA-COH-V2-CATAGG-001.
 """
+
 from __future__ import annotations
 
 from src.coherence.application.dtos.coherence_v2_dtos import (
@@ -38,6 +39,7 @@ class CategoryAggregator:
         applicable: bool,
         applicability_reason: str | None = None,
         assessed: bool = True,
+        budget_reconciliation=None,  # BudgetReconciliation | None — TASK-BCK-093
     ) -> CategoryV2:
         if not applicable:
             return CategoryV2(
@@ -50,6 +52,7 @@ class CategoryAggregator:
                 applicability_reason=applicability_reason,
                 evidence_count=evidence.count,
                 evidence_references=list(evidence.references),
+                budget_reconciliation=budget_reconciliation,
             )
 
         if evidence.count == 0:
@@ -62,6 +65,7 @@ class CategoryAggregator:
                 evidence_freshness=0.0,
                 missing_evidence=list(evidence.missing_required),
                 evidence_count=0,
+                budget_reconciliation=budget_reconciliation,
             )
 
         threshold = MIN_EVIDENCE_BY_CATEGORY.get(category, 1)
@@ -76,6 +80,7 @@ class CategoryAggregator:
                 evidence_count=evidence.count,
                 evidence_references=list(evidence.references),
                 missing_evidence=list(evidence.missing_required),
+                budget_reconciliation=budget_reconciliation,
             )
 
         base = self._aggregate_rule_signals(rule_signals)
@@ -93,6 +98,7 @@ class CategoryAggregator:
                     missing_evidence=list(evidence.missing_required),
                     rationale="rule_assessment_unavailable",
                     calculation_metadata={"assessment_state": "unassessed"},
+                    budget_reconciliation=budget_reconciliation,
                 )
             base = 100.0
             assessment_state = "assessed_clean"
@@ -107,8 +113,11 @@ class CategoryAggregator:
                 dominant_rules=[r for r, _ in rule_signals],
                 score_path=[
                     {"step": "base", "value": base},
-                    {"step": "severity_multiplier", "severity": conflict.severity,
-                     "value": multiplier},
+                    {
+                        "step": "severity_multiplier",
+                        "severity": conflict.severity,
+                        "value": multiplier,
+                    },
                     {"step": "evidence_certainty", "value": conflict.evidence_certainty},
                     {"step": "adjusted", "value": adjusted},
                 ],
@@ -125,6 +134,7 @@ class CategoryAggregator:
                 detected_conflicts=list(conflict.conflict_set),
                 score_explanation=explanation,
                 calculation_metadata={"assessment_state": assessment_state},
+                budget_reconciliation=budget_reconciliation,
             )
 
         explanation = ScoreExplanation(
@@ -143,6 +153,7 @@ class CategoryAggregator:
             evidence_references=list(evidence.references),
             score_explanation=explanation,
             calculation_metadata={"assessment_state": assessment_state},
+            budget_reconciliation=budget_reconciliation,
         )
 
     @staticmethod

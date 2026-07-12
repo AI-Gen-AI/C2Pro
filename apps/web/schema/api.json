@@ -6822,6 +6822,48 @@
         ],
         "title": "CategoryStatus"
       },
+      "BudgetReconciliation": {
+        "properties": {
+          "items_sum": {
+            "type": "number",
+            "title": "Items Sum"
+          },
+          "stated_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stated Total"
+          },
+          "contract_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Total"
+          },
+          "deviation_pct": {
+            "type": "number",
+            "title": "Deviation Pct"
+          },
+          "direction": {
+            "type": "string",
+            "title": "Direction"
+          }
+        },
+        "type": "object",
+        "required": ["items_sum", "deviation_pct", "direction"],
+        "title": "BudgetReconciliation",
+        "description": "TASK-BCK-093: Typed reconciliation fields from DET-BUD FindingSignal.raw_data."
+      },
       "CategoryV2": {
         "properties": {
           "category": {
@@ -6931,6 +6973,16 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Calculation Metadata"
+          },
+          "budget_reconciliation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BudgetReconciliation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
