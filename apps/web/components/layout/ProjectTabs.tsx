@@ -6,6 +6,7 @@ import {
   FileText,
   Gauge,
   LayoutDashboard,
+  ScrollText,
   Settings,
   Users,
   ListTree,
@@ -21,6 +22,7 @@ const tabs = [
   { href: "/stakeholders", label: "Stakeholders", icon: Users },
   { href: "/wbs", label: "WBS", icon: ListTree },
   { href: "/budget", label: "Budget", icon: Gauge },
+  { href: "/report", label: "Report", icon: ScrollText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

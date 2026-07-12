@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-11T21:55:00Z",
+  "updated_at": "2026-07-12T00:05:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -99,6 +99,49 @@
           "Forbidden zero-default grep in components/coherence and contracts.ts -> 0 hits.",
           "Broader guard pnpm vitest run \"app/(app)/projects/[id]\" shows only known TASK-FRT-192 budget/settings/wbs failures."
         ]
+      }
+    },
+    {
+      "tarea_id": "T135",
+      "backlog_id": "TASK-FRT-188",
+      "tipo": "frontend",
+      "descripcion": "Implement Audit Report export v1 with project report route, print/JSON export, and Budget placeholder removal.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "The project Report tab composes backend-sourced project identity, coherence score/version, categories_v2, grouped findings with evidence refs, and document register; null scores remain Pending evidence; browser print is the PDF path; JSON download emits the same payload; Budget no longer has an alert() PDF placeholder.",
+      "archivos_modificados": [
+        "apps/web/app/(app)/projects/[id]/report/page.tsx",
+        "apps/web/app/(app)/projects/[id]/report/page.test.tsx",
+        "apps/web/components/features/report/AuditReportView.tsx",
+        "apps/web/components/features/report/AuditReportView.test.tsx",
+        "apps/web/components/features/report/report-data.ts",
+        "apps/web/components/features/report/report-data.test.ts",
+        "apps/web/components/layout/ProjectTabs.tsx",
+        "apps/web/components/layout/ProjectTabs.test.tsx",
+        "apps/web/app/(app)/projects/[id]/budget/page.tsx",
+        "apps/web/app/(app)/projects/[id]/budget/page.test.tsx",
+        "backlogs/FRT_FRONTEND.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-11T23:35:00Z",
+        "completado": "2026-07-12T00:05:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-FRT-188 completed on feat/frt-188-report-export: added a project audit report route with backend-sourced score/categories/findings/documents, browser print export, JSON download, and Budget link replacement for the old PDF alert placeholder. HITL decisions are omitted because the generated queue client has no project_id filter.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: focused tests failed first on missing report modules/page, missing project Report tab, and Budget PDF placeholder behavior.",
+          "GREEN: pnpm vitest run \"app/(app)/projects/[id]/report\" components/features/report \"app/(app)/projects/[id]/budget\" components/layout/ProjectTabs.test.tsx -> 5 files / 8 tests passed.",
+          "pnpm typecheck -> passed.",
+          "pnpm lint -> passed.",
+          "Budget/report alert() grep -> 0 hits.",
+          "Broader guard pnpm vitest run \"app/(app)/projects/[id]\" -> 11 files / 69 tests passed; only known TASK-FRT-192 debt failed in untouched settings and wbs tests."
+        ],
+        "deviacion": "Generated HITL queue params expose status, skip, and limit only; no project_id filter is available, so project report HITL decisions are omitted rather than faked."
       }
     },
     {
@@ -3300,7 +3343,7 @@
     "rev_006_progress": "Phase A complete - hexagonal structure created",
     "audit_pending": 4
   },
-  "contexto_paso_anterior": "2026-07-11T22:55:00Z: TASK-FRT-189 completed on feat/frt-189-mutation-errors. Result: createQueryClient surfaces unhandled mutation failures with a visible toast while respecting local onError handlers; useBudget and useWBSTree write helpers now rethrow instead of returning null/false; document deletion failure shows a toast. Focused tests, typecheck, lint, and targeted swallow grep passed.",
+  "contexto_paso_anterior": "2026-07-12T00:05:00Z: TASK-FRT-188 completed on feat/frt-188-report-export. Result: project Audit Report route composes backend-sourced project identity, nullable coherence score/version, categories_v2, grouped alerts with evidence refs, and document register; export uses browser print plus JSON download; Budget now links to the report instead of alert() PDF placeholder. HITL decisions omitted because the generated queue client has no project_id filter. Focused tests, typecheck, lint, and alert() grep passed.",
   "contexto_paso_anterior": "2026-07-11T21:55:00Z: TASK-FRT-187 completed on feat/frt-187-hitl-queue. Contract inspection found no review-queue project filter in the generated client or backend router, so the project Review tab now honestly labels the surface as an organization queue. ReviewItemCard renders human-readable item summaries, evidence links, collapsed raw data, visible approve/reject errors, and supported status/skip/limit pagination. Backend follow-up TASK-BCK-092 registered for true project filtering.",
   "trazas_de_error": [
     {

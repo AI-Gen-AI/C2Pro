@@ -13,17 +13,17 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 10
+**Pending Tasks**: 9
 
 - IDs: `TASK-FRT-041` (blocked — requires Clerk dashboard operator access)
-- IDs: `TASK-FRT-182`-`TASK-FRT-197` — **EPIC-FRT-L1-WEDGE** (Level-1 wedge closure, 2026-07-04). Wave 0/P0: 182 complete, 183 pending · Wave 1/P1: 187-188 and 190-192 pending · Wave 2/P2: 193-197. Patch-by-patch executable spec: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md`
-- IDs: `TASK-FRT-182`-`TASK-FRT-197` — **EPIC-FRT-L1-WEDGE** (Level-1 wedge closure, 2026-07-04). Wave 0/P0: 182 complete, 183 pending · Wave 1/P1: 188-192 pending · Wave 2/P2: 193-197. Patch-by-patch executable spec: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md`
+- IDs: `TASK-FRT-182`-`TASK-FRT-197` — **EPIC-FRT-L1-WEDGE** (Level-1 wedge closure, 2026-07-04). Wave 0/P0: 182 complete, 183 pending · Wave 1/P1: 190-192 pending · Wave 2/P2: 193-197. Patch-by-patch executable spec: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md`
+- IDs: `TASK-FRT-182`-`TASK-FRT-197` — **EPIC-FRT-L1-WEDGE** (Level-1 wedge closure, 2026-07-04). Wave 0/P0: 182 complete, 183 pending · Wave 1/P1: 190-192 pending · Wave 2/P2: 193-197. Patch-by-patch executable spec: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md`
 - IDs: `TASK-FRT-198`-`TASK-FRT-202` — **EPIC-FRT-LANDING-SYNC** (c2pro.io landing × AI-Gen brand synchrony, 2026-07-06). Single wave P1: 198-202 complete. Patch-by-patch executable spec: `docs/audits/C2Pro — Landing AI-Gen Sync Implementation Prompt_Fable5.md`
 
-**Completed Tasks**: 188
+**Completed Tasks**: 189
 
-- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-181`, `TASK-FRT-184`-`TASK-FRT-186`, `TASK-FRT-189`, `TASK-FRT-198`-`TASK-FRT-202`
-- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-181`, `TASK-FRT-184`-`TASK-FRT-187`, `TASK-FRT-198`-`TASK-FRT-202`
+- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-181`, `TASK-FRT-184`-`TASK-FRT-189`, `TASK-FRT-198`-`TASK-FRT-202`
+- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-181`, `TASK-FRT-184`-`TASK-FRT-189`, `TASK-FRT-198`-`TASK-FRT-202`
 
 **Usage Note**:
 
@@ -47,11 +47,11 @@
 | [x]    | P1       | `TASK-FRT-185` | `TASK-FRT-180`, `TASK-FRT-184` | "Evaluate coherence" + "Re-run analysis" actions wired to the never-used generated mutations (`useEvaluateProjectCoherence…`, analyze/reprocess); verify request contract first; invalidate dashboard/alerts queries on success; disabled until triplet complete. ✅ Implemented 2026-07-11 on `feat/frt-l1-wave1-a`: generated mutation hooks wired through guarded actions, dashboard/alerts/documents invalidated on success, and actions disabled until the triplet is complete. | `Fable5 L1 Prompt — PATCH 11` |
 | [x]    | P1       | `TASK-FRT-186` | `TASK-FRT-177` | Render `categories_v2` (typed in `contracts.ts:50-75`, never displayed): per-category status, evidence coverage, missing evidence, conflicts, recommendation; map through `getDashboardSummary`; humanize `AUDIT_INCOMPLETE` copy. ✅ Implemented 2026-07-11 on `feat/frt-186-categories-v2`: dashboard summary maps `categories_v2`, coherence renders the v2 evidence-aware category panel with honest null handling, and `AUDIT_INCOMPLETE` copy is humanized. | `Fable5 L1 Prompt — PATCH 12` |
 | [x]    | P1       | `TASK-FRT-187` | `TASK-FRT-179` | HITL queue project scoping (pass project param or honest retitle; register backend task if filter missing), human-readable `ReviewItemCard` with evidence link (raw JSON behind disclosure), visible mutation errors, pagination. ✅ Implemented 2026-07-11 on `feat/frt-187-hitl-queue`: generated client/backend expose no project filter, so the page is honestly titled as an organization queue; `ReviewItemCard` renders readable summary/status/reviewer/evidence link with raw data behind disclosure; approve/reject failures stay visible with toast; queue uses supported status + skip/limit params with Load more. Backend filter follow-up registered as `TASK-BCK-092`. | `Fable5 L1 Prompt — PATCH 13` |
-| [ ]    | P1       | `TASK-FRT-188` | `TASK-FRT-178`, `TASK-FRT-179`, `TASK-FRT-186` | Audit Report export v1: new `/projects/[id]/report` tab composing score + categories + findings by status + evidence refs + HITL decisions with reviewers; print-optimized A4 route + JSON download; remove `alert()` PDF placeholder in Budget. The product's value output. | `Fable5 L1 Prompt — PATCH 14` |
+| [x]    | P1       | `TASK-FRT-188` | `TASK-FRT-178`, `TASK-FRT-179`, `TASK-FRT-186` | Audit Report export v1: new `/projects/[id]/report` tab composing score + categories + findings by status + evidence refs + HITL decisions with reviewers; print-optimized A4 route + JSON download; remove `alert()` PDF placeholder in Budget. The product's value output. ✅ Implemented 2026-07-12 on `feat/frt-188-report-export`: report tab composes project identity, coherence score/version, categories_v2, grouped project alerts with evidence refs, document register, A4 print CSS, and JSON download; Budget PDF `alert()` placeholder replaced with a Report tab link. HITL decisions are honestly omitted because the regenerated queue client exposes no project_id filter. | `Fable5 L1 Prompt — PATCH 14` |
 | [x]    | P1       | `TASK-FRT-189` | None       | Global mutation error surface: `MutationCache.onError` → toast in `createQueryClient`; remove swallow patterns (`catch {}`, `console.error`-only in useBudget etc.). No silent write failures anywhere. ✅ Implemented 2026-07-11 on `feat/frt-189-mutation-errors`: shared QueryClient now toasts unhandled mutation failures without duplicating local `onError`; `useBudget` and `useWBSTree` mutation helpers rethrow instead of returning `null`/`false`; document deletion now shows a visible toast on failure. | `Fable5 L1 Prompt — PATCH 15` |
 | [ ]    | P1       | `TASK-FRT-190` | None       | Navigation focus: flags `NEXT_PUBLIC_FEATURE_INTERNAL_DASHBOARDS` (AI Analytics/Observability) + `NEXT_PUBLIC_FEATURE_PHASE2_MODULES` (Stakeholders/WBS), default off; prune sidebar/project tabs to Level-1 surface; remove decorative header search input. | `Fable5 L1 Prompt — PATCH 16` |
 | [ ]    | P1       | `TASK-FRT-191` | None       | Single project-creation flow: `/projects/new` → `redirect('/projects?create=1')` opening the wizard; delete decorative Templates + Batch Import dialogs; extract `CreateProjectWizard` component (starts god-file split). | `Fable5 L1 Prompt — PATCH 17` |
-| [ ]    | P1       | `TASK-FRT-192` | `TASK-FRT-175`…`TASK-FRT-188` | CI wedge gates: `pnpm test:all` in frontend-ci (today only 50/249 test files gate); new `journey-3-wedge.spec.ts` (E2E-W1..W5: typed triplet → progress → evaluate → evidence → identity-approve → export) MSW-deterministic + `@real-backend` variant. | `Fable5 L1 Prompt — PATCH 18` |
+| [ ]    | P1       | `TASK-FRT-192` | `TASK-FRT-175`…`TASK-FRT-188` | CI wedge gates: `pnpm test:all` in frontend-ci (today only 50/249 test files gate); new `journey-3-wedge.spec.ts` (E2E-W1..W5: typed triplet → progress → evaluate → evidence → identity-approve → export) MSW-deterministic + `@real-backend` variant. ⚠️ Debt catalogue update 2026-07-11: broader-guard runs now show FIVE failing pre-existing test files on main — the original budget/settings/wbs trio PLUS newly observed raci and global-documents failures (confirmed pre-existing: untouched by the branches that surfaced them). Scope of this task includes repairing all five before enabling the full test:all gate. | `Fable5 L1 Prompt — PATCH 18` |
 | [ ]    | P2       | `TASK-FRT-193` | `TASK-FRT-186` | Budget reconciliation block: Stated vs Computed vs Contract totals with delta % (pilot: 636M vs 654M = 2.8%) sourced from DET-BUD findings / `categories_v2.BUDGET`; replace duck-typed budget response with real types. | `Fable5 L1 Prompt — PATCH 19` |
 | [ ]    | P2       | `TASK-FRT-194` | None       | Design-system consolidation: single `severityToToken`/`statusToToken` source (kill ≥4 divergent raw-Tailwind maps), shared `EmptyState` component, ProjectTabs active state + `aria-current`. | `Fable5 L1 Prompt — PATCH 20` |
 | [ ]    | P2       | `TASK-FRT-195` | `TASK-FRT-183` | Mount orphaned onboarding: `OnboardingEntry` + sample-project bootstrap on first login (zero projects, not dismissed); persist dismissal. | `Fable5 L1 Prompt — PATCH 21` |
@@ -77,7 +77,7 @@
 
 - Total: 202 tasks
 - Active: 14 (6.9%)
-- Completed: 188 (93.1%)
+- Completed: 189 (93.6%)
 - Blocked: 1 (0.5%)
 
 ---
