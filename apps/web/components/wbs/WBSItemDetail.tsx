@@ -9,6 +9,7 @@
  */
 
 import React, { useState } from "react";
+import { severityToColor } from "@/lib/ui/severity-tokens";
 
 export interface WBSItem {
   id: string;
@@ -64,24 +65,6 @@ const formatCurrency = (amount: number, currency: string): string => {
     maximumFractionDigits: 0,
   });
   return formatter.format(amount);
-};
-
-/**
- * Get severity color for alerts
- */
-const getSeverityColor = (severity: string): string => {
-  switch (severity.toLowerCase()) {
-    case "critical":
-      return "#dc2626";
-    case "high":
-      return "#ea580c";
-    case "medium":
-      return "#ca8a04";
-    case "low":
-      return "#16a34a";
-    default:
-      return "#6b7280";
-  }
 };
 
 /**
@@ -419,7 +402,7 @@ export const WBSItemDetail: React.FC<WBSItemDetailProps> = ({
                   style={{
                     padding: "12px",
                     backgroundColor: "#fef3c7",
-                    borderLeft: `4px solid ${getSeverityColor(alert.severity)}`,
+                    borderLeft: `4px solid ${severityToColor(alert.severity)}`,
                     borderRadius: "4px",
                     marginBottom: "8px",
                   }}
@@ -436,7 +419,7 @@ export const WBSItemDetail: React.FC<WBSItemDetailProps> = ({
                       data-testid="alert-severity"
                       style={{
                         padding: "2px 8px",
-                        backgroundColor: getSeverityColor(alert.severity),
+                        backgroundColor: severityToColor(alert.severity),
                         color: "white",
                         borderRadius: "4px",
                         fontSize: "12px",

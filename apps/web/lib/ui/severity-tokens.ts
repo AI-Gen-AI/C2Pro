@@ -27,6 +27,24 @@ export function severityToToken(severity: SeverityKey): string {
 }
 
 /**
+ * Maps standard severity levels to hex color codes (for inline style usage).
+ */
+export function severityToColor(severity: SeverityKey): string {
+  const s = severity.toLowerCase().trim();
+  switch (s) {
+    case "critical":
+      return "#dc2626";
+    case "high":
+      return "#ea580c";
+    case "medium":
+      return "#ca8a04";
+    case "low":
+      return "#16a34a";
+    default:
+      return "#6b7280";
+  }
+}
+/**
  * Maps standard statuses to Tailwind CSS badge class names.
  */
 export function statusToToken(status: string): string {

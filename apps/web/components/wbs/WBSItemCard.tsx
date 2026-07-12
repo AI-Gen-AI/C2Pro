@@ -9,6 +9,7 @@
  */
 
 import React from "react";
+import { severityToColor } from "@/lib/ui/severity-tokens";
 
 export interface WBSItem {
   id: string;
@@ -85,22 +86,6 @@ export const WBSItemCard: React.FC<WBSItemCardProps> = ({
     }
   };
 
-  // Get severity color for alerts
-  const getSeverityColor = (severity: string): string => {
-    switch (severity.toLowerCase()) {
-      case "critical":
-        return "#dc2626";
-      case "high":
-        return "#ea580c";
-      case "medium":
-        return "#ca8a04";
-      case "low":
-        return "#16a34a";
-      default:
-        return "#6b7280";
-    }
-  };
-
   return (
     <div
       data-testid="wbs-item-card"
@@ -158,7 +143,7 @@ export const WBSItemCard: React.FC<WBSItemCardProps> = ({
             style={{
               padding: "4px 8px",
               borderRadius: "4px",
-              backgroundColor: getSeverityColor(item.alerts[0].severity),
+              backgroundColor: severityToColor(item.alerts[0].severity),
               color: "#ffffff",
               fontSize: "12px",
               fontWeight: 500,

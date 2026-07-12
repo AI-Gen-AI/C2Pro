@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { Progress } from "@/components/ui/progress"; // Phase 2: budget progress bars
 import { Badge } from "@/components/ui/badge";
+import { statusToToken } from "@/lib/ui/severity-tokens";
 import {
   Table,
   TableBody,
@@ -233,19 +234,6 @@ export default function ProjectBudgetPage() {
   const categoryBreakdown = calculateCategoryBreakdown(items);
   const varianceData = calculateVarianceData(items);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "approved":
-        return "bg-green-500";
-      case "pending":
-        return "bg-yellow-500";
-      case "rejected":
-        return "bg-red-500";
-      default:
-        return "bg-gray-400";
-    }
-  };
-
   return (
     <div className="space-y-6" data-testid="budget-page">
       <div className="flex items-center justify-between">
@@ -441,7 +429,7 @@ export default function ProjectBudgetPage() {
                         : "-"}
                     </TableCell>
                     <TableCell>
-                      <Badge className={getStatusColor(item.status)}>
+                      <Badge className={statusToToken(item.status)}>
                         {item.status}
                       </Badge>
                     </TableCell>
