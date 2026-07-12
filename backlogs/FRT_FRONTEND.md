@@ -13,17 +13,17 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 7
+**Pending Tasks**: 6
 
 - IDs: `TASK-FRT-041` (blocked — requires Clerk dashboard operator access)
 - IDs: `TASK-FRT-182`-`TASK-FRT-197` — **EPIC-FRT-L1-WEDGE** (Level-1 wedge closure, 2026-07-04). Wave 0/P0: 182 complete, 183 pending · Wave 1/P1: 190-191 pending, 192 complete · Wave 2/P2: 193-197. Patch-by-patch executable spec: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md`
 - IDs: `TASK-FRT-182`-`TASK-FRT-197` — **EPIC-FRT-L1-WEDGE** (Level-1 wedge closure, 2026-07-04). Wave 0/P0: 182 complete, 183 pending · Wave 1/P1: 190-191 pending, 192 complete · Wave 2/P2: 193-197. Patch-by-patch executable spec: `docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md`
 - IDs: `TASK-FRT-198`-`TASK-FRT-202` — **EPIC-FRT-LANDING-SYNC** (c2pro.io landing × AI-Gen brand synchrony, 2026-07-06). Single wave P1: 198-202 complete. Patch-by-patch executable spec: `docs/audits/C2Pro — Landing AI-Gen Sync Implementation Prompt_Fable5.md`
 
-**Completed Tasks**: 191
+**Completed Tasks**: 192
 
-- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-181`, `TASK-FRT-184`-`TASK-FRT-189`, `TASK-FRT-192`-`TASK-FRT-193`, `TASK-FRT-198`-`TASK-FRT-202`
-- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-181`, `TASK-FRT-184`-`TASK-FRT-189`, `TASK-FRT-192`-`TASK-FRT-193`, `TASK-FRT-198`-`TASK-FRT-202`
+- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-181`, `TASK-FRT-184`-`TASK-FRT-189`, `TASK-FRT-192`-`TASK-FRT-193`, `TASK-FRT-197`-`TASK-FRT-202`
+- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-181`, `TASK-FRT-184`-`TASK-FRT-189`, `TASK-FRT-192`-`TASK-FRT-193`, `TASK-FRT-197`-`TASK-FRT-202`
 
 **Usage Note**:
 
@@ -56,7 +56,7 @@
 | [x]    | P2       | `TASK-FRT-194` | None       | Design-system consolidation: single `severityToToken`/`statusToToken` source (kill ≥4 divergent raw-Tailwind maps), shared `EmptyState` component, ProjectTabs active state + `aria-current`. ✅ Completed 2026-07-09: created canonical severityToToken/statusToToken, extracted shared EmptyState with tests, and wired active aria-current tab state on ProjectTabs. | `Fable5 L1 Prompt — PATCH 20` |
 | [x]    | P2       | `TASK-FRT-195` | `TASK-FRT-183` | Mount orphaned onboarding: `OnboardingEntry` + sample-project bootstrap on first login (zero projects, not dismissed); persist dismissal. ✅ Completed 2026-07-09: wired OnboardingEntry in AppDashboardPage, handled onboardingFail query param, and implemented sessionStorage-based preference persistence. | `Fable5 L1 Prompt — PATCH 21` |
 | [ ]    | P2       | `TASK-FRT-196` | None       | Language unification (EN): translate `"Sesión expirada o inválida"` / `"Sin permisos"` toasts and Spanish form placeholders; grep-clean. Full i18n out of scope. | `Fable5 L1 Prompt — PATCH 22` |
-| [ ]    | P2       | `TASK-FRT-197` | `TASK-FRT-186`, `TASK-FRT-188`, `TASK-FRT-191` | Component-root consolidation (merge `src/components` + `features/coherence` duplicates into one canonical root), split 1,636-line evidence page, delete `GlobalSearch`/`CrossModuleNavigator` RED-phase placeholders + 3D view/no-op templates; enforce <800 lines/file. | `Fable5 L1 Prompt — PATCH 23` |
+| [x]    | P2       | `TASK-FRT-197` | `TASK-FRT-186`, `TASK-FRT-188`, `TASK-FRT-191` | Component-root consolidation (merge `src/components` + `features/coherence` duplicates into one canonical root), split 1,636-line evidence page, delete `GlobalSearch`/`CrossModuleNavigator` RED-phase placeholders + 3D view/no-op templates; enforce <800 lines/file. ✅ Completed 2026-07-12 on `feat/frt-197-component-consolidation`: consolidated coherence components/tests into `apps/web/components/coherence`, split the evidence page into focused `components/features/evidence` sections with all touched files under 800 lines, deleted unused `GlobalSearch` and `CrossModuleNavigator` placeholders after grep proof, and preserved the live 3D/template evidence behavior to satisfy the zero-behavior-change rule. | `Fable5 L1 Prompt — PATCH 23` |
 
 #### EPIC-FRT-LANDING-SYNC — c2pro.io Landing × AI-Gen Brand Synchrony (2026-07-06)
 
@@ -76,8 +76,8 @@
 **Statistics**:
 
 - Total: 202 tasks
-- Active: 12 (5.9%)
-- Completed: 191 (94.6%)
+- Active: 11 (5.4%)
+- Completed: 192 (95.0%)
 - Blocked: 1 (0.5%)
 
 ---

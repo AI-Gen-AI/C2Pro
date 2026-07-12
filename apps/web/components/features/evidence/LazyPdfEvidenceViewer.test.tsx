@@ -44,7 +44,7 @@ describe("LazyPdfEvidenceViewer", () => {
     ).toBeInTheDocument();
   });
 
-  it("[S3-01-PERF-02] keeps the evidence page pointed at the lazy wrapper instead of a direct PDF viewer import", () => {
+  it("[S3-01-PERF-02] keeps the evidence surface pointed at the lazy wrapper instead of a direct PDF viewer import", () => {
     const pageSource = fs.readFileSync(
       path.resolve(
         process.cwd(),
@@ -57,8 +57,18 @@ describe("LazyPdfEvidenceViewer", () => {
       ),
       "utf8",
     );
+    const viewerPanelSource = fs.readFileSync(
+      path.resolve(
+        process.cwd(),
+        "components",
+        "features",
+        "evidence",
+        "EvidenceViewerPanel.tsx",
+      ),
+      "utf8",
+    );
 
-    expect(pageSource).toContain("LazyPdfEvidenceViewer");
+    expect(viewerPanelSource).toContain("LazyPdfEvidenceViewer");
     expect(pageSource).not.toContain("PdfEvidenceViewer,");
   });
 });
