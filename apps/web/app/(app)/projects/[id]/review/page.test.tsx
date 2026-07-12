@@ -110,20 +110,21 @@ describe('ReviewPage', () => {
     vi.clearAllMocks();
   });
 
-  it('labels the queue as tenant-wide because the API has no project filter', () => {
+  it('labels the queue as project-scoped because the API now supports project filtering', () => {
     setupMock();
     render(<ReviewPage />);
 
-    expect(screen.getByRole('heading', { name: 'Organization review queue' })).toBeInTheDocument();
-    expect(screen.getByText(/tenant-wide HITL queue/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Human-in-the-loop review for Test Project/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /review queue/i })).toBeInTheDocument();
+    expect(screen.getByText(/Human-in-the-loop review for Test Project/i)).toBeInTheDocument();
   });
 
-  it('requests the queue with supported status and pagination params only', () => {
+  it('passes project_id to the queue hook', () => {
     setupMock();
     render(<ReviewPage />);
 
-    expect(mockUseQueue).toHaveBeenCalledWith({ skip: 0, limit: 50 });
+    expect(mockUseQueue).toHaveBeenCalledWith(
+      expect.objectContaining({ project_id: 'test-project-id' }),
+    );
   });
 
   it('shows loading state', () => {
