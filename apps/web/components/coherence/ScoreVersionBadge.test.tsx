@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fireEvent, renderWithProviders, screen } from "@/src/tests/test-utils";
-import { ScoreVersionBadge } from "./ScoreVersionBadge";
+import { ScoreVersionBadge } from "@/components/coherence/ScoreVersionBadge";
 
 describe("ScoreVersionBadge", () => {
   it("renders v1 label for canonical coherence-v1 score", () => {

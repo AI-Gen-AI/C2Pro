@@ -16,7 +16,7 @@
 | Backend            | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md)                     | backend  | 55    | 8      | 47        |
 | DevOps             | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md)                       | devops   | 8     | 5      | 3         |
 | Documentation      | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md)         | shared   | 0     | 0      | 0         |
-| Frontend           | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md)                   | frontend | 202   | 11     | 191       |
+| Frontend           | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md)                   | frontend | 202   | 10     | 192       |
 | Infrastructure     | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md)       | infra    | 59    | 17     | 42        |
 | Planning           | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md)                   | planner  | 0     | 0      | 0         |
 | Quality Assurance  | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md)   | qa       | 120   | 108    | 12        |
@@ -28,7 +28,7 @@
 | Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 55 | 8 | 47 |
 | DevOps | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md) | devops | 8 | 5 | 3 |
 | Documentation | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md) | shared | 0 | 0 | 0 |
-| Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 202 | 11 | 191 |
+| Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 202 | 10 | 192 |
 | Infrastructure | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md) | infra | 59 | 17 | 42 |
 | Planning | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md) | planner | 0 | 0 | 0 |
 | Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 120 | 108 | 12 |
@@ -106,7 +106,7 @@
 | `TASK-FRT-194` | 20    | P2       | —             | Severity/status tokens single-source + shared EmptyState + active project tabs. ✅ Completed 2026-07-09: created canonical severityToToken/statusToToken, extracted shared EmptyState with tests, and wired active aria-current tab state on ProjectTabs. |,old_string:
 | `TASK-FRT-195` | 21    | P2       | 183           | Mount orphaned onboarding (sample-project bootstrap on first login). ✅ Completed 2026-07-09: wired OnboardingEntry inside AppDashboardPage, handled onboardingFail query parameter, integrated sessionStorage preference persistence, and added comprehensive unit testing. |
 | `TASK-FRT-196` | 22    | P2       | —             | Language unification (EN) — remove ES toast/placeholders                                                                                                                                                                                                                                      |
-| `TASK-FRT-197` | 23    | P2       | 186, 188, 191 | Component-root consolidation + god-file split + delete RED-phase placeholders                                                                                                                                                                                                                 |
+| `TASK-FRT-197` | 23    | P2       | 186, 188, 191 | Component-root consolidation + god-file split + delete RED-phase placeholders. ✅ Completed 2026-07-12 on `feat/frt-197-component-consolidation`: canonicalized coherence components/tests under `apps/web/components/coherence`, split the evidence page into focused evidence components under the 800-line cap, deleted unused RED-phase navigation/search placeholders, and kept behavior unchanged. |
 
 ### Landing × AI-Gen Sync (EPIC-FRT-LANDING-SYNC, 2026-07-06)
 
