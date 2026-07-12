@@ -75,6 +75,7 @@ export * from "./bulkResolveRequest";
 export * from "./bulkReviewRequest";
 export * from "./bulkReviewRequestDecision";
 export * from "./bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost202";
+export * from "./bulkWBSItem";
 export * from "./bulkWBSRequest";
 export * from "./categoryBreakdown";
 export * from "./categoryBreakdownCategory";
