@@ -119,11 +119,15 @@ def test_quality_report_cli_fails_when_contract_coverage_drops_too_far(tmp_path:
 
 
 def test_quality_report_action_and_workflows_are_wired() -> None:
-    """TS-QA-CONTRACT-COVERAGE-TRACK-C-001: composite action is wired into CI."""
+    """TS-QA-CONTRACT-COVERAGE-TRACK-C-001: composite action is wired into CI.
+
+    tests.yml/frontend-ci.yml were consolidated into ci.yml (TASK-DEV-003);
+    the report renders once in the ci-status join job and stays wired into
+    the scheduled qa-swarm coverage run.
+    """
     repo_root = Path(__file__).resolve().parents[4]
     action = repo_root / ".github" / "actions" / "quality-report" / "action.yml"
-    tests_workflow = (repo_root / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
-    frontend_workflow = (repo_root / ".github" / "workflows" / "frontend-ci.yml").read_text(encoding="utf-8")
+    ci_workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     qa_swarm_workflow = (repo_root / ".github" / "workflows" / "qa-swarm.yml").read_text(encoding="utf-8")
 
     assert action.exists()
@@ -133,11 +137,10 @@ def test_quality_report_action_and_workflows_are_wired() -> None:
     assert "contract-coverage-json" in action_text
     assert "wireframe-coverage-json" in action_text
 
-    for workflow_text in [tests_workflow, frontend_workflow, qa_swarm_workflow]:
+    for workflow_text in [ci_workflow, qa_swarm_workflow]:
         assert "./.github/actions/quality-report" in workflow_text
         assert "quality-report.md" in workflow_text
 
-    for workflow_text in [tests_workflow, qa_swarm_workflow]:
-        assert "marocchino/sticky-pull-request-comment" in workflow_text
-
-    assert "frontend-quality-report" in frontend_workflow
+    assert "marocchino/sticky-pull-request-comment" in ci_workflow
+    assert "fail-on-contract-drop" in ci_workflow
+    assert "ci-quality-report" in ci_workflow

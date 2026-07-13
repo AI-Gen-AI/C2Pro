@@ -61,13 +61,14 @@ describe("S2-11 RED - three-layer Server Component test strategy", () => {
   });
 
   it("[S2-11-RED-04] enforces CI execution for all three test layers", () => {
+    // frontend-ci.yml was consolidated into ci.yml's frontend lane (TASK-DEV-003).
     const ciPath = resolve(
       process.cwd(),
       "..",
       "..",
       ".github",
       "workflows",
-      "frontend-ci.yml",
+      "ci.yml",
     );
     const ci = readFileSync(ciPath, "utf-8");
 
@@ -75,16 +76,21 @@ describe("S2-11 RED - three-layer Server Component test strategy", () => {
     expect(ci).toContain("pnpm test:e2e");
   });
 
-  it("[S2-11-RED-05] defines a dedicated frontend E2E workflow", () => {
-    const e2eWorkflowPath = resolve(
+  it("[S2-11-RED-05] defines a dedicated frontend E2E job", () => {
+    // frontend-e2e.yml was absorbed into ci.yml as the frontend-e2e-smoke job.
+    const ciPath = resolve(
       process.cwd(),
       "..",
       "..",
       ".github",
       "workflows",
-      "frontend-e2e.yml",
+      "ci.yml",
     );
 
-    expect(existsSync(e2eWorkflowPath)).toBe(true);
+    expect(existsSync(ciPath)).toBe(true);
+
+    const ci = readFileSync(ciPath, "utf-8");
+    expect(ci).toContain("frontend-e2e-smoke:");
+    expect(ci).toContain("playwright install");
   });
 });

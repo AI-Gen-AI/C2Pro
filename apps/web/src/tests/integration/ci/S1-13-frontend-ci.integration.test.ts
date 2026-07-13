@@ -8,17 +8,18 @@ import { resolve } from "node:path";
 
 describe("S1-13 frontend CI pipeline", () => {
   it("defines the required quality gates in GitHub Actions", () => {
+    // frontend-ci.yml was consolidated into ci.yml's frontend lane (TASK-DEV-003).
     const workflowPath = resolve(
       process.cwd(),
       "..",
       "..",
       ".github",
       "workflows",
-      "frontend-ci.yml",
+      "ci.yml",
     );
     const workflow = readFileSync(workflowPath, "utf-8");
 
-    expect(workflow).toContain("name: Frontend CI");
+    expect(workflow).toContain("name: CI");
     expect(workflow).toContain("working-directory: apps/web");
     expect(workflow).toContain("pnpm typecheck");
     expect(workflow).toContain("pnpm lint");
