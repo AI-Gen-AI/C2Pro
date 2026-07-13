@@ -1068,8 +1068,7 @@ export function useGetSampleProjectReadyApiV1OnboardingSampleProjectReadyGet<
   TError = HTTPValidationError,
 >(
   params:
-    | undefined
-    | GetSampleProjectReadyApiV1OnboardingSampleProjectReadyGetParams,
+    undefined | GetSampleProjectReadyApiV1OnboardingSampleProjectReadyGetParams,
   options: {
     query: Partial<
       UseQueryOptions<

@@ -341,8 +341,7 @@ export function useListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet<
 >(
   projectId: string,
   params:
-    | undefined
-    | ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams,
+    undefined | ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams,
   options: {
     query: Partial<
       UseQueryOptions<

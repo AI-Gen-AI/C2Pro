@@ -339,9 +339,7 @@ export type RefreshTokenApiV1AuthRefreshPostMutationResult = NonNullable<
 >;
 export type RefreshTokenApiV1AuthRefreshPostMutationBody = RefreshTokenRequest;
 export type RefreshTokenApiV1AuthRefreshPostMutationError =
-  | void
-  | AuthErrorResponse
-  | HTTPValidationError;
+  void | AuthErrorResponse | HTTPValidationError;
 
 /**
  * @summary Refresh access token
@@ -582,8 +580,7 @@ export type UpdateMeApiV1AuthMePutMutationResult = NonNullable<
 >;
 export type UpdateMeApiV1AuthMePutMutationBody = UserUpdateRequest;
 export type UpdateMeApiV1AuthMePutMutationError =
-  | AuthErrorResponse
-  | HTTPValidationError;
+  AuthErrorResponse | HTTPValidationError;
 
 /**
  * @summary Update current user profile
@@ -760,8 +757,7 @@ export type ChangePasswordApiV1AuthChangePasswordPostMutationResult =
 export type ChangePasswordApiV1AuthChangePasswordPostMutationBody =
   PasswordChangeRequest;
 export type ChangePasswordApiV1AuthChangePasswordPostMutationError =
-  | AuthErrorResponse
-  | HTTPValidationError;
+  AuthErrorResponse | HTTPValidationError;
 
 /**
  * @summary Change password
