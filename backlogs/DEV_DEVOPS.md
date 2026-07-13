@@ -2,7 +2,7 @@
 
 **Category**: DevOps (DEV)
 **Owner Role**: devops
-**Last Updated**: 2026-07-12
+**Last Updated**: 2026-07-14
 
 **Quick Links**:
 - 🏠 [Master Index](../C2PRO_MASTER_BACKLOG.md)
@@ -15,7 +15,7 @@
 
 **Pending Tasks**: 6 (TASK-DEV-004 … TASK-DEV-009)
 
-**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — and `TASK-DEV-003` (CI/CD overhaul, below).
+**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), and `TASK-DEV-010` (canonical OpenAPI baseline, below).
 
 ---
 
@@ -70,6 +70,16 @@ The `openapi` target text is embedded *inside* the `help` recipe (Makefile lines
 ---
 
 ## Completed Tasks
+
+### TASK-DEV-010: Canonical OpenAPI baseline after schema-stack upgrade ✅ 2026-07-14
+
+**Dependency**: `TASK-DEV-003` · **Focused existing Test Suite ID**: `TS-INT-DOC-PROC-003`
+
+**Verified root cause**: unrelated Python Dependabot PRs produced the same `docs/api/openapi.yaml` drift because commit `849558cb` upgraded FastAPI from 0.121.3 to 0.139.0 without regenerating the canonical artifact. CI generated with FastAPI 0.139.0, Pydantic 2.13.4, pydantic-core 2.46.4, Starlette 1.3.1, pydantic-settings 2.14.2, python-multipart 0.0.32, and PyYAML 6.0.3.
+
+**Minimal fix**: regenerated only `docs/api/openapi.yaml` with that exact stack. The intentional schema delta removes six duplicate `HTTPBearer` entries, changes two upload fields from `format: binary` to `contentMediaType: application/octet-stream`, and adds Pydantic's `input`/`ctx` fields to `ValidationError`. No route or application behavior changed.
+
+**TDD evidence**: RED was the existing `openapi-drift.yml` canonical comparison failing identically across unrelated PRs; GREEN is deterministic regeneration plus the focused canonical verification assets. The generator also reported a pre-existing duplicate worker-health operation ID, registered separately as `TASK-BCK-094` rather than expanding this fix.
 
 ### TASK-DEV-003: CI/CD overhaul — consolidated PR pipeline, security scanning, tag-driven releases ✅ 2026-07-12
 

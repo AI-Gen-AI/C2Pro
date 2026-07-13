@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-12T20:25:00Z",
+  "updated_at": "2026-07-13T23:25:28Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,38 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T127",
+      "backlog_id": "TASK-DEV-010",
+      "tipo": "devops",
+      "descripcion": "Regenerate the canonical OpenAPI baseline with the CI-pinned FastAPI and Pydantic schema stack after the shared Dependabot drift diagnosis.",
+      "asignado_a": "devops",
+      "estado": "completado",
+      "criterio_done": "docs/api/openapi.yaml is generated reproducibly with the exact CI schema stack, the focused OpenAPI drift guard passes, and the shared baseline failure is documented without changing application behavior.",
+      "archivos_modificados": [
+        "docs/api/openapi.yaml",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/DEV_DEVOPS.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-13T23:21:13Z",
+        "completado": "2026-07-13T23:25:28Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-DEV-010 completed locally: regenerated the canonical OpenAPI artifact with the exact CI schema stack; the 15-line schema delta matches the shared Dependabot failure and no application behavior changed. Registered duplicate worker-health operation ID follow-up as TASK-BCK-094.",
+        "tests_pasados": true,
+        "validacion_lint": null,
+        "tests": [
+          "RED: existing openapi-drift workflow failed with the same schema delta across unrelated Python Dependabot PRs.",
+          "GREEN: two exact-stack regenerations produced identical SHA-256 2FEF77B3FDC41E3F8A411BDB8013C1EE16274FF342B5DBC92295778F9F58160D.",
+          "pytest -q tests/core/test_canonical_verification_assets.py -> 3 passed.",
+          "pytest -q tests/unit/test_backend_ci_guards.py::test_openapi_schema_examples_do_not_use_jwt_like_placeholders -> 1 passed."
+        ]
+      }
+    },
     {
       "tarea_id": "T126",
       "backlog_id": "TASK-FRT-198",
