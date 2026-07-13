@@ -149,7 +149,26 @@ def test_backend_requirements_include_schemathesis_contract_dependency() -> None
     contents = requirements.read_text(encoding="utf-8")
 
     assert "schemathesis>=4.22.4" in contents
-    assert "tenacity>=9.1.2,<10.0" in contents
+
+
+def test_backend_requirements_keep_tenacity_in_schemathesis_compatible_range() -> None:
+    """Test Suite ID: TASK-OPS-DOCFLOW-015."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    requirements = repo_root / "apps" / "api" / "requirements.txt"
+    requirement_lines = requirements.read_text(encoding="utf-8").splitlines()
+    tenacity_requirement = next(
+        line.split("#", maxsplit=1)[0].strip()
+        for line in requirement_lines
+        if line.startswith("tenacity")
+    )
+
+    package_name, version_range = tenacity_requirement.split(">=", maxsplit=1)
+    lower_bound, upper_bound = version_range.split(",", maxsplit=1)
+
+    assert package_name == "tenacity"
+    assert tuple(int(part) for part in lower_bound.split(".")) >= (9, 1, 2)
+    assert upper_bound == "<10.0"
 
 
 def test_backend_requirements_include_langchain_anthropic_compatible_sdk() -> None:
