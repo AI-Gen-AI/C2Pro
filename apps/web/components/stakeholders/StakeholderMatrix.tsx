@@ -175,7 +175,7 @@ export function StakeholderMatrix({ projectId }: StakeholderMatrixProps) {
     monitor: [],
   };
 
-  stakeholders.forEach((stakeholder) => {
+  stakeholders.forEach((stakeholder: Stakeholder) => {
     grouped[mapStakeholderQuadrant(stakeholder.quadrant)].push(stakeholder);
   });
 

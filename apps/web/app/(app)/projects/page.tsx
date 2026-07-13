@@ -41,7 +41,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Loader2, Plus, Settings2 } from "lucide-react";
-import type { ProjectListItem } from "@/lib/api/contracts";
+import type { ProjectListItem, ProjectQuickViewAlert } from "@/lib/api/contracts";
 
 
 
@@ -948,7 +948,7 @@ export default function ProjectsPage() {
                     </div>
                     {quickViewSummary && quickViewSummary.top_alerts.length > 0 ? (
                       <div className="mt-4 space-y-3">
-                        {quickViewSummary.top_alerts.map((alert) => (
+                        {quickViewSummary.top_alerts.map((alert: ProjectQuickViewAlert) => (
                           <div
                             key={alert.id}
                             className="rounded-xl border bg-muted/20 p-4 shadow-sm"

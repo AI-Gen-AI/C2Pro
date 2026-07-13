@@ -65,6 +65,7 @@ import {
   type BudgetItem,
 } from "@/hooks/useBudget";
 import { getDashboardSummary } from "@/lib/api/services/dashboard";
+import type { CategoryV2 } from "@/lib/api/contracts";
 
 export default function ProjectBudgetPage() {
   const params = useParams<{ id: string }>();
@@ -187,7 +188,7 @@ export default function ProjectBudgetPage() {
   const items = budget?.items ?? [];
   const budgetCategory =
     dashboardQuery.data?.categories_v2?.categories.find(
-      (category) => category.category === "BUDGET",
+      (category: CategoryV2) => category.category === "BUDGET",
     ) ?? null;
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
