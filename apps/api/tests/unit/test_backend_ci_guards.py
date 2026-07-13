@@ -148,7 +148,7 @@ def test_backend_requirements_include_schemathesis_contract_dependency() -> None
     requirements = repo_root / "apps" / "api" / "requirements.txt"
     contents = requirements.read_text(encoding="utf-8")
 
-    assert "schemathesis>=4.18.5" in contents
+    assert "schemathesis>=4.22.4" in contents
     assert "tenacity>=9.1.2,<10.0" in contents
 
 
