@@ -159,10 +159,10 @@ def test_backend_requirements_include_langchain_anthropic_compatible_sdk() -> No
     requirements = repo_root / "apps" / "api" / "requirements.txt"
     contents = requirements.read_text(encoding="utf-8")
 
-    assert "langchain-anthropic==1.4.6" in contents
+    assert "langchain-anthropic==1.4.8" in contents
     assert "anthropic>=0.78.0,<1.0.0" in contents
     assert "pydantic-settings>=2.10.1,<3.0.0" in contents
-    assert "supabase==2.30.1" in contents
+    assert "supabase==2.31.0" in contents
     assert "httpx>=0.28.1,<1.0.0" in contents
     assert "uvicorn[standard]>=0.31.1,<1.0.0" in contents
     assert "websockets>=13.0.0,<17.0" in contents
