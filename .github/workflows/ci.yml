@@ -10,8 +10,8 @@
 #   * Advisory (non-gating) jobs: backend-typecheck (mypy baseline not clean yet),
 #     backend-integration (14 failures + 10 errors on main as of 2026-07-12,
 #     previously hidden by continue-on-error — now visibly red but not blocking),
-#     and backend-lint (ruff==0.2.1 finds ~57 pre-existing violations; `ruff
-#     check .` was never enforced in CI — cleanup tracked as TASK-DEV-009).
+#     and backend-lint (~57 pre-existing violations under the original 0.2.x
+#     baseline; `ruff check .` was never enforced in CI — TASK-DEV-009).
 #     ci-status enumerates required jobs explicitly; advisory jobs are excluded.
 #   * Secret scanning is owned by secret-scan.yml; OpenAPI drift by
 #     openapi-drift.yml; deeper eval/E2E suites by their dedicated workflows.
@@ -93,9 +93,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      # Same ruff version as apps/api/requirements.txt and the Husky pre-commit hook.
-      - name: Install ruff
-        run: pip install ruff==0.2.1
+      # Install the exact ruff version pinned in apps/api/requirements.txt so
+      # the job always matches the project toolchain (survives Dependabot bumps).
+      - name: Install ruff (version from requirements.txt)
+        run: pip install "$(grep -E '^ruff==' apps/api/requirements.txt)"
 
       - name: Ruff check
         working-directory: apps/api
@@ -107,7 +108,7 @@ jobs:
           {
             echo "## Backend lint (advisory)"
             echo ""
-            echo "ruff==0.2.1 reports pre-existing violations; this job does not block"
+            echo "ruff reports pre-existing violations; this job does not block"
             echo "merges yet. Clean the baseline via TASK-DEV-009 in"
             echo "C2PRO_MASTER_BACKLOG.md, then move backend-lint into REQUIRED_JOBS"
             echo "in ci-status."
@@ -129,10 +130,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      # Same mypy version as apps/api/requirements.txt. Config lives in
-      # apps/api/pyproject.toml (strict mode, ignore_missing_imports).
-      - name: Install mypy
-        run: pip install mypy==1.8.0
+      # Install the exact mypy version pinned in apps/api/requirements.txt.
+      # Config lives in apps/api/pyproject.toml (strict mode, ignore_missing_imports).
+      - name: Install mypy (version from requirements.txt)
+        run: pip install "$(grep -E '^mypy==' apps/api/requirements.txt)"
 
       - name: Mypy (advisory — baseline not clean yet)
         working-directory: apps/api
