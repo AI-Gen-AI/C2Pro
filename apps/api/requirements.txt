@@ -89,7 +89,7 @@ networkx==3.6.1
 pytest>=9.0.3  # >=9.0.3 fixes tmpdir predictable path CVE
 pytest-asyncio>=0.24.0  # >=0.24.0 required for pytest 9 compatibility
 pytest-cov>=5.0.0  # >=5.0.0 required for pytest 9 compatibility
-pytest-benchmark==4.0.0
+pytest-benchmark==5.2.3
 schemathesis>=4.22.4  # TASK-QA-200/TASK-OPS-DOCFLOW-015: OpenAPI contract testing
 factory-boy==3.3.3
 Faker==40.28.1  # For factory-boy
