@@ -55,7 +55,7 @@
     "lucide-react": "^0.562.0",
     "next": "16.2.10",
     "next-themes": "^0.4.6",
-    "pdfjs-dist": "^5.4.530",
+    "pdfjs-dist": "^6.1.200",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "react-pdf": "^10.4.1",
