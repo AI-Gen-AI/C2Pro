@@ -284,8 +284,8 @@ importers:
         specifier: ^8.18.0
         version: 8.18.0(prettier@3.8.1)(typescript@5.3.3)
       postcss:
-        specifier: ^8.5.16
-        version: 8.5.16
+        specifier: ^8.5.17
+        version: 8.5.17
       tailwindcss:
         specifier: ^4.1.18
         version: 4.1.18

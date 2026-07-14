@@ -15,7 +15,7 @@
 
 **Pending Tasks**: 7 (`TASK-DEV-004` … `TASK-DEV-009`, `TASK-DEV-013`)
 
-**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), and `TASK-DEV-011` (Tenacity compatibility guard, below).
+**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), `TASK-DEV-011` (Tenacity compatibility guard, below), and `TASK-DEV-012` (PostCSS patch isolation, below).
 
 ---
 
@@ -100,6 +100,18 @@ The `openapi` target text is embedded *inside* the `help` recipe (Makefile lines
 **Minimal fix**: updated the requirement to `tenacity>=9.1.4,<10.0`, kept the Schemathesis dependency assertion, and split Tenacity into a semantic guard that enforces package identity, a lower bound of at least 9.1.2, and the `<10.0` major cap.
 
 **TDD evidence**: RED failed only on the stale `tenacity>=9.1.2,<10.0` string. GREEN passed both focused requirement guards. With Tenacity 9.1.4, the two production modules constructing retry decorators (`analysis.adapters.ai.anthropic_client` and `core.ai.service`) imported successfully under the standard test bootstrap environment without network calls.
+
+---
+
+### TASK-DEV-012: Isolated PostCSS 8.5.17 patch update ✅ 2026-07-14
+
+**Dependency**: `TASK-SEC-DEPENDABOT-001` · **PR**: `#228`
+
+**Verified root cause**: `origin/main` consistently declared PostCSS 8.5.16 in the web manifest and direct lock importer. The only locally available Dependabot commit bundled PostCSS 8.5.17 with Vite 8.1.4, esbuild 0.28.1, and an 847-line lock rewrite, so reusing it would violate isolated patch-upgrade scope.
+
+**Minimal fix**: updated only `apps/web/package.json` and the `apps/web` importer in `pnpm-lock.yaml` to 8.5.17. Existing 8.5.17 package metadata and snapshot were already present. The 8.5.16 package/snapshot remain because Tailwind 4.1.18 still references them.
+
+**TDD evidence**: RED `pnpm install --lockfile-only --frozen-lockfile --offline --filter c2pro-web` reported exactly one manifest/lock mismatch for PostCSS. GREEN passed the same offline frozen-lockfile command after the two importer fields changed. No dependency tree was installed and no broad frontend build was claimed.
 
 ### TASK-DEV-003: CI/CD overhaul — consolidated PR pipeline, security scanning, tag-driven releases ✅ 2026-07-12
 
