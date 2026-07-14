@@ -13,13 +13,21 @@
 
 ## Status View
 
-**Pending Tasks**: 6 (TASK-DEV-004 … TASK-DEV-009)
+**Pending Tasks**: 7 (`TASK-DEV-004` … `TASK-DEV-009`, `TASK-DEV-013`)
 
-**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), and `TASK-DEV-010` (canonical OpenAPI baseline, below).
+**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), and `TASK-DEV-011` (Tenacity compatibility guard, below).
 
 ---
 
 ## Active Tasks
+
+### TASK-DEV-013: Repair advisory `pip-audit` invocation
+
+**Priority**: P1 · **Owner**: devops · **Depends on**: TASK-DEV-003 (done)
+
+PR #235 verified that `.github/workflows/dependency-audit.yml` invokes `pip-audit -r apps/api/requirements.txt --disable-pip`. With the unhashed requirements file, pip-audit 2.10.1 exits before auditing because `--disable-pip` requires either hashes or `--no-deps`. Add a focused workflow guard, choose an invocation that preserves transitive dependency resolution, and verify that the advisory lane produces an actual vulnerability report rather than a CLI-usage failure.
+
+---
 
 ### TASK-DEV-004: Fix backend integration suite → promote `backend-integration` to required gate
 
@@ -80,6 +88,18 @@ The `openapi` target text is embedded *inside* the `help` recipe (Makefile lines
 **Minimal fix**: regenerated only `docs/api/openapi.yaml` with that exact stack. The intentional schema delta removes six duplicate `HTTPBearer` entries, changes two upload fields from `format: binary` to `contentMediaType: application/octet-stream`, and adds Pydantic's `input`/`ctx` fields to `ValidationError`. No route or application behavior changed.
 
 **TDD evidence**: RED was the existing `openapi-drift.yml` canonical comparison failing identically across unrelated PRs; GREEN is deterministic regeneration plus the focused canonical verification assets. The generator also reported a pre-existing duplicate worker-health operation ID, registered separately as `TASK-BCK-094` rather than expanding this fix.
+
+---
+
+### TASK-DEV-011: Tenacity patch-level compatibility guard ✅ 2026-07-14
+
+**Dependency**: `TASK-SEC-DEPENDABOT-001` · **Test Suite ID**: `TASK-OPS-DOCFLOW-015`
+
+**Verified root cause**: PR #232 safely raises Tenacity's lower bound from 9.1.2 to 9.1.4 while retaining `<10.0`, but `test_backend_ci_guards.py` asserted the entire old requirement string. The guard therefore rejected a compatible patch-level floor advance rather than detecting an actual runtime incompatibility.
+
+**Minimal fix**: updated the requirement to `tenacity>=9.1.4,<10.0`, kept the Schemathesis dependency assertion, and split Tenacity into a semantic guard that enforces package identity, a lower bound of at least 9.1.2, and the `<10.0` major cap.
+
+**TDD evidence**: RED failed only on the stale `tenacity>=9.1.2,<10.0` string. GREEN passed both focused requirement guards. With Tenacity 9.1.4, the two production modules constructing retry decorators (`analysis.adapters.ai.anthropic_client` and `core.ai.service`) imported successfully under the standard test bootstrap environment without network calls.
 
 ### TASK-DEV-003: CI/CD overhaul — consolidated PR pipeline, security scanning, tag-driven releases ✅ 2026-07-12
 
