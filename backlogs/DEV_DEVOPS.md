@@ -2,7 +2,7 @@
 
 **Category**: DevOps (DEV)
 **Owner Role**: devops
-**Last Updated**: 2026-07-12
+**Last Updated**: 2026-07-14
 
 **Quick Links**:
 - 🏠 [Master Index](../C2PRO_MASTER_BACKLOG.md)
@@ -13,9 +13,9 @@
 
 ## Status View
 
-**Pending Tasks**: 6 (TASK-DEV-004 … TASK-DEV-009)
+**Pending Tasks**: 6 (`TASK-DEV-004` … `TASK-DEV-009`)
 
-**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — and `TASK-DEV-003` (CI/CD overhaul, below).
+**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), `TASK-DEV-011` (Tenacity compatibility guard, below), `TASK-DEV-012` (PostCSS patch isolation, below), and `TASK-DEV-013` (Python dependency audit repair, below).
 
 ---
 
@@ -70,6 +70,52 @@ The `openapi` target text is embedded *inside* the `help` recipe (Makefile lines
 ---
 
 ## Completed Tasks
+
+### TASK-DEV-013: Repair advisory `pip-audit` invocation ✅ 2026-07-14
+
+**Dependency**: `TASK-DEV-003` · **Test Suite ID**: `TS-CI-BACKEND-GUARDS-001`
+
+**Verified root cause**: `.github/workflows/dependency-audit.yml` passed `--disable-pip` for an unhashed requirements file. pip-audit 2.10.1 rejected that combination before resolving or auditing packages. Adding `--no-deps` would have hidden transitive vulnerabilities.
+
+**Minimal fix**: removed `--disable-pip` so pip-audit uses its normal dependency resolver. Added a focused workflow guard that requires the requirements audit command and forbids both `--disable-pip` and `--no-deps`.
+
+**TDD and live evidence**: RED failed on the existing invalid flag. GREEN passed all 24 backend CI guards and focused Ruff. PR #237 then ran pip-audit successfully in 29 seconds and reported `No known vulnerabilities found`, proving the job evaluated the resolved dependency set instead of failing on CLI usage.
+
+---
+
+### TASK-DEV-010: Canonical OpenAPI baseline after schema-stack upgrade ✅ 2026-07-14
+
+**Dependency**: `TASK-DEV-003` · **Focused existing Test Suite ID**: `TS-INT-DOC-PROC-003`
+
+**Verified root cause**: unrelated Python Dependabot PRs produced the same `docs/api/openapi.yaml` drift because commit `849558cb` upgraded FastAPI from 0.121.3 to 0.139.0 without regenerating the canonical artifact. CI generated with FastAPI 0.139.0, Pydantic 2.13.4, pydantic-core 2.46.4, Starlette 1.3.1, pydantic-settings 2.14.2, python-multipart 0.0.32, and PyYAML 6.0.3.
+
+**Minimal fix**: regenerated only `docs/api/openapi.yaml` with that exact stack. The intentional schema delta removes six duplicate `HTTPBearer` entries, changes two upload fields from `format: binary` to `contentMediaType: application/octet-stream`, and adds Pydantic's `input`/`ctx` fields to `ValidationError`. No route or application behavior changed.
+
+**TDD evidence**: RED was the existing `openapi-drift.yml` canonical comparison failing identically across unrelated PRs; GREEN is deterministic regeneration plus the focused canonical verification assets. The generator also reported a pre-existing duplicate worker-health operation ID, registered separately as `TASK-BCK-094` rather than expanding this fix.
+
+---
+
+### TASK-DEV-011: Tenacity patch-level compatibility guard ✅ 2026-07-14
+
+**Dependency**: `TASK-SEC-DEPENDABOT-001` · **Test Suite ID**: `TASK-OPS-DOCFLOW-015`
+
+**Verified root cause**: PR #232 safely raises Tenacity's lower bound from 9.1.2 to 9.1.4 while retaining `<10.0`, but `test_backend_ci_guards.py` asserted the entire old requirement string. The guard therefore rejected a compatible patch-level floor advance rather than detecting an actual runtime incompatibility.
+
+**Minimal fix**: updated the requirement to `tenacity>=9.1.4,<10.0`, kept the Schemathesis dependency assertion, and split Tenacity into a semantic guard that enforces package identity, a lower bound of at least 9.1.2, and the `<10.0` major cap.
+
+**TDD evidence**: RED failed only on the stale `tenacity>=9.1.2,<10.0` string. GREEN passed both focused requirement guards. With Tenacity 9.1.4, the two production modules constructing retry decorators (`analysis.adapters.ai.anthropic_client` and `core.ai.service`) imported successfully under the standard test bootstrap environment without network calls.
+
+---
+
+### TASK-DEV-012: Isolated PostCSS 8.5.17 patch update ✅ 2026-07-14
+
+**Dependency**: `TASK-SEC-DEPENDABOT-001` · **PR**: `#228`
+
+**Verified root cause**: `origin/main` consistently declared PostCSS 8.5.16 in the web manifest and direct lock importer. The only locally available Dependabot commit bundled PostCSS 8.5.17 with Vite 8.1.4, esbuild 0.28.1, and an 847-line lock rewrite, so reusing it would violate isolated patch-upgrade scope.
+
+**Minimal fix**: updated only `apps/web/package.json` and the `apps/web` importer in `pnpm-lock.yaml` to 8.5.17. Existing 8.5.17 package metadata and snapshot were already present. The 8.5.16 package/snapshot remain because Tailwind 4.1.18 still references them.
+
+**TDD evidence**: RED `pnpm install --lockfile-only --frozen-lockfile --offline --filter c2pro-web` reported exactly one manifest/lock mismatch for PostCSS. GREEN passed the same offline frozen-lockfile command after the two importer fields changed. No dependency tree was installed and no broad frontend build was claimed.
 
 ### TASK-DEV-003: CI/CD overhaul — consolidated PR pipeline, security scanning, tag-driven releases ✅ 2026-07-12
 

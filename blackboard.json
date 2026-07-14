@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-12T20:25:00Z",
+  "updated_at": "2026-07-14T19:04:40Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,133 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T142",
+      "backlog_id": "TASK-DEV-013",
+      "tipo": "devops",
+      "descripcion": "Repair the advisory pip-audit workflow so it audits dependencies instead of exiting on an invalid --disable-pip invocation.",
+      "asignado_a": "devops",
+      "estado": "completado",
+      "criterio_done": "The dependency-audit workflow has a focused guard, uses a valid pip-audit invocation that retains dependency coverage, and produces a real audit result for apps/api/requirements.txt.",
+      "archivos_modificados": [
+        ".github/workflows/dependency-audit.yml",
+        "apps/api/tests/unit/test_backend_ci_guards.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/DEV_DEVOPS.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-14T18:58:26Z",
+        "completado": "2026-07-14T19:04:40Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-DEV-013 completed: pip-audit now resolves and audits the API dependency graph instead of exiting on an invalid --disable-pip invocation.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: focused workflow guard failed because dependency-audit.yml contained --disable-pip.",
+          "GREEN: test_dependency_audit_resolves_backend_transitive_dependencies passed after removing the flag.",
+          "python -m pytest -q tests/unit/test_backend_ci_guards.py -> 24 passed.",
+          "python -m ruff check tests/unit/test_backend_ci_guards.py -> passed.",
+          "GitHub PR #237 pip-audit (advisory) -> passed in 29 seconds; No known vulnerabilities found."
+        ]
+      }
+    },
+    {
+      "tarea_id": "T127",
+      "backlog_id": "TASK-DEV-010",
+      "tipo": "devops",
+      "descripcion": "Regenerate the canonical OpenAPI baseline with the CI-pinned FastAPI and Pydantic schema stack after the shared Dependabot drift diagnosis.",
+      "asignado_a": "devops",
+      "estado": "completado",
+      "criterio_done": "docs/api/openapi.yaml is generated reproducibly with the exact CI schema stack, the focused OpenAPI drift guard passes, and the shared baseline failure is documented without changing application behavior.",
+      "archivos_modificados": [
+        "docs/api/openapi.yaml",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/DEV_DEVOPS.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-13T23:21:13Z",
+        "completado": "2026-07-13T23:25:28Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-DEV-010 completed locally: regenerated the canonical OpenAPI artifact with the exact CI schema stack; the 15-line schema delta matches the shared Dependabot failure and no application behavior changed. Registered duplicate worker-health operation ID follow-up as TASK-BCK-094.",
+        "tests_pasados": true,
+        "validacion_lint": null,
+        "tests": [
+          "RED: existing openapi-drift workflow failed with the same schema delta across unrelated Python Dependabot PRs.",
+          "GREEN: two exact-stack regenerations produced identical SHA-256 2FEF77B3FDC41E3F8A411BDB8013C1EE16274FF342B5DBC92295778F9F58160D.",
+          "pytest -q tests/core/test_canonical_verification_assets.py -> 3 passed.",
+          "pytest -q tests/unit/test_backend_ci_guards.py::test_openapi_schema_examples_do_not_use_jwt_like_placeholders -> 1 passed."
+        ]
+      }
+    },
+    {
+      "tarea_id": "T128",
+      "backlog_id": "TASK-DEV-011",
+      "tipo": "devops",
+      "descripcion": "Update PR #232's Tenacity lower bound and make the CI requirement guard validate compatibility semantics instead of an exact patch string.",
+      "asignado_a": "devops",
+      "estado": "completado",
+      "criterio_done": "Tenacity 9.1.4 remains capped below 10.0, the focused requirement guards pass, and both production retry modules import successfully without external calls.",
+      "archivos_modificados": [
+        "apps/api/requirements.txt",
+        "apps/api/tests/unit/test_backend_ci_guards.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/DEV_DEVOPS.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-13T23:31:00Z",
+        "completado": "2026-07-13T23:37:19Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-DEV-011 completed locally: PR #232's compatible Tenacity 9.1.4 floor is accepted without weakening the >=9.1.2,<10.0 compatibility contract.",
+        "tests_pasados": true,
+        "validacion_lint": null,
+        "tests": [
+          "RED: focused CI guard failed on the stale exact string tenacity>=9.1.2,<10.0.",
+          "GREEN: Schemathesis and semantic Tenacity requirement guards passed (2 tests).",
+          "Tenacity 9.1.4 production imports passed for anthropic_client and core.ai.service under test bootstrap settings."
+        ]
+      }
+    },
+    {
+      "tarea_id": "T129",
+      "backlog_id": "TASK-DEV-012",
+      "tipo": "devops",
+      "descripcion": "Apply PR #228's PostCSS 8.5.17 patch as an isolated manifest and lock-importer update.",
+      "asignado_a": "devops",
+      "estado": "completado",
+      "criterio_done": "The web manifest and direct lock importer resolve PostCSS 8.5.17, frozen offline lock validation passes, and no Vite/esbuild or unrelated lock entries change.",
+      "archivos_modificados": [
+        "apps/web/package.json",
+        "pnpm-lock.yaml",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/DEV_DEVOPS.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-14T18:00:00Z",
+        "completado": "2026-07-14T18:10:16Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-DEV-012 completed locally: PostCSS 8.5.17 is isolated to the web manifest and direct lock importer without the coupled Vite 8/esbuild rewrite.",
+        "tests_pasados": true,
+        "validacion_lint": null,
+        "tests": [
+          "RED: frozen offline lock validation reported one PostCSS mismatch (manifest ^8.5.17, lock ^8.5.16).",
+          "GREEN: pnpm install --lockfile-only --frozen-lockfile --offline --filter c2pro-web passed.",
+          "No frontend dependency installation or build was run because the isolated worktree has no node_modules."
+        ]
+      }
+    },
     {
       "tarea_id": "T126",
       "backlog_id": "TASK-FRT-198",
