@@ -15,7 +15,7 @@
 
 **Pending Tasks**: 6 (`TASK-DEV-004` … `TASK-DEV-009`)
 
-**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), `TASK-DEV-011` (Tenacity compatibility guard, below), `TASK-DEV-012` (PostCSS patch isolation, below), and `TASK-DEV-013` (Python dependency audit repair, below).
+**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), `TASK-DEV-011` (Tenacity compatibility guard, below), `TASK-DEV-012` (PostCSS patch isolation, below), `TASK-DEV-013` (Python dependency audit repair, below), and `TASK-DEV-014` (js-minor-patch group bump, below).
 
 ---
 
@@ -52,6 +52,12 @@ The integration suite fails on main (as of 2026-07-12: `14 failed, 74 passed, 3 
 
 `ruff check .` (ruff==0.2.1, config in `apps/api/pyproject.toml`) reports ~57 pre-existing violations across `apps/api` (SIM105/SIM102 in src, I001/F401/F841/E402 mostly in tests, plus stray root files `test.py` / `test_document_repository.py`); 35 are `--fix`-able. It was never a CI gate before TASK-DEV-003 and the Husky pre-commit hook does not reliably run (verified: local commits passed while `ruff check .` fails). `ci.yml` runs `backend-lint` as advisory. Fix the violations (or explicitly ignore rules that are deliberate), then move `backend-lint` from `ADVISORY_JOBS` to `REQUIRED_JOBS` in `ci-status`.
 
+### TASK-DEV-015: SonarCloud "New Code" quality debt cleanup
+
+**Priority**: P3 · **Owner**: frontend · **Depends on**: —
+
+Cognitive-complexity code smells (Reliability/Security rating C on new code) surfaced in `apps/web/app/(app)/raci/page.tsx`, `.../projects/page.tsx`, and `.../projects/[id]/budget/page.tsx` when the js-minor-patch fix commit (`TASK-DEV-014`, commit `15cb74cd`) edited those pages. Non-blocking; unrelated to dependencies. The SonarCloud quality gate on PR #223 failed pre-merge but is NON-BLOCKING and identical to the pre-merge failure on tip `c50ea946` (caused by the same pages edited, not the dependency bump itself). Status: not started.
+
 ### TASK-DEV-008: Repair corrupted Makefile `help`/`openapi` targets
 
 **Priority**: P3 · **Owner**: devops · **Depends on**: —
@@ -80,6 +86,18 @@ The `openapi` target text is embedded *inside* the `help` recipe (Makefile lines
 **Minimal fix**: removed `--disable-pip` so pip-audit uses its normal dependency resolver. Added a focused workflow guard that requires the requirements audit command and forbids both `--disable-pip` and `--no-deps`.
 
 **TDD and live evidence**: RED failed on the existing invalid flag. GREEN passed all 24 backend CI guards and focused Ruff. PR #237 then ran pip-audit successfully in 29 seconds and reported `No known vulnerabilities found`, proving the job evaluated the resolved dependency set instead of failing on CLI usage.
+
+---
+
+### TASK-DEV-014: Resolve conflicts and land js-minor-patch group bump ✅ 2026-07-14
+
+**Dependency**: `TASK-SEC-DEPENDABOT-001` · **PR**: `#223`
+
+**Verified root cause**: PR #223 carried the `js-minor-patch` group of 45 same-major updates on branch `dependabot/npm_and_yarn/js-minor-patch-7dfeb5d883`, with two remediation commits (`15cb74cd` TS-inference/API-client drift repair, `c50ea946` prettier drift repair). It went CONFLICTING against main after main advanced 7 commits.
+
+**Minimal fix**: Resolved conflicts in two files — `apps/web/package.json` (chose `--ours`: our side had the newest same-major version of every dep; main's only web change `postcss ^8.5.18` was already satisfied) and `pnpm-lock.yaml` (regenerated via `pnpm install --lockfile-only`, validated with `pnpm install --frozen-lockfile`). Squash-merged to main as commit `e6f5028a`.
+
+**TDD and live evidence**: Drift fixes verified INTACT post-merge via `pnpm typecheck` (exit 0), `pnpm lint` (exit 0), and `prettier --check` on all 3 generated API-client files (authentication.ts, documents.ts, frontend-support.ts). CI: all required checks green (Frontend Lint+Typecheck, Frontend Tests + API Drift, Frontend E2E, CodeQL, Dependency Review, pnpm audit, CI Status). SonarCloud quality gate failed but is NON-BLOCKING and PRE-EXISTING (identical failure on pre-merge tip `c50ea946` from cognitive-complexity code smells in raci/projects/budget pages edited by the TS-inference fix commit; NOT dependency-caused, NOT a regression from the merge).
 
 ---
 
