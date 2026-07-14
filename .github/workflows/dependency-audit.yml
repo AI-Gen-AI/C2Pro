@@ -46,7 +46,7 @@ jobs:
       - name: Audit backend requirements
         run: |
           set -o pipefail
-          pip-audit -r apps/api/requirements.txt --disable-pip 2>&1 | tee pip-audit.log || AUDIT_FAILED=1
+          pip-audit -r apps/api/requirements.txt 2>&1 | tee pip-audit.log || AUDIT_FAILED=1
           {
             echo "## pip-audit (advisory)"
             echo ""

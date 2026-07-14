@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-14T18:28:58Z",
+  "updated_at": "2026-07-14T18:58:26Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -23,7 +23,7 @@
       "tipo": "devops",
       "descripcion": "Repair the advisory pip-audit workflow so it audits dependencies instead of exiting on an invalid --disable-pip invocation.",
       "asignado_a": "devops",
-      "estado": "pendiente",
+      "estado": "en_progreso",
       "criterio_done": "The dependency-audit workflow has a focused guard, uses a valid pip-audit invocation that retains dependency coverage, and produces a real audit result for apps/api/requirements.txt.",
       "archivos_modificados": [
         ".github/workflows/dependency-audit.yml",
@@ -32,7 +32,7 @@
         "blackboard.json"
       ],
       "timestamps": {
-        "inicio": "2026-07-14T18:28:58Z"
+        "inicio": "2026-07-14T18:58:26Z"
       }
     },
     {
