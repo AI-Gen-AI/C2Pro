@@ -171,6 +171,18 @@ def test_backend_requirements_keep_tenacity_in_schemathesis_compatible_range() -
     assert upper_bound == "<10.0"
 
 
+def test_dependency_audit_resolves_backend_transitive_dependencies() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001, TASK-DEV-013."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    workflow = repo_root / ".github" / "workflows" / "dependency-audit.yml"
+    contents = workflow.read_text(encoding="utf-8")
+
+    assert "pip-audit -r apps/api/requirements.txt" in contents
+    assert "--disable-pip" not in contents
+    assert "--no-deps" not in contents
+
+
 def test_backend_requirements_include_langchain_anthropic_compatible_sdk() -> None:
     """Test Suite ID: TASK-BCK-078."""
 
