@@ -62,6 +62,7 @@
 |[ ]|P2|`TASK-BCK-094`|None|Remove the duplicate `worker_health_check_api_v1_health_worker_get` OpenAPI operation ID by consolidating or uniquely identifying the duplicate worker health route; add a focused schema regression test before changing router behavior.|`backlogs/BCK_BACKEND.md`|
 |[x]|P1|`TASK-DEV-011`|`TASK-SEC-DEPENDABOT-001`|Update Tenacity from `>=9.1.2,<10.0` to `>=9.1.4,<10.0` for PR #232 and replace the stale exact-patch CI assertion with a semantic compatibility guard that preserves the Schemathesis-required floor and major-version cap. `[x] Implemented (RED/GREEN + Tenacity 9.1.4 production imports)`|`backlogs/DEV_DEVOPS.md`|
 |[ ]|P1|`TASK-DEV-013`|`TASK-DEV-003`|Repair the advisory Python dependency audit: `pip-audit --disable-pip` rejects the unhashed API requirements unless `--no-deps` is also used, so the current workflow exits before auditing packages. Add a focused workflow guard and retain dependency-resolution coverage.|`backlogs/DEV_DEVOPS.md`|
+|[x]|P1|`TASK-DEV-012`|`TASK-SEC-DEPENDABOT-001`|Apply PR #228's isolated PostCSS patch update from 8.5.16 to 8.5.17 without importing the coupled Vite 8/esbuild lock rewrite. `[x] Implemented (offline frozen-lockfile RED/GREEN)`|`backlogs/DEV_DEVOPS.md`|
 
 ## Pending Tasks by Category
 

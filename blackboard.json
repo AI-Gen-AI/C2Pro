@@ -99,6 +99,37 @@
       }
     },
     {
+      "tarea_id": "T129",
+      "backlog_id": "TASK-DEV-012",
+      "tipo": "devops",
+      "descripcion": "Apply PR #228's PostCSS 8.5.17 patch as an isolated manifest and lock-importer update.",
+      "asignado_a": "devops",
+      "estado": "completado",
+      "criterio_done": "The web manifest and direct lock importer resolve PostCSS 8.5.17, frozen offline lock validation passes, and no Vite/esbuild or unrelated lock entries change.",
+      "archivos_modificados": [
+        "apps/web/package.json",
+        "pnpm-lock.yaml",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/DEV_DEVOPS.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-14T18:00:00Z",
+        "completado": "2026-07-14T18:10:16Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-DEV-012 completed locally: PostCSS 8.5.17 is isolated to the web manifest and direct lock importer without the coupled Vite 8/esbuild rewrite.",
+        "tests_pasados": true,
+        "validacion_lint": null,
+        "tests": [
+          "RED: frozen offline lock validation reported one PostCSS mismatch (manifest ^8.5.17, lock ^8.5.16).",
+          "GREEN: pnpm install --lockfile-only --frozen-lockfile --offline --filter c2pro-web passed.",
+          "No frontend dependency installation or build was run because the isolated worktree has no node_modules."
+        ]
+      }
+    },
+    {
       "tarea_id": "T126",
       "backlog_id": "TASK-FRT-198",
       "tipo": "frontend",
