@@ -49,7 +49,7 @@ export default function SignUpPage() {
               alert: "bg-red-500/10 border-red-500/20 text-red-400",
               alertText: "text-red-400",
             },
-            layout: {
+            options: {
               socialButtonsPlacement: "top",
               socialButtonsVariant: "blockButton",
             },

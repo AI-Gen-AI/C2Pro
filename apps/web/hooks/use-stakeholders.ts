@@ -120,8 +120,8 @@ export const useUpdateStakeholder = (projectId?: string) => {
 
       queryClient.setQueryData<Stakeholder[]>(
         queryKey,
-        (current) =>
-          current?.map((stakeholder) =>
+        (current: Stakeholder[] | undefined) =>
+          current?.map((stakeholder: Stakeholder) =>
             stakeholder.id === stakeholderId
               ? {
                   ...stakeholder,

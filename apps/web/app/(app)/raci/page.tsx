@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Search, Download, Sparkles } from 'lucide-react';
 import { useRaci, type RaciRow } from '@/hooks/useRaci';
 import { useProjects } from '@/hooks/useProjects';
+import type { ProjectListItem } from '@/lib/api/contracts';
 
 type RaciTemplate = {
   id: string;
@@ -437,7 +438,7 @@ export default function RaciPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Projects</SelectItem>
-            {(projects ?? []).map((project) => (
+            {(projects ?? []).map((project: ProjectListItem) => (
               <SelectItem key={project.id} value={project.id}>
                 {project.name}
               </SelectItem>

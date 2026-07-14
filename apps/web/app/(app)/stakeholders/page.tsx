@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useProjects } from "@/hooks/useProjects";
+import type { ProjectListItem } from "@/lib/api/contracts";
 import { StakeholderMatrix } from "@/components/stakeholders/StakeholderMatrix";
 import {
   Select,
@@ -38,7 +39,7 @@ export default function StakeholdersPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Select a project</SelectItem>
-            {(projects ?? []).map((project) => (
+            {(projects ?? []).map((project: ProjectListItem) => (
               <SelectItem key={project.id} value={project.id}>
                 {project.name}
               </SelectItem>
