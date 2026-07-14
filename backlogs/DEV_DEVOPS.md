@@ -13,21 +13,13 @@
 
 ## Status View
 
-**Pending Tasks**: 7 (`TASK-DEV-004` … `TASK-DEV-009`, `TASK-DEV-013`)
+**Pending Tasks**: 6 (`TASK-DEV-004` … `TASK-DEV-009`)
 
-**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), `TASK-DEV-011` (Tenacity compatibility guard, below), and `TASK-DEV-012` (PostCSS patch isolation, below).
+**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), `TASK-DEV-011` (Tenacity compatibility guard, below), `TASK-DEV-012` (PostCSS patch isolation, below), and `TASK-DEV-013` (Python dependency audit repair, below).
 
 ---
 
 ## Active Tasks
-
-### TASK-DEV-013: Repair advisory `pip-audit` invocation
-
-**Priority**: P1 · **Owner**: devops · **Depends on**: TASK-DEV-003 (done)
-
-PR #235 verified that `.github/workflows/dependency-audit.yml` invokes `pip-audit -r apps/api/requirements.txt --disable-pip`. With the unhashed requirements file, pip-audit 2.10.1 exits before auditing because `--disable-pip` requires either hashes or `--no-deps`. Add a focused workflow guard, choose an invocation that preserves transitive dependency resolution, and verify that the advisory lane produces an actual vulnerability report rather than a CLI-usage failure.
-
----
 
 ### TASK-DEV-004: Fix backend integration suite → promote `backend-integration` to required gate
 
@@ -78,6 +70,18 @@ The `openapi` target text is embedded *inside* the `help` recipe (Makefile lines
 ---
 
 ## Completed Tasks
+
+### TASK-DEV-013: Repair advisory `pip-audit` invocation ✅ 2026-07-14
+
+**Dependency**: `TASK-DEV-003` · **Test Suite ID**: `TS-CI-BACKEND-GUARDS-001`
+
+**Verified root cause**: `.github/workflows/dependency-audit.yml` passed `--disable-pip` for an unhashed requirements file. pip-audit 2.10.1 rejected that combination before resolving or auditing packages. Adding `--no-deps` would have hidden transitive vulnerabilities.
+
+**Minimal fix**: removed `--disable-pip` so pip-audit uses its normal dependency resolver. Added a focused workflow guard that requires the requirements audit command and forbids both `--disable-pip` and `--no-deps`.
+
+**TDD and live evidence**: RED failed on the existing invalid flag. GREEN passed all 24 backend CI guards and focused Ruff. PR #237 then ran pip-audit successfully in 29 seconds and reported `No known vulnerabilities found`, proving the job evaluated the resolved dependency set instead of failing on CLI usage.
+
+---
 
 ### TASK-DEV-010: Canonical OpenAPI baseline after schema-stack upgrade ✅ 2026-07-14
 

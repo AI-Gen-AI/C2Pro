@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-14T18:58:26Z",
+  "updated_at": "2026-07-14T19:04:40Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -23,16 +23,31 @@
       "tipo": "devops",
       "descripcion": "Repair the advisory pip-audit workflow so it audits dependencies instead of exiting on an invalid --disable-pip invocation.",
       "asignado_a": "devops",
-      "estado": "en_progreso",
+      "estado": "completado",
       "criterio_done": "The dependency-audit workflow has a focused guard, uses a valid pip-audit invocation that retains dependency coverage, and produces a real audit result for apps/api/requirements.txt.",
       "archivos_modificados": [
         ".github/workflows/dependency-audit.yml",
+        "apps/api/tests/unit/test_backend_ci_guards.py",
         "C2PRO_MASTER_BACKLOG.md",
         "backlogs/DEV_DEVOPS.md",
         "blackboard.json"
       ],
       "timestamps": {
-        "inicio": "2026-07-14T18:58:26Z"
+        "inicio": "2026-07-14T18:58:26Z",
+        "completado": "2026-07-14T19:04:40Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-DEV-013 completed: pip-audit now resolves and audits the API dependency graph instead of exiting on an invalid --disable-pip invocation.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: focused workflow guard failed because dependency-audit.yml contained --disable-pip.",
+          "GREEN: test_dependency_audit_resolves_backend_transitive_dependencies passed after removing the flag.",
+          "python -m pytest -q tests/unit/test_backend_ci_guards.py -> 24 passed.",
+          "python -m ruff check tests/unit/test_backend_ci_guards.py -> passed.",
+          "GitHub PR #237 pip-audit (advisory) -> passed in 29 seconds; No known vulnerabilities found."
+        ]
       }
     },
     {
