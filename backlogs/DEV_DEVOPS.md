@@ -13,13 +13,21 @@
 
 ## Status View
 
-**Pending Tasks**: 6 (TASK-DEV-004 … TASK-DEV-009)
+**Pending Tasks**: 7 (`TASK-DEV-004` … `TASK-DEV-009`, `TASK-DEV-013`)
 
 **Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), and `TASK-DEV-011` (Tenacity compatibility guard, below).
 
 ---
 
 ## Active Tasks
+
+### TASK-DEV-013: Repair advisory `pip-audit` invocation
+
+**Priority**: P1 · **Owner**: devops · **Depends on**: TASK-DEV-003 (done)
+
+PR #235 verified that `.github/workflows/dependency-audit.yml` invokes `pip-audit -r apps/api/requirements.txt --disable-pip`. With the unhashed requirements file, pip-audit 2.10.1 exits before auditing because `--disable-pip` requires either hashes or `--no-deps`. Add a focused workflow guard, choose an invocation that preserves transitive dependency resolution, and verify that the advisory lane produces an actual vulnerability report rather than a CLI-usage failure.
+
+---
 
 ### TASK-DEV-004: Fix backend integration suite → promote `backend-integration` to required gate
 
