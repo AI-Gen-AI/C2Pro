@@ -2247,7 +2247,6 @@ paths:
       operationId: list_dlq_entries_api_v1_admin_dlq_get
       security:
       - HTTPBearer: []
-      - HTTPBearer: []
       parameters:
       - name: status
         in: query
@@ -2299,7 +2298,6 @@ paths:
       description: 'TS-BCK-042-001: Retry a DLQ entry for organization administrators.'
       operationId: retry_dlq_entry_api_v1_admin_dlq__dlq_id__retry_post
       security:
-      - HTTPBearer: []
       - HTTPBearer: []
       parameters:
       - name: dlq_id
@@ -3465,7 +3463,6 @@ paths:
       operationId: evaluate_project_coherence_api_v1_coherence_evaluate_post
       security:
       - HTTPBearer: []
-      - HTTPBearer: []
       parameters:
       - name: include_diagnostics
         in: query
@@ -3531,7 +3528,6 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
-      - HTTPBearer: []
   /api/v1/coherence/dashboard/{project_id}:
     get:
       tags:
@@ -3541,7 +3537,6 @@ paths:
         \ the latest Analysis or CoherenceResult records."
       operationId: get_coherence_dashboard_api_v1_coherence_dashboard__project_id__get
       security:
-      - HTTPBearer: []
       - HTTPBearer: []
       parameters:
       - name: project_id
@@ -3573,7 +3568,6 @@ paths:
         \ the latest Analysis or CoherenceResult records."
       operationId: get_coherence_dashboard_api_coherence_dashboard__project_id__get
       security:
-      - HTTPBearer: []
       - HTTPBearer: []
       parameters:
       - name: project_id
@@ -4388,7 +4382,7 @@ components:
       properties:
         file:
           type: string
-          format: binary
+          contentMediaType: application/octet-stream
           title: File
       type: object
       required:
@@ -4400,7 +4394,7 @@ components:
           $ref: '#/components/schemas/DocumentType'
         file:
           type: string
-          format: binary
+          contentMediaType: application/octet-stream
           title: File
       type: object
       required:
@@ -7946,6 +7940,11 @@ components:
         type:
           type: string
           title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
       type: object
       required:
       - loc
