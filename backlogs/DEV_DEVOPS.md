@@ -13,9 +13,9 @@
 
 ## Status View
 
-**Pending Tasks**: 14 (`TASK-DEV-004`…`006`, `007` (partial), `008`, `009`, `015`, `016`…`023`)
+**Pending Tasks**: 20 (`TASK-DEV-004`…`006`, `007` (partial), `008`, `009`, `015`, `016`…`026`, `028`, `029`)
 
-**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), `TASK-DEV-011` (Tenacity compatibility guard, below), `TASK-DEV-012` (PostCSS patch isolation, below), `TASK-DEV-013` (Python dependency audit repair, below), and `TASK-DEV-014` (js-minor-patch group bump, below).
+**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), `TASK-DEV-011` (Tenacity compatibility guard, below), `TASK-DEV-012` (PostCSS patch isolation, below), `TASK-DEV-013` (Python dependency audit repair, below), `TASK-DEV-014` (js-minor-patch group bump, below), and `TASK-DEV-027` (2026-07-15 multi-agent re-audit, below).
 
 ---
 
@@ -104,7 +104,7 @@ Three contradictory configs: ci.yml backend-unit runs `--cov-fail-under=0`; `app
 
 **Priority**: P2 · **Owner**: devops · **Depends on**: — · **Source**: audit §3 P2-1 (full file list there; owner-approved 2026-07-14)
 
-234 tracked artifact files: `apps/web/coverage/.tmp/` (232 files, 1.9 MB — `.gitignore` only has root-only `/coverage`), `apps/web/test-results/.last-run.json`, `backups/*.bak`, `apps/api` junk (`=2.0.0`, `=3.2.0`, `docker-compose … up -d` file, pytest/coverage XML/JSON reports, `test_real.pdf`, `test_error_handling_standalone copy.py`), stray pre-src-layout api root modules (usage-check before deleting: `models.py`, `sqlalchemy_orm.py`, `sqlalchemy_document_repository.py`, …), root clutter (Consenso*, `analyze_payload.json`, `blackboard.json`). Add `.gitignore`: `apps/web/coverage/`, `.claude/scheduled_tasks.lock`.
+234 tracked artifact files: `apps/web/coverage/.tmp/` (232 files, 1.9 MB — `.gitignore` only has root-only `/coverage`), `apps/web/test-results/.last-run.json`, `backups/*.bak`, `apps/api` junk (`=2.0.0`, `=3.2.0`, `docker-compose … up -d` file, pytest/coverage XML/JSON reports, `test_real.pdf`, `test_error_handling_standalone copy.py`), stray pre-src-layout api root modules (usage-check before deleting: `models.py`, `sqlalchemy_orm.py`, `sqlalchemy_document_repository.py`, …), root clutter (Consenso*, `analyze_payload.json`, `blackboard.json`). Add `.gitignore`: `apps/web/coverage/`, `.claude/scheduled_tasks.lock`. Extended 2026-07-15 (verified re-audit deltas): also delete or mark-legacy the divergent minimal `apps/api/docker-compose.test.yml` (root compose is canonical), and expand `apps/web/.gitignore` (currently 5 lines) with coverage/, test-results/, playwright-report/, *.log, tsconfig.tsbuildinfo, wireframe-coverage.json. Refuted during verification: "66+ tracked __pycache__/.pyc files" — `git ls-files` shows ZERO tracked __pycache__ entries (disk-only, already ignored).
 
 ### TASK-DEV-021: Husky pre-commit cannot fail on ruff — fix enforcement
 
@@ -116,7 +116,7 @@ Root cause of the "hook does not reliably run" note: `.husky/pre-commit` runs th
 
 **Priority**: P1 · **Owner**: devops · **Depends on**: — · **Source**: audit §3 P2-4 + P0-3
 
-Root manifest is misleading: `"name": "package.json"`, unused runtime deps (next/react/recharts@^3-vs-web-@^2/@google/generative-ai/@sentry/react/lucide drift — only referenced by `context/experimental` and `docs/archive`), npm-style `overrides` duplicated beside `pnpm.overrides`, plus a third dead `overrides` block in `apps/web/package.json`. Collapse to a single root `pnpm.overrides`; per pin decide keep-as-security-pin (+ matching `dependabot.yml` ignore) vs drop; prune unused deps; rename package; regenerate lockfile; full frontend gates re-run.
+Root manifest is misleading: `"name": "package.json"`, unused runtime deps (next/react/recharts@^3-vs-web-@^2/@google/generative-ai/@sentry/react/lucide drift — only referenced by `context/experimental` and `docs/archive`), npm-style `overrides` duplicated beside `pnpm.overrides`, plus a third dead `overrides` block in `apps/web/package.json`. Collapse to a single root `pnpm.overrides`; per pin decide keep-as-security-pin (+ matching `dependabot.yml` ignore) vs drop; prune unused deps; rename package; regenerate lockfile; full frontend gates re-run. Extended 2026-07-15: also move `tailwindcss-animate` to devDependencies (build-time plugin, only used by tailwind.config.ts), audit the deprecated `openapi-typescript-codegen ^0.31.0` devDep (orval is the primary generator — remove if unused, else migrate to @hey-api/openapi-ts), and note that pnpm v11+ no longer reads `package.json#pnpm.overrides` (settings moved to pnpm-workspace.yaml) — keep overrides in the location our pinned pnpm 10.25.0 reads, and record the v11 migration caveat.
 
 ### TASK-DEV-023: Nightly full-E2E lane (27 of 29 Playwright spec files never run)
 
@@ -124,9 +124,45 @@ Root manifest is misleading: `"name": "package.json"`, unused runtime deps (next
 
 CI runs only 2 smoke specs; the rest rot invisibly and `document-analysis-pipeline.spec.ts` contains 5 state-conditional `test.skip(true, …)`. Add a scheduled (nightly) non-blocking workflow running the full suite with seeded data; triage conditional skips into deterministic tests or explicit quarantine.
 
+### TASK-DEV-024: Restore the JavaScript dependency-audit gate
+
+**Priority**: P0 · **Owner**: devops/security · **Depends on**: TASK-DEV-003 · **Source**: `docs/audits/TECH_DEBT_AUDIT_2026-07-15.md`
+
+PR #233, PR #230, and local reproduction fail before producing a vulnerability result: pnpm reports `ERR_PNPM_AUDIT_BAD_RESPONSE` because the registry legacy audit endpoint returns HTTP 410. Validate a supported pnpm v10 patch against the bulk endpoint first; otherwise use an already-approved platform-native signal or request approval for a replacement tool. The acceptance criterion is a live audit that still blocks critical vulnerabilities, plus a workflow regression guard—not removal or weakening of the gate.
+
+### TASK-DEV-025: Align local test-bootstrap Redis port contracts
+
+**Priority**: P1 · **Owner**: devops/backend · **Depends on**: TASK-DEV-003 · **Source**: `docs/audits/TECH_DEBT_AUDIT_2026-07-15.md`
+
+The canonical root test Compose file maps Redis to host port 6380, while `apps/api/scripts/bootstrap_test_infra.py` defaults to 6379. CI happens to provide a separate service container on 6379, masking the mismatch. Make local bootstrap derive or receive the canonical port, distinguish CI and local ports in the runbook, and protect the contract with a focused test.
+
+### TASK-DEV-026: Remove frontend test-runner listener accumulation
+
+**Priority**: P2 · **Owner**: frontend/qa · **Depends on**: — · **Source**: `docs/audits/TECH_DEBT_AUDIT_2026-07-15.md`
+
+`pnpm test:all` is green (269 files, 849 tests) but repeatedly emits `MaxListenersExceededWarning`. Identify the setup/listener that accumulates across workers, add lifecycle cleanup and a focused regression, and retain the default listener limit so the warning cannot be merely hidden. Treat third-party CSS source-map warnings as a separate non-blocking signal.
+
+### TASK-DEV-028: Python dependency and local-environment reproducibility
+
+**Priority**: P2 · **Owner**: backend/devops · **Depends on**: — · **Source**: `docs/audits/TECH_DEBT_AUDIT_2026-07-15.md`
+
+`apps/api/requirements.txt` contains two overlapping `psycopg[binary]` floors. The reused audit `.venv` also reports an orphaned `supafunc 0.4.7` versus httpx conflict even though fresh requirements resolution passes pip-audit and reports no known vulnerabilities. Recreate a clean venv, require `pip check` and `pip-audit` evidence, remove only the redundant bound under a focused requirements guard, and document the clean-bootstrap command. Any broader constraints/locking change needs separate approval.
+
+### TASK-DEV-029: Phased TypeScript upgrade 5.3.3 → current 5.x
+
+**Priority**: P2 · **Owner**: frontend · **Depends on**: — · **Source**: `docs/audits/TECH_DEBT_AUDIT_2026-07-15.md`
+
+`apps/web/package.json` pins `typescript: "5.3.3"` (Jan 2024). Upgrade stepwise (5.4 → 5.5 → … → current), running `pnpm typecheck` and `pnpm build` at each step; land with per-step commits so any breaking type change bisects cleanly.
+
 ---
 
 ## Completed Tasks
+
+### TASK-DEV-027: Full repository health and technical-debt audit ✅ 2026-07-15
+
+**Priority**: P1 · **Owner**: devops/reviewer · **Source**: owner-requested full repository audit
+
+Completed diagnosis-only evidence collection across live `main` and open-PR CI, npm/pnpm consistency, backend CI-equivalent gates, frontend quality/build/test gates, Alembic/Supabase migration assets, dependency health, and tracked artifacts. The canonical report is `docs/audits/TECH_DEBT_AUDIT_2026-07-15.md`. No remediation, dependency change, gate relaxation, or tracked-file deletion was performed; execution is stopped at the owner approval gate.
 
 ### TASK-DEV-013: Repair advisory `pip-audit` invocation ✅ 2026-07-14
 

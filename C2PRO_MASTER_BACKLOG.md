@@ -14,7 +14,7 @@
 | ------------------ | ---------------------------------------------------------------------- | -------- | ----- | ------ | --------- |
 | AI/ML Intelligence | [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md) | ai       | 78    | 43     | 35        |
 | Backend            | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md)                     | backend  | 55    | 8      | 47        |
-| DevOps             | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md)                       | devops   | 23    | 7      | 16        |
+| DevOps             | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md)                       | devops   | 29    | 8      | 21        |
 | Documentation      | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md)         | shared   | 0     | 0      | 0         |
 | Frontend           | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md)                   | frontend | 202   | 10     | 192       |
 | Infrastructure     | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md)       | infra    | 59    | 17     | 42        |
@@ -22,18 +22,6 @@
 | Quality Assurance  | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md)   | qa       | 120   | 108    | 12        |
 | Code Review        | [backlogs/REV_CODE_REVIEW.md](backlogs/REV_CODE_REVIEW.md)             | reviewer | 25    | 0      | 25        |
 | Security           | [backlogs/SEC_SECURITY.md](backlogs/SEC_SECURITY.md)                   | security | 1     | 1      | 0         |
-| Category | File | Owner | Total | Active | Completed |
-| -------- | ---- | ----- | ----- | ------ | --------- |
-| AI/ML Intelligence | [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md) | ai | 78 | 43 | 35 |
-| Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 55 | 8 | 47 |
-| DevOps | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md) | devops | 9 | 6 | 3 |
-| Documentation | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md) | shared | 0 | 0 | 0 |
-| Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 202 | 10 | 192 |
-| Infrastructure | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md) | infra | 59 | 17 | 42 |
-| Planning | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md) | planner | 0 | 0 | 0 |
-| Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 120 | 108 | 12 |
-| Code Review | [backlogs/REV_CODE_REVIEW.md](backlogs/REV_CODE_REVIEW.md) | reviewer | 25 | 0 | 25 |
-| Security | [backlogs/SEC_SECURITY.md](backlogs/SEC_SECURITY.md) | security | 1 | 1 | 0 |
 
 ---
 
@@ -72,6 +60,12 @@
 |[ ]|P2|`TASK-DEV-020`|—|Artifact & junk purge (owner-approved 2026-07-14): 234 tracked artifacts incl. `apps/web/coverage/.tmp` (232 files), api-root junk (`=2.0.0`, pytest/coverage XMLs, stray pre-src modules after usage check) + .gitignore gaps (`apps/web/coverage/`, `.claude/scheduled_tasks.lock`).|`backlogs/DEV_DEVOPS.md`|
 |[ ]|P2|`TASK-DEV-021`|`TASK-DEV-009`|Fix Husky pre-commit: ruff branch lacks `\|\| exit 1` and script ends in echo → hook always exits 0 for Python-only changes. Fix after ruff baseline is clean; scope to staged files.|`backlogs/DEV_DEVOPS.md`|
 |[ ]|P2|`TASK-DEV-023`|`TASK-DEV-005`|Nightly full-E2E lane: 27 of 29 Playwright spec files never run anywhere (CI = 2 smoke specs); add scheduled non-blocking full-suite run; triage the 5 state-conditional `test.skip(true, …)` in document-analysis-pipeline.spec.ts.|`backlogs/DEV_DEVOPS.md`|
+|[ ]|P0|`TASK-DEV-024`|`TASK-DEV-003`|Repair the JavaScript dependency-audit lane: `pnpm audit --audit-level critical --prod` now exits with `ERR_PNPM_AUDIT_BAD_RESPONSE` because the registry legacy audit endpoint returns HTTP 410. Preserve a real critical-vulnerability gate and prove it with a live run.|`backlogs/DEV_DEVOPS.md`|
+|[ ]|P1|`TASK-DEV-025`|`TASK-DEV-003`|Align local backend test bootstrap Redis ports: root `docker-compose.test.yml` exposes 6380 while `bootstrap_test_infra.py` defaults to 6379 and the runbook conflates local Compose with CI's Redis service.|`backlogs/DEV_DEVOPS.md`|
+|[ ]|P2|`TASK-DEV-026`|—|Eliminate repeated frontend Vitest `MaxListenersExceededWarning` through listener lifecycle/root-cause cleanup; do not silence it by raising the listener limit. Keep third-party source-map warnings classified separately.|`backlogs/DEV_DEVOPS.md`|
+|[x]|P1|`TASK-DEV-027`|—|Full repository health and technical-debt audit dated 2026-07-15: live CI/PR triage, pnpm/npm verdict and migration plan, backend/frontend local gates, migration/dependency checks, hygiene inventory, prioritized execution plan. Diagnosis only; remediation pending approval. `[x] Completed (Evidence-backed audit and tracker synchronization)`|`docs/audits/TECH_DEBT_AUDIT_2026-07-15.md`|
+|[ ]|P2|`TASK-DEV-028`|—|Re-establish Python dependency/environment reproducibility: verify a clean venv with `pip check` + `pip-audit`, remove the duplicate `psycopg[binary]` lower bound under a focused requirements guard, and document clean bootstrap. Do not introduce a new lock/constraints system without approval.|`backlogs/DEV_DEVOPS.md`|
+|[ ]|P2|`TASK-DEV-029`|—|Phased TypeScript upgrade from pinned 5.3.3 to current 5.x in apps/web; `pnpm typecheck` + `pnpm build` at each step; per-step commits for clean bisection.|`backlogs/DEV_DEVOPS.md`|
 |[x]|P1|`TASK-DEV-012`|`TASK-SEC-DEPENDABOT-001`|Apply PR #228's isolated PostCSS patch update from 8.5.16 to 8.5.17 without importing the coupled Vite 8/esbuild lock rewrite. `[x] Implemented (offline frozen-lockfile RED/GREEN)`|`backlogs/DEV_DEVOPS.md`|
 
 ## Pending Tasks by Category
@@ -502,6 +496,8 @@ FOLLOW-UPS (open):
 ---
 
 ## Change Log
+
+**2026-07-15 (reconciliation)**: Multi-agent re-audit reconciled (Codex/DeepSeek/Gemini were accidentally given the audit prompt). Leader-verified and accepted: `TASK-DEV-024` (P0 — `pnpm audit` endpoint retired, HTTP 410, reproduced locally; even pnpm@latest fails), `TASK-DEV-025` (Redis port contract 6380 vs 6379, verified in compose + bootstrap defaults), `TASK-DEV-026` (vitest MaxListenersExceededWarning, 7 occurrences reproduced), `TASK-DEV-027` (completed 2026-07-15 re-audit), `TASK-DEV-028` (duplicate `psycopg[binary]` floors verified at requirements.txt L14-15), `TASK-DEV-029` (TypeScript 5.3.3 phased upgrade). Folded into existing tasks: apps/api compose dedup + apps/web/.gitignore expansion → `TASK-DEV-020`; tailwindcss-animate category + openapi-typescript-codegen deprecation + pnpm v11 overrides caveat → `TASK-DEV-022`. REFUTED: "66+ tracked `__pycache__`" (git tracks zero). The 2026-07-15 report's own proposed task-ID table is superseded by these registrations.
 
 **2026-07-15**: Registered tech-debt audit results (`docs/audits/TECH_DEBT_AUDIT_2026-07-14.md`, owner-approved remediation). New tasks `TASK-DEV-016`…`TASK-DEV-023` (pnpm standardization, Dependabot majors triage, CI frontend build, coverage policy, artifact purge, Husky fix, root manifest hygiene, nightly E2E lane). Corrections from live verification: `TASK-DEV-007` core item DONE (main protected by active ruleset `Protect main` id 18843913 — PR + `CI Status` + `gitleaks`; P0→P2 for remaining owner sub-items); `TASK-DEV-009` baseline corrected to 206 violations under CI-pinned ruff 0.15.21 (94 auto-fixable), P2→P1; fixed interleaved TASK-DEV-007/008 sections in `backlogs/DEV_DEVOPS.md` (bad merge). Also verified: `SECRETS.md`/`claves postgre.txt` local-only with zero git history (no leak); Dependabot green trio #224/#225/#226 pass all required checks.
 
