@@ -13,7 +13,7 @@
 
 ## Status View
 
-**Pending Tasks**: 6 (`TASK-DEV-004` … `TASK-DEV-009`)
+**Pending Tasks**: 14 (`TASK-DEV-004`…`006`, `007` (partial), `008`, `009`, `015`, `016`…`023`)
 
 **Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), `TASK-DEV-011` (Tenacity compatibility guard, below), `TASK-DEV-012` (PostCSS patch isolation, below), `TASK-DEV-013` (Python dependency audit repair, below), and `TASK-DEV-014` (js-minor-patch group bump, below).
 
@@ -58,20 +58,71 @@ The integration suite fails on main (as of 2026-07-12: `14 failed, 74 passed, 3 
 
 Cognitive-complexity code smells (Reliability/Security rating C on new code) surfaced in `apps/web/app/(app)/raci/page.tsx`, `.../projects/page.tsx`, and `.../projects/[id]/budget/page.tsx` when the js-minor-patch fix commit (`TASK-DEV-014`, commit `15cb74cd`) edited those pages. Non-blocking; unrelated to dependencies. The SonarCloud quality gate on PR #223 failed pre-merge but is NON-BLOCKING and identical to the pre-merge failure on tip `c50ea946` (caused by the same pages edited, not the dependency bump itself). Status: not started.
 
-### TASK-DEV-008: Repair corrupted Makefile `help`/`openapi` targets
-
-**Priority**: P3 · **Owner**: devops · **Depends on**: —
 ### TASK-DEV-007: GitHub settings manual follow-ups (owner action)
 
-**Priority**: P0 (branch protection) · **Owner**: repo owner · **Depends on**: TASK-DEV-003 merged to main
+**Priority**: P2 (was P0; core item done) · **Owner**: repo owner · **Depends on**: TASK-DEV-003 merged to main
 
 Actions only the repo owner can do in GitHub settings — full instructions in `docs/runbooks/ci-cd-setup.md`:
-- [ ] Branch protection ruleset on `main`: require PR + required checks **`CI Status`** and **`gitleaks`** (optionally `Vercel`). `main` is currently UNPROTECTED — with platform auto-deploy this ruleset is the production deploy gate.
+- [x] Branch protection ruleset on `main`: **DONE** — active ruleset `Protect main` (id 18843913) verified 2026-07-14 via API: requires PR + required checks **`CI Status`** and **`gitleaks`**, non-fast-forward. (Legacy branch-protection API returns 404 because protection is ruleset-based — expected.)
 - [ ] Add `CODECOV_TOKEN` secret (from codecov.io) so backend coverage uploads work (upload is non-fatal meanwhile).
 - [ ] `Production` environment: add Required reviewers (approval gate for `release.yml` publish).
 - [ ] Delete stale `staging` environment.
 - [ ] Optional cleanup: delete now-unused secrets `RAILWAY_TOKEN_PRODUCTION`, `VERCEL_TOKEN`, `PRODUCTION_API_URL`, `SUPABASE_*_PRODUCTION`/staging family.
-The `openapi` target text is embedded *inside* the `help` recipe (Makefile lines 25–33, bad merge), so `make openapi` — documented in CLAUDE.md — does not exist and `make help` echoes garbage. Extract `openapi:` into a real target. CI does not depend on the Makefile, so this is DX-only.
+- [ ] Verify the Vercel project's install command uses pnpm (dashboard-side; the repo has no `vercel.json`).
+
+### TASK-DEV-008: Repair corrupted Makefile `help`/`openapi` targets
+
+**Priority**: P3 · **Owner**: devops · **Depends on**: —
+
+The `openapi` target text is embedded *inside* the `help` recipe (Makefile lines 25–33, bad merge), so `make openapi` — documented in CLAUDE.md — does not exist and `make help` echoes garbage. Extract `openapi:` into a real target. CI does not depend on the Makefile, so this is DX-only. Fold into the TASK-DEV-016 Makefile overhaul (same file, one commit): also standardize `.venv` (targets currently activate `venv/` while setup creates `.venv/`) and migrate `docker-compose` → `docker compose`.
+
+### TASK-DEV-016: npm→pnpm standardization (enforced end-to-end)
+
+**Priority**: P1 · **Owner**: devops · **Depends on**: — · **Source**: `docs/audits/TECH_DEBT_AUDIT_2026-07-14.md` §4
+
+Audit verdict: mixing is real but contained to human surfaces — Makefile (8 npm calls incl. `setup-frontend: npm install`, which bypasses `pnpm.overrides` security pins), `README.md` L147/177/180, `QUICK_START.md` ×5, `apps/web/README_SETUP.md` ×8 (incl. `npm install next-themes`), and `apps/web` script `verify:openspec: npm --prefix`. No stray lockfiles anywhere; CI/Husky/deploy are pnpm-pure. Plan: (1) guard first — root `preinstall: npx only-allow pnpm`, `engines` (node 22 / pnpm 10) in root+web, `.npmrc` `engine-strict=true`, `.nvmrc`; (2) Makefile → pnpm (with TASK-DEV-008 repair); (3) `verify:openspec` → `pnpm -w run`; (4) docs → pnpm (`npx supabase` → `pnpm exec supabase`); archived docs untouched. Verify: frozen install + frontend gates + make-target smoke + npm-grep gate.
+
+### TASK-DEV-017: Dependabot major-bump queue triage (#233, #230, #227, green trio)
+
+**Priority**: P1 · **Owner**: devops/backend · **Depends on**: — · **Source**: audit §3 P0-1..P0-3
+
+`#233` bcrypt 4→5 and `#230` redis 5→8 fail required gates (stale vs main + likely real incompatibilities: passlib/bcrypt-5 API removal; redis-py three-major jump touching cache + rate limiter). Rebase → re-triage → fix-forward or defer-with-`dependabot.yml`-ignore. `#227` vite 8 hard-fails at install: root `pnpm.overrides` pins `vite 7.3.5` → `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` (structural: any overridden package fails this way — governance fix in TASK-DEV-022). `#224`/`#225`/`#226` are GREEN majors awaiting a merge decision (pdfjs-dist needs behavioral validation of the PDF viewer).
+
+### TASK-DEV-018: Add frontend production build to CI
+
+**Priority**: P1 · **Owner**: devops · **Depends on**: — · **Source**: audit §3 P1-5
+
+No CI job runs `next build`; only Vercel builds at deploy time, so build-only regressions surface post-merge. Add a build step/job to the frontend lane using the existing mock Clerk env (local build passes ~2 min), and/or make the Vercel preview check required in the ruleset. Update the workflow meta-tests accordingly.
+
+### TASK-DEV-019: Coverage policy alignment (one enforced number)
+
+**Priority**: P1 · **Owner**: devops · **Depends on**: — · **Source**: audit §3 P1-6
+
+Three contradictory configs: ci.yml backend-unit runs `--cov-fail-under=0`; `apps/api/pyproject.toml` says `fail_under = 70`; `codecov.yml` targets 80% (statuses not required); vitest has no thresholds. Measure actuals first, then: enforce 70 in CI for backend (drop the `--cov-fail-under=0` override) and add vitest thresholds at measured actuals as a ratchet. Never lower an existing threshold.
+
+### TASK-DEV-020: Artifact & junk purge + .gitignore gaps
+
+**Priority**: P2 · **Owner**: devops · **Depends on**: — · **Source**: audit §3 P2-1 (full file list there; owner-approved 2026-07-14)
+
+234 tracked artifact files: `apps/web/coverage/.tmp/` (232 files, 1.9 MB — `.gitignore` only has root-only `/coverage`), `apps/web/test-results/.last-run.json`, `backups/*.bak`, `apps/api` junk (`=2.0.0`, `=3.2.0`, `docker-compose … up -d` file, pytest/coverage XML/JSON reports, `test_real.pdf`, `test_error_handling_standalone copy.py`), stray pre-src-layout api root modules (usage-check before deleting: `models.py`, `sqlalchemy_orm.py`, `sqlalchemy_document_repository.py`, …), root clutter (Consenso*, `analyze_payload.json`, `blackboard.json`). Add `.gitignore`: `apps/web/coverage/`, `.claude/scheduled_tasks.lock`.
+
+### TASK-DEV-021: Husky pre-commit cannot fail on ruff — fix enforcement
+
+**Priority**: P2 · **Owner**: devops · **Depends on**: TASK-DEV-009 (clean baseline first) · **Source**: audit §3 P2-3
+
+Root cause of the "hook does not reliably run" note: `.husky/pre-commit` runs the ruff branch without `|| exit 1` and the script ends in `echo "✅ …"`, so it always exits 0 for Python-only changes (the ESLint branch does have `|| exit 1`). Fix after the ruff baseline is clean, and scope the check to staged files.
+
+### TASK-DEV-022: Root package.json hygiene + single pnpm.overrides
+
+**Priority**: P1 · **Owner**: devops · **Depends on**: — · **Source**: audit §3 P2-4 + P0-3
+
+Root manifest is misleading: `"name": "package.json"`, unused runtime deps (next/react/recharts@^3-vs-web-@^2/@google/generative-ai/@sentry/react/lucide drift — only referenced by `context/experimental` and `docs/archive`), npm-style `overrides` duplicated beside `pnpm.overrides`, plus a third dead `overrides` block in `apps/web/package.json`. Collapse to a single root `pnpm.overrides`; per pin decide keep-as-security-pin (+ matching `dependabot.yml` ignore) vs drop; prune unused deps; rename package; regenerate lockfile; full frontend gates re-run.
+
+### TASK-DEV-023: Nightly full-E2E lane (27 of 29 Playwright spec files never run)
+
+**Priority**: P2 · **Owner**: frontend/devops · **Depends on**: TASK-DEV-005 (i13 fixture) · **Source**: audit §3 P1-7
+
+CI runs only 2 smoke specs; the rest rot invisibly and `document-analysis-pipeline.spec.ts` contains 5 state-conditional `test.skip(true, …)`. Add a scheduled (nightly) non-blocking workflow running the full suite with seeded data; triage conditional skips into deterministic tests or explicit quarantine.
 
 ---
 
