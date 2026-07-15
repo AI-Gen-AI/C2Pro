@@ -46,7 +46,7 @@ Pillow>=10.0.0  # Image processing for OCR
 # Security
 PyJWT[crypto]>=2.8.0
 passlib[bcrypt]==1.7.4
-bcrypt==4.0.1  # passlib 1.7.4 backend detection breaks on newer bcrypt builds
+bcrypt==5.0.0  # passlib 1.7.4 backend detection breaks on newer bcrypt builds
 
 # Privacy & GDPR Compliance
 # presidio-analyzer==2.2.354  # Requires spacy
