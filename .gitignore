@@ -98,6 +98,13 @@ claves postgre.txt
 .pytest-tmp-local/
 .mypy_cache/
 ruff_errors.json
+apps/api/.pytest-collect.txt
+apps/api/.pytest-*.xml
+apps/api/.coverage-*.xml
+apps/api/coverage*.json
+apps/api/coverage*.xml
+apps/api/test-results-*.xml
+apps/api/=*
 
 # Local copies
 * - copia.xlsx

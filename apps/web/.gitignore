@@ -3,3 +3,11 @@
 /.clerk/
 .vercel
 .env*
+
+# Generated test and build artifacts
+/coverage/
+/test-results/
+/playwright-report/
+*.log
+tsconfig.tsbuildinfo
+wireframe-coverage.json
