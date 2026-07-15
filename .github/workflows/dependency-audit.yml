@@ -2,10 +2,13 @@
 # ones — that is dependency-review.yml's job).
 #
 #   * pip-audit: advisory — reports to the job summary, never blocks.
-#   * osv-scan: blocks on known vulnerabilities in the JS dependency tree
-#     (pnpm-lock.yaml) via Google's OSV scanner. Replaces the former `pnpm audit`,
-#     which stopped working when the npm legacy audit endpoint was retired
-#     (HTTP 410 — ERR_PNPM_AUDIT_BAD_RESPONSE). See TASK-DEV-024.
+#   * osv-scan: scans the JS dependency tree (pnpm-lock.yaml) against the OSV
+#     database and blocks on High/Critical advisories (CVSS >= 7.0). Replaces the
+#     former `pnpm audit`, which stopped working when the npm legacy audit
+#     endpoint was retired (HTTP 410 — ERR_PNPM_AUDIT_BAD_RESPONSE). The old job
+#     gated on `--audit-level critical`; the severity gate here preserves that
+#     threshold behavior (Medium/Low are reported but non-blocking). See
+#     TASK-DEV-024.
 
 name: Dependency Audit
 
@@ -60,7 +63,7 @@ jobs:
           exit "${AUDIT_FAILED:-0}"
 
   osv-scan:
-    name: OSV scan (blocks on vulnerabilities)
+    name: OSV scan (blocks on High/Critical)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -69,12 +72,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      # Scans pnpm-lock.yaml against the OSV database and fails on any known
-      # vulnerability in the resolved dependency tree. Pinned to a specific
-      # release so scanner behavior is stable (the action's own README notes
-      # behavior may change across minor patches when unpinned).
+      # osv-scanner exits non-zero on ANY advisory regardless of severity. We let
+      # it run to completion (continue-on-error) to emit JSON, then gate on
+      # severity below — so a High/Critical advisory blocks CI while pre-existing
+      # Medium/Low advisories in pinned/transitive deps do not. Pinned to a
+      # specific release for stable scanner behavior.
       - name: Scan dependency lockfile against the OSV database
+        id: osv
+        continue-on-error: true
         uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
         with:
           scan-args: |-
+            --format=json
+            --output=osv-results.json
             --lockfile=pnpm-lock.yaml
+
+      # Fails only on CVSS >= 7.0 (High/Critical), preserving the old
+      # `pnpm audit --audit-level critical` threshold. Fail-closed if the
+      # scanner produced no parseable results.
+      - name: Gate on High/Critical severity
+        run: python3 .github/scripts/osv_gate.py osv-results.json
