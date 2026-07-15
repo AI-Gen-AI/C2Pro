@@ -1,6 +1,7 @@
 """Tests for golden dataset evaluators."""
 
 import pytest
+
 from golden.evaluators.base import EvaluationResult
 from golden.evaluators.coherence_evaluator import ActualCoherenceIssue, CoherenceEvaluator
 from golden.evaluators.state_evaluator import StateEvaluator

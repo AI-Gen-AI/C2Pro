@@ -57,7 +57,7 @@ def upgrade() -> None:
 
         # Drop legacy join-based policies
         op.execute(f"DROP POLICY IF EXISTS tenant_isolation_{table} ON {table}")
-        
+
         # Drop possible crud-specific legacy policies
         for action in ["select", "insert", "update", "delete"]:
             op.execute(f"DROP POLICY IF EXISTS {table}_tenant_isolation_{action} ON {table}")
@@ -102,11 +102,11 @@ def downgrade() -> None:
     for table in tables:
         for action in ["select", "insert", "update", "delete"]:
             op.execute(f"DROP POLICY IF EXISTS {table}_tenant_isolation_{action} ON {table}")
-        
+
         op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
-    
+
     op.drop_index("ix_raci_tenant", "stakeholder_wbs_raci")
     op.drop_index("ix_stakeholders_tenant", "stakeholders")
-    
+
     op.drop_column("stakeholder_wbs_raci", "tenant_id")
     op.drop_column("stakeholders", "tenant_id")

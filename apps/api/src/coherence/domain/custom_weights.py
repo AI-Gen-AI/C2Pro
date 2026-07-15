@@ -53,7 +53,7 @@ class CustomWeightRegistry:
         else:
             if current_total <= 0:
                 equal = 1.0 / len(CoherenceCategory)
-                normalized = {category: equal for category in CoherenceCategory}
+                normalized = dict.fromkeys(CoherenceCategory, equal)
             elif abs(current_total - 1.0) > 1e-9:
                 normalized = {category: value / current_total for category, value in normalized.items()}
 

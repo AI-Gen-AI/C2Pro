@@ -101,7 +101,7 @@ def test_all_six_assessed_zero_findings_no_collapse(svc: ScoringService) -> None
     The coverage_ratio multiplier was the ADR-009 §1 P1 violation — it must be
     removed. reason should be 'assessed_clean' when all assessed and no findings.
     """
-    coverage_map = {c: True for c in ALL_CATEGORIES}
+    coverage_map = dict.fromkeys(ALL_CATEGORIES, True)
 
     result: ScoringDiagnostics = svc.calculate_detailed(
         signals=[],
@@ -131,7 +131,7 @@ def test_poor_extraction_quality_returns_insufficient_evidence(svc: ScoringServi
     score=None with reason="insufficient_evidence". This behaviour is unchanged
     by the §14 guard — the poor-quality gate fires before it.
     """
-    coverage_map = {c: True for c in ALL_CATEGORIES}
+    coverage_map = dict.fromkeys(ALL_CATEGORIES, True)
 
     result: ScoringDiagnostics = svc.calculate_detailed(
         signals=[],

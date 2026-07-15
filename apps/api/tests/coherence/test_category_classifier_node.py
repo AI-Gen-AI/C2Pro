@@ -14,7 +14,7 @@ Key invariants:
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -47,12 +47,12 @@ def _chunk(text: str = "sample text") -> ChunkSignal:
 
 def _all_clear_relevance(score: float = 0.80) -> dict[CanonicalCategory, float]:
     """All categories above escalate_high — no escalation needed."""
-    return {cat: score for cat in CanonicalCategory}
+    return dict.fromkeys(CanonicalCategory, score)
 
 
 def _all_low_relevance(score: float = 0.10) -> dict[CanonicalCategory, float]:
     """All categories below insufficient_evidence — no escalation needed."""
-    return {cat: score for cat in CanonicalCategory}
+    return dict.fromkeys(CanonicalCategory, score)
 
 
 def _ambiguous_relevance(
@@ -108,13 +108,13 @@ class TestAmbiguityDetection:
     def test_exactly_at_escalate_low_is_not_ambiguous(self):
         # escalate_low=0.35: strict > so 0.35 is NOT in ambiguous zone
         node = _make_node()
-        relevance = {cat: 0.35 for cat in CanonicalCategory}
+        relevance = dict.fromkeys(CanonicalCategory, 0.35)
         assert not node.is_ambiguous_chunk(relevance)
 
     def test_exactly_at_escalate_high_is_not_ambiguous(self):
         # escalate_high=0.65: strict < so 0.65 is NOT in ambiguous zone
         node = _make_node()
-        relevance = {cat: 0.65 for cat in CanonicalCategory}
+        relevance = dict.fromkeys(CanonicalCategory, 0.65)
         assert not node.is_ambiguous_chunk(relevance)
 
     def test_multiple_categories_in_zone_is_ambiguous(self):
@@ -407,7 +407,7 @@ class TestChunkClassificationResult:
     def test_is_immutable(self):
         result = ChunkClassificationResult(
             chunk_id="test-id",
-            relevance={cat: 0.5 for cat in CanonicalCategory},
+            relevance=dict.fromkeys(CanonicalCategory, 0.5),
             was_escalated=False,
             escalated_categories=frozenset(),
         )

@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from core.ai.sync_prompts import run_sync
 
+from core.ai.sync_prompts import run_sync
 from src.core.ai.prompt_registry import InMemoryPromptHubClient
 
 

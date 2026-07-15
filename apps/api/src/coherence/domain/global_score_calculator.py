@@ -55,7 +55,7 @@ class GlobalScoreCalculator:
 
         if not relevant_weights:
             equal_weight = 1.0 / len(subscores)
-            return {scope: equal_weight for scope in subscores}
+            return dict.fromkeys(subscores, equal_weight)
 
         weight_sum = sum(relevant_weights.values())
 
@@ -77,7 +77,7 @@ class GlobalScoreCalculator:
 
         if weight_sum <= 0:
             equal_weight = 1.0 / len(relevant_weights)
-            return {scope: equal_weight for scope in relevant_weights}
+            return dict.fromkeys(relevant_weights, equal_weight)
 
         return {scope: weight / weight_sum for scope, weight in relevant_weights.items()}
 

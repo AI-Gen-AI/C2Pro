@@ -53,14 +53,14 @@ class TestGlobalScoreCalculator:
         assert score == pytest.approx(90.0)
 
     def test_003_global_score_all_100_equals_100(self) -> None:
-        subscores = {scope: 100.0 for scope in ScoreScope}
+        subscores = dict.fromkeys(ScoreScope, 100.0)
 
         score = GlobalScoreCalculator().calculate_global(subscores=subscores)
 
         assert score == 100.0
 
     def test_004_global_score_all_0_equals_0(self) -> None:
-        subscores = {scope: 0.0 for scope in ScoreScope}
+        subscores = dict.fromkeys(ScoreScope, 0.0)
 
         score = GlobalScoreCalculator().calculate_global(subscores=subscores)
 

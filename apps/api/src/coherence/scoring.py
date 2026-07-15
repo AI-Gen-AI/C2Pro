@@ -375,7 +375,7 @@ class ScoringService:
                 category_contributions={},
                 reason="insufficient_evidence",
                 missing_dimensions=unassessed,
-                category_scores={c: None for c in self._ALL_CATEGORIES},
+                category_scores=dict.fromkeys(self._ALL_CATEGORIES),
                 audit_coverage={
                     "assessed": len(assessed),
                     "total": 6,
@@ -391,7 +391,7 @@ class ScoringService:
             cat_penalty[s.category] += self._compute_signal_contribution(s)
 
         total_findings = len(signals)
-        category_scores: dict[str, float | None] = {c: None for c in self._ALL_CATEGORIES}
+        category_scores: dict[str, float | None] = dict.fromkeys(self._ALL_CATEGORIES)
 
         for category in assessed:
             other = [s for s in signals if s.category != category]

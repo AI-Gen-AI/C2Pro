@@ -8,6 +8,8 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from freezegun import freeze_time
+
 from alerts.domain.services.sla_calculator import (
     CRITICAL_SLA,
     HIGH_SLA,
@@ -17,7 +19,6 @@ from alerts.domain.services.sla_calculator import (
     SLACalculation,
     SLACalculator,
 )
-from freezegun import freeze_time
 
 
 class TestSLACalculatorGetPolicy:

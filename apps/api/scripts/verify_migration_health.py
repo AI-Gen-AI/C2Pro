@@ -12,7 +12,6 @@ from typing import TypeAlias
 
 import psycopg
 
-
 DownRevision: TypeAlias = tuple[str, ...]
 
 

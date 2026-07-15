@@ -432,7 +432,7 @@ async def llm_semantic_evaluate_async(
             "llm_signals": [],
             "llm_cost_usd": 0.0,
             "llm_calls_count": 0,
-            "coverage_map": {cat: False for cat in _LLM_CATEGORIES},
+            "coverage_map": dict.fromkeys(_LLM_CATEGORIES, False),
         }
 
     if gate is None:
@@ -463,7 +463,7 @@ async def _run_gate(
     rule_ids: tuple[str, ...],
 ) -> NodeOutput:
     """Inner loop: dispatch each (clause, rule) to the gate and aggregate."""
-    accum = _GateAccum(coverage={cat: False for cat in _LLM_CATEGORIES})
+    accum = _GateAccum(coverage=dict.fromkeys(_LLM_CATEGORIES, False))
     tenant_id = (state.config.tenant_id or "").strip() or \
         "00000000-0000-0000-0000-000000000000"
 

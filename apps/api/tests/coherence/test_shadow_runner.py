@@ -27,8 +27,7 @@ def _v1(score: float | None = 80.0) -> dict:
         "tenant_id": str(uuid4()),
         "coherence_score": score,
         "global_score": score,
-        "sub_scores": {c: 80 for c in
-                       ("SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME")},
+        "sub_scores": dict.fromkeys(("SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME"), 80),
         "weights_used": {},
         "alert_count": 0,
         "document_count": 5,

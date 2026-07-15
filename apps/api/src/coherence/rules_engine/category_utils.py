@@ -49,7 +49,7 @@ def infer_category(clause: Clause) -> CoherenceCategory:
     """
     combined = clause.text.lower() if clause.text else ""
 
-    scores: dict[CoherenceCategory, int] = {cat: 0 for cat in CATEGORY_KEYWORDS}
+    scores: dict[CoherenceCategory, int] = dict.fromkeys(CATEGORY_KEYWORDS, 0)
 
     for category, keywords in CATEGORY_KEYWORDS.items():
         for kw in keywords:

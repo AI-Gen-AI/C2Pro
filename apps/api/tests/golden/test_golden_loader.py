@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+
 from golden.loader import GoldenDatasetLoader
 from golden.schemas import (
     CoherenceDimension,
@@ -11,7 +12,6 @@ from golden.schemas import (
     InputDocuments,
     TrajectoryConstraint,
 )
-
 from tests.golden.conftest import (
     create_golden_case_json,
     create_golden_case_json_hierarchical,

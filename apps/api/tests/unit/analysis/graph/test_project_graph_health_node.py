@@ -7,8 +7,8 @@ from uuid import uuid4
 import pytest
 
 from src.analysis.adapters.graph.project_coherence_result import ProjectCoherenceResult
-from src.analysis.domain.documentation_health import DocumentationHealthSignal
 from src.analysis.domain.contracts import DocumentArtifact, RiskItem, Severity
+from src.analysis.domain.documentation_health import DocumentationHealthSignal
 from src.analysis.domain.node_result import NodeStatus
 from src.health.domain.health_vector import HealthDimension
 

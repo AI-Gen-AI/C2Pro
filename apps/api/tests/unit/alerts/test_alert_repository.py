@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+
 from alerts.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
 from alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
 from alerts.domain.models import Alert

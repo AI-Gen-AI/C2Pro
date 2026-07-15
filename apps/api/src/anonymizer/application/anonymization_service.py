@@ -111,7 +111,7 @@ class AnonymizationService:
         if not actionable:
             return []
 
-        chosen: list["DetectedPii"] = []
+        chosen: list[DetectedPii] = []
         for candidate in sorted(
             actionable,
             key=lambda item: (-(item.end - item.start), item.start),

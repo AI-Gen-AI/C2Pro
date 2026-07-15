@@ -22,7 +22,7 @@ def test_unassessed_categories_are_null_and_penalize_global():
 
 def test_assessed_clean_lands_in_baseline_band():
     svc = ScoringService()
-    cov = {c: True for c in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY")}
+    cov = dict.fromkeys(("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"), True)
     d = svc.calculate_detailed(signals=[_sig("TECHNICAL", 0.4)], num_clauses=20,
                                coverage_map=cov)
     assert 80.0 <= d.category_scores["LEGAL"] <= 90.0

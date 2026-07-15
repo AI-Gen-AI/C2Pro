@@ -27,8 +27,7 @@ def _make_v1(
         "global_score": coherence_score,
         "sub_scores": sub_scores
         or {"SCOPE": 90, "BUDGET": 60, "QUALITY": 85, "TECHNICAL": 70, "LEGAL": 95, "TIME": 75},
-        "weights_used": {c: 1 / 6 for c in
-                         ("SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME")},
+        "weights_used": dict.fromkeys(("SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME"), 1 / 6),
         "alert_count": 0,
         "document_count": 8,
         "methodology_version": "v1",

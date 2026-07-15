@@ -9,11 +9,11 @@ import asyncio
 from uuid import uuid4
 
 import pytest
+from alembic.config import Config
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import command
-from alembic.config import Config
 from src.analysis.adapters.persistence.models import Alert
 from src.config import settings
 

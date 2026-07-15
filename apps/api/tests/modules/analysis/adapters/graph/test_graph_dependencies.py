@@ -160,7 +160,7 @@ class TestGraphDependencyProviders:
                 assert kwargs["scope_defined"] is True
                 return SimpleNamespace(
                     global_score=88,
-                    category_scores={category: 88 for category in CoherenceCategory},
+                    category_scores=dict.fromkeys(CoherenceCategory, 88),
                 )
 
         monkeypatch.setattr(
