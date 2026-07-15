@@ -109,7 +109,7 @@ class NotificationConfigResponse(BaseModel):
         custom_headers = config.get("custom_headers")
         if custom_headers:
             # Mask header values
-            custom_headers = {k: "***" for k in custom_headers}
+            custom_headers = dict.fromkeys(custom_headers, "***")
 
         return cls(
             notification_channels=[

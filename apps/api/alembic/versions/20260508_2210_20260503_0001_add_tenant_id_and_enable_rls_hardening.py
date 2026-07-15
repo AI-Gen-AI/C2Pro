@@ -9,18 +9,15 @@ SECURITY HARDENING:
 2. Enables RLS on clause_embeddings, analyses, alerts, and audit_logs.
 3. Implements fail-closed RLS policies for tenant isolation.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
-
 
 # revision identifiers, used by Alembic.
 revision: str = '20260503_0001'
-down_revision: Union[str, None] = '20260425_0001'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = '20260425_0001'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -116,11 +113,11 @@ def downgrade() -> None:
     op.drop_index('ix_alerts_tenant', 'alerts')
     op.drop_index('ix_analyses_tenant', 'analyses')
     op.drop_index('ix_clause_embeddings_tenant', 'clause_embeddings')
-    
+
     op.drop_constraint('fk_alerts_tenant', 'alerts', type_='foreignkey')
     op.drop_constraint('fk_analyses_tenant', 'analyses', type_='foreignkey')
     op.drop_constraint('fk_clause_embeddings_tenant', 'clause_embeddings', type_='foreignkey')
-    
+
     op.drop_column('alerts', 'tenant_id')
     op.drop_column('analyses', 'tenant_id')
     op.drop_column('clause_embeddings', 'tenant_id')

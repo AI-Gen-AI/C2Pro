@@ -78,15 +78,14 @@ def assert_head_revision(database_url: str, api_dir: Path) -> str:
     nodes, _ = parse_migration_graph(versions_dir)
     expected_head = validate_linear_chain(nodes)
 
-    with psycopg.connect(database_url) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT version_num FROM alembic_version")
-            row = cur.fetchone()
-            if not row:
-                raise RuntimeError("alembic_version table is missing rows.")
-            applied = row[0]
-            if applied != expected_head:
-                raise RuntimeError(f"Alembic head mismatch. expected={expected_head}, applied={applied}")
+    with psycopg.connect(database_url) as conn, conn.cursor() as cur:
+        cur.execute("SELECT version_num FROM alembic_version")
+        row = cur.fetchone()
+        if not row:
+            raise RuntimeError("alembic_version table is missing rows.")
+        applied = row[0]
+        if applied != expected_head:
+            raise RuntimeError(f"Alembic head mismatch. expected={expected_head}, applied={applied}")
     return expected_head
 
 

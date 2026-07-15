@@ -487,12 +487,12 @@ class TestReviewQueueProjectFiltering:
 
     def test_repository_list_by_status_accepts_project_id(self):
         """Repository list_by_status signature accepts optional project_id."""
+        from unittest.mock import AsyncMock, MagicMock
         from uuid import uuid4
 
         from src.modules.hitl.adapters.persistence.repository import (
             SqlAlchemyReviewQueueRepository,
         )
-        from unittest.mock import AsyncMock, MagicMock
 
         mock_session = MagicMock()
         mock_session.execute = AsyncMock()
@@ -507,13 +507,12 @@ class TestReviewQueueProjectFiltering:
 
     def test_repository_list_by_status_applies_project_id_filter(self):
         """When project_id is provided, the SQL query includes it."""
+        from unittest.mock import AsyncMock, MagicMock
         from uuid import uuid4
 
-        from src.modules.hitl.adapters.persistence.models import ReviewItemORM
         from src.modules.hitl.adapters.persistence.repository import (
             SqlAlchemyReviewQueueRepository,
         )
-        from unittest.mock import AsyncMock, MagicMock
 
         tenant_id = uuid4()
         project_id = uuid4()
@@ -537,13 +536,12 @@ class TestReviewQueueProjectFiltering:
 
     def test_repository_list_by_status_omits_project_id_when_none(self):
         """When project_id is None, the filter is not applied (backward compat)."""
+        from unittest.mock import AsyncMock, MagicMock
         from uuid import uuid4
 
-        from src.modules.hitl.adapters.persistence.models import ReviewItemORM
         from src.modules.hitl.adapters.persistence.repository import (
             SqlAlchemyReviewQueueRepository,
         )
-        from unittest.mock import AsyncMock, MagicMock
 
         tenant_id = uuid4()
         mock_session = MagicMock()
@@ -570,12 +568,12 @@ class TestReviewQueueProjectFiltering:
 
     def test_repository_count_by_status_returns_true_count(self):
         """Repository count_by_status returns total matching rows not page size."""
+        from unittest.mock import AsyncMock, MagicMock
         from uuid import uuid4
 
         from src.modules.hitl.adapters.persistence.repository import (
             SqlAlchemyReviewQueueRepository,
         )
-        from unittest.mock import AsyncMock, MagicMock
 
         tenant_id = uuid4()
         mock_session = MagicMock()
@@ -594,12 +592,12 @@ class TestReviewQueueProjectFiltering:
 
     def test_repository_count_by_status_cross_tenant_returns_zero(self):
         """Cross-tenant project_id returns zero (tenant isolation preserved)."""
+        from unittest.mock import AsyncMock, MagicMock
         from uuid import uuid4
 
         from src.modules.hitl.adapters.persistence.repository import (
             SqlAlchemyReviewQueueRepository,
         )
-        from unittest.mock import AsyncMock, MagicMock
 
         tenant_id = uuid4()
         other_project_id = uuid4()
@@ -611,9 +609,7 @@ class TestReviewQueueProjectFiltering:
         repo = SqlAlchemyReviewQueueRepository(session=mock_session, tenant_id=tenant_id)
         import asyncio
 
-        count = asyncio.get_event_loop().run_until_complete(
-            repo.count_by_status(project_id=other_project_id)
-        )
+        asyncio.get_event_loop().run_until_complete(repo.count_by_status(project_id=other_project_id))
         call_args = mock_session.execute.call_args[0][0]
         sql_str = str(call_args.compile(compile_kwargs={"literal_binds": True}))
         tid_hex = str(tenant_id).replace("-", "")

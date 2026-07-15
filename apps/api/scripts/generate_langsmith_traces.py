@@ -25,7 +25,7 @@ api_dir = os.path.dirname(script_dir)
 repo_root = os.path.dirname(os.path.dirname(api_dir))
 sys.path.insert(0, api_dir)
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # noqa: E402 - import must follow the script path bootstrap
 
 # Load .env from repo root
 env_path = os.path.join(repo_root, ".env")

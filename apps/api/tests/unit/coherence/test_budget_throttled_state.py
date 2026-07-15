@@ -56,9 +56,9 @@ def test_build_category_breakdown_surfaces_budget_throttled():
     """
     from src.coherence.graph.nodes import _build_category_breakdown
 
-    coverage = {c: True for c in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "QUALITY")}
+    coverage = dict.fromkeys(("SCOPE", "BUDGET", "TIME", "TECHNICAL", "QUALITY"), True)
     coverage["LEGAL"] = False
-    cat_scores = {c: 85.0 for c in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "QUALITY")}
+    cat_scores = dict.fromkeys(("SCOPE", "BUDGET", "TIME", "TECHNICAL", "QUALITY"), 85.0)
     cat_scores["LEGAL"] = None
 
     bd = _build_category_breakdown(
@@ -77,9 +77,9 @@ def test_build_category_breakdown_omitting_throttled_set_uses_unassessed():
     unassessed remains 'unassessed' (no behavioral change for non-LLM paths).
     """
     from src.coherence.graph.nodes import _build_category_breakdown
-    coverage = {c: True for c in ("SCOPE","BUDGET","TIME","TECHNICAL","QUALITY")}
+    coverage = dict.fromkeys(("SCOPE", "BUDGET", "TIME", "TECHNICAL", "QUALITY"), True)
     coverage["LEGAL"] = False
-    cat_scores = {c: 85.0 for c in ("SCOPE","BUDGET","TIME","TECHNICAL","QUALITY")}
+    cat_scores = dict.fromkeys(("SCOPE", "BUDGET", "TIME", "TECHNICAL", "QUALITY"), 85.0)
     cat_scores["LEGAL"] = None
     bd = _build_category_breakdown(
         signals=[], coverage_map=coverage, category_scores=cat_scores,
@@ -92,8 +92,8 @@ def test_assessed_category_in_throttled_set_does_not_get_overridden():
     """Throttling only applies when the category is ALSO unassessed.
     An assessed-clean category in the throttled set keeps assessed_clean."""
     from src.coherence.graph.nodes import _build_category_breakdown
-    coverage = {c: True for c in ("SCOPE","BUDGET","TIME","TECHNICAL","LEGAL","QUALITY")}
-    cat_scores = {c: 85.0 for c in coverage}
+    coverage = dict.fromkeys(("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"), True)
+    cat_scores = dict.fromkeys(coverage, 85.0)
     bd = _build_category_breakdown(
         signals=[], coverage_map=coverage, category_scores=cat_scores,
         budget_throttled_categories={"LEGAL"},

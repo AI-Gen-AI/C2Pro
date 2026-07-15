@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
+
 from alerts.application.use_cases.resolve_alert_use_case import (
     AlertNotFoundError,
     ResolveAlertUseCase,

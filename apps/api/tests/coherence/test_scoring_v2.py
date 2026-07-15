@@ -38,7 +38,7 @@ def test_v2_returns_payload_object_with_six_categories() -> None:
     payload: CoherenceV2Payload = calculate_v2_from_signals(
         signals=[],
         evidence_bundles=bundles,
-        applicability_map={c: (True, None) for c in bundles},
+        applicability_map=dict.fromkeys(bundles, (True, None)),
         project_id=uuid4(),
     )
     assert len(payload.categories) == 6

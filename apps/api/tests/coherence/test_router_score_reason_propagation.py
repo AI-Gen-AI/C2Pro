@@ -72,7 +72,7 @@ def test_dashboard_summary_propagates_null_score_and_reason() -> None:
             "LEGAL": None,
             "QUALITY": None,
         },
-        weights_used={c: 1 / 6 for c in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY")},
+        weights_used=dict.fromkeys(("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"), 1 / 6),
         alert_count=0,
         document_count=2,
         score_version=SCORE_VERSION_V1,

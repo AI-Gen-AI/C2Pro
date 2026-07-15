@@ -375,7 +375,7 @@ class ScoringService:
                 category_contributions={},
                 reason="insufficient_evidence",
                 missing_dimensions=unassessed,
-                category_scores={c: None for c in self._ALL_CATEGORIES},
+                category_scores=dict.fromkeys(self._ALL_CATEGORIES),
                 audit_coverage={
                     "assessed": len(assessed),
                     "total": 6,
@@ -391,7 +391,7 @@ class ScoringService:
             cat_penalty[s.category] += self._compute_signal_contribution(s)
 
         total_findings = len(signals)
-        category_scores: dict[str, float | None] = {c: None for c in self._ALL_CATEGORIES}
+        category_scores: dict[str, float | None] = dict.fromkeys(self._ALL_CATEGORIES)
 
         for category in assessed:
             other = [s for s in signals if s.category != category]
@@ -882,9 +882,9 @@ def calculate_v2_from_signals(
                 cat == "BUDGET"
                 and isinstance(raw, dict)
                 and ("DET-BUD-SUM" in rule_id or "DET-BUD-INTERNAL" in rule_id)
+                and "items_sum" in raw
             ):
-                if "items_sum" in raw:
-                    budget_reconciliation_raw.setdefault("BUDGET", {}).update(raw)
+                budget_reconciliation_raw.setdefault("BUDGET", {}).update(raw)
         signals_by_category.setdefault(cat, []).append((str(rule_id), float(score)))
 
     categories = []

@@ -388,6 +388,14 @@ jobs:
     timeout-minutes: 15
     needs: detect-changes
     if: needs.detect-changes.outputs.migrations == 'true'
+    # alembic/env.py (and the single-head regression test) import
+    # src.config.settings, whose only required field is JWT_SECRET_KEY. Without
+    # it, `alembic upgrade head` aborts at Settings validation before applying
+    # any migration. This job previously "passed" only because it was skipped on
+    # non-migration PRs; provide the test env so the lane actually runs.
+    env:
+      ENVIRONMENT: test
+      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

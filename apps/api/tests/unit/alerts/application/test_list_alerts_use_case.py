@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
+
 from alerts.application.use_cases.list_alerts_use_case import ListAlertsUseCase
 from alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
 from alerts.domain.models import Alert

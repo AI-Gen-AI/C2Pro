@@ -25,8 +25,8 @@ def isolate_langsmith_and_langchain_sdks(monkeypatch: pytest.MonkeyPatch) -> Sim
     import langsmith
     import langsmith.run_helpers
     import langsmith.run_trees
-    import langsmith.utils
     import langsmith.schemas
+    import langsmith.utils
     try:
         import langchain
     except ImportError:

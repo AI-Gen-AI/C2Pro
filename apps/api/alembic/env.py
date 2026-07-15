@@ -19,10 +19,10 @@ from alembic import context
 
 # --- C2Pro: Import all ORM models for autogenerate ---
 from src.core.database import Base
-from src.core.dlq.models import *  # TASK-BCK-022: DLQ for analysis trigger failures
-from src.documents.adapters.persistence.models import *
-from src.projects.adapters.persistence.models import *
-from src.evidence.adapters.persistence.models import *  # ADR-011 Phase 2A.3 shadow persistence
+from src.core.dlq.models import *  # noqa: F403 - register all DLQ ORM models with Alembic metadata
+from src.documents.adapters.persistence.models import *  # noqa: F403 - register all document ORM models with Alembic metadata
+from src.evidence.adapters.persistence.models import *  # noqa: F403 - register all evidence ORM models with Alembic metadata
+from src.projects.adapters.persistence.models import *  # noqa: F403 - register all project ORM models with Alembic metadata
 
 # Agrega aquí futuros modelos ORM para que Alembic los detecte
 # from src.analysis.adapters.persistence.models import *

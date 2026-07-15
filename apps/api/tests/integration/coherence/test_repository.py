@@ -44,7 +44,7 @@ async def test_repository_roundtrip_preserves_score_version_fields(
     result = CoherenceCalculationResult(
         project_id=repository_project.id,
         global_score=72,
-        category_scores={category: 72 for category in CoherenceCategory},
+        category_scores=dict.fromkeys(CoherenceCategory, 72),
         category_details=[
             CategoryScoreDetail(category=category, score=72, violations=[])
             for category in CoherenceCategory

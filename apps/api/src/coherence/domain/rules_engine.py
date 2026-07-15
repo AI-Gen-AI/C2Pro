@@ -95,7 +95,7 @@ class CoherenceRulesEngine:
 
     def evaluate(self, context: CoherenceContext) -> CoherenceEvaluationResult:
         self._traces = []  # fresh evaluation
-        scores: dict[str, int] = {category: 100 for category in self._CATEGORIES}
+        scores: dict[str, int] = dict.fromkeys(self._CATEGORIES, 100)
         violations: dict[str, list[str]] = {category: [] for category in self._CATEGORIES}
 
         if not context.scope_defined:

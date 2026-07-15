@@ -240,7 +240,7 @@ async def pii_anonymizer_node(state: ProjectState) -> ProjectState:
     service = get_anonymization_service(detector)
 
     config = AnonymizationConfig(
-        strategies={pii_type: AnonymizationStrategy.REDACT for pii_type in PiiType}
+        strategies=dict.fromkeys(PiiType, AnonymizationStrategy.REDACT)
     )
     anonymized = await service.anonymize(text, config)
 

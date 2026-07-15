@@ -114,7 +114,7 @@ class ScoringConfig:
         if total == 0:
             # Fallback to equal weights
             n = len(self.category_weights)
-            return {k: 1.0 / n for k in self.category_weights}
+            return dict.fromkeys(self.category_weights, 1.0 / n)
         return {k: v / total for k, v in self.category_weights.items()}
 
     def compute_scope_factor(self, clause_count: int) -> float:

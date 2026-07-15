@@ -104,7 +104,7 @@ class CoherenceEvaluateRequest(BaseModel):
 
 
 def _empty_sub_scores() -> dict[str, float | None]:
-    return {category: None for category in COHERENCE_CATEGORIES}
+    return dict.fromkeys(COHERENCE_CATEGORIES)
 
 
 def _normalized_sub_scores(raw_scores: object) -> dict[str, float | None]:

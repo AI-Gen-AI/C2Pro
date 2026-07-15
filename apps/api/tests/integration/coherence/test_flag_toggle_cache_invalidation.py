@@ -16,7 +16,6 @@ from src.coherence.cache_invalidation import on_flag_flip
 from src.coherence.cache_keys import key
 from src.coherence.domain.v2_constants import SCORE_VERSION_V1, SCORE_VERSION_V2
 
-
 TENANT_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 OTHER_TENANT_ID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 PROJECT_ID = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")

@@ -80,8 +80,7 @@ async def test_full_evidence_yields_scored_categories() -> None:
         avg_technical_reliability=0.9, missing_required=[],
         references=[f"doc-{i}" for i in range(5)],
     )
-    evidence = {c: full_bundle for c in
-                ("SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME")}
+    evidence = dict.fromkeys(("SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME"), full_bundle)
     orch = _make_orchestrator(evidence)
     payload = await orch.run(
         project_id=uuid4(),
@@ -100,8 +99,7 @@ async def test_one_critical_conflict_depresses_score_but_not_null() -> None:
         avg_technical_reliability=0.9, missing_required=[],
         references=[f"doc-{i}" for i in range(5)],
     )
-    evidence = {c: full_bundle for c in
-                ("SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME")}
+    evidence = dict.fromkeys(("SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME"), full_bundle)
     conflicts = {
         "BUDGET": ConflictReport(
             severity="critical", hard_conflict=True,

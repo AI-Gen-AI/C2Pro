@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable
+from contextlib import suppress
 from typing import Any
 
 from src.coherence.domain.v2_constants import SCORE_VERSION_V1
@@ -78,14 +79,12 @@ def traced_coherence_node(
                     }
                     _validate_attributes(output_attributes)
                     if span:
-                        try:
+                        # TS-OBS-COH-001: Metadata enrichment is best-effort only.
+                        with suppress(Exception):
                             langsmith_client.update_span_metadata(
                                 span,
                                 output_attributes,
                             )
-                        except Exception:
-                            # TS-OBS-COH-001: Metadata enrichment is best-effort only.
-                            pass
 
                 return result
             except Exception as e:
@@ -93,11 +92,9 @@ def traced_coherence_node(
                 raise
             finally:
                 if span:
-                    try:
+                    # TS-OBS-COH-001: Telemetry finalization is best-effort only.
+                    with suppress(Exception):
                         langsmith_client.end_span(span, error=caught_error)
-                    except Exception:
-                        # TS-OBS-COH-001: Telemetry finalization is best-effort only.
-                        pass
 
         return wrapper
     return decorator

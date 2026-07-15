@@ -33,7 +33,9 @@ class EvidenceService:
     """
 
     def collect(  # noqa: D401 — Protocol-style stub
-        self, category: str, project_docs: list[Any]
+        self,
+        category: str,  # noqa: ARG002 - required by the EvidenceService interface
+        project_docs: list[Any],
     ) -> EvidenceBundle:
         if not project_docs:
             return EvidenceBundle(

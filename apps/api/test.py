@@ -21,6 +21,7 @@ def run_tests():
     # Ensure pytest is installed
     try:
         import pytest
+        _ = pytest
     except ImportError:
         print("pytest is not installed. Installing now...")
         subprocess.run(

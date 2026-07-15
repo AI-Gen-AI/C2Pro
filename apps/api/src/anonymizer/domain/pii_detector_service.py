@@ -36,7 +36,7 @@ class PiiDetectionResult:
     @property
     def counts(self) -> dict[PiiType, int]:
         """Returns a dictionary with the count of each detected PII type."""
-        counts_dict = {pii_type: 0 for pii_type in PiiType}
+        counts_dict = dict.fromkeys(PiiType, 0)
         for item in self.items:
             counts_dict[item.pii_type] += 1
         return counts_dict

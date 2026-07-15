@@ -9,7 +9,6 @@ TASK-BCK-023: Implement document update re-trigger flow
 - Add file_hash column for detecting duplicate uploads
 - Add index on file_hash for efficient lookup
 """
-import sqlalchemy as sa
 
 from alembic import op
 

@@ -25,8 +25,9 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from golden.schemas import CoherenceDimension, DifficultyLevel, GoldenCase
 from pydantic import ValidationError
+
+from golden.schemas import CoherenceDimension, DifficultyLevel, GoldenCase
 
 logger = logging.getLogger(__name__)
 

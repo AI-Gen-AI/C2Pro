@@ -72,6 +72,7 @@ def _make_service(wrapper: MagicMock | None = None):
     # Dynamically inject _parse_json_response for unit test backwards compatibility
     def _parse_json_response(self, content: str) -> dict:
         import json
+
         from src.core.ai.structured_output import _strip_markdown_json
         stripped = _strip_markdown_json(content)
         try:

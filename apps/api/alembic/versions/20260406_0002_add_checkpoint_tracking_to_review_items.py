@@ -8,9 +8,6 @@ Revises: 20260406_0001
 
 from __future__ import annotations
 
-import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
-
 from alembic import op
 
 revision: str = "20260406_0002"

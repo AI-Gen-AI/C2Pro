@@ -41,8 +41,7 @@ def _make_v1_partial(sub_scores: dict) -> dict:
         "coherence_score": 15,        # the buggy v1 number — must NOT be echoed
         "global_score": 15,
         "sub_scores": sub_scores,
-        "weights_used": {c: 1 / 6 for c in
-                         ("SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME")},
+        "weights_used": dict.fromkeys(("SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME"), 1 / 6),
         "alert_count": 0,
         "document_count": 2,
         "methodology_version": "v1",

@@ -400,8 +400,8 @@ class TestCoherenceCalculationService:
             previous_global_score=50,
             new_global_score=85,
             score_delta=35,  # Large delta
-            previous_category_scores={cat: 50 for cat in CoherenceCategory},
-            new_category_scores={cat: 85 for cat in CoherenceCategory},
+            previous_category_scores=dict.fromkeys(CoherenceCategory, 50),
+            new_category_scores=dict.fromkeys(CoherenceCategory, 85),
             category_details=[],
             remaining_alerts=[],
             resolved_alert_ids=["R6"],
@@ -447,8 +447,8 @@ class TestCoherenceCalculationService:
             previous_global_score=50,
             new_global_score=85,
             score_delta=35,  # Large delta
-            previous_category_scores={cat: 50 for cat in CoherenceCategory},
-            new_category_scores={cat: 85 for cat in CoherenceCategory},
+            previous_category_scores=dict.fromkeys(CoherenceCategory, 50),
+            new_category_scores=dict.fromkeys(CoherenceCategory, 85),
             category_details=[],
             remaining_alerts=[],
             resolved_alert_ids=["R6"],
