@@ -2,7 +2,10 @@
 # ones — that is dependency-review.yml's job).
 #
 #   * pip-audit: advisory — reports to the job summary, never blocks.
-#   * pnpm audit: blocks on CRITICAL findings in production dependencies.
+#   * osv-scan: blocks on known vulnerabilities in the JS dependency tree
+#     (pnpm-lock.yaml) via Google's OSV scanner. Replaces the former `pnpm audit`,
+#     which stopped working when the npm legacy audit endpoint was retired
+#     (HTTP 410 — ERR_PNPM_AUDIT_BAD_RESPONSE). See TASK-DEV-024.
 
 name: Dependency Audit
 
@@ -56,21 +59,22 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit "${AUDIT_FAILED:-0}"
 
-  pnpm-audit:
-    name: pnpm audit (blocks on critical)
+  osv-scan:
+    name: OSV scan (blocks on vulnerabilities)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      # Scans pnpm-lock.yaml against the OSV database and fails on any known
+      # vulnerability in the resolved dependency tree. Pinned to a specific
+      # release so scanner behavior is stable (the action's own README notes
+      # behavior may change across minor patches when unpinned).
+      - name: Scan dependency lockfile against the OSV database
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
         with:
-          node-version: 22
-
-      - name: Audit production dependencies
-        run: pnpm audit --audit-level critical --prod
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
