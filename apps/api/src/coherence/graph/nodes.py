@@ -686,10 +686,7 @@ def _is_non_substantive_clause(clause: Clause) -> bool:
         return True
     if text == text.upper() and len(words) <= 12:
         return True
-    if _HEADING_RE.match(text) and len(words) <= 12:
-        return True
-
-    return False
+    return bool(_HEADING_RE.match(text) and len(words) <= 12)
 
 
 def _looks_like_reference_list(text: str) -> bool:

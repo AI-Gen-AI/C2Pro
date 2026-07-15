@@ -8,7 +8,7 @@ Incluye Row Level Security (RLS) para multi-tenancy.
 import re
 import time
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from uuid import UUID
 
 import structlog
@@ -222,11 +222,9 @@ async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
                 and request.state.tenant_id
                 and not settings.database_url.startswith("sqlite")
             ):
-                try:
+                # Connection might already be closed/invalid.
+                with suppress(Exception):
                     await session.execute(text("RESET app.current_tenant"))
-                except Exception:
-                    # Connection might already be closed/invalid
-                    pass
                 logger.debug("RLS_tenant_reset", tenant_id=str(request.state.tenant_id))
 
 

@@ -882,9 +882,9 @@ def calculate_v2_from_signals(
                 cat == "BUDGET"
                 and isinstance(raw, dict)
                 and ("DET-BUD-SUM" in rule_id or "DET-BUD-INTERNAL" in rule_id)
+                and "items_sum" in raw
             ):
-                if "items_sum" in raw:
-                    budget_reconciliation_raw.setdefault("BUDGET", {}).update(raw)
+                budget_reconciliation_raw.setdefault("BUDGET", {}).update(raw)
         signals_by_category.setdefault(cat, []).append((str(rule_id), float(score)))
 
     categories = []

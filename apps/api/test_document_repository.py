@@ -13,10 +13,14 @@ pytest.skip(
     allow_module_level=True,
 )
 
-from src.documents.adapters.persistence.sqlalchemy_document_repository import (
+from src.documents.adapters.persistence.sqlalchemy_document_repository import (  # noqa: E402 - legacy import intentionally follows the module-level skip
     SqlAlchemyDocumentRepository,
 )
-from src.documents.domain.models import Document, DocumentStatus, DocumentType
+from src.documents.domain.models import (  # noqa: E402 - legacy imports intentionally follow the module-level skip
+    Document,
+    DocumentStatus,
+    DocumentType,
+)
 
 
 @pytest.mark.asyncio

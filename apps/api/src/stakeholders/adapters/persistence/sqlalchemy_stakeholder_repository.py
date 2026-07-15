@@ -196,9 +196,8 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
             return
 
         # Verify ownership if tenant_id is provided
-        if tenant_id is not None:
-            if orm.tenant_id != tenant_id:
-                raise PermissionError("Cannot update stakeholder for project outside tenant")
+        if tenant_id is not None and orm.tenant_id != tenant_id:
+            raise PermissionError("Cannot update stakeholder for project outside tenant")
 
         orm.name = stakeholder.name
         orm.role = stakeholder.role
@@ -308,9 +307,8 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         orm = await self.session.get(StakeholderWBSRaciORM, assignment.id)
         if not orm:
             return
-        if tenant_id is not None:
-            if orm.tenant_id != tenant_id:
-                raise PermissionError("Cannot update RACI assignment for project outside tenant")
+        if tenant_id is not None and orm.tenant_id != tenant_id:
+            raise PermissionError("Cannot update RACI assignment for project outside tenant")
         orm.raci_role = assignment.raci_role
         orm.evidence_text = assignment.evidence_text
         orm.generated_automatically = assignment.generated_automatically

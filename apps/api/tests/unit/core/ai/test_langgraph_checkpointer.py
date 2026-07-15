@@ -237,7 +237,7 @@ class TestLangGraphCheckpointer:
         assert checkpointer_instance_2 is not None
 
         # Both should connect to the same PostgreSQL table
-        assert type(checkpointer_instance_1) == type(checkpointer_instance_2)
+        assert type(checkpointer_instance_1) is type(checkpointer_instance_2)
 
 
 @pytest.mark.integration

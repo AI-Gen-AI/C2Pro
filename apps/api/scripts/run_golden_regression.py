@@ -18,7 +18,7 @@ src_dir = script_dir.parent / "src"
 sys.path.insert(0, str(src_dir))
 
 # Now import and run the main function
-from golden.runner import main
+from golden.runner import main  # noqa: E402 - import must follow the src path bootstrap
 
 if __name__ == "__main__":
     sys.exit(main())

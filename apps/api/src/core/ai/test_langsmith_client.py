@@ -74,7 +74,10 @@ def test_langsmith_client_start_span_fails_open_on_api_error(monkeypatch):
     """TS-AI-LANGSMITH-001: LangSmith API failures must not block application responses."""
 
     class _FailingNativeClient:
-        def create_run(self, **kwargs):
+        def create_run(
+            self,
+            **kwargs,  # noqa: ARG002 - required by the native client method signature
+        ):
             raise RuntimeError("403 Forbidden")
 
     monkeypatch.setenv("LANGSMITH_API_KEY", "unit-test-key")

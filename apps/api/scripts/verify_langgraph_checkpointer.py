@@ -36,11 +36,13 @@ async def verify_package_installed():
 
     try:
         from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+        _ = AsyncPostgresSaver
         print("[OK] langgraph.checkpoint.postgres.aio.AsyncPostgresSaver - OK")
         return True
     except ImportError:
         try:
             from langgraph.checkpoint.postgres import AsyncPostgresSaver
+            _ = AsyncPostgresSaver
             print("[OK] langgraph.checkpoint.postgres.AsyncPostgresSaver - OK")
             return True
         except ImportError:

@@ -236,8 +236,6 @@ class TestSetFlagEmitsEvent:
         repo = _make_repo(tenant)
         settings = _make_settings()
 
-        events: list[dict] = []
-
         with patch(
             "src.core.feature_flags.tenant_flags_service.logger"
         ) as mock_logger:

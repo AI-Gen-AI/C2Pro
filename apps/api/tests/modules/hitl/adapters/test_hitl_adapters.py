@@ -609,9 +609,7 @@ class TestReviewQueueProjectFiltering:
         repo = SqlAlchemyReviewQueueRepository(session=mock_session, tenant_id=tenant_id)
         import asyncio
 
-        count = asyncio.get_event_loop().run_until_complete(
-            repo.count_by_status(project_id=other_project_id)
-        )
+        asyncio.get_event_loop().run_until_complete(repo.count_by_status(project_id=other_project_id))
         call_args = mock_session.execute.call_args[0][0]
         sql_str = str(call_args.compile(compile_kwargs={"literal_binds": True}))
         tid_hex = str(tenant_id).replace("-", "")
