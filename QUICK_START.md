@@ -106,7 +106,7 @@ In a **new terminal**:
 cd apps/web
 
 # Install dependencies
-npm install
+pnpm install
 
 # Start dev server
 to fi
@@ -152,10 +152,10 @@ Demo mode runs the frontend with **MSW (Mock Service Worker)** intercepting all 
 cd apps/web
 
 # Install dependencies (if not already done)
-npm install
+pnpm install
 
 # Start with demo mode enabled
-NEXT_PUBLIC_APP_MODE=demo npm run dev
+NEXT_PUBLIC_APP_MODE=demo pnpm dev
 ```
 
 The web app will be available at http://localhost:3000 with a "DEMO" banner.
@@ -173,7 +173,7 @@ The web app will be available at http://localhost:3000 with a "DEMO" banner.
 Stop the dev server and restart without the env variable:
 
 ```bash
-npm run dev
+pnpm dev
 # NEXT_PUBLIC_APP_MODE defaults to "production" -  no MSW, real API calls
 ```
 
@@ -206,7 +206,7 @@ Services:
 Then start the frontend separately:
 
 ```bash
-cd apps/web && npm run dev
+cd apps/web && pnpm dev
 ```
 
 ---

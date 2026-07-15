@@ -144,7 +144,7 @@ cp .env.example .env
 docker-compose up -d
 
 # O usar Supabase local
-npx supabase start
+pnpm exec supabase start
 ```
 
 ### 3. Backend
@@ -174,10 +174,10 @@ uvicorn src.main:app --reload
 cd apps/web
 
 # Instalar dependencias
-npm install
+pnpm install
 
 # Iniciar servidor de desarrollo
-npm run dev
+pnpm dev
 ```
 
 ### 5. Verificar
@@ -198,7 +198,7 @@ pytest --cov=src --cov-report=html
 
 # Frontend
 cd apps/web
-npm test
+pnpm test
 ```
 
 ## 📊 Variables de Entorno
