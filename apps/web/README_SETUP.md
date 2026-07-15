@@ -95,13 +95,13 @@ apps/web/
 cd apps/web
 
 # Install dependencies
-npm install
+pnpm install
 
 # Install next-themes (if not already installed)
-npm install next-themes
+pnpm add next-themes
 
 # Start development server
-npm run dev
+pnpm dev
 ```
 
 ---
@@ -158,7 +158,7 @@ Configured in `tsconfig.json`:
 ### Start Dev Server
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 Server runs on `http://localhost:3000`
@@ -166,19 +166,19 @@ Server runs on `http://localhost:3000`
 ### Build for Production
 
 ```bash
-npm run build
+pnpm build
 ```
 
 ### Start Production Server
 
 ```bash
-npm run start
+pnpm start
 ```
 
 ### Linting
 
 ```bash
-npm run lint
+pnpm lint
 ```
 
 ---
