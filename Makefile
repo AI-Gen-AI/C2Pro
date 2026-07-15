@@ -8,7 +8,7 @@
 #   make dev         # Iniciar desarrollo
 #   make test        # Ejecutar todos los tests
 
-.PHONY: help setup dev test clean perf-bench
+.PHONY: help openapi setup dev test clean perf-bench
 
 # Default
 .DEFAULT_GOAL := help
@@ -24,13 +24,14 @@ RESET := \033[0m
 # ===========================================
 help: ## Mostrar esta ayuda
 	@echo ""
-	openapi: ## Generar OpenAPI YAML desde runtime
-	@echo "$(CYAN)📜 Generando OpenAPI...$(RESET)"
-	@python apps/api/scripts/generate_openapi.py
 	@echo "$(CYAN)C2PRO - Comandos disponibles$(RESET)"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
+
+openapi: ## Generar OpenAPI YAML desde runtime
+	@echo "$(CYAN)📜 Generando OpenAPI...$(RESET)"
+	@python apps/api/scripts/generate_openapi.py
 
 # ===========================================
 # SETUP
@@ -72,13 +73,13 @@ setup-backend-supabase: ## Instalar dependencias (Supabase cloud)
 	cd apps/api && pip install -r requirements.txt
 	@echo "$(GREEN)✅ Dependencias instaladas$(RESET)"
 
-setup-frontend: ## Instalar dependencias del frontend
+setup-frontend: ## Instalar dependencias del frontend (pnpm workspace)
 	@echo "$(CYAN)📦 Instalando dependencias del frontend...$(RESET)"
-	cd apps/web && npm install
+	pnpm install
 
 setup-infra: ## Iniciar servicios de infraestructura
 	@echo "$(CYAN)🐳 Iniciando servicios Docker...$(RESET)"
-	docker-compose up -d postgres redis minio minio-setup
+	docker compose up -d postgres redis minio minio-setup
 	@echo "$(CYAN)⏳ Esperando a que los servicios estén listos...$(RESET)"
 	@sleep 5
 	@echo "$(GREEN)✓ Servicios iniciados$(RESET)"
@@ -108,13 +109,13 @@ backend-dev: ## Iniciar backend en desarrollo (Supabase)
 	cd apps/api && python dev.py
 
 dev-infra: ## Iniciar solo infraestructura
-	docker-compose up -d postgres redis minio
+	docker compose up -d postgres redis minio
 
 dev-api: ## Iniciar backend en modo desarrollo
-	cd apps/api && . venv/bin/activate && uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+	cd apps/api && . .venv/bin/activate && uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 
 dev-web: ## Iniciar frontend en modo desarrollo
-	cd apps/web && npm run dev
+	cd apps/web && pnpm dev
 
 # ===========================================
 # DATABASE (Supabase Cloud)
@@ -132,13 +133,13 @@ db-migrate-history: ## Ver historial de migraciones
 	cd apps/api && python migrate.py history
 
 db-reset: ## Resetear base de datos (⚠️ destruye datos)
-	docker-compose down -v postgres
-	docker-compose up -d postgres
+	docker compose down -v postgres
+	docker compose up -d postgres
 	@sleep 3
 	@make db-migrate
 
 db-shell: ## Abrir shell de PostgreSQL
-	docker-compose exec postgres psql -U postgres -d c2pro
+	docker compose exec postgres psql -U postgres -d c2pro
 
 # ===========================================
 # TESTING
@@ -148,16 +149,16 @@ test: ## Ejecutar todos los tests
 	@make test-web
 
 test-api: ## Tests del backend
-	cd apps/api && . venv/bin/activate && pytest -v
+	cd apps/api && . .venv/bin/activate && pytest -v
 
 test-api-cov: ## Tests del backend con coverage
-	cd apps/api && . venv/bin/activate && pytest --cov=src --cov-report=html --cov-report=term
+	cd apps/api && . .venv/bin/activate && pytest --cov=src --cov-report=html --cov-report=term
 
 test-web: ## Tests del frontend
-	cd apps/web && npm test
+	cd apps/web && pnpm test
 
 test-e2e: ## Tests end-to-end
-	cd apps/web && npm run test:e2e
+	cd apps/web && pnpm test:e2e
 
 perf-bench: ## Ejecutar benchmarks backend y guardar baseline
 	cd apps/api && C2PRO_AI_MOCK=1 python -m pytest tests/perf/ --benchmark-only --benchmark-save=baseline_2026_05_03
@@ -170,24 +171,24 @@ lint: ## Ejecutar linters
 	@make lint-web
 
 lint-api: ## Lint del backend
-	cd apps/api && . venv/bin/activate && ruff check src tests
+	cd apps/api && . .venv/bin/activate && ruff check src tests
 
 lint-web: ## Lint del frontend
-	cd apps/web && npm run lint
+	cd apps/web && pnpm lint
 
 format: ## Formatear código
 	@make format-api
 	@make format-web
 
 format-api: ## Formatear backend
-	cd apps/api && . venv/bin/activate && ruff format src tests
+	cd apps/api && . .venv/bin/activate && ruff format src tests
 
 format-web: ## Formatear frontend
-	cd apps/web && npm run format
+	cd apps/web && pnpm exec prettier --write .
 
 typecheck: ## Verificar tipos
-	cd apps/api && . venv/bin/activate && mypy src
-	cd apps/web && npm run typecheck
+	cd apps/api && . .venv/bin/activate && mypy src
+	cd apps/web && pnpm typecheck
 
 # ===========================================
 # BUILD
@@ -200,7 +201,7 @@ build-api: ## Build del backend
 	cd apps/api && docker build -t c2pro-api .
 
 build-web: ## Build del frontend
-	cd apps/web && npm run build
+	cd apps/web && pnpm build
 
 # ===========================================
 # CLEANUP
@@ -213,27 +214,27 @@ clean: ## Limpiar archivos temporales
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
 clean-docker: ## Limpiar contenedores y volúmenes Docker
-	docker-compose down -v --remove-orphans
+	docker compose down -v --remove-orphans
 	docker system prune -f
 
 # ===========================================
 # UTILITIES
 # ===========================================
 logs: ## Ver logs de todos los servicios
-	docker-compose logs -f
+	docker compose logs -f
 
 logs-api: ## Ver logs del backend
-	docker-compose logs -f api
+	docker compose logs -f api
 
 shell-api: ## Shell en contenedor del backend
-	docker-compose exec api /bin/sh
+	docker compose exec api /bin/sh
 
 redis-cli: ## Cliente de Redis
-	docker-compose exec redis redis-cli
+	docker compose exec redis redis-cli
 
 check-health: ## Verificar salud de servicios
 	@echo "$(CYAN)Verificando servicios...$(RESET)"
 	@curl -s http://localhost:8000/health | jq . || echo "❌ API no disponible"
 	@curl -s http://localhost:3000 > /dev/null && echo "✅ Frontend OK" || echo "❌ Frontend no disponible"
-	@docker-compose exec postgres pg_isready -U postgres > /dev/null && echo "✅ PostgreSQL OK" || echo "❌ PostgreSQL no disponible"
-	@docker-compose exec redis redis-cli ping > /dev/null && echo "✅ Redis OK" || echo "❌ Redis no disponible"
+	@docker compose exec postgres pg_isready -U postgres > /dev/null && echo "✅ PostgreSQL OK" || echo "❌ PostgreSQL no disponible"
+	@docker compose exec redis redis-cli ping > /dev/null && echo "✅ Redis OK" || echo "❌ Redis no disponible"
