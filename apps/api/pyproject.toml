@@ -30,6 +30,15 @@ ignore = [
     "E501",   # line too long (handled by formatter)
     "B008",   # function call in default argument (needed for FastAPI Depends)
     "B904",   # raise without from (sometimes intentional)
+
+    # UP042 (replace-str-enum): flags classes inheriting from both `str` and
+    # `enum.Enum`, suggesting `enum.StrEnum`. The repo has 88 such enums. The
+    # migration is NOT behavior-preserving: for `class X(str, Enum)`,
+    # `str(X.MEMBER)` == "X.MEMBER", whereas for `StrEnum` it == the member value.
+    # Logs, f-strings, and serializers relying on the current form would change
+    # silently. Deferred until TASK-DEV-030 delivers a per-enum audit and a
+    # semantic-preserving migration; the backend-lint job guards the count at 88.
+    "UP042",
 ]
 
 [tool.ruff.lint.isort]

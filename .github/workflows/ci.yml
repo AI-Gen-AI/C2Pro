@@ -7,11 +7,11 @@
 #     so docs-only PRs finish in under a minute. The workflow itself has NO
 #     `paths:` trigger filter on purpose: the final `ci-status` join job must
 #     always report, because it is the single required branch-protection check.
-#   * Advisory (non-gating) jobs: backend-typecheck (mypy baseline not clean yet),
-#     backend-integration (14 failures + 10 errors on main as of 2026-07-12,
-#     previously hidden by continue-on-error — now visibly red but not blocking),
-#     and backend-lint (~57 pre-existing violations under the original 0.2.x
-#     baseline; `ruff check .` was never enforced in CI — TASK-DEV-009).
+#   * Advisory (non-gating) jobs: backend-typecheck (mypy baseline not clean yet —
+#     TASK-DEV-006) and backend-integration (14 failures + 10 errors on main as of
+#     2026-07-12, previously hidden by continue-on-error — now visibly red but not
+#     blocking — TASK-DEV-004). backend-lint was promoted to required on 2026-07-15
+#     once ruff reached zero enforced violations (UP042 ignored pending TASK-DEV-030).
 #     ci-status enumerates required jobs explicitly; advisory jobs are excluded.
 #   * Secret scanning is owned by secret-scan.yml; OpenAPI drift by
 #     openapi-drift.yml; deeper eval/E2E suites by their dedicated workflows.
@@ -75,11 +75,14 @@ jobs:
 
   # ──────────────────────────── Backend lane ────────────────────────────
 
-  # Advisory: the repo has ~57 pre-existing ruff violations (`ruff check .` was
-  # never a CI gate; the Husky hook does not reliably run). Clean them up via
-  # TASK-DEV-009, then move this job into REQUIRED_JOBS in ci-status.
+  # Required gate (promoted from advisory on 2026-07-15, TASK-DEV-009). `ruff
+  # check .` reports zero violations: the baseline was cleaned to 88 findings,
+  # all UP042 (str+Enum -> StrEnum), which are globally ignored in
+  # apps/api/pyproject.toml pending the semantic migration in TASK-DEV-030. The
+  # UP042 baseline-guard step below fails if new str+Enum classes push the count
+  # above 88.
   backend-lint:
-    name: Backend Lint (ruff, advisory)
+    name: Backend Lint (ruff)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: detect-changes
@@ -102,17 +105,20 @@ jobs:
         working-directory: apps/api
         run: python -m ruff check .
 
-      - name: Advisory notice
-        if: failure()
+      # UP042 is ignored (see pyproject.toml). Count the deferred str+Enum
+      # classes with --select UP042 and fail if the count regresses above the
+      # audited baseline of 88, so new enums are written as StrEnum from the start.
+      - name: UP042 baseline guard (str+Enum, deferred to TASK-DEV-030)
+        working-directory: apps/api
         run: |
-          {
-            echo "## Backend lint (advisory)"
-            echo ""
-            echo "ruff reports pre-existing violations; this job does not block"
-            echo "merges yet. Clean the baseline via TASK-DEV-009 in"
-            echo "C2PRO_MASTER_BACKLOG.md, then move backend-lint into REQUIRED_JOBS"
-            echo "in ci-status."
-          } >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          COUNT=$(python -m ruff check . --select UP042 --statistics 2>/dev/null | awk '/UP042/{print $1}')
+          COUNT=${COUNT:-0}
+          echo "UP042 (str+Enum classes pending StrEnum migration): ${COUNT} (baseline 88)"
+          if [ "${COUNT}" -gt 88 ]; then
+            echo "::error title=UP042 baseline exceeded::${COUNT} str+Enum classes exceed the audited baseline of 88 (TASK-DEV-030). Write new enums as enum.StrEnum."
+            exit 1
+          fi
 
   backend-typecheck:
     name: Backend Typecheck (mypy, advisory)
@@ -654,6 +660,7 @@ jobs:
           # by this change). Advisory jobs are reported but never gate.
           REQUIRED_JOBS=(
             "detect-changes:$RESULT_DETECT"
+            "backend-lint:$RESULT_BACKEND_LINT"
             "backend-unit:$RESULT_BACKEND_UNIT"
             "backend-security:$RESULT_BACKEND_SECURITY"
             "backend-migrations:$RESULT_BACKEND_MIGRATIONS"
@@ -662,7 +669,6 @@ jobs:
             "frontend-e2e-smoke:$RESULT_FRONTEND_E2E"
           )
           ADVISORY_JOBS=(
-            "backend-lint:$RESULT_BACKEND_LINT"
             "backend-typecheck:$RESULT_BACKEND_TYPECHECK"
             "backend-integration:$RESULT_BACKEND_INTEGRATION"
           )
