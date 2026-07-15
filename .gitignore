@@ -79,6 +79,7 @@ codex*.txt
 
 # Custom ignores
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 .gemini-clipboard/
 mi-gemini/
 docs/DATABASE_CONNECTION_ISSUE.md
