@@ -112,7 +112,10 @@ jobs:
         working-directory: apps/api
         run: |
           set -euo pipefail
-          COUNT=$(python -m ruff check . --select UP042 --statistics 2>/dev/null | awk '/UP042/{print $1}')
+          # --exit-zero: ruff exits non-zero when it finds violations; here that
+          # is the expected state (UP042 is deferred), so we ignore the exit code
+          # and gate on the parsed count instead.
+          COUNT=$(python -m ruff check . --select UP042 --statistics --exit-zero 2>/dev/null | awk '/UP042/{print $1}')
           COUNT=${COUNT:-0}
           echo "UP042 (str+Enum classes pending StrEnum migration): ${COUNT} (baseline 88)"
           if [ "${COUNT}" -gt 88 ]; then
