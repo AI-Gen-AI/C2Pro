@@ -13,7 +13,7 @@
 
 ## Status View
 
-**Pending Tasks**: 20 (`TASK-DEV-004`…`006`, `007` (partial), `008`, `009`, `015`, `016`…`026`, `028`, `029`)
+**Pending Tasks**: 19 (`TASK-DEV-004`…`006`, `007` (partial), `008`, `015`, `016`…`026`, `028`…`030`; `009` done 2026-07-15)
 
 **Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), `TASK-DEV-011` (Tenacity compatibility guard, below), `TASK-DEV-012` (PostCSS patch isolation, below), `TASK-DEV-013` (Python dependency audit repair, below), `TASK-DEV-014` (js-minor-patch group bump, below), and `TASK-DEV-027` (2026-07-15 multi-agent re-audit, below).
 
@@ -46,11 +46,19 @@ The integration suite fails on main (as of 2026-07-12: `14 failed, 74 passed, 3 
 
 
 
-### TASK-DEV-009: Clean ruff baseline → promote `backend-lint` to required gate
+### TASK-DEV-009: Clean ruff baseline → promote `backend-lint` to required gate ✅ 2026-07-15
 
-**Priority**: P2 · **Owner**: backend · **Depends on**: —
+**Priority**: P1 · **Owner**: backend · **Depends on**: —
 
-`ruff check .` (ruff==0.2.1, config in `apps/api/pyproject.toml`) reports ~57 pre-existing violations across `apps/api` (SIM105/SIM102 in src, I001/F401/F841/E402 mostly in tests, plus stray root files `test.py` / `test_document_repository.py`); 35 are `--fix`-able. It was never a CI gate before TASK-DEV-003 and the Husky pre-commit hook does not reliably run (verified: local commits passed while `ruff check .` fails). `ci.yml` runs `backend-lint` as advisory. Fix the violations (or explicitly ignore rules that are deliberate), then move `backend-lint` from `ADVISORY_JOBS` to `REQUIRED_JOBS` in `ci-status`.
+Corrected baseline (ruff==0.15.21, not the old 0.2.1 "~57"): **206 violations**. Cleaned in two steps: **97** via `ruff check --fix` (safe autofixes) + **24** manual fixes with justified inline `# noqa` where deliberate (Alembic F403 star imports, script E402/F401 bootstraps, interface-required ARG002, `contextlib.suppress` for SIM105, E721 identity checks) — landed in **PR #242**. The remaining **88 are all UP042** (`class X(str, Enum)` → `enum.StrEnum`): globally ignored in `apps/api/pyproject.toml` with a documented justification (StrEnum changes `str(member)` semantics; not behavior-preserving) plus a **CI baseline guard** that fails if the count exceeds 88. `backend-lint` renamed `Backend Lint (ruff)` and moved from `ADVISORY_JOBS` → `REQUIRED_JOBS`. `ruff check .` is now clean (0 enforced) and gating. StrEnum migration tracked as **TASK-DEV-030**.
+
+Note: the Husky pre-commit hook is fixed separately in **TASK-DEV-021** (its ruff branch lacks `|| exit 1`).
+
+### TASK-DEV-030: Enum semantics migration (str+Enum → StrEnum)
+
+**Priority**: P2 · **Owner**: backend · **Depends on**: TASK-DEV-009
+
+88 classes inherit `(str, Enum)` (ruff UP042), currently ignored + count-guarded at baseline 88. Migrating to `enum.StrEnum` is **not** blind-safe: `str(X.MEMBER)` changes from `"X.MEMBER"` to the member value, which can silently alter logs, f-strings, and serializers. Requires a per-enum audit of `str()`/f-string/serialization use, a semantic-preserving migration with regression guards, then removal of the `UP042` ignore (and the baseline guard) from `apps/api/pyproject.toml` + `ci.yml`.
 
 ### TASK-DEV-015: SonarCloud "New Code" quality debt cleanup
 
