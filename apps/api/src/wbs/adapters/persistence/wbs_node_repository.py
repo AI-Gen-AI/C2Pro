@@ -205,6 +205,8 @@ class WBSNodeRepository:
             # Shift rgt FIRST (increasing rgt always preserves lft < rgt
             # and never violates CHECK ck_wbs_nodes_lft_lt_rgt).  Then
             # shift lft SECOND (safe because rgt was already increased).
+            # Use synchronize_session=False to avoid expiring parent_orm;
+            # we update it manually below instead.
             await self.session.execute(
                 update(WBSNodeORM)
                 .where(
@@ -215,6 +217,7 @@ class WBSNodeRepository:
                     )
                 )
                 .values(rgt=WBSNodeORM.rgt + 2)
+                .execution_options(synchronize_session=False)
             )
             await self.session.execute(
                 update(WBSNodeORM)
@@ -226,7 +229,12 @@ class WBSNodeRepository:
                     )
                 )
                 .values(lft=WBSNodeORM.lft + 2)
+                .execution_options(synchronize_session=False)
             )
+            # Keep the parent ORM object consistent with the DB shift
+            # so any subsequent domain conversion from this session gets
+            # the post-shift rgt value.
+            parent_orm.rgt = parent_rgt + 2
 
             # Insert new node at parent's original rgt position
             lft = parent_rgt
@@ -337,6 +345,7 @@ class WBSNodeRepository:
             await self.session.delete(node_orm)
 
         # Shift remaining nodes left
+        # Subtract preserves lft < rgt invariant (rgt > lft → rgt-width > lft-width).
         await self.session.execute(
             update(WBSNodeORM)
             .where(
@@ -347,6 +356,7 @@ class WBSNodeRepository:
                 )
             )
             .values(lft=WBSNodeORM.lft - width)
+            .execution_options(synchronize_session=False)
         )
         await self.session.execute(
             update(WBSNodeORM)
@@ -358,6 +368,7 @@ class WBSNodeRepository:
                 )
             )
             .values(rgt=WBSNodeORM.rgt - width)
+            .execution_options(synchronize_session=False)
         )
 
         await self.session.flush()
@@ -415,7 +426,7 @@ class WBSNodeRepository:
             new_depth = 0
 
         width = node_orm.rgt - node_orm.lft + 1
-        _distance = target_lft - node_orm.lft  # computed but unused in current impl
+        _distance = target_lft - node_orm.lft  # captured before detach
         depth_change = new_depth - node_orm.depth
 
         # Use a temporary shift to move the subtree "out of the way"
@@ -423,6 +434,9 @@ class WBSNodeRepository:
         tmp_offset = 1000000
 
         # Mark nodes in subtree
+        # Detach to negative space to avoid CHECK constraint violations
+        # during gap manipulation.  Use synchronize_session=False so
+        # node_orm stays accessible for subsequent WHERE clauses.
         subtree_stmt = (
             update(WBSNodeORM)
             .where(
@@ -438,10 +452,12 @@ class WBSNodeRepository:
                 rgt=WBSNodeORM.rgt - tmp_offset,
                 depth=WBSNodeORM.depth + depth_change,
             )
+            .execution_options(synchronize_session=False)
         )
         await self.session.execute(subtree_stmt)
 
         # 2. Close gap in original position
+        # Shift lft FIRST (subtracting preserves lft < rgt).
         await self.session.execute(
             update(WBSNodeORM)
             .where(
@@ -452,6 +468,7 @@ class WBSNodeRepository:
                 )
             )
             .values(lft=WBSNodeORM.lft - width)
+            .execution_options(synchronize_session=False)
         )
         await self.session.execute(
             update(WBSNodeORM)
@@ -463,6 +480,7 @@ class WBSNodeRepository:
                 )
             )
             .values(rgt=WBSNodeORM.rgt - width)
+            .execution_options(synchronize_session=False)
         )
 
         # Adjust target_lft if it was shifted by the gap closure
@@ -482,6 +500,7 @@ class WBSNodeRepository:
                 )
             )
             .values(rgt=WBSNodeORM.rgt + width)
+            .execution_options(synchronize_session=False)
         )
         await self.session.execute(
             update(WBSNodeORM)
@@ -493,10 +512,12 @@ class WBSNodeRepository:
                 )
             )
             .values(lft=WBSNodeORM.lft + width)
+            .execution_options(synchronize_session=False)
         )
 
-        # 4. Re-attach subtree
-        final_distance = target_lft - (node_orm.lft - tmp_offset)
+        # 4. Re-attach subtree — use _distance captured before detach
+        # (node_orm.lft is stale in session after synchronize_session=False
+        # on step 1; _distance = target_lft - original_lft is still correct).
 
         await self.session.execute(
             update(WBSNodeORM)
@@ -504,13 +525,14 @@ class WBSNodeRepository:
                 and_(
                     WBSNodeORM.project_id == node_orm.project_id,
                     WBSNodeORM.tenant_id == tenant_id,
-                    WBSNodeORM.lft < 0,  # Subtree nodes are negative
+                    WBSNodeORM.lft < 0,  # Subtree nodes are in negative space
                 )
             )
             .values(
-                lft=WBSNodeORM.lft + tmp_offset + final_distance,
-                rgt=WBSNodeORM.rgt + tmp_offset + final_distance,
+                lft=WBSNodeORM.lft + tmp_offset + _distance,
+                rgt=WBSNodeORM.rgt + tmp_offset + _distance,
             )
+            .execution_options(synchronize_session=False)
         )
 
         # Update parent_id

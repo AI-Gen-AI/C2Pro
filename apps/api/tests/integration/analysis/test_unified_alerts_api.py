@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,9 +25,10 @@ from src.analysis.domain.enums import (
 )
 
 
-@pytest.fixture
-def tenant_id() -> UUID:
-    return uuid4()
+@pytest_asyncio.fixture
+async def tenant_id(test_tenant) -> UUID:
+    """Use the conftest's test_tenant for middleware-compatible auth."""
+    return test_tenant.id
 
 
 @pytest.fixture
@@ -38,8 +40,8 @@ async def project_id(db: AsyncSession, tenant_id: UUID):
         id=uuid4(),
         name="Test Project",
         tenant_id=tenant_id,
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
+        created_at=datetime.now(UTC).replace(tzinfo=None),
+        updated_at=datetime.now(UTC).replace(tzinfo=None),
     )
     db.add(project)
     await db.commit()
@@ -56,8 +58,8 @@ async def analysis_id(db: AsyncSession, project_id: UUID, tenant_id: UUID):
         tenant_id=tenant_id,
         analysis_type=AnalysisType.COHERENCE,
         status=AnalysisStatus.COMPLETED,
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
+        created_at=datetime.now(UTC).replace(tzinfo=None),
+        updated_at=datetime.now(UTC).replace(tzinfo=None),
     )
     db.add(analysis)
     await db.commit()
@@ -83,8 +85,8 @@ async def sample_alerts(
             title="Schedule delay risk",
             description="Project timeline at risk.",
             status=AlertStatus.OPEN,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+            updated_at=datetime.now(UTC).replace(tzinfo=None),
         ),
         Alert(
             id=uuid4(),
@@ -97,8 +99,8 @@ async def sample_alerts(
             title="Budget overrun risk",
             description="Budget may be exceeded.",
             status=AlertStatus.OPEN,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+            updated_at=datetime.now(UTC).replace(tzinfo=None),
         ),
         # Coherence alerts
         Alert(
@@ -113,8 +115,8 @@ async def sample_alerts(
             title="Budget coherence violation",
             description="Budget item exceeds contract amount.",
             status=AlertStatus.OPEN,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+            updated_at=datetime.now(UTC).replace(tzinfo=None),
         ),
         Alert(
             id=uuid4(),
@@ -128,8 +130,8 @@ async def sample_alerts(
             title="Schedule dependency violation",
             description="Invalid task dependencies detected.",
             status=AlertStatus.ACKNOWLEDGED,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+            updated_at=datetime.now(UTC).replace(tzinfo=None),
         ),
         Alert(
             id=uuid4(),
@@ -143,8 +145,8 @@ async def sample_alerts(
             title="Compliance issue",
             description="Missing required permits.",
             status=AlertStatus.RESOLVED,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+            updated_at=datetime.now(UTC).replace(tzinfo=None),
         ),
     ]
 
@@ -162,10 +164,10 @@ class TestUnifiedAlertsAPI:
 
     @pytest.mark.asyncio
     async def test_list_alerts_without_filters_returns_all_types(
-        self, client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
+        self, authenticated_client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
     ):
         """GET /projects/{id}/alerts without filters should return all alert types."""
-        response = await client.get(f"/api/v1/projects/{project_id}/alerts")
+        response = await authenticated_client.get(f"/api/v1/projects/{project_id}/alerts")
 
         assert response.status_code == 200
         data = response.json()
@@ -180,10 +182,10 @@ class TestUnifiedAlertsAPI:
 
     @pytest.mark.asyncio
     async def test_list_alerts_filtered_by_alert_type_risk(
-        self, client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
+        self, authenticated_client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
     ):
         """GET /projects/{id}/alerts?alert_type=risk should return only risk alerts."""
-        response = await client.get(
+        response = await authenticated_client.get(
             f"/api/v1/projects/{project_id}/alerts",
             params={"alert_type": "risk"},
         )
@@ -197,10 +199,10 @@ class TestUnifiedAlertsAPI:
 
     @pytest.mark.asyncio
     async def test_list_alerts_filtered_by_alert_type_coherence(
-        self, client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
+        self, authenticated_client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
     ):
         """GET /projects/{id}/alerts?alert_type=coherence should return only coherence alerts."""
-        response = await client.get(
+        response = await authenticated_client.get(
             f"/api/v1/projects/{project_id}/alerts",
             params={"alert_type": "coherence"},
         )
@@ -214,10 +216,10 @@ class TestUnifiedAlertsAPI:
 
     @pytest.mark.asyncio
     async def test_list_alerts_filtered_by_category_schedule(
-        self, client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
+        self, authenticated_client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
     ):
         """GET /projects/{id}/alerts?category=schedule should filter by category."""
-        response = await client.get(
+        response = await authenticated_client.get(
             f"/api/v1/projects/{project_id}/alerts",
             params={"category": "schedule"},
         )
@@ -231,10 +233,10 @@ class TestUnifiedAlertsAPI:
 
     @pytest.mark.asyncio
     async def test_list_alerts_filtered_by_severity_critical(
-        self, client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
+        self, authenticated_client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
     ):
         """GET /projects/{id}/alerts?severity=critical should filter by severity."""
-        response = await client.get(
+        response = await authenticated_client.get(
             f"/api/v1/projects/{project_id}/alerts",
             params={"severity": "critical"},
         )
@@ -248,10 +250,10 @@ class TestUnifiedAlertsAPI:
 
     @pytest.mark.asyncio
     async def test_list_alerts_filtered_by_status_open(
-        self, client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
+        self, authenticated_client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
     ):
         """GET /projects/{id}/alerts?status=open should filter by status."""
-        response = await client.get(
+        response = await authenticated_client.get(
             f"/api/v1/projects/{project_id}/alerts",
             params={"status": "open"},
         )
@@ -265,11 +267,11 @@ class TestUnifiedAlertsAPI:
 
     @pytest.mark.asyncio
     async def test_list_alerts_pagination_works(
-        self, client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
+        self, authenticated_client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
     ):
         """GET /projects/{id}/alerts with pagination should work correctly."""
         # First page with limit=2
-        response = await client.get(
+        response = await authenticated_client.get(
             f"/api/v1/projects/{project_id}/alerts",
             params={"limit": 2},
         )
@@ -282,7 +284,7 @@ class TestUnifiedAlertsAPI:
         assert "next_cursor" in data
 
         # Second page using cursor
-        response2 = await client.get(
+        response2 = await authenticated_client.get(
             f"/api/v1/projects/{project_id}/alerts",
             params={"limit": 2, "cursor": data["next_cursor"]},
         )
@@ -292,18 +294,18 @@ class TestUnifiedAlertsAPI:
         assert len(data2["items"]) == 2
 
     @pytest.mark.asyncio
-    async def test_list_alerts_requires_authentication(self, client: AsyncClient, project_id: UUID):
+    async def test_list_alerts_requires_authentication(self, authenticated_client: AsyncClient, project_id: UUID):
         """GET /projects/{id}/alerts should require authentication."""
         # Remove auth header
-        client.headers.pop("Authorization", None)
+        authenticated_client.headers.pop("Authorization", None)
 
-        response = await client.get(f"/api/v1/projects/{project_id}/alerts")
+        response = await authenticated_client.get(f"/api/v1/projects/{project_id}/alerts")
 
         assert response.status_code == 401  # Unauthorized
 
     @pytest.mark.asyncio
     async def test_list_alerts_enforces_tenant_isolation(
-        self, client: AsyncClient, db: AsyncSession, project_id: UUID
+        self, authenticated_client: AsyncClient, db: AsyncSession, project_id: UUID
     ):
         """GET /projects/{id}/alerts should enforce tenant isolation (RLS)."""
         # Create alert for different tenant
@@ -314,8 +316,8 @@ class TestUnifiedAlertsAPI:
             id=uuid4(),
             name="Other Tenant Project",
             tenant_id=other_tenant_id,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+            updated_at=datetime.now(UTC).replace(tzinfo=None),
         )
         db.add(other_project)
         await db.commit()
@@ -325,8 +327,8 @@ class TestUnifiedAlertsAPI:
             project_id=other_project.id,
             analysis_type=AnalysisType.COHERENCE,
             status=AnalysisStatus.COMPLETED,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+            updated_at=datetime.now(UTC).replace(tzinfo=None),
         )
         db.add(other_analysis)
         await db.commit()
@@ -340,25 +342,25 @@ class TestUnifiedAlertsAPI:
             title="Other tenant alert",
             description="Should not be visible.",
             status=AlertStatus.OPEN,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+            updated_at=datetime.now(UTC).replace(tzinfo=None),
         )
         db.add(other_alert)
         await db.commit()
 
         # Query with current tenant credentials (should not see other tenant's alerts)
-        response = await client.get(f"/api/v1/projects/{other_project.id}/alerts")
+        response = await authenticated_client.get(f"/api/v1/projects/{other_project.id}/alerts")
 
         # Should return 403 Forbidden or 404 Not Found (tenant isolation)
         assert response.status_code in [403, 404]
 
     @pytest.mark.asyncio
     async def test_list_alerts_combined_filters(
-        self, client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
+        self, authenticated_client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
     ):
         """GET /projects/{id}/alerts with multiple filters should combine correctly."""
         # Filter: alert_type=coherence AND category=financial AND status=open
-        response = await client.get(
+        response = await authenticated_client.get(
             f"/api/v1/projects/{project_id}/alerts",
             params={
                 "alert_type": "coherence",

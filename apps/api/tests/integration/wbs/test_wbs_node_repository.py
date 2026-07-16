@@ -96,13 +96,15 @@ class TestWBSNodeRepositoryCreate:
 
         assert child.parent_id == parent.id
         assert child.depth == 1
-        assert child.lft > parent.lft
-        assert child.rgt < parent.rgt
         assert child.is_leaf is True
 
-        # Verify parent is updated
+        # Adding a child expands the parent's interval to contain it, so reload
+        # the parent — the returned `parent` value object is an immutable snapshot
+        # taken before the nested-set shift (its rgt is still the pre-shift value).
         parent_reloaded = await repo.get_by_id(parent.id, tenant_id)
         assert parent_reloaded.is_leaf is False  # Now has children
+        assert child.lft > parent_reloaded.lft
+        assert child.rgt < parent_reloaded.rgt
 
     async def test_create_multiple_siblings(self, async_session, project_id, tenant_id):
         """Test creating multiple sibling nodes."""
