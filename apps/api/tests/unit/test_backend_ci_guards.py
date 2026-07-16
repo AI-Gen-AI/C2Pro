@@ -391,3 +391,35 @@ def test_backend_pytest_uses_importlib_mode_for_golden_package_isolation() -> No
     contents = pyproject.read_text(encoding="utf-8")
 
     assert '"--import-mode=importlib"' in contents
+
+
+def test_backend_integration_job_is_required_gate_in_ci_workflow() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+    repo_root = Path(__file__).resolve().parents[4]
+    workflow = repo_root / ".github" / "workflows" / "ci.yml"
+    contents = workflow.read_text(encoding="utf-8")
+
+    # Prove backend-integration is in REQUIRED_JOBS
+    assert '"backend-integration:$RESULT_BACKEND_INTEGRATION"' in contents
+
+    # Prove it is NOT in ADVISORY_JOBS
+    advisory_block_started = False
+    advisory_jobs = []
+    for line in contents.splitlines():
+        line_stripped = line.strip()
+        if "ADVISORY_JOBS=(" in line_stripped:
+            advisory_block_started = True
+            continue
+        if advisory_block_started:
+            if ")" in line_stripped:
+                advisory_block_started = False
+                break
+            advisory_jobs.append(line_stripped.strip('"'))
+
+    assert "backend-integration" not in [job.split(":")[0] for job in advisory_jobs]
+    assert "backend-typecheck" in [job.split(":")[0] for job in advisory_jobs]
+
+    # Prove the job name and workflow comments no longer call it advisory
+    assert "Backend Integration Tests (advisory)" not in contents
+    assert "Advisory notice" not in contents
+    assert "Advisory: the integration suite has pre-existing failures on main" not in contents

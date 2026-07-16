@@ -111,7 +111,7 @@ async def test_feedback_endpoint_records_metadata_and_uses_mocked_langsmith_clie
     app.dependency_overrides.clear()
 
     # The active endpoint (src/ai_feedback/router.py) returns 202 Accepted —
-    # feedback is recorded asynchronously, so Accepted is the correct contract.
+    # this is the established endpoint contract.
     assert response.status_code == 202
     mocked_feedback.create_feedback.assert_called_once_with(
         run_id=trace_id, key="user_feedback", score=0.9, comment="accurate"

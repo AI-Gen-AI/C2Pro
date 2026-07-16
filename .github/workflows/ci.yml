@@ -8,10 +8,8 @@
 #     `paths:` trigger filter on purpose: the final `ci-status` join job must
 #     always report, because it is the single required branch-protection check.
 #   * Advisory (non-gating) jobs: backend-typecheck (mypy baseline not clean yet —
-#     TASK-DEV-006) and backend-integration (14 failures + 10 errors on main as of
-#     2026-07-12, previously hidden by continue-on-error — now visibly red but not
-#     blocking — TASK-DEV-004). backend-lint was promoted to required on 2026-07-15
-#     once ruff reached zero enforced violations (UP042 ignored pending TASK-DEV-030).
+#     TASK-DEV-006). All other backend checks (lint, unit, security, integration,
+#     and migrations) are required gates (TASK-DEV-004, TASK-DEV-009).
 #     ci-status enumerates required jobs explicitly; advisory jobs are excluded.
 #   * Secret scanning is owned by secret-scan.yml; OpenAPI drift by
 #     openapi-drift.yml; deeper eval/E2E suites by their dedicated workflows.
@@ -327,12 +325,10 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.test.yml down -v
 
-  # Advisory: the integration suite has pre-existing failures on main
-  # (14 failed / 10 errors, sqlalchemy pool teardown — see backlog task).
-  # It runs visibly red but is intentionally NOT part of the required gate.
-  # Flip it to required by moving it into REQUIRED_JOBS in ci-status once green.
+  # Required gate (promoted from advisory, TASK-DEV-004).
+  # Run the full integration test suite.
   backend-integration:
-    name: Backend Integration Tests (advisory)
+    name: Backend Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: detect-changes
@@ -367,17 +363,6 @@ jobs:
       - name: Run integration tests
         working-directory: apps/api
         run: python -m pytest tests/integration/ --tb=short --junit-xml=integration-test-results.xml
-
-      - name: Advisory notice
-        if: failure()
-        run: |
-          {
-            echo "## Backend integration tests (advisory)"
-            echo ""
-            echo "This suite has known pre-existing failures and does not block merges yet."
-            echo "Track and fix via the backlog task in C2PRO_MASTER_BACKLOG.md, then move"
-            echo "backend-integration into REQUIRED_JOBS in ci-status."
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload integration test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -666,6 +651,7 @@ jobs:
             "backend-lint:$RESULT_BACKEND_LINT"
             "backend-unit:$RESULT_BACKEND_UNIT"
             "backend-security:$RESULT_BACKEND_SECURITY"
+            "backend-integration:$RESULT_BACKEND_INTEGRATION"
             "backend-migrations:$RESULT_BACKEND_MIGRATIONS"
             "frontend-quality:$RESULT_FRONTEND_QUALITY"
             "frontend-test:$RESULT_FRONTEND_TEST"
@@ -673,7 +659,6 @@ jobs:
           )
           ADVISORY_JOBS=(
             "backend-typecheck:$RESULT_BACKEND_TYPECHECK"
-            "backend-integration:$RESULT_BACKEND_INTEGRATION"
           )
 
           {
