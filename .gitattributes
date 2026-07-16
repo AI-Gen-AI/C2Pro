@@ -1,3 +1,6 @@
 *.sh text eol=lf
 start.sh text eol=lf
 apps/api/start.sh text eol=lf
+
+# mypy ratchet baseline: keep LF so Windows-generated baselines match Linux CI
+apps/api/mypy-baseline.txt text eol=lf

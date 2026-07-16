@@ -190,6 +190,9 @@ typecheck: ## Verificar tipos
 	cd apps/api && . .venv/bin/activate && mypy src
 	cd apps/web && pnpm typecheck
 
+mypy-baseline: ## Refrescar mypy-baseline.txt (EPIC-MYPY-STRICT ratchet) tras reducir errores
+	cd apps/api && . .venv/bin/activate && mypy src --no-error-summary --no-color-output | python scripts/mypy_ratchet.py --update mypy-baseline.txt
+
 # ===========================================
 # BUILD
 # ===========================================
