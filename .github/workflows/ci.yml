@@ -7,9 +7,10 @@
 #     so docs-only PRs finish in under a minute. The workflow itself has NO
 #     `paths:` trigger filter on purpose: the final `ci-status` join job must
 #     always report, because it is the single required branch-protection check.
-#   * Advisory (non-gating) jobs: backend-typecheck (mypy baseline not clean yet —
-#     TASK-DEV-006). All other backend checks (lint, unit, security, integration,
-#     and migrations) are required gates (TASK-DEV-004, TASK-DEV-009).
+#   * Advisory (non-gating) jobs: backend-typecheck only (mypy baseline not clean
+#     yet — TASK-DEV-006 / EPIC-MYPY-STRICT). backend-lint was promoted to required
+#     2026-07-15 (ruff zero enforced, UP042 ignored pending TASK-DEV-030) and
+#     backend-integration 2026-07-16 (suite green after TASK-DEV-004).
 #     ci-status enumerates required jobs explicitly; advisory jobs are excluded.
 #   * Secret scanning is owned by secret-scan.yml; OpenAPI drift by
 #     openapi-drift.yml; deeper eval/E2E suites by their dedicated workflows.
@@ -325,8 +326,9 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.test.yml down -v
 
-  # Required gate (promoted from advisory, TASK-DEV-004).
-  # Run the full integration test suite.
+  # Required gate (promoted from advisory 2026-07-16, TASK-DEV-004). The suite is
+  # green on main (0 failed / 0 errors) after the tenant_id fixture, WBS nested-set,
+  # alerts/langsmith router-contract, and datetime-tz repairs.
   backend-integration:
     name: Backend Integration Tests
     runs-on: ubuntu-latest
