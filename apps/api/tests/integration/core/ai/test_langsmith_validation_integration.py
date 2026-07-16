@@ -8,7 +8,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
-from src.core.ai.feedback_router import get_feedback_client
+from src.ai_feedback.service import AIFeedbackService, get_feedback_service
 from src.core.ai.models import AIUsageLogORM
 from src.core.ai.usage_logger import AIUsageLogger, AIUsageLogRecord
 from src.core.database import get_session
@@ -40,7 +40,9 @@ async def test_usage_logger_persists_row_and_cost_analytics_reads_it(
         )
     )
 
-    stmt = select(AIUsageLogORM).where(AIUsageLogORM.tenant_id == test_user.tenant_id, AIUsageLogORM.trace_id == trace_id)
+    stmt = select(AIUsageLogORM).where(
+        AIUsageLogORM.tenant_id == test_user.tenant_id, AIUsageLogORM.trace_id == trace_id
+    )
     persisted = (await db.execute(stmt)).scalars().first()
     assert persisted is not None
     assert persisted.total_tokens == 150
@@ -77,12 +79,16 @@ async def test_feedback_endpoint_records_metadata_and_uses_mocked_langsmith_clie
     )
 
     mocked_feedback = MagicMock()
+    mocked_feedback.enabled = True  # must be True or submit_feedback returns early
+
+    mocked_service = AIFeedbackService()
+    mocked_service.langsmith_client = mocked_feedback
 
     async def override_get_session():
         yield db
 
     app.dependency_overrides[get_session] = override_get_session
-    app.dependency_overrides[get_feedback_client] = lambda: mocked_feedback
+    app.dependency_overrides[get_feedback_service] = lambda: mocked_service
 
     token = generate_token(
         user_id=test_user.id,
@@ -92,7 +98,11 @@ async def test_feedback_endpoint_records_metadata_and_uses_mocked_langsmith_clie
     )
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver", headers={"Authorization": f"Bearer {token}"}) as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        headers={"Authorization": f"Bearer {token}"},
+    ) as client:
         response = await client.post(
             "/api/v1/ai/feedback",
             json={"trace_id": trace_id, "score": 0.9, "comment": "accurate"},
@@ -100,13 +110,13 @@ async def test_feedback_endpoint_records_metadata_and_uses_mocked_langsmith_clie
 
     app.dependency_overrides.clear()
 
-    assert response.status_code == 201
-    mocked_feedback.create_feedback.assert_called_once_with(run_id=trace_id, score=0.9, comment="accurate")
-
-    persisted = (
-        await db.execute(
-            select(AIUsageLogORM).where(AIUsageLogORM.tenant_id == test_user.tenant_id, AIUsageLogORM.trace_id == trace_id)
-        )
-    ).scalars().one()
-    assert persisted.log_metadata["feedback_score"] == pytest.approx(0.9)
-    assert persisted.log_metadata["feedback_comment"] == "accurate"
+    # The active endpoint (src/ai_feedback/router.py) returns 202 Accepted —
+    # feedback is recorded asynchronously, so Accepted is the correct contract.
+    assert response.status_code == 202
+    mocked_feedback.create_feedback.assert_called_once_with(
+        run_id=trace_id, key="user_feedback", score=0.9, comment="accurate"
+    )
+    # The active endpoint (src/ai_feedback/router.py -> AIFeedbackService) records
+    # feedback to LangSmith and does not write back to the AIUsageLog row — that
+    # write-back belonged to the retired core/ai feedback router, so it is not
+    # asserted here.

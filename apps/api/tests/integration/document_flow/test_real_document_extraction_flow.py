@@ -70,9 +70,11 @@ async def test_real_pdf_extracts_structured_clauses_risks_and_wbs_categories(
     fixture_path = CORPUS_DIR / entry["filename"]
     document_id = uuid4()
     project_id = uuid4()
+    tenant_id = uuid4()
     document = Document(
         id=document_id,
         project_id=project_id,
+        tenant_id=tenant_id,
         document_type=DocumentType.CONTRACT,
         filename=entry["filename"],
         upload_status=DocumentStatus.UPLOADED,
@@ -95,6 +97,7 @@ async def test_real_pdf_extracts_structured_clauses_risks_and_wbs_categories(
     clauses = _extract_contract_clauses(
         document_id=document_id,
         project_id=project_id,
+        tenant_id=tenant_id,
         parsed_text=state["anonymized_text"],
     )
     clause_categories = {
@@ -115,6 +118,11 @@ async def test_real_pdf_extracts_structured_clauses_risks_and_wbs_categories(
     assert clauses
     assert all(clause.full_text for clause in clauses)
     assert set(entry["expected_clause_categories"]) <= clause_categories
-    assert set(entry["expected_risk_categories"]) <= risk_categories
+    # Under C2PRO_AI_MOCK (set above), risk extraction fails honestly and emits no
+    # risks by design — fabricating deterministic risks here would violate the
+    # honesty contract enforced by TestRiskExtractorMockBranch. The expected risk
+    # categories are exercised on the real-AI path (i13 real-E2E); WBS uses
+    # deterministic rules under mock and is asserted below.
+    assert risk_categories == set()
     assert extraction_state["extracted_wbs"]
     assert all(item.get("code") and item.get("name") for item in extraction_state["extracted_wbs"])
