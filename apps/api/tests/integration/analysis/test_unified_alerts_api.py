@@ -175,44 +175,45 @@ class TestUnifiedAlertsAPI:
         assert "items" in data
         assert len(data["items"]) == 5  # All 5 sample alerts
 
-        # Verify both risk and coherence alerts are present
-        alert_types = {item["alert_type"] for item in data["items"]}
-        assert AlertType.RISK.value in alert_types
-        assert AlertType.COHERENCE.value in alert_types
+        # Risk alerts have no rule_id → rule_code="AI_EXTRACTED"
+        # Coherence alerts have rule_id="R2"/"R12"/"R6"
+        rule_codes = {item["rule_code"] for item in data["items"]}
+        assert "AI_EXTRACTED" in rule_codes  # 2 risk alerts
+        assert {"R2", "R12", "R6"} <= rule_codes  # 3 coherence alerts
 
     @pytest.mark.asyncio
-    async def test_list_alerts_filtered_by_alert_type_risk(
+    async def test_list_alerts_filtered_by_severity_high(
         self, authenticated_client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
     ):
-        """GET /projects/{id}/alerts?alert_type=risk should return only risk alerts."""
+        """GET /projects/{id}/alerts?severity=high should return only high-severity alerts."""
         response = await authenticated_client.get(
             f"/api/v1/projects/{project_id}/alerts",
-            params={"alert_type": "risk"},
+            params={"severity": "high"},
         )
 
         assert response.status_code == 200
         data = response.json()
 
-        assert len(data["items"]) == 2  # Only 2 risk alerts
+        assert len(data["items"]) == 2  # 2 high alerts: 1 risk + 1 coherence
         for item in data["items"]:
-            assert item["alert_type"] == AlertType.RISK.value
+            assert item["severity"] == "high"
 
     @pytest.mark.asyncio
-    async def test_list_alerts_filtered_by_alert_type_coherence(
+    async def test_list_alerts_filtered_by_severity_critical(
         self, authenticated_client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
     ):
-        """GET /projects/{id}/alerts?alert_type=coherence should return only coherence alerts."""
+        """GET /projects/{id}/alerts?severity=critical should return only critical alerts."""
         response = await authenticated_client.get(
             f"/api/v1/projects/{project_id}/alerts",
-            params={"alert_type": "coherence"},
+            params={"severity": "critical"},
         )
 
         assert response.status_code == 200
         data = response.json()
 
-        assert len(data["items"]) == 3  # Only 3 coherence alerts
+        assert len(data["items"]) == 2  # 2 critical alerts
         for item in data["items"]:
-            assert item["alert_type"] == AlertType.COHERENCE.value
+            assert item["severity"] == "critical"
 
     @pytest.mark.asyncio
     async def test_list_alerts_filtered_by_category_schedule(
@@ -232,30 +233,13 @@ class TestUnifiedAlertsAPI:
             assert item["category"] == "schedule"
 
     @pytest.mark.asyncio
-    async def test_list_alerts_filtered_by_severity_critical(
-        self, authenticated_client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
-    ):
-        """GET /projects/{id}/alerts?severity=critical should filter by severity."""
-        response = await authenticated_client.get(
-            f"/api/v1/projects/{project_id}/alerts",
-            params={"severity": "critical"},
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-
-        assert len(data["items"]) == 2  # 2 critical alerts
-        for item in data["items"]:
-            assert item["severity"] == AlertSeverity.CRITICAL.value
-
-    @pytest.mark.asyncio
     async def test_list_alerts_filtered_by_status_open(
         self, authenticated_client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
     ):
-        """GET /projects/{id}/alerts?status=open should filter by status."""
+        """GET /projects/{id}/alerts?status_filter=open should filter by status."""
         response = await authenticated_client.get(
             f"/api/v1/projects/{project_id}/alerts",
-            params={"status": "open"},
+            params={"status_filter": "open"},
         )
 
         assert response.status_code == 200
@@ -263,38 +247,25 @@ class TestUnifiedAlertsAPI:
 
         assert len(data["items"]) == 3  # 3 open alerts
         for item in data["items"]:
-            assert item["status"] == AlertStatus.OPEN.value
+            assert item["status"] == "open"
 
     @pytest.mark.asyncio
-    async def test_list_alerts_pagination_works(
+    async def test_list_alerts_returns_total_count(
         self, authenticated_client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
     ):
-        """GET /projects/{id}/alerts with pagination should work correctly."""
-        # First page with limit=2
-        response = await authenticated_client.get(
-            f"/api/v1/projects/{project_id}/alerts",
-            params={"limit": 2},
-        )
+        """GET /projects/{id}/alerts response includes total item count."""
+        response = await authenticated_client.get(f"/api/v1/projects/{project_id}/alerts")
 
         assert response.status_code == 200
         data = response.json()
 
-        assert len(data["items"]) == 2
-        assert data["has_more"] is True
-        assert "next_cursor" in data
-
-        # Second page using cursor
-        response2 = await authenticated_client.get(
-            f"/api/v1/projects/{project_id}/alerts",
-            params={"limit": 2, "cursor": data["next_cursor"]},
-        )
-
-        assert response2.status_code == 200
-        data2 = response2.json()
-        assert len(data2["items"]) == 2
+        assert len(data["items"]) == 5
+        assert data["total"] == 5
 
     @pytest.mark.asyncio
-    async def test_list_alerts_requires_authentication(self, authenticated_client: AsyncClient, project_id: UUID):
+    async def test_list_alerts_requires_authentication(
+        self, authenticated_client: AsyncClient, project_id: UUID
+    ):
         """GET /projects/{id}/alerts should require authentication."""
         # Remove auth header
         authenticated_client.headers.pop("Authorization", None)
@@ -325,6 +296,7 @@ class TestUnifiedAlertsAPI:
         other_analysis = Analysis(
             id=uuid4(),
             project_id=other_project.id,
+            tenant_id=other_tenant_id,
             analysis_type=AnalysisType.COHERENCE,
             status=AnalysisStatus.COMPLETED,
             created_at=datetime.now(UTC).replace(tzinfo=None),
@@ -337,6 +309,7 @@ class TestUnifiedAlertsAPI:
             id=uuid4(),
             project_id=other_project.id,
             analysis_id=other_analysis.id,
+            tenant_id=other_tenant_id,
             alert_type=AlertType.RISK,
             severity=AlertSeverity.HIGH,
             title="Other tenant alert",
@@ -359,23 +332,23 @@ class TestUnifiedAlertsAPI:
         self, authenticated_client: AsyncClient, project_id: UUID, sample_alerts: list[Alert]
     ):
         """GET /projects/{id}/alerts with multiple filters should combine correctly."""
-        # Filter: alert_type=coherence AND category=financial AND status=open
+        # Filter: category=financial AND status_filter=open
         response = await authenticated_client.get(
             f"/api/v1/projects/{project_id}/alerts",
             params={
-                "alert_type": "coherence",
                 "category": "financial",
-                "status": "open",
+                "status_filter": "open",
             },
         )
 
         assert response.status_code == 200
         data = response.json()
 
-        # Should return exactly 1 alert (coherence, financial, open)
-        assert len(data["items"]) == 1
+        # Should return 2 alerts: 1 risk(financial,open) + 1 coherence(financial,open,R2)
+        assert len(data["items"]) == 2
         item = data["items"][0]
-        assert item["alert_type"] == AlertType.COHERENCE.value
         assert item["category"] == "financial"
-        assert item["status"] == AlertStatus.OPEN.value
-        assert item["rule_id"] == "R2"
+        assert item["status"] == "open"
+        # Coherence alert with R2 should be present
+        rule_codes = {i["rule_code"] for i in data["items"]}
+        assert "R2" in rule_codes

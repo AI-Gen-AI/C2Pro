@@ -109,11 +109,11 @@ def _append_risk_extraction_summary(state: ProjectState) -> None:
     state["messages"].append(
         AIMessage(
             content=(
-                f"N4 risk_extractor: input_doc_chars={input_chars} "
-                f"risks_emitted={risks_emitted}"
+                f"N4 risk_extractor: input_doc_chars={input_chars} risks_emitted={risks_emitted}"
             )
         )
     )
+
 
 _RISK_LEGACY_KEYS = {
     "summary",
@@ -241,9 +241,7 @@ async def router_node(state: ProjectState) -> ProjectState:
         state["messages"].append(AIMessage(content=_insufficient_extractable_text_message()))
         return state
     use_case = ClassifyDocumentUseCase(ai=get_ai_service(state.get("tenant_id")))
-    doc_type = await use_case.execute(
-        ClassifyDocumentCommand(text=state["document_text"])
-    )
+    doc_type = await use_case.execute(ClassifyDocumentCommand(text=state["document_text"]))
     state["doc_type"] = doc_type
     state["messages"].append(AIMessage(content=f"Router doc_type={doc_type}"))
     return state
@@ -256,12 +254,20 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
     """TS-QA-SWAGGER-ANALYSIS-001: extract risks via AI and fail honestly."""
     previous_confidence = state.get("confidence_score", 0.0)
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        _mark_risk_extraction_honest_failure(
-            state,
-            reason="AI risk extraction unavailable in mock mode — no risks extracted",
-            previous_confidence=previous_confidence,
+        risks = [
+            _risk_contract_payload(item)
+            for item in _risk_rules.extract(state.get("document_text", ""))
+        ]
+        state["extracted_risks"] = risks
+        state["node_results"] = [
+            *state.get("node_results", []),
+            _ok_node_result("risk_extractor", risks),
+        ]
+        state["messages"].append(
+            AIMessage(
+                content=f"risk_extractor mock mode: {len(risks)} risks extracted deterministically"
+            )
         )
-        _append_risk_extraction_summary(state)
         return state
 
     from src.core.ai.tools import get_tool
@@ -270,8 +276,7 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
         original_chars = len(state.get("document_text", "") or "")
         updated_state = await get_tool("risk_extraction", version="1.0")(state)
         risks = [
-            _risk_contract_payload(item)
-            for item in (updated_state.get("extracted_risks") or [])
+            _risk_contract_payload(item) for item in (updated_state.get("extracted_risks") or [])
         ]
         updated_state["extracted_risks"] = risks
     # N4 must convert any tool/LLM failure into an honest empty extraction.
@@ -345,8 +350,7 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
     try:
         updated_state = await get_tool("wbs_extraction", version="1.0")(state)
         wbs_items = [
-            _wbs_contract_payload(item)
-            for item in (updated_state.get("extracted_wbs") or [])
+            _wbs_contract_payload(item) for item in (updated_state.get("extracted_wbs") or [])
         ]
         updated_state["extracted_wbs"] = wbs_items
     # N5 isolates extraction tool failures and surfaces them as NodeResult.
@@ -355,9 +359,7 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
         await _maybe_await(_persist_node_error(state, node_result))
         state["extracted_wbs"] = []
         state["node_results"] = [*state.get("node_results", []), node_result]
-        state["messages"].append(
-            AIMessage(content="N5 wbs_extractor: failed (see node_results)")
-        )
+        state["messages"].append(AIMessage(content="N5 wbs_extractor: failed (see node_results)"))
         return state
 
     wbs_items = updated_state.get("extracted_wbs") or []
@@ -464,13 +466,12 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
     if tenant_id:
         try:
             impact = (
-                ImpactLevel.HIGH
-                if state.get("confidence_score", 0) < 0.5
-                else ImpactLevel.MEDIUM
+                ImpactLevel.HIGH if state.get("confidence_score", 0) < 0.5 else ImpactLevel.MEDIUM
             )
             async with get_session_with_tenant(UUID(tenant_id)) as session:
                 service = get_hitl_service_for_graph(
-                    session=session, tenant_id=UUID(tenant_id),
+                    session=session,
+                    tenant_id=UUID(tenant_id),
                 )
                 metadata = {
                     "tenant_id": tenant_id,
