@@ -1,5 +1,6 @@
-"""
-SQLAlchemy implementation of the IStakeholderRepository port.
+"""SQLAlchemy implementation of the IStakeholderRepository port.
+
+TS-UA-STK-UC-001 / TASK-BCK-095.
 """
 from __future__ import annotations
 
@@ -191,7 +192,12 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
 
     async def update(self, stakeholder: Stakeholder, tenant_id: UUID) -> None:
         """Update stakeholder metadata."""
-        orm = await self.session.get(StakeholderORM, stakeholder.id)
+        stmt = select(StakeholderORM).where(
+            StakeholderORM.id == stakeholder.id,
+            StakeholderORM.tenant_id == tenant_id,
+        )
+        result = await self.session.execute(stmt)
+        orm = result.scalar_one_or_none()
         if orm is None:
             return
 
@@ -322,7 +328,12 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
 
     async def refresh(self, entity: object) -> None:
         if isinstance(entity, Stakeholder):
-            orm = await self.session.get(StakeholderORM, entity.id)
+            stmt = select(StakeholderORM).where(
+                StakeholderORM.id == entity.id,
+                StakeholderORM.tenant_id == entity.tenant_id,
+            )
+            result = await self.session.execute(stmt)
+            orm = result.scalar_one_or_none()
             if orm:
                 await self.session.refresh(orm)
                 entity.name = orm.name

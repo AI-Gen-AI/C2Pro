@@ -1,11 +1,13 @@
 """
-TS-E2E-SEC-TNT-001
+TS-E2E-SEC-TNT-001 / TS-UA-STK-UC-001 / TASK-BCK-095
 
 Repository-level tenant isolation hardening tests.
 """
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -13,9 +15,35 @@ import pytest
 
 from src.analysis.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
 from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
+from src.core.approval import ApprovalStatus
 from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
     SqlAlchemyStakeholderRepository,
 )
+from src.stakeholders.domain.models import InterestLevel, PowerLevel, Stakeholder
+
+
+def _stakeholder() -> Stakeholder:
+    now = datetime.now(UTC)
+    return Stakeholder(
+        id=uuid4(),
+        project_id=uuid4(),
+        tenant_id=uuid4(),
+        power_level=PowerLevel.HIGH,
+        interest_level=InterestLevel.HIGH,
+        approval_status=ApprovalStatus.APPROVED,
+        created_at=now,
+        updated_at=now,
+        name="Tenant-scoped stakeholder",
+    )
+
+
+def _assert_stakeholder_identity_is_tenant_scoped(stmt: Any, stakeholder: Stakeholder) -> None:
+    statement = str(stmt)
+    params = stmt.compile().params
+    assert "stakeholders.id" in statement
+    assert "stakeholders.tenant_id" in statement
+    assert stakeholder.id in params.values()
+    assert stakeholder.tenant_id in params.values()
 
 
 @pytest.mark.asyncio
@@ -100,3 +128,35 @@ async def test_stakeholder_repository_list_by_project_filters_by_tenant_id() -> 
 
     first_stmt = session.execute.call_args_list[0].args[0]
     assert "stakeholders.tenant_id" in str(first_stmt)
+
+
+@pytest.mark.asyncio
+async def test_stakeholder_repository_update_selects_by_id_and_tenant_id() -> None:
+    session = AsyncMock()
+    session.get.return_value = None
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    session.execute.return_value = result
+    repo = SqlAlchemyStakeholderRepository(session=session)
+    stakeholder = _stakeholder()
+
+    await repo.update(stakeholder, tenant_id=stakeholder.tenant_id)
+
+    stmt = session.execute.await_args.args[0]
+    _assert_stakeholder_identity_is_tenant_scoped(stmt, stakeholder)
+
+
+@pytest.mark.asyncio
+async def test_stakeholder_repository_refresh_selects_by_id_and_tenant_id() -> None:
+    session = AsyncMock()
+    session.get.return_value = None
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    session.execute.return_value = result
+    repo = SqlAlchemyStakeholderRepository(session=session)
+    stakeholder = _stakeholder()
+
+    await repo.refresh(stakeholder)
+
+    stmt = session.execute.await_args.args[0]
+    _assert_stakeholder_identity_is_tenant_scoped(stmt, stakeholder)

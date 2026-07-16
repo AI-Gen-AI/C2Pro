@@ -1,6 +1,4 @@
-"""
-Use case for reviewing stakeholder approvals.
-"""
+"""TS-UA-STK-UC-001 / TASK-BCK-095: review stakeholder approvals."""
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -8,6 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from src.core.approval import ApprovalStatus
+from src.core.tenants.types import TenantId, require_tenant_id
 from src.stakeholders.domain.models import Stakeholder
 from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
 
@@ -19,13 +18,15 @@ class ReviewStakeholderApprovalUseCase:
     async def execute(
         self,
         *,
+        tenant_id: UUID | TenantId,
         stakeholder_id: UUID,
         status: ApprovalStatus,
         correction_data: dict[str, Any] | None,
         feedback_comment: str | None,
         user_id: UUID,
     ) -> tuple[Stakeholder, dict[str, Any]]:
-        stakeholder = await self.repository.get_by_id(stakeholder_id)
+        normalized_tenant_id = require_tenant_id(tenant_id)
+        stakeholder = await self.repository.get_by_id(stakeholder_id, normalized_tenant_id)
         if not stakeholder:
             raise ValueError("stakeholder_not_found")
 
@@ -37,7 +38,7 @@ class ReviewStakeholderApprovalUseCase:
         stakeholder.reviewed_at = datetime.now(UTC)
         stakeholder.review_comment = feedback_comment
 
-        await self.repository.update(stakeholder)
+        await self.repository.update(stakeholder, normalized_tenant_id)
         await self.repository.commit()
         await self.repository.refresh(stakeholder)
 

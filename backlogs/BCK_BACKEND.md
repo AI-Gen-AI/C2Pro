@@ -594,3 +594,8 @@
 | TASK-QA-322 | QA | — | Per-wave mypy ratchet + risk-proportionate regression certification | TASK-DEV-031 |
 | TASK-QA-323 | QA | — | Independent zero-error / full-suite / live-CI certification | TASK-BCK-113, TASK-QA-322 |
 | TASK-DEV-006 | DevOps | — | Promote `backend-typecheck` to required + close umbrella | TASK-QA-323 |
+
+### TASK-BCK-095 execution log
+
+- **Stakeholder approval tenant-isolation slice (in progress, TS-UA-STK-UC-001):** RED tests prove the authenticated tenant must cross the HTTP/use-case boundary and be supplied unchanged to both `IStakeholderRepository.get_by_id` and `update`. The use case normalizes the boundary UUID once with `require_tenant_id`; `TASK-BCK-095` remains open for the other high-signal defects in this wave.
+- **Persistence review extension:** `SqlAlchemyStakeholderRepository.update` and Stakeholder `refresh` now select by the compound stakeholder ID + tenant ID boundary. Unscoped `session.get` calls in delete and RACI update/refresh paths remain pending under the still-open `TASK-BCK-095`; they are intentionally excluded from this approval-path slice.

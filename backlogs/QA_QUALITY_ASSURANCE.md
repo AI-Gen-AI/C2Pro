@@ -2,7 +2,7 @@
 
 **Category**: Quality Assurance (QA)
 **Owner Role**: qa
-**Last Updated**: 2026-06-04
+**Last Updated**: 2026-07-16
 
 **Quick Links**:
 - 🏠 [Master Index](../C2PRO_MASTER_BACKLOG.md)
@@ -333,3 +333,15 @@ After each EPIC-MYPY-STRICT wave, independently verify the `mypy-baseline.txt` r
 **Priority**: P1 · **Owner**: qa · **Depends on**: TASK-BCK-113, TASK-QA-322 · **Epic**: EPIC-MYPY-STRICT
 
 Independent final gate: `mypy src` reports zero errors with the full backend dependency set; backend unit + integration suites pass; ruff clean under the UP042 policy; no blanket ignores or relaxed strict; CI runs the same env/command as local. Green here unblocks TASK-DEV-006 (promote `backend-typecheck` to required).
+
+### TASK-QA-324: repair inherited stakeholder tenant fixtures
+
+**Priority**: P2 · **Owner**: qa · **Depends on**: TASK-BCK-095 · **Epic**: EPIC-MYPY-STRICT
+
+Repair the inherited stakeholder application fixtures in `test_extract_stakeholders_use_case.py`, `test_get_raci_matrix_use_case.py`, and `test_upsert_raci_assignment_use_case.py` so every use-case construction supplies the required `tenant_id` contract.
+
+**Scope and acceptance**:
+
+- Test fixtures only; no production behavior or interface changes.
+- Preserve tenant-isolation intent by using explicit, deterministic tenant identifiers.
+- Run the three focused stakeholder application test modules and confirm they pass without weakening assertions or skipping tests.
