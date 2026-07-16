@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-14T19:04:40Z",
+  "updated_at": "2026-07-16T22:15:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,38 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T143",
+      "backlog_id": "TASK-DEV-004",
+      "tipo": "devops",
+      "descripcion": "Fix backend integration suite and promote backend-integration to a required gate in ci.yml.",
+      "asignado_a": "devops",
+      "estado": "completado",
+      "criterio_done": "All integration tests pass, backend-integration is added to REQUIRED_JOBS in ci.yml, obsolete advisory step/notices/comments are removed, and the CI guard tests pass.",
+      "archivos_modificados": [
+        ".github/workflows/ci.yml",
+        "apps/api/tests/integration/core/ai/test_langsmith_validation_integration.py",
+        "apps/api/tests/unit/test_backend_ci_guards.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/DEV_DEVOPS.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-16T19:30:00Z",
+        "completado": "2026-07-16T22:15:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-DEV-004 completed successfully: integration tests green (97 passed / 0 failed), promoted backend-integration to REQUIRED_JOBS, and CI Status gate verified on GitHub run 29531027518.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "test_backend_integration_job_is_required_gate_in_ci_workflow passed",
+          "test_feedback_endpoint_records_metadata_and_uses_mocked_langsmith_client passed",
+          "GitHub actions run 29531027518 passed all required gating jobs"
+        ]
+      }
+    },
     {
       "tarea_id": "T142",
       "backlog_id": "TASK-DEV-013",
