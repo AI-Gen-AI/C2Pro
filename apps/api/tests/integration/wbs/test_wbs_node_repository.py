@@ -140,10 +140,13 @@ class TestWBSNodeRepositoryCreate:
             node_type=WBSNodeType.ACTIVITY,
         )
 
-        # Verify nested set properties
+        # Verify nested set properties. The returned `parent` value object is an
+        # immutable snapshot from before the children were inserted, so reload it
+        # to compare against the expanded interval.
+        parent_reloaded = await repo.get_by_id(parent.id, tenant_id)
         assert child1.lft < child1.rgt < child2.lft < child2.rgt
-        assert parent.lft < child1.lft
-        assert child2.rgt < parent.rgt
+        assert parent_reloaded.lft < child1.lft
+        assert child2.rgt < parent_reloaded.rgt
 
 
 class TestWBSNodeRepositoryQuery:

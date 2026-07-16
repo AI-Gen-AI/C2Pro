@@ -177,12 +177,19 @@ class WBSNodeRepository:
         """
         # Calculate lft, rgt, depth based on parent
         if parent_id is None:
-            # Root node - find max rgt and place after it
-            stmt = select(WBSNodeORM.rgt).where(
-                and_(
-                    WBSNodeORM.project_id == project_id,
-                    WBSNodeORM.tenant_id == tenant_id,
+            # Root node - find the MAX rgt and place after it (order + limit;
+            # a bare scalar() would return an arbitrary row's rgt, colliding
+            # intervals once more than one root exists).
+            stmt = (
+                select(WBSNodeORM.rgt)
+                .where(
+                    and_(
+                        WBSNodeORM.project_id == project_id,
+                        WBSNodeORM.tenant_id == tenant_id,
+                    )
                 )
+                .order_by(WBSNodeORM.rgt.desc())
+                .limit(1)
             )
             result = await self.session.execute(stmt)
             max_rgt = result.scalar()
@@ -425,46 +432,50 @@ class WBSNodeRepository:
             target_lft = max_rgt + 1
             new_depth = 0
 
-        width = node_orm.rgt - node_orm.lft + 1
-        _distance = target_lft - node_orm.lft  # captured before detach
+        # Original subtree bounds (node_orm is fetched fresh above; with
+        # synchronize_session=False on the bulk UPDATEs below, these attributes
+        # stay at their original values for the remaining WHERE clauses).
+        subtree_lft = node_orm.lft
+        subtree_rgt = node_orm.rgt
+        width = subtree_rgt - subtree_lft + 1
         depth_change = new_depth - node_orm.depth
 
-        # Use a temporary shift to move the subtree "out of the way"
-        # We'll use a large negative offset
-        tmp_offset = 1000000
+        # Move the subtree "out of the way" into a high POSITIVE temp band.
+        # Negative space would violate CHECK ck_wbs_nodes_lft_positive (lft > 0),
+        # so the temp band is above any real coordinate; the gap operations below
+        # explicitly exclude it (lft/rgt < tmp_offset).
+        tmp_offset = 1_000_000
 
-        # Mark nodes in subtree
-        # Detach to negative space to avoid CHECK constraint violations
-        # during gap manipulation.  Use synchronize_session=False so
-        # node_orm stays accessible for subsequent WHERE clauses.
-        subtree_stmt = (
-            update(WBSNodeORM)
-            .where(
-                and_(
-                    WBSNodeORM.project_id == node_orm.project_id,
-                    WBSNodeORM.tenant_id == tenant_id,
-                    WBSNodeORM.lft >= node_orm.lft,
-                    WBSNodeORM.rgt <= node_orm.rgt,
-                )
-            )
-            .values(
-                lft=WBSNodeORM.lft - tmp_offset,
-                rgt=WBSNodeORM.rgt - tmp_offset,
-                depth=WBSNodeORM.depth + depth_change,
-            )
-            .execution_options(synchronize_session=False)
-        )
-        await self.session.execute(subtree_stmt)
-
-        # 2. Close gap in original position
-        # Shift lft FIRST (subtracting preserves lft < rgt).
+        # 1. Detach subtree to the temp band. lft and rgt shift together in one
+        #    statement, so lft < rgt is preserved per row.
         await self.session.execute(
             update(WBSNodeORM)
             .where(
                 and_(
                     WBSNodeORM.project_id == node_orm.project_id,
                     WBSNodeORM.tenant_id == tenant_id,
-                    WBSNodeORM.lft > node_orm.rgt,
+                    WBSNodeORM.lft >= subtree_lft,
+                    WBSNodeORM.rgt <= subtree_rgt,
+                )
+            )
+            .values(
+                lft=WBSNodeORM.lft + tmp_offset,
+                rgt=WBSNodeORM.rgt + tmp_offset,
+                depth=WBSNodeORM.depth + depth_change,
+            )
+            .execution_options(synchronize_session=False)
+        )
+
+        # 2. Close the gap the subtree left behind. Subtract shifts lft FIRST
+        #    (lft decreasing keeps lft < rgt). Exclude the temp band.
+        await self.session.execute(
+            update(WBSNodeORM)
+            .where(
+                and_(
+                    WBSNodeORM.project_id == node_orm.project_id,
+                    WBSNodeORM.tenant_id == tenant_id,
+                    WBSNodeORM.lft > subtree_rgt,
+                    WBSNodeORM.lft < tmp_offset,
                 )
             )
             .values(lft=WBSNodeORM.lft - width)
@@ -476,20 +487,21 @@ class WBSNodeRepository:
                 and_(
                     WBSNodeORM.project_id == node_orm.project_id,
                     WBSNodeORM.tenant_id == tenant_id,
-                    WBSNodeORM.rgt > node_orm.rgt,
+                    WBSNodeORM.rgt > subtree_rgt,
+                    WBSNodeORM.rgt < tmp_offset,
                 )
             )
             .values(rgt=WBSNodeORM.rgt - width)
             .execution_options(synchronize_session=False)
         )
 
-        # Adjust target_lft if it was shifted by the gap closure
-        if target_lft > node_orm.rgt:
+        # If the destination was to the right of the removed subtree, it shifted
+        # left by `width` when the gap closed.
+        if target_lft > subtree_rgt:
             target_lft -= width
 
-        # 3. Open gap in new position — shift rgt FIRST (preserves
-        #    lft < rgt invariant under CHECK ck_wbs_nodes_lft_lt_rgt),
-        #    then shift lft SECOND.
+        # 3. Open a gap of `width` at the destination. Add shifts rgt FIRST
+        #    (rgt increasing keeps lft < rgt). Exclude the temp band.
         await self.session.execute(
             update(WBSNodeORM)
             .where(
@@ -497,6 +509,7 @@ class WBSNodeRepository:
                     WBSNodeORM.project_id == node_orm.project_id,
                     WBSNodeORM.tenant_id == tenant_id,
                     WBSNodeORM.rgt >= target_lft,
+                    WBSNodeORM.rgt < tmp_offset,
                 )
             )
             .values(rgt=WBSNodeORM.rgt + width)
@@ -509,28 +522,29 @@ class WBSNodeRepository:
                     WBSNodeORM.project_id == node_orm.project_id,
                     WBSNodeORM.tenant_id == tenant_id,
                     WBSNodeORM.lft >= target_lft,
+                    WBSNodeORM.lft < tmp_offset,
                 )
             )
             .values(lft=WBSNodeORM.lft + width)
             .execution_options(synchronize_session=False)
         )
 
-        # 4. Re-attach subtree — use _distance captured before detach
-        # (node_orm.lft is stale in session after synchronize_session=False
-        # on step 1; _distance = target_lft - original_lft is still correct).
-
+        # 4. Bring the subtree back from the temp band into the opened gap.
+        #    shift = destination lft - original subtree lft (destination is the
+        #    post-gap-closure value).
+        shift = target_lft - subtree_lft
         await self.session.execute(
             update(WBSNodeORM)
             .where(
                 and_(
                     WBSNodeORM.project_id == node_orm.project_id,
                     WBSNodeORM.tenant_id == tenant_id,
-                    WBSNodeORM.lft < 0,  # Subtree nodes are in negative space
+                    WBSNodeORM.lft >= tmp_offset,
                 )
             )
             .values(
-                lft=WBSNodeORM.lft + tmp_offset + _distance,
-                rgt=WBSNodeORM.rgt + tmp_offset + _distance,
+                lft=WBSNodeORM.lft - tmp_offset + shift,
+                rgt=WBSNodeORM.rgt - tmp_offset + shift,
             )
             .execution_options(synchronize_session=False)
         )
