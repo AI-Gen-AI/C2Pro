@@ -505,11 +505,19 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
 
     async def refresh(self, entity: Document | Clause) -> None:
         if isinstance(entity, Document):
-            orm_entity = await self.session.get(DocumentORM, entity.id)
+            stmt = select(DocumentORM).where(
+                DocumentORM.id == entity.id,
+                DocumentORM.tenant_id == entity.tenant_id,
+            )
         elif isinstance(entity, Clause):
-            orm_entity = await self.session.get(ClauseORM, entity.id)
+            stmt = select(ClauseORM).where(
+                ClauseORM.id == entity.id,
+                ClauseORM.tenant_id == entity.tenant_id,
+            )
         else:
             raise TypeError(f"Cannot refresh unknown entity type: {type(entity)}")
+        result = await self.session.execute(stmt)
+        orm_entity = result.scalar_one_or_none()
         if orm_entity:
             await self.session.refresh(orm_entity)
             # Update the domain entity with refreshed ORM data
