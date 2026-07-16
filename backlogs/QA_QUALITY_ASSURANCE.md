@@ -345,3 +345,16 @@ Repair the inherited stakeholder application fixtures in `test_extract_stakehold
 - Test fixtures only; no production behavior or interface changes.
 - Preserve tenant-isolation intent by using explicit, deterministic tenant identifiers.
 - Run the three focused stakeholder application test modules and confirm they pass without weakening assertions or skipping tests.
+
+### TASK-QA-325: restore coherence dependency-provider test isolation
+
+**Priority**: P2 · **Owner**: qa · **Depends on**: TASK-BCK-095 · **Epic**: EPIC-MYPY-STRICT
+
+Repair the inherited isolation drift in `apps/api/tests/modules/analysis/adapters/graph/test_graph_dependencies.py::test_coherence_scorer_uses_dependency_provider`. The fixture expects score 88 from its monkeypatched provider, but the async coherence path bypasses that provider, attempts an uninitialized database connection, and then returns the low-budget fail-closed `None` result.
+
+**Scope and acceptance**:
+
+- Diagnose the async dependency boundary before editing; keep the fix in test fixture/contract isolation unless evidence proves a production defect.
+- Preserve the assertion that the coherence scorer consumes the dependency provider's score 88; do not weaken, skip, or broadly mock away the contract.
+- Prevent database access in this isolated test and prove the focused test passes independently.
+- If diagnosis proves production dependency wiring is defective, stop the fixture-only change and register/escalate a backend task before modifying production code.
