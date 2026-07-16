@@ -48,6 +48,7 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-test-mock-key")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("RATE_LIMIT_ENABLED", "true")
 os.environ.setdefault("RATE_LIMIT_PER_MINUTE", "100")
+os.environ.setdefault("AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY", "true")
 
 # =============================================================
 # SRC IMPORTS  (after env setup)
@@ -329,6 +330,7 @@ async def authenticated_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> AsyncGenerator[AsyncClient, None]:
     """Authenticated client for protected endpoint tests (TASK-BCK-030)."""
+
     async def override_get_session():
         yield db
 
@@ -374,9 +376,20 @@ async def cleanup_database(superuser_cleanup_engine):
     async def _cleanup(**entity_ids):
         async with AsyncSession(superuser_cleanup_engine) as session:
             order = [
-                "users", "tenants", "projects", "documents", "clauses",
-                "analyses", "alerts", "extractions", "stakeholders", "wbs_items",
-                "bom_items", "stakeholder_wbs_raci", "ai_usage_logs", "audit_logs",
+                "users",
+                "tenants",
+                "projects",
+                "documents",
+                "clauses",
+                "analyses",
+                "alerts",
+                "extractions",
+                "stakeholders",
+                "wbs_items",
+                "bom_items",
+                "stakeholder_wbs_raci",
+                "ai_usage_logs",
+                "audit_logs",
             ]
             for table in order:
                 ids = entity_ids.get(table, [])
@@ -432,8 +445,15 @@ def mocker():
 @pytest.fixture(scope="function")
 def clean_tables() -> list[str]:
     return [
-        "users", "tenants", "projects", "documents", "clauses", "analyses",
-        "inconsistencies", "procurement_budget_items", "stakeholder_alerts",
+        "users",
+        "tenants",
+        "projects",
+        "documents",
+        "clauses",
+        "analyses",
+        "inconsistencies",
+        "procurement_budget_items",
+        "stakeholder_alerts",
     ]
 
 

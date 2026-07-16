@@ -25,6 +25,11 @@ from src.analysis.domain.enums import (
 
 
 @pytest.fixture
+def tenant_id() -> UUID:
+    return uuid4()
+
+
+@pytest.fixture
 async def project_id(db: AsyncSession, tenant_id: UUID):
     """Create test project and return its ID."""
     from src.projects.adapters.persistence.models import ProjectORM
@@ -43,11 +48,12 @@ async def project_id(db: AsyncSession, tenant_id: UUID):
 
 
 @pytest.fixture
-async def analysis_id(db: AsyncSession, project_id: UUID):
+async def analysis_id(db: AsyncSession, project_id: UUID, tenant_id: UUID):
     """Create test analysis and return its ID."""
     analysis = Analysis(
         id=uuid4(),
         project_id=project_id,
+        tenant_id=tenant_id,
         analysis_type=AnalysisType.COHERENCE,
         status=AnalysisStatus.COMPLETED,
         created_at=datetime.now(UTC),
@@ -61,7 +67,7 @@ async def analysis_id(db: AsyncSession, project_id: UUID):
 
 @pytest.fixture
 async def sample_alerts(
-    db: AsyncSession, project_id: UUID, analysis_id: UUID
+    db: AsyncSession, project_id: UUID, analysis_id: UUID, tenant_id: UUID
 ) -> list[Alert]:
     """Create sample alerts of different types."""
     alerts = [
@@ -70,6 +76,7 @@ async def sample_alerts(
             id=uuid4(),
             project_id=project_id,
             analysis_id=analysis_id,
+            tenant_id=tenant_id,
             alert_type=AlertType.RISK,
             severity=AlertSeverity.CRITICAL,
             category="schedule",
@@ -83,6 +90,7 @@ async def sample_alerts(
             id=uuid4(),
             project_id=project_id,
             analysis_id=analysis_id,
+            tenant_id=tenant_id,
             alert_type=AlertType.RISK,
             severity=AlertSeverity.HIGH,
             category="financial",
@@ -97,6 +105,7 @@ async def sample_alerts(
             id=uuid4(),
             project_id=project_id,
             analysis_id=analysis_id,
+            tenant_id=tenant_id,
             alert_type=AlertType.COHERENCE,
             severity=AlertSeverity.HIGH,
             category="financial",
@@ -111,6 +120,7 @@ async def sample_alerts(
             id=uuid4(),
             project_id=project_id,
             analysis_id=analysis_id,
+            tenant_id=tenant_id,
             alert_type=AlertType.COHERENCE,
             severity=AlertSeverity.CRITICAL,
             category="schedule",
@@ -125,6 +135,7 @@ async def sample_alerts(
             id=uuid4(),
             project_id=project_id,
             analysis_id=analysis_id,
+            tenant_id=tenant_id,
             alert_type=AlertType.COHERENCE,
             severity=AlertSeverity.MEDIUM,
             category="legal",
@@ -281,9 +292,7 @@ class TestUnifiedAlertsAPI:
         assert len(data2["items"]) == 2
 
     @pytest.mark.asyncio
-    async def test_list_alerts_requires_authentication(
-        self, client: AsyncClient, project_id: UUID
-    ):
+    async def test_list_alerts_requires_authentication(self, client: AsyncClient, project_id: UUID):
         """GET /projects/{id}/alerts should require authentication."""
         # Remove auth header
         client.headers.pop("Authorization", None)

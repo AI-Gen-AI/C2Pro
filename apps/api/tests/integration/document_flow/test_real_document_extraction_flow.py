@@ -70,9 +70,11 @@ async def test_real_pdf_extracts_structured_clauses_risks_and_wbs_categories(
     fixture_path = CORPUS_DIR / entry["filename"]
     document_id = uuid4()
     project_id = uuid4()
+    tenant_id = uuid4()
     document = Document(
         id=document_id,
         project_id=project_id,
+        tenant_id=tenant_id,
         document_type=DocumentType.CONTRACT,
         filename=entry["filename"],
         upload_status=DocumentStatus.UPLOADED,
@@ -95,6 +97,7 @@ async def test_real_pdf_extracts_structured_clauses_risks_and_wbs_categories(
     clauses = _extract_contract_clauses(
         document_id=document_id,
         project_id=project_id,
+        tenant_id=tenant_id,
         parsed_text=state["anonymized_text"],
     )
     clause_categories = {

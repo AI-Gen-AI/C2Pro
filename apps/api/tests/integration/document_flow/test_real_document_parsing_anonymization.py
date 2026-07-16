@@ -89,6 +89,7 @@ def _to_domain_document(row: DocumentORM) -> Document:
     return Document(
         id=row.id,
         project_id=row.project_id,
+        tenant_id=row.tenant_id,
         document_type=row.document_type,
         filename=row.filename,
         upload_status=row.upload_status,

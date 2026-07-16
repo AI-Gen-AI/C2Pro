@@ -195,34 +195,42 @@ class WBSNodeRepository:
             if not parent_orm or parent_orm.tenant_id != tenant_id:
                 raise ValueError(f"Parent node {parent_id} not found")
 
-            # Make space for new node by shifting existing nodes
-            # All nodes with lft > parent.rgt need to shift by 2
+            # Capture parent's pre-shift rgt before bulk UPDATEs expire the ORM
+            # object.  Accessing parent_orm.rgt after the UPDATEs triggers a
+            # lazy DB load returning the post-update value, which places the
+            # new node at the wrong position.
+            parent_rgt = parent_orm.rgt
+
+            # Make space for new node by shifting existing nodes.
+            # Shift rgt FIRST (increasing rgt always preserves lft < rgt
+            # and never violates CHECK ck_wbs_nodes_lft_lt_rgt).  Then
+            # shift lft SECOND (safe because rgt was already increased).
             await self.session.execute(
                 update(WBSNodeORM)
                 .where(
                     and_(
                         WBSNodeORM.project_id == project_id,
                         WBSNodeORM.tenant_id == tenant_id,
-                        WBSNodeORM.lft > parent_orm.rgt,
-                    )
-                )
-                .values(lft=WBSNodeORM.lft + 2)
-            )
-            await self.session.execute(
-                update(WBSNodeORM)
-                .where(
-                    and_(
-                        WBSNodeORM.project_id == project_id,
-                        WBSNodeORM.tenant_id == tenant_id,
-                        WBSNodeORM.rgt >= parent_orm.rgt,
+                        WBSNodeORM.rgt >= parent_rgt,
                     )
                 )
                 .values(rgt=WBSNodeORM.rgt + 2)
             )
+            await self.session.execute(
+                update(WBSNodeORM)
+                .where(
+                    and_(
+                        WBSNodeORM.project_id == project_id,
+                        WBSNodeORM.tenant_id == tenant_id,
+                        WBSNodeORM.lft > parent_rgt,
+                    )
+                )
+                .values(lft=WBSNodeORM.lft + 2)
+            )
 
-            # Insert new node at parent's current rgt position
-            lft = parent_orm.rgt
-            rgt = parent_orm.rgt + 1
+            # Insert new node at parent's original rgt position
+            lft = parent_rgt
+            rgt = parent_rgt + 1
             depth = parent_orm.depth + 1
 
         # Create ORM model
@@ -253,21 +261,16 @@ class WBSNodeRepository:
 
         return self._to_domain(orm_node)
 
-    async def update(
-        self, node_id: UUID, tenant_id: UUID, **kwargs
-    ) -> WBSNode | None:
+    async def update(self, node_id: UUID, tenant_id: UUID, **kwargs) -> WBSNode | None:
         """
         Update a WBS node (metadata only, not structure).
 
         For moving nodes, use move_node().
         """
-        stmt = (
-            select(WBSNodeORM)
-            .where(
-                and_(
-                    WBSNodeORM.id == node_id,
-                    WBSNodeORM.tenant_id == tenant_id,
-                )
+        stmt = select(WBSNodeORM).where(
+            and_(
+                WBSNodeORM.id == node_id,
+                WBSNodeORM.tenant_id == tenant_id,
             )
         )
         result = await self.session.execute(stmt)
@@ -319,15 +322,12 @@ class WBSNodeRepository:
         width = node.rgt - node.lft + 1
 
         # Delete nodes in subtree
-        stmt = (
-            select(WBSNodeORM)
-            .where(
-                and_(
-                    WBSNodeORM.tenant_id == tenant_id,
-                    WBSNodeORM.project_id == node.project_id,
-                    WBSNodeORM.lft >= node.lft,
-                    WBSNodeORM.rgt <= node.rgt,
-                )
+        stmt = select(WBSNodeORM).where(
+            and_(
+                WBSNodeORM.tenant_id == tenant_id,
+                WBSNodeORM.project_id == node.project_id,
+                WBSNodeORM.lft >= node.lft,
+                WBSNodeORM.rgt <= node.rgt,
             )
         )
         result = await self.session.execute(stmt)
@@ -398,12 +398,17 @@ class WBSNodeRepository:
             new_depth = new_parent.depth + 1
         else:
             # Moving to root - place at the end
-            stmt = select(WBSNodeORM.rgt).where(
-                and_(
-                    WBSNodeORM.project_id == node_orm.project_id,
-                    WBSNodeORM.tenant_id == tenant_id,
+            stmt = (
+                select(WBSNodeORM.rgt)
+                .where(
+                    and_(
+                        WBSNodeORM.project_id == node_orm.project_id,
+                        WBSNodeORM.tenant_id == tenant_id,
+                    )
                 )
-            ).order_by(WBSNodeORM.rgt.desc()).limit(1)
+                .order_by(WBSNodeORM.rgt.desc())
+                .limit(1)
+            )
             result = await self.session.execute(stmt)
             max_rgt = result.scalar() or 0
             target_lft = max_rgt + 1
@@ -464,18 +469,9 @@ class WBSNodeRepository:
         if target_lft > node_orm.rgt:
             target_lft -= width
 
-        # 3. Open gap in new position
-        await self.session.execute(
-            update(WBSNodeORM)
-            .where(
-                and_(
-                    WBSNodeORM.project_id == node_orm.project_id,
-                    WBSNodeORM.tenant_id == tenant_id,
-                    WBSNodeORM.lft >= target_lft,
-                )
-            )
-            .values(lft=WBSNodeORM.lft + width)
-        )
+        # 3. Open gap in new position — shift rgt FIRST (preserves
+        #    lft < rgt invariant under CHECK ck_wbs_nodes_lft_lt_rgt),
+        #    then shift lft SECOND.
         await self.session.execute(
             update(WBSNodeORM)
             .where(
@@ -487,6 +483,17 @@ class WBSNodeRepository:
             )
             .values(rgt=WBSNodeORM.rgt + width)
         )
+        await self.session.execute(
+            update(WBSNodeORM)
+            .where(
+                and_(
+                    WBSNodeORM.project_id == node_orm.project_id,
+                    WBSNodeORM.tenant_id == tenant_id,
+                    WBSNodeORM.lft >= target_lft,
+                )
+            )
+            .values(lft=WBSNodeORM.lft + width)
+        )
 
         # 4. Re-attach subtree
         final_distance = target_lft - (node_orm.lft - tmp_offset)
@@ -497,7 +504,7 @@ class WBSNodeRepository:
                 and_(
                     WBSNodeORM.project_id == node_orm.project_id,
                     WBSNodeORM.tenant_id == tenant_id,
-                    WBSNodeORM.lft < 0, # Subtree nodes are negative
+                    WBSNodeORM.lft < 0,  # Subtree nodes are negative
                 )
             )
             .values(
