@@ -321,11 +321,14 @@ class TestUnifiedAlertsAPI:
         db.add(other_alert)
         await db.commit()
 
-        # Query with current tenant credentials (should not see other tenant's alerts)
+        # Query with current tenant credentials (must not see the other tenant's alert)
         response = await authenticated_client.get(f"/api/v1/projects/{other_project.id}/alerts")
 
-        # Should return 403 Forbidden or 404 Not Found (tenant isolation)
-        assert response.status_code in [403, 404]
+        # Tenant isolation is enforced by filtering on the authenticated tenant:
+        # the request succeeds (200) but the other tenant's alert must NOT leak.
+        assert response.status_code == 200
+        returned_ids = {item["id"] for item in response.json().get("items", [])}
+        assert str(other_alert.id) not in returned_ids
 
     @pytest.mark.asyncio
     async def test_list_alerts_combined_filters(
