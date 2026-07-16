@@ -556,3 +556,41 @@
 | `TASK-BCK-058`  | DET-TIM-STATUS false positive guard                      | 2026-05-17                                 |
 | `TASK-BCK-059`  | DET-TEC-SPEC / DET-QUA-\* category guards                | 2026-05-17                                 |
 | `TASK-CE-F2-01` | LEGAL pilot extraction adapter                           | 2026-05-29                                 |
+
+## EPIC-MYPY-STRICT — Backend strict-typing burn-down (umbrella TASK-DEV-006)
+
+**Goal**: `mypy src` → 0 errors with the full backend dependency set, then promote `backend-typecheck` to a required CI gate. Baseline: 1,357 errors / 300 files. Strict mode stays ON throughout; **no** blanket ignores, `ignore_errors`, `Any` expansion, exclusions, or relaxed strictness. A `mypy-baseline.txt` ratchet (TASK-DEV-031) blocks NEW errors while existing ones burn down by bounded context.
+
+**Work-package limits (every implementation commit)**: ≤10 production files or ~80 starting diagnostics; `arg-type`/`call-arg`/`attr-defined`/`assignment`/`operator`/`no-any-return` each need individual review; tenant + behavioral changes require RED tests first; record before/after totals, per-error-code counts, affected files, targeted tests, and zero new out-of-scope errors.
+
+**Error taxonomy (baseline)**: type-arg ~304, arg-type ~231, no-untyped-def ~228, attr-defined ~115, assignment ~77, call-arg ~75, no-any-return ~65, operator ~62, no-untyped-call ~61. Largest areas: core 312, coherence 192, analysis 186, procurement 181, documents 172.
+
+**High-signal defects (TASK-BCK-095, RED tests first)**: un-awaited repo coroutine `documents/application/use_cases.py:52`; 9 repository implementations incompatible with their ports (e.g. `INotificationService`, `IDocumentRepository`); branded `TenantId` (NewType) bypassed by raw `UUID` at boundaries (`documents/application/upload_document_use_case.py:105`); missing/reversed tenant/ID positional args; 3 duplicate definitions; LangSmith call treated as returning a value; invalid `type: ignore` at `coherence/scoring.py:829`; 17 stale `type: ignore`; missing SMTP settings attrs in `modules/hitl/adapters/http/dependencies.py`.
+
+**WBS (dependency-ordered)**:
+
+| ID | Owner | Wave | Scope | Depends on |
+|---|---|---|---|---|
+| TASK-DEV-031 | DevOps | 0 | CI dep parity + `mypy-baseline.txt` ratchet + trustworthy exit reporting + per-wave metrics | TASK-DEV-003 |
+| TASK-BCK-095 | Backend/Security | 1 | High-signal probable defects (RED tests first) | TASK-DEV-031 |
+| TASK-BCK-096 | Backend | 2 | Shared typing foundations: TenantId boundaries, generic contracts, explicit re-exports, approved stubs | TASK-BCK-095 |
+| TASK-BCK-097 | Backend | 3 | Documents domain ports/DTOs | TASK-BCK-096 |
+| TASK-BCK-098 | Backend | 3 | Procurement domain ports/DTOs | TASK-BCK-096 |
+| TASK-BCK-099 | Backend | 3 | Analysis domain ports/DTOs | TASK-BCK-097, TASK-BCK-098 |
+| TASK-BCK-100 | Backend | 3 | Coherence domain ports/DTOs + typed scoring payloads | TASK-BCK-096 |
+| TASK-BCK-101 | Backend | 4 | Documents persistence adapters | TASK-BCK-097 |
+| TASK-BCK-102 | Backend | 4 | Procurement SQLAlchemy 2 Mapped modernization + persistence | TASK-BCK-098 |
+| TASK-BCK-103 | Backend | 4 | Analysis persistence adapters + port covariance | TASK-BCK-099 |
+| TASK-BCK-104 | Backend | 4 | Coherence/embedding persistence + mandatory tenant filtering | TASK-BCK-100 |
+| TASK-BCK-105 | Backend | 5 | Documents application services + use cases | TASK-BCK-101 |
+| TASK-BCK-106 | Backend | 5 | Procurement application services + use cases | TASK-BCK-102 |
+| TASK-BCK-107 | Backend | 5 | Analysis application services + use cases | TASK-BCK-103, TASK-BCK-105, TASK-BCK-106 |
+| TASK-BCK-108 | Backend | 5 | Coherence application services + use cases | TASK-BCK-104 |
+| TASK-BCK-109 | Backend/Security | 6 | Core auth, tenant, security, middleware typing | TASK-BCK-095, TASK-BCK-096 |
+| TASK-BCK-110 | Backend | 6 | Core cache, events, DLQ, task infrastructure | TASK-BCK-096 |
+| TASK-BCK-111 | Backend/AI | 6 | Core AI, observability, LangSmith, MCP, external SDK validation | TASK-BCK-096, TASK-BCK-110 |
+| TASK-BCK-112 | Backend | 7 | HTTP routers, dependencies, factories, composition edge | TASK-BCK-105…TASK-BCK-111 |
+| TASK-BCK-113 | Backend | 7 | Remaining mechanical leaf cleanup + full-tree convergence to zero | TASK-BCK-112 |
+| TASK-QA-322 | QA | — | Per-wave mypy ratchet + risk-proportionate regression certification | TASK-DEV-031 |
+| TASK-QA-323 | QA | — | Independent zero-error / full-suite / live-CI certification | TASK-BCK-113, TASK-QA-322 |
+| TASK-DEV-006 | DevOps | — | Promote `backend-typecheck` to required + close umbrella | TASK-QA-323 |

@@ -13,13 +13,13 @@
 | Category           | File                                                                   | Owner    | Total | Active | Completed |
 | ------------------ | ---------------------------------------------------------------------- | -------- | ----- | ------ | --------- |
 | AI/ML Intelligence | [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md) | ai       | 78    | 43     | 35        |
-| Backend            | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md)                     | backend  | 55    | 8      | 47        |
-| DevOps             | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md)                       | devops   | 30    | 8      | 22        |
+| Backend            | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md)                     | backend  | 74    | 27     | 47        |
+| DevOps             | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md)                       | devops   | 31    | 9      | 22        |
 | Documentation      | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md)         | shared   | 0     | 0      | 0         |
 | Frontend           | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md)                   | frontend | 202   | 10     | 192       |
 | Infrastructure     | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md)       | infra    | 59    | 17     | 42        |
 | Planning           | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md)                   | planner  | 0     | 0      | 0         |
-| Quality Assurance  | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md)   | qa       | 120   | 108    | 12        |
+| Quality Assurance  | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md)   | qa       | 122   | 110    | 12        |
 | Code Review        | [backlogs/REV_CODE_REVIEW.md](backlogs/REV_CODE_REVIEW.md)             | reviewer | 25    | 0      | 25        |
 | Security           | [backlogs/SEC_SECURITY.md](backlogs/SEC_SECURITY.md)                   | security | 1     | 1      | 0         |
 
@@ -67,6 +67,28 @@
 |[ ]|P2|`TASK-DEV-028`|—|Re-establish Python dependency/environment reproducibility: verify a clean venv with `pip check` + `pip-audit`, remove the duplicate `psycopg[binary]` lower bound under a focused requirements guard, and document clean bootstrap. Do not introduce a new lock/constraints system without approval.|`backlogs/DEV_DEVOPS.md`|
 |[ ]|P2|`TASK-DEV-029`|—|Phased TypeScript upgrade from pinned 5.3.3 to current 5.x in apps/web; `pnpm typecheck` + `pnpm build` at each step; per-step commits for clean bisection.|`backlogs/DEV_DEVOPS.md`|
 |[ ]|P2|`TASK-DEV-030`|`TASK-DEV-009`|Enum semantics migration: 88 classes inherit `(str, Enum)` (ruff UP042). Migrate to `enum.StrEnum` **only** after a per-enum audit of `str(member)`/f-string/serialization use, since `str(X.MEMBER)` changes from `"X.MEMBER"` to the member value. Land with regression guards, then remove the `UP042` ignore from `apps/api/pyproject.toml`. UP042 is currently ignored + count-guarded at baseline 88.|`backlogs/DEV_DEVOPS.md`|
+|[ ]|P1|`TASK-DEV-031`|`TASK-DEV-003`|mypy Wave 0 (DevOps signal) — CI parity + baseline ratchet: make `backend-typecheck` install the full backend env (setup-python-backend) so mypy sees real types; replace `\|\| true`/exit-swallow with explicit exit capture; generate `mypy-baseline.txt` so NEW errors fail while the ~1,357 existing burn down; keep advisory until zero; per-wave metrics. Part of the TASK-DEV-006 mypy epic.|`backlogs/DEV_DEVOPS.md`|
+|[ ]|P1|`TASK-BCK-095`|`TASK-DEV-031`|mypy Wave 1 — high-signal probable defects (RED tests first): un-awaited document repo coroutine (use_cases.py:52), missing/reversed tenant/ID args, 9 port-incompatible repo overrides, 3 duplicate defs, LangSmith return misuse, invalid `type: ignore` (scoring.py:829), 17 stale ignores. Tenant changes need isolation tests.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P1|`TASK-BCK-096`|`TASK-BCK-095`|mypy Wave 2 — shared typing foundations: normalize TenantId at HTTP/task boundaries, ports accept TenantId, typed JSON aliases, replace raw dict/list in domain/port contracts, explicit re-exports (`__all__`/`import X as X`), remove invalid ignore syntax, request types-PyYAML + types-python-dateutil stubs.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-097`|`TASK-BCK-096`|mypy Wave 3 — Documents domain ports/DTOs.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-098`|`TASK-BCK-096`|mypy Wave 3 — Procurement domain ports/DTOs.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-099`|`TASK-BCK-097, TASK-BCK-098`|mypy Wave 3 — Analysis domain ports/DTOs.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-100`|`TASK-BCK-096`|mypy Wave 3 — Coherence domain ports/DTOs + typed scoring payloads.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-101`|`TASK-BCK-097`|mypy Wave 4 — Documents persistence adapters.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-102`|`TASK-BCK-098`|mypy Wave 4 — Procurement SQLAlchemy 2 Mapped modernization + persistence.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-103`|`TASK-BCK-099`|mypy Wave 4 — Analysis persistence adapters + port covariance.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-104`|`TASK-BCK-100`|mypy Wave 4 — Coherence/embedding persistence + mandatory tenant filtering.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-105`|`TASK-BCK-101`|mypy Wave 5 — Documents application services + use cases.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-106`|`TASK-BCK-102`|mypy Wave 5 — Procurement application services + use cases.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-107`|`TASK-BCK-103, TASK-BCK-105, TASK-BCK-106`|mypy Wave 5 — Analysis application services + use cases.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-108`|`TASK-BCK-104`|mypy Wave 5 — Coherence application services + use cases.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P1|`TASK-BCK-109`|`TASK-BCK-095, TASK-BCK-096`|mypy Wave 6 — Core auth, tenant, security, middleware typing.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-110`|`TASK-BCK-096`|mypy Wave 6 — Core cache, events, DLQ, task infrastructure.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-111`|`TASK-BCK-096, TASK-BCK-110`|mypy Wave 6 — Core AI, observability, LangSmith, MCP, external SDK validation.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-112`|`TASK-BCK-105…TASK-BCK-111`|mypy Wave 7 — HTTP routers, dependencies, factories, composition edge.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-BCK-113`|`TASK-BCK-112`|mypy Wave 7 — remaining mechanical leaf cleanup + full-tree convergence to zero.|`backlogs/BCK_BACKEND.md`|
+|[ ]|P2|`TASK-QA-322`|`TASK-DEV-031`|mypy QA — per-wave ratchet + risk-proportionate regression certification.|`backlogs/QA_QUALITY_ASSURANCE.md`|
+|[ ]|P1|`TASK-QA-323`|`TASK-BCK-113, TASK-QA-322`|mypy QA — independent zero-error/full-suite/live-CI certification before gate promotion.|`backlogs/QA_QUALITY_ASSURANCE.md`|
 |[x]|P1|`TASK-DEV-012`|`TASK-SEC-DEPENDABOT-001`|Apply PR #228's isolated PostCSS patch update from 8.5.16 to 8.5.17 without importing the coupled Vite 8/esbuild lock rewrite. `[x] Implemented (offline frozen-lockfile RED/GREEN)`|`backlogs/DEV_DEVOPS.md`|
 
 ## Pending Tasks by Category
@@ -497,6 +519,8 @@ FOLLOW-UPS (open):
 ---
 
 ## Change Log
+
+**2026-07-16**: Expanded `TASK-DEV-006` (mypy strict typing, ~1,357 errors) into a 22-task cross-owned WBS after Codex+Gemini analysis (both verified the baseline; CI runs mypy without the dependency graph + `continue-on-error` + `|| true`). Owner approved the XL burn-down. Registered `TASK-DEV-031` (Wave 0 DevOps: CI dep parity + `mypy-baseline.txt` ratchet), `TASK-BCK-095`…`TASK-BCK-113` (Waves 1–7: high-signal defects → shared typing foundations → bounded-context domains/persistence/application → core cluster → composition/leaf), and `TASK-QA-322`/`TASK-QA-323` (per-wave + final certification). Corrected an ID collision: Codex's draft reused `TASK-DEV-030` (already the StrEnum migration) for the DevOps setup — reassigned to `TASK-DEV-031`. Strategy: strict stays ON; no blanket ignores/baseline-suppression of strictness; ≤10 production files or ~80 diagnostics per commit; tenant/behavioral changes require RED tests. `TASK-DEV-006` remains the umbrella (reprioritized P1), promoted to a required gate only after `TASK-QA-323`.
 
 **2026-07-15 (delegate integration)**: Merged PRs #240 (osv-scanner, `TASK-DEV-024`), #241 (override governance + vite 8, `TASK-DEV-022`, supersedes #227), #242 (ruff 206→88, `TASK-DEV-009` src), #243 (docs npm→pnpm, `TASK-DEV-016` docs). Completed `TASK-DEV-009`: UP042 (88 str+Enum classes) globally ignored with justification + CI baseline-guard; `backend-lint` promoted from advisory to `REQUIRED_JOBS`; registered `TASK-DEV-030` for the deferred StrEnum migration. While integrating #242, found and fixed a latent bug: the required `backend-migrations` job lacked `JWT_SECRET_KEY`, so `alembic upgrade head` aborted at Settings validation — the job had only ever passed by being skipped. Reconciliation note: DeepSeek's UP042 work misidentified the rule as isinstance-type-union; re-authored correctly. `TASK-DEV-020` (artifact purge, 268 files) done by Codex on `chore/task-dev-020-artifact-purge` (pending PR). Guards + Makefile (`TASK-DEV-008`, `TASK-DEV-016` non-docs) merged as #239.
 
