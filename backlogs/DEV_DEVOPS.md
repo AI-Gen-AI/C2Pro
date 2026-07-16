@@ -40,9 +40,9 @@ The integration suite fails on main (as of 2026-07-12: `14 failed, 74 passed, 3 
 
 ### TASK-DEV-006: Clean mypy baseline → promote `backend-typecheck` to required gate
 
-**Priority**: P2 · **Owner**: backend · **Depends on**: TASK-DEV-003 (done)
+**Priority**: P1 (umbrella for EPIC-MYPY-STRICT — see backlogs/BCK_BACKEND.md) · **Owner**: backend · **Depends on**: TASK-DEV-003 (done)
 
-`ci.yml` now runs `mypy src` (mypy 1.8.0, strict per `apps/api/pyproject.toml`) as an advisory job with the report in the step summary. Burn down the baseline (or adopt a baseline tool / relax strictness deliberately), then remove `continue-on-error: true` and add the job to `REQUIRED_JOBS` in `ci-status`.
+`ci.yml` now runs `mypy src` (mypy 1.8.0, strict per `apps/api/pyproject.toml`) as an advisory job with the report in the step summary. Burn down the baseline (or adopt a baseline tool / relax strictness deliberately), then remove `continue-on-error: true` and add the job to `REQUIRED_JOBS` in `ci-status`. Expanded 2026-07-16 into a 22-task cross-owned WBS (TASK-DEV-031 Wave 0 + TASK-BCK-095…TASK-BCK-113 Waves 1–7 + TASK-QA-322/323) under EPIC-MYPY-STRICT.
 
 
 
@@ -249,3 +249,9 @@ Completed diagnosis-only evidence collection across live `main` and open-PR CI, 
 **Meta-test retarget** (owner-approved follow-up in same task): backend CI-structure regression tests referenced the deleted workflows and would have failed the new pipeline's first backend run. Fixed: `tests/unit/test_backend_ci_guards.py` retargeted to `ci.yml` (3 path retargets + 2 pin-matchers loosened to `pnpm/action-setup@`/`setup-node@` prefixes for SHA pins), `tests/contract/test_graph_node_contracts.py` ADR-013 gate assertion retargeted to `ci.yml`, `tests/unit/test_ci_deploy_production_workflow.py` replaced by `tests/unit/test_ci_release_workflow.py` (guards release.yml: tag trigger, certify-before-publish, Production environment gate, evidence validation, i13/evaluation release-evidence wiring), `src/coherence/cache_keys.py` docstring workflow reference updated.
 
 **Verification**: `actionlint` v1.7.12 — 0 findings across all workflows; `yaml.safe_load` clean on dependabot.yml + all composite actions; retargeted meta-tests pass locally (27 passed: test_backend_ci_guards.py + test_ci_release_workflow.py + ADR-013 gate assertion); ruff clean on touched Python files; run-history audit evidence: Scheduled Drift Checks 8/8 recent failures (deleted test), i13 8/8 failures (port 5432 vs 5433), integration suite red under the old `continue-on-error` mask.
+
+### TASK-DEV-031: mypy Wave 0 — CI parity + baseline ratchet
+
+**Priority**: P1 · **Owner**: devops · **Depends on**: TASK-DEV-003 · **Epic**: EPIC-MYPY-STRICT (umbrella TASK-DEV-006)
+
+The `backend-typecheck` job installs only `mypy` (not the backend dependency graph), so with `ignore_missing_imports` it degrades missing types to `Any` and reports a weaker/different baseline than a full local run; it is also `continue-on-error: true` and pipes `mypy src | tee … || true`, swallowing the exit code. Fix: (1) install the full backend env via the `setup-python-backend` composite; (2) capture the real exit code (report published, result recorded); (3) generate a committed `mypy-baseline.txt` and gate on it so NEW type errors fail while the ~1,357 existing burn down per bounded context; (4) emit per-wave metrics. Keep the job advisory (not in REQUIRED_JOBS) until the baseline reaches zero — promotion is TASK-DEV-006 after TASK-QA-323. Do NOT relax `strict` or add blanket ignores.

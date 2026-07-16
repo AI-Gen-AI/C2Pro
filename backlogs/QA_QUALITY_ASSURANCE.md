@@ -317,3 +317,19 @@ All 14 subtasks (TASK-QA-200..213) complete:
 - A failing endpoint gets a dedicated backend/frontend follow-up task immediately if root cause is product code.
 - An endpoint blocked only by missing test data keeps its QA task open with the exact blocker noted.
 - Duplicate Swagger tags do not create duplicate tasks; this board tracks unique method + path operations.
+
+---
+
+## EPIC-MYPY-STRICT QA Tasks
+
+### TASK-QA-322: mypy per-wave ratchet + regression certification
+
+**Priority**: P2 · **Owner**: qa · **Depends on**: TASK-DEV-031 · **Epic**: EPIC-MYPY-STRICT
+
+After each EPIC-MYPY-STRICT wave, independently verify the `mypy-baseline.txt` ratchet strictly decreased (no new errors, no suppressed strictness) and run risk-proportionate regression tests for the touched bounded contexts (tenant-isolation tests mandatory for any tenant/security-typed change).
+
+### TASK-QA-323: mypy final zero-error certification
+
+**Priority**: P1 · **Owner**: qa · **Depends on**: TASK-BCK-113, TASK-QA-322 · **Epic**: EPIC-MYPY-STRICT
+
+Independent final gate: `mypy src` reports zero errors with the full backend dependency set; backend unit + integration suites pass; ruff clean under the UP042 policy; no blanket ignores or relaxed strict; CI runs the same env/command as local. Green here unblocks TASK-DEV-006 (promote `backend-typecheck` to required).
