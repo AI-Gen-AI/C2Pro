@@ -13,7 +13,7 @@
 
 ## Status View
 
-**Pending Tasks**: 19 (`TASK-DEV-004`…`006`, `007` (partial), `008`, `015`, `016`…`026`, `028`…`030`; `009` done 2026-07-15)
+**Pending Tasks**: 18 (`TASK-DEV-005`…`006`, `007` (partial), `008`, `015`, `016`…`026`, `028`…`030`; `004` done 2026-07-16; `009` done 2026-07-15)
 
 **Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), `TASK-DEV-011` (Tenacity compatibility guard, below), `TASK-DEV-012` (PostCSS patch isolation, below), `TASK-DEV-013` (Python dependency audit repair, below), `TASK-DEV-014` (js-minor-patch group bump, below), and `TASK-DEV-027` (2026-07-15 multi-agent re-audit, below).
 
@@ -21,16 +21,18 @@
 
 ## Active Tasks
 
-### TASK-DEV-004: Fix backend integration suite → promote `backend-integration` to required gate
+### TASK-DEV-004: Fix backend integration suite → promote `backend-integration` to required gate ✅ 2026-07-16
 
 **Priority**: P1 · **Owner**: backend · **Depends on**: TASK-DEV-003 (done)
 
 The integration suite fails on main (as of 2026-07-12: `14 failed, 74 passed, 3 skipped, 10 errors` — sqlalchemy pool teardown, error code `gkpj`). The old `tests.yml` hid this behind `continue-on-error: true`; the new `ci.yml` runs it as a visible **advisory** job. Fix the suite, then move `backend-integration` from `ADVISORY_JOBS` to `REQUIRED_JOBS` in the `ci-status` gate step of `.github/workflows/ci.yml`.
 
 **Checklist**:
-- [ ] `pytest tests/integration/` green locally against `bootstrap_test_infra.py` infra
-- [ ] `backend-integration` green in CI on a PR
-- [ ] Job moved to `REQUIRED_JOBS`; advisory comment removed from `ci.yml`
+- [x] `pytest tests/integration/` green locally against `bootstrap_test_infra.py` infra
+- [x] `backend-integration` green in CI on a PR
+- [x] Job moved to `REQUIRED_JOBS`; advisory comment removed from `ci.yml`
+
+**Done 2026-07-16**: 24 failures → 0 (97 passed); root causes were tenant_id fixtures, WBS nested-set (`ck_wbs_nodes_lft_positive`), retired-router test contracts (alerts + langsmith), and tz-naive datetime columns. Fixed in #246; `backend-integration` promoted to REQUIRED_JOBS in ci.yml via #248. An honesty guardrail (risk_extractor honest-empty under mock) was preserved.
 
 ### TASK-DEV-005: Fix i13 real-E2E fixture port → re-enable daily cron
 
