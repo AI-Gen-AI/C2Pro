@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """mypy baseline ratchet (EPIC-MYPY-STRICT / TASK-DEV-031).
 
-mypy 1.8 has no native baseline. This gate lets the ~1,357 existing strict-mode
+mypy 1.8 has no native baseline. This gate lets the ~1,400 existing strict-mode
 errors burn down incrementally while **blocking any new one** — with no extra
 dependency.
+
+The baseline is **Linux/CI-canonical**: mypy's results drift across platforms
+(e.g. Starlette's ``Request`` is generic under the Linux stubs but not locally
+on Windows), so paths are normalized and the baseline must be regenerated on
+Linux — via ``make mypy-baseline`` in WSL/Docker, or from the ``mypy-report``
+CI artifact. The gate is robust to that: path separators and CRLF are
+normalized, so a report captured on any OS compares correctly.
 
 Mechanism: normalize each mypy error line by stripping the `:line:col:` position
 (so refactors that shift lines don't churn the baseline), then compare the
