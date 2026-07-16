@@ -5,12 +5,13 @@ from __future__ import annotations
 import functools
 import os
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID, uuid4
 
 import structlog
 from langsmith import Client as NativeLangSmithClient
 from langsmith.run_helpers import get_current_run_tree
-from langsmith.schemas import Run
 
 logger = structlog.get_logger()
 
@@ -34,6 +35,13 @@ class LangSmithConfig:
             project_name=project_name,
             tracing_enabled=tracing_enabled,
         )
+
+
+@dataclass(frozen=True)
+class LangSmithSpanHandle:
+    """TS-AI-LANGSMITH-001: Stable identity for a native LangSmith run."""
+
+    id: UUID
 
 
 LLM_SPAN_ATTRIBUTE_ALLOWLIST = {
@@ -103,13 +111,15 @@ class LangSmithClient:
         metadata: dict[str, Any] | None = None,
         inputs: dict[str, Any] | None = None,
         tags: list[str] | None = None,
-    ) -> Run | None:
+    ) -> LangSmithSpanHandle | None:
         """TS-AI-LANGSMITH-001: Start a new span with SDK-required inputs."""
         if not self.is_enabled or not self._client:
             return None
 
         parent_run = get_current_run_tree()
+        span = LangSmithSpanHandle(id=uuid4())
         create_run_kwargs: dict[str, Any] = {
+            "id": span.id,
             "name": name,
             "run_type": run_type,
             "inputs": inputs or {},
@@ -120,8 +130,8 @@ class LangSmithClient:
         if tags:
             create_run_kwargs["tags"] = tags
         try:
-            run = self._client.create_run(**create_run_kwargs)
-            return run
+            self._client.create_run(**create_run_kwargs)
+            return span
         except Exception as exc:  # noqa: BLE001 - telemetry must never block app flow
             logger.warning(
                 "langsmith_start_span_failed",
@@ -133,7 +143,7 @@ class LangSmithClient:
 
     def end_span(
         self,
-        span: Run,
+        span: LangSmithSpanHandle,
         error: Exception | None = None,
         outputs: dict[str, Any] | None = None,
     ) -> None:
@@ -143,7 +153,12 @@ class LangSmithClient:
 
         error_message = str(error) if error else None
         try:
-            self._client.end_run(run_id=span.id, error=error_message, outputs=outputs or {})
+            self._client.update_run(
+                run_id=span.id,
+                end_time=datetime.now(UTC),
+                error=error_message,
+                outputs=outputs or {},
+            )
         except Exception as exc:  # noqa: BLE001 - telemetry must never block app flow
             logger.warning(
                 "langsmith_end_span_failed",
@@ -151,7 +166,7 @@ class LangSmithClient:
                 error=str(exc),
             )
 
-    def update_span_metadata(self, span: Run, metadata: dict[str, Any]) -> None:
+    def update_span_metadata(self, span: LangSmithSpanHandle, metadata: dict[str, Any]) -> None:
         """Updates the metadata of an existing span."""
         if not self.is_enabled or not self._client or not span:
             return
