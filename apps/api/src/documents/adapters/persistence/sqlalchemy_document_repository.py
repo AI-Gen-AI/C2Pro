@@ -6,9 +6,10 @@ Refers to Suite ID: TS-INT-DB-CLS-001, TS-INT-DB-DOC-001.
 Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 """
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, inspect, select, text
+from sqlalchemy import Select, func, inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.persistence.models import Alert
@@ -504,6 +505,7 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         await self.session.commit()
 
     async def refresh(self, entity: Document | Clause) -> None:
+        stmt: Select[Any]
         if isinstance(entity, Document):
             stmt = select(DocumentORM).where(
                 DocumentORM.id == entity.id,
