@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import structlog
@@ -120,9 +120,9 @@ class RaciGenerationService:
                 name=stakeholder.name,
                 role=stakeholder.role,
                 company=stakeholder.organization,
-                stakeholder_type=stakeholder.stakeholder_metadata.get("type")
-                if isinstance(stakeholder.stakeholder_metadata, dict)
-                else None,
+                stakeholder_type=cast(
+                    str | None, stakeholder.stakeholder_metadata.get("type")
+                ),
             )
             for stakeholder in stakeholders
         ]
