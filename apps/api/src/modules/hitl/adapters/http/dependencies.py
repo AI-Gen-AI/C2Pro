@@ -63,13 +63,13 @@ def get_notification_service(
     settings = get_settings()
 
     email_svc = None
-    if hasattr(settings, "SMTP_HOST") and settings.SMTP_HOST:
+    if settings.smtp_host and settings.smtp_from:
         email_svc = EmailNotificationService(
-            smtp_host=settings.SMTP_HOST,
-            smtp_port=settings.SMTP_PORT,
-            smtp_user=settings.SMTP_USER,
-            smtp_password=settings.SMTP_PASSWORD.get_secret_value() if hasattr(settings.SMTP_PASSWORD, "get_secret_value") else settings.SMTP_PASSWORD,
-            from_email=settings.FROM_EMAIL,
+            smtp_host=settings.smtp_host,
+            smtp_port=settings.smtp_port,
+            smtp_user=settings.smtp_username or "",
+            smtp_password=settings.smtp_password or "",
+            from_email=settings.smtp_from,
         )
 
     slack_svc = None

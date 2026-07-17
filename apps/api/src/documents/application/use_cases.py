@@ -1,5 +1,5 @@
 """
-Application Use Cases for the Documents bounded context.
+TS-UD-DOC-DOC-001 / TASK-BCK-095: Documents application use cases.
 
 This module contains the high-level application logic (use cases)
 that orchestrate the domain models and repositories to fulfill
@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from src.core.tenants.types import require_tenant_id
 from src.documents.application.dtos import CreateDocumentDTO
 from src.documents.domain.models import Document, DocumentStatus
 from src.documents.ports.document_repository import IDocumentRepository
@@ -18,12 +19,13 @@ from src.documents.ports.document_repository import IDocumentRepository
 @dataclass
 class CreateDocumentUseCase:
     """
-    Use case for creating a new document.
+    TS-UD-DOC-DOC-001 / TASK-BCK-095: Create a document asynchronously.
+
     It orchestrates the creation and persistence of a Document entity.
     """
     repository: IDocumentRepository
 
-    def execute(self, dto: CreateDocumentDTO) -> Document:
+    async def execute(self, dto: CreateDocumentDTO) -> Document:
         """
         Executes the use case.
 
@@ -33,10 +35,11 @@ class CreateDocumentUseCase:
         """
         # For now, we are creating a basic Document entity.
         # A DocumentFactory might be introduced later for more complex creation logic.
+        tenant_id = require_tenant_id(dto.tenant_id)
         new_document = Document(
             id=uuid4(),
             project_id=dto.project_id,
-            tenant_id=dto.tenant_id,
+            tenant_id=tenant_id,
             document_type=dto.document_type,
             filename=dto.filename,
             upload_status=DocumentStatus.UPLOADED, # Default status on creation
@@ -49,6 +52,6 @@ class CreateDocumentUseCase:
             document_metadata=dto.document_metadata or {},
         )
 
-        self.repository.add(dto.tenant_id, new_document)
+        await self.repository.add(tenant_id, new_document)
 
         return new_document

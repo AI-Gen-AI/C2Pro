@@ -16,6 +16,7 @@ from src.analysis.ports.graph_entities import (
     WBSTaskView,
 )
 from src.analysis.ports.knowledge_graph import KnowledgeGraphPort
+from src.core.tenants.types import TenantId, require_tenant_id
 from src.documents.ports.document_repository import IDocumentRepository
 from src.procurement.ports.wbs_repository import IWBSRepository
 from src.shared_kernel.enums import RACIRole
@@ -29,6 +30,8 @@ class GraphPath:
 
 
 class ProjectKnowledgeGraph(KnowledgeGraphPort):
+    """Project graph adapter covered by TS-UAD-PER-GRP-001 / TASK-BCK-095."""
+
     def __init__(
         self,
         *,
@@ -45,12 +48,13 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
 
     async def build_graph(self, project_id: UUID, tenant_id: UUID) -> nx.DiGraph:
         self.graph.clear()
+        normalized_tenant_id = require_tenant_id(tenant_id)
 
-        stakeholders = await self._load_stakeholders(project_id)
-        tasks = await self._load_tasks(project_id, tenant_id)
-        risks = await self._load_risks(project_id, tenant_id)
-        clauses = await self._load_clauses(risks, tasks)
-        raci_rows = await self._load_raci(project_id)
+        stakeholders = await self._load_stakeholders(project_id, normalized_tenant_id)
+        tasks = await self._load_tasks(project_id, normalized_tenant_id)
+        risks = await self._load_risks(project_id, normalized_tenant_id)
+        clauses = await self._load_clauses(risks, tasks, normalized_tenant_id)
+        raci_rows = await self._load_raci(project_id, normalized_tenant_id)
 
         for stakeholder in stakeholders:
             self._add_node(
@@ -172,18 +176,25 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
     def degree_centrality(self) -> dict[str, float]:
         return nx.degree_centrality(self.graph)
 
-    async def _load_stakeholders(self, project_id: UUID) -> list[StakeholderView]:
+    async def _load_stakeholders(
+        self, project_id: UUID, tenant_id: TenantId
+    ) -> list[StakeholderView]:
         stakeholders, _ = await self.stakeholder_repository.get_stakeholders_by_project(
             project_id=project_id,
+            tenant_id=tenant_id,
             skip=0,
             limit=1000,
         )
         return list(stakeholders)
 
-    async def _load_tasks(self, project_id: UUID, tenant_id: UUID) -> list[WBSTaskView]:
+    async def _load_tasks(
+        self, project_id: UUID, tenant_id: TenantId
+    ) -> list[WBSTaskView]:
         return await self.wbs_repository.get_by_project(project_id, tenant_id)
 
-    async def _load_risks(self, project_id: UUID, tenant_id: UUID) -> list[Alert]:
+    async def _load_risks(
+        self, project_id: UUID, tenant_id: TenantId
+    ) -> list[Alert]:
         """Load risks with tenant isolation."""
         page = await self.alert_repository.list_for_project(
             project_id=project_id,
@@ -197,15 +208,22 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
         self,
         risks: Iterable[Alert],
         tasks: Iterable[WBSTaskView],
+        tenant_id: TenantId,
     ) -> list[ClauseView]:
         clause_ids = {risk.source_clause_id for risk in risks if risk.source_clause_id}
         clause_ids.update({task.source_clause_id for task in tasks if task.source_clause_id})
         if not clause_ids:
             return []
-        return await self.document_repository.get_clauses_by_ids(list(clause_ids))
+        return await self.document_repository.get_clauses_by_ids(
+            tenant_id, list(clause_ids)
+        )
 
-    async def _load_raci(self, project_id: UUID) -> list[RaciAssignmentView]:
-        return await self.stakeholder_repository.list_raci_assignments(project_id)
+    async def _load_raci(
+        self, project_id: UUID, tenant_id: TenantId
+    ) -> list[RaciAssignmentView]:
+        return await self.stakeholder_repository.list_raci_assignments(
+            project_id, tenant_id
+        )
 
     def _add_node(self, node_id: str, *, node_type: str, label: str, properties: dict[str, Any]):
         self.graph.add_node(

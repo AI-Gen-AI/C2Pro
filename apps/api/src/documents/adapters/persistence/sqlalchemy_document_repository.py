@@ -6,9 +6,10 @@ Refers to Suite ID: TS-INT-DB-CLS-001, TS-INT-DB-DOC-001.
 Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 """
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, inspect, select, text
+from sqlalchemy import Select, func, inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.persistence.models import Alert
@@ -504,12 +505,21 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         await self.session.commit()
 
     async def refresh(self, entity: Document | Clause) -> None:
+        stmt: Select[Any]
         if isinstance(entity, Document):
-            orm_entity = await self.session.get(DocumentORM, entity.id)
+            stmt = select(DocumentORM).where(
+                DocumentORM.id == entity.id,
+                DocumentORM.tenant_id == entity.tenant_id,
+            )
         elif isinstance(entity, Clause):
-            orm_entity = await self.session.get(ClauseORM, entity.id)
+            stmt = select(ClauseORM).where(
+                ClauseORM.id == entity.id,
+                ClauseORM.tenant_id == entity.tenant_id,
+            )
         else:
             raise TypeError(f"Cannot refresh unknown entity type: {type(entity)}")
+        result = await self.session.execute(stmt)
+        orm_entity = result.scalar_one_or_none()
         if orm_entity:
             await self.session.refresh(orm_entity)
             # Update the domain entity with refreshed ORM data

@@ -1,15 +1,15 @@
-"""
-Unit Tests for CreateDocumentUseCase.
-"""
+"""TS-UD-DOC-DOC-001 / TASK-BCK-095: CreateDocumentUseCase unit tests."""
 
-from unittest.mock import Mock
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 
+from src.core.tenants.types import TenantId
 from src.documents.application.dtos import CreateDocumentDTO
 from src.documents.application.use_cases import CreateDocumentUseCase
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
+from src.documents.ports.document_repository import IDocumentRepository
 
 # =================================================================
 # Fixtures
@@ -35,39 +35,38 @@ def _make_dto(**overrides) -> CreateDocumentDTO:
 # =================================================================
 
 
-def test_create_document_happy_path():
+@pytest.mark.asyncio
+async def test_create_document_happy_path():
     """Should create and return a Document with status UPLOADED."""
-    repo = Mock()
+    repo = AsyncMock(spec=IDocumentRepository)
     use_case = CreateDocumentUseCase(repository=repo)
     dto = _make_dto()
 
-    result = use_case.execute(dto)
+    result = await use_case.execute(dto)
 
-    # Assert: repo.add was called exactly once with the new document
-    repo.add.assert_called_once()
-    passed_tenant_id, saved_doc = repo.add.call_args[0]
-    assert passed_tenant_id == dto.tenant_id
-    assert isinstance(saved_doc, Document)
-    assert saved_doc.project_id == dto.project_id
-    assert saved_doc.tenant_id == dto.tenant_id
-    assert saved_doc.filename == dto.filename
-    assert saved_doc.document_type == dto.document_type
-    assert saved_doc.upload_status == DocumentStatus.UPLOADED
+    repo.add.assert_awaited_once_with(TenantId(dto.tenant_id), result)
+    assert isinstance(result, Document)
+    assert result.project_id == dto.project_id
+    assert result.tenant_id == dto.tenant_id
+    assert result.filename == dto.filename
+    assert result.document_type == dto.document_type
+    assert result.upload_status == DocumentStatus.UPLOADED
 
-    # Assert: use case returns the same document
-    assert result is saved_doc
     assert result.id is not None
 
 
-def test_create_document_raises_exception_on_repository_error():
+@pytest.mark.asyncio
+async def test_create_document_raises_exception_on_repository_error():
     """Should propagate repository exceptions to the caller."""
-    repo = Mock()
+    repo = AsyncMock(spec=IDocumentRepository)
     repo.add.side_effect = ConnectionError("DB connection lost")
     use_case = CreateDocumentUseCase(repository=repo)
     dto = _make_dto()
 
     with pytest.raises(ConnectionError, match="DB connection lost"):
-        use_case.execute(dto)
+        await use_case.execute(dto)
+
+    repo.add.assert_awaited_once()
 
 
 def test_create_document_with_missing_name_fails():

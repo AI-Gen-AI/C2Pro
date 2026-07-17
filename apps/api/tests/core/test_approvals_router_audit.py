@@ -1,6 +1,4 @@
-"""
-TS-INT-DB-CLS-001: Approvals router audit trail tests.
-"""
+"""TS-INT-DB-CLS-001 / TS-UA-STK-UC-001 / TASK-BCK-095: approval tests."""
 
 from __future__ import annotations
 
@@ -16,12 +14,14 @@ from src.stakeholders.adapters.http.approvals_router import ApprovalReview, revi
 @pytest.mark.asyncio
 async def test_review_resource_logs_feedback_audit_for_approved_item_with_note(monkeypatch) -> None:
     events: list[tuple[str, dict[str, object]]] = []
+    execute_kwargs: dict[str, object] = {}
 
     class _Logger:
         def info(self, event_name: str, **kwargs: object) -> None:
             events.append((event_name, kwargs))
 
-    async def _execute(**_: object) -> tuple[SimpleNamespace, dict[str, object]]:
+    async def _execute(**kwargs: object) -> tuple[SimpleNamespace, dict[str, object]]:
+        execute_kwargs.update(kwargs)
         return (
             SimpleNamespace(approval_status=ApprovalStatus.APPROVED),
             {"name": "Original Stakeholder"},
@@ -50,6 +50,7 @@ async def test_review_resource_logs_feedback_audit_for_approved_item_with_note(m
     )
 
     assert response.status == ApprovalStatus.APPROVED
+    assert execute_kwargs["tenant_id"] == tenant_id
     assert events == [
         (
             "ai_feedback_recorded",

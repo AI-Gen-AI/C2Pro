@@ -150,6 +150,6 @@ class IDocumentRepository(ABC):
         pass
 
     @abstractmethod
-    async def refresh(self, entity: object) -> None:
+    async def refresh(self, entity: Document | Clause) -> None:
         """Refreshes the state of an entity from the repository."""
         pass

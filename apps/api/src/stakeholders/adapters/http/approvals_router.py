@@ -1,7 +1,8 @@
-"""
-HTTP adapter (FastAPI router) for approval workflow.
+"""HTTP adapter (FastAPI router) for approval workflow.
 
 Transitional location under stakeholders until a dedicated approvals module exists.
+
+TS-UA-STK-UC-001 / TASK-BCK-095.
 """
 from __future__ import annotations
 
@@ -79,6 +80,7 @@ async def review_resource(
     if resource_type == "stakeholders":
         try:
             record, original_snapshot = await use_case.execute(
+                tenant_id=_tenant_id,
                 stakeholder_id=resource_id,
                 status=payload.status,
                 correction_data=payload.correction_data,
