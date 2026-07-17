@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
 import pytest
@@ -11,6 +12,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from src.core.auth.dependencies import get_current_user
+from src.core.tenants.types import TenantId
 from src.health.adapters.http.router import get_snapshot_repository, router
 from src.health.domain.health_vector import HealthBand, HealthDimension
 from src.temporal.domain.project_snapshot import ProjectSnapshot, SnapshotTrigger
@@ -156,3 +158,26 @@ def test_project_health_openapi_path_is_registered() -> None:
     schema = app.openapi()
 
     assert "/api/v1/projects/{project_id}/health" in schema["paths"]
+
+
+@pytest.mark.asyncio
+async def test_project_health_normalizes_tenant_once_at_http_boundary(monkeypatch) -> None:
+    """TS-UD-HEALTH-018-006: pass a normalized tenant into the snapshot port."""
+    from src.health.adapters.http import router as health_router
+
+    project_id = uuid4()
+    raw_tenant_id = uuid4()
+    normalized_tenant_id = TenantId(uuid4())
+    normalize = Mock(return_value=normalized_tenant_id)
+    repository = SimpleNamespace(latest=AsyncMock(return_value=None))
+    monkeypatch.setattr(health_router, "require_tenant_id", normalize, raising=False)
+
+    result = await health_router.get_project_health(
+        project_id=project_id,
+        current_user=SimpleNamespace(tenant_id=raw_tenant_id),
+        repository=repository,
+    )
+
+    normalize.assert_called_once_with(raw_tenant_id)
+    repository.latest.assert_awaited_once_with(project_id, normalized_tenant_id)
+    assert result.tenant_id == normalized_tenant_id

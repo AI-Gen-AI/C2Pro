@@ -14,6 +14,7 @@ from sqlalchemy import select, text
 
 from src.core.database import get_raw_session, init_db
 from src.core.tasks.celery_app import celery_app
+from src.core.tenants.types import TenantId, require_tenant_id
 from src.project_state.adapters.persistence.project_state_repository import (
     SqlAlchemyProjectStateRepository,
 )
@@ -50,7 +51,7 @@ def enqueue_project_snapshot(
 async def _write_project_snapshot_async(
     *,
     project_id: UUID,
-    tenant_id: UUID,
+    tenant_id: TenantId,
     trigger: str,
     source_event_id: UUID | None = None,
 ) -> dict[str, str]:
@@ -101,7 +102,7 @@ def write_project_snapshot(
     return asyncio.run(
         _write_project_snapshot_async(
             project_id=UUID(project_id),
-            tenant_id=UUID(tenant_id),
+            tenant_id=require_tenant_id(tenant_id),
             trigger=trigger,
             source_event_id=UUID(source_event_id) if source_event_id else None,
         )

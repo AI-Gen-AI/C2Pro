@@ -11,6 +11,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.tenants.types import TenantId
 from src.temporal.adapters.persistence.models import ProjectSnapshotORM
 from src.temporal.domain.project_snapshot import ProjectSnapshot, SnapshotTrigger
 from src.temporal.ports.project_snapshot_repository import IProjectSnapshotRepository
@@ -55,7 +56,7 @@ class SqlAlchemyProjectSnapshotRepository(IProjectSnapshotRepository):
         await self._session.flush()
         return snapshot
 
-    async def latest(self, project_id: UUID, tenant_id: UUID) -> ProjectSnapshot | None:
+    async def latest(self, project_id: UUID, tenant_id: TenantId) -> ProjectSnapshot | None:
         result = await self._session.execute(
             select(ProjectSnapshotORM)
             .where(
@@ -69,7 +70,7 @@ class SqlAlchemyProjectSnapshotRepository(IProjectSnapshotRepository):
         return self._to_domain(orm) if orm else None
 
     async def list_since(
-        self, project_id: UUID, tenant_id: UUID, since: datetime
+        self, project_id: UUID, tenant_id: TenantId, since: datetime
     ) -> list[ProjectSnapshot]:
         result = await self._session.execute(
             select(ProjectSnapshotORM)

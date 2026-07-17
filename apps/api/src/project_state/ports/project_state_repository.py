@@ -15,6 +15,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from uuid import UUID
 
+from src.core.tenants.types import TenantId
 from src.project_state.domain.aggregate import ProjectState
 
 
@@ -22,7 +23,7 @@ class ProjectStateRepository(ABC):
     """Repository interface for the ProjectState aggregate."""
 
     @abstractmethod
-    async def get(self, project_id: UUID, tenant_id: UUID) -> ProjectState | None:
+    async def get(self, project_id: UUID, tenant_id: TenantId) -> ProjectState | None:
         """Load the canonical ProjectState for a project (tenant-isolated)."""
         ...
 

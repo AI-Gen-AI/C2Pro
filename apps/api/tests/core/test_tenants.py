@@ -13,6 +13,7 @@ from src.core.tenants import __getattr__ as tenants_getattr
 from src.core.tenants import router as tenants_router_module
 from src.core.tenants import schemas as tenants_schemas
 from src.core.tenants.service import TenantService, get_tenant_by_id
+from src.core.tenants.types import require_tenant_id
 
 
 def test_core_tenants_getattr_imports_service_module():
@@ -60,3 +61,19 @@ async def test_core_tenants_get_tenant_by_id_returns_scalar_result():
     resolved = await get_tenant_by_id(_FakeSession(), tenant.id)
 
     assert resolved is tenant
+
+
+def test_require_tenant_id_parses_task_boundary_string() -> None:
+    """TS-E2E-SEC-TNT-001: task strings become UUID-backed tenant IDs."""
+    tenant_id = uuid4()
+
+    normalized = require_tenant_id(str(tenant_id))
+
+    assert normalized == tenant_id
+    assert not isinstance(normalized, str)
+
+
+def test_require_tenant_id_rejects_invalid_task_boundary_string() -> None:
+    """TS-E2E-SEC-TNT-001: malformed task tenant IDs fail at the boundary."""
+    with pytest.raises(ValueError, match="badly formed hexadecimal UUID string"):
+        require_tenant_id("not-a-tenant-id")

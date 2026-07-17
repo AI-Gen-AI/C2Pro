@@ -14,6 +14,7 @@ import structlog
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.tenants.types import TenantId
 from src.project_state.adapters.persistence.models import (
     ProjectStateEntityORM,
     ProjectStateORM,
@@ -145,7 +146,7 @@ class SqlAlchemyProjectStateRepository(ProjectStateRepository):
         )
 
     async def get(
-        self, project_id: UUID, tenant_id: UUID
+        self, project_id: UUID, tenant_id: TenantId
     ) -> ProjectState | None:
         result = await self._session.execute(
             select(ProjectStateORM).where(
