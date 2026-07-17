@@ -43,4 +43,4 @@ class GenerateRaciUseCase:
         except Exception:
             logger.warning("generate_raci_use_case_failed", exc_info=True)
             return []
-        return matrix if isinstance(matrix, list) else [matrix]
+        return matrix

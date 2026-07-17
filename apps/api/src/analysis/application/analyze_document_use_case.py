@@ -4,6 +4,7 @@ from typing import Any
 from uuid import uuid4
 
 from src.analysis.ports.orchestrator import AnalysisOrchestrator
+from src.core.json_types import JsonDict
 
 
 class AnalyzeDocumentUseCase:
@@ -20,7 +21,7 @@ class AnalyzeDocumentUseCase:
         tenant_id: str | None,
     ) -> dict[str, Any]:
         thread_id = str(uuid4())
-        initial_state = {
+        initial_state: JsonDict = {
             "document_text": document_text,
             "project_id": project_id,
             "document_id": document_id or project_id,

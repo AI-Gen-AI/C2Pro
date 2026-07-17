@@ -9,6 +9,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from src.analysis.ports.coherence_calculator import CoherenceCalculatorPort
+from src.core.json_types import JsonDict
 
 
 class TriggerCoherenceFromAnalysisUseCase:
@@ -22,8 +23,8 @@ class TriggerCoherenceFromAnalysisUseCase:
         *,
         project_id: UUID,
         tenant_id: UUID,
-        analysis_payload: dict,
-    ) -> dict:
+        analysis_payload: JsonDict,
+    ) -> JsonDict:
         if not analysis_payload:
             raise ValueError("analysis_payload is required")
         if not analysis_payload.get("analysis_id"):
