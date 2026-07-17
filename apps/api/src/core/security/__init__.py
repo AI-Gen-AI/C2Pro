@@ -8,7 +8,7 @@ Utilidades de seguridad: validacion de JWT, obtencion de usuario actual, etc.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, cast
 from uuid import UUID
 
 import structlog
@@ -40,7 +40,7 @@ async def get_current_tenant_id(request: Request) -> UUID:
     if tenant_id is None:
         raise TenantNotFoundError()
 
-    return tenant_id
+    return cast(UUID, tenant_id)
 
 
 async def get_current_user_id(request: Request) -> UUID:
@@ -52,7 +52,7 @@ async def get_current_user_id(request: Request) -> UUID:
     if user_id is None:
         raise AuthenticationError("User not authenticated")
 
-    return user_id
+    return cast(UUID, user_id)
 
 
 async def get_current_user_id_with_bearer(

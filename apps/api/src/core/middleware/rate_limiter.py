@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -19,6 +19,7 @@ from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from redis.exceptions import RedisError
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp
 
 from src.config import settings
 
@@ -45,7 +46,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,
+        app: ASGIApp,
         redis_url: str | None = None,
         user_limit: int | None = None,
         tenant_limit: int | None = None,
@@ -56,7 +57,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._tenant_limit = tenant_limit or settings.rate_limit_tenant_per_min
         self._requests: dict[str, list[float]] = {}
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         if not settings.rate_limit_enabled:
             return await call_next(request)
 
@@ -129,9 +132,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 headers={
                     "Retry-After": str(reset_seconds),
                     "X-RateLimit-Limit-User": str(self._user_limit),
-                    "X-RateLimit-Remaining-User": str(
-                        max(0, self._user_limit - (user_count or 0))
-                    ),
+                    "X-RateLimit-Remaining-User": str(max(0, self._user_limit - (user_count or 0))),
                     "X-RateLimit-Reset": str(reset_seconds),
                     "X-RateLimit-Limit-Tenant": str(self._tenant_limit),
                     "X-RateLimit-Remaining-Tenant": str(
@@ -157,7 +158,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         return response
 
-    async def _dispatch_in_memory(self, request: Request, call_next: Callable) -> Response:
+    async def _dispatch_in_memory(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         client_id = self._get_client_identifier(request)
         if self._is_rate_limited(client_id, request.url.path):
             return JSONResponse(
@@ -171,7 +174,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def _is_public_path(self, path: str) -> bool:
         return any(path.startswith(prefix) for prefix in self.PUBLIC_PATH_PREFIXES)
 
-    def _build_redis(self, redis_url: str | None) -> redis.Redis | None:
+    def _build_redis(self, redis_url: str | None) -> redis.Redis[str] | None:
         # TS-E2E-PER-LRG-001: avoid Redis connect timeout latency in pytest runs.
         if settings.environment == "test" or os.getenv("PYTEST_CURRENT_TEST"):
             return None
@@ -237,9 +240,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if self._redis is None:
             return None, None
 
-        user_key = (
-            f"rate_limit:user:{user_id}:{window_key}" if user_id is not None else None
-        )
+        user_key = f"rate_limit:user:{user_id}:{window_key}" if user_id is not None else None
         tenant_key = (
             f"rate_limit:tenant:{tenant_id}:{window_key}" if tenant_id is not None else None
         )
