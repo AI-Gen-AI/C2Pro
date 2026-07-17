@@ -47,6 +47,7 @@
         "mensaje": "TASK-BCK-096 core lane completed in four bounded commits; parent Wave 2 remains open pending the parallel dependency/re-export lane and Fable integration.",
         "tests_pasados": true,
         "validacion_lint": true,
+        "follow_up": "Registered TASK-QA-325 for two inherited stale core-tenant placeholder tests discovered during broad focused verification.",
         "tests": [
           "JSON contract slice: 287 passed, 16 pre-existing legacy skips; Ruff passed.",
           "Snapshot/health TenantId slice: 16 passed; Ruff passed.",
