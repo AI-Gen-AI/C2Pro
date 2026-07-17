@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-17T03:53:28Z",
+  "updated_at": "2026-07-17T07:07:54Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,45 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T144",
+      "backlog_id": "TASK-BCK-096",
+      "tipo": "backend",
+      "descripcion": "Implement the TASK-BCK-096 type-contract core lane: shared JSON aliases plus TenantId normalization across core HTTP/task boundaries and their ports.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Core boundary slices use require_tenant_id exactly once, affected ports accept TenantId, genuine JSON contracts use shared aliases, focused tests and Ruff pass, and mypy ratchet reports new=0.",
+      "archivos_modificados": [
+        "apps/api/src/core/json_types.py",
+        "apps/api/src/core/tenants/types.py",
+        "apps/api/src/core/tasks/snapshot_tasks.py",
+        "apps/api/src/core/tasks/project_graph_tasks.py",
+        "apps/api/src/core/tasks/ingestion_tasks.py",
+        "apps/api/src/health/adapters/http/router.py",
+        "apps/api/src/project_state/ports/project_state_repository.py",
+        "apps/api/src/temporal/ports/project_snapshot_repository.py",
+        "apps/api/src/analysis/ports/document_artifact_repository.py",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-17T05:40:00Z",
+        "completado": "2026-07-17T07:07:54Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-BCK-096 core lane completed in four bounded commits; parent Wave 2 remains open pending the parallel dependency/re-export lane and Fable integration.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "JSON contract slice: 287 passed, 16 pre-existing legacy skips; Ruff passed.",
+          "Snapshot/health TenantId slice: 16 passed; Ruff passed.",
+          "Project-graph TenantId slice: 12 passed; Ruff passed.",
+          "Ingestion TenantId slice: 13 passed; Ruff passed.",
+          "Mypy ratchet after every production commit: baseline=1406 current=1327 new=0 fixed=79."
+        ]
+      }
+    },
     {
       "tarea_id": "T143",
       "backlog_id": "TASK-QA-324",
