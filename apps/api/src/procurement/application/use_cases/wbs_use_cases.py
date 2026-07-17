@@ -47,7 +47,10 @@ class CreateWBSItemUseCase:
             existing.actual_end = wbs_create.actual_end
             existing.source_clause_id = wbs_create.funded_by_clause_id
             existing.wbs_metadata = wbs_create.wbs_metadata
-            return await self.wbs_repository.update(existing.id, existing, tenant_id)
+            result = await self.wbs_repository.update(existing.id, existing, tenant_id)
+            if result is None:
+                raise ValueError(f"WBS item {existing.id} not found after update")
+            return result
 
         # Convert DTO to domain entity
         wbs_item = WBSItem(
@@ -74,7 +77,7 @@ class CreateWBSItemUseCase:
             if parent:
                 wbs_item.parent_code = parent.code
 
-        return await self.wbs_repository.create(wbs_item, tenant_id)
+        return await self.wbs_repository.create(tenant_id, wbs_item)
 
 
 class ListWBSItemsUseCase:
@@ -214,7 +217,9 @@ class GetWBSTreeUseCase:
         return await self.wbs_repository.get_tree(project_id, tenant_id)
 
 
-def _same_source_document(existing_metadata: dict | None, incoming_metadata: dict | None) -> bool:
+def _same_source_document(
+    existing_metadata: dict[str, object] | None, incoming_metadata: dict[str, object] | None
+) -> bool:
     """TS-UD-DOC-EXT-002: identify idempotent schedule-derived WBS rows by source document."""
     if not existing_metadata or not incoming_metadata:
         return False

@@ -259,7 +259,7 @@ class ProcurementPlanItem:
     required_on_site_date: datetime | date
     optimal_order_date: datetime | date
     priority: ProcurementPriority
-    alerts: list[dict[str, object]] = field(default_factory=list)
+    alerts: list[object] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

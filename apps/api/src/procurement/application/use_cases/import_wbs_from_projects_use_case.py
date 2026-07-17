@@ -35,7 +35,7 @@ class ImportWBSFromProjectsUseCase:
             if item.project_id != project_id:
                 raise ValueError("project_id mismatch")
 
-            metadata: dict = {}
+            metadata: dict[str, object] = {}
             if item.specifications:
                 metadata.update(item.specifications)
             if item.parent_id:

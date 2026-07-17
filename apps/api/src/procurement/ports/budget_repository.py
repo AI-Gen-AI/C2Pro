@@ -15,9 +15,7 @@ class BudgetRepository(Protocol):
     """Port for Budget item CRUD operations."""
 
     @abstractmethod
-    async def get_by_project(
-        self, project_id: UUID, tenant_id: TenantId
-    ) -> list[dict[str, object]]:
+    async def get_by_project(self, project_id: UUID, tenant_id: TenantId) -> list[dict]:
         """Get all budget items for a project."""
         ...
 
@@ -29,7 +27,7 @@ class BudgetRepository(Protocol):
         name: str,
         code: str,
         amount: Decimal,
-    ) -> dict[str, object]:
+    ) -> dict:
         """Create a new budget item."""
         ...
 
@@ -39,7 +37,7 @@ class BudgetRepository(Protocol):
         item_id: UUID,
         tenant_id: TenantId,
         **updates: object,
-    ) -> dict[str, object] | None:
+    ) -> dict | None:
         """Update an existing budget item."""
         ...
 
@@ -49,7 +47,7 @@ class BudgetRepository(Protocol):
         ...
 
     @abstractmethod
-    async def get_by_id(self, item_id: UUID, tenant_id: TenantId) -> dict[str, object] | None:
+    async def get_by_id(self, item_id: UUID, tenant_id: TenantId) -> dict | None:
         """Get a budget item by ID."""
         ...
 
