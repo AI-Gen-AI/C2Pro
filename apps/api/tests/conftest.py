@@ -32,7 +32,7 @@ if sys.platform == "win32":
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("DEBUG", "true")
 os.environ.setdefault(
-    "TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/c2pro_test"
+    "TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:5433/c2pro_test"
 )
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
 os.environ.setdefault("SUPABASE_ANON_KEY", "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock")
