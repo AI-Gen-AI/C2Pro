@@ -18,13 +18,14 @@ from src.analysis.adapters.persistence.document_artifact_repository import (
 )
 from src.core.database import get_raw_session, init_db
 from src.core.tasks.project_graph_tasks import enqueue_project_graph
+from src.core.tenants.types import require_tenant_id
 
 logger = logging.getLogger(__name__)
 
 
 async def _persist_artifact(final_state: Mapping[str, Any]) -> None:
     project_id = UUID(str(final_state["project_id"]))
-    tenant_id = UUID(str(final_state["tenant_id"]))
+    tenant_id = require_tenant_id(str(final_state["tenant_id"]))
     artifact = build_document_artifact(final_state)
     await init_db()
     async with get_raw_session() as session:

@@ -18,6 +18,7 @@ from src.analysis.factories.orchestrator_factory import AnalysisOrchestratorFact
 from src.core.database import get_raw_session, init_db
 from src.core.dlq.dlq_service import DLQService
 from src.core.tasks.celery_app import celery_app
+from src.core.tenants.types import TenantId, require_tenant_id
 from src.documents.adapters.extraction.documents_entity_extraction_service import (
     DocumentsEntityExtractionService,
 )
@@ -265,7 +266,7 @@ def _extract_contract_clauses(
     *,
     document_id: UUID,
     project_id: UUID,
-    tenant_id: UUID,
+    tenant_id: TenantId,
     parsed_text: str,
 ) -> list[Clause]:
     segments = [segment.strip() for segment in re.split(r"(?<=[\.!?])\s+|\n\n+", parsed_text) if segment.strip()]
@@ -308,7 +309,7 @@ def _dispatch_failed_task(**kwargs) -> None:
 
 async def _push_trigger_failure_to_dlq(
     *,
-    tenant_id: UUID,
+    tenant_id: TenantId,
     document_id: UUID,
     error: Exception,
 ) -> None:
@@ -323,7 +324,7 @@ async def _push_trigger_failure_to_dlq(
 
 async def _run_document_analysis(
     *,
-    tenant_id: UUID,
+    tenant_id: TenantId,
     document_id: UUID,
     orchestrator=None,
 ) -> dict:
@@ -420,10 +421,11 @@ async def _process(document_id: UUID) -> dict:
         )
         rag_ingestion = SqlAlchemyRagIngestionService(db_session=session)
 
-        tenant_id = await repo.get_project_tenant_id(document.project_id)
-        if not tenant_id:
+        raw_tenant_id = await repo.get_project_tenant_id(document.project_id)
+        if not raw_tenant_id:
             logger.error("tenant_id_not_found_for_project: project_id=%s", document.project_id)
             return {"status": "error", "message": "Project not found"}
+        tenant_id = require_tenant_id(raw_tenant_id)
 
         await repo.update_status(tenant_id, document_id, DocumentStatus.PARSING)
         await session.commit()
@@ -585,10 +587,11 @@ def process_document_analysis_async(self, tenant_id: str, document_id: str):
         self.request.id,
         document_id,
     )
+    normalized_tenant_id = require_tenant_id(tenant_id)
     try:
         return asyncio.run(
             _run_document_analysis(
-                tenant_id=UUID(tenant_id),
+                tenant_id=normalized_tenant_id,
                 document_id=UUID(document_id),
             )
         )
@@ -603,7 +606,7 @@ def process_document_analysis_async(self, tenant_id: str, document_id: str):
         )
         asyncio.run(
             _push_trigger_failure_to_dlq(
-                tenant_id=UUID(tenant_id),
+                tenant_id=normalized_tenant_id,
                 document_id=UUID(document_id),
                 error=error,
             )

@@ -24,6 +24,7 @@ from src.core.database import get_raw_session, init_db
 from src.core.dlq.dlq_service import DLQService
 from src.core.tasks.celery_app import celery_app
 from src.core.tasks.project_graph_governance import ProjectGraphGovernance
+from src.core.tenants.types import TenantId, require_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ async def enqueue_project_graph(
 async def run_project_graph_once(
     *,
     project_id: UUID,
-    tenant_id: UUID,
+    tenant_id: TenantId,
     artifact_repository: IDocumentArtifactRepository,
     trigger_event_id: UUID | None = None,
 ) -> dict[str, object]:
@@ -97,7 +98,7 @@ def _serializable(value: object) -> object:
 async def _run_project_graph_async(
     *,
     project_id: UUID,
-    tenant_id: UUID,
+    tenant_id: TenantId,
     trigger_event_id: UUID | None = None,
     governance: ProjectGraphGovernance | None = None,
 ) -> dict[str, object]:
@@ -145,7 +146,7 @@ async def _run_project_graph_async(
 async def record_project_graph_dead_letter(
     *,
     project_id: UUID,
-    tenant_id: UUID,
+    tenant_id: TenantId,
     trigger_event_id: UUID | None,
     error: Exception,
 ) -> UUID:
@@ -179,7 +180,7 @@ def run_project_graph(
     trigger_event_id: str | None = None,
 ) -> dict[str, object]:
     project_uuid = UUID(project_id)
-    tenant_uuid = UUID(tenant_id)
+    tenant_uuid = require_tenant_id(tenant_id)
     trigger_uuid = UUID(trigger_event_id) if trigger_event_id else None
     try:
         return asyncio.run(

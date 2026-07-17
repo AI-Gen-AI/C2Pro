@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
 
+from src.core.tenants.types import TenantId
 from src.temporal.domain.project_snapshot import SnapshotTrigger
 
 
@@ -90,6 +92,39 @@ def test_enqueue_project_snapshot_calls_delay(monkeypatch) -> None:
             "source_event_id": str(source_event_id),
         }
     ]
+
+
+def test_write_project_snapshot_normalizes_tenant_once_at_task_boundary(monkeypatch) -> None:
+    """TS-INT-TASK-SNAP-001: normalize the serialized tenant before application code."""
+    from src.core.tasks import snapshot_tasks
+
+    project_id = uuid4()
+    raw_tenant_id = str(uuid4())
+    normalized_tenant_id = TenantId(uuid4())
+    normalize = Mock(return_value=normalized_tenant_id)
+    captured: dict[str, object] = {}
+
+    async def fake_write_project_snapshot_async(**kwargs):
+        captured.update(kwargs)
+        return {"status": "ok", "snapshot_id": "snapshot-1"}
+
+    monkeypatch.setattr(snapshot_tasks, "require_tenant_id", normalize, raising=False)
+    monkeypatch.setattr(
+        snapshot_tasks,
+        "_write_project_snapshot_async",
+        fake_write_project_snapshot_async,
+    )
+
+    result = snapshot_tasks.write_project_snapshot(
+        None,
+        project_id=str(project_id),
+        tenant_id=raw_tenant_id,
+        trigger=SnapshotTrigger.REVISION_INGESTED.value,
+    )
+
+    normalize.assert_called_once_with(raw_tenant_id)
+    assert captured["tenant_id"] is normalized_tenant_id
+    assert result == {"status": "ok", "snapshot_id": "snapshot-1"}
 
 
 @pytest.mark.asyncio

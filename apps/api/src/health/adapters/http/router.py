@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session_with_tenant
+from src.core.tenants.types import TenantId, require_tenant_id
 from src.health.application.health_engine import assemble_health_vector
 from src.health.domain.health_vector import (
     HealthBand,
@@ -46,13 +47,14 @@ async def get_project_health(
 ) -> HealthVector:
     """Return latest tenant-scoped project HealthVector or honest insufficient data."""
 
-    snapshot = await repository.latest(project_id, current_user.tenant_id)
+    tenant_id = require_tenant_id(current_user.tenant_id)
+    snapshot = await repository.latest(project_id, tenant_id)
     if snapshot is None:
-        return _insufficient_data_vector(project_id, current_user.tenant_id)
+        return _insufficient_data_vector(project_id, tenant_id)
     return HealthVector.model_validate(snapshot.health_vector)
 
 
-def _insufficient_data_vector(project_id: UUID, tenant_id: UUID) -> HealthVector:
+def _insufficient_data_vector(project_id: UUID, tenant_id: TenantId) -> HealthVector:
     return assemble_health_vector(
         project_id,
         tenant_id,

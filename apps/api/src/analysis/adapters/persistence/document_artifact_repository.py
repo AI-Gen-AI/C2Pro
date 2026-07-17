@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.analysis.adapters.persistence.models import DocumentArtifactORM
 from src.analysis.domain.contracts import DocumentArtifact
 from src.analysis.ports.document_artifact_repository import IDocumentArtifactRepository
+from src.core.tenants.types import TenantId
 
 
 class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
@@ -36,7 +37,7 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
         artifact: DocumentArtifact,
         *,
         project_id: UUID,
-        tenant_id: UUID,
+        tenant_id: TenantId,
     ) -> DocumentArtifact:
         document_id = self._artifact_document_id(artifact)
         await self._session.execute(
@@ -64,7 +65,7 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
         self,
         *,
         project_id: UUID,
-        tenant_id: UUID,
+        tenant_id: TenantId,
     ) -> list[DocumentArtifact]:
         result = await self._session.execute(
             select(DocumentArtifactORM)
@@ -84,7 +85,7 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
         self,
         *,
         project_id: UUID,
-        tenant_id: UUID,
+        tenant_id: TenantId,
         document_id: UUID,
     ) -> list[DocumentArtifact]:
         result = await self._session.execute(

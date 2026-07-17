@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from uuid import UUID
 
+from src.core.tenants.types import TenantId
 from src.temporal.domain.project_snapshot import ProjectSnapshot
 
 
@@ -18,12 +19,12 @@ class IProjectSnapshotRepository(ABC):
         ...
 
     @abstractmethod
-    async def latest(self, project_id: UUID, tenant_id: UUID) -> ProjectSnapshot | None:
+    async def latest(self, project_id: UUID, tenant_id: TenantId) -> ProjectSnapshot | None:
         ...
 
     @abstractmethod
     async def list_since(
-        self, project_id: UUID, tenant_id: UUID, since: datetime
+        self, project_id: UUID, tenant_id: TenantId, since: datetime
     ) -> list[ProjectSnapshot]:
         ...
 

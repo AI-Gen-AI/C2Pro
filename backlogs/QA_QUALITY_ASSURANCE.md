@@ -363,3 +363,9 @@ Repair the inherited isolation drift in `apps/api/tests/modules/analysis/adapter
 **Status**: Completed 2026-07-17 · **Priority**: P1 · **Owner**: qa · **Depends on**: —
 
 `tests/coherence/golden` was imported as the top-level package `golden` because its parent `tests/coherence` lacked `__init__.py`. That shadowed `src/golden`, so later imports of `golden.evaluators` failed during broad collection. Added the missing parent package boundary with Suite ID `TS-QA-PYTEST-COLLECTION-001`; full `pytest --collect-only -q` and the 651-case `tests/golden` suite complete without collection errors.
+
+### TASK-QA-325: Repair stale core-tenant placeholder tests
+
+**Status**: Open · **Priority**: P2 · **Owner**: qa · **Depends on**: —
+
+During TASK-BCK-096 verification, the complete `tests/core/test_tenants.py` file exposed two inherited failures unrelated to the TenantId changes: `tenants_schemas.Tenant` no longer exists, and `TenantService()` now requires a database argument. Diagnose the intended current schema/service contracts, update only the stale fixtures/assertions, retain tenant behavior coverage, and verify the complete file independently. Do not recreate placeholder production APIs solely to satisfy obsolete tests.

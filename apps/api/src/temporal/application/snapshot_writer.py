@@ -9,6 +9,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from src.core.tenants.types import TenantId
 from src.health.application.contract_scorer import score_contract_dimension
 from src.health.application.documentation_scorer import score_documentation_dimension
 from src.health.application.governance_scorer import score_governance_dimension
@@ -42,7 +43,7 @@ class SnapshotWriter:
     async def write_snapshot(
         self,
         project_id: UUID,
-        tenant_id: UUID,
+        tenant_id: TenantId,
         trigger: SnapshotTrigger,
         source_event_id: UUID | None = None,
     ) -> ProjectSnapshot:
@@ -98,7 +99,7 @@ class SnapshotWriter:
         self,
         *,
         project_id: UUID,
-        tenant_id: UUID,
+        tenant_id: TenantId,
         trigger: SnapshotTrigger,
         captured_at: datetime,
         source_event_id: UUID | None,
