@@ -6,6 +6,7 @@ Refers to Suite ID: TS-CT-WBS-API-001
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 from uuid import UUID
 
 
@@ -21,11 +22,11 @@ class WBSItemDTO:
     parent_id: UUID | None = None
     start_date: date | None = None
     end_date: date | None = None
-    budget: dict | None = None
+    budget: dict[str, Any] | None = None
     completion: int = 0
-    children: list[dict] = None
+    children: list[dict[str, Any]] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.children is None:
             object.__setattr__(self, "children", [])
 
@@ -70,8 +71,8 @@ class WBSResponse:
     """Response DTO for WBS endpoints."""
 
     items: list[WBSItemDTO]
-    coverage: dict
-    alerts: list[dict]
+    coverage: dict[str, Any]
+    alerts: list[dict[str, Any]]
 
 
 @dataclass(frozen=True)

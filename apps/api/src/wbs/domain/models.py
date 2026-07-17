@@ -18,6 +18,7 @@ Tree operations:
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from src.wbs.domain.enums import WBSNodeStatus, WBSNodeType
@@ -61,7 +62,7 @@ class WBSNode:
     budget_spent: float
 
     # Metadata
-    metadata: dict
+    metadata: dict[str, Any]
     created_at: datetime
     updated_at: datetime
 

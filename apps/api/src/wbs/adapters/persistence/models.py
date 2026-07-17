@@ -8,7 +8,7 @@ TASK-BCK-029: WBS API Endpoint with nested set model
 """
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -102,7 +102,9 @@ class WBSNodeORM(Base):
     budget_spent: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, server_default="0")
 
     # Metadata
-    metadata_json: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, server_default="{}")
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, nullable=False, server_default="{}"
+    )
 
     # Timestamps
     @staticmethod
@@ -110,15 +112,15 @@ class WBSNodeORM(Base):
         """Return UTC now normalized to a naive timestamp for legacy TIMESTAMP columns."""
         return datetime.now(UTC).replace(tzinfo=None)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow_naive, nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow_naive, onupdate=_utcnow_naive, nullable=False
     )
 
     # Relationships
-    project: Mapped["ProjectORM"] = relationship("ProjectORM", foreign_keys=[project_id], lazy="select")
+    project: Mapped["ProjectORM"] = relationship(
+        "ProjectORM", foreign_keys=[project_id], lazy="select"
+    )
     parent: Mapped["WBSNodeORM"] = relationship(
         "WBSNodeORM",
         remote_side=[id],
@@ -136,7 +138,9 @@ class WBSNodeORM(Base):
         Index("ix_wbs_nodes_depth", "depth"),
         Index("ix_wbs_nodes_status", "status"),
         Index("ix_wbs_nodes_node_type", "node_type"),
-        Index("ix_wbs_nodes_project_lft_rgt", "project_id", "lft", "rgt"),  # Composite for tree queries
+        Index(
+            "ix_wbs_nodes_project_lft_rgt", "project_id", "lft", "rgt"
+        ),  # Composite for tree queries
         UniqueConstraint("project_id", "code", name="uq_wbs_nodes_project_code"),
         CheckConstraint("lft < rgt", name="ck_wbs_nodes_lft_lt_rgt"),
         CheckConstraint("lft > 0", name="ck_wbs_nodes_lft_positive"),

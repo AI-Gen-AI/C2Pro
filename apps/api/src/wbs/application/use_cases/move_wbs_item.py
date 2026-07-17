@@ -8,6 +8,7 @@ from uuid import UUID
 
 from src.wbs.application.dtos import MoveWBSItemRequest, WBSItemDTO
 from src.wbs.application.mappers import map_wbs_item_to_dto
+from src.wbs.domain.entities.wbs_item import WBSItem
 from src.wbs.ports import IWBSRepository
 
 
@@ -37,7 +38,9 @@ class MoveWBSItemUseCase:
         if not item.can_be_moved_to(request.new_parent_id, all_items_map):
             if request.new_parent_id == item_id:
                 raise ValueError("Cannot move item to itself (circular reference)")
-            raise ValueError("Cannot move item: would exceed maximum depth or create circular reference")
+            raise ValueError(
+                "Cannot move item: would exceed maximum depth or create circular reference"
+            )
 
         # Remove from old parent
         if item.parent_id is not None:
@@ -68,10 +71,7 @@ class MoveWBSItemUseCase:
         return map_wbs_item_to_dto(saved, children=[])
 
     async def _generate_new_code(
-        self,
-        item,
-        new_parent_id: UUID | None,
-        all_items: list
+        self, item: WBSItem, new_parent_id: UUID | None, all_items: list[WBSItem]
     ) -> str:
         """Generate new code when moving item to new parent."""
         if new_parent_id is not None:

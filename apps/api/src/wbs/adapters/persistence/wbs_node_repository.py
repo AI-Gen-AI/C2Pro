@@ -7,6 +7,7 @@ Refers to Suite ID: TS-INT-DB-WBS-001.
 TASK-BCK-029: WBS API Endpoint with nested set model
 """
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import and_, select, update
@@ -167,7 +168,7 @@ class WBSNodeRepository:
         name: str,
         parent_id: UUID | None,
         node_type: WBSNodeType,
-        **kwargs,
+        **kwargs: Any,
     ) -> WBSNode:
         """
         Create a new WBS node and insert into nested set.
@@ -276,7 +277,7 @@ class WBSNodeRepository:
 
         return self._to_domain(orm_node)
 
-    async def update(self, node_id: UUID, tenant_id: UUID, **kwargs) -> WBSNode | None:
+    async def update(self, node_id: UUID, tenant_id: UUID, **kwargs: Any) -> WBSNode | None:
         """
         Update a WBS node (metadata only, not structure).
 

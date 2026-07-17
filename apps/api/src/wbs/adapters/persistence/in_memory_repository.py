@@ -18,7 +18,7 @@ class InMemoryWBSRepository(IWBSRepository):
     Will be replaced with SQLAlchemy repository.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._items: dict[UUID, WBSItem] = {}
 
     async def get_by_id(self, item_id: UUID, tenant_id: str) -> WBSItem | None:
@@ -31,16 +31,15 @@ class InMemoryWBSRepository(IWBSRepository):
     async def get_by_project(self, project_id: str, tenant_id: str) -> list[WBSItem]:
         """Get all WBS items for a project."""
         return [
-            item for item in self._items.values()
+            item
+            for item in self._items.values()
             if item.project_id == project_id and item.tenant_id == tenant_id
         ]
 
     async def get_by_code(self, project_id: str, code: str, tenant_id: str) -> WBSItem | None:
         """Get a WBS item by code."""
         for item in self._items.values():
-            if (item.project_id == project_id and
-                item.code == code and
-                item.tenant_id == tenant_id):
+            if item.project_id == project_id and item.code == code and item.tenant_id == tenant_id:
                 return item
         return None
 
@@ -65,7 +64,8 @@ class InMemoryWBSRepository(IWBSRepository):
     async def get_children(self, parent_id: UUID, tenant_id: str) -> list[WBSItem]:
         """Get all children of a WBS item."""
         return [
-            item for item in self._items.values()
+            item
+            for item in self._items.values()
             if item.parent_id == parent_id and item.tenant_id == tenant_id
         ]
 
