@@ -6,6 +6,7 @@ Refers to Suite ID: TS-INT-MOD-STK-001.
 
 from __future__ import annotations
 
+from typing import cast
 from uuid import UUID
 
 from src.stakeholders.application.dtos import (
@@ -39,10 +40,8 @@ class HandoverStakeholdersToRaciUseCase:
                 name=stakeholder.name,
                 role=stakeholder.role,
                 company=stakeholder.organization,
-                stakeholder_type=(
-                    stakeholder.stakeholder_metadata.get("type")
-                    if isinstance(stakeholder.stakeholder_metadata, dict)
-                    else None
+                stakeholder_type=cast(
+                    str | None, stakeholder.stakeholder_metadata.get("type")
                 ),
             )
             for stakeholder in stakeholders

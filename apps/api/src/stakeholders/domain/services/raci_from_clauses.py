@@ -6,16 +6,18 @@ Refers to Suite ID: TS-UD-STK-RAC-003.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
-from typing import Any
+from typing import cast
 from uuid import UUID, uuid4
 
 from src.stakeholders.domain.models import RaciAssignment, RACIRole
 
 
 def generate_raci_assignments_from_clauses(
-    clauses: list[dict],
+    clauses: Sequence[Mapping[str, object]],
     *,
+    tenant_id: UUID,
     known_stakeholder_ids: set[UUID] | None = None,
     strict_identity: bool = False,
 ) -> list[RaciAssignment]:
@@ -24,16 +26,14 @@ def generate_raci_assignments_from_clauses(
     known_ids = known_stakeholder_ids or set()
 
     for clause in clauses:
-        if not isinstance(clause, dict):
-            continue
         project_id = clause.get("project_id")
-        full_text = clause.get("full_text")
-        extracted = clause.get("extracted_entities") or {}
+        full_text = cast(str | None, clause.get("full_text"))
+        extracted = cast(Mapping[str, object], clause.get("extracted_entities") or {})
         raw_assignments = extracted.get("raci_assignments")
         if not isinstance(raw_assignments, list):
             continue
         for raw in raw_assignments:
-            if not isinstance(raw, dict):
+            if not isinstance(raw, Mapping):
                 continue
             stakeholder_id = raw.get("stakeholder_id")
             wbs_item_id = raw.get("wbs_item_id")
@@ -57,6 +57,7 @@ def generate_raci_assignments_from_clauses(
                 RaciAssignment(
                     id=uuid4(),
                     project_id=project_id,
+                    tenant_id=tenant_id,
                     stakeholder_id=stakeholder_id,
                     wbs_item_id=wbs_item_id,
                     raci_role=role,
@@ -82,7 +83,7 @@ def _parse_role(value: object) -> RACIRole | None:
 
 def _validate_identity_constraints(
     *,
-    raw: dict[str, Any],
+    raw: Mapping[str, object],
     stakeholder_id: UUID,
     known_ids: set[UUID],
     strict_identity: bool,

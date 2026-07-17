@@ -30,6 +30,7 @@ class TestRaciFromClauses:
     """Refers to Suite ID: TS-UD-STK-RAC-003."""
 
     def test_001_builds_assignments_from_clause_payload(self) -> None:
+        tenant_id = uuid4()
         project_id = uuid4()
         stakeholder_id = uuid4()
         wbs_item_id = uuid4()
@@ -47,11 +48,12 @@ class TestRaciFromClauses:
             )
         ]
 
-        assignments = generate_raci_assignments_from_clauses(clauses)
+        assignments = generate_raci_assignments_from_clauses(clauses, tenant_id=tenant_id)
 
         assert len(assignments) == 1
         assignment = assignments[0]
         assert assignment.project_id == project_id
+        assert assignment.tenant_id == tenant_id
         assert assignment.stakeholder_id == stakeholder_id
         assert assignment.wbs_item_id == wbs_item_id
         assert assignment.raci_role == RACIRole.ACCOUNTABLE
@@ -75,7 +77,7 @@ class TestRaciFromClauses:
             )
         ]
 
-        assignments = generate_raci_assignments_from_clauses(clauses)
+        assignments = generate_raci_assignments_from_clauses(clauses, tenant_id=uuid4())
 
         assert assignments == []
 
@@ -88,6 +90,6 @@ class TestRaciFromClauses:
             )
         ]
 
-        assignments = generate_raci_assignments_from_clauses(clauses)
+        assignments = generate_raci_assignments_from_clauses(clauses, tenant_id=uuid4())
 
         assert assignments == []

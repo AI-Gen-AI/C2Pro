@@ -5,6 +5,7 @@ TS-UA-STK-UC-001 / TASK-BCK-095.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -216,7 +217,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         orm.phone = stakeholder.phone
         orm.source_clause_id = stakeholder.source_clause_id
         orm.extracted_from_document_id = stakeholder.extracted_from_document_id
-        orm.approval_status = stakeholder.approval_status
+        orm.approval_status = cast(ApprovalStatus, stakeholder.approval_status)
         orm.reviewed_by = stakeholder.reviewed_by
         orm.reviewed_at = self._normalize_naive_utc(stakeholder.reviewed_at)
         orm.review_comment = stakeholder.review_comment
@@ -226,12 +227,15 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
 
     async def delete(self, stakeholder_id: UUID, tenant_id: UUID) -> None:
         """Delete a stakeholder."""
-        orm = await self.get_by_id(stakeholder_id=stakeholder_id, tenant_id=tenant_id)
+        stmt = select(StakeholderORM).where(
+            StakeholderORM.id == stakeholder_id,
+            StakeholderORM.tenant_id == tenant_id,
+        )
+        result = await self.session.execute(stmt)
+        orm = result.scalar_one_or_none()
         if orm:
-            orm_to_delete = await self.session.get(StakeholderORM, orm.id)
-            if orm_to_delete:
-                await self.session.delete(orm_to_delete)
-                await self.session.flush()
+            await self.session.delete(orm)
+            await self.session.flush()
 
     async def add_raci_assignment(
         self, assignment: RaciAssignment, tenant_id: UUID
@@ -310,11 +314,14 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         self, assignment: RaciAssignment, tenant_id: UUID
     ) -> None:
         """Update a RACI assignment."""
-        orm = await self.session.get(StakeholderWBSRaciORM, assignment.id)
+        stmt = select(StakeholderWBSRaciORM).where(
+            StakeholderWBSRaciORM.id == assignment.id,
+            StakeholderWBSRaciORM.tenant_id == tenant_id,
+        )
+        result = await self.session.execute(stmt)
+        orm = result.scalar_one_or_none()
         if not orm:
             return
-        if tenant_id is not None and orm.tenant_id != tenant_id:
-            raise PermissionError("Cannot update RACI assignment for project outside tenant")
         orm.raci_role = assignment.raci_role
         orm.evidence_text = assignment.evidence_text
         orm.generated_automatically = assignment.generated_automatically
@@ -355,12 +362,17 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
                 entity.created_at = orm.created_at
                 entity.updated_at = orm.updated_at
         if isinstance(entity, RaciAssignment):
-            orm = await self.session.get(StakeholderWBSRaciORM, entity.id)
-            if orm:
-                await self.session.refresh(orm)
-                entity.raci_role = orm.raci_role
-                entity.evidence_text = orm.evidence_text
-                entity.generated_automatically = orm.generated_automatically
-                entity.manually_verified = orm.manually_verified
-                entity.verified_by = orm.verified_by
-                entity.verified_at = orm.verified_at
+            raci_stmt = select(StakeholderWBSRaciORM).where(
+                StakeholderWBSRaciORM.id == entity.id,
+                StakeholderWBSRaciORM.tenant_id == entity.tenant_id,
+            )
+            raci_result = await self.session.execute(raci_stmt)
+            raci_orm = raci_result.scalar_one_or_none()
+            if raci_orm:
+                await self.session.refresh(raci_orm)
+                entity.raci_role = raci_orm.raci_role
+                entity.evidence_text = raci_orm.evidence_text
+                entity.generated_automatically = raci_orm.generated_automatically
+                entity.manually_verified = raci_orm.manually_verified
+                entity.verified_by = raci_orm.verified_by
+                entity.verified_at = raci_orm.verified_at

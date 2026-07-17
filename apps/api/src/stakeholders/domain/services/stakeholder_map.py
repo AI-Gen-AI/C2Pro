@@ -6,7 +6,7 @@ Refers to Suite ID: TS-UD-STK-MAP-001.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -35,13 +35,11 @@ def _quadrant_anchor(quadrant: StakeholderQuadrant) -> tuple[float, float]:
 
 
 def generate_stakeholder_map(
-    stakeholders: Iterable[dict],
+    stakeholders: Iterable[Mapping[str, object]],
 ) -> list[MapPoint]:
     """Generate map points from stakeholder payloads."""
     points: list[MapPoint] = []
     for stakeholder in stakeholders:
-        if not isinstance(stakeholder, dict):
-            continue
         stakeholder_id = stakeholder.get("id")
         name = stakeholder.get("name")
         quadrant = stakeholder.get("quadrant")

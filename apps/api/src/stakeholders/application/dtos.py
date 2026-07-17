@@ -5,9 +5,12 @@ Refers to Suite ID: TS-UA-DTO-ALL-001.
 """
 from datetime import datetime
 from decimal import Decimal
+from typing import Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+
+from src.core.json_types import JsonDict
 
 # Import enums from the new domain models
 from src.stakeholders.domain.models import InterestLevel, PowerLevel, RACIRole, StakeholderQuadrant
@@ -39,7 +42,7 @@ class StakeholderBase(BaseModel):
     quadrant: StakeholderQuadrant | None = Field(None, description="Power/Interest grid quadrant")
     email: EmailStr | None = Field(None, description="Contact email (validated)")
     phone: str | None = Field(None, max_length=50, description="Contact phone number")
-    stakeholder_metadata: dict = Field(default_factory=dict, description="Custom metadata")
+    stakeholder_metadata: JsonDict = Field(default_factory=dict, description="Custom metadata")
 
     @field_validator("name")
     @classmethod
@@ -90,7 +93,7 @@ class StakeholderCreate(StakeholderBase):
     )
 
     @model_validator(mode="after")
-    def validate_auto_extraction(self):
+    def validate_auto_extraction(self) -> Self:
         """Validate that auto-extracted stakeholders have extraction_confidence."""
         if self.is_auto_extracted and self.extraction_confidence is None:
             raise ValueError(
@@ -114,7 +117,7 @@ class StakeholderUpdate(BaseModel):
     extraction_confidence: float | None = Field(
         None, ge=0.0, le=1.0, description="Updated confidence score"
     )
-    stakeholder_metadata: dict | None = Field(None, description="Updated metadata")
+    stakeholder_metadata: JsonDict | None = Field(None, description="Updated metadata")
 
     @field_validator("name")
     @classmethod
@@ -143,7 +146,7 @@ class StakeholderCreateRequest(BaseModel):
     power_score: int | None = Field(None, ge=1, le=10)
     interest_score: int | None = Field(None, ge=1, le=10)
     source_clause_id: UUID | None = None
-    stakeholder_metadata: dict | None = None
+    stakeholder_metadata: JsonDict | None = None
     feedback_comment: str | None = Field(None, max_length=500)
 
     @field_validator("name")
@@ -165,7 +168,7 @@ class StakeholderUpdateRequest(BaseModel):
     power_score: int | None = Field(None, ge=1, le=10)
     interest_score: int | None = Field(None, ge=1, le=10)
     source_clause_id: UUID | None = None
-    stakeholder_metadata: dict | None = None
+    stakeholder_metadata: JsonDict | None = None
     feedback_comment: str | None = Field(None, max_length=500)
 
     @field_validator("name")

@@ -55,6 +55,7 @@ class TestI10AmbiguityEscalationContractRed:
         with pytest.raises(ValueError, match="unresolved stakeholder identity"):
             generate_raci_assignments_from_clauses(
                 clauses,
+                tenant_id=uuid4(),
                 known_stakeholder_ids={known_stakeholder_id},
                 strict_identity=True,
             )
@@ -83,6 +84,7 @@ class TestI10AmbiguityEscalationContractRed:
         with pytest.raises(ValueError, match="ambiguous stakeholder mapping"):
             generate_raci_assignments_from_clauses(
                 clauses,
+                tenant_id=uuid4(),
                 known_stakeholder_ids={stakeholder_id},
                 strict_identity=True,
             )

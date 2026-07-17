@@ -9,8 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Literal
+from typing import Literal
 from uuid import UUID, uuid4
+
+from src.core.json_types import JsonDict
 
 
 @dataclass(frozen=True)
@@ -79,7 +81,7 @@ class Stakeholder:
     reviewed_by: UUID | None = None
     reviewed_at: datetime | None = None
     review_comment: str | None = None
-    stakeholder_metadata: dict = field(default_factory=dict)
+    stakeholder_metadata: JsonDict = field(default_factory=dict)
 
     # I10 AI Extraction Fields
     canonical_id: UUID | None = None
@@ -148,7 +150,7 @@ class RaciResponsibility:
     role: RACIRole
     tenant_id: UUID
     confidence: float = 1.0
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: JsonDict = field(default_factory=dict)
 
 
 @dataclass
@@ -157,7 +159,7 @@ class RaciActivity:
     activity_id: UUID = field(default_factory=uuid4)
     responsibilities: list[RaciResponsibility] = field(default_factory=list)
     confidence: float = 1.0
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: JsonDict = field(default_factory=dict)
 
 
 def _derive_quadrant(power_level: PowerLevel, interest_level: InterestLevel) -> StakeholderQuadrant:
