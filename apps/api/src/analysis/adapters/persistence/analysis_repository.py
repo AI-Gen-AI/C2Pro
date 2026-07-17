@@ -7,9 +7,9 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.analysis.adapters.persistence.models import Analysis
+from src.analysis.adapters.persistence.models import Alert, Analysis
 from src.analysis.ports.analysis_repository import IAnalysisRepository
-from src.analysis.ports.types import AlertRecord, AnalysisRecord
+from src.analysis.ports.types import AlertWrite, AnalysisRecord, AnalysisWrite
 from src.projects.adapters.persistence.models import ProjectORM
 
 
@@ -30,16 +30,16 @@ class SqlAlchemyAnalysisRepository(IAnalysisRepository):
         return project_tenant == self.tenant_id
 
     async def add_analysis(
-        self, analysis: AnalysisRecord, tenant_id: UUID | None = None
+        self, analysis: AnalysisWrite, tenant_id: UUID | None = None
     ) -> None:
         effective_tenant_id = tenant_id or self.tenant_id
         if effective_tenant_id is not None:  # noqa: SIM102
             if not await self._verify_project_ownership(analysis.project_id):
                 raise PermissionError("Cannot add analysis for project outside tenant")
-        self.session.add(analysis)
+        self.session.add(Analysis(**analysis.__dict__))
 
     async def add_alerts(
-        self, alerts: Iterable[AlertRecord], tenant_id: UUID | None = None
+        self, alerts: Iterable[AlertWrite], tenant_id: UUID | None = None
     ) -> None:
         effective_tenant_id = tenant_id or self.tenant_id
         alert_list = list(alerts)
@@ -47,7 +47,7 @@ class SqlAlchemyAnalysisRepository(IAnalysisRepository):
             if effective_tenant_id is not None:  # noqa: SIM102
                 if not await self._verify_project_ownership(alert.project_id):
                     raise PermissionError("Cannot add alert for project outside tenant")
-        self.session.add_all(alert_list)
+        self.session.add_all([Alert(**alert.__dict__) for alert in alert_list])
 
     async def list_recent(
         self, *, limit: int, offset: int, tenant_id: UUID | None = None
