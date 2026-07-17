@@ -4,7 +4,6 @@ WBS Use Cases - Move WBS Item.
 Refers to Suite ID: TS-CT-WBS-API-001
 """
 
-from typing import Any
 from uuid import UUID
 
 from src.wbs.application.dtos import MoveWBSItemRequest, WBSItemDTO

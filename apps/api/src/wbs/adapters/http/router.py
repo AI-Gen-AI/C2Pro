@@ -20,8 +20,6 @@ from pydantic import BaseModel, Field
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.wbs.adapters.persistence import InMemoryWBSRepository, get_wbs_repository
-from src.wbs.domain.entities.wbs_item import WBSItem
-from src.wbs.ports import IWBSRepository
 from src.wbs.application.dtos import (
     CreateWBSItemRequest,
     MoveWBSItemRequest,
@@ -35,6 +33,8 @@ from src.wbs.application.use_cases import (
     MoveWBSItemUseCase,
     UpdateWBSItemUseCase,
 )
+from src.wbs.domain.entities.wbs_item import WBSItem
+from src.wbs.ports import IWBSRepository
 
 router = APIRouter(prefix="/projects", tags=["wbs"])
 
