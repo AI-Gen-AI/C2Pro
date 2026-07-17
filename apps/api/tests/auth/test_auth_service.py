@@ -660,9 +660,9 @@ class TestAuthServiceRegistration:
             company_name="Login Co"
         )
 
-        before = datetime.now(UTC)
+        before = datetime.now(UTC).replace(tzinfo=None)
         await AuthService.register(db, request)
-        after = datetime.now(UTC)
+        after = datetime.now(UTC).replace(tzinfo=None)
 
         # Get user from database
         user = await get_user_by_email(db, request.email)
