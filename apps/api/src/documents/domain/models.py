@@ -71,7 +71,7 @@ class Clause:
     full_text: str | None
     text_start_offset: int | None = None
     text_end_offset: int | None = None
-    extracted_entities: dict = field(default_factory=dict)
+    extracted_entities: JsonDict = field(default_factory=dict)
     extraction_confidence: float | None = None
     extraction_model: str | None = None
     manually_verified: bool = False

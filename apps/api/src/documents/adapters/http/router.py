@@ -6,6 +6,7 @@ Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 from __future__ import annotations
 
 import pathlib
+from typing import cast
 from uuid import UUID
 
 import structlog
@@ -15,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.core.database import get_session
+from src.core.json_types import JsonDict, JsonValue
 from src.core.repositories import get_project_repository
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
 from src.documents.adapters.extraction.documents_entity_extraction_service import (
@@ -560,11 +562,25 @@ async def get_document_entities_endpoint(
 
     entities: list[DocumentEntityResponse] = []
     for clause in document.clauses:
-        evidence_location = (
+        evidence_location = cast(
+            JsonDict,
             clause.extracted_entities.get("evidence_location", {})
             if clause.extracted_entities
-            else {}
+            else {},
         )
+        page_number = int(cast(str | int | float, evidence_location.get("page_number") or 1))
+        metadata: JsonDict = {
+            "clause_code": clause.clause_code,
+            "clause_type": clause.clause_type.value if clause.clause_type else None,
+            "evidence_location": {
+                "page_number": page_number,
+                "bbox": cast(
+                    JsonValue,
+                    evidence_location.get("bbox") or [0.08, 0.12, 0.84, 0.06],
+                ),
+                "normalized": bool(evidence_location.get("normalized", True)),
+            },
+        }
         entities.append(
             DocumentEntityResponse(
                 id=clause.id,
@@ -572,17 +588,9 @@ async def get_document_entities_endpoint(
                 tenant_id=clause.tenant_id,
                 type="clause",
                 text=clause.title or clause.full_text or clause.clause_code,
-                page=int(evidence_location.get("page_number") or 1),
+                page=page_number,
                 confidence=float(clause.extraction_confidence or 1.0),
-                metadata={
-                    "clause_code": clause.clause_code,
-                    "clause_type": clause.clause_type.value if clause.clause_type else None,
-                    "evidence_location": {
-                        "page_number": int(evidence_location.get("page_number") or 1),
-                        "bbox": evidence_location.get("bbox") or [0.08, 0.12, 0.84, 0.06],
-                        "normalized": bool(evidence_location.get("normalized", True)),
-                    },
-                },
+                metadata=metadata,
             )
         )
 
