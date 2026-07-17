@@ -1,8 +1,12 @@
 """
 Use cases for BOM operations.
 """
+
+from __future__ import annotations
+
 from uuid import UUID
 
+from src.core.tenants.types import TenantId
 from src.procurement.application.dtos import BOMItemCreate, BOMItemUpdate
 from src.procurement.domain.models import BOMItem, ProcurementStatus
 from src.procurement.ports.bom_repository import IBOMRepository
@@ -27,7 +31,7 @@ class CreateBOMItemUseCase:
     def __init__(self, bom_repository: IBOMRepository):
         self.bom_repository = bom_repository
 
-    async def execute(self, bom_create: BOMItemCreate, tenant_id: UUID) -> BOMItem:
+    async def execute(self, bom_create: BOMItemCreate, tenant_id: TenantId) -> BOMItem:
         """
         Create a new BOM item.
 
@@ -57,7 +61,7 @@ class CreateBOMItemUseCase:
             contract_clause_id=bom_create.contract_clause_id,
             source_document_id=_source_document_id_from_payload(bom_create),
             procurement_status=bom_create.procurement_status,
-            bom_metadata=bom_create.bom_metadata
+            bom_metadata=bom_create.bom_metadata,
         )
 
         return await self.bom_repository.create(bom_item, tenant_id)
@@ -68,7 +72,7 @@ class CreateBOMItemUseCase:
         project_id: UUID,
         source_document_id: UUID,
         bom_items: list[BOMItemCreate],
-        tenant_id: UUID,
+        tenant_id: TenantId,
     ) -> list[BOMItem]:
         """Replace parsed BOM rows for one source document in a single repository operation."""
         domain_items = [
@@ -111,7 +115,7 @@ class ListBOMItemsUseCase:
     def __init__(self, bom_repository: IBOMRepository):
         self.bom_repository = bom_repository
 
-    async def execute(self, project_id: UUID, tenant_id: UUID) -> list[BOMItem]:
+    async def execute(self, project_id: UUID, tenant_id: TenantId) -> list[BOMItem]:
         """
         List all BOM items for a project.
 
@@ -131,7 +135,7 @@ class GetBOMItemUseCase:
     def __init__(self, bom_repository: IBOMRepository):
         self.bom_repository = bom_repository
 
-    async def execute(self, bom_id: UUID, tenant_id: UUID) -> BOMItem | None:
+    async def execute(self, bom_id: UUID, tenant_id: TenantId) -> BOMItem | None:
         """
         Get a BOM item by ID.
 
@@ -152,7 +156,7 @@ class UpdateBOMItemUseCase:
         self.bom_repository = bom_repository
 
     async def execute(
-        self, bom_id: UUID, bom_update: BOMItemUpdate, tenant_id: UUID
+        self, bom_id: UUID, bom_update: BOMItemUpdate, tenant_id: TenantId
     ) -> BOMItem | None:
         """
         Update a BOM item.
@@ -201,7 +205,7 @@ class DeleteBOMItemUseCase:
     def __init__(self, bom_repository: IBOMRepository):
         self.bom_repository = bom_repository
 
-    async def execute(self, bom_id: UUID, tenant_id: UUID) -> bool:
+    async def execute(self, bom_id: UUID, tenant_id: TenantId) -> bool:
         """
         Delete a BOM item.
 
@@ -222,7 +226,7 @@ class UpdateBOMStatusUseCase:
         self.bom_repository = bom_repository
 
     async def execute(
-        self, bom_id: UUID, status: ProcurementStatus, tenant_id: UUID
+        self, bom_id: UUID, status: ProcurementStatus, tenant_id: TenantId
     ) -> BOMItem | None:
         """
         Update the procurement status of a BOM item.

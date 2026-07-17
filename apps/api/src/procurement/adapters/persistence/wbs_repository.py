@@ -3,6 +3,9 @@ SQLAlchemy implementation of the WBS repository.
 
 Refers to Suite ID: TS-INT-DB-WBS-001.
 """
+
+from __future__ import annotations
+
 from uuid import UUID
 
 from sqlalchemy import and_, inspect, select
@@ -10,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.core.exceptions import ConflictError
+from src.core.tenants.types import TenantId
 from src.procurement.adapters.persistence.models import WBSItemORM
 from src.procurement.domain.models import WBSItem
 from src.procurement.ports.wbs_repository import IWBSRepository
@@ -44,15 +48,14 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             source_clause_id=orm.source_clause_id,
             version=orm.version,
             wbs_metadata=orm.wbs_metadata or {},
-            children=[]
+            children=[],
         )
 
         if include_children:
             state = inspect(orm)
             if "children" not in state.unloaded and orm.children:
                 wbs_item.children = [
-                    self._orm_to_domain(child, include_children=True)
-                    for child in orm.children
+                    self._orm_to_domain(child, include_children=True) for child in orm.children
                 ]
 
         return wbs_item
@@ -76,7 +79,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             actual_end=wbs_item.actual_end,
             source_clause_id=wbs_item.source_clause_id,
             version=wbs_item.version,
-            wbs_metadata=wbs_item.wbs_metadata or {}
+            wbs_metadata=wbs_item.wbs_metadata or {},
         )
 
     async def _ensure_project_in_tenant(self, project_id: UUID, tenant_id: UUID) -> None:
@@ -89,10 +92,9 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         if result.scalar_one_or_none() is None:
             raise PermissionError("Cannot create WBS items for project outside tenant")
 
-    async def create(self, wbs_item: WBSItem, tenant_id: UUID | None = None) -> WBSItem:
+    async def create(self, tenant_id: TenantId, wbs_item: WBSItem) -> WBSItem:
         """Create a new WBS item."""
-        if tenant_id is not None:
-            await self._ensure_project_in_tenant(wbs_item.project_id, tenant_id)
+        await self._ensure_project_in_tenant(wbs_item.project_id, tenant_id)
         orm = self._domain_to_orm(wbs_item)
         self.session.add(orm)
         await self.session.flush()
@@ -135,12 +137,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         result = await self.session.execute(
             select(WBSItemORM)
             .options(selectinload(WBSItemORM.parent))
-            .where(
-                and_(
-                    WBSItemORM.project_id == project_id,
-                    WBSItemORM.code == wbs_code
-                )
-            )
+            .where(and_(WBSItemORM.project_id == project_id, WBSItemORM.code == wbs_code))
             .join(ProjectORM, ProjectORM.id == WBSItemORM.project_id)
             .where(ProjectORM.tenant_id == tenant_id)
         )
@@ -207,20 +204,20 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             raise ConflictError("WBSItem", field="version", value=str(wbs_id))
 
         # Update fields
-        orm.name = wbs_item.name
-        orm.description = wbs_item.description
-        orm.item_type = wbs_item.item_type
-        orm.budget_allocated = wbs_item.budget_allocated
-        orm.budget_spent = wbs_item.budget_spent
-        orm.planned_start = wbs_item.planned_start
-        orm.planned_end = wbs_item.planned_end
-        orm.actual_start = wbs_item.actual_start
-        orm.actual_end = wbs_item.actual_end
-        orm.wbs_metadata = wbs_item.wbs_metadata or {}
+        orm.name = wbs_item.name  # type: ignore[assignment]
+        orm.description = wbs_item.description  # type: ignore[assignment]
+        orm.item_type = wbs_item.item_type  # type: ignore[assignment]
+        orm.budget_allocated = wbs_item.budget_allocated  # type: ignore[assignment]
+        orm.budget_spent = wbs_item.budget_spent  # type: ignore[assignment]
+        orm.planned_start = wbs_item.planned_start  # type: ignore[assignment]
+        orm.planned_end = wbs_item.planned_end  # type: ignore[assignment]
+        orm.actual_start = wbs_item.actual_start  # type: ignore[assignment]
+        orm.actual_end = wbs_item.actual_end  # type: ignore[assignment]
+        orm.wbs_metadata = wbs_item.wbs_metadata or {}  # type: ignore[assignment]
 
         # Handle parent_code update
         if wbs_item.parent_code:
-            orm.parent_code = wbs_item.parent_code
+            orm.parent_code = wbs_item.parent_code  # type: ignore[assignment]
 
         await self.session.flush()
         await self.session.refresh(orm)
@@ -269,7 +266,10 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         return created_items
 
     async def bulk_create_from_dicts(
-        self, project_id: UUID, items: list[dict], tenant_id: UUID,
+        self,
+        project_id: UUID,
+        items: list[dict[str, object]],
+        tenant_id: UUID,
     ) -> list[WBSItem]:
         """Build WBSItem domain objects from raw dicts and persist them.
 

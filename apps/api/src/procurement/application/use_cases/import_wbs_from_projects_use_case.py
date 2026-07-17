@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime, time
 from uuid import UUID
 
+from src.core.tenants.types import TenantId
 from src.procurement.domain.models import WBSItem
 from src.procurement.ports.wbs_repository import IWBSRepository
 from src.shared_kernel.dtos import (
@@ -25,7 +26,7 @@ class ImportWBSFromProjectsUseCase:
     async def execute(
         self,
         project_id: UUID,
-        tenant_id: UUID,
+        tenant_id: TenantId,
         items: list[WBSItemDTO],
     ) -> list[WBSItem]:
         mapped_items: list[WBSItem] = []
@@ -34,7 +35,7 @@ class ImportWBSFromProjectsUseCase:
             if item.project_id != project_id:
                 raise ValueError("project_id mismatch")
 
-            metadata: dict = {}
+            metadata: dict[str, object] = {}
             if item.specifications:
                 metadata.update(item.specifications)
             if item.parent_id:

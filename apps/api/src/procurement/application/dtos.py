@@ -1,6 +1,7 @@
 """
 Data Transfer Objects (DTOs) for the Procurement module.
 """
+
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
@@ -31,7 +32,7 @@ class WBSItemBase(BaseModel):
     planned_end: datetime | None = Field(None, description="Planned end date")
     actual_start: datetime | None = Field(None, description="Actual start date")
     actual_end: datetime | None = Field(None, description="Actual end date")
-    wbs_metadata: dict = Field(default_factory=dict, description="Custom metadata")
+    wbs_metadata: dict[str, object] = Field(default_factory=dict, description="Custom metadata")
 
 
 class BOMItemBase(BaseModel):
@@ -61,7 +62,7 @@ class BOMItemBase(BaseModel):
     procurement_status: ProcurementStatus = Field(
         ProcurementStatus.PENDING, description="Current procurement status"
     )
-    bom_metadata: dict = Field(default_factory=dict, description="Custom metadata")
+    bom_metadata: dict[str, object] = Field(default_factory=dict, description="Custom metadata")
 
 
 class WBSItemCreate(WBSItemBase):
@@ -85,7 +86,7 @@ class WBSItemUpdate(BaseModel):
     planned_end: datetime | None = None
     actual_start: datetime | None = None
     actual_end: datetime | None = None
-    wbs_metadata: dict | None = None
+    wbs_metadata: dict[str, object] | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -111,7 +112,7 @@ class BOMItemUpdate(BaseModel):
     lead_time_days: int | None = Field(None, ge=0)
     source_document_id: UUID | None = None
     procurement_status: ProcurementStatus | None = None
-    bom_metadata: dict | None = None
+    bom_metadata: dict[str, object] | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -168,5 +169,5 @@ class PlanningDecision(BaseModel):
     """Service output for procurement planning decisions."""
 
     plan_fingerprint: str
-    conflicts: list[dict] = Field(default_factory=list)
+    conflicts: list[dict[str, object]] = Field(default_factory=list)
     requires_human_review: bool = False

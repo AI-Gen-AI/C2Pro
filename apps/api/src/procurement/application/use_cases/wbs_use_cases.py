@@ -1,8 +1,12 @@
 """
 Use cases for WBS operations.
 """
+
+from __future__ import annotations
+
 from uuid import UUID
 
+from src.core.tenants.types import TenantId
 from src.procurement.application.dtos import WBSItemCreate, WBSItemUpdate
 from src.procurement.domain.models import WBSItem
 from src.procurement.ports.wbs_repository import IWBSRepository
@@ -14,7 +18,7 @@ class CreateWBSItemUseCase:
     def __init__(self, wbs_repository: IWBSRepository):
         self.wbs_repository = wbs_repository
 
-    async def execute(self, wbs_create: WBSItemCreate, tenant_id: UUID) -> WBSItem:
+    async def execute(self, wbs_create: WBSItemCreate, tenant_id: TenantId) -> WBSItem:
         """
         Create a new WBS item.
 
@@ -43,7 +47,10 @@ class CreateWBSItemUseCase:
             existing.actual_end = wbs_create.actual_end
             existing.source_clause_id = wbs_create.funded_by_clause_id
             existing.wbs_metadata = wbs_create.wbs_metadata
-            return await self.wbs_repository.update(existing.id, existing, tenant_id)
+            result = await self.wbs_repository.update(existing.id, existing, tenant_id)
+            if result is None:
+                raise ValueError(f"WBS item {existing.id} not found after update")
+            return result
 
         # Convert DTO to domain entity
         wbs_item = WBSItem(
@@ -61,7 +68,7 @@ class CreateWBSItemUseCase:
             actual_start=wbs_create.actual_start,
             actual_end=wbs_create.actual_end,
             source_clause_id=wbs_create.funded_by_clause_id,
-            wbs_metadata=wbs_create.wbs_metadata
+            wbs_metadata=wbs_create.wbs_metadata,
         )
 
         # If parent_id is provided, resolve parent_code
@@ -70,7 +77,7 @@ class CreateWBSItemUseCase:
             if parent:
                 wbs_item.parent_code = parent.code
 
-        return await self.wbs_repository.create(wbs_item, tenant_id)
+        return await self.wbs_repository.create(tenant_id, wbs_item)
 
 
 class ListWBSItemsUseCase:
@@ -79,7 +86,7 @@ class ListWBSItemsUseCase:
     def __init__(self, wbs_repository: IWBSRepository):
         self.wbs_repository = wbs_repository
 
-    async def execute(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
+    async def execute(self, project_id: UUID, tenant_id: TenantId) -> list[WBSItem]:
         """
         List all WBS items for a project.
 
@@ -99,7 +106,7 @@ class GetWBSItemUseCase:
     def __init__(self, wbs_repository: IWBSRepository):
         self.wbs_repository = wbs_repository
 
-    async def execute(self, wbs_id: UUID, tenant_id: UUID) -> WBSItem | None:
+    async def execute(self, wbs_id: UUID, tenant_id: TenantId) -> WBSItem | None:
         """
         Get a WBS item by ID.
 
@@ -120,7 +127,7 @@ class UpdateWBSItemUseCase:
         self.wbs_repository = wbs_repository
 
     async def execute(
-        self, wbs_id: UUID, wbs_update: WBSItemUpdate, tenant_id: UUID
+        self, wbs_id: UUID, wbs_update: WBSItemUpdate, tenant_id: TenantId
     ) -> WBSItem | None:
         """
         Update a WBS item.
@@ -176,7 +183,7 @@ class DeleteWBSItemUseCase:
     def __init__(self, wbs_repository: IWBSRepository):
         self.wbs_repository = wbs_repository
 
-    async def execute(self, wbs_id: UUID, tenant_id: UUID) -> bool:
+    async def execute(self, wbs_id: UUID, tenant_id: TenantId) -> bool:
         """
         Delete a WBS item and its children.
 
@@ -196,7 +203,7 @@ class GetWBSTreeUseCase:
     def __init__(self, wbs_repository: IWBSRepository):
         self.wbs_repository = wbs_repository
 
-    async def execute(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
+    async def execute(self, project_id: UUID, tenant_id: TenantId) -> list[WBSItem]:
         """
         Get the complete WBS tree for a project with hierarchy.
 
@@ -210,7 +217,9 @@ class GetWBSTreeUseCase:
         return await self.wbs_repository.get_tree(project_id, tenant_id)
 
 
-def _same_source_document(existing_metadata: dict | None, incoming_metadata: dict | None) -> bool:
+def _same_source_document(
+    existing_metadata: dict[str, object] | None, incoming_metadata: dict[str, object] | None
+) -> bool:
     """TS-UD-DOC-EXT-002: identify idempotent schedule-derived WBS rows by source document."""
     if not existing_metadata or not incoming_metadata:
         return False

@@ -94,7 +94,7 @@ class WBSItem:
     actual_end: datetime | None = None
     source_clause_id: UUID | None = None
     version: int = 1
-    wbs_metadata: dict = field(default_factory=dict)
+    wbs_metadata: dict[str, object] = field(default_factory=dict)
     children: list[WBSItem] = field(default_factory=list)
 
     def is_leaf(self) -> bool:
@@ -165,7 +165,7 @@ class BOMItem:
     budget_item_id: UUID | None = None
     source_document_id: UUID | None = None
     procurement_status: ProcurementStatus = ProcurementStatus.PENDING
-    bom_metadata: dict = field(default_factory=dict)
+    bom_metadata: dict[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Derive total_price and lead_time_days when omitted."""
@@ -259,7 +259,7 @@ class ProcurementPlanItem:
     required_on_site_date: datetime | date
     optimal_order_date: datetime | date
     priority: ProcurementPriority
-    alerts: list = field(default_factory=list)
+    alerts: list[object] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -279,4 +279,4 @@ class ProcurementConflict:
     reason_code: str
     impact: str
     message: str
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, object] = field(default_factory=dict)
