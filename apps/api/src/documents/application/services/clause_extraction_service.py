@@ -5,16 +5,26 @@ Refers to Suite ID: TS-UA-SVC-EXT-001.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Protocol, cast
 from uuid import UUID, uuid4
 
+from src.core.json_types import JsonDict, JsonValue
+from src.core.tenants.types import require_tenant_id
 from src.documents.domain.models import Clause, ClauseType
+
+
+class ClauseExtractionPort(Protocol):
+    """Typed LLM boundary used by the clause extraction service."""
+
+    async def extract_clauses(
+        self, *, text: str, document_id: UUID, project_id: UUID, tenant_id: UUID
+    ) -> list[JsonDict]: ...
 
 
 class ClauseExtractionService:
     """Refers to Suite ID: TS-UA-SVC-EXT-001."""
 
-    def __init__(self, llm_port: Any) -> None:
+    def __init__(self, llm_port: ClauseExtractionPort) -> None:
         self.llm_port = llm_port
 
     async def extract_from_text(
@@ -24,11 +34,12 @@ class ClauseExtractionService:
         project_id: UUID,
         tenant_id: UUID,
     ) -> list[Clause]:
+        scoped_tenant_id = require_tenant_id(tenant_id)
         raw_clauses = await self.llm_port.extract_clauses(
             text=text,
             document_id=document_id,
             project_id=project_id,
-            tenant_id=tenant_id,
+            tenant_id=scoped_tenant_id,
         )
 
         clauses: list[Clause] = []
@@ -38,18 +49,19 @@ class ClauseExtractionService:
                 Clause(
                     id=uuid4(),
                     project_id=project_id,
+                    tenant_id=scoped_tenant_id,
                     document_id=document_id,
                     clause_code=str(raw.get("clause_code")) if raw.get("clause_code") is not None else "",
                     clause_type=clause_type,
-                    title=raw.get("title"),
-                    full_text=raw.get("content"),
-                    extraction_confidence=raw.get("confidence_score"),
+                    title=cast(str | None, raw.get("title")),
+                    full_text=cast(str | None, raw.get("content")),
+                    extraction_confidence=cast(float | None, raw.get("confidence_score")),
                 )
             )
         return clauses
 
 
-def _parse_clause_type(value: Any) -> ClauseType:
+def _parse_clause_type(value: JsonValue) -> ClauseType:
     if isinstance(value, ClauseType):
         return value
     if isinstance(value, str):
