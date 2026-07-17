@@ -17,7 +17,7 @@ alembic>=1.18.5
 supabase==2.31.0
 
 # Cache
-redis==5.0.1
+redis==8.0.1
 upstash-redis==1.7.0
 
 # Storage
