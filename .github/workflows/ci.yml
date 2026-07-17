@@ -7,11 +7,11 @@
 #     so docs-only PRs finish in under a minute. The workflow itself has NO
 #     `paths:` trigger filter on purpose: the final `ci-status` join job must
 #     always report, because it is the single required branch-protection check.
-#   * Advisory (non-gating) jobs: backend-typecheck (mypy baseline not clean
-#     yet — TASK-DEV-006 / EPIC-MYPY-STRICT) and frontend-build (added
-#     2026-07-17, TASK-DEV-018 — no CI job previously ran `next build`, only
-#     Vercel at deploy time; advisory until it has run green for a while,
-#     then promote to REQUIRED_JOBS). backend-lint was promoted to required
+#   * Advisory (non-gating) job: frontend-build only (added 2026-07-17,
+#     TASK-DEV-018 — no CI job previously ran `next build`, only Vercel at deploy
+#     time; advisory until it has run green for a while, then promote to
+#     REQUIRED_JOBS). backend-typecheck (mypy ratchet) was promoted to required
+#     after EPIC-MYPY-STRICT (main at new=0). backend-lint was promoted to required
 #     2026-07-15 (ruff zero enforced, UP042 ignored pending TASK-DEV-030) and
 #     backend-integration 2026-07-16 (suite green after TASK-DEV-004).
 #     ci-status enumerates required jobs explicitly; advisory jobs are excluded.
@@ -129,15 +129,15 @@ jobs:
   # dependency graph (so types resolve — the old job installed only mypy, which
   # degraded missing imports to Any) and gates via a ratchet: the ~1,364 existing
   # errors live in apps/api/mypy-baseline.txt; the job fails only on NEW ones.
-  # Stays advisory (continue-on-error) for now — flip to required once CI/baseline
-  # parity is confirmed and the burn-down is underway (TASK-DEV-006 / QA-322).
+  # REQUIRED gate: with main at new=0, any PR that regresses typing fails the ratchet
+  # and cannot merge. Promoted from advisory after the EPIC-MYPY-STRICT campaign drained
+  # the queue (TASK-DEV-006 / QA-322). CI (Linux) is the sole arbiter of new=0.
   backend-typecheck:
-    name: Backend Typecheck (mypy ratchet, advisory)
+    name: Backend Typecheck (mypy ratchet)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: detect-changes
     if: needs.detect-changes.outputs.backend == 'true'
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -688,6 +688,7 @@ jobs:
           REQUIRED_JOBS=(
             "detect-changes:$RESULT_DETECT"
             "backend-lint:$RESULT_BACKEND_LINT"
+            "backend-typecheck:$RESULT_BACKEND_TYPECHECK"
             "backend-unit:$RESULT_BACKEND_UNIT"
             "backend-security:$RESULT_BACKEND_SECURITY"
             "backend-integration:$RESULT_BACKEND_INTEGRATION"
@@ -697,7 +698,6 @@ jobs:
             "frontend-e2e-smoke:$RESULT_FRONTEND_E2E"
           )
           ADVISORY_JOBS=(
-            "backend-typecheck:$RESULT_BACKEND_TYPECHECK"
             "frontend-build:$RESULT_FRONTEND_BUILD"
           )
 

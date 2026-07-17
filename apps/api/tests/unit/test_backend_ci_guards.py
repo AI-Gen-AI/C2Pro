@@ -441,7 +441,9 @@ def test_backend_integration_job_is_required_gate_in_ci_workflow() -> None:
             advisory_jobs.append(line_stripped.strip('"'))
 
     assert "backend-integration" not in [job.split(":")[0] for job in advisory_jobs]
-    assert "backend-typecheck" in [job.split(":")[0] for job in advisory_jobs]
+    # backend-typecheck (mypy ratchet) promoted to a required gate after EPIC-MYPY-STRICT.
+    assert "backend-typecheck" not in [job.split(":")[0] for job in advisory_jobs]
+    assert '"backend-typecheck:$RESULT_BACKEND_TYPECHECK"' in contents
 
     # Prove the job name and workflow comments no longer call it advisory
     assert "Backend Integration Tests (advisory)" not in contents
