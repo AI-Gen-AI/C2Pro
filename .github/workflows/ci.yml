@@ -7,8 +7,11 @@
 #     so docs-only PRs finish in under a minute. The workflow itself has NO
 #     `paths:` trigger filter on purpose: the final `ci-status` join job must
 #     always report, because it is the single required branch-protection check.
-#   * Advisory (non-gating) jobs: backend-typecheck only (mypy baseline not clean
-#     yet — TASK-DEV-006 / EPIC-MYPY-STRICT). backend-lint was promoted to required
+#   * Advisory (non-gating) jobs: backend-typecheck (mypy baseline not clean
+#     yet — TASK-DEV-006 / EPIC-MYPY-STRICT) and frontend-build (added
+#     2026-07-17, TASK-DEV-018 — no CI job previously ran `next build`, only
+#     Vercel at deploy time; advisory until it has run green for a while,
+#     then promote to REQUIRED_JOBS). backend-lint was promoted to required
 #     2026-07-15 (ruff zero enforced, UP042 ignored pending TASK-DEV-030) and
 #     backend-integration 2026-07-16 (suite green after TASK-DEV-004).
 #     ci-status enumerates required jobs explicitly; advisory jobs are excluded.
@@ -538,6 +541,30 @@ jobs:
           path: apps/web/playwright-report/
           retention-days: 7
 
+  # TASK-DEV-018: previously only Vercel ran `next build` at deploy time — a
+  # production build break was never caught in CI, only at deploy. Advisory
+  # for now; promote to REQUIRED_JOBS once it has run green for a while.
+  frontend-build:
+    name: Frontend Production Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsubW9jay5sb2NhbCQ' }}
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup web environment
+        uses: ./.github/actions/setup-node-web
+
+      - name: Production build
+        working-directory: apps/web
+        run: pnpm build
+
   # ──────────────────────────── Join gate ───────────────────────────────
   # The ONLY check that branch protection should require. Skipped lanes are
   # fine (path filtering); failed or cancelled required lanes are not.
@@ -557,6 +584,7 @@ jobs:
       - frontend-quality
       - frontend-test
       - frontend-e2e-smoke
+      - frontend-build
     if: always()
     permissions:
       contents: read
@@ -651,6 +679,7 @@ jobs:
           RESULT_FRONTEND_E2E: ${{ needs.frontend-e2e-smoke.result }}
           RESULT_BACKEND_TYPECHECK: ${{ needs.backend-typecheck.result }}
           RESULT_BACKEND_INTEGRATION: ${{ needs.backend-integration.result }}
+          RESULT_FRONTEND_BUILD: ${{ needs.frontend-build.result }}
         run: |
           set -euo pipefail
 
@@ -669,6 +698,7 @@ jobs:
           )
           ADVISORY_JOBS=(
             "backend-typecheck:$RESULT_BACKEND_TYPECHECK"
+            "frontend-build:$RESULT_FRONTEND_BUILD"
           )
 
           {

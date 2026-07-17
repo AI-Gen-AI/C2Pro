@@ -31,7 +31,10 @@ def test_database_backed_ci_workflows_export_test_database_url() -> None:
     for workflow in workflow_paths:
         contents = workflow.read_text(encoding="utf-8")
         assert "DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test" in contents
-        assert "TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test" in contents
+        assert (
+            "TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test"
+            in contents
+        )
 
 
 def test_test_compose_uses_pgvector_image() -> None:
@@ -115,14 +118,19 @@ def test_real_document_operability_workflow_runs_required_quality_gates() -> Non
     contents = workflow.read_text(encoding="utf-8")
 
     assert "TASK-OPS-DOCFLOW-012" in contents
-    assert "C2PRO_AI_MOCK: \"1\"" in contents
+    assert 'C2PRO_AI_MOCK: "1"' in contents
     assert "python -m pytest tests/integration/document_flow/ -q" in contents
     assert (
         "python -m pytest tests/unit/core/ai/ "
         "--cov=src/core/ai --cov-report=term-missing --cov-fail-under=70 -q"
     ) in contents
-    assert "tests/unit/core/observability tests/unit/core/resilience tests/unit/core/security" in contents
-    assert "--cov=src/core/observability --cov=src/core/resilience --cov=src/core/security" in contents
+    assert (
+        "tests/unit/core/observability tests/unit/core/resilience tests/unit/core/security"
+        in contents
+    )
+    assert (
+        "--cov=src/core/observability --cov=src/core/resilience --cov=src/core/security" in contents
+    )
     assert "python -m pytest tests/ -x -q" in contents
     assert "python -m evals.run_evals" in contents
     assert "python -m pytest tests/evals/test_golden_corpus.py -q" in contents
@@ -206,7 +214,9 @@ def test_backend_requirements_include_langchain_anthropic_compatible_sdk() -> No
     assert "websockets==12.0" not in contents
 
 
-def test_production_contract_drift_repair_migration_restores_alerts_and_stakeholders_columns() -> None:
+def test_production_contract_drift_repair_migration_restores_alerts_and_stakeholders_columns() -> (
+    None
+):
     """Test Suite ID: TS-CI-BACKEND-GUARDS-001, TASK-BCK-051."""
 
     repo_root = Path(__file__).resolve().parents[4]
@@ -228,9 +238,15 @@ def test_production_contract_drift_repair_migration_restores_alerts_and_stakehol
     assert "ALTER TABLE stakeholders ADD COLUMN IF NOT EXISTS stakeholder_metadata" in contents
     assert "column_name = 'message'" in contents
     assert "UPDATE alerts SET description = COALESCE(description, message, '')" in contents
-    assert "ELSE\n                UPDATE alerts SET description = COALESCE(description, '')" in contents
+    assert (
+        "ELSE\n                UPDATE alerts SET description = COALESCE(description, '')"
+        in contents
+    )
     assert "column_name = 'metadata'" in contents
-    assert "SET stakeholder_metadata = COALESCE(stakeholder_metadata, metadata, '{}'::jsonb)" in contents
+    assert (
+        "SET stakeholder_metadata = COALESCE(stakeholder_metadata, metadata, '{}'::jsonb)"
+        in contents
+    )
     assert "SET stakeholder_metadata = COALESCE(stakeholder_metadata, '{}'::jsonb)" in contents
 
 
@@ -260,8 +276,7 @@ def test_hotfix_migration_chain_has_no_duplicate_revisions() -> None:
     repo_root = Path(__file__).resolve().parents[4]
     versions_dir = repo_root / "apps" / "api" / "alembic" / "versions"
     revision_markers = [
-        path.read_text(encoding="utf-8")
-        for path in versions_dir.glob("20260516_000*.py")
+        path.read_text(encoding="utf-8") for path in versions_dir.glob("20260516_000*.py")
     ]
 
     assert sum('revision: str = "20260516_0002"' in contents for contents in revision_markers) == 1
@@ -422,4 +437,59 @@ def test_backend_integration_job_is_required_gate_in_ci_workflow() -> None:
     # Prove the job name and workflow comments no longer call it advisory
     assert "Backend Integration Tests (advisory)" not in contents
     assert "Advisory notice" not in contents
+
+
+def test_frontend_build_job_present_and_advisory_in_ci_workflow() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001 (TASK-DEV-018)."""
+    repo_root = Path(__file__).resolve().parents[4]
+    workflow = repo_root / ".github" / "workflows" / "ci.yml"
+    contents = workflow.read_text(encoding="utf-8")
+
+    import yaml
+
+    parsed = yaml.safe_load(contents)
+    jobs = parsed["jobs"]
+
+    # The job exists, runs a production build, and is gated on the same
+    # frontend path filter as the other frontend-lane jobs.
+    assert "frontend-build" in jobs
+    frontend_build = jobs["frontend-build"]
+    assert frontend_build["needs"] == "detect-changes"
+    assert frontend_build["if"] == "needs.detect-changes.outputs.frontend == 'true'"
+    step_commands = [step.get("run", "") for step in frontend_build["steps"]]
+    assert any("pnpm build" in cmd for cmd in step_commands)
+
+    # ci-status must wait on it so a build break is visible in the summary...
+    assert "frontend-build" in jobs["ci-status"]["needs"]
+
+    # ...but it must be ADVISORY, not REQUIRED, until proven stable in CI
+    # (TASK-DEV-018 explicitly proposes rather than forces promotion).
+    assert '"frontend-build:$RESULT_FRONTEND_BUILD"' in contents
+
+    advisory_block_started = False
+    advisory_jobs: list[str] = []
+    required_block_started = False
+    required_jobs: list[str] = []
+    for line in contents.splitlines():
+        line_stripped = line.strip()
+        if "REQUIRED_JOBS=(" in line_stripped:
+            required_block_started = True
+            continue
+        if required_block_started:
+            if ")" in line_stripped:
+                required_block_started = False
+            else:
+                required_jobs.append(line_stripped.strip('"'))
+            continue
+        if "ADVISORY_JOBS=(" in line_stripped:
+            advisory_block_started = True
+            continue
+        if advisory_block_started:
+            if ")" in line_stripped:
+                advisory_block_started = False
+                continue
+            advisory_jobs.append(line_stripped.strip('"'))
+
+    assert "frontend-build" in [job.split(":")[0] for job in advisory_jobs]
+    assert "frontend-build" not in [job.split(":")[0] for job in required_jobs]
     assert "Advisory: the integration suite has pre-existing failures on main" not in contents
