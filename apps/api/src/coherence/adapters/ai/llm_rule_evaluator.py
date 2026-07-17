@@ -63,7 +63,7 @@ class LLMRuleEvaluatorAdapter:
 
     def _map_category(self, category: str) -> CoherenceCategory:
         """Map legacy category string to CoherenceCategory."""
-        mapping = {
+        mapping: dict[str, CoherenceCategory] = {
             "general": "SCOPE",
             "scope": "SCOPE",
             "financial": "BUDGET",

@@ -79,7 +79,7 @@ async def calculate_centroid_vector(texts: list[str]) -> list[float]:
     if not texts:
         raise ValueError("Cannot calculate centroid of empty text list.")
 
-    embeddings = await _embed_texts(texts)
+    embeddings: list[list[float]] = await _embed_texts(texts)
     if not embeddings:
         raise ValueError("Embedding service returned empty results.")
 

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 # --- Enums and Data Models ---
 
+
 class CoherenceStatus(Enum):
     PASS = "PASS"
     FAIL = "FAIL"
@@ -331,7 +332,7 @@ class RuleR14_OrderDatePassed(CoherenceRule):
 # --- Rule Engine ---
 
 class CoherenceRuleEngine:
-    def __init__(self):
+    def __init__(self) -> None:
         self.rules: list[CoherenceRule] = [
             RuleR11_WBSEmptyLevel4(), RuleR12_WBSNoBudget(), RuleR13_ScopeClauseNoWBS(),
             RuleR6_BudgetActualDeviation(), RuleR15_BOMBudget(), RuleR16_BudgetVarianceTrend(),

@@ -14,6 +14,7 @@ from abc import ABC, abstractmethod
 from uuid import UUID
 
 from src.coherence.application.dtos import CoherenceCalculationResult
+from src.core.tenants.types import TenantId
 
 
 class ICoherenceRepository(ABC):
@@ -91,7 +92,7 @@ class ICoherenceRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_project_tenant_id(self, project_id: UUID) -> UUID | None:
+    async def get_project_tenant_id(self, project_id: UUID) -> TenantId | None:
         """
         Get the tenant ID for a project.
 

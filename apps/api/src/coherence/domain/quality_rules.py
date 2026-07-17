@@ -113,7 +113,9 @@ class QualityRulesEngine:
     """Minimal deterministic quality rules engine for TS-UD-COH-RUL-006."""
 
     def __init__(self) -> None:
-        self._rules = (RuleR17SpecificationWithoutStandard(), RuleR18MaterialWithoutCertification())
+        self._rules: tuple[
+            RuleR17SpecificationWithoutStandard | RuleR18MaterialWithoutCertification, ...
+        ] = (RuleR17SpecificationWithoutStandard(), RuleR18MaterialWithoutCertification())
 
     def evaluate(self, data: QualityProjectData) -> list[CoherenceResult]:
         results: list[CoherenceResult] = []

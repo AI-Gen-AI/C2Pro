@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 # Type alias for coherence categories
 CoherenceCategory = Literal["BUDGET", "TIME", "LEGAL", "SCOPE", "TECHNICAL", "QUALITY", "CROSS"]
@@ -139,7 +139,7 @@ class ScoringConfig:
 DEFAULT_SCORING_CONFIG = ScoringConfig()
 
 
-def get_scoring_config(**overrides) -> ScoringConfig:
+def get_scoring_config(**overrides: Any) -> ScoringConfig:
     """
     Get a ScoringConfig with optional overrides.
 

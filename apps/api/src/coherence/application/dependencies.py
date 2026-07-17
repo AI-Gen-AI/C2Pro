@@ -6,6 +6,8 @@ Refers to Suite ID: TS-UA-COH-DI-001.
 
 from __future__ import annotations
 
+from typing import Any
+
 from src.coherence.application.services import CoherenceCalculationService
 from src.coherence.application.use_cases import (
     CalculateCoherenceUseCase,
@@ -20,7 +22,7 @@ def build_recalculate_on_alert_use_case() -> RecalculateOnAlertUseCase:
 
 
 def build_coherence_calculation_service(
-    event_publisher=None,
+    event_publisher: Any | None = None,
 ) -> CoherenceCalculationService:
     """Build the coherence application service with explicit collaborators."""
     calculate_use_case = CalculateCoherenceUseCase()

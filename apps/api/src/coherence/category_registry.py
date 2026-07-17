@@ -31,7 +31,7 @@ class VersionInfo(BaseModel):
     """Registry and score engine version details."""
 
     registry_version: str = Field(..., min_length=1)
-    score_version: int = Field(..., gt=0)
+    score_version: int = Field(gt=0)
     embedding_model: str = Field(..., min_length=1)
     cutoff_date: datetime.date
     languages: list[str] = Field(..., min_items=1)

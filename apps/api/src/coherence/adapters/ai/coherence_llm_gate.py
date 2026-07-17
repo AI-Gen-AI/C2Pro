@@ -10,8 +10,9 @@ Test Suite ID: TS-UD-COH-LLMGATE-001
 
 from __future__ import annotations
 
+import datetime
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -28,7 +29,6 @@ ESTIMATED_HAIKU_COST_USD = 0.0008  # conservative per-call estimate for budget p
 
 def _next_month_first():
     """First of next calendar month — matches cost_controller's monthly reset boundary."""
-    import datetime
     today = datetime.date.today()
     if today.month == 12:
         return datetime.date(today.year + 1, 1, 1)
@@ -75,7 +75,7 @@ class CoherenceLlmGate:
     def _get_cost(self) -> Any:
         if self._cost is None:
             from src.core.ai.cost_controller import CostControllerService
-            self._cost = CostControllerService(db=self.db)
+            self._cost = CostControllerService(db=cast(Any, self.db))
         return self._cost
 
     def _get_router(self) -> Any:
@@ -268,7 +268,7 @@ class CoherenceLlmGate:
         evaluator = get_v1_evaluator(rule_id, low_budget_mode=False)
         cost_before = float(getattr(evaluator, "total_cost_usd", 0.0))
         t0 = time.perf_counter()
-        signal = await evaluator.evaluate_v3_async(clause)
+        signal = await cast(Any, evaluator).evaluate_v3_async(clause)
         latency_ms = (time.perf_counter() - t0) * 1000.0
         cost_after = float(getattr(evaluator, "total_cost_usd", cost_before))
         actual_cost = max(0.0, cost_after - cost_before)

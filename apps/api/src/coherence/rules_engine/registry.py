@@ -233,7 +233,7 @@ def get_v1_evaluator(
         tenant_id=tenant_id,
         llm_port=llm_port,
     )
-    evaluator.source = "llm"
+    cast(Any, evaluator).source = "llm"
     return evaluator
 
 

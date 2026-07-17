@@ -19,6 +19,7 @@ import logging
 import warnings
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -47,7 +48,7 @@ class RuleExecutionTrace:
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
-def _hash_inputs(payload: dict) -> str:
+def _hash_inputs(payload: dict[str, Any]) -> str:
     blob = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
     return hashlib.sha256(blob).hexdigest()[:16]
 
@@ -56,7 +57,7 @@ class CoherenceContext(BaseModel):
     """Input context for deterministic category evaluation."""
 
     contract_price: float = 0.0
-    bom_items: list[dict[str, object]] = Field(default_factory=list)
+    bom_items: list[dict[str, Any]] = Field(default_factory=list)
     scope_defined: bool = True
     schedule_within_contract: bool | None = True
     technical_consistent: bool | None = True
@@ -82,7 +83,7 @@ class CoherenceRulesEngine:
     def last_traces(self) -> tuple[RuleExecutionTrace, ...]:
         return tuple(self._traces)
 
-    def _record(self, rule_id: str, inputs: dict, output: int | None,
+    def _record(self, rule_id: str, inputs: dict[str, Any], output: int | None,
                 applied_default: bool) -> None:
         self._traces.append(
             RuleExecutionTrace(
