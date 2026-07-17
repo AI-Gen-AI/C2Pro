@@ -8,6 +8,7 @@ TASK-BCK-029: WBS API Endpoint with nested set model
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from src.wbs.adapters.persistence.wbs_node_repository import WBSNodeRepository
@@ -30,7 +31,7 @@ class CreateWBSNodeRequest:
     planned_start: datetime | None = None
     planned_end: datetime | None = None
     budget_allocated: float | None = None
-    metadata: dict | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class CreateWBSNodeUseCase:

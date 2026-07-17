@@ -8,7 +8,7 @@ Refers to Suite ID: TS-INT-DB-WBS-001
 """
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
-from src.core.database import get_db
+from src.core.database import get_session
 from src.wbs.adapters.persistence.wbs_node_repository import WBSNodeRepository
 from src.wbs.application.use_cases.create_wbs_node import (
     CreateWBSNodeRequest,
@@ -51,7 +51,7 @@ router = APIRouter(prefix="/wbs-tree", tags=["wbs-tree"])
 
 
 def get_wbs_node_repository(
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> WBSNodeRepository:
     """Get WBS node repository."""
     return WBSNodeRepository(session)
@@ -75,7 +75,7 @@ class CreateWBSNodeInput(BaseModel):
     planned_start: datetime | None = None
     planned_end: datetime | None = None
     budget_allocated: float | None = Field(None, ge=0)
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class UpdateWBSNodeInput(BaseModel):
@@ -91,7 +91,7 @@ class UpdateWBSNodeInput(BaseModel):
     actual_end: datetime | None = None
     budget_allocated: float | None = Field(None, ge=0)
     budget_spent: float | None = Field(None, ge=0)
-    metadata: dict | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class MoveWBSNodeInput(BaseModel):
@@ -121,7 +121,7 @@ class WBSNodeOutput(BaseModel):
     actual_end: datetime | None
     budget_allocated: float | None
     budget_spent: float
-    metadata: dict
+    metadata: dict[str, Any]
     created_at: datetime
     updated_at: datetime
     is_leaf: bool
@@ -259,7 +259,9 @@ async def get_wbs_node(
     return _map_node_to_output(node)
 
 
-@router.get("/projects/{project_id}/nodes/{node_id}/descendants", response_model=list[WBSNodeOutput])
+@router.get(
+    "/projects/{project_id}/nodes/{node_id}/descendants", response_model=list[WBSNodeOutput]
+)
 async def get_wbs_descendants(
     _project_id: Annotated[str, Path(alias="project_id")],
     node_id: str,
@@ -478,7 +480,9 @@ async def reorder_wbs_node(
     Updates the nested set tree structure.
     """
     node_uuid = _parse_uuid(node_id, "node_id")
-    new_parent_uuid = _parse_uuid(input_data.new_parent_id, "new_parent_id") if input_data.new_parent_id else None
+    new_parent_uuid = (
+        _parse_uuid(input_data.new_parent_id, "new_parent_id") if input_data.new_parent_id else None
+    )
 
     # Verify node exists and belongs to project
     existing = await repository.get_by_id(node_uuid, UUID(str(current_user.tenant_id)))

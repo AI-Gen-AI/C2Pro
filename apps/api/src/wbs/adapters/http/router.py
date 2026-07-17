@@ -11,7 +11,7 @@ Changes:
 """
 
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -20,6 +20,8 @@ from pydantic import BaseModel, Field
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.wbs.adapters.persistence import InMemoryWBSRepository, get_wbs_repository
+from src.wbs.domain.entities.wbs_item import WBSItem
+from src.wbs.ports import IWBSRepository
 from src.wbs.application.dtos import (
     CreateWBSItemRequest,
     MoveWBSItemRequest,
@@ -38,31 +40,31 @@ router = APIRouter(prefix="/projects", tags=["wbs"])
 
 
 def get_wbs_use_case(
-    repository=Depends(get_wbs_repository),
+    repository: IWBSRepository = Depends(get_wbs_repository),
 ) -> GetWBSUseCase:
     return GetWBSUseCase(repository)
 
 
 def get_create_wbs_item_use_case(
-    repository=Depends(get_wbs_repository),
+    repository: IWBSRepository = Depends(get_wbs_repository),
 ) -> CreateWBSItemUseCase:
     return CreateWBSItemUseCase(repository)
 
 
 def get_update_wbs_item_use_case(
-    repository=Depends(get_wbs_repository),
+    repository: IWBSRepository = Depends(get_wbs_repository),
 ) -> UpdateWBSItemUseCase:
     return UpdateWBSItemUseCase(repository)
 
 
 def get_move_wbs_item_use_case(
-    repository=Depends(get_wbs_repository),
+    repository: IWBSRepository = Depends(get_wbs_repository),
 ) -> MoveWBSItemUseCase:
     return MoveWBSItemUseCase(repository)
 
 
 def get_delete_wbs_item_use_case(
-    repository=Depends(get_wbs_repository),
+    repository: IWBSRepository = Depends(get_wbs_repository),
 ) -> DeleteWBSItemUseCase:
     return DeleteWBSItemUseCase(repository)
 
@@ -71,14 +73,17 @@ def get_delete_wbs_item_use_case(
 # REQUEST/RESPONSE MODELS
 # ===========================================
 
+
 class BudgetInput(BaseModel):
     """Budget input model."""
+
     amount: float = Field(..., ge=0)
     currency: str = "EUR"
 
 
 class CreateWBSItemInput(BaseModel):
     """Input model for creating a WBS item."""
+
     name: str = Field(..., min_length=1)
     description: str | None = None
     parent_id: str | None = None
@@ -91,6 +96,7 @@ class CreateWBSItemInput(BaseModel):
 
 class UpdateWBSItemInput(BaseModel):
     """Input model for updating a WBS item."""
+
     name: str | None = Field(None, min_length=1)
     description: str | None = None
     start_date: date | None = None
@@ -101,11 +107,13 @@ class UpdateWBSItemInput(BaseModel):
 
 class MoveWBSItemInput(BaseModel):
     """Input model for moving a WBS item."""
+
     new_parent_id: str | None = None
 
 
 class WBSItemChildOutput(BaseModel):
     """Output model for child items."""
+
     id: str
     code: str
     name: str
@@ -114,6 +122,7 @@ class WBSItemChildOutput(BaseModel):
 
 class WBSItemOutput(BaseModel):
     """Output model for WBS items."""
+
     id: str
     code: str
     name: str
@@ -122,13 +131,14 @@ class WBSItemOutput(BaseModel):
     parent_id: str | None = None
     start_date: date | None = None
     end_date: date | None = None
-    budget: dict | None = None
+    budget: dict[str, Any] | None = None
     completion: int = 0
     children: list[WBSItemChildOutput] = []
 
 
 class WBSCoverageOutput(BaseModel):
     """Output model for WBS coverage."""
+
     total_items: int
     items_with_budget: int
     items_with_dates: int
@@ -138,19 +148,18 @@ class WBSCoverageOutput(BaseModel):
 
 class WBSOutput(BaseModel):
     """Output model for WBS endpoint."""
+
     items: list[WBSItemOutput]
     coverage: WBSCoverageOutput
-    alerts: list[dict]
-
-
-
+    alerts: list[dict[str, Any]]
 
 
 # ===========================================
 # MAPPERS
 # ===========================================
 
-def _map_budget_to_dict(budget) -> dict | None:
+
+def _map_budget_to_dict(budget: Any) -> dict[str, Any] | None:
     """Convert Money value object to dict."""
     if budget is None:
         return None
@@ -173,13 +182,11 @@ def _map_wbs_item_dto_to_output(dto: WBSItemDTO) -> WBSItemOutput:
         end_date=dto.end_date,
         budget=dto.budget,
         completion=dto.completion,
-        children=[
-            WBSItemChildOutput(**child) for child in (dto.children or [])
-        ],
+        children=[WBSItemChildOutput(**child) for child in (dto.children or [])],
     )
 
 
-def _map_domain_item_to_output(item) -> WBSItemOutput:
+def _map_domain_item_to_output(item: WBSItem) -> WBSItemOutput:
     """Map domain WBSItem to WBSItemOutput response model."""
     return WBSItemOutput(
         id=str(item.id),
@@ -199,6 +206,7 @@ def _map_domain_item_to_output(item) -> WBSItemOutput:
 # ===========================================
 # ERROR HANDLING
 # ===========================================
+
 
 def _handle_use_case_error(error: ValueError) -> HTTPException:
     """
@@ -248,6 +256,7 @@ def _parse_uuid(uuid_str: str, field_name: str = "ID") -> UUID:
 # REQUEST BUILDERS
 # ===========================================
 
+
 def _build_create_request(input_data: CreateWBSItemInput) -> CreateWBSItemRequest:
     """Build CreateWBSItemRequest from input data."""
     parent_uuid = None
@@ -283,10 +292,7 @@ def _build_update_request(input_data: UpdateWBSItemInput) -> UpdateWBSItemReques
     )
 
 
-def _build_move_request(
-    item_id: str,
-    input_data: MoveWBSItemInput
-) -> MoveWBSItemRequest:
+def _build_move_request(item_id: str, input_data: MoveWBSItemInput) -> MoveWBSItemRequest:
     """Build MoveWBSItemRequest from input data."""
     # Check for circular reference (moving to self)
     if input_data.new_parent_id == item_id:
@@ -305,6 +311,7 @@ def _build_move_request(
 # ===========================================
 # ENDPOINTS
 # ===========================================
+
 
 @router.get("/{project_id}/wbs", response_model=WBSOutput)
 async def get_wbs(

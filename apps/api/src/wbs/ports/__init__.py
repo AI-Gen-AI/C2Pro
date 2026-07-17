@@ -1,6 +1,6 @@
 """WBS ports (interfaces)."""
 
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from src.wbs.domain.entities.wbs_item import WBSItem
@@ -54,15 +54,12 @@ class IWBSQueryPort(Protocol):
     """
 
     async def get_wbs_items_for_project(
-        self,
-        project_id: str,
-        tenant_id: str,
-        level: int | None = None
-    ) -> list[dict]:
+        self, project_id: str, tenant_id: str, level: int | None = None
+    ) -> list[dict[str, Any]]:
         """Get WBS items for a project (as dicts for DTO serialization)."""
         ...
 
-    async def get_wbs_item_by_id(self, item_id: UUID, tenant_id: str) -> dict | None:
+    async def get_wbs_item_by_id(self, item_id: UUID, tenant_id: str) -> dict[str, Any] | None:
         """Get a WBS item by ID."""
         ...
 

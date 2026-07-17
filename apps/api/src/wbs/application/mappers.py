@@ -4,11 +4,13 @@ WBS Application Mappers.
 Refers to Suite ID: TS-CT-WBS-API-001 (REFACTOR phase)
 """
 
+from typing import Any
+
 from src.wbs.application.dtos import WBSItemDTO
 from src.wbs.domain.entities.wbs_item import WBSItem
 
 
-def map_wbs_item_to_dto(item: WBSItem, children: list[dict] | None = None) -> WBSItemDTO:
+def map_wbs_item_to_dto(item: WBSItem, children: list[dict[str, Any]] | None = None) -> WBSItemDTO:
     """
     Map a domain WBSItem to a WBSItemDTO.
 
@@ -31,7 +33,9 @@ def map_wbs_item_to_dto(item: WBSItem, children: list[dict] | None = None) -> WB
         budget={
             "amount": item.budget.amount,
             "currency": item.budget.currency,
-        } if item.budget else None,
+        }
+        if item.budget
+        else None,
         completion=item.completion,
         children=children if children is not None else [],
     )

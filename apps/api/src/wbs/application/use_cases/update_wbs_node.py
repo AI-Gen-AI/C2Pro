@@ -8,6 +8,7 @@ TASK-BCK-029: WBS API Endpoint with nested set model
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from src.wbs.adapters.persistence.wbs_node_repository import WBSNodeRepository
@@ -31,7 +32,7 @@ class UpdateWBSNodeRequest:
     actual_end: datetime | None = None
     budget_allocated: float | None = None
     budget_spent: float | None = None
-    metadata: dict | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class UpdateWBSNodeUseCase:
@@ -52,7 +53,7 @@ class UpdateWBSNodeUseCase:
         Returns None if node not found.
         """
         # Build kwargs with only provided fields
-        kwargs = {}
+        kwargs: dict[str, Any] = {}
         if request.name is not None:
             kwargs["name"] = request.name
         if request.description is not None:
