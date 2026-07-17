@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from src.core.approval import ApprovalStatus
+from src.core.tenants.types import require_tenant_id
 from src.documents.ports.document_repository import IDocumentRepository
 from src.stakeholders.application.dtos import StakeholderCreateRequest
 from src.stakeholders.application.helpers import derive_levels_and_quadrant
@@ -30,11 +31,12 @@ class CreateStakeholderUseCase:
         payload: StakeholderCreateRequest,
         tenant_id: UUID,
     ) -> Stakeholder:
-        if tenant_id is None:
-             raise ValueError("tenant_id is required")
+        scoped_tenant_id = require_tenant_id(tenant_id)
 
         if payload.source_clause_id:
-            exists = await self.document_repository.clause_exists(tenant_id, payload.source_clause_id)
+            exists = await self.document_repository.clause_exists(
+                scoped_tenant_id, payload.source_clause_id
+            )
             if not exists:
                 raise ValueError("source_clause_id_not_found")
 
@@ -56,7 +58,7 @@ class CreateStakeholderUseCase:
         stakeholder = Stakeholder(
             id=uuid4(),
             project_id=project_id,
-            tenant_id=tenant_id,
+            tenant_id=scoped_tenant_id,
             name=payload.name,
             role=payload.role,
             organization=payload.company,
@@ -77,7 +79,7 @@ class CreateStakeholderUseCase:
             updated_at=now,
         )
 
-        await self.repository.add(stakeholder, tenant_id=tenant_id)
+        await self.repository.add(stakeholder, tenant_id=scoped_tenant_id)
         await self.repository.commit()
         await self.repository.refresh(stakeholder)
         return stakeholder

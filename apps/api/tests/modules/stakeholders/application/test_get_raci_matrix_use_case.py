@@ -61,6 +61,7 @@ async def test_get_raci_matrix_use_case_includes_timeline_sequence_and_schedule_
         RaciAssignment(
             id=uuid4(),
             project_id=project_id,
+            tenant_id=tenant_id,
             stakeholder_id=stakeholder_id,
             wbs_item_id=first_task_id,
             raci_role=RACIRole.ACCOUNTABLE,
@@ -70,6 +71,7 @@ async def test_get_raci_matrix_use_case_includes_timeline_sequence_and_schedule_
     stakeholder_repo.get_by_id.return_value = Stakeholder(
         id=stakeholder_id,
         project_id=project_id,
+        tenant_id=tenant_id,
         name="Maria Gomez",
         power_level=PowerLevel.HIGH,
         interest_level=InterestLevel.HIGH,

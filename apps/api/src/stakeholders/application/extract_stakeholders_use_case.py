@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from src.core.tenants.types import require_tenant_id
 from src.stakeholders.domain.models import Stakeholder
 from src.stakeholders.ports.stakeholder_extraction_service import (
     IStakeholderExtractionService,
@@ -35,15 +36,16 @@ class ExtractStakeholdersUseCase:
         tenant_id: UUID,
     ) -> list[Stakeholder]:
         """Extract and persist stakeholders from contract text."""
+        scoped_tenant_id = require_tenant_id(tenant_id)
         stakeholders = await self.extraction_service.extract_from_text(
             text=contract_text,
             project_id=project_id,
-            tenant_id=tenant_id,
+            tenant_id=scoped_tenant_id,
         )
         if not stakeholders:
             return []
 
         for stakeholder in stakeholders:
-            await self.stakeholder_repository.add(stakeholder, tenant_id=tenant_id)
+            await self.stakeholder_repository.add(stakeholder, tenant_id=scoped_tenant_id)
         await self.stakeholder_repository.commit()
         return stakeholders

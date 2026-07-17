@@ -36,6 +36,7 @@ async def test_i10_int_runtime_wires_canonical_service_through_i10_inference_gat
             Stakeholder(
                 id=stakeholder_id,
                 project_id=project_id,
+                tenant_id=tenant_id,
                 power_level=PowerLevel.HIGH,
                 interest_level=InterestLevel.HIGH,
                 approval_status="approved",
@@ -104,6 +105,7 @@ async def test_i10_int_runtime_rejects_unresolved_stakeholder_ids_from_deprecate
             Stakeholder(
                 id=known_stakeholder_id,
                 project_id=project_id,
+                tenant_id=tenant_id,
                 power_level=PowerLevel.MEDIUM,
                 interest_level=InterestLevel.HIGH,
                 approval_status="approved",

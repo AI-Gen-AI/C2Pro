@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from src.core.tenants.types import require_tenant_id
 from src.procurement.ports.wbs_repository import IWBSRepository
 from src.projects.ports.project_repository import ProjectRepository
 from src.stakeholders.application.dtos import (
@@ -35,26 +36,27 @@ class GetRaciMatrixUseCase:
         self.project_repository = project_repository
 
     async def execute(self, project_id: UUID, tenant_id: UUID) -> RaciMatrixViewResponse:
+        scoped_tenant_id = require_tenant_id(tenant_id)
         project_exists = await self.project_repository.exists_by_id(
             project_id=project_id,
-            tenant_id=tenant_id,
+            tenant_id=scoped_tenant_id,
         )
         if not project_exists:
             raise ValueError("project_not_found")
 
-        wbs_items = await self.wbs_repository.get_by_project(project_id, tenant_id)
+        wbs_items = await self.wbs_repository.get_by_project(project_id, scoped_tenant_id)
         if not wbs_items:
             return RaciMatrixViewResponse(matrix=[])
 
         assignments = await self.stakeholder_repository.list_raci_assignments(
             project_id,
-            tenant_id=tenant_id,
+            tenant_id=scoped_tenant_id,
         )
         assignments_by_task: dict[UUID, list[RaciMatrixAssignment]] = {}
         for assignment in assignments:
             stakeholder = await self.stakeholder_repository.get_by_id(
                 assignment.stakeholder_id,
-                tenant_id=tenant_id,
+                tenant_id=scoped_tenant_id,
             )
             assignments_by_task.setdefault(assignment.wbs_item_id, []).append(
                 RaciMatrixAssignment(

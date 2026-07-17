@@ -6,16 +6,11 @@ Test Suite ID: TS-I10-STKH-APP-001
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Protocol
+from collections.abc import Mapping
+from typing import Any, Protocol, TypeAlias
 from uuid import UUID
 
-# Use the relocated Extraction entity (if available) or dict
-try:
-    from src.modules.extraction.domain.entities import ExtractedClause
-except ImportError:
-    # Fallback to dict if extraction module is not yet relocated or available
-    ExtractedClause = Any
-
+from src.modules.extraction.domain.entities import ExtractedClause
 from src.stakeholders.domain.models import (
     PartyResolutionResult,
     RaciActivity,
@@ -23,6 +18,8 @@ from src.stakeholders.domain.models import (
     RACIRole,
     Stakeholder,
 )
+
+ContractStatement: TypeAlias = ExtractedClause | Mapping[str, object]
 
 
 class LLMGeneratorAdapter(Protocol):
@@ -68,12 +65,12 @@ class RACIInferenceService:
 
     def _build_cache_key(
         self,
-        contract_statements: list[ExtractedClause],
+        contract_statements: list[ContractStatement],
         tenant_id: UUID,
         project_id: UUID | None,
     ) -> str:
         payload = "\n".join(
-            clause.text if hasattr(clause, "text") else str(clause.get("text", ""))
+            _statement_text(clause)
             for clause in contract_statements
         )
         raw = f"{tenant_id}|{project_id}|{payload}"
@@ -81,7 +78,7 @@ class RACIInferenceService:
 
     async def generate_raci_matrix(
         self,
-        contract_statements: list[ExtractedClause],
+        contract_statements: list[ContractStatement],
         tenant_id: UUID,
         project_id: UUID | None = None,
     ) -> tuple[list[RaciActivity], list[dict[str, Any]]]:
@@ -107,7 +104,7 @@ class RACIInferenceService:
         existing_stakeholders = await self.stakeholder_repo.get_all_stakeholders(tenant_id)
 
         context_text = "\n".join(
-            [c.text if hasattr(c, "text") else str(c.get("text", "")) for c in contract_statements]
+            [_statement_text(statement) for statement in contract_statements]
         )
         llm_output = await self.llm_generator.generate_structured_output(
             prompt="Infer RACI activities and responsibilities.",
@@ -175,3 +172,11 @@ class RACIInferenceService:
             [dict(entry) for entry in ambiguities],
         )
         return activities, ambiguities
+
+
+def _statement_text(statement: ContractStatement) -> str:
+    """TS-I10-STKH-APP-001: Extract statement text from supported input contracts."""
+    if isinstance(statement, ExtractedClause):
+        return statement.text
+    text = statement.get("text", "")
+    return text if isinstance(text, str) else str(text)
