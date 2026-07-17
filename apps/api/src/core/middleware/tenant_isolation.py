@@ -30,7 +30,7 @@ from src.core.observability.sentry_alerts import record_auth_failure
 logger = structlog.get_logger()
 
 
-class TenantIsolationMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
+class TenantIsolationMiddleware(BaseHTTPMiddleware):
     """
     Middleware que extrae y valida el tenant_id del JWT.
 
@@ -81,9 +81,13 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
             return await call_next(request)
 
         # Extraer y validar token
-        tenant_id, user_id, require_tenant_validation, error_message, reason_code = (
-            await self._extract_auth_context(request)
-        )
+        (
+            tenant_id,
+            user_id,
+            require_tenant_validation,
+            error_message,
+            reason_code,
+        ) = await self._extract_auth_context(request)
 
         if error_message:
             # Use specific error message if provided, otherwise generic one
@@ -392,11 +396,15 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
                     return False
                 return bool(record.is_active)
         except Exception as e:
-            if settings.environment == "test" and isinstance(e, RuntimeError) and "Database not initialized" in str(e):
-                    logger.warning(
-                        "tenant_validation_bypassed_for_tests",
-                        tenant_id=str(tenant_id),
-                    )
-                    return True
+            if (
+                settings.environment == "test"
+                and isinstance(e, RuntimeError)
+                and "Database not initialized" in str(e)
+            ):
+                logger.warning(
+                    "tenant_validation_bypassed_for_tests",
+                    tenant_id=str(tenant_id),
+                )
+                return True
             logger.error("tenant_validation_error", error=str(e), tenant_id=str(tenant_id))
             return False

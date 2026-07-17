@@ -14,7 +14,7 @@ from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings(BaseSettings):  # type: ignore[misc]
+class Settings(BaseSettings):
     """
     Configuración global de la aplicación.
 
@@ -64,10 +64,12 @@ class Settings(BaseSettings):  # type: ignore[misc]
     db_max_overflow: int = Field(default=10, ge=0, le=50)
     db_pool_pre_ping: bool = True
     db_pool_timeout: int = Field(default=30, ge=5, le=60, description="Pool connection timeout")
-    db_pool_recycle: int = Field(default=1800, ge=300, description="Recycle connections after N seconds")
+    db_pool_recycle: int = Field(
+        default=1800, ge=300, description="Recycle connections after N seconds"
+    )
     db_echo: bool = Field(default=False, description="Log SQL queries")
 
-    @field_validator("database_url")  # type: ignore[misc]
+    @field_validator("database_url")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
         """Valida que la URL de base de datos sea PostgreSQL."""
@@ -132,9 +134,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
     clerk_jwks_url: str | None = Field(
         default=None, description="Clerk JWKS URL (auto-constructed if not provided)"
     )
-    clerk_issuer: str | None = Field(
-        default=None, description="Clerk JWT issuer for validation"
-    )
+    clerk_issuer: str | None = Field(default=None, description="Clerk JWT issuer for validation")
     secret_channel_token: str | None = Field(
         default=None,
         validation_alias="SECRET_CHANNEL_TOKEN",
@@ -207,7 +207,9 @@ class Settings(BaseSettings):  # type: ignore[misc]
     # ===========================================
 
     anthropic_api_key: str | None = Field(default=None, description="Anthropic API key para Claude")
-    openai_api_key: str | None = Field(default=None, description="OpenAI API key para embeddings/RAG")
+    openai_api_key: str | None = Field(
+        default=None, description="OpenAI API key para embeddings/RAG"
+    )
 
     # Model selection
     ai_model_default: str = "claude-sonnet-4-20250514"  # Sonnet 4 por defecto
@@ -263,9 +265,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
     # EMAIL
     # ===========================================
 
-    email_from: str = Field(
-        default="C2Pro <noreply@c2pro.app>", validation_alias="EMAIL_FROM"
-    )
+    email_from: str = Field(default="C2Pro <noreply@c2pro.app>", validation_alias="EMAIL_FROM")
 
     # ===========================================
     # RATE LIMITING
@@ -322,15 +322,25 @@ class Settings(BaseSettings):  # type: ignore[misc]
     # C2Pro v3.0 Project Intelligence Overlay (ADR-013→021) — all default OFF;
     # enable per-phase via canary. Resolved by require_feature()/getattr(settings, …).
     feature_v3_spine: bool = Field(default=False, validation_alias="FEATURE_V3_SPINE")
-    feature_v3_coherence_llm: bool = Field(default=False, validation_alias="FEATURE_V3_COHERENCE_LLM")  # ADR-013/017
-    feature_v3_project_state: bool = Field(default=False, validation_alias="FEATURE_V3_PROJECT_STATE")  # ADR-014
-    feature_v3_temporal: bool = Field(default=False, validation_alias="FEATURE_V3_TEMPORAL")  # ADR-015
-    feature_v3_change_impact: bool = Field(default=False, validation_alias="FEATURE_V3_CHANGE_IMPACT")  # ADR-016
+    feature_v3_coherence_llm: bool = Field(
+        default=False, validation_alias="FEATURE_V3_COHERENCE_LLM"
+    )  # ADR-013/017
+    feature_v3_project_state: bool = Field(
+        default=False, validation_alias="FEATURE_V3_PROJECT_STATE"
+    )  # ADR-014
+    feature_v3_temporal: bool = Field(
+        default=False, validation_alias="FEATURE_V3_TEMPORAL"
+    )  # ADR-015
+    feature_v3_change_impact: bool = Field(
+        default=False, validation_alias="FEATURE_V3_CHANGE_IMPACT"
+    )  # ADR-016
     feature_v3_change_semantic_llm: bool = Field(
         default=False,
         validation_alias="FEATURE_V3_CHANGE_SEMANTIC_LLM",
     )  # ADR-016 L2
-    feature_v3_project_graph: bool = Field(default=False, validation_alias="FEATURE_V3_PROJECT_GRAPH")  # ADR-017
+    feature_v3_project_graph: bool = Field(
+        default=False, validation_alias="FEATURE_V3_PROJECT_GRAPH"
+    )  # ADR-017
     project_graph_debounce_ttl_seconds: int = Field(
         default=300,
         ge=1,
@@ -347,14 +357,16 @@ class Settings(BaseSettings):  # type: ignore[misc]
         validation_alias="PROJECT_GRAPH_REQUEUE_COUNTDOWN_SECONDS",
     )
     feature_v3_health: bool = Field(default=False, validation_alias="FEATURE_V3_HEALTH")  # ADR-018
-    feature_v3_action_review: bool = Field(default=False, validation_alias="FEATURE_V3_ACTION_REVIEW")  # ADR-019/020
-    feature_v3_briefing: bool = Field(default=False, validation_alias="FEATURE_V3_BRIEFING")  # ADR-021
+    feature_v3_action_review: bool = Field(
+        default=False, validation_alias="FEATURE_V3_ACTION_REVIEW"
+    )  # ADR-019/020
+    feature_v3_briefing: bool = Field(
+        default=False, validation_alias="FEATURE_V3_BRIEFING"
+    )  # ADR-021
 
     # ECOA v2 (ADR-009) — Phase 1 (compatibility) + Phase 2 (shadow mode).
     # Per-tenant override is deferred — single global toggle for now.
-    coherence_v2_enabled: bool = Field(
-        default=False, validation_alias="COHERENCE_V2_ENABLED"
-    )
+    coherence_v2_enabled: bool = Field(default=False, validation_alias="COHERENCE_V2_ENABLED")
     coherence_v2_shadow_mode: bool = Field(
         default=True, validation_alias="COHERENCE_V2_SHADOW_MODE"
     )
@@ -390,7 +402,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
     # VALIDATION
     # ===========================================
 
-    @field_validator("cors_origins", mode="before")  # type: ignore[misc]
+    @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: Any) -> list[str]:
         """Parse CORS origins from string or list."""
@@ -435,7 +447,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
 
         return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
 
-    @field_validator("integration_api_keys", mode="before")  # type: ignore[misc]
+    @field_validator("integration_api_keys", mode="before")
     @classmethod
     def parse_integration_api_keys(cls, v: Any) -> dict[str, str]:
         if v in (None, "", {}):
@@ -449,7 +461,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
             return {str(key): str(value) for key, value in v.items()}
         return {}
 
-    @model_validator(mode="after")  # type: ignore[misc]
+    @model_validator(mode="after")
     def validate_security_posture(self) -> Self:
         if self.environment == "test":
             if self.supabase_url is None:
@@ -475,7 +487,10 @@ class Settings(BaseSettings):  # type: ignore[misc]
                 raise ValueError("wildcard CORS is not allowed outside development/test")
 
             localhost_markers = ("localhost", "127.0.0.1")
-            if any(any(marker in origin for marker in localhost_markers) for origin in self.cors_origins):
+            if any(
+                any(marker in origin for marker in localhost_markers)
+                for origin in self.cors_origins
+            ):
                 raise ValueError("localhost origins are not allowed outside development/test")
 
             if self.auth_bootstrap_fallback_mode == "non_production":
@@ -483,7 +498,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
 
         return self
 
-    @field_validator("ai_budget_monthly_default")  # type: ignore[misc]
+    @field_validator("ai_budget_monthly_default")
     @classmethod
     def validate_budget(cls, v: float) -> float:
         """Valida que el budget sea positivo."""
@@ -491,7 +506,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
             raise ValueError("ai_budget_monthly_default must be >= 0")
         return v
 
-    @field_validator("budget_alert_admin_emails", mode="before")  # type: ignore[misc]
+    @field_validator("budget_alert_admin_emails", mode="before")
     @classmethod
     def parse_budget_alert_admin_emails(cls, v: Any) -> list[str]:
         if isinstance(v, str):
