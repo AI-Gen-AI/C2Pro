@@ -11,6 +11,7 @@ Refers to Suite ID: TS-I13-E2E-REAL-001.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 from typing import Any
@@ -69,8 +70,13 @@ class ExtractionPortAdapter:
         if not parsed:
             return self._fallback_clauses(prompt_chunks)
 
-        pages = {chunk.get("page") for chunk in prompt_chunks if chunk.get("page")}
-        default_citation = f"page-{min(pages)}" if pages else "document"
+        pages_list: list[int] = []
+        for chunk in prompt_chunks:
+            p = chunk.get("page")
+            if p is not None:
+                with contextlib.suppress(ValueError, TypeError):
+                    pages_list.append(int(p))
+        default_citation = f"page-{min(pages_list)}" if pages_list else "document"
 
         normalized: list[dict[str, Any]] = []
         for raw in parsed:

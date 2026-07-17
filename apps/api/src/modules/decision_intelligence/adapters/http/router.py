@@ -132,7 +132,7 @@ async def execute_decision_intelligence(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[DecisionOrchestrationService, Depends(get_decision_orchestration_service)],
-) -> ExecuteDecisionResponseDTO:
+) -> ExecuteDecisionResponseDTO | JSONResponse:
     """Run I13 decision orchestration and return final package or policy block."""
     force_profile = payload.force_profile
     tenant_id = current_user.tenant_id

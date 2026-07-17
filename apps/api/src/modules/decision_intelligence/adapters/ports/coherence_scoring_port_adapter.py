@@ -43,8 +43,11 @@ class CoherenceScoringPortAdapter:
         tenant_id: UUID,
         project_id: UUID,
     ) -> dict[str, Any]:
-        domain_alerts = [self._coerce_alert(raw) for raw in alerts or []]
-        domain_alerts = [alert for alert in domain_alerts if alert is not None]
+        domain_alerts: list[CoherenceAlert] = []
+        for raw in alerts or []:
+            alert = self._coerce_alert(raw)
+            if alert is not None:
+                domain_alerts.append(alert)
 
         try:
             overall: OverallScore = await self._service.aggregate_coherence_score(
