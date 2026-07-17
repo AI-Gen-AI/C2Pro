@@ -13,7 +13,7 @@ import asyncio
 import os
 import sys
 from collections.abc import AsyncGenerator, Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
@@ -79,7 +79,7 @@ from tests.support.seeded_identity_guard import assert_seeded_identity_isolation
 # CONSTANTS
 # =============================================================
 
-TEST_PASSWORD_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYvDqLTMKKe"
+TEST_PASSWORD_HASH = hash_password("TestPassword123!")
 
 # =============================================================
 # PLUGIN LOADING — heavy fixtures live in these modules
@@ -130,7 +130,7 @@ async def test_user(db: AsyncSession, test_tenant: Tenant) -> User:
         role=UserRole.ADMIN,
         is_active=True,
         is_verified=True,
-        last_login=datetime.now(),
+        last_login=datetime.now(UTC).replace(tzinfo=None),
     )
     db.add(user)
     await db.commit()
@@ -171,7 +171,7 @@ async def test_user_2(db: AsyncSession, test_tenant_2: Tenant) -> User:
         role=UserRole.USER,
         is_active=True,
         is_verified=True,
-        last_login=datetime.now(),
+        last_login=datetime.now(UTC).replace(tzinfo=None),
     )
     db.add(user)
     await db.commit()
@@ -247,7 +247,7 @@ async def seeded_auth_context() -> dict[str, str]:
                 role=UserRole.ADMIN,
                 is_active=True,
                 is_verified=True,
-                last_login=datetime.now(),
+                last_login=datetime.now(UTC).replace(tzinfo=None),
             )
             session.add(user)
         else:
