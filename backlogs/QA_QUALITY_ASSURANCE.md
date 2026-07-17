@@ -358,3 +358,8 @@ Repair the inherited isolation drift in `apps/api/tests/modules/analysis/adapter
 - Preserve the assertion that the coherence scorer consumes the dependency provider's score 88; do not weaken, skip, or broadly mock away the contract.
 - Prevent database access in this isolated test and prove the focused test passes independently.
 - If diagnosis proves production dependency wiring is defective, stop the fixture-only change and register/escalate a backend task before modifying production code.
+### TASK-QA-324: Repair golden pytest collection namespace collision
+
+**Status**: Completed 2026-07-17 · **Priority**: P1 · **Owner**: qa · **Depends on**: —
+
+`tests/coherence/golden` was imported as the top-level package `golden` because its parent `tests/coherence` lacked `__init__.py`. That shadowed `src/golden`, so later imports of `golden.evaluators` failed during broad collection. Added the missing parent package boundary with Suite ID `TS-QA-PYTEST-COLLECTION-001`; full `pytest --collect-only -q` and the 651-case `tests/golden` suite complete without collection errors.
