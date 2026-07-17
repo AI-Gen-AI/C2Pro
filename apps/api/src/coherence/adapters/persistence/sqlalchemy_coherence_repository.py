@@ -13,13 +13,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
-from uuid import UUID
 
 from sqlalchemy import Select, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.json_types import JsonDict
-from src.core.tenants.types import TenantId
 from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.coherence.application.dtos import (
     CategoryScoreDetail,
@@ -28,6 +25,7 @@ from src.coherence.application.dtos import (
 from src.coherence.domain.alert_mapping import CoherenceAlert
 from src.coherence.domain.category_weights import CoherenceCategory
 from src.coherence.ports.coherence_repository import ICoherenceRepository
+from src.core.tenants.types import TenantId
 from src.projects.adapters.persistence.models import ProjectORM
 
 

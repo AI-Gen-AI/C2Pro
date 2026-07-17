@@ -17,9 +17,7 @@ Sprint: P2-02
 from __future__ import annotations
 
 import json  # still used in analyze_clause prompt formatting
-from src.core.json_types import JsonDict
 from dataclasses import dataclass, field
-from typing import Any
 from uuid import UUID
 
 import structlog
@@ -47,6 +45,7 @@ from src.core.ai.anthropic_wrapper import (
 )
 from src.core.ai.model_router import AITaskType
 from src.core.ai.structured_output import LLMSchemaError, parse_llm_json
+from src.core.json_types import JsonDict
 
 logger = structlog.get_logger()
 

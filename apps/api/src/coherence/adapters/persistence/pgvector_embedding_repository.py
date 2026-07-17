@@ -14,14 +14,15 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, cast, Literal
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.tenants.types import TenantId
 from src.core.json_types import JsonDict
+from src.core.tenants.types import TenantId
+
 from ...ports.embedding_repository import (
     EmbeddingMatch,
     EmbeddingRecord,

@@ -11,15 +11,14 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass
-from typing import Any
 from uuid import UUID
 
-from src.core.json_types import JsonDict
 from src.analysis.domain.coherence_derivation import (
     CoherenceDerivationInput,
     CoherenceScoringDerivationService,
 )
 from src.coherence.application.services import CoherenceCalculationService
+from src.core.json_types import JsonDict
 
 warnings.warn(
     "ScoreFromExtractionUseCase is deprecated; N8 now delegates to the "

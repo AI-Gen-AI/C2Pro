@@ -29,7 +29,6 @@ ESTIMATED_HAIKU_COST_USD = 0.0008  # conservative per-call estimate for budget p
 
 def _next_month_first():
     """First of next calendar month — matches cost_controller's monthly reset boundary."""
-    import datetime
     today = datetime.date.today()
     if today.month == 12:
         return datetime.date(today.year + 1, 1, 1)

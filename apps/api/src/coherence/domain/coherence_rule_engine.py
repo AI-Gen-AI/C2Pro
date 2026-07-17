@@ -9,8 +9,6 @@ from pydantic import BaseModel, Field
 
 # --- Enums and Data Models ---
 
-from src.core.json_types import JsonDict
-
 
 class CoherenceStatus(Enum):
     PASS = "PASS"
@@ -28,7 +26,7 @@ class CoherenceResult(BaseModel):
     severity: CoherenceSeverity
     message: str
     affected_entities: list[UUID] = Field(default_factory=list)
-    metadata: JsonDict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 # --- Input Data Structures ---
 
