@@ -7,19 +7,26 @@ Refers to Suite ID: TS-INT-MOD-DOC-001.
 from __future__ import annotations
 
 import logging
-from typing import Any, Protocol
+from typing import Protocol, cast
 from uuid import UUID
 
 from src.analysis.ports.orchestrator import AnalysisOrchestrator
+from src.core.json_types import JsonDict
+from src.core.tenants.types import require_tenant_id
+from src.documents.domain.models import Document
 from src.documents.ports.document_repository import IDocumentRepository
 
 logger = logging.getLogger(__name__)
 
 
+class AsyncTaskResult(Protocol):
+    id: str | None
+
+
 class AnalysisTask(Protocol):
     name: str
 
-    def apply_async(self, *, kwargs: dict[str, str], queue: str) -> Any:
+    def apply_async(self, *, kwargs: dict[str, str], queue: str) -> AsyncTaskResult:
         """Enqueue an async analysis task."""
         ...
 
@@ -42,19 +49,23 @@ class TriggerDocumentAnalysisUseCase:
             return self._analysis_task
         from src.core.tasks.ingestion_tasks import process_document_analysis_async
 
-        return process_document_analysis_async
+        return cast(AnalysisTask, process_document_analysis_async)
 
     async def _load_document(
         self,
         *,
         tenant_id: UUID | None,
         document_id: UUID,
-    ):
+    ) -> Document | None:
         if tenant_id is not None:
-            return await self._document_repository.get_by_id(tenant_id, document_id)
+            return await self._document_repository.get_by_id(
+                require_tenant_id(tenant_id), document_id
+            )
         return await self._document_repository.get_by_id(document_id)  # type: ignore[call-arg]
 
-    async def execute(self, *, document_id: UUID, tenant_id: UUID | None = None) -> dict:
+    async def execute(
+        self, *, document_id: UUID, tenant_id: UUID | None = None
+    ) -> JsonDict:
         document = await self._load_document(tenant_id=tenant_id, document_id=document_id)
         if not document:
             raise ValueError("document not found or access denied")
@@ -71,7 +82,7 @@ class TriggerDocumentAnalysisUseCase:
             raise ValueError("document must be parsed before analysis")
 
         parsed_text = document.document_metadata.get("parsed_text") if document.document_metadata else None
-        if not parsed_text:
+        if not isinstance(parsed_text, str) or not parsed_text:
             raise ValueError("parsed_text not available")
 
         task = self._get_analysis_task()
@@ -82,7 +93,7 @@ class TriggerDocumentAnalysisUseCase:
             },
             queue="document_parsing",
         )
-        task_id = getattr(async_result, "id", None)
+        task_id = async_result.id
         logger.info(
             "document_analysis_task_enqueued",
             extra={
