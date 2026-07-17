@@ -4,6 +4,7 @@ These are pure domain entities representing core business concepts.
 
 Refers to Suite ID: TS-UD-PROC-BOM-001.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -20,6 +21,7 @@ from src.shared_kernel.enums import WBSItemType  # noqa: F401 — re-export
 
 class BOMCategory(str, Enum):
     """Categories of BOM items."""
+
     MATERIAL = "material"
     EQUIPMENT = "equipment"
     SERVICE = "service"
@@ -28,6 +30,7 @@ class BOMCategory(str, Enum):
 
 class ProcurementStatus(str, Enum):
     """Procurement statuses."""
+
     PENDING = "pending"
     REQUESTED = "requested"
     ORDERED = "ordered"
@@ -38,6 +41,7 @@ class ProcurementStatus(str, Enum):
 
 class ProcurementPriority(str, Enum):
     """Priority for procurement execution order."""
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -52,6 +56,7 @@ class ProcurementPriority(str, Enum):
 @dataclass
 class BudgetItem:
     """Represents a single item from the project budget."""
+
     id: UUID
     name: str
     code: str
@@ -69,6 +74,7 @@ class WBSItem:
     Domain entity representing a Work Breakdown Structure item.
     Used for AI generation and business logic.
     """
+
     # Required fields first
     project_id: UUID
     code: str
@@ -88,7 +94,7 @@ class WBSItem:
     actual_end: datetime | None = None
     source_clause_id: UUID | None = None
     version: int = 1
-    wbs_metadata: dict = field(default_factory=dict)
+    wbs_metadata: dict[str, object] = field(default_factory=dict)
     children: list[WBSItem] = field(default_factory=list)
 
     def is_leaf(self) -> bool:
@@ -119,6 +125,7 @@ class WBSItem:
 @dataclass
 class WBSItemList:
     """Container for a list of WBS items, used for structured LLM output."""
+
     items: list[WBSItem] = field(default_factory=list)
 
 
@@ -133,6 +140,7 @@ class BOMItem:
     Domain entity representing a Bill of Materials item.
     Used for AI generation and business logic.
     """
+
     # Required fields first
     project_id: UUID
     item_name: str
@@ -157,7 +165,7 @@ class BOMItem:
     budget_item_id: UUID | None = None
     source_document_id: UUID | None = None
     procurement_status: ProcurementStatus = ProcurementStatus.PENDING
-    bom_metadata: dict = field(default_factory=dict)
+    bom_metadata: dict[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Derive total_price and lead_time_days when omitted."""
@@ -200,7 +208,7 @@ class BOMItem:
         return self.procurement_status in [
             ProcurementStatus.REQUESTED,
             ProcurementStatus.ORDERED,
-            ProcurementStatus.IN_TRANSIT
+            ProcurementStatus.IN_TRANSIT,
         ]
 
     def update_status(self, new_status: ProcurementStatus) -> None:
@@ -212,12 +220,14 @@ class BOMItem:
         if self.lead_time_days is None:
             return None
         from datetime import timedelta
+
         return order_date + timedelta(days=self.lead_time_days)
 
 
 @dataclass
 class BOMItemList:
     """Container for a list of BOM items, used for structured LLM output."""
+
     items: list[BOMItem] = field(default_factory=list)
 
     def get_total_cost(self) -> Decimal:
@@ -241,6 +251,7 @@ class BOMItemList:
 @dataclass(frozen=True)
 class ProcurementPlanItem:
     """Line item in a generated procurement plan."""
+
     bom_item_id: UUID
     item_name: str
     quantity: Decimal
@@ -248,12 +259,13 @@ class ProcurementPlanItem:
     required_on_site_date: datetime | date
     optimal_order_date: datetime | date
     priority: ProcurementPriority
-    alerts: list = field(default_factory=list)
+    alerts: list[dict[str, object]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class ProcurementPlan:
     """Procurement plan aggregate."""
+
     required_on_site_date: datetime | date
     items: list[ProcurementPlanItem]
     total_cost: Decimal
@@ -262,8 +274,9 @@ class ProcurementPlan:
 @dataclass(frozen=True)
 class ProcurementConflict:
     """Conflict detected in the procurement timeline or budget posture."""
+
     item_id: UUID
     reason_code: str
     impact: str
     message: str
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, object] = field(default_factory=dict)
