@@ -8,7 +8,7 @@ Endpoints:
 - GET /api/v1/bulk-operations/{job_id}/progress - Track operation progress
 """
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/bulk-operations", tags=["bulk-operations"])
 async def get_bulk_operation_progress(
     job_id: str,
     current_user: Annotated[User, Depends(get_current_user)],
-) -> dict:
+) -> dict[str, Any]:
     """
     Get progress of a bulk operation.
 
