@@ -1,11 +1,15 @@
 """
 SQLAlchemy implementation of the BOM repository.
 """
+
+from __future__ import annotations
+
 from uuid import UUID
 
 from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.tenants.types import TenantId
 from src.procurement.adapters.persistence.models import BOMItemORM
 from src.procurement.domain.models import BOMCategory, BOMItem, ProcurementStatus
 from src.procurement.ports.bom_repository import IBOMRepository
@@ -39,7 +43,7 @@ class SQLAlchemyBOMRepository(IBOMRepository):
             contract_clause_id=orm.contract_clause_id,
             source_document_id=orm.source_document_id,
             procurement_status=orm.procurement_status,
-            bom_metadata=orm.bom_metadata or {}
+            bom_metadata=orm.bom_metadata or {},
         )
 
     def _domain_to_orm(self, bom_item: BOMItem) -> BOMItemORM:
@@ -63,7 +67,7 @@ class SQLAlchemyBOMRepository(IBOMRepository):
             contract_clause_id=bom_item.contract_clause_id,
             source_document_id=bom_item.source_document_id,
             procurement_status=bom_item.procurement_status,
-            bom_metadata=bom_item.bom_metadata or {}
+            bom_metadata=bom_item.bom_metadata or {},
         )
 
     async def _ensure_project_in_tenant(self, project_id: UUID, tenant_id: UUID) -> None:
@@ -166,12 +170,7 @@ class SQLAlchemyBOMRepository(IBOMRepository):
         """Retrieve all BOM items of a specific category in a project."""
         result = await self.session.execute(
             select(BOMItemORM)
-            .where(
-                and_(
-                    BOMItemORM.project_id == project_id,
-                    BOMItemORM.category == category
-                )
-            )
+            .where(and_(BOMItemORM.project_id == project_id, BOMItemORM.category == category))
             .join(ProjectORM, ProjectORM.id == BOMItemORM.project_id)
             .where(ProjectORM.tenant_id == tenant_id)
             .order_by(BOMItemORM.item_code)
@@ -187,10 +186,7 @@ class SQLAlchemyBOMRepository(IBOMRepository):
         result = await self.session.execute(
             select(BOMItemORM)
             .where(
-                and_(
-                    BOMItemORM.project_id == project_id,
-                    BOMItemORM.procurement_status == status
-                )
+                and_(BOMItemORM.project_id == project_id, BOMItemORM.procurement_status == status)
             )
             .join(ProjectORM, ProjectORM.id == BOMItemORM.project_id)
             .where(ProjectORM.tenant_id == tenant_id)
@@ -214,21 +210,21 @@ class SQLAlchemyBOMRepository(IBOMRepository):
             return None
 
         # Update fields
-        orm.item_code = bom_item.item_code
-        orm.item_name = bom_item.item_name
-        orm.description = bom_item.description
-        orm.category = bom_item.category
-        orm.quantity = bom_item.quantity
-        orm.unit = bom_item.unit
-        orm.unit_price = bom_item.unit_price
-        orm.total_price = bom_item.total_price
-        orm.currency = bom_item.currency
-        orm.supplier = bom_item.supplier
-        orm.lead_time_days = bom_item.lead_time_days
-        orm.incoterm = bom_item.incoterm
-        orm.source_document_id = bom_item.source_document_id
-        orm.procurement_status = bom_item.procurement_status
-        orm.bom_metadata = bom_item.bom_metadata or {}
+        orm.item_code = bom_item.item_code  # type: ignore[assignment]
+        orm.item_name = bom_item.item_name  # type: ignore[assignment]
+        orm.description = bom_item.description  # type: ignore[assignment]
+        orm.category = bom_item.category  # type: ignore[assignment]
+        orm.quantity = bom_item.quantity  # type: ignore[assignment]
+        orm.unit = bom_item.unit  # type: ignore[assignment]
+        orm.unit_price = bom_item.unit_price  # type: ignore[assignment]
+        orm.total_price = bom_item.total_price  # type: ignore[assignment]
+        orm.currency = bom_item.currency  # type: ignore[assignment]
+        orm.supplier = bom_item.supplier  # type: ignore[assignment]
+        orm.lead_time_days = bom_item.lead_time_days  # type: ignore[assignment]
+        orm.incoterm = bom_item.incoterm  # type: ignore[assignment]
+        orm.source_document_id = bom_item.source_document_id  # type: ignore[assignment]
+        orm.procurement_status = bom_item.procurement_status  # type: ignore[assignment]
+        orm.bom_metadata = bom_item.bom_metadata or {}  # type: ignore[assignment]
 
         await self.session.flush()
         await self.session.refresh(orm)
@@ -250,7 +246,7 @@ class SQLAlchemyBOMRepository(IBOMRepository):
         if not orm:
             return None
 
-        orm.procurement_status = status
+        orm.procurement_status = status  # type: ignore[assignment]
 
         await self.session.flush()
         await self.session.refresh(orm)

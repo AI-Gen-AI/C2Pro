@@ -3,6 +3,8 @@ SQLAlchemy Budget Repository - TASK-BCK-021
 Implements BudgetRepository port using existing procurement_budget_items table.
 """
 
+from __future__ import annotations
+
 from decimal import Decimal
 from uuid import UUID
 
@@ -32,7 +34,7 @@ class SQLAlchemyBudgetRepository:
         total_spent = result.scalar() or Decimal("0.00")
         return Decimal(str(total_spent))
 
-    async def get_by_project(self, project_id: UUID, tenant_id: UUID) -> list[dict]:
+    async def get_by_project(self, project_id: UUID, tenant_id: UUID) -> list[dict[str, object]]:
         """Get all budget items for a project with tenant isolation."""
         stmt = (
             select(BudgetItemORM)
@@ -61,9 +63,13 @@ class SQLAlchemyBudgetRepository:
         name: str,
         code: str,
         amount: Decimal,
-    ) -> dict:
+    ) -> dict[str, object]:
         """Create a new budget item with tenant isolation."""
-        stmt = select(ProjectORM).where(ProjectORM.id == project_id).where(ProjectORM.tenant_id == tenant_id)
+        stmt = (
+            select(ProjectORM)
+            .where(ProjectORM.id == project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
+        )
         result = await self.session.execute(stmt)
         project = result.scalar_one_or_none()
 
@@ -92,8 +98,8 @@ class SQLAlchemyBudgetRepository:
         self,
         item_id: UUID,
         tenant_id: UUID,
-        **updates,
-    ) -> dict | None:
+        **updates: object,
+    ) -> dict[str, object] | None:
         """Update an existing budget item with tenant isolation."""
         stmt = (
             select(BudgetItemORM)
@@ -139,7 +145,7 @@ class SQLAlchemyBudgetRepository:
         await self.session.commit()
         return True
 
-    async def get_by_id(self, item_id: UUID, tenant_id: UUID) -> dict | None:
+    async def get_by_id(self, item_id: UUID, tenant_id: UUID) -> dict[str, object] | None:
         """Get a budget item by ID with tenant isolation."""
         stmt = (
             select(BudgetItemORM)
