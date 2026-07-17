@@ -333,3 +333,9 @@ After each EPIC-MYPY-STRICT wave, independently verify the `mypy-baseline.txt` r
 **Priority**: P1 · **Owner**: qa · **Depends on**: TASK-BCK-113, TASK-QA-322 · **Epic**: EPIC-MYPY-STRICT
 
 Independent final gate: `mypy src` reports zero errors with the full backend dependency set; backend unit + integration suites pass; ruff clean under the UP042 policy; no blanket ignores or relaxed strict; CI runs the same env/command as local. Green here unblocks TASK-DEV-006 (promote `backend-typecheck` to required).
+
+### TASK-QA-324: Repair golden pytest collection namespace collision
+
+**Status**: Completed 2026-07-17 · **Priority**: P1 · **Owner**: qa · **Depends on**: —
+
+`tests/coherence/golden` was imported as the top-level package `golden` because its parent `tests/coherence` lacked `__init__.py`. That shadowed `src/golden`, so later imports of `golden.evaluators` failed during broad collection. Added the missing parent package boundary with Suite ID `TS-QA-PYTEST-COLLECTION-001`; full `pytest --collect-only -q` and the 651-case `tests/golden` suite complete without collection errors.

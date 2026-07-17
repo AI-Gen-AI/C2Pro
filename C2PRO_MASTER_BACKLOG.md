@@ -89,6 +89,7 @@
 |[ ]|P2|`TASK-BCK-113`|`TASK-BCK-112`|mypy Wave 7 — remaining mechanical leaf cleanup + full-tree convergence to zero.|`backlogs/BCK_BACKEND.md`|
 |[ ]|P2|`TASK-QA-322`|`TASK-DEV-031`|mypy QA — per-wave ratchet + risk-proportionate regression certification.|`backlogs/QA_QUALITY_ASSURANCE.md`|
 |[ ]|P1|`TASK-QA-323`|`TASK-BCK-113, TASK-QA-322`|mypy QA — independent zero-error/full-suite/live-CI certification before gate promotion.|`backlogs/QA_QUALITY_ASSURANCE.md`|
+|[x]|P1|`TASK-QA-324`|—|Repair broad pytest collection by preventing `tests/coherence/golden` from shadowing the production `src/golden` package. `[x] Implemented (package-boundary fix; full collection + golden suite green)`|`backlogs/QA_QUALITY_ASSURANCE.md`|
 |[x]|P1|`TASK-DEV-012`|`TASK-SEC-DEPENDABOT-001`|Apply PR #228's isolated PostCSS patch update from 8.5.16 to 8.5.17 without importing the coupled Vite 8/esbuild lock rewrite. `[x] Implemented (offline frozen-lockfile RED/GREEN)`|`backlogs/DEV_DEVOPS.md`|
 
 ## Pending Tasks by Category

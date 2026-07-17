@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-14T19:04:40Z",
+  "updated_at": "2026-07-17T03:53:28Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,38 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T143",
+      "backlog_id": "TASK-QA-324",
+      "tipo": "qa",
+      "descripcion": "Repair broad pytest collection by preventing the nested coherence golden tests from shadowing the production golden package.",
+      "asignado_a": "qa",
+      "estado": "completado",
+      "criterio_done": "Full backend pytest collection completes without errors and tests/golden still collects and passes without skips or import fallbacks.",
+      "archivos_modificados": [
+        "apps/api/tests/coherence/__init__.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-17T03:42:00Z",
+        "completado": "2026-07-17T03:53:28Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-QA-324 completed: tests/coherence is now a package, so its nested golden suite no longer occupies the production golden namespace during pytest collection.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: python -m pytest --collect-only -q -> ModuleNotFoundError: No module named 'golden.evaluators'.",
+          "Root-cause probe: sys.modules['golden'] resolved to tests/coherence/golden/__init__.py and golden.evaluators had no spec.",
+          "GREEN: python -m pytest --collect-only -q -> exit 0 with zero collection errors.",
+          "GREEN: python -m pytest tests/golden -q -> 651 cases passed.",
+          "python -m ruff check tests/coherence/__init__.py -> All checks passed."
+        ]
+      }
+    },
     {
       "tarea_id": "T142",
       "backlog_id": "TASK-DEV-013",
