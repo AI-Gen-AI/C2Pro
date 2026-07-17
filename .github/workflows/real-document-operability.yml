@@ -84,7 +84,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Bootstrap backend test infrastructure
-        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
+        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
 
       - name: Record operator-only real document status
         if: github.event_name == 'workflow_dispatch' && inputs.run_real_document_flow != 'true'

@@ -1,12 +1,8 @@
 name: Scheduled I13 Real E2E Reliability
 
 on:
-  # Cron paused 2026-07-12: the suite failed on every daily run since at least
-  # 2026-07-05 — test fixtures connect to Postgres on 5432 while
-  # docker-compose.test.yml exposes 5433. Re-enable the schedule after the
-  # app-side fixture fix lands (tracked in C2PRO_MASTER_BACKLOG.md).
-  # schedule:
-  #   - cron: "0 4 * * *"
+  schedule:
+    - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
       release_commit_sha:
@@ -25,6 +21,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
       ENVIRONMENT: test
       DEBUG: "true"
       JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
@@ -80,7 +77,7 @@ jobs:
       - name: Infra preflight
         run: |
           mkdir -p apps/api/ci-artifacts
-          python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis | tee apps/api/ci-artifacts/i13-scheduled-preflight.log
+          python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 | tee apps/api/ci-artifacts/i13-scheduled-preflight.log
 
       - name: Run I13 real E2E reliability suite
         working-directory: apps/api
