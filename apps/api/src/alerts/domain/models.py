@@ -5,10 +5,12 @@ Pure Python domain entity - NO SQLAlchemy, NO external dependencies.
 Contains business logic for alert lifecycle management.
 Refers to TASK-REV-006, TS-BUG-ALRT-IMPORT-001.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from src.alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
@@ -25,8 +27,8 @@ class Alert:
     rule_id: str | None
     title: str
     description: str
-    affected_entities: dict = field(default_factory=dict)
-    alert_metadata: dict = field(default_factory=dict)
+    affected_entities: dict[str, Any] = field(default_factory=dict)
+    alert_metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime | None = None
     reviewed_by: UUID | None = None
@@ -107,12 +109,14 @@ class Alert:
         """Append action to alert history."""
         metadata = dict(self.alert_metadata or {})
         history = list(metadata.get("history", []))
-        history.append({
-            "action": action,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "user_id": str(user_id),
-            **details,
-        })
+        history.append(
+            {
+                "action": action,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "user_id": str(user_id),
+                **details,
+            }
+        )
         metadata["history"] = history
         self.alert_metadata = metadata
 
@@ -126,18 +130,20 @@ class Alert:
         """Attach evidence to alert."""
         metadata = dict(self.alert_metadata or {})
         evidence = list(metadata.get("evidence", []))
-        evidence.append({
-            "type": evidence_type,
-            "content": content,
-            "source": source,
-            "added_by": str(added_by),
-            "added_at": datetime.now(UTC).isoformat(),
-        })
+        evidence.append(
+            {
+                "type": evidence_type,
+                "content": content,
+                "source": source,
+                "added_by": str(added_by),
+                "added_at": datetime.now(UTC).isoformat(),
+            }
+        )
         metadata["evidence"] = evidence
         self.alert_metadata = metadata
 
     @staticmethod
-    def normalize_affected_entities(value: object) -> dict:
+    def normalize_affected_entities(value: object) -> dict[str, Any]:
         """
         Normalize affected_entities to standard dict format.
 
@@ -159,7 +165,7 @@ class Alert:
         return {}
 
     @staticmethod
-    def normalize_metadata(value: object) -> dict:
+    def normalize_metadata(value: object) -> dict[str, Any]:
         """
         Normalize alert_metadata to standard dict format.
 

@@ -6,8 +6,10 @@ TASK-IMPL-003: Fixed tenant_id propagation to repository.
 Refers to Suite ID: TS-E2E-FLW-JRN-001.
 Refers to Suite ID: TS-BUG-ALRT-IMPORT-001.
 """
+
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID, uuid4
 
 from src.alerts.application.ports.alert_repository import IAlertRepository
@@ -28,7 +30,7 @@ class CreateAlertUseCase:
         category: str,
         severity: str,
         message: str,
-        affected_entities: dict | None = None,
+        affected_entities: dict[str, Any] | None = None,
     ) -> Alert:
         """Create a new alert with tenant isolation."""
         alert = Alert(

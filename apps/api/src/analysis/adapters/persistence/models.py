@@ -14,7 +14,9 @@ from datetime import UTC, datetime
 def _utcnow() -> datetime:
     """Return current UTC time as a naive datetime (for TIMESTAMP WITHOUT TIME ZONE columns)."""
     return datetime.now(UTC).replace(tzinfo=None)
-from typing import TYPE_CHECKING
+
+
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -236,7 +238,7 @@ class Alert(Base):
     )
 
     # Affected entities (stored as JSONB)
-    affected_entities: Mapped[dict] = mapped_column(
+    affected_entities: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         default=dict,  # {"documents": [], "wbs": [], "bom": []}
     )
@@ -245,7 +247,7 @@ class Alert(Base):
     impact_level: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Metadata (includes evidence and other data)
-    alert_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
+    alert_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
 
     # Status
     status: Mapped[AlertStatus] = mapped_column(
@@ -308,15 +310,15 @@ class Alert(Base):
         TASK-BCK-026: Ensure alert_type defaults to RISK for backward compatibility.
         """
         # Set alert_type default if not provided
-        if 'alert_type' not in kwargs:
-            kwargs['alert_type'] = AlertType.RISK
+        if "alert_type" not in kwargs:
+            kwargs["alert_type"] = AlertType.RISK
         else:
             # Validate alert_type is a valid AlertType enum
-            alert_type_value = kwargs['alert_type']
+            alert_type_value = kwargs["alert_type"]
             if not isinstance(alert_type_value, AlertType):
                 try:
                     # Try to convert string to AlertType
-                    kwargs['alert_type'] = AlertType(alert_type_value)
+                    kwargs["alert_type"] = AlertType(alert_type_value)
                 except (ValueError, KeyError):
                     raise ValueError(
                         f"Invalid alert_type: {alert_type_value}. "
@@ -472,9 +474,7 @@ class KnowledgeGraphNodeORM(Base):
 
     __tablename__ = "knowledge_graph_nodes"
 
-    id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), primary_key=True, default=uuid4
-    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
@@ -494,7 +494,9 @@ class KnowledgeGraphNodeORM(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("project_id", "entity_type", "entity_id", name="kg_nodes_project_entity_unique"),
+        UniqueConstraint(
+            "project_id", "entity_type", "entity_id", name="kg_nodes_project_entity_unique"
+        ),
         Index("ix_kg_nodes_project", "project_id"),
         Index("ix_kg_nodes_type", "entity_type"),
         Index("ix_kg_nodes_entity", "entity_id"),
@@ -515,9 +517,7 @@ class KnowledgeGraphEdgeORM(Base):
 
     __tablename__ = "knowledge_graph_edges"
 
-    id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), primary_key=True, default=uuid4
-    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
@@ -545,8 +545,11 @@ class KnowledgeGraphEdgeORM(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "project_id", "source_node_id", "target_node_id", "relationship_type",
-            name="kg_edges_unique"
+            "project_id",
+            "source_node_id",
+            "target_node_id",
+            "relationship_type",
+            name="kg_edges_unique",
         ),
         Index("ix_kg_edges_project", "project_id"),
         Index("ix_kg_edges_source", "source_node_id"),
@@ -564,9 +567,7 @@ class DocumentArtifactORM(Base):
 
     __tablename__ = "document_artifacts"
 
-    artifact_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), primary_key=True, default=uuid4
-    )
+    artifact_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     document_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     document_revision_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
@@ -601,8 +602,7 @@ class DocumentArtifactORM(Base):
 
 
 _DOCUMENT_ARTIFACT_POLICY_USING = (
-    "tenant_id = COALESCE(NULLIF(current_setting('app.current_tenant', true), "
-    "'')::uuid, tenant_id)"
+    "tenant_id = COALESCE(NULLIF(current_setting('app.current_tenant', true), '')::uuid, tenant_id)"
 )
 
 

@@ -3,10 +3,11 @@ Alert Application DTOs.
 
 Request and Response Data Transfer Objects.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -39,9 +40,13 @@ class AlertSubscriptionConfigPayload(BaseModel):
         if self.emailEnabled:
             local_part, separator, domain_part = self.emailAddress.partition("@")
             if not separator or not local_part or "." not in domain_part:
-                raise ValueError("emailAddress must be a valid email when email notifications are enabled")
+                raise ValueError(
+                    "emailAddress must be a valid email when email notifications are enabled"
+                )
 
-        if self.slackEnabled and (not self.slackChannel.startswith("#") or len(self.slackChannel) < 2):
+        if self.slackEnabled and (
+            not self.slackChannel.startswith("#") or len(self.slackChannel) < 2
+        ):
             raise ValueError("slackChannel must start with # when Slack notifications are enabled")
 
         return self
@@ -58,7 +63,7 @@ class CreateAlertRequest(BaseModel):
     category: Literal["SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME"]
     severity: Literal["low", "medium", "high", "critical"]
     message: str
-    affected_entities: dict = Field(default_factory=dict)
+    affected_entities: dict[str, Any] = Field(default_factory=dict)
 
 
 class ReviewAlertRequest(BaseModel):
@@ -104,7 +109,7 @@ class AlertResponse(BaseModel):
     severity: str
     message: str
     status: str
-    affected_entities: dict = Field(default_factory=dict)
+    affected_entities: dict[str, Any] = Field(default_factory=dict)
     reviewed_by: UUID | None = None
     reviewed_at: datetime | None = None
     root_cause: str | None = None
@@ -123,7 +128,7 @@ class AlertListResponse(BaseModel):
 
 class AlertHistoryResponse(BaseModel):
     alert_id: str
-    items: list[dict]
+    items: list[dict[str, Any]]
 
 
 class BulkOperationResponse(BaseModel):

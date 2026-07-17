@@ -6,6 +6,7 @@ Implements IAlertRepository port with tenant isolation.
 
 Refers to Suite ID: TS-E2E-FLW-JRN-001, TS-BUG-ALRT-IMPORT-001.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -15,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.alerts.application.ports.alert_repository import IAlertRepository
-from src.alerts.domain.enums import AlertSeverity, AlertStatus
+from src.alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
 from src.alerts.domain.models import Alert
 from src.analysis.adapters.persistence.models import Alert as AlertORM
 from src.documents.adapters.persistence.models import ClauseORM
@@ -60,13 +61,18 @@ class SqlAlchemyAlertRepository(IAlertRepository):
         except ValueError:
             status = AlertStatus.OPEN
 
+        try:
+            approval_status_converted = ApprovalStatus(str(orm_alert.approval_status).lower())
+        except ValueError:
+            approval_status_converted = ApprovalStatus.PENDING
+
         return Alert(
             id=orm_alert.id,
             project_id=orm_alert.project_id,
             severity=severity,
             category=orm_alert.category or "risk",
             status=status,
-            approval_status=orm_alert.approval_status,
+            approval_status=approval_status_converted,
             rule_id=orm_alert.rule_id,
             title=orm_alert.title,
             description=orm_alert.description or "",
@@ -94,16 +100,16 @@ class SqlAlchemyAlertRepository(IAlertRepository):
 
     def _to_orm(self, domain_alert: Alert) -> AlertORM:
         """Convert domain entity to ORM model (for updates)."""
-        return AlertORM(
+        return AlertORM(  # type: ignore[no-untyped-call]
             id=domain_alert.id,
             project_id=domain_alert.project_id,
             severity=domain_alert.severity.value
-                if hasattr(domain_alert.severity, "value")
-                else domain_alert.severity,
+            if hasattr(domain_alert.severity, "value")
+            else domain_alert.severity,
             category=domain_alert.category,
             status=domain_alert.status.value
-                if hasattr(domain_alert.status, "value")
-                else domain_alert.status,
+            if hasattr(domain_alert.status, "value")
+            else domain_alert.status,
             rule_id=domain_alert.rule_id,
             title=domain_alert.title,
             message=domain_alert.description,
@@ -121,10 +127,7 @@ class SqlAlchemyAlertRepository(IAlertRepository):
 
     async def get_by_id(self, alert_id: UUID, tenant_id: UUID) -> Alert | None:
         """Get alert by ID with tenant isolation (relying on RLS)."""
-        query = (
-            select(AlertORM)
-            .where(AlertORM.id == alert_id, AlertORM.tenant_id == tenant_id)
-        )
+        query = select(AlertORM).where(AlertORM.id == alert_id, AlertORM.tenant_id == tenant_id)
         result = await self._session.execute(query)
         orm_alert = result.scalar_one_or_none()
 
@@ -139,12 +142,9 @@ class SqlAlchemyAlertRepository(IAlertRepository):
         severity: AlertSeverity | None = None,
     ) -> list[Alert]:
         """List alerts for a project with filters."""
-        query = (
-            select(AlertORM)
-            .where(
-                AlertORM.project_id == project_id,
-                AlertORM.tenant_id == tenant_id,
-            )
+        query = select(AlertORM).where(
+            AlertORM.project_id == project_id,
+            AlertORM.tenant_id == tenant_id,
         )
         if status:
             query = query.where(AlertORM.status == status.value)
@@ -171,9 +171,9 @@ class SqlAlchemyAlertRepository(IAlertRepository):
         if project_id:
             query = query.where(AlertORM.project_id == project_id)
         if document_id:
-            query = query.join(
-                ClauseORM, ClauseORM.id == AlertORM.source_clause_id
-            ).where(ClauseORM.document_id == document_id)
+            query = query.join(ClauseORM, ClauseORM.id == AlertORM.source_clause_id).where(
+                ClauseORM.document_id == document_id
+            )
         if status:
             query = query.where(AlertORM.status == status.value)
         if category:
@@ -197,7 +197,7 @@ class SqlAlchemyAlertRepository(IAlertRepository):
         if not await self._verify_project_ownership(alert.project_id, effective_tenant_id):
             raise ValueError("Cannot create alert outside tenant context")
 
-        orm_alert = AlertORM(
+        orm_alert = AlertORM(  # type: ignore[no-untyped-call]
             id=alert.id,
             tenant_id=effective_tenant_id,
             project_id=alert.project_id,
@@ -230,13 +230,13 @@ class SqlAlchemyAlertRepository(IAlertRepository):
             result = await self._session.execute(query)
             orm_alert = result.scalar_one_or_none()
         if orm_alert:
-            orm_alert.status = alert.status.value if hasattr(alert.status, "value") else alert.status
+            orm_alert.status = alert.status.value  # type: ignore[assignment]
             orm_alert.reviewed_by = alert.reviewed_by
             orm_alert.reviewed_at = self._normalize_naive_utc(alert.reviewed_at)
             orm_alert.resolved_at = self._normalize_naive_utc(alert.resolved_at)
             orm_alert.resolved_by = alert.resolved_by
             orm_alert.alert_metadata = alert.alert_metadata
-            orm_alert.updated_at = self._normalize_naive_utc(datetime.now(UTC))
+            orm_alert.updated_at = datetime.now(UTC).replace(tzinfo=None)
             await self._session.flush()
 
     async def delete(self, alert_id: UUID, tenant_id: UUID) -> bool:
