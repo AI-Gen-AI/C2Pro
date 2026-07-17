@@ -192,7 +192,9 @@ class CacheService:
     It logs errors and gracefully degrades to in-memory cache.
     """
 
-    def __init__(self, redis_url: str | None = None, namespace_prefix: str = NAMESPACE_C2PRO) -> None:
+    def __init__(
+        self, redis_url: str | None = None, namespace_prefix: str = NAMESPACE_C2PRO
+    ) -> None:
         """
         Initialize cache service.
 
@@ -201,7 +203,7 @@ class CacheService:
                        If None, only in-memory cache will be used.
             namespace_prefix: Default namespace prefix for all keys (default: "c2pro").
         """
-        self._redis: redis.Redis | None = None
+        self._redis: redis.Redis[Any] | None = None
         self._memory = InMemoryCache()
         self._enabled = bool(redis_url)
         self._namespace = namespace_prefix
@@ -236,7 +238,7 @@ class CacheService:
                 self._redis = None
                 self._enabled = False
 
-    def _init_circuit_breaker(self):
+    def _init_circuit_breaker(self) -> Any:  # CircuitBreaker from fakeredis
         """Initialize circuit breaker for Redis operations."""
         cb_settings = get_circuit_breaker_settings()
         if not cb_settings.enable_circuit_breakers:
@@ -310,10 +312,7 @@ class CacheService:
     # =============================================
 
     async def get(
-        self,
-        key: str,
-        namespace: str | None = None,
-        default: Any | None = None
+        self, key: str, namespace: str | None = None, default: Any | None = None
     ) -> Any | None:
         """
         Get value from cache (auto-deserializes JSON).
@@ -335,11 +334,7 @@ class CacheService:
         return value if value is not None else default
 
     async def set(
-        self,
-        key: str,
-        value: Any,
-        ttl: int | None = None,
-        namespace: str | None = None
+        self, key: str, value: Any, ttl: int | None = None, namespace: str | None = None
     ) -> bool:
         """
         Set value in cache (auto-serializes to JSON).
@@ -384,7 +379,10 @@ class CacheService:
 
         if await self._can_use_redis():
             try:
-                result = await self._redis.delete(full_key)
+                redis = self._redis
+                if redis is None:
+                    return False
+                result = await redis.delete(full_key)
                 if self._circuit_breaker:
                     await self._circuit_breaker.record_success()
                 return result > 0
@@ -414,6 +412,7 @@ class CacheService:
 
         if await self._can_use_redis():
             try:
+                assert self._redis is not None  # _can_use_redis() guarantees this
                 result = await self._redis.exists(full_key)
                 if self._circuit_breaker:
                     await self._circuit_breaker.record_success()
@@ -512,12 +511,13 @@ class CacheService:
             return False
         if self._circuit_breaker is None:
             return True
-        return await self._circuit_breaker.can_execute()
+        return await self._circuit_breaker.can_execute()  # type: ignore[no-any-return]
 
     async def _get_bytes(self, key: str) -> bytes | None:
         """Internal method to get raw bytes from cache with circuit breaker protection."""
         if await self._can_use_redis():
             try:
+                assert self._redis is not None  # _can_use_redis() guarantees this
                 value = await self._redis.get(key)
                 if self._circuit_breaker:
                     await self._circuit_breaker.record_success()
@@ -536,6 +536,7 @@ class CacheService:
         """Internal method to set raw bytes in cache with circuit breaker protection."""
         if await self._can_use_redis():
             try:
+                assert self._redis is not None  # _can_use_redis() guarantees this
                 await self._redis.set(key, value, ex=ttl_seconds)
                 if self._circuit_breaker:
                     await self._circuit_breaker.record_success()
@@ -585,11 +586,7 @@ class CacheService:
     # Domain-Specific Methods (Document Extraction)
     # =============================================
 
-    async def get_extraction(
-        self,
-        document_hash: str,
-        task_type: str
-    ) -> dict[str, Any] | None:
+    async def get_extraction(self, document_hash: str, task_type: str) -> dict[str, Any] | None:
         """
         Get cached document extraction result.
 
@@ -601,7 +598,7 @@ class CacheService:
             Cached extraction result or None if not found
         """
         key = build_extraction_cache_key(document_hash, task_type)
-        payload = await self.get_json(key)
+        payload: dict[str, Any] | None = await self.get_json(key)
         if payload is None:
             record_cache_miss(CACHE_TYPE_EXTRACTION)
             return None
@@ -698,12 +695,16 @@ def build_endpoint_cache_key(*, endpoint: str, query_params: dict[str, Any], ten
         "tenant_id": str(tenant_id),
     }
     digest = hashlib.sha256(
-        json.dumps(normalized_payload, sort_keys=True, default=str, separators=(",", ":")).encode("utf-8")
+        json.dumps(normalized_payload, sort_keys=True, default=str, separators=(",", ":")).encode(
+            "utf-8"
+        )
     ).hexdigest()
     return f"endpoint:{endpoint.strip('/').replace('/', ':')}:{digest}"
 
 
-def cached(*, ttl: int, endpoint: str) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
+def cached(
+    *, ttl: int, endpoint: str
+) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
     """
     TS-AI-020: Cache async route responses by endpoint, query params, and tenant_id.
 
@@ -733,7 +734,9 @@ def cached(*, ttl: int, endpoint: str) -> Callable[[Callable[..., Awaitable[Any]
                 for key, value in bound.arguments.items()
                 if key not in {"tenant_id", "service"} and not key.startswith("_")
             }
-            cache_key = build_endpoint_cache_key(endpoint=endpoint, query_params=query_params, tenant_id=tenant_id)
+            cache_key = build_endpoint_cache_key(
+                endpoint=endpoint, query_params=query_params, tenant_id=tenant_id
+            )
             cache = get_cache_service()
             cache_type = f"{CACHE_TYPE_AI_ANALYTICS}:{endpoint.strip('/')}"
 
@@ -745,7 +748,12 @@ def cached(*, ttl: int, endpoint: str) -> Callable[[Callable[..., Awaitable[Any]
                         return cached_payload
                     record_cache_miss(cache_type)
                 except Exception as exc:
-                    logger.warning("route_cache_get_failed", endpoint=endpoint, cache_key=cache_key, error=str(exc))
+                    logger.warning(
+                        "route_cache_get_failed",
+                        endpoint=endpoint,
+                        cache_key=cache_key,
+                        error=str(exc),
+                    )
 
             payload = await func(*args, **kwargs)
 
@@ -753,7 +761,12 @@ def cached(*, ttl: int, endpoint: str) -> Callable[[Callable[..., Awaitable[Any]
                 try:
                     await cache.set(cache_key, payload, ttl=ttl)
                 except Exception as exc:
-                    logger.warning("route_cache_set_failed", endpoint=endpoint, cache_key=cache_key, error=str(exc))
+                    logger.warning(
+                        "route_cache_set_failed",
+                        endpoint=endpoint,
+                        cache_key=cache_key,
+                        error=str(exc),
+                    )
 
             return payload
 
@@ -811,7 +824,7 @@ def get_cache_service() -> CacheService | None:
     return _cache_service
 
 
-def get_redis_client() -> redis.Redis | None:
+def get_redis_client() -> redis.Redis[Any] | None:
     """
     Return the raw ``redis.asyncio.Redis`` client from the singleton CacheService.
 

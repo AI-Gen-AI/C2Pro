@@ -28,7 +28,7 @@ class DLQReplayService:
         """
         Replay one message honoring retryability, tenant filtering, and idempotency.
         """
-        messages = self._dlq.list()
+        messages = self._dlq.list_messages()
         selected = None
         for message in messages:
             message_tenant = str(message.payload.get("tenant_id", ""))
@@ -70,7 +70,11 @@ class DLQReplayService:
 
         remaining_all = await self._dlq.size()
         remaining_for_tenant = len(
-            [msg for msg in self._dlq.list() if str(msg.payload.get("tenant_id", "")) == message_tenant]
+            [
+                msg
+                for msg in self._dlq.list_messages()
+                if str(msg.payload.get("tenant_id", "")) == message_tenant
+            ]
         )
         return {
             "status": "replayed",
@@ -83,4 +87,3 @@ class DLQReplayService:
                 "tenant_id": message_tenant,
             },
         }
-

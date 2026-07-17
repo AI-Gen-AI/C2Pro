@@ -80,7 +80,7 @@ class DeadLetterQueue:
             task_id=task_id,
         )
 
-    def list(self) -> list[DLQMessage]:
+    def list_messages(self) -> list[DLQMessage]:
         return list(self._messages)
 
     def list_by_topic(self, topic: str) -> list[DLQMessage]:
