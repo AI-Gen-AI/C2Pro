@@ -5,7 +5,7 @@ These models represent the database schema for procurement-related entities.
 
 from datetime import datetime
 from decimal import Decimal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
     DECIMAL,
@@ -40,8 +40,8 @@ class BudgetItemORM(Base):
 
     __tablename__ = "procurement_budget_items"
 
-    id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    project_id: Mapped[PGUUID | None] = mapped_column(
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    project_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
@@ -70,8 +70,8 @@ class WBSItemORM(Base):
         ),
     )
 
-    id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    project_id: Mapped[PGUUID] = mapped_column(
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
     )
     code: Mapped[str] = mapped_column(String, nullable=False)
@@ -91,7 +91,7 @@ class WBSItemORM(Base):
     planned_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     actual_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     actual_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    source_clause_id: Mapped[PGUUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    source_clause_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     wbs_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default={}, nullable=False)
     __mapper_args__ = {"version_id_col": version}
@@ -120,13 +120,13 @@ class BOMItemORM(Base):
 
     __tablename__ = "procurement_bom_items"
 
-    id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    project_id: Mapped[PGUUID] = mapped_column(
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
     )
     item_name: Mapped[str] = mapped_column(String, nullable=False)
     quantity: Mapped[Decimal] = mapped_column(DECIMAL(18, 4), nullable=False)
-    wbs_item_id: Mapped[PGUUID | None] = mapped_column(
+    wbs_item_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("procurement_wbs_items.id"), nullable=True
     )
     item_code: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -144,11 +144,11 @@ class BOMItemORM(Base):
     production_time_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     transit_time_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     incoterm: Mapped[str | None] = mapped_column(String, nullable=True)
-    contract_clause_id: Mapped[PGUUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
-    source_document_id: Mapped[PGUUID | None] = mapped_column(
+    contract_clause_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    source_document_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=True
     )
-    budget_item_id: Mapped[PGUUID | None] = mapped_column(
+    budget_item_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("procurement_budget_items.id"), nullable=True
     )
     procurement_status: Mapped[ProcurementStatus] = mapped_column(
@@ -175,14 +175,14 @@ class StakeholderAlertORM(Base):
 
     __tablename__ = "stakeholder_alerts"
 
-    id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    project_id: Mapped[PGUUID] = mapped_column(
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
     )
-    stakeholder_id: Mapped[PGUUID] = mapped_column(
+    stakeholder_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("stakeholders.id", ondelete="CASCADE"), nullable=False
     )
-    alert_id: Mapped[PGUUID] = mapped_column(
+    alert_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("alerts.id", ondelete="CASCADE"), nullable=False
     )
     notification_sent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -213,18 +213,18 @@ class BOMRevisionORM(Base):
 
     __tablename__ = "bom_revisions"
 
-    id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    project_id: Mapped[PGUUID] = mapped_column(
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
     )
-    bom_item_id: Mapped[PGUUID] = mapped_column(
+    bom_item_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("procurement_bom_items.id", ondelete="CASCADE"),
         nullable=False,
     )
     revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
     changes_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    changed_by: Mapped[PGUUID | None] = mapped_column(
+    changed_by: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     change_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -250,13 +250,13 @@ class ProcurementPlanSnapshotORM(Base):
 
     __tablename__ = "procurement_plan_snapshots"
 
-    id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    project_id: Mapped[PGUUID] = mapped_column(
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
     )
     snapshot_name: Mapped[str] = mapped_column(String(255), nullable=False)
     snapshot_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    created_by: Mapped[PGUUID | None] = mapped_column(
+    created_by: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(

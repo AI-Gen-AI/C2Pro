@@ -23,6 +23,7 @@ from src.bulk_operations.store import register_job
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session_with_tenant
+from src.core.tenants.types import require_tenant_id
 from src.procurement.adapters.persistence.budget_repository import SQLAlchemyBudgetRepository
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.application.budget_use_cases import GetBudgetUseCase
@@ -1013,7 +1014,7 @@ async def get_project_budget(
     async with get_session_with_tenant(current_user.tenant_id) as session:
         budget_repo = SQLAlchemyBudgetRepository(session)
         budget_use_case = GetBudgetUseCase(budget_repo)
-        budget_response = await budget_use_case.execute(project_id, current_user.tenant_id)
+        budget_response = await budget_use_case.execute(project_id, require_tenant_id(current_user.tenant_id))
 
     total_budget = budget_response.total_budget
     spent_amount = Decimal("0")
@@ -1102,10 +1103,10 @@ async def get_project_wbs(
     async with get_session_with_tenant(current_user.tenant_id) as session:
         wbs_repo = SQLAlchemyWBSRepository(session)
         wbs_use_case = GetWBSTreeUseCase(wbs_repo)
-        tree_items = await wbs_use_case.execute(project_id, current_user.tenant_id)
+        tree_items = await wbs_use_case.execute(project_id, require_tenant_id(current_user.tenant_id))
 
         list_use_case = ListWBSItemsUseCase(wbs_repo)
-        flat_items = await list_use_case.execute(project_id, current_user.tenant_id)
+        flat_items = await list_use_case.execute(project_id, require_tenant_id(current_user.tenant_id))
 
     return {
         "project_id": str(project_id),

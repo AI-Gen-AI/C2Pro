@@ -209,21 +209,21 @@ class SQLAlchemyBOMRepository(IBOMRepository):
             return None
 
         # Update fields
-        orm.item_code = bom_item.item_code  # type: ignore[assignment]
-        orm.item_name = bom_item.item_name  # type: ignore[assignment]
-        orm.description = bom_item.description  # type: ignore[assignment]
-        orm.category = bom_item.category  # type: ignore[assignment]
-        orm.quantity = bom_item.quantity  # type: ignore[assignment]
-        orm.unit = bom_item.unit  # type: ignore[assignment]
-        orm.unit_price = bom_item.unit_price  # type: ignore[assignment]
-        orm.total_price = bom_item.total_price  # type: ignore[assignment]
-        orm.currency = bom_item.currency  # type: ignore[assignment]
-        orm.supplier = bom_item.supplier  # type: ignore[assignment]
-        orm.lead_time_days = bom_item.lead_time_days  # type: ignore[assignment]
-        orm.incoterm = bom_item.incoterm  # type: ignore[assignment]
-        orm.source_document_id = bom_item.source_document_id  # type: ignore[assignment]
-        orm.procurement_status = bom_item.procurement_status  # type: ignore[assignment]
-        orm.bom_metadata = bom_item.bom_metadata or {}  # type: ignore[assignment]
+        orm.item_code = bom_item.item_code
+        orm.item_name = bom_item.item_name
+        orm.description = bom_item.description
+        orm.category = bom_item.category
+        orm.quantity = bom_item.quantity
+        orm.unit = bom_item.unit
+        orm.unit_price = bom_item.unit_price
+        orm.total_price = bom_item.total_price
+        orm.currency = bom_item.currency
+        orm.supplier = bom_item.supplier
+        orm.lead_time_days = bom_item.lead_time_days
+        orm.incoterm = bom_item.incoterm
+        orm.source_document_id = bom_item.source_document_id
+        orm.procurement_status = bom_item.procurement_status
+        orm.bom_metadata = bom_item.bom_metadata or {}
 
         await self.session.flush()
         await self.session.refresh(orm)
@@ -245,7 +245,7 @@ class SQLAlchemyBOMRepository(IBOMRepository):
         if not orm:
             return None
 
-        orm.procurement_status = status  # type: ignore[assignment]
+        orm.procurement_status = status
 
         await self.session.flush()
         await self.session.refresh(orm)
