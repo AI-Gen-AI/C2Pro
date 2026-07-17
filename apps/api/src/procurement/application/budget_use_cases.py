@@ -67,7 +67,7 @@ class GetBudgetUseCase:
 
         return BudgetResponse(
             project_id=project_id,
-            items=[BudgetItemResponse(**item) for item in items],
+            items=[BudgetItemResponse.model_validate(item) for item in items],
             total_budget=total_budget,
             spent_amount=spent_amount,
             remaining_budget=remaining_budget,
@@ -94,7 +94,7 @@ class CreateBudgetItemUseCase:
             code=data.code,
             amount=data.amount,
         )
-        return BudgetItemResponse(**item)
+        return BudgetItemResponse.model_validate(item)
 
 
 class UpdateBudgetItemUseCase:
@@ -114,7 +114,7 @@ class UpdateBudgetItemUseCase:
         item = await self.repository.update(item_id, tenant_id, **updates)
         if not item:
             raise ValueError(f"Budget item {item_id} not found")
-        return BudgetItemResponse(**item)
+        return BudgetItemResponse.model_validate(item)
 
 
 class DeleteBudgetItemUseCase:

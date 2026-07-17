@@ -6,6 +6,7 @@ Refers to Suite ID: TS-INT-DB-WBS-001.
 
 from __future__ import annotations
 
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import and_, inspect, select
@@ -305,10 +306,10 @@ class SQLAlchemyWBSRepository(IWBSRepository):
                 WBSItem(
                     project_id=project_id,
                     code=code,
-                    name=item.get("name") or "WBS Item",
-                    description=item.get("description"),
+                    name=cast("str", item.get("name") or "WBS Item"),
+                    description=cast("str | None", item.get("description")),
                     level=level,
-                    parent_code=item.get("parent_code"),
+                    parent_code=cast("str | None", item.get("parent_code")),
                     item_type=item_type,
                     budget_allocated=_parse_decimal(item.get("budget_allocated")),
                     wbs_metadata={"confidence": item.get("confidence"), "raw": item},
