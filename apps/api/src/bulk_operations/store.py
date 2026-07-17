@@ -9,10 +9,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from src.core.tenants.types import TenantId
+
 _jobs: dict[str, dict[str, Any]] = {}
 
 
-def register_job(job_id: str, job_data: dict[str, Any], tenant_id: str | None = None) -> None:
+def register_job(job_id: str, job_data: dict[str, Any], tenant_id: TenantId | None = None) -> None:
     """Register or replace a bulk-operation job payload with tenant isolation."""
     payload = dict(job_data)
     now_iso = datetime.now(UTC).isoformat()
@@ -28,7 +30,7 @@ def register_job(job_id: str, job_data: dict[str, Any], tenant_id: str | None = 
     _jobs[job_id] = payload
 
 
-def get_job(job_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
+def get_job(job_id: str, tenant_id: TenantId | None = None) -> dict[str, Any] | None:
     """Fetch a bulk-operation job by ID with tenant isolation."""
     job = _jobs.get(job_id)
     if job is None:
@@ -38,4 +40,3 @@ def get_job(job_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
         if job_tenant is not None and job_tenant != tenant_id:
             return None
     return job
-
