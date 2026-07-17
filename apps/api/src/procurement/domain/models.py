@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 # ===========================================
 # ENUMS
 # ===========================================
-from src.shared_kernel.enums import WBSItemType  # noqa: F401 — re-export
+from src.shared_kernel.enums import WBSItemType as WBSItemType  # re-export
 
 
 class BOMCategory(str, Enum):

@@ -8,9 +8,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from src.procurement.ports.budget_repository import BudgetRepository
+
 
 class BudgetItemCreate(BaseModel):
     """DTO for creating a budget item."""
+
     name: str = Field(..., min_length=1)
     code: str = Field(..., pattern=r"^[A-Z0-9-]+$")
     amount: Decimal = Field(..., ge=0)
@@ -18,6 +21,7 @@ class BudgetItemCreate(BaseModel):
 
 class BudgetItemUpdate(BaseModel):
     """DTO for updating a budget item."""
+
     name: str | None = Field(None, min_length=1)
     code: str | None = Field(None, pattern=r"^[A-Z0-9-]+$")
     amount: Decimal | None = Field(None, ge=0)
@@ -25,6 +29,7 @@ class BudgetItemUpdate(BaseModel):
 
 class BudgetItemResponse(BaseModel):
     """DTO for budget item response."""
+
     id: UUID
     project_id: UUID
     name: str
@@ -37,6 +42,7 @@ class BudgetItemResponse(BaseModel):
 
 class BudgetResponse(BaseModel):
     """DTO for project budget summary."""
+
     project_id: UUID
     items: list[BudgetItemResponse]
     total_budget: Decimal = Decimal(0)
@@ -48,8 +54,8 @@ class BudgetResponse(BaseModel):
 class GetBudgetUseCase:
     """Use case for getting project budget."""
 
-    def __init__(self, repository):
-        self.repository = repository
+    def __init__(self, repository: BudgetRepository) -> None:
+        self.repository: BudgetRepository = repository
 
     async def execute(self, project_id: UUID, tenant_id: UUID) -> BudgetResponse:
         """Get budget for a project."""
@@ -70,8 +76,8 @@ class GetBudgetUseCase:
 class CreateBudgetItemUseCase:
     """Use case for creating a budget item."""
 
-    def __init__(self, repository):
-        self.repository = repository
+    def __init__(self, repository: BudgetRepository) -> None:
+        self.repository: BudgetRepository = repository
 
     async def execute(
         self,
@@ -93,8 +99,8 @@ class CreateBudgetItemUseCase:
 class UpdateBudgetItemUseCase:
     """Use case for updating a budget item."""
 
-    def __init__(self, repository):
-        self.repository = repository
+    def __init__(self, repository: BudgetRepository) -> None:
+        self.repository: BudgetRepository = repository
 
     async def execute(
         self,
@@ -113,8 +119,8 @@ class UpdateBudgetItemUseCase:
 class DeleteBudgetItemUseCase:
     """Use case for deleting a budget item."""
 
-    def __init__(self, repository):
-        self.repository = repository
+    def __init__(self, repository: BudgetRepository) -> None:
+        self.repository: BudgetRepository = repository
 
     async def execute(self, item_id: UUID, tenant_id: UUID) -> bool:
         """Delete a budget item."""
