@@ -75,7 +75,7 @@ class IngestionPortAdapter:
 
     def _extract_pdf_pages(self, doc_bytes: bytes) -> list[tuple[int, str]] | None:
         try:
-            import fitz  # PyMuPDF
+            import fitz  # type: ignore
         except ImportError:
             logger.warning("di_ingestion_pymupdf_unavailable")
             return None
