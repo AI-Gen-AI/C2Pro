@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from src.core.tenants.types import TenantId
 from src.procurement.ports.budget_repository import BudgetRepository
 
 
@@ -57,7 +58,7 @@ class GetBudgetUseCase:
     def __init__(self, repository: BudgetRepository) -> None:
         self.repository: BudgetRepository = repository
 
-    async def execute(self, project_id: UUID, tenant_id: UUID) -> BudgetResponse:
+    async def execute(self, project_id: UUID, tenant_id: TenantId) -> BudgetResponse:
         """Get budget for a project."""
         items = await self.repository.get_by_project(project_id, tenant_id)
         total_budget = sum(item["amount"] for item in items)
@@ -82,7 +83,7 @@ class CreateBudgetItemUseCase:
     async def execute(
         self,
         project_id: UUID,
-        tenant_id: UUID,
+        tenant_id: TenantId,
         data: BudgetItemCreate,
     ) -> BudgetItemResponse:
         """Create a new budget item."""
@@ -105,7 +106,7 @@ class UpdateBudgetItemUseCase:
     async def execute(
         self,
         item_id: UUID,
-        tenant_id: UUID,
+        tenant_id: TenantId,
         data: BudgetItemUpdate,
     ) -> BudgetItemResponse:
         """Update an existing budget item."""
@@ -122,6 +123,6 @@ class DeleteBudgetItemUseCase:
     def __init__(self, repository: BudgetRepository) -> None:
         self.repository: BudgetRepository = repository
 
-    async def execute(self, item_id: UUID, tenant_id: UUID) -> bool:
+    async def execute(self, item_id: UUID, tenant_id: TenantId) -> bool:
         """Delete a budget item."""
         return await self.repository.delete(item_id, tenant_id)

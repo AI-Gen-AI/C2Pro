@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import date
 from uuid import UUID
 
+from src.core.tenants.types import TenantId
 from src.procurement.domain.lead_time_calculator import LeadTimeResult
 from src.procurement.ports.bom_repository import IBOMRepository
 from src.procurement.ports.lead_time_calculator import ILeadTimeCalculator
@@ -31,7 +32,7 @@ class CalculateLeadTimeUseCase:
         *,
         project_id: UUID,
         required_on_site: date,
-        tenant_id: UUID,
+        tenant_id: TenantId,
     ) -> dict[UUID, LeadTimeResult]:
         """
         Calculate lead times for all BOM items in a project.

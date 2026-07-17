@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from src.core.tenants.types import TenantId
 from src.procurement.domain.models import BOMItem, BudgetItem
 from src.procurement.ports.bom_generation_service import IBOMGenerationService
 from src.procurement.ports.bom_repository import IBOMRepository
@@ -33,7 +34,7 @@ class GenerateBOMUseCase:
         *,
         project_id: UUID,
         budget_items: list[BudgetItem],
-        tenant_id: UUID,
+        tenant_id: TenantId,
     ) -> list[BOMItem]:
         """
         Generate BOM items for a project and persist them.
