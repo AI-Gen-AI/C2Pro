@@ -28,7 +28,7 @@ class TestDeadLetterQueue:
         dlq = DeadLetterQueue()
         dlq.push("t", {"id": "1"}, "e1")
         dlq.push("t", {"id": "2"}, "e2")
-        assert [m.payload["id"] for m in dlq.list()] == ["1", "2"]
+        assert [m.payload["id"] for m in dlq.list_messages()] == ["1", "2"]
 
     def test_004_pop_oldest_returns_first_message(self) -> None:
         dlq = DeadLetterQueue()
@@ -56,11 +56,11 @@ class TestDeadLetterQueue:
         dlq.push("t", {"id": "1"}, "e1")
         dlq.push("t", {"id": "2"}, "e2")
         dlq.push("t", {"id": "3"}, "e3")
-        assert [m.payload["id"] for m in dlq.list()] == ["2", "3"]
+        assert [m.payload["id"] for m in dlq.list_messages()] == ["2", "3"]
 
     def test_008_purge_clears_queue(self) -> None:
         dlq = DeadLetterQueue()
         dlq.push("t", {"id": "1"}, "e1")
         dlq.push("t", {"id": "2"}, "e2")
         dlq.purge()
-        assert dlq.list() == []
+        assert dlq.list_messages() == []
