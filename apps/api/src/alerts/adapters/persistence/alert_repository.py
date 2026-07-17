@@ -100,7 +100,7 @@ class SqlAlchemyAlertRepository(IAlertRepository):
 
     def _to_orm(self, domain_alert: Alert) -> AlertORM:
         """Convert domain entity to ORM model (for updates)."""
-        return AlertORM(  # type: ignore[no-untyped-call]
+        return AlertORM(
             id=domain_alert.id,
             project_id=domain_alert.project_id,
             severity=domain_alert.severity.value
@@ -197,7 +197,7 @@ class SqlAlchemyAlertRepository(IAlertRepository):
         if not await self._verify_project_ownership(alert.project_id, effective_tenant_id):
             raise ValueError("Cannot create alert outside tenant context")
 
-        orm_alert = AlertORM(  # type: ignore[no-untyped-call]
+        orm_alert = AlertORM(
             id=alert.id,
             tenant_id=effective_tenant_id,
             project_id=alert.project_id,
