@@ -14,6 +14,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.core.json_types import JsonDict
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
 
@@ -29,7 +30,7 @@ class CreateDocumentDTO:
     storage_url: str | None = None
     file_size_bytes: int | None = None
     created_by: UUID | None = None
-    document_metadata: dict | None = None
+    document_metadata: JsonDict | None = None
 
 
 @dataclass(frozen=True)
@@ -76,7 +77,7 @@ class DocumentDTO:
 class RetrievedChunk:
     """DTO for retrieved document chunks."""
     content: str
-    metadata: dict
+    metadata: JsonDict
     similarity: float
 
 
@@ -153,7 +154,7 @@ class DocumentListResponse(BaseModel):
 
 class DocumentDetailResponse(DocumentResponse):
     """Detailed document response."""
-    clauses: list[dict] | None = None
+    clauses: list[JsonDict] | None = None
 
 
 class EvidenceHistoryEventResponse(BaseModel):
@@ -204,7 +205,7 @@ class RagQuestionRequest(BaseModel):
 class RagAnswerResponse(BaseModel):
     """Response for RAG answers."""
     answer: str
-    sources: list[dict] = field(default_factory=list)
+    sources: list[JsonDict] = field(default_factory=list)
 
 
 class DocumentEntityResponse(BaseModel):
@@ -214,4 +215,4 @@ class DocumentEntityResponse(BaseModel):
     text: str
     page: int
     confidence: float
-    metadata: dict = Field(default_factory=dict)
+    metadata: JsonDict = Field(default_factory=dict)

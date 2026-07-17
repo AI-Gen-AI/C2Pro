@@ -13,6 +13,7 @@ import structlog
 from pydantic import BaseModel, Field
 from rapidfuzz import fuzz, process
 
+from src.core.tenants.types import require_tenant_id
 from src.documents.ports.document_repository import IDocumentRepository
 
 logger = structlog.get_logger()
@@ -43,6 +44,7 @@ class SourceLocator:
         self,
         query_text: str,
         document_id: UUID,
+        tenant_id: UUID,
         min_similarity_score: int = 85
     ) -> SourceLocation | None:
         """
@@ -61,11 +63,13 @@ class SourceLocator:
         Returns:
             A SourceLocation object if a satisfactory match is found, otherwise None.
         """
+        scoped_tenant_id = require_tenant_id(tenant_id)
         # --- Fast Path: Direct Code Match ---
         match = self.clause_regex.search(query_text)
         if match:
             clause_code = match.group(1)
             clause = await self.document_repository.get_clause_by_document_and_code(
+                tenant_id=scoped_tenant_id,
                 document_id=document_id,
                 clause_code=clause_code,
             )
@@ -81,7 +85,10 @@ class SourceLocator:
 
         # --- Slow Path: Fuzzy Search ---
         logger.info("source_locator_slow_path_started", document_id=document_id)
-        all_clauses = await self.document_repository.list_clauses_for_document(document_id=document_id)
+        all_clauses = await self.document_repository.list_clauses_for_document(
+            tenant_id=scoped_tenant_id,
+            document_id=document_id,
+        )
 
         if not all_clauses:
             logger.warning("source_locator_no_clauses", document_id=document_id)

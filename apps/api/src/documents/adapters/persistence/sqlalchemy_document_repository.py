@@ -6,13 +6,14 @@ Refers to Suite ID: TS-INT-DB-CLS-001, TS-INT-DB-DOC-001.
 Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 """
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, overload
 from uuid import UUID
 
 from sqlalchemy import Select, func, inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.persistence.models import Alert
+from src.core.json_types import JsonDict
 from src.documents.adapters.persistence.models import ClauseORM, DocumentORM
 from src.documents.domain.models import (
     Clause,
@@ -29,6 +30,14 @@ from src.documents.ports.document_repository import IDocumentRepository
 class SqlAlchemyDocumentRepository(IDocumentRepository):
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    @staticmethod
+    @overload
+    def _normalize_naive_utc(value: None) -> None: ...
+
+    @staticmethod
+    @overload
+    def _normalize_naive_utc(value: datetime) -> datetime: ...
 
     @staticmethod
     def _normalize_naive_utc(value: datetime | None) -> datetime | None:
@@ -54,13 +63,21 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         except ValueError:
             return None
 
-    async def _apply_document_tenant_filter(self, stmt, explicit_tenant_id: UUID | None = None):
+    async def _apply_document_tenant_filter(
+        self,
+        stmt: Select[tuple[DocumentORM]],
+        explicit_tenant_id: UUID | None = None,
+    ) -> Select[tuple[DocumentORM]]:
         tenant_id = explicit_tenant_id or await self._get_current_tenant_id()
         if tenant_id is None:
             return stmt
         return stmt.where(DocumentORM.tenant_id == tenant_id)
 
-    async def _apply_clause_tenant_filter(self, stmt, explicit_tenant_id: UUID | None = None):
+    async def _apply_clause_tenant_filter(
+        self,
+        stmt: Select[tuple[ClauseORM]],
+        explicit_tenant_id: UUID | None = None,
+    ) -> Select[tuple[ClauseORM]]:
         tenant_id = explicit_tenant_id or await self._get_current_tenant_id()
         if tenant_id is None:
             return stmt
@@ -171,7 +188,7 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         return orm_clause
 
     @staticmethod
-    def _build_alert_history_detail(alert: Alert, history_item: dict) -> str:
+    def _build_alert_history_detail(alert: Alert, history_item: JsonDict) -> str:
         details: list[str] = [alert.title]
         for key in ("decision", "resolution", "root_cause", "evidence_type", "rule_code"):
             value = history_item.get(key)
@@ -207,14 +224,14 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         )
         result = await self.session.execute(stmt)
         orm_document = result.scalar_one_or_none()
-        return self._to_domain_document(orm_document)
+        return self._to_domain_document(orm_document) if orm_document is not None else None
 
     async def get_by_id_internal(self, document_id: UUID) -> Document | None:
         """Retrieves a document by its ID without tenant filtering. Internal use only."""
         stmt = select(DocumentORM).where(DocumentORM.id == document_id)
         result = await self.session.execute(stmt)
         orm_document = result.scalar_one_or_none()
-        return self._to_domain_document(orm_document)
+        return self._to_domain_document(orm_document) if orm_document is not None else None
 
     async def get_document_with_clauses(
         self,
@@ -343,7 +360,9 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
                 orm_document.parsed_at = self._normalize_naive_utc(parsed_at)
             orm_document.updated_at = self._normalize_naive_utc(datetime.now(UTC))
 
-    async def update_metadata(self, tenant_id: UUID, document_id: UUID, document_metadata: dict) -> None:
+    async def update_metadata(
+        self, tenant_id: UUID, document_id: UUID, document_metadata: JsonDict
+    ) -> None:
         stmt = select(DocumentORM).where(
             DocumentORM.id == document_id,
             DocumentORM.tenant_id == tenant_id

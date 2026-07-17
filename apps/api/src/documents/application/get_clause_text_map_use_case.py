@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from uuid import UUID
 
+from src.core.tenants.types import require_tenant_id
 from src.documents.ports.document_repository import IDocumentRepository
 
 
@@ -14,4 +15,4 @@ class GetClauseTextMapUseCase:
         ids = [clause_id for clause_id in clause_ids if clause_id]
         if not ids:
             return {}
-        return await self.document_repository.get_clause_text_map(tenant_id, ids)
+        return await self.document_repository.get_clause_text_map(require_tenant_id(tenant_id), ids)

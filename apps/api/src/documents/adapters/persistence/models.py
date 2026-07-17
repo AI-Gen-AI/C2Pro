@@ -31,6 +31,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
+from src.core.json_types import JsonDict
 
 # TYPE_CHECKING imports need to be adjusted for the new module structure
 if TYPE_CHECKING:
@@ -108,7 +109,7 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
     retention_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Document Metadata (custom data)
-    document_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
+    document_metadata: Mapped[JsonDict] = mapped_column(JSONB, default=dict)
 
     # Audit
     created_by: Mapped[UUID | None] = mapped_column(
@@ -204,7 +205,7 @@ class ClauseORM(Base): # Renamed to ClauseORM to distinguish from domain entity
     text_end_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # AI Extraction
-    extracted_entities: Mapped[dict] = mapped_column(
+    extracted_entities: Mapped[JsonDict] = mapped_column(
         JSONB,
         default=dict,
     )
@@ -283,7 +284,9 @@ class DocumentChunkORM(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=False)
-    chunk_metadata: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, server_default="{}")
+    chunk_metadata: Mapped[JsonDict] = mapped_column(
+        "metadata", JSONB, nullable=False, server_default="{}"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

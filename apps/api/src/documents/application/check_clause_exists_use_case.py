@@ -3,6 +3,7 @@ Use Case for checking whether a clause exists.
 """
 from uuid import UUID
 
+from src.core.tenants.types import require_tenant_id
 from src.documents.ports.document_repository import IDocumentRepository
 
 
@@ -11,4 +12,4 @@ class CheckClauseExistsUseCase:
         self.document_repository = document_repository
 
     async def execute(self, tenant_id: UUID, clause_id: UUID) -> bool:
-        return await self.document_repository.clause_exists(tenant_id, clause_id)
+        return await self.document_repository.clause_exists(require_tenant_id(tenant_id), clause_id)

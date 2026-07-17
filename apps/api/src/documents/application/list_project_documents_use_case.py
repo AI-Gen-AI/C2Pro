@@ -3,6 +3,7 @@ Use Case for listing documents for a specific project.
 """
 from uuid import UUID
 
+from src.core.tenants.types import require_tenant_id
 from src.documents.domain.models import Document
 from src.documents.ports.document_repository import IDocumentRepository
 from src.projects.ports.project_repository import ProjectRepository
@@ -29,6 +30,6 @@ class ListProjectDocumentsUseCase:
             return [], 0
 
         documents, total_count = await self.document_repository.list_for_project(
-            tenant_id, project_id, skip, limit
+            require_tenant_id(tenant_id), project_id, skip, limit
         )
         return documents, total_count

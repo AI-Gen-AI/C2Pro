@@ -3,11 +3,14 @@ Use Case for parsing a document, extracting entities, and ingesting for RAG.
 """
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 from uuid import UUID
 
 import structlog
 from fastapi import HTTPException, status
 
+from src.core.json_types import JsonDict
+from src.core.tenants.types import require_tenant_id
 from src.documents.domain.models import DocumentStatus
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.entity_extraction_service import IEntityExtractionService
@@ -18,23 +21,23 @@ from src.documents.ports.storage_service import IStorageService
 logger = structlog.get_logger()
 
 
-def _extract_parsed_text(parsed_payload: dict) -> str:
+def _extract_parsed_text(parsed_payload: JsonDict) -> str:
     """Extract readable text from parsed payload for analysis fallback.
 
     Mirrors the priority chain from _extract_rag_text in the RAG ingestion
     service, adding budget handling that was previously missing.
     """
     # Priority 1: PDF text blocks
-    text_blocks = parsed_payload.get("text_blocks", [])
+    text_blocks = cast(list[JsonDict], parsed_payload.get("text_blocks", []))
     if text_blocks:
         return "\n\n".join(
-            block.get("text", "")
+            cast(str, block.get("text", ""))
             for block in text_blocks
             if isinstance(block.get("text"), str)
         ).strip()
 
     # Priority 2: Legacy/extracted clauses
-    clauses = parsed_payload.get("clauses", [])
+    clauses = cast(list[JsonDict], parsed_payload.get("clauses", []))
     if clauses:
         parts: list[str] = []
         for clause in clauses:
@@ -50,7 +53,7 @@ def _extract_parsed_text(parsed_payload: dict) -> str:
             return "\n\n".join(parts).strip()
 
     # Priority 3: Schedule rows
-    schedule_rows = parsed_payload.get("schedule", [])
+    schedule_rows = cast(list[JsonDict], parsed_payload.get("schedule", []))
     if schedule_rows:
         lines: list[str] = []
         for row in schedule_rows:
@@ -75,7 +78,7 @@ def _extract_parsed_text(parsed_payload: dict) -> str:
         header = budget.get("header", {})
         if isinstance(header, dict) and "project_name" in header:
             budget_parts.append(f"Project: {header['project_name']}")
-        chapters = budget.get("chapters", [])
+        chapters = cast(list[JsonDict], budget.get("chapters", []))
         for ch in chapters:
             if not isinstance(ch, dict):
                 continue
@@ -98,7 +101,7 @@ def _extract_parsed_text(parsed_payload: dict) -> str:
     return ""
 
 
-def _extract_budget_stated_total(parsed_payload: dict) -> float | int | None:
+def _extract_budget_stated_total(parsed_payload: JsonDict) -> float | int | None:
     """TS-COH-BUD-RECON-004: extract budget declared total from parser payload."""
     budget = parsed_payload.get("budget")
     stated_total = getattr(budget, "stated_total", None)
@@ -127,13 +130,16 @@ class ParseDocumentUseCase:
         self.rag_ingestion_service = rag_ingestion_service
 
     async def execute(self, tenant_id: UUID, document_id: UUID, user_id: UUID) -> None:  # noqa: ARG002 — user_id reserved for future audit/permissions
+        scoped_tenant_id = require_tenant_id(tenant_id)
         # 1. Get document and ensure it exists
-        document = await self.document_repository.get_by_id(tenant_id, document_id)
+        document = await self.document_repository.get_by_id(scoped_tenant_id, document_id)
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found or access denied.")
 
         # 2. Mark document as PARSING
-        await self.document_repository.update_status(tenant_id, document_id, DocumentStatus.PARSING)
+        await self.document_repository.update_status(
+            scoped_tenant_id, document_id, DocumentStatus.PARSING
+        )
         await self.document_repository.commit()
 
         try:
@@ -150,14 +156,14 @@ class ParseDocumentUseCase:
             await self.entity_extraction_service.extract_entities_from_document(
                 document=document,
                 parsed_payload=parsed_payload,
-                tenant_id=tenant_id,
+                tenant_id=scoped_tenant_id,
             )
 
             # 6. Ingest for RAG
             await self.rag_ingestion_service.ingest_document_chunks(
                 document=document,
                 parsed_payload=parsed_payload,
-                tenant_id=tenant_id,
+                tenant_id=scoped_tenant_id,
             )
 
             # 7. Extract parsed_text and store in document_metadata
@@ -169,11 +175,13 @@ class ParseDocumentUseCase:
             stated_total = _extract_budget_stated_total(parsed_payload)
             if stated_total is not None:
                 metadata["stated_total"] = stated_total
-            await self.document_repository.update_metadata(tenant_id, document_id, metadata)
+            await self.document_repository.update_metadata(
+                scoped_tenant_id, document_id, cast(JsonDict, metadata)
+            )
 
             # 8. Update document status to PARSED
             await self.document_repository.update_status(
-                tenant_id,
+                scoped_tenant_id,
                 document_id,
                 DocumentStatus.PARSED,
                 parsing_error=None,
@@ -185,7 +193,7 @@ class ParseDocumentUseCase:
         except Exception as e:
             logger.error("document_parsing_failed", document_id=document_id, error=str(e))
             await self.document_repository.update_status(
-                tenant_id, document_id, DocumentStatus.ERROR, parsing_error=str(e)
+                scoped_tenant_id, document_id, DocumentStatus.ERROR, parsing_error=str(e)
             )
             await self.document_repository.commit()
             raise # Re-raise to ensure error is propagated

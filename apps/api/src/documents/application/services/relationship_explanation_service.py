@@ -9,9 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import cast
 from uuid import UUID
 
 from src.analysis.domain.enums import AlertSeverity
+from src.core.json_types import JsonDict
 from src.documents.domain.models import Document
 
 
@@ -85,13 +87,16 @@ class EvidenceRelationshipExplanationService:
 
         citations: list[ExplanationCitation] = []
         for clause in document.clauses:
-            evidence_location = clause.extracted_entities.get("evidence_location", {})
+            evidence_location = cast(
+                JsonDict,
+                clause.extracted_entities.get("evidence_location", {}),
+            )
             citations.append(
                 ExplanationCitation(
                     clause_id=clause.id,
                     clause_code=clause.clause_code,
                     label=clause.title or clause.full_text or clause.clause_code,
-                    page=evidence_location.get("page_number"),
+                    page=cast(int | None, evidence_location.get("page_number")),
                     reason=(
                         "Linked to active alert"
                         if any(alert.source_clause_id == clause.id for alert in alerts)

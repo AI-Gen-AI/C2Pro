@@ -42,7 +42,7 @@ class MoneyEntityExtractor:
     A domain service to extract monetary and percentage entities from text.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         amount_pattern = r"-?\d{1,3}(?:[.,\s]\d{3})*(?:[.,]\d+)?|-?\d+(?:[.,]\d+)?"
         self.patterns = [
             (
@@ -158,6 +158,7 @@ class MoneyEntityExtractor:
                     amount_str = match.group("amount")
                     normalized_amount = self._normalize_amount_string(amount_str)
 
+                    entity: ExtractedEntity
                     if currency == "PERCENT":
                         entity = ExtractedPercentage(
                             value=normalized_amount,

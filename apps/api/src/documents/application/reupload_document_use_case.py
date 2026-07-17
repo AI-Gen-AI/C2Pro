@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from src.core.tasks.snapshot_tasks import enqueue_project_snapshot
+from src.core.tenants.types import require_tenant_id
 from src.documents.application.dtos import DocumentDTO
 from src.documents.domain.models import DocumentStatus, DocumentType
 from src.documents.ports.document_repository import IDocumentRepository
@@ -21,7 +22,7 @@ from src.temporal.domain.project_snapshot import SnapshotTrigger
 from src.temporal.ports.document_revision_repository import IDocumentRevisionRepository
 
 
-def _now_naive():
+def _now_naive() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
@@ -85,7 +86,8 @@ class ReuploadDocumentUseCase:
         file_content: bytes,
         filename: str | None = None,
     ) -> DocumentDTO:
-        document = await self.document_repository.get_by_id(tenant_id, document_id)
+        scoped_tenant_id = require_tenant_id(tenant_id)
+        document = await self.document_repository.get_by_id(scoped_tenant_id, document_id)
         if not document:
             raise ValueError(f"Document {document_id} not found or access denied")
         file_extension = os.path.splitext(filename or document.filename)[1].lower()
@@ -97,7 +99,7 @@ class ReuploadDocumentUseCase:
         if document.file_hash == new_file_hash:
             return DocumentDTO.from_domain(document)
 
-        current_rev = await self.revision_repository.get_current(document_id, tenant_id)
+        current_rev = await self.revision_repository.get_current(document_id, scoped_tenant_id)
 
         # H1: lazy genesis synthesis — if no revision row exists for this document
         # but it has a file_hash (legacy upload), synthesise genesis from that hash
@@ -105,7 +107,7 @@ class ReuploadDocumentUseCase:
             current_rev = await self._synthesize_genesis(
                 document_id=document_id,
                 project_id=document.project_id,
-                tenant_id=tenant_id,
+                tenant_id=scoped_tenant_id,
                 file_hash=document.file_hash,
                 filename=document.filename,
             )
@@ -121,7 +123,7 @@ class ReuploadDocumentUseCase:
             revision_id=uuid4(),
             document_id=document_id,
             project_id=document.project_id,
-            tenant_id=tenant_id,
+            tenant_id=scoped_tenant_id,
             rev_no=new_rev_no,
             parent_revision_id=parent_id,
             blob_hash=new_file_hash,
@@ -131,19 +133,19 @@ class ReuploadDocumentUseCase:
         )
 
         if current_rev:
-            await self.revision_repository.close_current(document_id, tenant_id, now)
+            await self.revision_repository.close_current(document_id, scoped_tenant_id, now)
 
         await self.revision_repository.append_revision(new_revision)
         enqueue_project_snapshot(
             project_id=document.project_id,
-            tenant_id=tenant_id,
+            tenant_id=scoped_tenant_id,
             trigger=SnapshotTrigger.REVISION_INGESTED,
             source_event_id=new_revision.revision_id,
         )
 
         new_version = document.version + 1
         updated_document = await self.document_repository.update_version(
-            tenant_id=tenant_id,
+            tenant_id=scoped_tenant_id,
             document_id=document_id,
             version=new_version,
             file_hash=new_file_hash,

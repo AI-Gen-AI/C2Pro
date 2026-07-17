@@ -3,16 +3,16 @@ RAG Ingestion Service Interface (Port).
 Defines the contract for ingesting document chunks into a RAG system.
 """
 from abc import ABC, abstractmethod
-from typing import Any
 from uuid import UUID
 
+from src.core.json_types import JsonDict
 from src.documents.domain.models import Document
 
 
 class IRagIngestionService(ABC):
     @abstractmethod
     async def ingest_document_chunks(
-        self, document: Document, parsed_payload: dict[str, Any], tenant_id: UUID
+        self, document: Document, parsed_payload: JsonDict, tenant_id: UUID
     ) -> None:
         """
         Ingests parsed document content into the RAG system.

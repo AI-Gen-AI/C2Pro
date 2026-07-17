@@ -2,11 +2,13 @@
 Use Case for creating a document record and queuing it for processing.
 """
 import os
+from typing import cast
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, UploadFile, status
 
 from src.config import settings  # Keep settings for validation for now
+from src.core.tenants.types import require_tenant_id
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.documents.ports.document_repository import IDocumentRepository
 
@@ -31,6 +33,8 @@ class CreateAndQueueDocumentUseCase:
         This is the first, synchronous step in the async processing workflow,
         before the file is actually uploaded to permanent storage.
         """
+        scoped_tenant_id = require_tenant_id(tenant_id)
+        filename = cast(str, file.filename)
         file_size = getattr(file, "size", None)
         if not isinstance(file_size, int):
             current_position = file.file.tell()
@@ -45,7 +49,7 @@ class CreateAndQueueDocumentUseCase:
                 detail=f"File size exceeds limit of {settings.max_upload_size_mb}MB.",
             )
 
-        file_extension = os.path.splitext(file.filename)[1].lower()
+        file_extension = os.path.splitext(filename)[1].lower()
         if file_extension not in settings.allowed_document_types:
             raise HTTPException(
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -59,16 +63,16 @@ class CreateAndQueueDocumentUseCase:
 
         # 2. Verify project ownership (optional but recommended if tenant_id is available)
         proj_tenant = await self.document_repository.get_project_tenant_id(project_id)
-        if not proj_tenant or proj_tenant != tenant_id:
+        if not proj_tenant or proj_tenant != scoped_tenant_id:
              raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found or access denied.")
 
         # 3. Create a new document domain entity with QUEUED status
         new_document = Document(
             id=uuid4(),
             project_id=project_id,
-            tenant_id=tenant_id,
+            tenant_id=scoped_tenant_id,
             document_type=document_type,
-            filename=file.filename,
+            filename=filename,
             upload_status=DocumentStatus.QUEUED, # Always start as QUEUED
             parsed_at=None,
             parsing_error=None,
@@ -78,7 +82,7 @@ class CreateAndQueueDocumentUseCase:
         )
 
         # 4. Add document to repository
-        await self.document_repository.add(tenant_id, new_document)
+        await self.document_repository.add(scoped_tenant_id, new_document)
         await self.document_repository.commit()
         await self.document_repository.refresh(new_document) # Refresh to get any DB-assigned values
 

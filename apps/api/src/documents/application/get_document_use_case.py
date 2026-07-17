@@ -5,6 +5,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
+from src.core.tenants.types import require_tenant_id
 from src.documents.domain.models import Document
 from src.documents.ports.document_repository import IDocumentRepository
 
@@ -17,7 +18,9 @@ class GetDocumentUseCase:
         """
         Retrieves a document record from the database.
         """
-        document = await self.document_repository.get_by_id(tenant_id, document_id)
+        document = await self.document_repository.get_by_id(
+            require_tenant_id(tenant_id), document_id
+        )
 
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
