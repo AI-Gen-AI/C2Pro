@@ -1,5 +1,5 @@
 """
-C2Pro - Authentication Service
+C2Pro - Authentication Service (TS-E2E-SEC-TNT-001 / TASK-DEV-017)
 
 Lógica de negocio para autenticación y gestión de usuarios.
 """
@@ -9,9 +9,9 @@ import string
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import bcrypt
 import jwt
 import structlog
-from passlib.context import CryptContext
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -48,12 +48,12 @@ logger = structlog.get_logger()
 # PASSWORD HASHING
 # ===========================================
 
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-    bcrypt__rounds=settings.bcrypt_rounds,
-    bcrypt__ident="2b",  # Use 2b ident to avoid version detection issues with bcrypt 5.0
-)
+_BCRYPT_MAX_PASSWORD_BYTES = 72
+
+
+def _password_bytes(password: str) -> bytes:
+    """TS-E2E-SEC-TNT-001: Preserve bcrypt 4's legacy 72-byte truncation behavior."""
+    return password.encode("utf-8")[:_BCRYPT_MAX_PASSWORD_BYTES]
 
 
 def hash_password(password: str) -> str:
@@ -66,7 +66,8 @@ def hash_password(password: str) -> str:
     Returns:
         Hash de la contraseña
     """
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt(rounds=settings.bcrypt_rounds, prefix=b"2b")
+    return bcrypt.hashpw(_password_bytes(password), salt).decode("ascii")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -80,7 +81,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True si coincide, False si no
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(
+        _password_bytes(plain_password),
+        hashed_password.encode("ascii"),
+    )
 
 
 # ===========================================

@@ -143,11 +143,11 @@ Prerequisites: `pip install schemathesis` and `make openapi` to generate the sch
 
 **Issue:** `ValueError: password cannot be longer than 72 bytes`
 
-**Fix:** The project uses `bcrypt==4.0.1` with `passlib==1.7.4`. Newer bcrypt builds can trigger Passlib backend-detection tracebacks. Do NOT upgrade bcrypt without re-validating the auth hashing path.
+**Fix:** The project uses `bcrypt==5.0.0` directly. The auth adapter explicitly preserves the legacy 72-byte password truncation required to verify existing hashes.
 
 **Lock the version:**
 ```bash
-pip install 'bcrypt==4.0.1'
+pip install 'bcrypt==5.0.0'
 ```
 
 ### 3. Pgbouncer / Supabase Connection Pooler

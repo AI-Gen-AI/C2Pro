@@ -4,7 +4,7 @@ C2Pro - Core Authentication Module
 Infraestructura transversal de autenticación y multi-tenancy.
 
 Uses lazy imports (PEP 562) to avoid pulling in JWT, cryptography,
-passlib, and database drivers at ``import src.core.auth`` time.
+bcrypt, and database drivers at ``import src.core.auth`` time.
 """
 
 from __future__ import annotations
