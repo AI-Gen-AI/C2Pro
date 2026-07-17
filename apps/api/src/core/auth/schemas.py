@@ -5,6 +5,7 @@ Schemas Pydantic para validación y serialización de autenticación.
 """
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import (
@@ -101,7 +102,7 @@ class RegisterRequest(BaseModel):
 
     @field_validator("password_confirm")
     @classmethod
-    def validate_password_confirmation(cls, v: str | None, info: ValidationInfo) -> str | None:
+    def validate_password_confirmation(cls, v: str | None, info: ValidationInfo[Any]) -> str | None:
         """Valida coincidencia solo si se envía confirmación."""
         if v is None:
             return v
@@ -156,7 +157,9 @@ class PasswordChangeRequest(BaseModel):
 
     @field_validator("new_password_confirm")
     @classmethod
-    def validate_new_password_confirmation(cls, v: str | None, info: ValidationInfo) -> str | None:
+    def validate_new_password_confirmation(
+        cls, v: str | None, info: ValidationInfo[Any]
+    ) -> str | None:
         """Valida que las contraseñas coincidan si se envía confirmación."""
         if v is None:
             return v
@@ -340,7 +343,7 @@ class UserUpdateRequest(BaseModel):
     last_name: str | None = Field(None, max_length=100)
     phone: str | None = Field(None, max_length=50)
     avatar_url: str | None = Field(None, max_length=500)
-    preferences: dict | None = None
+    preferences: dict[str, Any] | None = None
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -353,7 +356,7 @@ class TenantUpdateRequest(BaseModel):
     """Request para actualizar tenant (solo admin)."""
 
     name: str | None = Field(None, min_length=1, max_length=255)
-    settings: dict | None = None
+    settings: dict[str, Any] | None = None
 
 
 # ===========================================

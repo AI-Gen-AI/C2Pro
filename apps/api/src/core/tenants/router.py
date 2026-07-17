@@ -4,8 +4,10 @@ Tenant Router.
 API endpoints for tenant management.
 Refers to TASK-REV-009.
 """
+
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -160,7 +162,7 @@ async def get_budget_status(
 async def check_user_limit(
     tenant_id: UUID,
     service: TenantService = Depends(get_tenant_service),
-) -> dict:
+) -> dict[str, Any]:
     """
     Check if tenant is at user limit.
     """

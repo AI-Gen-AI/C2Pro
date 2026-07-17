@@ -51,6 +51,7 @@ async def _try_clerk_jwt(token: str) -> dict[str, Any] | None:
     """
     try:
         from src.core.middleware.clerk_auth import verify_clerk_token
+
         claims = await verify_clerk_token(token)
         return dict(claims)
     except Exception:
@@ -150,6 +151,7 @@ async def _provision_clerk_user(
 
     if not settings.database_url.startswith("sqlite"):
         from src.core.database import _validate_uuid_for_sql
+
         context_tenant_id = user_record.tenant_id if user_record is not None else target_tenant_id
         safe_tenant = _validate_uuid_for_sql(context_tenant_id)
         await db.execute(text(f"SET LOCAL app.current_tenant = '{safe_tenant}'"))
@@ -266,10 +268,8 @@ async def get_current_user(
         )
 
     # Validate tenant exists and is active
-    result = await db.execute(
-        select(Tenant).where(Tenant.id == tenant_id)
-    )
-    tenant = result.scalar_one_or_none()
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = tenant_result.scalar_one_or_none()
 
     if not tenant:
         logger.warning("tenant_not_found", tenant_id=str(tenant_id))
@@ -286,22 +286,22 @@ async def get_current_user(
         )
 
     # Validate user exists and is active
-    result = await db.execute(
+    user_result = await db.execute(
         select(User).where(
             User.id == user_id,
             User.tenant_id == tenant_id,
         )
     )
-    user = result.scalar_one_or_none()
+    local_user = user_result.scalar_one_or_none()
 
-    if not user:
+    if not local_user:
         logger.warning("user_not_found", user_id=str(user_id))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid user",
         )
 
-    if not user.is_active:
+    if not local_user.is_active:
         logger.warning("user_inactive", user_id=str(user_id))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -310,9 +310,9 @@ async def get_current_user(
 
     logger.debug(
         "user_authenticated",
-        user_id=str(user.id),
-        tenant_id=str(user.tenant_id),
-        email=user.email,
+        user_id=str(local_user.id),
+        tenant_id=str(local_user.tenant_id),
+        email=local_user.email,
     )
 
-    return user
+    return local_user

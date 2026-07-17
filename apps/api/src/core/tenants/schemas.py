@@ -4,9 +4,11 @@ Tenant Schemas.
 Pydantic models for tenant API requests/responses.
 Refers to TASK-REV-009.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -14,24 +16,28 @@ from pydantic import BaseModel, Field
 
 class TenantBase(BaseModel):
     """Base tenant schema."""
+
     name: str = Field(..., min_length=1, max_length=255)
     slug: str = Field(..., min_length=1, max_length=100)
 
 
 class TenantCreate(TenantBase):
     """Schema for creating a tenant."""
+
     pass
 
 
 class TenantUpdate(BaseModel):
     """Schema for updating a tenant."""
+
     name: str | None = Field(None, min_length=1, max_length=255)
-    settings: dict | None = None
+    settings: dict[str, Any] | None = None
     is_active: bool | None = None
 
 
 class TenantResponse(TenantBase):
     """Schema for tenant response."""
+
     id: UUID
     subscription_plan: str
     subscription_status: str
@@ -50,6 +56,7 @@ class TenantResponse(TenantBase):
 
 class TenantListResponse(BaseModel):
     """Schema for tenant list response."""
+
     tenants: list[TenantResponse]
     total: int
     limit: int
@@ -58,6 +65,7 @@ class TenantListResponse(BaseModel):
 
 class BudgetStatusResponse(BaseModel):
     """Schema for budget status response."""
+
     tenant_id: str
     monthly_budget: float
     current_spend: float
@@ -69,4 +77,5 @@ class BudgetStatusResponse(BaseModel):
 
 class AiSpendUpdate(BaseModel):
     """Schema for updating AI spend."""
+
     amount: float = Field(..., description="Amount to add to current spend")

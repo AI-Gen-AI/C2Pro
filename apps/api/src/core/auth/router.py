@@ -76,7 +76,9 @@ router = APIRouter(
         422: {"description": "Validation error"},
     },
 )
-async def register(request: RegisterRequest, db: AsyncSession = Depends(get_session)):
+async def register(
+    request: RegisterRequest, db: AsyncSession = Depends(get_session)
+) -> RegisterResponse:
     """
     Registra nuevo usuario y crea empresa/organización (tenant).
 
@@ -121,7 +123,7 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_sess
         422: {"description": "Validation error"},
     },
 )
-async def login(request: LoginRequest, db: AsyncSession = Depends(get_session)):
+async def login(request: LoginRequest, db: AsyncSession = Depends(get_session)) -> LoginResponse:
     """
     Autentica usuario con email y contraseña.
 
@@ -164,7 +166,9 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_session)):
         401: {"description": "Invalid or expired refresh token"},
     },
 )
-async def refresh_token(request: RefreshTokenRequest, db: AsyncSession = Depends(get_session)):
+async def refresh_token(
+    request: RefreshTokenRequest, db: AsyncSession = Depends(get_session)
+) -> TokenResponse:
     """
     Refresca el access token usando el refresh token.
     """
@@ -205,7 +209,7 @@ async def refresh_token(request: RefreshTokenRequest, db: AsyncSession = Depends
         401: {"description": "Not authenticated or invalid token"},
     },
 )
-async def get_me(user_id: CurrentUserId, db: AsyncSession = Depends(get_session)):
+async def get_me(user_id: CurrentUserId, db: AsyncSession = Depends(get_session)) -> MeResponse:
     """
     Obtiene información del usuario actual autenticado.
     """
@@ -269,7 +273,7 @@ async def get_me(user_id: CurrentUserId, db: AsyncSession = Depends(get_session)
 )
 async def update_me(
     request: UserUpdateRequest, user_id: CurrentUserId, db: AsyncSession = Depends(get_session)
-):
+) -> UserResponse:
     """
     Actualiza el perfil del usuario actual.
     """
@@ -314,7 +318,7 @@ async def update_me(
     removing the tokens. This endpoint is for logging purposes.
     """,
 )
-async def logout(request: Request, user_id: CurrentUserId):
+async def logout(request: Request, user_id: CurrentUserId) -> None:
     """
     Cierra sesión del usuario actual.
 
@@ -348,7 +352,7 @@ async def logout(request: Request, user_id: CurrentUserId):
 )
 async def change_password(
     request: PasswordChangeRequest, user_id: CurrentUserId, db: AsyncSession = Depends(get_session)
-):
+) -> None:
     """
     Cambia la contraseña del usuario actual.
     """
@@ -392,6 +396,6 @@ async def change_password(
     description="Simple health check endpoint for authentication service",
     include_in_schema=False,
 )
-async def health():
+async def health() -> dict[str, str]:
     """Health check para el servicio de autenticación."""
     return {"status": "ok", "service": "auth"}
