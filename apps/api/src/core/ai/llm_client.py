@@ -640,9 +640,7 @@ class LLMClient:
             "total_retries": self.total_retries,
             "total_cost_usd": round(self.total_cost_usd, 2),
             "avg_retries_per_request": round(avg_retries, 2),
-            "circuit_breaker_state": self.circuit_breaker.get_state()  # type: ignore[attr-defined]
-            if self.circuit_breaker
-            else None,
+            "circuit_breaker_state": self.circuit_breaker.state if self.circuit_breaker else None,
             "circuit_breaker_failures": self.circuit_breaker.failure_count
             if self.circuit_breaker
             else None,

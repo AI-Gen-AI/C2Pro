@@ -92,7 +92,7 @@ async def example_circuit_breaker():
     client = create_llm_client(enable_circuit_breaker=True)
 
     print("\n🔌 Circuit Breaker:")
-    print(f"   State: {client.circuit_breaker.get_state()}")
+    print(f"   State: {client.circuit_breaker.state}")
     print(f"   Failure threshold: {client.circuit_breaker.failure_threshold}")
     print(f"   Recovery timeout: {client.circuit_breaker.recovery_timeout}s")
 
@@ -227,4 +227,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

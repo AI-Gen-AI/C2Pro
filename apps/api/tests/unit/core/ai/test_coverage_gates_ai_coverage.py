@@ -95,7 +95,7 @@ def test_llm_client_helpers_classify_retry_cost_and_statistics() -> None:
     client.total_requests = 4
     client.total_retries = 2
     client.total_cost_usd = 1.234
-    client.circuit_breaker = SimpleNamespace(get_state=lambda: "closed", failure_count=1)
+    client.circuit_breaker = SimpleNamespace(state="closed", failure_count=1)
     client.model_router = MagicMock()
     fallback_model = SimpleNamespace(name="claude-sonnet-4", tier=ModelTier.STANDARD)
     client.model_router.get_model_by_name.return_value = None
@@ -180,7 +180,9 @@ async def test_prompt_cache_hit_expired_decode_and_invalidate_paths(monkeypatch)
     expired_payload = fresh.to_dict()
     expired_payload["cached_at"] = 0.0
     assert await PromptCacheService(_CacheService(expired_payload)).get_cached_response("p") is None
-    assert await PromptCacheService(_CacheService({"bad": "payload"})).get_cached_response("p") is None
+    assert (
+        await PromptCacheService(_CacheService({"bad": "payload"})).get_cached_response("p") is None
+    )
 
 
 @pytest.mark.asyncio
@@ -253,9 +255,7 @@ async def test_ai_service_cache_budget_json_and_batch_paths(monkeypatch) -> None
         ),
     )
     service.router = SimpleNamespace(
-        select_model=MagicMock(
-            return_value=SimpleNamespace(name="claude-haiku-4", max_tokens=100)
-        ),
+        select_model=MagicMock(return_value=SimpleNamespace(name="claude-haiku-4", max_tokens=100)),
         estimate_cost=MagicMock(return_value=1.0),
     )
     service._estimate_tokens = lambda text: 12
@@ -269,7 +269,7 @@ async def test_ai_service_cache_budget_json_and_batch_paths(monkeypatch) -> None
     with pytest.raises(ValueError, match="Insufficient budget"):
         await service.generate(AIRequest(prompt="expensive", task_type=TaskType.COMPLEX_EXTRACTION))
 
-    assert service._parse_json_response("prefix {\"a\": 1} suffix") == {"a": 1}
+    assert service._parse_json_response('prefix {"a": 1} suffix') == {"a": 1}
     assert service._parse_json_response("```json\n[1, 2]\n```") == [1, 2]
     with pytest.raises(Exception, match="No JSON block|Failed to parse"):
         service._parse_json_response("not json")
@@ -287,7 +287,9 @@ async def test_base_tool_success_retry_failure_and_state_call() -> None:
     assert success.data.text == "ok:ok"
     assert success.input_tokens == 11
 
-    retried = await _DummyTool(fail_once=True).execute(_ToolInput(text="retry"), tenant_id=tenant_id)
+    retried = await _DummyTool(fail_once=True).execute(
+        _ToolInput(text="retry"), tenant_id=tenant_id
+    )
     assert retried.success is True
     assert retried.retries == 1
 
