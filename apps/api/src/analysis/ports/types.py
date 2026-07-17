@@ -8,6 +8,7 @@ from typing import Any, Protocol
 from uuid import UUID
 
 from src.analysis.domain.enums import AlertSeverity, AlertStatus, AnalysisStatus, AnalysisType
+from src.core.json_types import JsonDict
 
 
 class AlertRecord(Protocol):
@@ -22,9 +23,9 @@ class AlertRecord(Protocol):
     recommendation: str | None
     source_clause_id: UUID | None
     related_clause_ids: list[UUID] | None
-    affected_entities: dict
+    affected_entities: JsonDict
     impact_level: str | None
-    alert_metadata: dict
+    alert_metadata: JsonDict
     status: AlertStatus
     resolved_at: datetime | None
     resolved_by: UUID | None

@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from src.core.json_types import JsonDict
+
 
 class ICoherenceRepository(ABC):
     @abstractmethod
@@ -16,8 +18,8 @@ class ICoherenceRepository(ABC):
     async def persist_wbs_bom_items(
         self,
         project_id: UUID,
-        wbs_items: list[dict],
-        bom_items: list[dict],
+        wbs_items: list[JsonDict],
+        bom_items: list[JsonDict],
     ) -> tuple[list[Any], list[Any]]:
         ...
 
@@ -27,6 +29,6 @@ class ICoherenceRepository(ABC):
         project_id: UUID,
         started_at: datetime,
         coherence_score: float,
-        alerts: Iterable[dict],
+        alerts: Iterable[JsonDict],
     ) -> None:
         ...

@@ -9,9 +9,11 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
+from src.core.json_types import JsonDict
+
 
 class CoherenceCalculatorPort(Protocol):
     async def calculate_from_analysis(
-        self, *, project_id: UUID, tenant_id: UUID, analysis_payload: dict
-    ) -> dict:
+        self, *, project_id: UUID, tenant_id: UUID, analysis_payload: JsonDict
+    ) -> JsonDict:
         ...

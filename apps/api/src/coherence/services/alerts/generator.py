@@ -53,8 +53,8 @@ class AlertGeneratorService:
 
         if auto_resolve:
             for alert in existing:
-                fingerprint = (alert.alert_metadata or {}).get("fingerprint")
-                if alert.status == AlertStatus.OPEN and fingerprint not in fingerprints:
+                existing_fingerprint = (alert.alert_metadata or {}).get("fingerprint")
+                if alert.status == AlertStatus.OPEN and existing_fingerprint not in fingerprints:
                     alert.status = AlertStatus.RESOLVED
                     alert.resolved_at = now
                     alert.resolution_notes = self._merge_notes(
