@@ -4,11 +4,11 @@ Protocol types for Analysis ports.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Protocol
 from uuid import UUID
 
 from src.analysis.domain.enums import AlertSeverity, AlertStatus, AnalysisStatus, AnalysisType
-from src.core.json_types import JsonDict
+from src.core.json_types import JsonDict, JsonValue
 
 
 class AlertRecord(Protocol):
@@ -36,7 +36,7 @@ class AnalysisRecord(Protocol):
     project_id: UUID
     analysis_type: AnalysisType
     status: AnalysisStatus
-    result_json: Any | None
+    result_json: JsonValue
     coherence_score: int | None
     alerts_count: int
     started_at: datetime | None

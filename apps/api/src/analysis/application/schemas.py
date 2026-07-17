@@ -8,13 +8,13 @@ Moved from modules/analysis/schemas.py (2026-01-29)
 """
 
 from datetime import UTC, datetime
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.analysis.application.dtos import AlertBase, AlertCreate
 from src.analysis.domain.enums import AlertSeverity, AlertStatus, AnalysisStatus, AnalysisType
+from src.core.json_types import JsonDict
 
 # ===========================================
 # ANALYSIS SCHEMAS
@@ -39,11 +39,11 @@ class AnalysisUpdate(BaseModel):
     """Schema for updating an existing analysis (used by agents)."""
 
     status: AnalysisStatus | None = Field(None, description="Updated analysis status")
-    result_json: dict[str, Any] | None = Field(None, description="Complete analysis results")
+    result_json: JsonDict | None = Field(None, description="Complete analysis results")
     coherence_score: int | None = Field(
         None, ge=0, le=100, description="Overall coherence score (0-100)"
     )
-    coherence_breakdown: dict[str, Any] | None = Field(
+    coherence_breakdown: JsonDict | None = Field(
         None, description="Detailed breakdown of coherence score by rule"
     )
     alerts_count: int | None = Field(None, ge=0, description="Number of alerts generated")
@@ -67,11 +67,11 @@ class AnalysisResponse(AnalysisBase):
     id: UUID = Field(..., description="Unique ID of the analysis")
     project_id: UUID = Field(..., description="ID of the project analyzed")
     status: AnalysisStatus = Field(..., description="Current status of the analysis")
-    result_json: dict[str, Any] | None = Field(None, description="Complete analysis results")
+    result_json: JsonDict | None = Field(None, description="Complete analysis results")
     coherence_score: int | None = Field(
         None, ge=0, le=100, description="Overall coherence score (0-100)"
     )
-    coherence_breakdown: dict[str, Any] | None = Field(
+    coherence_breakdown: JsonDict | None = Field(
         None, description="Detailed breakdown of coherence score by rule"
     )
     alerts_count: int = Field(default=0, description="Number of alerts generated")
@@ -121,10 +121,10 @@ class AlertResponse(AlertBase):
     related_clause_ids: list[UUID] | None = Field(None, description="IDs of related clauses")
 
     # Affected entities and metadata
-    affected_entities: dict[str, Any] = Field(
+    affected_entities: JsonDict = Field(
         default_factory=dict, description="Affected entities"
     )
-    alert_metadata: dict[str, Any] = Field(default_factory=dict, description="Alert metadata")
+    alert_metadata: JsonDict = Field(default_factory=dict, description="Alert metadata")
 
     # Additional fields
     recommendation: str | None = Field(None, description="Suggested action")
@@ -154,7 +154,7 @@ class CoherenceScoreResponse(BaseModel):
     coherence_score: int = Field(
         ..., ge=0, le=100, description="Overall coherence score from 0 to 100"
     )
-    coherence_breakdown: dict[str, Any] = Field(
+    coherence_breakdown: JsonDict = Field(
         default_factory=dict,
         description="Detailed breakdown of the coherence score by categories or rules",
     )

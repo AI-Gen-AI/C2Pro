@@ -2,12 +2,12 @@
 Data Transfer Objects (DTOs) for the Analysis module.
 """
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.analysis.domain.enums import AlertSeverity, AlertType
+from src.core.json_types import JsonDict
 
 
 class CoherenceScoreResponse(BaseModel):
@@ -65,13 +65,13 @@ class AlertCreate(AlertBase):
     )
 
     # Affected entities
-    affected_entities: dict[str, Any] = Field(
+    affected_entities: JsonDict = Field(
         default_factory=dict,
         description="JSON object with affected entities: {documents: [], wbs: [], bom: []}",
     )
 
     # Evidence and metadata
-    alert_metadata: dict[str, Any] = Field(
+    alert_metadata: JsonDict = Field(
         default_factory=dict, description="Additional metadata and evidence for the alert"
     )
 

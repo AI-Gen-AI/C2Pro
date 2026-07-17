@@ -9,15 +9,17 @@ Refers to Suite ID: TS-ARCH-003.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import cast
+
+from src.core.json_types import JsonDict, JsonValue
 
 
 @dataclass
 class CoherenceDerivationInput:
     """Input data for coherence derivation."""
-    extracted_risks: list[dict[str, Any]]
-    extracted_wbs: list[dict[str, Any]]
-    bom_items: list[dict[str, Any]]
+    extracted_risks: list[JsonDict]
+    extracted_wbs: list[JsonDict]
+    bom_items: list[JsonDict]
     confidence_score: float
     document_text: str
 
@@ -30,7 +32,7 @@ class CoherenceDerivationResult:
     technical_consistent: bool | None
     legal_compliant: bool | None
     quality_standard_met: bool | None
-    bom_items: list[dict[str, Any]]
+    bom_items: list[JsonDict]
     contract_price: float
     has_budget_risks: bool
     poor_extraction_quality: bool
@@ -39,11 +41,11 @@ class CoherenceDerivationResult:
     wbs_count: int
     quality_note: str
 
-    def to_calculation_inputs(self) -> dict[str, Any]:
+    def to_calculation_inputs(self) -> JsonDict:
         """Return coherence calculation kwargs derived from domain rules."""
         return {
             "contract_price": self.contract_price,
-            "bom_items": self.bom_items,
+            "bom_items": cast(JsonValue, self.bom_items),
             "scope_defined": self.scope_defined,
             "schedule_within_contract": self.schedule_within_contract,
             "technical_consistent": self.technical_consistent,
@@ -144,34 +146,36 @@ class CoherenceScoringDerivationService:
             quality_note=quality_note,
         )
 
-    def _calculate_avg_wbs_confidence(self, wbs: list[dict[str, Any]]) -> float:
+    def _calculate_avg_wbs_confidence(self, wbs: list[JsonDict]) -> float:
         """Calculate average confidence of WBS items."""
         confidences = [
-            item.get("confidence", 0.0)
+            confidence
             for item in wbs
-            if isinstance(item.get("confidence"), int | float)
+            if isinstance(confidence := item.get("confidence"), int | float)
         ]
         return sum(confidences) / len(confidences) if confidences else 0.0
 
-    def _has_high_risk_in_categories(self, risks: list[dict], categories: set[str]) -> bool:
+    def _has_high_risk_in_categories(
+        self, risks: list[JsonDict], categories: set[str]
+    ) -> bool:
         """Check if any risk has HIGH/CRITICAL impact in given categories."""
         for risk in risks:
-            cat = (risk.get("category") or "").upper()
-            impact = (risk.get("impact") or "").upper()
+            cat = cast(str, risk.get("category") or "").upper()
+            impact = cast(str, risk.get("impact") or "").upper()
             if cat in categories and impact in ("HIGH", "CRITICAL"):
                 return True
         return False
 
     def _derive_dimension_flag(
         self,
-        risks: list[dict],
+        risks: list[JsonDict],
         categories: set[str],
     ) -> bool | None:
         """Derive a dimension flag only when extraction provides evidence."""
         matching_risks = [
             risk
             for risk in risks
-            if (risk.get("category") or "").upper() in categories
+            if cast(str, risk.get("category") or "").upper() in categories
         ]
         if not matching_risks:
             return None
@@ -179,8 +183,8 @@ class CoherenceScoringDerivationService:
 
     def _derive_scope_defined(
         self,
-        risks: list[dict],
-        wbs: list[dict],
+        risks: list[JsonDict],
+        wbs: list[JsonDict],
         poor_quality: bool,
     ) -> bool:
         """Derive whether scope is properly defined."""
@@ -190,9 +194,9 @@ class CoherenceScoringDerivationService:
 
     def _mark_bom_unassigned_if_needed(
         self,
-        bom: list[dict],
+        bom: list[JsonDict],
         has_budget_risks: bool,
-    ) -> list[dict]:
+    ) -> list[JsonDict]:
         """Mark BOM items as unassigned if budget risks exist."""
         if has_budget_risks and bom:
             return [
@@ -201,10 +205,15 @@ class CoherenceScoringDerivationService:
             ]
         return list(bom)
 
-    def _calculate_contract_price(self, bom: list[dict]) -> float:
+    def _calculate_contract_price(self, bom: list[JsonDict]) -> float:
         """Calculate total contract price from BOM items."""
         return sum(
-            float(item.get("amount", 0) or item.get("total", 0) or 0)
+            float(
+                cast(
+                    str | int | float,
+                    item.get("amount", 0) or item.get("total", 0) or 0,
+                )
+            )
             for item in bom
         )
 

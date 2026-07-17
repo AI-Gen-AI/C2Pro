@@ -4,7 +4,15 @@ Domain enums for Analysis module.
 
 from enum import Enum
 
-from src.shared_kernel.enums import AlertSeverity, AlertStatus, AlertType
+from src.shared_kernel.enums import (
+    AlertSeverity as AlertSeverity,
+)
+from src.shared_kernel.enums import (
+    AlertStatus as AlertStatus,
+)
+from src.shared_kernel.enums import (
+    AlertType as AlertType,
+)
 
 __all__ = [
     "AlertSeverity",
