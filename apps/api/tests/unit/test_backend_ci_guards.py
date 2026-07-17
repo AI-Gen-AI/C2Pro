@@ -26,6 +26,7 @@ def test_database_backed_ci_workflows_export_test_database_url() -> None:
     workflow_paths = [
         repo_root / ".github" / "workflows" / "ci.yml",
         repo_root / ".github" / "workflows" / "real-document-operability.yml",
+        repo_root / ".github" / "workflows" / "i13-real-e2e-scheduled.yml",
     ]
 
     for workflow in workflow_paths:
