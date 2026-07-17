@@ -3,6 +3,7 @@ Domain models for the Stakeholders bounded context.
 
 Refers to Suite ID: TS-UD-STK-ENT-001.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -24,6 +25,7 @@ class PartyResolutionResult:
 
 class PowerLevel(str, Enum):
     """Level of power of the stakeholder."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -31,6 +33,7 @@ class PowerLevel(str, Enum):
 
 class InterestLevel(str, Enum):
     """Level of interest of the stakeholder."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -38,13 +41,14 @@ class InterestLevel(str, Enum):
 
 class StakeholderQuadrant(str, Enum):
     """Power/interest quadrant (Mendelow Matrix)."""
+
     KEY_PLAYER = "key_player"  # high/high
     KEEP_SATISFIED = "keep_satisfied"  # high/low
     KEEP_INFORMED = "keep_informed"  # low/high
     MONITOR = "monitor"  # low/low
 
 
-from src.shared_kernel.enums import RACIRole  # noqa: E402, F401
+from src.shared_kernel.enums import RACIRole as RACIRole  # noqa: E402
 
 
 @dataclass
@@ -52,12 +56,15 @@ class Stakeholder:
     """
     Represents a Stakeholder as a pure domain entity.
     """
+
     id: UUID
     project_id: UUID
     tenant_id: UUID
     power_level: PowerLevel
     interest_level: InterestLevel
-    approval_status: str # Assuming approval_status is string for now, enum to be defined later if needed
+    approval_status: (
+        str  # Assuming approval_status is string for now, enum to be defined later if needed
+    )
     created_at: datetime
     updated_at: datetime
     name: str | None = None
@@ -105,7 +112,6 @@ class Stakeholder:
             else:
                 self.quadrant = _derive_quadrant(self.power_level, self.interest_level)
 
-
     def is_key_player(self) -> bool:
         return self.quadrant == StakeholderQuadrant.KEY_PLAYER
 
@@ -118,6 +124,7 @@ class RaciAssignment:
     """
     Represents a RACI assignment as a pure domain entity.
     """
+
     id: UUID
     project_id: UUID
     tenant_id: UUID

@@ -1,9 +1,18 @@
 """
 Domain enums for Analysis module.
 """
+
 from enum import Enum
 
-from src.shared_kernel.enums import AlertSeverity, AlertStatus, AlertType  # noqa: F401 — re-export
+from src.shared_kernel.enums import AlertSeverity, AlertStatus, AlertType
+
+__all__ = [
+    "AlertSeverity",
+    "AlertStatus",
+    "AlertType",
+    "AnalysisType",
+    "AnalysisStatus",
+]
 
 
 class AnalysisType(str, Enum):
@@ -12,6 +21,7 @@ class AnalysisType(str, Enum):
     COST = "cost"
     SCHEDULE = "schedule"
     QUALITY = "quality"
+
 
 class AnalysisStatus(str, Enum):
     PENDING = "pending"
