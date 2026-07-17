@@ -62,7 +62,7 @@ class SqlAlchemyAlertRepository(IAlertRepository):
             status = AlertStatus.OPEN
 
         try:
-            approval_status_converted = ApprovalStatus(str(orm_alert.approval_status).lower())
+            approval_status_converted = ApprovalStatus(str(getattr(orm_alert.approval_status, "value", orm_alert.approval_status)).lower())
         except ValueError:
             approval_status_converted = ApprovalStatus.PENDING
 
