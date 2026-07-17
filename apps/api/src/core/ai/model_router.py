@@ -143,7 +143,7 @@ def load_routing_config(config_path: Path | str | None = None) -> dict[str, Any]
 
     try:
         with open(config_path, encoding="utf-8") as f:
-            config = yaml.safe_load(f)
+            config: dict[str, Any] = yaml.safe_load(f)
 
         # Validate configuration
         warnings = validate_routing_config(config)
@@ -385,7 +385,6 @@ _FALLBACK_TASK_TO_TIER = {
     AITaskType.COHERENCE_CHECK: ModelTier.FLASH,  # Deterministic rules
     AITaskType.RACI_GENERATION: ModelTier.STANDARD,  # Complex reasoning
     AITaskType.MULTIMODAL_EXPEDITING: ModelTier.STANDARD,  # Vision (use sonnet-vision)
-
     # Additional Task Types
     # FLASH tasks
     AITaskType.CLASSIFICATION: ModelTier.FLASH,
@@ -779,7 +778,9 @@ class ModelRouter:
     @classmethod
     def get_tasks_for_tier(cls, tier: ModelTier) -> list[str]:
         """Lista tareas recomendadas para un tier."""
-        return [task.value for task, task_tier in _FALLBACK_TASK_TO_TIER.items() if task_tier == tier]
+        return [
+            task.value for task, task_tier in _FALLBACK_TASK_TO_TIER.items() if task_tier == tier
+        ]
 
 
 # ===========================================
@@ -805,4 +806,3 @@ def get_model_router() -> ModelRouter:
         _router = ModelRouter()
 
     return _router
-

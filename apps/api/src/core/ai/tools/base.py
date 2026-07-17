@@ -3,6 +3,7 @@ core/ai/tools/base.py
 
 Base implementation for AI tools with common functionality.
 """
+
 from __future__ import annotations
 
 import time
@@ -64,7 +65,7 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
     # Configuration (can override in subclasses)
     default_model_tier: ModelTier = ModelTier.STANDARD
     timeout_seconds: int = 120
-    retry_policy: RetryPolicy = RetryPolicy()
+    retry_policy: RetryPolicy = RetryPolicy()  # type: ignore[call-arg]
     prompt_template_name: str | None = None
     prompt_version: str = "latest"
 
@@ -380,9 +381,7 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
             "Unexpected retry loop exit", tool_name=self.name, original_error=last_error
         )
 
-    def _build_prompt(
-        self, input_data: TInput, is_retry: bool = False
-    ) -> tuple[str, str | None]:
+    def _build_prompt(self, input_data: TInput, is_retry: bool = False) -> tuple[str, str | None]:
         """
         Build prompt from input data.
 
@@ -410,9 +409,7 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
             # Fallback: subclass should override
             return self._build_default_prompt(input_data, is_retry)
 
-    def _build_default_prompt(
-        self, input_data: TInput, is_retry: bool
-    ) -> tuple[str, str | None]:
+    def _build_default_prompt(self, input_data: TInput, is_retry: bool) -> tuple[str, str | None]:
         """Override in subclass if not using PromptManager."""
         raise NotImplementedError(
             f"Tool '{self.name}' must either set prompt_template_name "
@@ -435,7 +432,7 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
                     if args and len(args) >= 1:
                         input_type = args[0]
                         if hasattr(input_type, "model_json_schema"):
-                            return input_type.model_json_schema()
+                            return input_type.model_json_schema()  # type: ignore[no-any-return]
         except Exception:
             pass
         return {}
@@ -454,7 +451,7 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
                     if args and len(args) >= 2:
                         output_type = args[1]
                         if hasattr(output_type, "model_json_schema"):
-                            return output_type.model_json_schema()
+                            return output_type.model_json_schema()  # type: ignore[no-any-return]
         except Exception:
             pass
         return {}

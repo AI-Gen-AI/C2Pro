@@ -67,7 +67,7 @@ class PromptTemplate:
     description: str
     metadata: dict[str, Any] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Valida los campos requeridos."""
         if not self.task_name:
             raise ValueError("task_name is required")
@@ -367,7 +367,7 @@ class PromptManager:
         # Guardar 'version' en ai_usage_logs.prompt_version
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Inicializa el PromptManager con el entorno Jinja2."""
         self.env = Environment(
             autoescape=select_autoescape(),
@@ -626,4 +626,3 @@ __all__ = [
     "STAKEHOLDER_CLASSIFICATION_V1_0",
     "COHERENCE_CHECK_V1_0",
 ]
-

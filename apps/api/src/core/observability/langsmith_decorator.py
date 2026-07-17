@@ -39,13 +39,13 @@ def _extract_span_client(
 ) -> _SpanClient | None:
     explicit = call_kwargs.get("langsmith_client")
     if explicit is not None:
-        return explicit
+        return explicit  # type: ignore[no-any-return]
 
     if call_args:
         owner = call_args[0]
         owner_client = getattr(owner, "langsmith_client", None)
         if owner_client is not None:
-            return owner_client
+            return owner_client  # type: ignore[no-any-return]
 
     return None
 
@@ -84,7 +84,7 @@ def _extract_prompt(call_kwargs: dict[str, Any], request: Any | None = None) -> 
         if isinstance(value, str):
             return value
     if request and hasattr(request, "system"):
-        return request.system
+        return str(request.system)
     return None
 
 
@@ -98,7 +98,7 @@ def _extract_model_name(
         if model_name:
             return str(model_name)
     if request and hasattr(request, "model"):
-        return request.model
+        return str(request.model)
     return None
 
 
@@ -241,7 +241,7 @@ def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and 
 
             try:
                 try:
-                    result = await func(*args, **kwargs)
+                    result = await func(*args, **kwargs)  # type: ignore[misc]
                 except Exception as exc:
                     if span_client is not None and span is not None:
                         latency_ms = int((time.perf_counter() - started_at) * 1000)
@@ -282,8 +282,8 @@ def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and 
                     if usage_logger is not None and tenant_uuid is not None and trace_id:
                         await usage_logger.log_success(
                             AIUsageLogRecord(
-                                tenant_id=tenant_uuid,
-                                project_id=project_id,
+                                tenant_id=tenant_uuid,  # type: ignore[arg-type]
+                                project_id=project_id,  # type: ignore[arg-type]
                                 model=usage_metrics.get("model_name") or "unknown",
                                 operation=usage_metrics.get("operation") or task_type,
                                 input_tokens=int(usage_metrics.get("tokens_input", 0)),
@@ -293,7 +293,7 @@ def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and 
                                 cached=bool(usage_metrics.get("cached", False)),
                                 trace_id=trace_id,
                                 trace_url=trace_url,
-                                prompt_version=prompt_version,
+                                prompt_version=prompt_version,  # type: ignore[arg-type]
                                 metadata={"request_id": request_id},
                             )
                         )

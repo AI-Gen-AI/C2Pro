@@ -3,6 +3,7 @@ core/ai/tools/protocol.py
 
 Defines the Tool protocol that all AI tools must implement.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
@@ -20,7 +21,7 @@ TOutput = TypeVar("TOutput", covariant=True)
 
 
 @runtime_checkable
-class Tool(Protocol[TInput, TOutput]):
+class Tool(Protocol[TInput, TOutput]):  # type: ignore[misc]
     """
     Protocol for AI tools that can be used as LangGraph nodes.
 

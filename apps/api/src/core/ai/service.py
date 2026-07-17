@@ -322,7 +322,7 @@ class AIService:
             tenant_id=str(self.tenant_id) if self.tenant_id else None,
             task_type=request.task_type
             if isinstance(request.task_type, str)
-            else request.task_type.value,
+            else request.task_type.value,  # type: ignore[union-attr]
             model=model_config.name,
             input_tokens_estimate=input_token_estimate,
         )
@@ -333,7 +333,7 @@ class AIService:
                 max_tokens=max_tokens,
                 temperature=request.temperature,
                 system=request.system_prompt or "",
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]
             )
 
         except anthropic.APIError as e:
@@ -363,29 +363,17 @@ class AIService:
             tenant_id=str(self.tenant_id) if self.tenant_id else None,
             task_type=request.task_type
             if isinstance(request.task_type, str)
-            else request.task_type.value,
+            else request.task_type.value,  # type: ignore[union-attr]
             model=model_config.name,
             prompt_version=request.prompt_version,  # CRÍTICO para auditoría
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
             cost_usd=actual_cost,
-            execution_time_ms=round(execution_time_ms, 2),
+            execution_time_ms=execution_time_ms,
+            system_prompt=request.system_prompt,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
         )
-
-        # 8. Save to prompt cache (SHA-256)
-        if request.use_cache and self.prompt_cache and self.prompt_cache.enabled:
-            await self.prompt_cache.set_cached_response(
-                prompt=request.prompt,
-                response_content=content,
-                model=model_config.name,
-                input_tokens=response.usage.input_tokens,
-                output_tokens=response.usage.output_tokens,
-                cost_usd=actual_cost,
-                execution_time_ms=execution_time_ms,
-                system_prompt=request.system_prompt,
-                temperature=request.temperature,
-                max_tokens=request.max_tokens,
-            )
 
         # 9. Save to document extraction cache
         if (
