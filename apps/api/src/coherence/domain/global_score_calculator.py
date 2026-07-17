@@ -30,12 +30,12 @@ class GlobalScoreCalculator:
     It applies a weighted average based on a provided or default weight configuration.
     """
 
-    # Exposed for tests that reference enum via calculator instance.
-    ScoreScope = ScoreScope
-
     DEFAULT_WEIGHTS = WeightConfig(weights={
         scope: 1.0 / len(ScoreScope) for scope in ScoreScope
     })
+
+    # Exposed for tests that reference enum via calculator instance.
+    ScoreScope = ScoreScope
 
     def __init__(self) -> None:
         self._weight_history: list[WeightConfig] = []

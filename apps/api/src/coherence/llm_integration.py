@@ -17,6 +17,7 @@ Sprint: P2-02
 from __future__ import annotations
 
 import json  # still used in analyze_clause prompt formatting
+from src.core.json_types import JsonDict
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
@@ -61,7 +62,7 @@ class ClauseAnalysisResult:
 
     clause_id: str
     has_issues: bool
-    issues: list[dict[str, Any]] = field(default_factory=list)
+    issues: list[JsonDict] = field(default_factory=list)
     confidence: float = 0.0
     reasoning: str = ""
     raw_response: str = ""
@@ -80,7 +81,7 @@ class CoherenceAnalysisResult:
     project_id: str
     overall_assessment: str
     risk_level: str  # low, medium, high, critical
-    findings: list[dict[str, Any]] = field(default_factory=list)
+    findings: list[JsonDict] = field(default_factory=list)
     recommendations: list[str] = field(default_factory=list)
 
     # Metrics
@@ -522,7 +523,7 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
             clauses_count=len(context.clauses),
         )
 
-        findings = []
+        findings: list[JsonDict] = []
         total_tokens = 0
         total_cost = 0.0
         clauses_with_issues = 0
@@ -530,21 +531,21 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
         # Individual clause analysis
         if analyze_individual:
             for clause in context.clauses:
-                result = await self.analyze_clause(
+                clause_res = await self.analyze_clause(
                     clause=clause,
                     tenant_id=tenant_id,
                 )
 
-                total_tokens += result.tokens_used
-                total_cost += result.cost_usd
+                total_tokens += clause_res.tokens_used
+                total_cost += clause_res.cost_usd
 
-                if result.has_issues:
+                if clause_res.has_issues:
                     clauses_with_issues += 1
-                    for issue in result.issues:
+                    for ind_issue in clause_res.issues:
                         findings.append({
                             "source": "individual_analysis",
                             "clause_id": clause.id,
-                            **issue,
+                            **ind_issue,
                         })
 
         # Cross-clause analysis
@@ -554,10 +555,10 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
                 tenant_id=tenant_id,
             )
 
-            for issue in cross_result.cross_clause_issues:
+            for cross_issue in cross_result.cross_clause_issues:
                 findings.append({
                     "source": "cross_clause_analysis",
-                    **issue.model_dump(),
+                    **cross_issue.model_dump(),
                 })
 
         # Determine risk level
@@ -566,7 +567,7 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
         # Generate recommendations
         recommendations = self._generate_recommendations(findings)
 
-        result = CoherenceAnalysisResult(
+        final_result = CoherenceAnalysisResult(
             project_id=context.id,
             overall_assessment=self._generate_assessment(findings, len(context.clauses)),
             risk_level=risk_level,
@@ -586,7 +587,7 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
             total_cost=total_cost,
         )
 
-        return result
+        return final_result
 
     # ===========================================
     # HELPER METHODS
@@ -629,14 +630,15 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
                 cached=response.cached,
             )
 
-    def _calculate_risk_level(self, findings: list[dict]) -> str:
+    def _calculate_risk_level(self, findings: list[JsonDict]) -> str:
         """Calcula el nivel de riesgo basado en los hallazgos."""
         if not findings:
             return "low"
 
         severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
         for finding in findings:
-            severity = finding.get("severity", "low")
+            severity_val = finding.get("severity", "low")
+            severity = severity_val if isinstance(severity_val, str) else "low"
             severity_counts[severity] = severity_counts.get(severity, 0) + 1
 
         if severity_counts["critical"] > 0:
@@ -647,7 +649,7 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
             return "medium"
         return "low"
 
-    def _generate_recommendations(self, findings: list[dict]) -> list[str]:
+    def _generate_recommendations(self, findings: list[JsonDict]) -> list[str]:
         """Genera recomendaciones basadas en los hallazgos."""
         recommendations = []
 
@@ -677,12 +679,13 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
 
         # Add specific recommendations from findings
         for finding in findings:
-            if finding.get("recommendation"):
-                recommendations.append(finding["recommendation"])
+            rec_val = finding.get("recommendation")
+            if isinstance(rec_val, str):
+                recommendations.append(rec_val)
 
         return list(set(recommendations))[:10]  # Limit to 10 unique recommendations
 
-    def _generate_assessment(self, findings: list[dict], total_clauses: int) -> str:
+    def _generate_assessment(self, findings: list[JsonDict], total_clauses: int) -> str:
         """Genera una evaluación general."""
         if not findings:
             return f"Análisis completado de {total_clauses} cláusulas sin hallazgos significativos."
@@ -701,7 +704,7 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
     # STATISTICS
     # ===========================================
 
-    def get_statistics(self) -> dict[str, Any]:
+    def get_statistics(self) -> JsonDict:
         """Obtiene estadísticas del servicio."""
         return {
             "total_analyses": self.total_analyses,

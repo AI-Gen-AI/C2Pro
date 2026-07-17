@@ -16,6 +16,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
+from src.core.json_types import JsonDict, JsonValue
+
+
 class CategoryStatus(str, Enum):
     PENDING_DOCUMENTS = "pending_documents"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
@@ -39,7 +42,7 @@ class ScoreExplanation(BaseModel):
     positive_factors: list[str] = Field(default_factory=list)
     negative_factors: list[str] = Field(default_factory=list)
     dominant_rules: list[str] = Field(default_factory=list)
-    score_path: list[dict[str, Any]] = Field(default_factory=list)
+    score_path: list[JsonDict] = Field(default_factory=list)
 
 
 class BudgetReconciliation(BaseModel):
@@ -64,10 +67,10 @@ class CategoryV2(BaseModel):
     evidence_count: int = 0
     evidence_references: list[str] = Field(default_factory=list)
     missing_evidence: list[str] = Field(default_factory=list)
-    detected_conflicts: list[dict[str, Any]] = Field(default_factory=list)
+    detected_conflicts: list[JsonDict] = Field(default_factory=list)
     rationale: str | None = None
     recommendation: str | None = None
-    calculation_metadata: dict[str, Any] = Field(default_factory=dict)
+    calculation_metadata: JsonDict = Field(default_factory=dict)
     budget_reconciliation: BudgetReconciliation | None = None
 
     @model_validator(mode="after")

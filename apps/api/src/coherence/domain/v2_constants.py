@@ -37,8 +37,8 @@ DEFAULT_CATEGORY_WEIGHTS: Final[dict[str, float]] = {
 # All scoring surfaces MUST use these constants — no inline string literals.
 # ---------------------------------------------------------------------------
 
-SCORE_VERSION_V1: Final[str] = "coherence-v1"
-SCORE_VERSION_V2: Final[str] = "coherence-v2"
+SCORE_VERSION_V1: Final = "coherence-v1"
+SCORE_VERSION_V2: Final = "coherence-v2"
 SCORE_VERSION_VALUES: Final[tuple[str, ...]] = (SCORE_VERSION_V1, SCORE_VERSION_V2)
 
 __all__ = [

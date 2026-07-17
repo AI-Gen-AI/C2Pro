@@ -9,6 +9,9 @@ from pydantic import BaseModel, Field
 
 # --- Enums and Data Models ---
 
+from src.core.json_types import JsonDict
+
+
 class CoherenceStatus(Enum):
     PASS = "PASS"
     FAIL = "FAIL"
@@ -25,7 +28,7 @@ class CoherenceResult(BaseModel):
     severity: CoherenceSeverity
     message: str
     affected_entities: list[UUID] = Field(default_factory=list)
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: JsonDict = Field(default_factory=dict)
 
 # --- Input Data Structures ---
 
@@ -331,7 +334,7 @@ class RuleR14_OrderDatePassed(CoherenceRule):
 # --- Rule Engine ---
 
 class CoherenceRuleEngine:
-    def __init__(self):
+    def __init__(self) -> None:
         self.rules: list[CoherenceRule] = [
             RuleR11_WBSEmptyLevel4(), RuleR12_WBSNoBudget(), RuleR13_ScopeClauseNoWBS(),
             RuleR6_BudgetActualDeviation(), RuleR15_BOMBudget(), RuleR16_BudgetVarianceTrend(),

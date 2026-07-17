@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+from src.core.json_types import JsonDict
 from src.analysis.domain.coherence_derivation import (
     CoherenceDerivationInput,
     CoherenceScoringDerivationService,
@@ -33,9 +34,9 @@ class ScoreFromExtractionCommand:
     """Input for Coherence Score™ calculation from extraction results."""
 
     project_id: UUID
-    extracted_risks: list[dict[str, Any]]
-    extracted_wbs: list[dict[str, Any]]
-    bom_items: list[dict[str, Any]]
+    extracted_risks: list[JsonDict]
+    extracted_wbs: list[JsonDict]
+    bom_items: list[JsonDict]
     confidence_score: float
     document_text: str
 
@@ -45,7 +46,7 @@ class ScoreFromExtractionResult:
     """Coherence Score™ result with quality metadata."""
 
     score: int | float | None
-    breakdown: dict[str, Any]
+    breakdown: JsonDict
     poor_extraction_quality: bool
     quality_note: str
 
@@ -87,7 +88,7 @@ class ScoreFromExtractionUseCase:
             document_count=1,
         )
 
-        breakdown = {
+        breakdown: JsonDict = {
             cat.value: sub_score
             for cat, sub_score in calc_result.category_scores.items()
         }

@@ -121,7 +121,9 @@ class LegalRulesEngine:
     """Minimal deterministic legal rules engine for TS-UD-COH-RUL-005."""
 
     def __init__(self) -> None:
-        self._rules = (RuleR8PenaltyClauseWithoutMilestone(), RuleR20ContractApproverNotIdentified())
+        self._rules: tuple[
+            RuleR8PenaltyClauseWithoutMilestone | RuleR20ContractApproverNotIdentified, ...
+        ] = (RuleR8PenaltyClauseWithoutMilestone(), RuleR20ContractApproverNotIdentified())
 
     def evaluate(self, data: LegalProjectData) -> list[CoherenceResult]:
         results: list[CoherenceResult] = []
