@@ -92,7 +92,7 @@
     "orval": "^8.21.0",
     "postcss": "^8.5.18",
     "tailwindcss": "^4.3.2",
-    "typescript": "5.3.3",
+    "typescript": "5.4.5",
     "typescript-eslint": "^8.63.0",
     "vite": "8.1.4",
     "vitest": "^4.1.10"
