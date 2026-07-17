@@ -94,7 +94,7 @@ def main() -> int:
     parser.add_argument("--db-host", default="localhost")
     parser.add_argument("--db-port", type=int, default=5433)
     parser.add_argument("--redis-host", default="localhost")
-    parser.add_argument("--redis-port", type=int, default=6379)
+    parser.add_argument("--redis-port", type=int, default=6380)
     parser.add_argument(
         "--database-url",
         default="postgresql://postgres:postgres@localhost:5433/c2pro_test",

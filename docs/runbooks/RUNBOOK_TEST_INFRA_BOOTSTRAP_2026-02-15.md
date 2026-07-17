@@ -26,7 +26,10 @@ python apps/api/scripts/bootstrap_test_infra.py --start-services
 3. Ensures target database exists (`c2pro_test` by default).
 4. Runs `alembic upgrade head`.
 5. Verifies applied `alembic_version` equals expected head revision.
-6. Checks Redis reachability (`localhost:6379`):
+6. Checks Redis reachability (`localhost:6380` locally by default, or `localhost:6379` in CI/service environments):
+   - Local Docker Compose maps `redis-test` on host port `6380` to avoid conflicts with development Redis (`6379`).
+   - In GitHub Actions / CI, the built-in Redis service runs natively on port `6379`.
+   - The bootstrap script automatically uses port `6380` by default locally, but can be overridden in CI via `--redis-port 6379`.
    - if unreachable and `--start-services` is passed:
      - runs `docker compose -f docker-compose.test.yml up -d redis-test`
      - waits for Redis port to become reachable.
@@ -39,10 +42,10 @@ python apps/api/scripts/bootstrap_test_infra.py --start-services
 - **Redis reachability:** soft fail unless `--require-redis` is set
 
 ## CI Usage
-`tests.yml` integration and e2e-security jobs now call:
+`ci.yml` jobs now call:
 
 ```yaml
-python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis
+python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379
 ```
 
 This enforces deterministic Redis availability for Event Bus integration paths.

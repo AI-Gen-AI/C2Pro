@@ -299,7 +299,7 @@ jobs:
         uses: ./.github/actions/setup-python-backend
 
       - name: Bootstrap test infrastructure
-        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
+        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
 
       - name: Run multi-tenant isolation and auth security tests
         working-directory: apps/api
@@ -368,7 +368,7 @@ jobs:
         uses: ./.github/actions/setup-python-backend
 
       - name: Bootstrap test infrastructure
-        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
+        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
 
       - name: Run integration tests
         working-directory: apps/api

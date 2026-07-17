@@ -206,6 +206,16 @@ def test_backend_requirements_include_langchain_anthropic_compatible_sdk() -> No
     assert "websockets==12.0" not in contents
 
 
+def test_backend_requirements_has_single_psycopg_constraint() -> None:
+    """TASK-DEV-028: Ensure apps/api/requirements.txt contains exactly one psycopg[binary] line."""
+    repo_root = Path(__file__).resolve().parents[4]
+    requirements = repo_root / "apps" / "api" / "requirements.txt"
+    assert requirements.exists()
+    lines = requirements.read_text(encoding="utf-8").splitlines()
+    psycopg_lines = [ln for ln in lines if "psycopg[binary]" in ln]
+    assert len(psycopg_lines) == 1, f"Found multiple/zero psycopg[binary] constraints: {psycopg_lines}"
+
+
 def test_production_contract_drift_repair_migration_restores_alerts_and_stakeholders_columns() -> None:
     """Test Suite ID: TS-CI-BACKEND-GUARDS-001, TASK-BCK-051."""
 
