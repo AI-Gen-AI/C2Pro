@@ -80,7 +80,7 @@ jobs:
       - name: Infra preflight
         run: |
           mkdir -p apps/api/ci-artifacts
-          python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis | tee apps/api/ci-artifacts/i13-scheduled-preflight.log
+          python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 | tee apps/api/ci-artifacts/i13-scheduled-preflight.log
 
       - name: Run I13 real E2E reliability suite
         working-directory: apps/api
