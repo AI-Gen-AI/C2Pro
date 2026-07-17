@@ -17,7 +17,9 @@ except ImportError:
     try:
         import langchain.hub as hub
     except ImportError:
-        hub = SimpleNamespace(pull=lambda _handle: (_ for _ in ()).throw(RuntimeError("LangChain Hub unavailable")))
+        hub = SimpleNamespace(
+            pull=lambda _handle: (_ for _ in ()).throw(RuntimeError("LangChain Hub unavailable"))
+        )
 
 
 @dataclass(frozen=True)
@@ -46,9 +48,15 @@ class LangSmithEnvProfile:
             default_project = "c2pro-dev"
 
         api_key = os.getenv(f"LANGCHAIN_API_KEY_{env_key}") or os.getenv("LANGCHAIN_API_KEY")
-        project = os.getenv(f"LANGCHAIN_PROJECT_{env_key}") or os.getenv("LANGCHAIN_PROJECT", default_project)
-        endpoint = os.getenv(f"LANGCHAIN_ENDPOINT_{env_key}") or os.getenv(
-            "LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com"
+        project: str = (
+            os.getenv(f"LANGCHAIN_PROJECT_{env_key}")
+            or os.getenv("LANGCHAIN_PROJECT")
+            or default_project
+        )
+        endpoint: str = (
+            os.getenv(f"LANGCHAIN_ENDPOINT_{env_key}")
+            or os.getenv("LANGCHAIN_ENDPOINT")
+            or "https://api.smith.langchain.com"
         )
         return cls(environment=normalized, api_key=api_key, project=project, endpoint=endpoint)
 
@@ -70,12 +78,12 @@ class PromptHubResolver:
         if not experiment_config:
             return "latest"
         if not experiment_config.get("enabled", False):
-            return experiment_config.get("fallback_tag", "latest")
+            return str(experiment_config.get("fallback_tag", "latest"))
         if tag := experiment_config.get("prompt_tag"):
             return str(tag)
         if variant := experiment_config.get("variant"):
             return f"variant-{variant}"
-        return experiment_config.get("active_tag", "latest")
+        return str(experiment_config.get("active_tag", "latest"))
 
     def pull_prompt(
         self,
@@ -93,7 +101,9 @@ class PromptHubResolver:
 
         try:
             with ThreadPoolExecutor(max_workers=1) as executor:
-                fetched = executor.submit(hub.pull, handle, **pull_kwargs).result(timeout=self.timeout_seconds)
+                fetched = executor.submit(hub.pull, handle, **pull_kwargs).result(
+                    timeout=self.timeout_seconds
+                )
             prompt_text = self._coerce_prompt_text(fetched)
             self._prompt_cache[handle] = prompt_text
             self._persist_cache()

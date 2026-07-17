@@ -3,8 +3,10 @@ core/ai/tools/registry.py
 
 Central registry for AI tools with autodiscovery.
 """
+
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import structlog
@@ -42,9 +44,9 @@ class ToolRegistry:
         tools = registry.get_by_task_type(AITaskType.COMPLEX_EXTRACTION)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # name -> version -> Tool class
-        self._tools: dict[str, dict[str, type[Tool]]] = {}
+        self._tools: dict[str, dict[str, type[Tool[Any, Any]]]] = {}
 
         # task_type -> list of (name, version)
         self._task_type_index: dict[AITaskType, list[tuple[str, str]]] = {}
@@ -53,7 +55,7 @@ class ToolRegistry:
 
     def register(
         self,
-        tool_class: type[Tool],
+        tool_class: type[Tool[Any, Any]],
         name: str | None = None,
         version: str | None = None,
     ) -> None:
@@ -65,14 +67,12 @@ class ToolRegistry:
             name: Override tool name (uses tool_class.name if None)
             version: Override version (uses tool_class.version if None)
         """
-        tool_name = name or getattr(tool_class, "name", tool_class.__name__)
-        tool_version = version or getattr(tool_class, "version", "1.0")
+        tool_name = str(name or getattr(tool_class, "name", tool_class.__name__))
+        tool_version = str(version or getattr(tool_class, "version", "1.0"))
 
         # Validate tool implements protocol
         if not hasattr(tool_class, "execute"):
-            raise ValueError(
-                f"Tool class {tool_class.__name__} must implement 'execute' method"
-            )
+            raise ValueError(f"Tool class {tool_class.__name__} must implement 'execute' method")
 
         # Register tool
         if tool_name not in self._tools:
@@ -94,9 +94,7 @@ class ToolRegistry:
             task_type=task_type.value if task_type else None,
         )
 
-    def get(
-        self, name: str, version: str = "latest", **init_kwargs: Any
-    ) -> Tool:
+    def get(self, name: str, version: str = "latest", **init_kwargs: Any) -> Tool[Any, Any]:
         """
         Get a tool instance by name and version.
 
@@ -135,7 +133,7 @@ class ToolRegistry:
 
     def get_by_task_type(
         self, task_type: AITaskType
-    ) -> list[tuple[str, str, type[Tool]]]:
+    ) -> list[tuple[str, str, type[Tool[Any, Any]]]]:
         """
         Get all tools for a specific task type.
 
@@ -164,9 +162,7 @@ class ToolRegistry:
         Returns:
             List of (name, versions) tuples
         """
-        return [
-            (name, list(versions.keys())) for name, versions in self._tools.items()
-        ]
+        return [(name, list(versions.keys())) for name, versions in self._tools.items()]
 
     def _get_latest_version(self, name: str) -> str:
         """Get latest version of a tool."""
@@ -215,7 +211,7 @@ def register_tool(
     name: str | None = None,
     version: str | None = None,
     auto_register: bool = True,
-):
+) -> Callable[[type[Tool[Any, Any]]], type[Tool[Any, Any]]]:
     """
     Decorator for automatic tool registration.
 
@@ -231,14 +227,14 @@ def register_tool(
         auto_register: If True, register immediately on import
     """
 
-    def decorator(cls: type[Tool]) -> type[Tool]:
+    def decorator(cls: type[Tool[Any, Any]]) -> type[Tool[Any, Any]]:
         if auto_register:
             registry = get_tool_registry()
             registry.register(cls, name=name, version=version)
 
         # Attach metadata to class for introspection
-        cls._tool_registry_name = name or getattr(cls, "name", cls.__name__)
-        cls._tool_registry_version = version or getattr(cls, "version", "1.0")
+        cls._tool_registry_name = name or getattr(cls, "name", cls.__name__)  # type: ignore[attr-defined]
+        cls._tool_registry_version = version or getattr(cls, "version", "1.0")  # type: ignore[attr-defined]
 
         return cls
 
@@ -250,7 +246,7 @@ def register_tool(
 # ============================================
 
 
-def get_tool(name: str, version: str = "latest", **kwargs: Any) -> Tool:
+def get_tool(name: str, version: str = "latest", **kwargs: Any) -> Tool[Any, Any]:
     """
     Convenience function to get a tool instance.
 

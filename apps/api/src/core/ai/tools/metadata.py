@@ -3,6 +3,7 @@ core/ai/tools/metadata.py
 
 Metadata schemas for tool registration and execution tracking.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -67,7 +68,7 @@ class ToolMetadata:
     # Execution configuration
     default_model_tier: ModelTier = ModelTier.STANDARD
     timeout_seconds: int = 120
-    retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
+    retry_policy: RetryPolicy = field(default_factory=RetryPolicy)  # type: ignore[arg-type]
 
     # Budget & permissions
     estimated_cost_usd: float | None = None  # Typical execution cost

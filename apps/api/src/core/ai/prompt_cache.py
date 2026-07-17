@@ -21,6 +21,7 @@ import hashlib
 import json
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -256,7 +257,9 @@ class FlashCacheService:
                     if not entry.is_expired():
                         self._memory[cache_key] = entry
                         self._hits += 1
-                        logger.info("flash_cache_hit_redis", key_prefix=cache_key[:16], model=model_id)
+                        logger.info(
+                            "flash_cache_hit_redis", key_prefix=cache_key[:16], model=model_id
+                        )
                         return entry
             except Exception as exc:
                 logger.warning("flash_cache_redis_get_failed", error=str(exc))
@@ -334,9 +337,7 @@ class FlashCacheService:
 
     async def clear_expired(self) -> int:
         """Remove expired entries from memory cache."""
-        expired_keys = [
-            key for key, entry in self._memory.items() if entry.is_expired()
-        ]
+        expired_keys = [key for key, entry in self._memory.items() if entry.is_expired()]
         for key in expired_keys:
             del self._memory[key]
 
@@ -840,7 +841,7 @@ def get_prompt_cache_service() -> PromptCacheService:
     return _prompt_cache_service
 
 
-def with_prompt_cache(func):
+def with_prompt_cache(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     Decorator para funciones que llaman a Claude API.
 
@@ -858,4 +859,3 @@ def with_prompt_cache(func):
     # Por ahora, retorna la función sin modificar
     # En futuras versiones, implementar wrapping automático
     return func
-

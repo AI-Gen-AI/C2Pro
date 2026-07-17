@@ -23,7 +23,7 @@ class _ApproximateEncoding:
 
     def encode(self, text: str) -> list[str]:
         tokens: list[str] = []
-        current = []
+        current: list[str] = []
         for char in text:
             if char.isspace():
                 if current:
@@ -39,6 +39,7 @@ class _ApproximateEncoding:
         if current:
             tokens.append("".join(current))
         return tokens
+
 
 # ===========================================
 # MODEL PRICING (USD per 1M tokens)
@@ -165,7 +166,9 @@ class TokenCounter:
         print(f"Context usage: {estimate.context_usage_percent:.1f}%")
     """
 
-    def __init__(self):
+    _encoding: tiktoken.Encoding | _ApproximateEncoding
+
+    def __init__(self) -> None:
         """Initialize with tiktoken encoder."""
         # Use cl100k_base encoding (closest to Claude's tokenizer)
         try:

@@ -109,7 +109,7 @@ class AIRequest:
     # Metadata
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Convert string task_type to AITaskType."""
         if isinstance(self.task_type, str):
             self.task_type = AITaskType(self.task_type)
@@ -278,7 +278,7 @@ class AnthropicWrapper:
         logger.info(
             "anthropic_wrapper_request_started",
             request_id=request.request_id,
-            task_type=request.task_type.value,
+            task_type=request.task_type.value,  # type: ignore[union-attr]
             tenant_id=str(request.tenant_id) if request.tenant_id else None,
             low_budget_mode=request.low_budget_mode,
             use_cache=request.use_cache,
@@ -306,10 +306,12 @@ class AnthropicWrapper:
                     logger.info(
                         "pii_anonymization_applied",
                         request_id=request.request_id,
-                        entities_found=len(deanonymization_map)
+                        entities_found=len(deanonymization_map),
                     )
             except Exception as e:
-                logger.error("pii_anonymization_failed", request_id=request.request_id, error=str(e))
+                logger.error(
+                    "pii_anonymization_failed", request_id=request.request_id, error=str(e)
+                )
                 # Re-raise as a security exception to halt the process
                 raise e
 
@@ -344,7 +346,7 @@ class AnthropicWrapper:
         cache_key = None
         if request.use_cache and self.cache_service:
             cache_key = self._build_cache_key(
-                prompt=safe_prompt, # Use safe prompt for cache key
+                prompt=safe_prompt,  # Use safe prompt for cache key
                 system_prompt=safe_system_prompt or "",
                 model=model_config.name,
                 temperature=request.temperature,
@@ -355,7 +357,11 @@ class AnthropicWrapper:
             if cached_response:
                 self.cache_hits += 1
                 latency_ms = (time.perf_counter() - start_time) * 1000
-                logger.info("anthropic_wrapper_cache_hit", request_id=request.request_id, latency_ms=round(latency_ms, 2))
+                logger.info(
+                    "anthropic_wrapper_cache_hit",
+                    request_id=request.request_id,
+                    latency_ms=round(latency_ms, 2),
+                )
 
                 # De-anonymize cached content
                 rehydrated_content = cached_response["content"]
@@ -373,7 +379,7 @@ class AnthropicWrapper:
                     cached=True,
                     retries=0,
                     request_id=request.request_id,
-                    task_type=request.task_type.value,
+                    task_type=request.task_type.value,  # type: ignore[union-attr]
                 )
 
             self.cache_misses += 1
@@ -385,20 +391,22 @@ class AnthropicWrapper:
 
         llm_request = LLMRequest(
             model=model_config.name,
-            messages=[{"role": "user", "content": safe_prompt}], # Use safe prompt
-            system=safe_system_prompt, # Use safe system prompt
+            messages=[{"role": "user", "content": safe_prompt}],  # Use safe prompt
+            system=safe_system_prompt,  # Use safe system prompt
             max_tokens=max_tokens,
             temperature=request.temperature,
             request_id=request.request_id,
             tenant_id=request.tenant_id,
-            task_type=request.task_type.value,
+            task_type=request.task_type.value,  # type: ignore[union-attr]
             metadata=request.metadata,
         )
 
         try:
             llm_response = await self.llm_client.generate(llm_request)
         except Exception as e:
-            logger.error("anthropic_wrapper_api_call_failed", request_id=request.request_id, error=str(e))
+            logger.error(
+                "anthropic_wrapper_api_call_failed", request_id=request.request_id, error=str(e)
+            )
             raise
 
         # ===========================================
@@ -426,24 +434,30 @@ class AnthropicWrapper:
             # IMPORTANT: Cache the ANONYMIZED content, not the rehydrated content
             await self._save_to_cache(
                 cache_key=cache_key,
-                content=llm_response.content, # Caching the raw, anonymized response from the LLM
+                content=llm_response.content,  # Caching the raw, anonymized response from the LLM
                 model=model_config.name,
                 input_tokens=llm_response.input_tokens,
                 output_tokens=llm_response.output_tokens,
                 cost_usd=cost_usd,
-                ttl=self._get_cache_ttl_for_task(request.task_type),
+                ttl=self._get_cache_ttl_for_task(request.task_type),  # type: ignore[arg-type]
             )
-            logger.info("anthropic_wrapper_cached_anonymized_response", request_id=request.request_id)
+            logger.info(
+                "anthropic_wrapper_cached_anonymized_response", request_id=request.request_id
+            )
 
         # ===========================================
         # STEP 7: Return Response
         # ===========================================
 
         latency_ms = (time.perf_counter() - start_time) * 1000
-        logger.info("anthropic_wrapper_request_success", request_id=request.request_id, latency_ms=round(latency_ms, 2))
+        logger.info(
+            "anthropic_wrapper_request_success",
+            request_id=request.request_id,
+            latency_ms=round(latency_ms, 2),
+        )
 
         return AIResponse(
-            content=rehydrated_content, # Return the rehydrated content
+            content=rehydrated_content,  # Return the rehydrated content
             model_used=model_config.name,
             input_tokens=llm_response.input_tokens,
             output_tokens=llm_response.output_tokens,
@@ -452,7 +466,7 @@ class AnthropicWrapper:
             cached=False,
             retries=llm_response.retries,
             request_id=request.request_id,
-            task_type=request.task_type.value,
+            task_type=request.task_type.value,  # type: ignore[union-attr]
             raw_response=llm_response.raw_response,
         )
 

@@ -96,7 +96,7 @@ def init_sentry(dsn: str, environment: str) -> None:
         # Data scrubbing
         send_default_pii=False,
         # Before send hook for filtering
-        before_send=_before_send_filter,
+        before_send=_before_send_filter,  # type: ignore[arg-type]
     )
 
 

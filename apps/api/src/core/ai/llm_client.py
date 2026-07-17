@@ -41,7 +41,7 @@ from src.core.observability import (
     record_ai_cache_size,
 )
 from src.core.observability.langsmith_decorator import traced_llm_call
-from src.core.resilience import CircuitBreakerConfig, CircuitBreakerRegistry
+from src.core.resilience import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry
 from src.core.resilience.config import get_circuit_breaker_settings
 
 logger = structlog.get_logger()
@@ -113,7 +113,7 @@ class LLMRequest:
     bypass_cache: bool = False
     tools: list[dict[str, Any]] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.request_id is None:
             self.request_id = str(uuid4())
 
@@ -241,8 +241,7 @@ class LLMClient:
             circuit_breaker_enabled=enable_circuit_breaker,
         )
 
-
-    def _init_circuit_breaker(self):
+    def _init_circuit_breaker(self) -> CircuitBreaker | None:
         """Initialize circuit breaker using centralized resilience infrastructure."""
         cb_settings = get_circuit_breaker_settings()
         if not cb_settings.enable_circuit_breakers:
@@ -410,14 +409,19 @@ class LLMClient:
 
                 # Calculate estimation accuracy
                 input_accuracy = (
-                    (1 - abs(raw_response.usage.input_tokens - pre_estimate.input_tokens) /
-                     max(raw_response.usage.input_tokens, 1)) * 100
-                    if pre_estimate.input_tokens > 0 else 0
+                    (
+                        1
+                        - abs(raw_response.usage.input_tokens - pre_estimate.input_tokens)
+                        / max(raw_response.usage.input_tokens, 1)
+                    )
+                    * 100
+                    if pre_estimate.input_tokens > 0
+                    else 0
                 )
 
                 logger.info(
                     "llm_request_success",
-                    request_id=request.request_id,
+                    request_id=request.request_id or str(uuid4()),
                     tenant_id=str(request.tenant_id) if request.tenant_id else None,
                     model=request.model,
                     input_tokens=raw_response.usage.input_tokens,
@@ -446,7 +450,7 @@ class LLMClient:
                     output_tokens=raw_response.usage.output_tokens,
                     cost_usd=cost_usd,
                     execution_time_ms=execution_time_ms,
-                    request_id=request.request_id,
+                    request_id=request.request_id or str(uuid4()),
                 )
                 record_ai_cache_size(self.flash_cache.size)
 
@@ -456,7 +460,7 @@ class LLMClient:
                     input_tokens=raw_response.usage.input_tokens,
                     output_tokens=raw_response.usage.output_tokens,
                     cost_usd=cost_usd,
-                    request_id=request.request_id,
+                    request_id=request.request_id or str(uuid4()),
                     execution_time_ms=round(execution_time_ms, 2),
                     retries=attempt,
                     raw_response=raw_response,
@@ -468,7 +472,7 @@ class LLMClient:
 
                 logger.warning(
                     "llm_request_attempt_failed",
-                    request_id=request.request_id,
+                    request_id=request.request_id or str(uuid4()),
                     tenant_id=str(request.tenant_id) if request.tenant_id else None,
                     attempt=attempt + 1,
                     max_retries=self.max_retries + 1,
@@ -489,7 +493,7 @@ class LLMClient:
                 if not self._should_retry(error_type):
                     logger.error(
                         "llm_request_non_retryable_error",
-                        request_id=request.request_id,
+                        request_id=request.request_id or str(uuid4()),
                         error_type=error_type.value,
                         error=str(e),
                     )
@@ -510,7 +514,7 @@ class LLMClient:
 
                 logger.info(
                     "llm_request_retrying",
-                    request_id=request.request_id,
+                    request_id=request.request_id or str(uuid4()),
                     attempt=attempt + 1,
                     delay_seconds=round(delay, 2),
                     error_type=error_type.value,
@@ -617,7 +621,9 @@ class LLMClient:
                 model_config = self.model_router.get_model_by_tier(ModelTier.POWERFUL)
             else:
                 model_config = self.model_router.get_model_by_tier(ModelTier.STANDARD)
-                logger.warning("llm_model_pricing_fallback", model=model, tier=ModelTier.STANDARD.value)
+                logger.warning(
+                    "llm_model_pricing_fallback", model=model, tier=ModelTier.STANDARD.value
+                )
 
         return self.model_router.estimate_cost(model_config, input_tokens, output_tokens)
 
@@ -634,9 +640,7 @@ class LLMClient:
             "total_retries": self.total_retries,
             "total_cost_usd": round(self.total_cost_usd, 2),
             "avg_retries_per_request": round(avg_retries, 2),
-            "circuit_breaker_state": self.circuit_breaker.get_state()
-            if self.circuit_breaker
-            else None,
+            "circuit_breaker_state": self.circuit_breaker.state if self.circuit_breaker else None,
             "circuit_breaker_failures": self.circuit_breaker.failure_count
             if self.circuit_breaker
             else None,
