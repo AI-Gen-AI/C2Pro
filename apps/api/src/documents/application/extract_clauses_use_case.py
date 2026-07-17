@@ -9,6 +9,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
+from src.core.tenants.types import require_tenant_id
 from src.documents.domain.models import Clause
 from src.documents.ports.clause_extraction_service import IClauseExtractionService
 from src.documents.ports.document_repository import IDocumentRepository
@@ -29,7 +30,8 @@ class ExtractClausesUseCase:
         """
         Extracts clauses from text and persists them for a document.
         """
-        document = await self.document_repository.get_by_id(tenant_id, document_id)
+        scoped_tenant_id = require_tenant_id(tenant_id)
+        document = await self.document_repository.get_by_id(scoped_tenant_id, document_id)
         if not document:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -40,14 +42,14 @@ class ExtractClausesUseCase:
             text=text,
             document_id=document_id,
             project_id=document.project_id,
-            tenant_id=tenant_id,
+            tenant_id=scoped_tenant_id,
         )
 
         if not clauses:
             return []
 
         for clause in clauses:
-            await self.document_repository.add_clause(tenant_id, clause)
+            await self.document_repository.add_clause(scoped_tenant_id, clause)
 
         await self.document_repository.commit()
         return clauses

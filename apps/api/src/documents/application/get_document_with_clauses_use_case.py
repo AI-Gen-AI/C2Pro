@@ -7,6 +7,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
+from src.core.tenants.types import require_tenant_id
 from src.documents.domain.models import Document
 from src.documents.ports.document_repository import IDocumentRepository
 
@@ -19,7 +20,7 @@ class GetDocumentWithClausesUseCase:
 
     async def execute(self, tenant_id: UUID, document_id: UUID) -> Document:
         document = await self.document_repository.get_document_with_clauses(
-            tenant_id,
+            require_tenant_id(tenant_id),
             document_id,
         )
         if not document:

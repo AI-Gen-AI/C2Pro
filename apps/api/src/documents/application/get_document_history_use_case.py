@@ -6,10 +6,13 @@ Use case for building a persisted document evidence timeline.
 
 from __future__ import annotations
 
+from datetime import datetime
+from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
 
+from src.core.tenants.types import require_tenant_id
 from src.documents.application.dtos import DocumentHistoryResponse, EvidenceHistoryEventResponse
 from src.documents.domain.models import DocumentHistorySnapshot
 from src.documents.ports.document_repository import IDocumentRepository
@@ -22,7 +25,9 @@ class GetDocumentHistoryUseCase:
         self.document_repository = document_repository
 
     async def execute(self, tenant_id: UUID, document_id: UUID) -> DocumentHistoryResponse:
-        snapshot = await self.document_repository.get_history_snapshot(tenant_id, document_id)
+        snapshot = await self.document_repository.get_history_snapshot(
+            require_tenant_id(tenant_id), document_id
+        )
         if snapshot is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
         return self._build_response(snapshot)
@@ -37,7 +42,7 @@ class GetDocumentHistoryUseCase:
                 id=f"document-uploaded-{document.id}",
                 title="Document uploaded",
                 detail=document.filename,
-                occurred_at=document.created_at,
+                occurred_at=cast(datetime, document.created_at),
                 source_type="document",
                 source_id=str(document.id),
             )
