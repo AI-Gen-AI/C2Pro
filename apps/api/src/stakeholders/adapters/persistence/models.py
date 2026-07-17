@@ -24,6 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.approval import ApprovalStatus  # Assuming this is a global enum
 from src.core.database import Base
+from src.core.json_types import JsonDict
 
 # Import enums from our domain models
 from src.stakeholders.domain.models import InterestLevel, PowerLevel, RACIRole, StakeholderQuadrant
@@ -114,7 +115,7 @@ class StakeholderORM(Base):
     review_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Stakeholder Metadata (custom data)
-    stakeholder_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
+    stakeholder_metadata: Mapped[JsonDict] = mapped_column(JSONB, default=dict)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive, nullable=False)

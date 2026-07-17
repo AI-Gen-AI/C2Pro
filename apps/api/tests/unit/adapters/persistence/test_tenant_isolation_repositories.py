@@ -23,7 +23,13 @@ from src.documents.domain.models import Clause, Document, DocumentStatus, Docume
 from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
     SqlAlchemyStakeholderRepository,
 )
-from src.stakeholders.domain.models import InterestLevel, PowerLevel, Stakeholder
+from src.stakeholders.domain.models import (
+    InterestLevel,
+    PowerLevel,
+    RaciAssignment,
+    RACIRole,
+    Stakeholder,
+)
 
 
 def _stakeholder() -> Stakeholder:
@@ -38,6 +44,19 @@ def _stakeholder() -> Stakeholder:
         created_at=now,
         updated_at=now,
         name="Tenant-scoped stakeholder",
+    )
+
+
+def _raci_assignment() -> RaciAssignment:
+    """TS-E2E-SEC-TNT-001: Build a tenant-owned RACI assignment."""
+    return RaciAssignment(
+        id=uuid4(),
+        project_id=uuid4(),
+        tenant_id=uuid4(),
+        stakeholder_id=uuid4(),
+        wbs_item_id=uuid4(),
+        raci_role=RACIRole.RESPONSIBLE,
+        created_at=datetime.now(UTC),
     )
 
 
@@ -197,6 +216,66 @@ async def test_stakeholder_repository_refresh_selects_by_id_and_tenant_id() -> N
 
     stmt = session.execute.await_args.args[0]
     _assert_stakeholder_identity_is_tenant_scoped(stmt, stakeholder)
+
+
+@pytest.mark.asyncio
+async def test_stakeholder_repository_raci_update_selects_by_id_and_tenant_id() -> None:
+    """TS-E2E-SEC-TNT-001: RACI updates must not use an unscoped PK lookup."""
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    session.execute.return_value = result
+    repo = SqlAlchemyStakeholderRepository(session=session)
+    assignment = _raci_assignment()
+
+    await repo.update_raci_assignment(assignment, tenant_id=assignment.tenant_id)
+
+    stmt = session.execute.await_args.args[0]
+    statement = str(stmt)
+    assert "stakeholder_wbs_raci.id" in statement
+    assert "stakeholder_wbs_raci.tenant_id" in statement
+    session.get.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stakeholder_repository_raci_refresh_selects_by_id_and_tenant_id() -> None:
+    """TS-E2E-SEC-TNT-001: RACI refresh must not cross a tenant boundary."""
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    session.execute.return_value = result
+    repo = SqlAlchemyStakeholderRepository(session=session)
+    assignment = _raci_assignment()
+
+    await repo.refresh(assignment)
+
+    stmt = session.execute.await_args.args[0]
+    statement = str(stmt)
+    assert "stakeholder_wbs_raci.id" in statement
+    assert "stakeholder_wbs_raci.tenant_id" in statement
+    session.get.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stakeholder_repository_delete_selects_by_id_and_tenant_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TS-E2E-SEC-TNT-001: Deletes must not re-read a tenant-owned row unscoped."""
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    session.execute.return_value = result
+    repo = SqlAlchemyStakeholderRepository(session=session)
+    stakeholder = _stakeholder()
+    scoped_lookup = AsyncMock(return_value=stakeholder)
+    monkeypatch.setattr(repo, "get_by_id", scoped_lookup)
+
+    await repo.delete(stakeholder.id, stakeholder.tenant_id)
+
+    stmt = session.execute.await_args.args[0]
+    _assert_stakeholder_identity_is_tenant_scoped(stmt, stakeholder)
+    scoped_lookup.assert_not_awaited()
+    session.get.assert_not_awaited()
 
 
 @pytest.mark.asyncio
