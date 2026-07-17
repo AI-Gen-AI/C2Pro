@@ -26,8 +26,7 @@ class ProcurementSnapshotRepository(Protocol):
         project_id: UUID,
         tenant_id: UUID,
         required_on_site: date | datetime,
-    ) -> list[ProcurementPlanItem]:
-        ...
+    ) -> list[ProcurementPlanItem]: ...
 
 
 class ProcurementDecisionRepository(Protocol):
@@ -38,26 +37,22 @@ class ProcurementDecisionRepository(Protocol):
         project_id: UUID,
         tenant_id: UUID,
         items: list[ProcurementPlanItem],
-    ) -> None:
-        ...
+    ) -> None: ...
 
     async def save_conflicts(
         self,
         project_id: UUID,
         tenant_id: UUID,
         conflicts: list[ProcurementConflict],
-    ) -> None:
-        ...
+    ) -> None: ...
 
 
 class ProcurementUnitOfWork(Protocol):
     """Transactional boundary for procurement persistence operations."""
 
-    async def commit(self) -> None:
-        ...
+    async def commit(self) -> None: ...
 
-    async def rollback(self) -> None:
-        ...
+    async def rollback(self) -> None: ...
 
 
 class ProcurementPlanningService:
@@ -120,9 +115,7 @@ class ProcurementPlanningService:
     ) -> PlanningDecision:
         if fingerprint is not None and fingerprint in self._persisted_fingerprints:
             return PlanningDecision(
-                plan_fingerprint=fingerprint,
-                conflicts=[],
-                requires_human_review=False
+                plan_fingerprint=fingerprint, conflicts=[], requires_human_review=False
             )
 
         decision = await self.build_procurement_plan(
@@ -140,10 +133,10 @@ class ProcurementPlanningService:
         # Map decision conflicts back to domain objects for saving
         domain_conflicts = [
             ProcurementConflict(
-                item_id=UUID(c["item_id"]),
-                reason_code=c["reason_code"],
-                impact=c["impact"],
-                message=c["message"]
+                item_id=UUID(str(c["item_id"])),
+                reason_code=str(c["reason_code"]),
+                impact=str(c["impact"]),
+                message=str(c["message"]),
             )
             for c in decision.conflicts
         ]
