@@ -97,24 +97,22 @@ async def example_circuit_breaker():
 
     print("\n🔌 Circuit Breaker:")
     print(f"   State: {cb.state}")
-    print(f"   Failure threshold: {cb.failure_threshold}")
-    print(f"   Recovery timeout: {cb.recovery_timeout}s")
 
     print("\n💡 Comportamiento:")
     print("   - CLOSED: Normal operation")
-    print(f"   - OPEN: Reject requests after {cb.failure_threshold} failures")
+    print("   - OPEN: Reject requests after the failure threshold")
     print("   - HALF_OPEN: Testing recovery")
 
     # Simular fallos
     print("\n🔨 Simulando 5 fallos...")
     for i in range(5):
-        cb.record_failure(Exception("test failure"))
+        await cb.record_failure(Exception("test failure"))
         print(f"   Failure {i + 1}: State = {cb.state}")
 
     print("\n🛑 Circuit breaker OPENED after threshold")
 
     # Verificar si puede ejecutar
-    can_execute = cb.can_execute()
+    can_execute = await cb.can_execute()
     print(f"\n❓ Can execute request? {can_execute}")
 
 
