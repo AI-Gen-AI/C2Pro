@@ -4,14 +4,14 @@ Defines the contract for parsing various document types.
 """
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
 
+from src.core.json_types import JsonDict
 from src.documents.domain.models import Document
 
 
 class IFileParserService(ABC):
     @abstractmethod
-    async def parse_document_file(self, document: Document, file_path: Path) -> dict[str, Any]:
+    async def parse_document_file(self, document: Document, file_path: Path) -> JsonDict:
         """
         Parses a document file based on its type and format.
         :param document: The domain Document entity.

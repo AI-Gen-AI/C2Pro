@@ -7,10 +7,18 @@ Refers to Suite ID: TS-UD-DOC-CLS-001.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Protocol
 from uuid import UUID
 
+from src.core.json_types import JsonDict
 from src.documents.domain.events import ClauseEntitiesExtracted
 from src.documents.domain.exceptions import DomainValidationError
+
+
+class EntityExtractor(Protocol):
+    """Contract for the legacy clause entity extraction collaborator."""
+
+    def extract(self, text: str) -> list[JsonDict]: ...
 
 
 @dataclass(slots=True)
@@ -33,7 +41,7 @@ class Clause:
         if not (0.0 <= self.confidence_score <= 1.0):
             raise DomainValidationError("confidence_score must be between 0 and 1")
 
-    def extract_entities(self, extractor: object) -> list[dict]:
+    def extract_entities(self, extractor: EntityExtractor) -> list[JsonDict]:
         extracted = extractor.extract(self.content)
         event = ClauseEntitiesExtracted(
             clause_id=self.clause_id,

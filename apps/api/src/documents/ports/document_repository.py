@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from uuid import UUID
 
+from src.core.json_types import JsonDict
 from src.core.tenants.types import TenantId
 from src.documents.domain.models import (
     Clause,
@@ -60,7 +61,9 @@ class IDocumentRepository(ABC):
         pass
 
     @abstractmethod
-    async def update_metadata(self, tenant_id: TenantId, document_id: UUID, document_metadata: dict) -> None:
+    async def update_metadata(
+        self, tenant_id: TenantId, document_id: UUID, document_metadata: JsonDict
+    ) -> None:
         """Updates the metadata of a document."""
         pass
 

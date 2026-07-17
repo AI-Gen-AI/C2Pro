@@ -3,7 +3,8 @@ TS-UD-DOC-ENT-001: Date entity extraction domain service.
 """
 
 import re
-from datetime import date, timedelta
+from collections.abc import Callable
+from datetime import date, datetime, timedelta
 from enum import Enum, auto
 from typing import NamedTuple
 
@@ -37,7 +38,7 @@ class DateEntityExtractor:
     It recognizes various absolute, relative, and contextual date formats.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Spanish month names for normalization before parsing
         self.spanish_months = {
             "enero": "January", "febrero": "February", "marzo": "March", "abril": "April",
@@ -47,7 +48,9 @@ class DateEntityExtractor:
 
         # A list of regex patterns to find dates.
         # Each tuple contains: (regex, context, handler_method_name)
-        self.patterns = [
+        self.patterns: list[
+            tuple[re.Pattern[str], DateContextType, Callable[[re.Match[str], date], date | None]]
+        ] = [
             # Contextual Dates first to give them priority
             (re.compile(r"\b(?:fecha de entrega:|delivery date:)\s*(?P<date>[\w\s,/-]+)", re.IGNORECASE), DateContextType.DELIVERY, self._parse_absolute),
             (re.compile(r"\b(?:firmado el|signed on)\s*(?P<date>[\w\s,/-]+)", re.IGNORECASE), DateContextType.SIGNATURE, self._parse_absolute),
@@ -86,18 +89,19 @@ class DateEntityExtractor:
         return text
 
     # --- Handler Methods ---
-    def _parse_absolute(self, match: re.Match, base_date: date) -> date | None:  # noqa: ARG002 - Handler signature is normalized across all parser callbacks
+    def _parse_absolute(self, match: re.Match[str], base_date: date) -> date | None:  # noqa: ARG002 - Handler signature is normalized across all parser callbacks
         date_str = match.group('date') if 'date' in match.groupdict() else match.group(0)
         try:
             # Normalize Spanish months before parsing
             normalized_str = self._normalize_spanish_month(date_str)
             # The parser is robust, but can fail on impossible dates (e.g., 99/99/9999)
-            return dateutil_parse(normalized_str, dayfirst=True).date()
+            parsed: datetime = dateutil_parse(normalized_str, dayfirst=True)
+            return parsed.date()
         except (ValueError, TypeError):
             # If parsing fails, it's not a valid date format, so ignore it.
             return None
 
-    def _parse_relative(self, match: re.Match, base_date: date) -> date | None:
+    def _parse_relative(self, match: re.Match[str], base_date: date) -> date | None:
         num = int(match.group('num'))
         unit = match.group('unit').lower()
         delta = timedelta(days=0)
@@ -109,11 +113,12 @@ class DateEntityExtractor:
             delta = timedelta(days=num * 365) # Approximate
         return base_date + delta
 
-    def _parse_relative_from(self, match: re.Match, base_date: date) -> date | None:  # noqa: ARG002 - Handler signature is normalized across all parser callbacks
+    def _parse_relative_from(self, match: re.Match[str], base_date: date) -> date | None:  # noqa: ARG002 - Handler signature is normalized across all parser callbacks
         num = int(match.group('num'))
         base_date_str = match.group('base_date')
         try:
-            new_base_date = dateutil_parse(base_date_str, dayfirst=True).date()
+            parsed: datetime = dateutil_parse(base_date_str, dayfirst=True)
+            new_base_date = parsed.date()
             return new_base_date + timedelta(days=num)
         except (ValueError, TypeError):
             return None
