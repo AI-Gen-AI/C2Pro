@@ -9,7 +9,6 @@ from uuid import UUID
 from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.tenants.types import TenantId
 from src.procurement.adapters.persistence.models import BOMItemORM
 from src.procurement.domain.models import BOMCategory, BOMItem, ProcurementStatus
 from src.procurement.ports.bom_repository import IBOMRepository
