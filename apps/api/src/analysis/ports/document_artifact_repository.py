@@ -9,6 +9,7 @@ from typing import Protocol
 from uuid import UUID
 
 from src.analysis.domain.contracts import DocumentArtifact
+from src.core.tenants.types import TenantId
 
 
 class IDocumentArtifactRepository(Protocol):
@@ -17,21 +18,21 @@ class IDocumentArtifactRepository(Protocol):
         artifact: DocumentArtifact,
         *,
         project_id: UUID,
-        tenant_id: UUID,
+        tenant_id: TenantId,
     ) -> DocumentArtifact: ...
 
     async def list_active_for_project(
         self,
         *,
         project_id: UUID,
-        tenant_id: UUID,
+        tenant_id: TenantId,
     ) -> list[DocumentArtifact]: ...
 
     async def list_superseded_for_document(
         self,
         *,
         project_id: UUID,
-        tenant_id: UUID,
+        tenant_id: TenantId,
         document_id: UUID,
     ) -> list[DocumentArtifact]: ...
 
