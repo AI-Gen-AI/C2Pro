@@ -22,6 +22,7 @@ from src.core.security.tenant_context import (
     TenantIsolationError,
     TenantScopedCache,
 )
+from src.core.tenants.types import TenantId
 
 logger = structlog.get_logger()
 
@@ -71,7 +72,7 @@ async def get_optional_user_id(request: Request) -> UUID | None:
 
 
 # Type aliases para Depends mas limpios
-CurrentTenantId = Annotated[UUID, Depends(get_current_tenant_id)]
+CurrentTenantId = Annotated[TenantId, Depends(get_current_tenant_id)]
 CurrentUserId = Annotated[UUID, Depends(get_current_user_id_with_bearer)]
 OptionalUserId = Annotated[UUID | None, Depends(get_optional_user_id)]
 

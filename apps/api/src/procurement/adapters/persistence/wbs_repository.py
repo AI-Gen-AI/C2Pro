@@ -6,6 +6,7 @@ Refers to Suite ID: TS-INT-DB-WBS-001.
 
 from __future__ import annotations
 
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import and_, inspect, select
@@ -204,20 +205,20 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             raise ConflictError("WBSItem", field="version", value=str(wbs_id))
 
         # Update fields
-        orm.name = wbs_item.name  # type: ignore[assignment]
-        orm.description = wbs_item.description  # type: ignore[assignment]
-        orm.item_type = wbs_item.item_type  # type: ignore[assignment]
-        orm.budget_allocated = wbs_item.budget_allocated  # type: ignore[assignment]
-        orm.budget_spent = wbs_item.budget_spent  # type: ignore[assignment]
-        orm.planned_start = wbs_item.planned_start  # type: ignore[assignment]
-        orm.planned_end = wbs_item.planned_end  # type: ignore[assignment]
-        orm.actual_start = wbs_item.actual_start  # type: ignore[assignment]
-        orm.actual_end = wbs_item.actual_end  # type: ignore[assignment]
-        orm.wbs_metadata = wbs_item.wbs_metadata or {}  # type: ignore[assignment]
+        orm.name = wbs_item.name
+        orm.description = wbs_item.description
+        orm.item_type = wbs_item.item_type
+        orm.budget_allocated = wbs_item.budget_allocated
+        orm.budget_spent = wbs_item.budget_spent
+        orm.planned_start = wbs_item.planned_start
+        orm.planned_end = wbs_item.planned_end
+        orm.actual_start = wbs_item.actual_start
+        orm.actual_end = wbs_item.actual_end
+        orm.wbs_metadata = wbs_item.wbs_metadata or {}
 
         # Handle parent_code update
         if wbs_item.parent_code:
-            orm.parent_code = wbs_item.parent_code  # type: ignore[assignment]
+            orm.parent_code = wbs_item.parent_code
 
         await self.session.flush()
         await self.session.refresh(orm)
@@ -305,10 +306,10 @@ class SQLAlchemyWBSRepository(IWBSRepository):
                 WBSItem(
                     project_id=project_id,
                     code=code,
-                    name=item.get("name") or "WBS Item",
-                    description=item.get("description"),
+                    name=cast("str", item.get("name") or "WBS Item"),
+                    description=cast("str | None", item.get("description")),
                     level=level,
-                    parent_code=item.get("parent_code"),
+                    parent_code=cast("str | None", item.get("parent_code")),
                     item_type=item_type,
                     budget_allocated=_parse_decimal(item.get("budget_allocated")),
                     wbs_metadata={"confidence": item.get("confidence"), "raw": item},

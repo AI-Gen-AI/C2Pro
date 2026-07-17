@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import cast
 
 from src.procurement.domain.lead_time_alerts import LeadTimeAlert, LeadTimeAlertEvaluator
 from src.procurement.domain.lead_time_calculator import LeadTimeCalculator
@@ -58,7 +59,7 @@ class ProcurementPlanGenerator:
                     required_on_site_date=required_on_site_date,
                     optimal_order_date=optimal_order_date,
                     priority=priority,
-                    alerts=alerts,
+                    alerts=cast("list[object]", alerts),
                 )
             )
 
