@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from src.coherence.models import Clause
@@ -133,7 +133,7 @@ async def _call_llm(clause_text: str) -> dict[str, Any]:
                 system=_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": _build_prompt(clause_text)}],
             )
-            raw = response.content[0].text.strip()
+            raw = cast(Any, response.content[0]).text.strip()
         finally:
             await client.close()
 
@@ -143,7 +143,7 @@ async def _call_llm(clause_text: str) -> dict[str, Any]:
             raw = parts[1] if len(parts) > 1 else raw
             if raw.startswith("json"):
                 raw = raw[4:]
-        return json.loads(raw)
+        return cast(dict[str, Any], json.loads(raw))
     except Exception as exc:
         logger.warning("clause_extractor: LLM call failed: %s", exc)
         return {}

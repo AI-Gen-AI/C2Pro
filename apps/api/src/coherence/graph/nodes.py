@@ -24,7 +24,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from itertools import islice, product
-from typing import Any
+from typing import Any, cast
 
 from src.coherence.domain.ports.coherence_llm_gate_port import (
     CoherenceLlmGatePort,
@@ -298,7 +298,7 @@ def _build_enriched_clauses(
             clause=clause,
             embedding=embeddings_by_clause.get(clause.id, []),
             category=category,
-            document_type=doc_type,
+            document_type=cast(Any, doc_type),
         )
         enriched.append(enriched_clause)
 
@@ -604,7 +604,7 @@ def _evaluate_deterministic_clause(
 def _deterministic_applicability(evaluator: Any, clause: Clause) -> ApplicabilityState:
     """Return evaluator applicability while letting unexpected defects propagate."""
     try:
-        return evaluator.applicability(clause)
+        return cast(ApplicabilityState, evaluator.applicability(clause))
     except _EXPECTED_EVALUATOR_ERRORS as e:
         logger.warning(f"applicability {evaluator.rule_id} failed: {e}")
         return ApplicabilityState.SKIPPED_MISSING_INPUTS
@@ -1186,7 +1186,7 @@ def _signal_to_alert(signal: FindingSignal) -> Alert:
     return Alert(
         rule_id=signal.rule_id,
         severity=signal.severity,
-        category=alert_category,
+        category=cast(Any, alert_category),
         message=signal.evidence_summary,
         evidence=Evidence(
             source_clause_id=signal.clause_id,
@@ -1268,7 +1268,7 @@ def _build_category_breakdown(
         cat_impact = sum(s.impact_score for s in cat_signals)
         breakdown.append(
             CategoryBreakdown(
-                category=legacy,
+                category=cast(Any, legacy),
                 score=score,
                 alert_count=len(cat_signals),
                 severity_breakdown=SeverityCount(**sev),

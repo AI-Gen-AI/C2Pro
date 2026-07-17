@@ -13,6 +13,8 @@ Location: apps/api/src/coherence/graph/prompts.py
 
 from __future__ import annotations
 
+from typing import Any
+
 # =============================================================================
 # SYSTEM PROMPT
 # =============================================================================
@@ -184,7 +186,7 @@ If clauses are coherent, return: {{"cross_findings": []}}
 # FEW-SHOT EXAMPLES FOR CALIBRATION
 # =============================================================================
 
-FEW_SHOT_EXAMPLES = {
+FEW_SHOT_EXAMPLES: dict[str, dict[str, Any]] = {
     "scope_ambiguity": {
         "clause": """The Contractor shall perform all work necessary to complete the project
 as described herein, including any additional work that may be required.""",
@@ -275,7 +277,7 @@ def build_evaluation_prompt(
     category: str,
     clause_id: str,
     clause_text: str,
-    clause_data: dict | None = None,
+    clause_data: dict[str, Any] | None = None,
 ) -> str:
     """
     Build a complete evaluation prompt from components.
@@ -313,8 +315,8 @@ def build_evaluation_prompt(
 def build_batch_prompt(
     clause_id: str,
     clause_text: str,
-    rules: list[dict],
-    clause_data: dict | None = None,
+    rules: list[dict[str, Any]],
+    clause_data: dict[str, Any] | None = None,
 ) -> str:
     """
     Build a batch evaluation prompt for multiple rules.
@@ -381,7 +383,7 @@ def build_cross_clause_prompt(
     )
 
 
-def get_few_shot_example(example_key: str) -> dict | None:
+def get_few_shot_example(example_key: str) -> dict[str, Any] | None:
     """
     Get a specific few-shot example for prompt calibration.
 
