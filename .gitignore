@@ -99,6 +99,7 @@ claves postgre.txt
 .mypy_cache/
 ruff_errors.json
 apps/api/.pytest-collect.txt
+apps/api/mypy-report.txt
 apps/api/.pytest-*.xml
 apps/api/.coverage-*.xml
 apps/api/coverage*.json

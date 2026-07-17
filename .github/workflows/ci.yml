@@ -122,10 +122,16 @@ jobs:
             exit 1
           fi
 
+  # EPIC-MYPY-STRICT Wave 0 (TASK-DEV-031). Runs strict mypy with the FULL backend
+  # dependency graph (so types resolve — the old job installed only mypy, which
+  # degraded missing imports to Any) and gates via a ratchet: the ~1,364 existing
+  # errors live in apps/api/mypy-baseline.txt; the job fails only on NEW ones.
+  # Stays advisory (continue-on-error) for now — flip to required once CI/baseline
+  # parity is confirmed and the burn-down is underway (TASK-DEV-006 / QA-322).
   backend-typecheck:
-    name: Backend Typecheck (mypy, advisory)
+    name: Backend Typecheck (mypy ratchet, advisory)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     needs: detect-changes
     if: needs.detect-changes.outputs.backend == 'true'
     continue-on-error: true
@@ -133,30 +139,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
-        with:
-          python-version: "3.11"
+      # Full backend env so mypy sees the real type surface (SQLAlchemy, Pydantic,
+      # FastAPI, ...), matching local runs. This is the CI-parity fix.
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
 
-      # Install the exact mypy version pinned in apps/api/requirements.txt.
-      # Config lives in apps/api/pyproject.toml (strict mode, ignore_missing_imports).
-      - name: Install mypy (version from requirements.txt)
-        run: pip install "$(grep -E '^mypy==' apps/api/requirements.txt)"
-
-      - name: Mypy (advisory — baseline not clean yet)
+      - name: Mypy ratchet (fail only on NEW errors vs baseline)
         working-directory: apps/api
         run: |
-          set -o pipefail
-          mypy src | tee mypy-report.txt || true
-          {
-            echo "## Mypy (advisory)"
-            echo ""
-            echo '```'
-            tail -n 30 mypy-report.txt
-            echo '```'
-            echo ""
-            echo "_This job is informational until the mypy baseline is clean (see backlog)._"
-          } >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          # mypy always exits non-zero while baseline errors remain, so capture
+          # its output (|| true) and let the ratchet's exit code gate the job.
+          python -m mypy src --no-error-summary --no-color-output > mypy-report.txt || true
+          python scripts/mypy_ratchet.py --check mypy-baseline.txt < mypy-report.txt \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The baseline is Linux/CI-canonical (mypy drifts across platforms — e.g.
+      # Starlette Request typing). Publish the raw Linux report so a maintainer
+      # can refresh the baseline reproducibly: download it and run
+      #   python apps/api/scripts/mypy_ratchet.py --update apps/api/mypy-baseline.txt < mypy-report.txt
+      - name: Upload mypy report (Linux-canonical baseline source)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mypy-report
+          path: apps/api/mypy-report.txt
+          if-no-files-found: warn
 
   backend-unit:
     name: Backend Unit Tests (${{ matrix.python-version }})

@@ -190,6 +190,10 @@ typecheck: ## Verificar tipos
 	cd apps/api && . .venv/bin/activate && mypy src
 	cd apps/web && pnpm typecheck
 
+mypy-baseline: ## Refrescar mypy-baseline.txt (Linux/CI-canonical) tras reducir errores
+	@[ "$$(uname -s)" = "Linux" ] || { echo "ERROR: el baseline de mypy es canonico en Linux/CI. mypy difiere entre plataformas (p.ej. Starlette Request). Regenera en Linux (WSL/Docker) o descarga el artifact 'mypy-report' del job backend-typecheck y ejecuta: python apps/api/scripts/mypy_ratchet.py --update apps/api/mypy-baseline.txt < mypy-report.txt"; exit 1; }
+	cd apps/api && . .venv/bin/activate && mypy src --no-error-summary --no-color-output | python scripts/mypy_ratchet.py --update mypy-baseline.txt
+
 # ===========================================
 # BUILD
 # ===========================================
