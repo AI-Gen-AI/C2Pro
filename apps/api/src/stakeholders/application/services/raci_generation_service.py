@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 import structlog
 
+from src.core.tenants.types import require_tenant_id
 from src.documents.ports.document_repository import IDocumentRepository
 from src.procurement.ports.wbs_repository import IWBSRepository
 from src.stakeholders.application.dtos import (
@@ -38,7 +39,7 @@ class RaciGenerationService:
         stakeholder_repository: IStakeholderRepository,
         raci_inference_service: IRaciInferenceService | None = None,
     ) -> None:
-        self.tenant_id = tenant_id
+        self.tenant_id = require_tenant_id(tenant_id)
         self.list_stakeholders_use_case = list_stakeholders_use_case
         self.wbs_repository = wbs_repository
         self.document_repository = document_repository
@@ -100,14 +101,18 @@ class RaciGenerationService:
                 id=item.id,
                 name=item.name,
                 description=item.description,
-                clause_text=clause_map.get(item.source_clause_id),
+                clause_text=(
+                    clause_map.get(item.source_clause_id)
+                    if item.source_clause_id is not None
+                    else None
+                ),
             )
             for item in leaf_items
         ]
 
     async def _load_clause_text_map(self, clause_ids: Iterable[UUID | None]) -> dict[UUID, str]:
         clause_id_list = [clause_id for clause_id in clause_ids if clause_id is not None]
-        return await self.document_repository.get_clause_text_map(clause_id_list)
+        return await self.document_repository.get_clause_text_map(self.tenant_id, clause_id_list)
 
     async def _load_stakeholders(self, project_id: UUID) -> list[RaciStakeholderInput]:
         stakeholders, _ = await self.list_stakeholders_use_case.execute(

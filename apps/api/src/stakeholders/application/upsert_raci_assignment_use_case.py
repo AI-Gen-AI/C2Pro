@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from src.core.tenants.types import require_tenant_id
 from src.procurement.ports.wbs_repository import IWBSRepository
 from src.stakeholders.application.dtos import (
     RaciAssignmentUpsertRequest,
@@ -49,14 +50,15 @@ class UpsertRaciAssignmentUseCase:
         user_id: UUID,
         payload: RaciAssignmentUpsertRequest,
     ) -> RaciAssignmentUpsertResponse:
-        wbs_item = await self.wbs_repository.get_by_id(payload.task_id, tenant_id)
+        scoped_tenant_id = require_tenant_id(tenant_id)
+        wbs_item = await self.wbs_repository.get_by_id(payload.task_id, scoped_tenant_id)
         if wbs_item is None:
             raise ValueError("task_not_found")
         project_id = wbs_item.project_id
 
         stakeholder = await self.stakeholder_repository.get_by_id(
             payload.stakeholder_id,
-            tenant_id=tenant_id,
+            tenant_id=scoped_tenant_id,
         )
         if stakeholder is None:
             raise ValueError("stakeholder_not_found")
@@ -70,7 +72,7 @@ class UpsertRaciAssignmentUseCase:
                 project_id=project_id,
                 wbs_item_id=payload.task_id,
                 exclude_stakeholder_id=payload.stakeholder_id,
-                tenant_id=tenant_id,
+                tenant_id=scoped_tenant_id,
             )
             if existing_accountable is not None:
                 raise ValueError("accountable_exists")
@@ -79,7 +81,7 @@ class UpsertRaciAssignmentUseCase:
             project_id=project_id,
             wbs_item_id=payload.task_id,
             stakeholder_id=payload.stakeholder_id,
-            tenant_id=tenant_id,
+            tenant_id=scoped_tenant_id,
         )
 
         now = datetime.now(UTC)
@@ -91,13 +93,14 @@ class UpsertRaciAssignmentUseCase:
             existing.verified_at = now
             await self.stakeholder_repository.update_raci_assignment(
                 existing,
-                tenant_id=tenant_id,
+                tenant_id=scoped_tenant_id,
             )
             assignment = existing
         else:
             assignment = RaciAssignment(
                 id=uuid4(),
                 project_id=project_id,
+                tenant_id=scoped_tenant_id,
                 stakeholder_id=payload.stakeholder_id,
                 wbs_item_id=payload.task_id,
                 raci_role=raci_role,
@@ -110,7 +113,7 @@ class UpsertRaciAssignmentUseCase:
             )
             await self.stakeholder_repository.add_raci_assignment(
                 assignment,
-                tenant_id=tenant_id,
+                tenant_id=scoped_tenant_id,
             )
 
         await self.stakeholder_repository.commit()

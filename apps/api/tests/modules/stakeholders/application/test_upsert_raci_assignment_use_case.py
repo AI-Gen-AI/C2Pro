@@ -36,6 +36,7 @@ async def test_upsert_raci_assignment_propagates_tenant_id_to_repository_calls()
     stakeholder_repository.get_by_id.return_value = Stakeholder(
         id=stakeholder_id,
         project_id=project_id,
+        tenant_id=tenant_id,
         name="Maria Gomez",
         power_level=PowerLevel.HIGH,
         interest_level=InterestLevel.HIGH,
@@ -87,6 +88,7 @@ async def test_upsert_raci_assignment_propagates_tenant_id_to_repository_calls()
     stakeholder_repository.add_raci_assignment.assert_awaited_once()
     assignment = stakeholder_repository.add_raci_assignment.await_args.args[0]
     assert assignment.project_id == project_id
+    assert assignment.tenant_id == tenant_id
     assert assignment.wbs_item_id == task_id
     assert stakeholder_repository.add_raci_assignment.await_args.kwargs == {"tenant_id": tenant_id}
     stakeholder_repository.commit.assert_awaited_once()

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from src.core.tenants.types import require_tenant_id
 from src.stakeholders.domain.models import Stakeholder
 from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
 
@@ -20,9 +21,10 @@ class ListProjectStakeholdersUseCase:
         skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[Stakeholder], int]:
+        scoped_tenant_id = require_tenant_id(tenant_id)
         return await self.repository.get_stakeholders_by_project(
             project_id=project_id,
-            tenant_id=tenant_id,
+            tenant_id=scoped_tenant_id,
             skip=skip,
             limit=limit,
         )

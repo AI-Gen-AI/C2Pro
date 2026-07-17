@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from src.core.approval import ApprovalStatus
+from src.core.tenants.types import require_tenant_id
 from src.documents.ports.document_repository import IDocumentRepository
 from src.stakeholders.application.dtos import StakeholderUpdateRequest
 from src.stakeholders.application.helpers import (
@@ -33,10 +34,9 @@ class UpdateStakeholderUseCase:
         payload: StakeholderUpdateRequest,
         tenant_id: UUID,
     ) -> Stakeholder:
-        if tenant_id is None:
-            raise ValueError("tenant_id is required")
+        scoped_tenant_id = require_tenant_id(tenant_id)
 
-        stakeholder = await self.repository.get_by_id(stakeholder_id, tenant_id=tenant_id)
+        stakeholder = await self.repository.get_by_id(stakeholder_id, tenant_id=scoped_tenant_id)
         if stakeholder is None:
             raise ValueError("Stakeholder not found")
 
@@ -53,7 +53,9 @@ class UpdateStakeholderUseCase:
         if payload.phone is not None:
             stakeholder.phone = payload.phone
         if payload.source_clause_id is not None:
-            exists = await self.document_repository.clause_exists(payload.source_clause_id)
+            exists = await self.document_repository.clause_exists(
+                scoped_tenant_id, payload.source_clause_id
+            )
             if not exists:
                 raise ValueError("source_clause_id_not_found")
             stakeholder.source_clause_id = payload.source_clause_id
@@ -99,7 +101,7 @@ class UpdateStakeholderUseCase:
 
         stakeholder.updated_at = datetime.now(UTC)
 
-        await self.repository.update(stakeholder, tenant_id=tenant_id)
+        await self.repository.update(stakeholder, tenant_id=scoped_tenant_id)
         await self.repository.commit()
         await self.repository.refresh(stakeholder)
         return stakeholder
