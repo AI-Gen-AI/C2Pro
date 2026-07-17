@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import UTC, datetime
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import select
@@ -12,6 +13,7 @@ from src.analysis.adapters.persistence.models import Alert, Analysis
 from src.analysis.domain.enums import AlertSeverity, AnalysisStatus, AnalysisType
 from src.analysis.ports.coherence_repository import ICoherenceRepository
 from src.core.database import get_session_with_tenant
+from src.core.json_types import JsonDict, JsonValue
 from src.documents.adapters.persistence.models import DocumentORM
 from src.procurement.adapters.persistence.models import BOMItemORM, WBSItemORM
 from src.projects.adapters.persistence.models import ProjectORM
@@ -52,8 +54,8 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
     async def persist_wbs_bom_items(
         self,
         project_id: UUID,
-        wbs_items: list[dict],
-        bom_items: list[dict],
+        wbs_items: list[JsonDict],
+        bom_items: list[JsonDict],
         tenant_id: UUID | None = None,
     ) -> tuple[list[WBSItemORM], list[BOMItemORM]]:
         effective_tenant_id = tenant_id or self._tenant_id
@@ -69,19 +71,19 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
                 existing_wbs = await tenant_db.scalar(
                     select(WBSItemORM).where(
                         WBSItemORM.project_id == project_id,
-                        WBSItemORM.wbs_code == item["wbs_code"],
+                        WBSItemORM.code == item["wbs_code"],
                     )
                 )
                 if existing_wbs:
                     continue
                 wbs = WBSItemORM(
                     project_id=project_id,
-                    wbs_code=item["wbs_code"],
-                    name=item["name"],
-                    description=item.get("description"),
-                    level=item.get("level", 1),
-                    item_type=item.get("item_type"),
-                    funded_by_clause_id=item.get("funded_by_clause_id"),
+                    code=cast(str, item["wbs_code"]),
+                    name=cast(str, item["name"]),
+                    description=cast(str | None, item.get("description")),
+                    level=cast(int, item.get("level", 1)),
+                    item_type=cast(Any, item.get("item_type")),
+                    source_clause_id=cast(UUID | None, item.get("funded_by_clause_id")),
                     wbs_metadata={"source_document_id": str(item.get("source_document_id"))},
                 )
                 tenant_db.add(wbs)
@@ -99,15 +101,15 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
                     continue
                 bom = BOMItemORM(
                     project_id=project_id,
-                    item_name=item["item_name"],
-                    quantity=item["quantity"],
-                    unit=item.get("unit"),
-                    description=item.get("description"),
-                    category=item.get("category"),
-                    unit_price=item.get("unit_price"),
-                    total_price=item.get("total_price"),
-                    currency=item.get("currency", "EUR"),
-                    contract_clause_id=item.get("contract_clause_id"),
+                    item_name=cast(str, item["item_name"]),
+                    quantity=cast(Any, item["quantity"]),
+                    unit=cast(str | None, item.get("unit")),
+                    description=cast(str | None, item.get("description")),
+                    category=cast(Any, item.get("category")),
+                    unit_price=cast(Any, item.get("unit_price")),
+                    total_price=cast(Any, item.get("total_price")),
+                    currency=cast(str, item.get("currency", "EUR")),
+                    contract_clause_id=cast(UUID | None, item.get("contract_clause_id")),
                     bom_metadata={"source_document_id": str(item.get("source_document_id"))},
                 )
                 tenant_db.add(bom)
@@ -115,10 +117,10 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
 
             await tenant_db.commit()
 
-            for item in created_wbs:
-                await tenant_db.refresh(item)
-            for item in created_bom:
-                await tenant_db.refresh(item)
+            for wbs_record in created_wbs:
+                await tenant_db.refresh(wbs_record)
+            for bom_record in created_bom:
+                await tenant_db.refresh(bom_record)
 
         return created_wbs, created_bom
 
@@ -127,7 +129,7 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
         project_id: UUID,
         started_at: datetime,
         coherence_score: float,
-        alerts: Iterable[dict],
+        alerts: Iterable[JsonDict],
         tenant_id: UUID | None = None,
     ) -> None:
         effective_tenant_id = tenant_id or self._tenant_id
@@ -155,19 +157,27 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
 
             if alert_payloads:
                 for alert_data in alert_payloads:
-                    affected_entities = alert_data.get("affected_entities", [])
+                    affected_entities = cast(
+                        list[JsonDict], alert_data.get("affected_entities", [])
+                    )
                     affected_document_ids = [
-                        UUID(e["id"]) for e in affected_entities if e["type"] == "document"
+                        UUID(cast(str, e["id"]))
+                        for e in affected_entities
+                        if e["type"] == "document"
                     ]
                     affected_wbs_ids = [
-                        UUID(e["id"]) for e in affected_entities if e["type"] == "wbs"
+                        UUID(cast(str, e["id"]))
+                        for e in affected_entities
+                        if e["type"] == "wbs"
                     ]
                     affected_bom_ids = [
-                        UUID(e["id"]) for e in affected_entities if e["type"] == "bom"
+                        UUID(cast(str, e["id"]))
+                        for e in affected_entities
+                        if e["type"] == "bom"
                     ]
                     source_clause_id = next(
                         (
-                            UUID(e["id"])
+                            UUID(cast(str, e["id"]))
                             for e in affected_entities
                             if e["type"] == "clause"
                         ),
@@ -178,19 +188,23 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
                         tenant_id=project.tenant_id,
                         project_id=project_id,
                         analysis_id=new_analysis.id,
-                        severity=AlertSeverity[alert_data.get("severity", "LOW").upper()],
-                        rule_id=alert_data.get("rule_id"),
+                        severity=AlertSeverity[
+                            cast(str, alert_data.get("severity", "LOW")).upper()
+                        ],
+                        rule_id=cast(str | None, alert_data.get("rule_id")),
                         title=f"Inconsistency Detected: {alert_data.get('rule_id')}",
-                        message=alert_data.get("message", "No message provided."),
-                        description=alert_data.get("message", "No message provided."),
-                        recommendation=alert_data.get("suggested_action"),
+                        message=cast(str, alert_data.get("message", "No message provided.")),
+                        description=cast(
+                            str, alert_data.get("message", "No message provided.")
+                        ),
+                        recommendation=cast(str | None, alert_data.get("suggested_action")),
                         source_clause_id=source_clause_id,
                         affected_entities={
                             "documents": affected_document_ids,
                             "wbs": affected_wbs_ids,
                             "bom": affected_bom_ids,
                         },
-                        alert_metadata={"raw": alert_data},
+                        alert_metadata={"raw": cast(JsonValue, alert_data)},
                     )
                     tenant_db.add(new_alert)
 

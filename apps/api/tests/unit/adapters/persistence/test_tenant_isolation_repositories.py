@@ -6,7 +6,9 @@ Repository-level tenant isolation hardening tests.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -15,6 +17,9 @@ import pytest
 
 from src.analysis.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
 from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
+from src.analysis.adapters.persistence.coherence_repository import (
+    SqlAlchemyCoherenceRepository,
+)
 from src.core.approval import ApprovalStatus
 from src.documents.adapters.persistence.sqlalchemy_document_repository import (
     SqlAlchemyDocumentRepository,
@@ -24,6 +29,54 @@ from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository imp
     SqlAlchemyStakeholderRepository,
 )
 from src.stakeholders.domain.models import InterestLevel, PowerLevel, Stakeholder
+
+
+@pytest.mark.asyncio
+async def test_coherence_repository_maps_wbs_payload_to_current_orm_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TS-UT-ANA-PER-001: Map legacy extraction keys to the current WBS ORM."""
+    tenant_id = uuid4()
+    project_id = uuid4()
+    db = AsyncMock()
+    tenant_db = MagicMock()
+    tenant_db.scalar = AsyncMock(return_value=None)
+    tenant_db.commit = AsyncMock()
+    tenant_db.refresh = AsyncMock()
+
+    @asynccontextmanager
+    async def tenant_session(_tenant_id: object):
+        yield tenant_db
+
+    monkeypatch.setattr(
+        "src.analysis.adapters.persistence.coherence_repository.get_session_with_tenant",
+        tenant_session,
+    )
+    repository = SqlAlchemyCoherenceRepository(db, tenant_id=tenant_id)
+    monkeypatch.setattr(
+        repository,
+        "_load_project",
+        AsyncMock(return_value=SimpleNamespace(tenant_id=tenant_id)),
+    )
+
+    created_wbs, created_bom = await repository.persist_wbs_bom_items(
+        project_id,
+        [
+            {
+                "wbs_code": "1.2",
+                "name": "Foundations",
+                "level": 2,
+                "funded_by_clause_id": None,
+            }
+        ],
+        [],
+        tenant_id=tenant_id,
+    )
+
+    assert created_bom == []
+    assert len(created_wbs) == 1
+    assert created_wbs[0].code == "1.2"
+    assert created_wbs[0].source_clause_id is None
 
 
 def _stakeholder() -> Stakeholder:

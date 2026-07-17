@@ -14,9 +14,8 @@ from datetime import UTC, datetime
 def _utcnow() -> datetime:
     """Return current UTC time as a naive datetime (for TIMESTAMP WITHOUT TIME ZONE columns)."""
     return datetime.now(UTC).replace(tzinfo=None)
-
-
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -51,6 +50,7 @@ from src.analysis.domain.enums import (
 )
 from src.core.approval import ApprovalStatus
 from src.core.database import Base
+from src.core.json_types import JsonDict
 
 if TYPE_CHECKING:
     from src.core.auth.models import User
@@ -101,7 +101,7 @@ class Analysis(Base):
     )
 
     # Results
-    result_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    result_json: Mapped[JsonDict | None] = mapped_column(JSONB, nullable=True)
 
     # Coherence Score (ROADMAP §12)
     coherence_score: Mapped[int | None] = mapped_column(
@@ -109,7 +109,7 @@ class Analysis(Base):
         nullable=True,
         # CHECK constraint definido en migración: BETWEEN 0 AND 100
     )
-    coherence_breakdown: Mapped[dict | None] = mapped_column(
+    coherence_breakdown: Mapped[JsonDict | None] = mapped_column(
         JSONB,
         nullable=True,  # Detalle por regla
     )
@@ -238,7 +238,7 @@ class Alert(Base):
     )
 
     # Affected entities (stored as JSONB)
-    affected_entities: Mapped[dict[str, Any]] = mapped_column(
+    affected_entities: Mapped[JsonDict] = mapped_column(
         JSONB,
         default=dict,  # {"documents": [], "wbs": [], "bom": []}
     )
@@ -247,7 +247,7 @@ class Alert(Base):
     impact_level: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Metadata (includes evidence and other data)
-    alert_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    alert_metadata: Mapped[JsonDict] = mapped_column(JSONB, default=dict)
 
     # Status
     status: Mapped[AlertStatus] = mapped_column(
@@ -303,22 +303,22 @@ class Alert(Base):
         {"info": {"rls_policy": "tenant_isolation"}},
     )
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """
         Initialize Alert with Python-level defaults and validation.
 
         TASK-BCK-026: Ensure alert_type defaults to RISK for backward compatibility.
         """
         # Set alert_type default if not provided
-        if "alert_type" not in kwargs:
-            kwargs["alert_type"] = AlertType.RISK
+        if 'alert_type' not in kwargs:
+            kwargs['alert_type'] = AlertType.RISK
         else:
             # Validate alert_type is a valid AlertType enum
-            alert_type_value = kwargs["alert_type"]
+            alert_type_value = kwargs['alert_type']
             if not isinstance(alert_type_value, AlertType):
                 try:
                     # Try to convert string to AlertType
-                    kwargs["alert_type"] = AlertType(alert_type_value)
+                    kwargs['alert_type'] = AlertType(alert_type_value)
                 except (ValueError, KeyError):
                     raise ValueError(
                         f"Invalid alert_type: {alert_type_value}. "
@@ -424,7 +424,7 @@ class Extraction(Base):
     )
 
     # Data
-    data_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    data_json: Mapped[JsonDict] = mapped_column(JSONB, nullable=False)
     confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # AI tracking (ROADMAP §6.2)
@@ -474,7 +474,9 @@ class KnowledgeGraphNodeORM(Base):
 
     __tablename__ = "knowledge_graph_nodes"
 
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
@@ -488,15 +490,13 @@ class KnowledgeGraphNodeORM(Base):
         index=True,
     )
     label: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    properties: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    properties: Mapped[JsonDict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "project_id", "entity_type", "entity_id", name="kg_nodes_project_entity_unique"
-        ),
+        UniqueConstraint("project_id", "entity_type", "entity_id", name="kg_nodes_project_entity_unique"),
         Index("ix_kg_nodes_project", "project_id"),
         Index("ix_kg_nodes_type", "entity_type"),
         Index("ix_kg_nodes_entity", "entity_id"),
@@ -517,7 +517,9 @@ class KnowledgeGraphEdgeORM(Base):
 
     __tablename__ = "knowledge_graph_edges"
 
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
@@ -537,7 +539,7 @@ class KnowledgeGraphEdgeORM(Base):
         index=True,
     )
     relationship_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    properties: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    properties: Mapped[JsonDict] = mapped_column(JSONB, nullable=False, default=dict)
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -545,11 +547,8 @@ class KnowledgeGraphEdgeORM(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "project_id",
-            "source_node_id",
-            "target_node_id",
-            "relationship_type",
-            name="kg_edges_unique",
+            "project_id", "source_node_id", "target_node_id", "relationship_type",
+            name="kg_edges_unique"
         ),
         Index("ix_kg_edges_project", "project_id"),
         Index("ix_kg_edges_source", "source_node_id"),
@@ -567,7 +566,9 @@ class DocumentArtifactORM(Base):
 
     __tablename__ = "document_artifacts"
 
-    artifact_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    artifact_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     document_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     document_revision_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
@@ -576,7 +577,7 @@ class DocumentArtifactORM(Base):
     )
     project_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
-    payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    payload: Mapped[JsonDict] = mapped_column(JSONB, nullable=False)
     lifecycle_status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -602,7 +603,8 @@ class DocumentArtifactORM(Base):
 
 
 _DOCUMENT_ARTIFACT_POLICY_USING = (
-    "tenant_id = COALESCE(NULLIF(current_setting('app.current_tenant', true), '')::uuid, tenant_id)"
+    "tenant_id = COALESCE(NULLIF(current_setting('app.current_tenant', true), "
+    "'')::uuid, tenant_id)"
 )
 
 
@@ -637,7 +639,7 @@ def _install_document_artifact_rls() -> None:
         event.listen(
             DocumentArtifactORM.__table__,
             "after_create",
-            DDL(statement).execute_if(dialect="postgresql"),
+            cast(Callable[[str], DDL], DDL)(statement).execute_if(dialect="postgresql"),
         )
 
 
