@@ -9,6 +9,7 @@ TASK-IMPL-005: Added ClauseEmbeddingORM model for Gate 4 traceability.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
@@ -60,15 +61,15 @@ class CoherenceResultORM(Base):
 
     # Category scores (stored as JSONB)
     # Format: {"SCOPE": 100, "BUDGET": 70, ...}
-    category_scores: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    category_scores: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
     # Category details with violations (stored as JSONB)
     # Format: [{"category": "SCOPE", "score": 100, "violations": []}]
-    category_details: Mapped[list] = mapped_column(JSONB, nullable=False)
+    category_details: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
 
     # Alerts (stored as JSONB)
     # Format: [{"rule_id": "R11", "severity": "HIGH", ...}]
-    alerts: Mapped[list] = mapped_column(JSONB, nullable=False)
+    alerts: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
 
     # Gaming detection
     is_gaming_detected: Mapped[bool] = mapped_column(default=False)
@@ -126,7 +127,7 @@ class ClauseEmbeddingORM(Base):
     category: Mapped[str] = mapped_column(
         String(50), nullable=False, server_default="SCOPE", index=True
     )
-    embedding_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    embedding_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

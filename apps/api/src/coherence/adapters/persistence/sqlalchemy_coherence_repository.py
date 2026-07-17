@@ -11,11 +11,15 @@ TASK-REV-003: Fixed tenant isolation in all methods.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
+from uuid import UUID
 from uuid import UUID
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import Select, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.json_types import JsonDict
+from src.core.tenants.types import TenantId
 from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.coherence.application.dtos import (
     CategoryScoreDetail,
@@ -35,11 +39,11 @@ def _utcnow_naive() -> datetime:
 class SqlAlchemyCoherenceRepository(ICoherenceRepository):
     """SQLAlchemy implementation of coherence repository with tenant isolation."""
 
-    def __init__(self, db: AsyncSession, tenant_id: UUID | None = None) -> None:
+    def __init__(self, db: AsyncSession, tenant_id: TenantId | None = None) -> None:
         self._db = db
         self._tenant_id = tenant_id
 
-    def _apply_tenant_filter(self, stmt) -> tuple:
+    def _apply_tenant_filter(self, stmt: Select[Any]) -> tuple[Select[Any], bool]:
         """Apply tenant filter by joining with ProjectORM."""
         if self._tenant_id is None:
             return stmt, False
@@ -198,11 +202,12 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
 
         return True
 
-    async def get_project_tenant_id(self, project_id: UUID) -> UUID | None:
+    async def get_project_tenant_id(self, project_id: UUID) -> TenantId | None:
         """Get the tenant ID for a project."""
         stmt = select(ProjectORM.tenant_id).where(ProjectORM.id == project_id)
         result = await self._db.execute(stmt)
-        return result.scalar_one_or_none()
+        res = result.scalar_one_or_none()
+        return TenantId(res) if res is not None else None
 
     async def commit(self) -> None:
         """Commit pending changes."""
@@ -242,7 +247,7 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
 
     def _serialize_category_details(
         self, details: list[CategoryScoreDetail]
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Convert category details to JSON-serializable format."""
         return [
             {
@@ -254,7 +259,7 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
         ]
 
     def _deserialize_category_details(
-        self, details_list: list[dict]
+        self, details_list: list[dict[str, Any]]
     ) -> list[CategoryScoreDetail]:
         """Convert JSON format back to domain model."""
         return [
@@ -266,10 +271,10 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
             for detail in details_list
         ]
 
-    def _serialize_alerts(self, alerts: list[CoherenceAlert]) -> list[dict]:
+    def _serialize_alerts(self, alerts: list[CoherenceAlert]) -> list[dict[str, Any]]:
         """Convert alerts to JSON-serializable format."""
         return [alert.model_dump() for alert in alerts]
 
-    def _deserialize_alerts(self, alerts_list: list[dict]) -> list[CoherenceAlert]:
+    def _deserialize_alerts(self, alerts_list: list[dict[str, Any]]) -> list[CoherenceAlert]:
         """Convert JSON format back to domain model."""
         return [CoherenceAlert.model_validate(alert) for alert in alerts_list]

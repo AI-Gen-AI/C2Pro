@@ -14,11 +14,14 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Any, cast, Literal
 from uuid import UUID
 
 from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.tenants.types import TenantId
+from src.core.json_types import JsonDict
 from ...ports.embedding_repository import (
     EmbeddingMatch,
     EmbeddingRecord,
@@ -63,7 +66,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         ```
     """
 
-    def __init__(self, session: AsyncSession, tenant_id: UUID | None = None):
+    def __init__(self, session: AsyncSession, tenant_id: TenantId | None = None):
         """
         Initialize repository with a database session and optional tenant context.
 
@@ -100,7 +103,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         document_type: str = "other",
         text: str = "",
         category: str = "SCOPE",
-        metadata: dict | None = None,
+        metadata: JsonDict | None = None,
     ) -> EmbeddingRecord:
         """
         Store an embedding for a clause with tenant verification.
@@ -201,7 +204,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
             clause_id=clause_id,
             project_id=project_id,
             document_id=document_id,
-            document_type=document_type,
+            document_type=cast(Literal["contract", "budget", "schedule", "bom", "other"], document_type),
             text=truncated_text,
             embedding=embedding,
             category=category,
@@ -598,7 +601,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
 
         await self.session.commit()
 
-        count = result.rowcount or 0
+        count = cast(Any, result).rowcount or 0
 
         logger.info(f"Deleted {count} embeddings for project {project_id}")
 
@@ -634,7 +637,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
 
         row = result.fetchone()
 
-        return row[0] if row else 0
+        return int(row[0]) if row else 0
 
 
 # =============================================================================

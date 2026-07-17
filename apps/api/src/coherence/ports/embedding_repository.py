@@ -17,8 +17,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
+
+from src.core.json_types import JsonDict
 
 # =============================================================================
 # DTOs (Data Transfer Objects)
@@ -52,7 +54,7 @@ class EmbeddingRecord:
     text: str = ""
     embedding: list[float] = field(default_factory=list)
     category: str = "SCOPE"
-    metadata: dict = field(default_factory=dict)
+    metadata: JsonDict = field(default_factory=dict)
     created_at: datetime | None = None
 
     def has_embedding(self) -> bool:
@@ -173,7 +175,7 @@ class IEmbeddingRepository(ABC):
         document_type: str = "other",
         text: str = "",
         category: str = "SCOPE",
-        metadata: dict | None = None,
+        metadata: JsonDict | None = None,
     ) -> EmbeddingRecord:
         """
         Store an embedding for a clause.
