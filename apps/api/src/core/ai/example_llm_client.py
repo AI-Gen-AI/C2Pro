@@ -90,27 +90,31 @@ async def example_circuit_breaker():
     print("=" * 60)
 
     client = create_llm_client(enable_circuit_breaker=True)
+    cb = client.circuit_breaker
+    if cb is None:
+        print("   Circuit breaker not enabled")
+        return
 
     print("\n🔌 Circuit Breaker:")
-    print(f"   State: {client.circuit_breaker.state}")
-    print(f"   Failure threshold: {client.circuit_breaker.failure_threshold}")
-    print(f"   Recovery timeout: {client.circuit_breaker.recovery_timeout}s")
+    print(f"   State: {cb.state}")
+    print(f"   Failure threshold: {cb.failure_threshold}")
+    print(f"   Recovery timeout: {cb.recovery_timeout}s")
 
     print("\n💡 Comportamiento:")
     print("   - CLOSED: Normal operation")
-    print(f"   - OPEN: Reject requests after {client.circuit_breaker.failure_threshold} failures")
+    print(f"   - OPEN: Reject requests after {cb.failure_threshold} failures")
     print("   - HALF_OPEN: Testing recovery")
 
     # Simular fallos
     print("\n🔨 Simulando 5 fallos...")
     for i in range(5):
-        client.circuit_breaker.record_failure()
-        print(f"   Failure {i + 1}: State = {client.circuit_breaker.get_state()}")
+        cb.record_failure(Exception("test failure"))
+        print(f"   Failure {i + 1}: State = {cb.state}")
 
     print("\n🛑 Circuit breaker OPENED after threshold")
 
     # Verificar si puede ejecutar
-    can_execute = client.circuit_breaker.can_execute()
+    can_execute = cb.can_execute()
     print(f"\n❓ Can execute request? {can_execute}")
 
 
