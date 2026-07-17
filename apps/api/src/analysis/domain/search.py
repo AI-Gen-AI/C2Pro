@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from uuid import UUID
 
+from src.core.json_types import JsonDict
+
 
 @dataclass(frozen=True)
 class HybridSearchResult:
@@ -21,7 +23,7 @@ class HybridSearchResult:
     keyword_score: float
     fusion_weight: float
     rank: int
-    metadata: dict = field(default_factory=dict)
+    metadata: JsonDict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.text or not self.text.strip():

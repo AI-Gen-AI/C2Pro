@@ -8,7 +8,8 @@ Refers to TASK-IMPL-010.3.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+
+from src.core.json_types import JsonDict
 
 
 @dataclass(frozen=True)
@@ -35,7 +36,7 @@ class CritiqueEvaluationService:
         self.confidence_threshold = confidence_threshold
         self.max_retries = max_retries
 
-    def calculate_confidence(self, items: list[dict[str, Any]]) -> float:
+    def calculate_confidence(self, items: list[JsonDict]) -> float:
         """Calculate average confidence from extracted items.
 
         Returns 0.0 for empty list, 0.9 for items without confidence field.
@@ -43,13 +44,13 @@ class CritiqueEvaluationService:
         if not items:
             return 0.0
         confidences = [
-            item["confidence"]
+            confidence
             for item in items
-            if isinstance(item.get("confidence"), int | float)
+            if isinstance(confidence := item.get("confidence"), int | float)
         ]
         if not confidences:
             return 0.9
-        return sum(confidences) / len(confidences)
+        return float(sum(confidences) / len(confidences))
 
     def evaluate_critique(
         self,

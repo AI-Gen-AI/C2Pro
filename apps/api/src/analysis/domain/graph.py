@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from uuid import UUID
 
+from src.core.json_types import JsonDict
+
 
 @dataclass(frozen=True)
 class GraphNode:
@@ -16,7 +18,7 @@ class GraphNode:
 
     node_id: UUID
     label: str
-    properties: dict = field(default_factory=dict)
+    properties: JsonDict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.node_id is None:

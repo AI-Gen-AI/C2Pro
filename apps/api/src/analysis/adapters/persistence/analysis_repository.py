@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.analysis.adapters.persistence.models import Alert, Analysis
+from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.ports.analysis_repository import IAnalysisRepository
+from src.analysis.ports.types import AlertRecord, AnalysisRecord
 from src.projects.adapters.persistence.models import ProjectORM
 
 
@@ -27,14 +29,18 @@ class SqlAlchemyAnalysisRepository(IAnalysisRepository):
             return True
         return project_tenant == self.tenant_id
 
-    async def add_analysis(self, analysis: Analysis, tenant_id: UUID | None = None) -> None:
+    async def add_analysis(
+        self, analysis: AnalysisRecord, tenant_id: UUID | None = None
+    ) -> None:
         effective_tenant_id = tenant_id or self.tenant_id
         if effective_tenant_id is not None:  # noqa: SIM102
             if not await self._verify_project_ownership(analysis.project_id):
                 raise PermissionError("Cannot add analysis for project outside tenant")
         self.session.add(analysis)
 
-    async def add_alerts(self, alerts: Iterable[Alert], tenant_id: UUID | None = None) -> None:
+    async def add_alerts(
+        self, alerts: Iterable[AlertRecord], tenant_id: UUID | None = None
+    ) -> None:
         effective_tenant_id = tenant_id or self.tenant_id
         alert_list = list(alerts)
         for alert in alert_list:
@@ -45,7 +51,7 @@ class SqlAlchemyAnalysisRepository(IAnalysisRepository):
 
     async def list_recent(
         self, *, limit: int, offset: int, tenant_id: UUID | None = None
-    ) -> list[Analysis]:
+    ) -> list[AnalysisRecord]:
         query = select(Analysis)
         if tenant_id is not None:
             query = query.join(ProjectORM, ProjectORM.id == Analysis.project_id).where(
@@ -54,7 +60,7 @@ class SqlAlchemyAnalysisRepository(IAnalysisRepository):
         result = await self.session.execute(
             query.order_by(Analysis.created_at.desc()).offset(offset).limit(limit)
         )
-        return list(result.scalars().all())
+        return cast(list[AnalysisRecord], list(result.scalars().all()))
 
     async def count_all(self, tenant_id: UUID | None = None) -> int:
         query = select(func.count(Analysis.id))
