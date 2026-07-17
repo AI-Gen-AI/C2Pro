@@ -8,6 +8,7 @@ Refers to Test Suite IDs: TS-E2E-SEC-TNT-001, TS-AUTH-CORE-001.
 import re
 from datetime import UTC, datetime
 from enum import Enum
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -25,8 +26,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, Mapper, mapped_column, relationship
 
 from src.core.database import Base
 
@@ -72,7 +74,9 @@ class Tenant(Base):
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
 
     # Clerk integration (for frontend auth)
-    clerk_org_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
+    clerk_org_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, unique=True, index=True
+    )
 
     # Subscription
     subscription_plan: Mapped[SubscriptionPlan] = mapped_column(
@@ -97,7 +101,7 @@ class Tenant(Base):
     max_storage_gb: Mapped[int] = mapped_column(default=10, nullable=False)
 
     # Settings
-    settings: Mapped[dict] = mapped_column(JSONB, default=dict)
+    settings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -181,7 +185,9 @@ class User(Base):
     oauth_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Clerk integration (for frontend auth)
-    clerk_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
+    clerk_user_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, unique=True, index=True
+    )
 
     # Profile
     first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -205,7 +211,7 @@ class User(Base):
     login_count: Mapped[int] = mapped_column(default=0, nullable=False)
 
     # Preferences
-    preferences: Mapped[dict] = mapped_column(JSONB, default=dict)
+    preferences: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive, nullable=False)
@@ -286,7 +292,11 @@ def _generate_slug_from_name(name: str) -> str:
 
 
 @event.listens_for(Tenant, "before_insert")
-def generate_tenant_slug(mapper, connection, target):  # noqa: ARG001
+def generate_tenant_slug(
+    mapper: Mapper[Any],  # noqa: ARG001
+    connection: Connection,
+    target: Tenant,
+) -> None:
     """SQLAlchemy event handler - mapper/connection required by event listener interface."""
     if target.slug:
         return

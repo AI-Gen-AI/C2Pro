@@ -12,21 +12,23 @@ CRITICAL FOR SECURITY:
 """
 
 import contextlib
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from functools import lru_cache
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import httpx
 import jwt
 import structlog
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 from fastapi import Depends, HTTPException, Request, Response, status
 from jwt.algorithms import RSAAlgorithm
+from jwt.types import Options
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.config import settings
 from src.core.observability.sentry_alerts import record_auth_failure
-from src.core.resilience import CircuitBreakerConfig, CircuitBreakerRegistry
+from src.core.resilience import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry
 from src.core.resilience.config import get_circuit_breaker_settings
 
 logger = structlog.get_logger()
@@ -35,7 +37,7 @@ logger = structlog.get_logger()
 _clerk_circuit_breaker = None
 
 
-def _get_clerk_circuit_breaker():
+def _get_clerk_circuit_breaker() -> CircuitBreaker | None:
     """Get or initialize the Clerk JWKS circuit breaker."""
     global _clerk_circuit_breaker
     if _clerk_circuit_breaker is None:
@@ -161,11 +163,13 @@ async def verify_clerk_token(token: str) -> dict[str, Any]:
             if not key:
                 raise ClerkTokenVerificationError(f"Key {kid} not found in JWKS")
 
-        # Convert JWKS key to RSA public key
-        rsa_key = RSAAlgorithm.from_jwk(key)
+        # Convert JWKS key to RSA public key. JWKS entries are always public
+        # keys (that is the purpose of a JWKS); from_jwk()'s return type is a
+        # union with the private-key case because the same helper handles both.
+        rsa_key = cast(RSAPublicKey, RSAAlgorithm.from_jwk(key))
 
         # Verify and decode token
-        decode_options = {
+        decode_options: Options = {
             "verify_exp": True,
             "verify_aud": False,  # Clerk doesn't always set audience
         }
@@ -356,7 +360,9 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
         "/api/v1/webhooks/clerk",
     ]
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # Allow public paths
         if self._is_public_path(request.url.path):
             return await call_next(request)
@@ -418,7 +424,7 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
 
             record_auth_failure(
                 reason_code=f"clerk_{reason_code}",
-                tenant_id=None, # Tenant ID is not available at this stage
+                tenant_id=None,  # Tenant ID is not available at this stage
                 path=request.url.path,
                 ip=request.client.host if request.client else None,
             )

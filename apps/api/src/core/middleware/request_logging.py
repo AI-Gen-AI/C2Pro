@@ -5,7 +5,7 @@ Middleware para logging estructurado de todas las requests HTTP.
 """
 
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 import structlog
 from fastapi import Request, Response
@@ -19,7 +19,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     Middleware para logging estructurado de todas las requests.
     """
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # Generar request ID
         request_id = request.headers.get("X-Request-ID", str(time.time_ns()))
         request.state.request_id = request_id

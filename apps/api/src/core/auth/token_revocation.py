@@ -10,10 +10,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from hashlib import sha256
 from threading import Lock
+from typing import TYPE_CHECKING
 
 import jwt
+import redis.asyncio as redis
 
 from src.config import settings
+
+if TYPE_CHECKING:
+    from src.core.cache import CacheService
 
 _REVOKED_TOKEN_PREFIX = "revoked_token:"
 _memory_fallback: dict[str, datetime] = {}
@@ -24,12 +29,13 @@ def _token_fingerprint(token: str) -> str:
     return sha256(token.encode("utf-8")).hexdigest()
 
 
-def _get_cache_service():
+def _get_cache_service() -> CacheService | None:
     from src.core.cache import get_cache_service
+
     return get_cache_service()
 
 
-async def _get_redis_client():
+async def _get_redis_client() -> redis.Redis[bytes] | None:
     cache = _get_cache_service()
     if cache and cache._redis:
         return cache._redis
@@ -141,10 +147,7 @@ async def is_token_revoked_async(token: str) -> bool:
 
 def _cleanup_expired_unlocked(now: datetime) -> None:
     """Clean up expired tokens (must hold _memory_lock)."""
-    expired = [
-        fp for fp, expires_at in _memory_fallback.items()
-        if expires_at <= now
-    ]
+    expired = [fp for fp, expires_at in _memory_fallback.items() if expires_at <= now]
     for fp in expired:
         _memory_fallback.pop(fp, None)
 
@@ -157,10 +160,7 @@ async def cleanup_expired_tokens() -> int:
     """
     now = datetime.now(UTC)
     with _memory_lock:
-        expired = [
-            fp for fp, expires_at in _memory_fallback.items()
-            if expires_at <= now
-        ]
+        expired = [fp for fp, expires_at in _memory_fallback.items() if expires_at <= now]
         for fp in expired:
             _memory_fallback.pop(fp, None)
         return len(expired)
