@@ -826,10 +826,10 @@ if __name__ == "__main__":
 # Source of truth: ADR-009 §5, §6, §14.
 # =============================================================================
 def calculate_v2_from_signals(
-    signals,  # type: ignore[no-untyped-def] — kept loose so callers can pass list[FindingSignal]
-    evidence_bundles,  # type: ignore[no-untyped-def]
-    applicability_map,  # type: ignore[no-untyped-def]
-    project_id,  # type: ignore[no-untyped-def]
+    signals,
+    evidence_bundles,
+    applicability_map,
+    project_id,
 ):
     """Compute the canonical v2 payload.
 

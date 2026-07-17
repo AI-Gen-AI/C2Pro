@@ -34,7 +34,9 @@ class _SpanClient(Protocol):
 _TRACE_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar("trace_context", default=None)
 
 
-def _extract_span_client(call_args: tuple[Any, ...], call_kwargs: dict[str, Any]) -> _SpanClient | None:
+def _extract_span_client(
+    call_args: tuple[Any, ...], call_kwargs: dict[str, Any]
+) -> _SpanClient | None:
     explicit = call_kwargs.get("langsmith_client")
     if explicit is not None:
         return explicit
@@ -86,7 +88,9 @@ def _extract_prompt(call_kwargs: dict[str, Any], request: Any | None = None) -> 
     return None
 
 
-def _extract_model_name(call_kwargs: dict[str, Any], result: Any | None = None, request: Any | None = None) -> str | None:
+def _extract_model_name(
+    call_kwargs: dict[str, Any], result: Any | None = None, request: Any | None = None
+) -> str | None:
     for source in (call_kwargs, result if isinstance(result, dict) else None):
         if source is None:
             continue
@@ -98,7 +102,9 @@ def _extract_model_name(call_kwargs: dict[str, Any], result: Any | None = None, 
     return None
 
 
-def _extract_model_params(call_kwargs: dict[str, Any], request: Any | None = None) -> dict[str, Any]:
+def _extract_model_params(
+    call_kwargs: dict[str, Any], request: Any | None = None
+) -> dict[str, Any]:
     model_params = call_kwargs.get("model_params")
     if isinstance(model_params, dict):
         return model_params
@@ -126,7 +132,6 @@ def _extract_request_id(call_kwargs: dict[str, Any], request: Any | None = None)
     return str(uuid4())
 
 
-
 def _extract_usage_metrics(result: Any) -> dict[str, Any]:
     # Handle LLMResponse dataclass (primary production path)
     if hasattr(result, "input_tokens") and hasattr(result, "output_tokens"):
@@ -134,7 +139,8 @@ def _extract_usage_metrics(result: Any) -> dict[str, Any]:
             "output": getattr(result, "content", None),
             "tokens_input": int(getattr(result, "input_tokens", 0)),
             "tokens_output": int(getattr(result, "output_tokens", 0)),
-            "tokens_total": int(getattr(result, "input_tokens", 0)) + int(getattr(result, "output_tokens", 0)),
+            "tokens_total": int(getattr(result, "input_tokens", 0))
+            + int(getattr(result, "output_tokens", 0)),
             "cost_usd": float(getattr(result, "cost_usd", 0.0)),
             "operation": None,
             "cached": bool(getattr(result, "cached", False)),
@@ -158,7 +164,9 @@ def _extract_usage_metrics(result: Any) -> dict[str, Any]:
     }
 
 
-def _extract_trace_identifiers(span: Any, run_id: str | None = None) -> tuple[str | None, str | None]:
+def _extract_trace_identifiers(
+    span: Any, run_id: str | None = None
+) -> tuple[str | None, str | None]:
     trace_id = run_id
     trace_url = None
     if isinstance(span, dict):
@@ -249,15 +257,27 @@ def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and 
 
                 if span_client is not None and span is not None:
                     usage_metrics = _extract_usage_metrics(result)
-                    usage_metrics["model_name"] = _extract_model_name(kwargs, result, request=request_obj)
+                    usage_metrics["model_name"] = _extract_model_name(
+                        kwargs, result, request=request_obj
+                    )
                     usage_metrics["latency_ms"] = int((time.perf_counter() - started_at) * 1000)
                     span_client.end_span(span, outputs={"status": "success", **usage_metrics})
                     trace_id, trace_url = _extract_trace_identifiers(span, run_id=run_id)
-                    _TRACE_CONTEXT.set({"trace_id": trace_id, "trace_url": trace_url, "latency_ms": usage_metrics["latency_ms"]})
+                    _TRACE_CONTEXT.set(
+                        {
+                            "trace_id": trace_id,
+                            "trace_url": trace_url,
+                            "latency_ms": usage_metrics["latency_ms"],
+                        }
+                    )
 
                     tenant_uuid = getattr(request_obj, "tenant_id", None) or kwargs.get("tenant_id")
-                    project_id = getattr(request_obj, "project_id", None) or kwargs.get("project_id")
-                    prompt_version = getattr(request_obj, "prompt_version", None) or kwargs.get("prompt_version")
+                    project_id = getattr(request_obj, "project_id", None) or kwargs.get(
+                        "project_id"
+                    )
+                    prompt_version = getattr(request_obj, "prompt_version", None) or kwargs.get(
+                        "prompt_version"
+                    )
 
                     if usage_logger is not None and tenant_uuid is not None and trace_id:
                         await usage_logger.log_success(
@@ -337,11 +357,19 @@ def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and 
 
                 if span_client is not None and span is not None:
                     usage_metrics = _extract_usage_metrics(result)
-                    usage_metrics["model_name"] = _extract_model_name(kwargs, result, request=request_obj)
+                    usage_metrics["model_name"] = _extract_model_name(
+                        kwargs, result, request=request_obj
+                    )
                     usage_metrics["latency_ms"] = int((time.perf_counter() - started_at) * 1000)
                     span_client.end_span(span, outputs={"status": "success", **usage_metrics})
                     trace_id, trace_url = _extract_trace_identifiers(span)
-                    _TRACE_CONTEXT.set({"trace_id": trace_id, "trace_url": trace_url, "latency_ms": usage_metrics["latency_ms"]})
+                    _TRACE_CONTEXT.set(
+                        {
+                            "trace_id": trace_id,
+                            "trace_url": trace_url,
+                            "latency_ms": usage_metrics["latency_ms"],
+                        }
+                    )
 
                 return result
             finally:
@@ -349,6 +377,6 @@ def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and 
 
         runner = _run_async if inspect.iscoroutinefunction(func) else _run_sync
         wrapped = functools.wraps(func)(runner)
-        return wrapped  # type: ignore[return-value]
+        return wrapped
 
     return decorator

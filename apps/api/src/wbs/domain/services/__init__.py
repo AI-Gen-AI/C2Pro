@@ -1,3 +1,3 @@
 """WBS domain services."""
 
-__all__ = []
+__all__: list[str] = []

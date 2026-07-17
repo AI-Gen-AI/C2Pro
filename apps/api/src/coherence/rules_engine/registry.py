@@ -396,7 +396,7 @@ def load_qualitative_rules(
     Returns:
         List of loaded rule configurations.
     """
-    import yaml  # type: ignore[import-untyped]
+    import yaml
 
     if file_path is None:
         # Default path: same directory as coherence module
@@ -467,10 +467,7 @@ def get_llm_rules_by_category(category: str) -> list[dict[str, Any]]:
     Returns:
         List of rule configurations.
     """
-    return [
-        config for config in LLM_RULE_CONFIGS.values()
-        if config.get("category") == category
-    ]
+    return [config for config in LLM_RULE_CONFIGS.values() if config.get("category") == category]
 
 
 def get_all_rule_ids() -> dict[str, list[str]]:

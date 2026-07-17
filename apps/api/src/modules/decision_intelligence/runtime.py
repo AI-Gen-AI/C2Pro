@@ -212,4 +212,4 @@ async def _noop_session() -> AsyncIterator[AsyncSession]:  # pragma: no cover - 
     always resolves a real provider.
     """
     raise RuntimeError("_noop_session must not be called")
-    yield  # type: ignore[unreachable]
+    yield

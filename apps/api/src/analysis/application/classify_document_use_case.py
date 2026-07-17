@@ -33,5 +33,5 @@ class ClassifyDocumentUseCase:
 
     async def execute(self, cmd: ClassifyDocumentCommand) -> str:
         if cmd.current_doc_type in DOC_TYPES:
-            return cmd.current_doc_type  # type: ignore[return-value]
+            return cmd.current_doc_type
         return await self.service.classify(text=cmd.text, ai=self.ai)

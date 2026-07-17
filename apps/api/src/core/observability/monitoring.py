@@ -566,7 +566,7 @@ DATADOG_AVAILABLE = False
 
 try:
     if os.environ.get("DD_AGENT_HOST") or os.environ.get("DATADOG_STATSD_HOST"):
-        from datadog import DogStatsd  # type: ignore[import-not-found]
+        from datadog import DogStatsd
 
         _DD_STATSD = DogStatsd(
             host=os.environ.get("DD_AGENT_HOST")
