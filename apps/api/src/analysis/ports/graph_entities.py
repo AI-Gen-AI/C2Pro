@@ -16,31 +16,59 @@ from src.shared_kernel.enums import RACIRole
 
 @runtime_checkable
 class ClauseView(Protocol):
-    id: UUID
-    title: str | None
-    clause_code: str
+    @property
+    def id(self) -> UUID: ...
+
+    @property
+    def title(self) -> str | None: ...
+
+    @property
+    def clause_code(self) -> str: ...
 
 
 @runtime_checkable
 class WBSTaskView(Protocol):
-    id: UUID
-    code: str
-    name: str
-    parent_code: str | None
-    source_clause_id: UUID | None
+    @property
+    def id(self) -> UUID: ...
+
+    @property
+    def code(self) -> str: ...
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def parent_code(self) -> str | None: ...
+
+    @property
+    def source_clause_id(self) -> UUID | None: ...
 
 
 @runtime_checkable
 class StakeholderView(Protocol):
-    id: UUID
-    name: str | None
-    role: str | None
-    organization: str | None
-    quadrant: object | None  # Any enum-like with .value
+    @property
+    def id(self) -> UUID: ...
+
+    @property
+    def name(self) -> str | None: ...
+
+    @property
+    def role(self) -> str | None: ...
+
+    @property
+    def organization(self) -> str | None: ...
+
+    @property
+    def quadrant(self) -> object | None: ...  # Any enum-like with .value
 
 
 @runtime_checkable
 class RaciAssignmentView(Protocol):
-    raci_role: RACIRole
-    stakeholder_id: UUID
-    wbs_item_id: UUID
+    @property
+    def raci_role(self) -> RACIRole: ...
+
+    @property
+    def stakeholder_id(self) -> UUID: ...
+
+    @property
+    def wbs_item_id(self) -> UUID: ...

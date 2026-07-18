@@ -7,15 +7,24 @@ Refers to Suite IDs: TS-UAD-PER-GRP-001, TS-INT-GRP-NEO-001.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, Self
 
 from src.analysis.adapters.graph.knowledge_graph import GraphPath
 
 
 class _Neo4jSession(Protocol):
-    def run(self, query: str, **params: Any): ...
-    def __enter__(self): ...
-    def __exit__(self, exc_type, exc, tb) -> None: ...
+    def run(self, query: str, **params: Any) -> _Neo4jResult: ...
+    def __enter__(self) -> Self: ...
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: object | None,
+    ) -> None: ...
+
+
+class _Neo4jResult(Protocol):
+    def data(self) -> list[dict[str, list[str]]]: ...
 
 
 class _Neo4jDriver(Protocol):

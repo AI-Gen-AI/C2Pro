@@ -9,9 +9,8 @@ from typing import Annotated, NotRequired, Protocol, TypedDict
 from uuid import UUID
 
 from src.analysis.adapters.graph.project_coherence_result import ProjectCoherenceResult
-from src.analysis.adapters.graph.schema import merge_node_results
 from src.analysis.domain.contracts import DocumentArtifact
-from src.analysis.domain.node_result import NodeResult
+from src.analysis.domain.node_result import NodeResult, merge_node_results
 from src.change_intelligence.domain.change_impact_report import ChangeImpactReport
 
 
