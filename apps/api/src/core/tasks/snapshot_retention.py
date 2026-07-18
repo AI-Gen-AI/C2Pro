@@ -8,9 +8,10 @@ from __future__ import annotations
 import asyncio
 import re
 from datetime import UTC, date, datetime, timedelta
+from typing import Any, cast
 
 import structlog
-from sqlalchemy import text
+from sqlalchemy import CursorResult, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_raw_session, init_db
@@ -135,7 +136,8 @@ async def _delete_extra_weekly_snapshots(
         ),
         {"cutoff": cutoff},
     )
-    return int(result.rowcount or 0)
+    cursor_result = cast(CursorResult[Any], result)
+    return int(cursor_result.rowcount or 0)
 
 
 async def _drop_old_partitions(
@@ -210,5 +212,5 @@ async def _run_snapshot_retention_async() -> dict[str, object]:
     retry_kwargs={"max_retries": 3},
     retry_backoff=True,
 )
-def run_snapshot_retention(_self) -> dict[str, object]:
+def run_snapshot_retention(_self: Any) -> dict[str, object]:
     return asyncio.run(_run_snapshot_retention_async())

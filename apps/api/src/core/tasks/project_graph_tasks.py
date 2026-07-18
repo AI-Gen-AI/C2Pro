@@ -8,12 +8,17 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+from collections.abc import Callable
+from typing import Any, cast
 from uuid import UUID
 
+from langgraph.graph.state import CompiledStateGraph
 from sqlalchemy import text
 
 from src.analysis.adapters.graph.project_graph import (
-    build_project_graph,
+    build_project_graph as _build_project_graph,
+)
+from src.analysis.adapters.graph.project_graph import (
     is_project_graph_enabled,
 )
 from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
@@ -26,6 +31,11 @@ from src.core.dlq.dlq_service import DLQService
 from src.core.tasks.celery_app import celery_app
 from src.core.tasks.project_graph_governance import ProjectGraphGovernance
 from src.core.tenants.types import TenantId, require_tenant_id
+
+_build_typed_graph = cast(
+    "Callable[[], CompiledStateGraph[ProjectGraphState, None, ProjectGraphState, ProjectGraphState]]",
+    _build_project_graph,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +89,7 @@ async def run_project_graph_once(
         "node_results": [],
         "artifact_repository": artifact_repository,
     }
-    result = await build_project_graph().ainvoke(graph_input)
+    result = await _build_typed_graph().ainvoke(graph_input)
     return {
         "status": "ok",
         "artifact_count": len(artifacts),
@@ -173,7 +183,7 @@ async def record_project_graph_dead_letter(
     retry_backoff_max=60,
 )
 def run_project_graph(
-    self,  # noqa: ARG001
+    self: Any,  # noqa: ARG001
     *,
     project_id: str,
     tenant_id: str,

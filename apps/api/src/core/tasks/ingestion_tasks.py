@@ -12,6 +12,7 @@ import asyncio
 import logging
 import re
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid4
 
 from src.analysis.factories.orchestrator_factory import AnalysisOrchestratorFactory
@@ -59,12 +60,12 @@ file_parser = CompositeFileParser(
 
 
 @celery_app.task(name="handle_failed_task")
-def handle_failed_task(**kwargs):
+def handle_failed_task(**kwargs: Any) -> dict[str, Any]:
     """Compatibility task for deferred failure handling."""
     return kwargs
 
 
-def _build_processing_details(extraction_summary: dict) -> dict:
+def _build_processing_details(extraction_summary: dict[str, Any]) -> dict[str, Any]:
     return {
         "processing_stage": "parsed_pending_analysis",
         "analysis_status": "queued",
@@ -118,7 +119,9 @@ def _parse_money_number(raw: str) -> float | None:
 
 
 def _extract_numeric_money(text: str) -> float | None:
-    match = re.search(r"(?:eur|€)\s*([0-9][0-9\.,]*)|([0-9][0-9\.,]*)\s*(?:eur|€)", text, re.IGNORECASE)
+    match = re.search(
+        r"(?:eur|€)\s*([0-9][0-9\.,]*)|([0-9][0-9\.,]*)\s*(?:eur|€)", text, re.IGNORECASE
+    )
     if not match:
         return None
     return _parse_money_number(match.group(1) or match.group(2) or "")
@@ -209,11 +212,10 @@ def _contract_affected_categories(clause_type: ClauseType, text: str) -> list[st
     return deduped
 
 
-
-def _build_contract_clause_data(text: str, parsed_text: str) -> dict:
+def _build_contract_clause_data(text: str, parsed_text: str) -> dict[str, Any]:
     clause_type = _infer_contract_clause_type(text)
     affected_categories = _contract_affected_categories(clause_type, text)
-    data = {
+    data: dict[str, Any] = {
         "category": affected_categories[0] if affected_categories else "LEGAL",
         "affected_categories": affected_categories,
         "source_document_type": "contract",
@@ -269,7 +271,11 @@ def _extract_contract_clauses(
     tenant_id: TenantId,
     parsed_text: str,
 ) -> list[Clause]:
-    segments = [segment.strip() for segment in re.split(r"(?<=[\.!?])\s+|\n\n+", parsed_text) if segment.strip()]
+    segments = [
+        segment.strip()
+        for segment in re.split(r"(?<=[\.!?])\s+|\n\n+", parsed_text)
+        if segment.strip()
+    ]
     clauses: list[Clause] = []
     for index, segment in enumerate(segments, start=1):
         if len(segment) < 20:
@@ -293,7 +299,7 @@ def _extract_contract_clauses(
     return clauses
 
 
-def _dispatch_failed_task(**kwargs) -> None:
+def _dispatch_failed_task(**kwargs: Any) -> None:
     """Schedule deferred failure handling in Celery when available."""
     apply_async = getattr(handle_failed_task, "apply_async", None)
     if callable(apply_async):
@@ -326,8 +332,8 @@ async def _run_document_analysis(
     *,
     tenant_id: TenantId,
     document_id: UUID,
-    orchestrator=None,
-) -> dict:
+    orchestrator: Any = None,
+) -> dict[str, Any]:
     """Run the full analysis graph for a parsed document and persist via N17."""
     await init_db()
 
@@ -339,7 +345,9 @@ async def _run_document_analysis(
         if not document.is_parsed():
             raise ValueError("document must be parsed before analysis")
 
-        parsed_text = document.document_metadata.get("parsed_text") if document.document_metadata else None
+        parsed_text = (
+            document.document_metadata.get("parsed_text") if document.document_metadata else None
+        )
         if not parsed_text:
             raise ValueError("parsed_text not available")
 
@@ -348,7 +356,9 @@ async def _run_document_analysis(
             "document_text": parsed_text,
             "project_id": str(document.project_id),
             "document_id": str(document.id),
-            "doc_type": getattr(document.document_type, "value", "") if document.document_type else "",
+            "doc_type": getattr(document.document_type, "value", "")
+            if document.document_type
+            else "",
             "tenant_id": str(tenant_id),
             "messages": [],
             "extracted_risks": [],
@@ -389,7 +399,7 @@ async def _run_document_analysis(
         }
 
 
-async def _process(document_id: UUID) -> dict:
+async def _process(document_id: UUID) -> dict[str, Any]:
     """Fetch, parse, update, and trigger analysis for a document."""
     await init_db()
 
@@ -401,18 +411,20 @@ async def _process(document_id: UUID) -> dict:
             logger.error("Document with ID '%s' not found. Cannot process.", document_id)
             return {"status": "error", "message": "Document not found"}
 
-        def stakeholder_factory():
+        def stakeholder_factory() -> Any:
             stk_repo = SqlAlchemyStakeholderRepository(session=session)
             return CreateStakeholderUseCase(repository=stk_repo, document_repository=repo)
 
-        def wbs_factory():
+        def wbs_factory() -> Any:
             wbs_repo = SQLAlchemyWBSRepository(session=session)
             return CreateWBSItemUseCase(wbs_repository=wbs_repo)
 
-        def bom_factory():
+        def bom_factory() -> Any:
             bom_repo = SQLAlchemyBOMRepository(session=session)
             return CreateBOMItemUseCase(bom_repository=bom_repo)
 
+        if document.created_by is None:
+            raise ValueError("document has no created_by user_id")
         entity_extraction = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=stakeholder_factory,
             wbs_use_case_factory=wbs_factory,
@@ -452,9 +464,7 @@ async def _process(document_id: UUID) -> dict:
             document.document_metadata = document.document_metadata or {}
             text_blocks = parsed_payload.get("text_blocks", [])
             parsed_text = "\n\n".join(
-                block.get("text", "")
-                for block in text_blocks
-                if isinstance(block.get("text"), str)
+                block.get("text", "") for block in text_blocks if isinstance(block.get("text"), str)
             ).strip()
             contract_clause_count = 0
             metadata = dict(document.document_metadata or {})
@@ -475,6 +485,7 @@ async def _process(document_id: UUID) -> dict:
                         metadata["contract_clause_count"] = contract_clause_count
             await repo.update_metadata(tenant_id, document_id, metadata)
             from datetime import UTC, datetime
+
             await repo.update_status(
                 tenant_id,
                 document_id,
@@ -541,7 +552,9 @@ async def _process(document_id: UUID) -> dict:
         except Exception as error:
             logger.error("Error processing document %s: %s", document_id, error, exc_info=True)
             await session.rollback()
-            await repo.update_status(tenant_id, document_id, DocumentStatus.ERROR, parsing_error=str(error))
+            await repo.update_status(
+                tenant_id, document_id, DocumentStatus.ERROR, parsing_error=str(error)
+            )
             await session.commit()
             raise
 
@@ -554,7 +567,7 @@ async def _process(document_id: UUID) -> dict:
     retry_backoff_max=60,
     task_track_started=True,
 )
-def process_document_async(self, document_id: str):
+def process_document_async(self: Any, document_id: str) -> dict[str, Any]:
     """
     Asynchronously processes a document using the appropriate parser.
 
@@ -580,7 +593,7 @@ def process_document_async(self, document_id: str):
     task_track_started=True,
     queue="document_parsing",
 )
-def process_document_analysis_async(self, tenant_id: str, document_id: str):
+def process_document_analysis_async(self: Any, tenant_id: str, document_id: str) -> dict[str, Any]:
     """Run full document analysis after parsing; persists via graph N17."""
     logger.info(
         "Starting document analysis for task_id: %s, document_id: %s",
