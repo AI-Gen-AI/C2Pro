@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import warnings
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Protocol, Any
 from uuid import UUID
 
 from src.coherence.application.dtos import (
@@ -38,7 +38,7 @@ warnings.warn(
 class EventPublisher(Protocol):
     """Protocol for event publishing."""
 
-    def publish(self, event_type: str, payload: dict) -> None:
+    def publish(self, event_type: str, payload: dict[str, Any]) -> None:
         """Publish an event."""
         ...
 

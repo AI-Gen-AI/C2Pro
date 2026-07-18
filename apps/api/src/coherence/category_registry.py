@@ -34,7 +34,7 @@ class VersionInfo(BaseModel):
     score_version: int = Field(gt=0)
     embedding_model: str = Field(..., min_length=1)
     cutoff_date: datetime.date
-    languages: list[str] = Field(..., min_items=1)
+    languages: list[str] = Field(..., min_length=1)
 
 
 class DefaultsWeights(BaseModel):

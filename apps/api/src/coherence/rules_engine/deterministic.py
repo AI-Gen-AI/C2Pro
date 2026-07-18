@@ -122,7 +122,7 @@ class BudgetLineItemEvaluator(RuleEvaluator):
         up = clause.data.get("unit_price")
         qty = clause.data.get("quantity")
         total = clause.data.get("line_total") or clause.data.get("total")
-        if not all(_num(v) for v in [up, qty, total]) or up <= 0 or qty <= 0:
+        if not _num(up) or not _num(qty) or not _num(total) or up <= 0 or qty <= 0:
             return None
         expected = up * qty
         dev = abs(expected - total) / expected
@@ -422,7 +422,7 @@ class PredecessorOverlapEvaluator(RuleEvaluator):
         if not isinstance(items, list) or len(items) < 2:
             return None
         # Build lookup: id → item
-        lookup: dict[str, dict] = {}
+        lookup: dict[str, dict[str, Any]] = {}
         for item in items:
             if isinstance(item, dict) and item.get("id"):
                 lookup[item["id"]] = item
@@ -919,7 +919,7 @@ class MissingRequiredFieldsEvaluator(RuleEvaluator):
     rule_name = "Missing Required Fields"
     category = "SCOPE"
 
-    REQUIRED = {
+    REQUIRED: dict[str, list[str]] = {
         "BUDGET": ["planned", "currency"],
         "TIME": ["end_date"],
         "LEGAL": [],
@@ -1171,13 +1171,13 @@ def get_all_deterministic_evaluators(
         ScheduleVsBomDeliveryEvaluator(),
         ScopeVsBudgetCoverageEvaluator(),
     ]
-
+from typing import Any, TypeGuard
 
 # ═══════════════════════════════════════════════════════════════
 #  HELPERS
 # ═══════════════════════════════════════════════════════════════
 
-def _num(val: Any) -> bool:
+def _num(val: Any) -> TypeGuard[int | float]:
     """Check if value is a numeric type (int or float, but not bool)."""
     return isinstance(val, int | float) and not isinstance(val, bool)
 
@@ -1209,7 +1209,7 @@ def _signal(
     clause: Clause,
     impact: float,
     evidence: str,
-    raw_data: dict,
+    raw_data: dict[str, Any],
 ) -> FindingSignal:
     """Factory to create FindingSignal with common defaults."""
     impact = round(min(0.95, max(0.0, impact)), 3)

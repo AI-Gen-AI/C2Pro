@@ -11,6 +11,7 @@ Refers to Suite ID: TS-UA-COH-V2-GLBAGG-001.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Literal, cast
 
 from src.coherence.application.dtos.coherence_v2_dtos import (
     CategoryStatus,
@@ -84,7 +85,7 @@ class GlobalAggregatorV2:
             )
 
         coherence = self._weighted_coherence(active, w)
-        status = "scored" if len(active) == len(applicable) else "partial"
+        status = cast(Literal["scored", "partial", "insufficient_active_weight", "pending_documents"], "scored" if len(active) == len(applicable) else "partial")
         return GlobalV2(
             coherence_score=round(coherence, 2),
             completeness_score=round(completeness_score, 4),

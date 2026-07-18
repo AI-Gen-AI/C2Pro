@@ -13,6 +13,7 @@ Refers to Suite ID: TS-UA-COH-V2-CATAGG-001.
 from __future__ import annotations
 
 from src.coherence.application.dtos.coherence_v2_dtos import (
+    BudgetReconciliation,
     CategoryStatus,
     CategoryV2,
     ScoreExplanation,
@@ -39,7 +40,7 @@ class CategoryAggregator:
         applicable: bool,
         applicability_reason: str | None = None,
         assessed: bool = True,
-        budget_reconciliation=None,  # BudgetReconciliation | None — TASK-BCK-093
+        budget_reconciliation: BudgetReconciliation | None = None,  # TASK-BCK-093
     ) -> CategoryV2:
         if not applicable:
             return CategoryV2(

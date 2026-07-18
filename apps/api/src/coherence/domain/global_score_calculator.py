@@ -12,15 +12,15 @@ from typing import TypeAlias
 from pydantic import BaseModel, Field
 
 # Import the ScoreScope enum from the subscore calculator module
-from .subscore_calculator import ScoreScope
+from .subscore_calculator import ScoreScope as ScoreScopeEnum
 
 # --- Type Aliases and Data Models ---
 
 class WeightConfig(BaseModel):
     """A configuration model for subscore weights."""
-    weights: dict[ScoreScope, float] = Field(default_factory=dict)
+    weights: dict[ScoreScopeEnum, float] = Field(default_factory=dict)
 
-Subscores: TypeAlias = dict[ScoreScope, float]
+Subscores: TypeAlias = dict[ScoreScopeEnum, float]
 
 # --- Domain Service ---
 
@@ -31,11 +31,11 @@ class GlobalScoreCalculator:
     """
 
     DEFAULT_WEIGHTS = WeightConfig(weights={
-        scope: 1.0 / len(ScoreScope) for scope in ScoreScope
+        scope: 1.0 / len(ScoreScopeEnum) for scope in ScoreScopeEnum
     })
 
     # Exposed for tests that reference enum via calculator instance.
-    ScoreScope = ScoreScope
+    ScoreScope = ScoreScopeEnum
 
     def __init__(self) -> None:
         self._weight_history: list[WeightConfig] = []
@@ -44,8 +44,8 @@ class GlobalScoreCalculator:
         self,
         subscores: Subscores,
         weights: WeightConfig | None = None,
-        normalize_weights: bool = True
-    ) -> dict[ScoreScope, float]:
+        normalize_weights: bool = True     
+    ) -> dict[ScoreScopeEnum, float]:
         effective_weights = weights or self.DEFAULT_WEIGHTS
         relevant_weights = {
             scope: weight
