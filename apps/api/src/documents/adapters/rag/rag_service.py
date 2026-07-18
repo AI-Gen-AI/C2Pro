@@ -62,7 +62,7 @@ class RagService:
         if not chunks:
             return 0
 
-        embeddings = await _embed_texts(chunks)
+        embeddings: list[list[float]] = await _embed_texts(chunks)
         chunk_metadata = metadata or {}
 
         rows = []

@@ -4,6 +4,7 @@ Uses RagService to split, embed, and store document chunks.
 """
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 import structlog
@@ -24,7 +25,7 @@ class SqlAlchemyRagIngestionService(IRagIngestionService):
     async def ingest_document_chunks(
         self,
         document: Document,
-        parsed_payload: dict,
+        parsed_payload: dict[str, Any],
         tenant_id: UUID,
     ) -> None:
         text_content = _extract_rag_text(parsed_payload).strip()
@@ -54,7 +55,7 @@ class SqlAlchemyRagIngestionService(IRagIngestionService):
             )
 
 
-def _extract_rag_text(parsed_payload: dict) -> str:
+def _extract_rag_text(parsed_payload: dict[str, Any]) -> str:
     """TS-UD-RAG-ERR-001: normalize parsed document payloads into searchable RAG text."""
     text_blocks = parsed_payload.get("text_blocks", [])
     if text_blocks:
@@ -88,7 +89,7 @@ def _extract_rag_text(parsed_payload: dict) -> str:
     return ""
 
 
-def _format_clause_for_rag(clause: dict) -> str:
+def _format_clause_for_rag(clause: dict[str, Any]) -> str:
     parts = []
     labels = {
         "clause_number": "Clause",
@@ -112,7 +113,7 @@ def _format_clause_for_rag(clause: dict) -> str:
     return "; ".join(parts)
 
 
-def _format_schedule_row_for_rag(row: dict) -> str:
+def _format_schedule_row_for_rag(row: dict[str, Any]) -> str:
     parts = []
     labels = {
         "wbs": "WBS",

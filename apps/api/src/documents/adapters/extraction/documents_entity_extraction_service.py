@@ -17,7 +17,7 @@ import structlog
 from src.documents.domain.models import Document, DocumentType
 from src.documents.ports.entity_extraction_service import IEntityExtractionService
 from src.procurement.application.dtos import BOMItemCreate, WBSItemCreate
-from src.procurement.domain.models import WBSItemType
+from src.procurement.domain.models import ProcurementStatus, WBSItemType
 
 # DTOs and Interfaces from other modules
 from src.stakeholders.application.dtos import StakeholderCreateRequest
@@ -45,7 +45,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
     async def extract_entities_from_document(
         self,
         document: Document,
-        parsed_payload: dict,
+        parsed_payload: dict[str, Any],
         tenant_id: UUID,
     ) -> dict[str, int]:
         extraction_summary = {"stakeholders": 0, "wbs_items": 0, "bom_items": 0}
@@ -65,7 +65,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
         return extraction_summary
 
     async def _extract_stakeholders(
-        self, document: Document, parsed_payload: dict, _tenant_id: UUID
+        self, document: Document, parsed_payload: dict[str, Any], _tenant_id: UUID
     ) -> int:
         text_blocks = parsed_payload.get("text_blocks", [])
         emails = _extract_emails(text_blocks)
@@ -82,7 +82,14 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
             payload = StakeholderCreateRequest(
                 name=_normalize_name_from_email(email),
                 email=email,
-                company=None, # To be enriched by AI if the use case supports it
+                company=None,
+                role=None,
+                department=None,
+                phone=None,
+                type=None,
+                power_score=None,
+                interest_score=None,
+                feedback_comment=None,
                 stakeholder_metadata={"source_document_id": str(document.id)}
             )
             try:
@@ -100,7 +107,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
         return count
 
     async def _extract_wbs_items(
-        self, document: Document, parsed_payload: dict, _tenant_id: UUID
+        self, document: Document, parsed_payload: dict[str, Any], _tenant_id: UUID
     ) -> int:
         schedule_data = parsed_payload.get("schedule", [])
         if not schedule_data:
@@ -121,8 +128,15 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
                 name=str(task_name),
                 level=_infer_wbs_level(wbs_code),
                 item_type=WBSItemType.ACTIVITY,
+                parent_id=None,
+                description=None,
+                budget_allocated=None,
+                budget_spent=Decimal(0),
+                actual_start=None,
+                actual_end=None,
                 planned_start=_parse_datetime_value(task.get("start_date")),
                 planned_end=_parse_datetime_value(task.get("end_date")),
+                funded_by_clause_id=None,
                 wbs_metadata={"source_document_id": str(document.id)}
             )
             try:
@@ -134,7 +148,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
         return count
 
     async def _extract_bom_items(
-        self, document: Document, parsed_payload: dict, _tenant_id: UUID
+        self, document: Document, parsed_payload: dict[str, Any], _tenant_id: UUID
     ) -> int:
         budget_payload = parsed_payload.get("budget")
         if not budget_payload:
@@ -187,6 +201,14 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
                     unit_price=item["price"],
                     total_price=item["total"],
                     currency="EUR",
+                    description=None,
+                    category=None,
+                    supplier=None,
+                    lead_time_days=None,
+                    incoterm=None,
+                    procurement_status=ProcurementStatus.PENDING,
+                    wbs_item_id=None,
+                    contract_clause_id=None,
                     source_document_id=document.id,
                     bom_metadata=item["metadata"],
                 )
@@ -209,7 +231,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
         return count
 
 
-def _extract_emails(text_blocks: list[dict]) -> set[str]:
+def _extract_emails(text_blocks: list[dict[str, Any]]) -> set[str]:
     emails: set[str] = set()
     for block in text_blocks:
         text = block.get("text", "")
