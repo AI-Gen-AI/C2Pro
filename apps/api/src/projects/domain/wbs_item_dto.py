@@ -7,4 +7,6 @@ re-exports for backward compatibility.
 Refers to Suite ID: TS-UD-PRJ-DTO-001.
 """
 
-from src.shared_kernel.dtos import WBSItemDTO  # noqa: F401 — re-export
+from src.shared_kernel.dtos import WBSItemDTO as WBSItemDTO
+
+__all__ = ["WBSItemDTO"]

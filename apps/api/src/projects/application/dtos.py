@@ -8,9 +8,12 @@ the presentation layer (API routers) and the application services (use cases).
 Refers to Suite ID: TS-UA-DTO-ALL-001.
 """
 from datetime import date, datetime
+from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+
+from src.core.json_types import JsonDict
 
 # Import domain enums
 from src.projects.domain.models import ProjectStatus, ProjectType
@@ -29,11 +32,13 @@ class ProjectCreateRequest(BaseModel):
     currency: str = Field(default="EUR", max_length=3)
     start_date: datetime | None = None
     end_date: datetime | None = None
-    metadata: dict = Field(default_factory=dict)
+    metadata: JsonDict = Field(default_factory=dict)
 
     @field_validator("end_date")
     @classmethod
-    def validate_end_date(cls, v: datetime | None, info) -> datetime | None:
+    def validate_end_date(
+        cls, v: datetime | None, info: ValidationInfo[Any]
+    ) -> datetime | None:
         if v and "start_date" in info.data and info.data["start_date"] and v <= info.data["start_date"]:
                 raise ValueError("end_date must be after start_date")
         return v
@@ -54,7 +59,7 @@ class ProjectUpdateRequest(BaseModel):
     currency: str | None = Field(None, max_length=3)
     start_date: datetime | None = None
     end_date: datetime | None = None
-    metadata: dict | None = None
+    metadata: JsonDict | None = None
 
 
 # ===========================================
@@ -117,7 +122,7 @@ class WBSItemDTO(BaseModel):
 
     model_config = ConfigDict()
 
-    def __setattr__(self, name: str, value) -> None:
+    def __setattr__(self, name: str, value: object) -> None:
         if name in self.__dict__:
             raise TypeError("WBSItemDTO is immutable")
         super().__setattr__(name, value)
