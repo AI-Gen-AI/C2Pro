@@ -16,6 +16,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
 from src.analysis.application.alerts_use_cases import (
@@ -26,6 +27,7 @@ from src.analysis.application.alerts_use_cases import (
     UpdateAlertStatusUseCase,
 )
 from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType
+from src.analysis.ports.types import AlertRecord
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User, UserRole
 from src.core.database import get_session
@@ -43,8 +45,8 @@ class AlertBase(BaseModel):
     description: str
     recommendation: str | None = None
     source_clause_id: UUID | None = None
-    affected_entities: dict = Field(default_factory=dict)
-    alert_metadata: dict = Field(default_factory=dict)
+    affected_entities: dict[str, object] = Field(default_factory=dict)
+    alert_metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class AlertRead(BaseModel):
@@ -61,9 +63,9 @@ class AlertRead(BaseModel):
     recommendation: str | None = None
     source_clause_id: UUID | None = None
     related_clause_ids: list[UUID] | None = None
-    affected_entities: dict
+    affected_entities: dict[str, object]
     impact_level: str | None = None
-    alert_metadata: dict
+    alert_metadata: dict[str, object]
     status: AlertStatus
     approval_status: str
     resolved_at: datetime | None = None
@@ -125,7 +127,9 @@ def _require_admin(current_user: User) -> None:
 # DEPENDENCY INJECTION
 # ===========================================
 
-def get_alert_repository(db=Depends(get_session)) -> SqlAlchemyAlertRepository:
+def get_alert_repository(
+    db: AsyncSession = Depends(get_session),
+) -> SqlAlchemyAlertRepository:
     return SqlAlchemyAlertRepository(session=db)
 
 def get_list_alerts_use_case(
@@ -174,7 +178,7 @@ async def list_alerts_for_project(
     limit: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     use_case: ListAlertsUseCase = Depends(get_list_alerts_use_case),
-):
+) -> Page[AlertRecord]:
     """
     List alerts for a specific project with filtering and pagination.
 
@@ -216,7 +220,7 @@ async def get_alerts_stats(
     project_id: UUID,
     current_user: User = Depends(get_current_user),
     use_case: GetAlertsStatsUseCase = Depends(get_alerts_stats_use_case),
-):
+) -> AlertsStats:
     """
     Get statistics about alerts for a specific project.
 
@@ -243,7 +247,7 @@ async def get_alert(
     alert_id: UUID,
     current_user: User = Depends(get_current_user),
     use_case: GetAlertUseCase = Depends(get_get_alert_use_case),
-):
+) -> AlertRecord:
     """
     Get a single alert by its ID.
 
@@ -276,7 +280,7 @@ async def update_alert(
     alert_update: AlertUpdate,
     current_user: User = Depends(get_current_user),
     use_case: UpdateAlertStatusUseCase = Depends(get_update_alert_use_case),
-):
+) -> AlertRecord:
     """
     Update an alert's status and add resolution notes.
 
@@ -330,7 +334,7 @@ async def delete_alert(
     alert_id: UUID,
     current_user: User = Depends(get_current_user),
     use_case: DeleteAlertUseCase = Depends(get_delete_alert_use_case),
-):
+) -> None:
     """
     Delete an alert. This should only be used by administrators for cleanup.
 
