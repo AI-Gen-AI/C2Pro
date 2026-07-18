@@ -20,11 +20,12 @@ from src.stakeholders.domain.models import InterestLevel, PowerLevel, Stakeholde
 class TestExtractStakeholdersUseCase:
     """Refers to Suite ID: TS-UA-STK-UC-001."""
 
-    def _make_stakeholder(self, project_id):
+    def _make_stakeholder(self, project_id, tenant_id=None):
         now = datetime.now(UTC)
         return Stakeholder(
             id=uuid4(),
             project_id=project_id,
+            tenant_id=tenant_id or uuid4(),
             power_level=PowerLevel.LOW,
             interest_level=InterestLevel.LOW,
             approval_status="pending",
@@ -37,7 +38,7 @@ class TestExtractStakeholdersUseCase:
     async def test_001_extracts_and_persists_stakeholders(self) -> None:
         project_id = uuid4()
         tenant_id = uuid4()
-        stakeholder = self._make_stakeholder(project_id)
+        stakeholder = self._make_stakeholder(project_id, tenant_id)
 
         extraction_service = AsyncMock()
         extraction_service.extract_from_text.return_value = [stakeholder]

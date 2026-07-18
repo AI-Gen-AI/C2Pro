@@ -30,13 +30,13 @@ def assemble_health_vector(
         composite_score = None
         composite_band = HealthBand.UNKNOWN
     else:
-        total_weight = sum(signal.confidence for signal in scored)
+        total_weight = sum((signal.confidence for signal in scored), 0.0)
         if total_weight <= 0:
             total_weight = float(len(scored))
-            composite_score = sum(float(signal.score) for signal in scored) / total_weight
+            composite_score = sum((float(signal.score or 0.0) for signal in scored), 0.0) / total_weight
         else:
             composite_score = (
-                sum(float(signal.score) * signal.confidence for signal in scored) / total_weight
+                sum((float(signal.score or 0.0) * signal.confidence for signal in scored), 0.0) / total_weight
             )
         composite_band = band_for_score(composite_score)
 

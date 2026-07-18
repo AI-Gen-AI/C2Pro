@@ -156,7 +156,7 @@ class StateEvaluator:
         Returns:
             The value at the path, or None if path doesn't exist
         """
-        current = state
+        current: Any = state
         for key in path.split("."):
             if current is None:
                 return None

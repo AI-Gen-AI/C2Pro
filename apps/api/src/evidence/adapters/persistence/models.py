@@ -16,6 +16,7 @@ Refers to Suite ID: TS-INT-DB-EVI-SHADOW-001.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -67,7 +68,7 @@ class EvidenceClaimORM(Base):
     # Claim core
     dimension: Mapped[str] = mapped_column(String(32), nullable=False)
     claim_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    value: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    value: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
     # Technical axis
     algorithmic_certainty: Mapped[float] = mapped_column(nullable=False)
@@ -75,7 +76,7 @@ class EvidenceClaimORM(Base):
 
     # Verification (CVC result)
     verification_status: Mapped[str] = mapped_column(String(32), nullable=False)
-    verification_trace: Mapped[dict] = mapped_column(
+    verification_trace: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict
     )
 
@@ -154,7 +155,7 @@ class EvidenceExtractionEventORM(Base):
     dimension: Mapped[str | None] = mapped_column(String(32), nullable=True)
     claim_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reason: Mapped[str] = mapped_column(String(64), nullable=False)
-    payload_trace: Mapped[dict] = mapped_column(
+    payload_trace: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict
     )
 

@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 
 import sentry_sdk
 import structlog
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sentry_sdk.utils import BadDsn
 
@@ -65,7 +65,7 @@ from src.wbs.adapters.http.router import router as wbs_router  # GREEN phase - T
 logger = structlog.get_logger()
 
 
-def _load_mcp_router():
+def _load_mcp_router() -> APIRouter:
     """Load the MCP router lazily so MCP is not a hard import-time dependency."""
     from src.core.mcp.router import router as mcp_router
 
@@ -78,7 +78,7 @@ def _load_mcp_router():
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     Lifespan context manager para startup/shutdown events.
 
@@ -267,7 +267,7 @@ def create_application() -> FastAPI:
 
     # Root
     @app.get("/", tags=["Public"])
-    async def root():
+    async def root() -> dict[str, str]:
         """
         Root endpoint.
 

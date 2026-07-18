@@ -27,6 +27,8 @@ from sqlalchemy import (
     event,
 )
 from sqlalchemy.dialects.postgresql import JSONB
+
+_DDL: Any = DDL
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -177,7 +179,7 @@ def _install_temporal_ddl(table: Any, table_name: str, prefix: str, block_delete
         event.listen(
             table,
             "after_create",
-            DDL(statement).execute_if(dialect="postgresql"),
+            _DDL(statement).execute_if(dialect="postgresql"),
         )
 
 
@@ -215,7 +217,7 @@ def _install_project_snapshot_partitions(table: Any) -> None:
         event.listen(
             table,
             "after_create",
-            DDL(statement).execute_if(dialect="postgresql"),
+            _DDL(statement).execute_if(dialect="postgresql"),
         )
 
 

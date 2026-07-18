@@ -6,18 +6,30 @@ so that monkeypatching works in tests.
 """
 
 import sys
-from typing import Literal
+from typing import Any, Literal
 
 from langgraph.graph import END, StateGraph
 
 # Re-imported AFTER the star import so the legacy facade's critique_node
 # (which resolves _critique_extraction via sys.modules at call time and
 # therefore supports monkeypatching) is the one bound on this module.
-from src.ai.graph.nodes import critique_node  # noqa: E402, F401
+from src.ai.graph.nodes import (
+    budget_parser_node,  # noqa: F401
+    critique_node,  # noqa: F401
+    human_interrupt_node,  # noqa: F401
+    risk_extractor_node,  # noqa: F401
+    router_node,  # noqa: F401
+    save_to_db_node,  # noqa: F401
+    wbs_extractor_node,  # noqa: F401
+)
 from src.analysis.adapters.graph.schema import ProjectState
-from src.analysis.adapters.graph.workflow import *  # noqa: F401, F403
 from src.analysis.adapters.graph.workflow import (
     _persist_graph_diagram,
+    build_workflow,  # noqa: F401
+    close_checkpointer_resources,  # noqa: F401
+    ensure_checkpointer_ready,  # noqa: F401
+    get_graph_app,  # noqa: F401
+    run_orchestration,  # noqa: F401
 )
 
 
@@ -42,7 +54,7 @@ def _next_after_critique(state: ProjectState) -> Literal[
     return "save_to_db"
 
 
-def compile_workflow(checkpointer=None, persist_diagram: bool = True):
+def compile_workflow(checkpointer: Any = None, persist_diagram: bool = True) -> Any:
     """Build and compile a simplified extraction workflow.
 
     This builds a smaller graph (router → extractor → critique → save)

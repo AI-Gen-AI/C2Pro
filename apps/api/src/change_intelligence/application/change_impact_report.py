@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from statistics import mean
+from typing import Literal
 from uuid import UUID, uuid4
 
 import structlog
@@ -76,7 +77,7 @@ def _recommended_actions(changes: list[SemanticChange]) -> list[str]:
     return actions
 
 
-def _hitl_routing(changes: list[SemanticChange]) -> str:
+def _hitl_routing(changes: list[SemanticChange]) -> Literal["auto", "needs_review"]:
     if any(change.needs_review for change in changes):
         return "needs_review"
     if any(change.severity in {"high", "critical"} for change in changes):

@@ -36,7 +36,11 @@ paths:
           description: Successful Response
           content:
             application/json:
-              schema: {}
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Root  Get
   /api/v1/health/worker:
     get:
       tags:

@@ -12,6 +12,7 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.approval import ApprovalStatus
 from src.core.database import get_session
@@ -49,7 +50,7 @@ RESOURCE_MAP = {
 }
 
 def get_repository(
-    db=Depends(get_session),
+    db: AsyncSession = Depends(get_session),
 ) -> SqlAlchemyStakeholderRepository:
     return SqlAlchemyStakeholderRepository(session=db)
 
@@ -113,5 +114,5 @@ async def review_resource(
     return ApprovalResponse(
         resource_type=resource_type,
         resource_id=resource_id,
-        status=record.approval_status,
+        status=ApprovalStatus(record.approval_status),
     )

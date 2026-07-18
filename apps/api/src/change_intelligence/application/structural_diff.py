@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from src.change_intelligence.application.anchor_resolver import (
@@ -43,7 +43,7 @@ def _jsonable(value: Any) -> Any:
 
 
 def _clause_snapshot(clause: Clause) -> dict[str, Any]:
-    return _jsonable(asdict(clause))
+    return cast(dict[str, Any], _jsonable(asdict(clause)))
 
 
 def _evidence_for_clause(
