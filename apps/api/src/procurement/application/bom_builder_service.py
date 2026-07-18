@@ -6,6 +6,7 @@ import structlog
 from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 # Import from the new domain models file
 from src.procurement.domain.models import BOMItem, BOMItemList, BudgetItem, WBSItem
@@ -23,24 +24,26 @@ class BOMBuilderService:
     """
     Application service to build a Bill of Materials from a WBS using an AI graph.
     """
+    workflow: CompiledStateGraph[BOMBuildingState, None, BOMBuildingState, BOMBuildingState]
+
     def __init__(self, llm: ChatAnthropic):
         self.llm = llm
         self.workflow = self._build_graph()
 
-    def _build_graph(self) -> StateGraph:
+    def _build_graph(self) -> CompiledStateGraph[BOMBuildingState, None, BOMBuildingState, BOMBuildingState]:
         graph = StateGraph(BOMBuildingState)
         graph.add_node("materializer_node", self.materializer_node)
         graph.set_entry_point("materializer_node")
         graph.add_edge("materializer_node", END)
         return graph.compile()
 
-    def materializer_node(self, state: BOMBuildingState) -> dict:
+    def materializer_node(self, state: BOMBuildingState) -> dict[str, object]:
         logger.info("Materializing BOM from WBS...")
 
         wbs_codes_that_are_parents = {item.parent_code for item in state["wbs_items"] if item.parent_code}
         leaf_wbs_items = [item for item in state["wbs_items"] if item.code not in wbs_codes_that_are_parents]
 
-        all_bom_items = []
+        all_bom_items: list[BOMItem] = []
 
         batch_size = 5
         for i in range(0, len(leaf_wbs_items), batch_size):
@@ -78,17 +81,18 @@ You are a Senior Supply Chain Architect and expert in EPC projects. Your task is
             wbs_text = "\n".join([f"Code: {item.code}, Name: {item.name}, Desc: {item.description}, Clause ID: {item.source_clause_id}" for item in batch])
             budget_text = "\n".join([f"ID: {item.id}, Code: {item.code}, Name: {item.name}, Amount: {item.amount}" for item in state["budget_items"]])
 
-            bom_item_list = chain.invoke({"wbs_items": wbs_text, "budget_items": budget_text})
+            result = chain.invoke({"wbs_items": wbs_text, "budget_items": budget_text})
+            assert isinstance(result, BOMItemList)
 
-            for bom_item in bom_item_list.items:
+            for bom_item in result.items:
                 if batch:
                     bom_item.project_id = batch[0].project_id
 
-            all_bom_items.extend(bom_item_list.items)
+            all_bom_items.extend(result.items)
 
         return {"bom_items": all_bom_items}
 
-    def run(self, wbs_items: list[WBSItem], budget_items: list[BudgetItem]) -> dict:
+    def run(self, wbs_items: list[WBSItem], budget_items: list[BudgetItem]) -> dict[str, object]:
         """Entry point to run the BOM building graph."""
         initial_state: BOMBuildingState = {
             "wbs_items": wbs_items,

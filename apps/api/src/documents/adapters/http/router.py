@@ -214,15 +214,15 @@ def get_entity_extraction_service(
     doc_repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
 ) -> DocumentsEntityExtractionService:
     # Use factories to provide fresh use cases with current session
-    def stakeholder_factory():
+    def stakeholder_factory() -> CreateStakeholderUseCase:
         repo = SqlAlchemyStakeholderRepository(session=db)
         return CreateStakeholderUseCase(repository=repo, document_repository=doc_repo)
 
-    def wbs_factory():
+    def wbs_factory() -> CreateWBSItemUseCase:
         repo = SQLAlchemyWBSRepository(session=db)
         return CreateWBSItemUseCase(wbs_repository=repo)
 
-    def bom_factory():
+    def bom_factory() -> CreateBOMItemUseCase:
         repo = SQLAlchemyBOMRepository(session=db)
         return CreateBOMItemUseCase(bom_repository=repo)
 
@@ -379,6 +379,12 @@ async def upload_document_for_processing(
     file: UploadFile = File(...),
     upload_use_case: UploadDocumentUseCase = Depends(get_upload_use_case),
 ) -> DocumentQueuedResponse:
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Filename is required.",
+        )
+
     file_size = _get_upload_file_size(file)
 
     if file_size > settings.max_upload_size_bytes:
@@ -430,6 +436,12 @@ async def reupload_document_file(
     - Resets status to UPLOADED for re-processing
     - Returns existing document if content unchanged
     """
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Filename is required.",
+        )
+
     file_size = _get_upload_file_size(file)
 
     if file_size > settings.max_upload_size_bytes:
@@ -470,6 +482,7 @@ async def reupload_document_file(
     return DocumentResponse(
         id=document_dto.id,
         project_id=document_dto.project_id,
+        tenant_id=document_dto.tenant_id,
         document_type=document_dto.document_type,
         filename=document_dto.filename,
         upload_status=document_dto.upload_status,
@@ -502,7 +515,7 @@ async def get_document_endpoint(
             "project_id": clause.project_id,
             "document_id": clause.document_id,
             "clause_code": clause.clause_code,
-            "clause_type": clause.clause_type.value if hasattr(clause.clause_type, "value") else str(clause.clause_type) if clause.clause_type else None,
+            "clause_type": clause.clause_type.value if clause.clause_type is not None else None,
             "title": clause.title,
             "full_text": clause.full_text,
             "text_start_offset": clause.text_start_offset,
@@ -571,7 +584,7 @@ async def get_document_entities_endpoint(
         page_number = int(cast(str | int | float, evidence_location.get("page_number") or 1))
         metadata: JsonDict = {
             "clause_code": clause.clause_code,
-            "clause_type": clause.clause_type.value if clause.clause_type else None,
+            "clause_type": clause.clause_type.value if clause.clause_type is not None else None,
             "evidence_location": {
                 "page_number": page_number,
                 "bbox": cast(
@@ -584,8 +597,6 @@ async def get_document_entities_endpoint(
         entities.append(
             DocumentEntityResponse(
                 id=clause.id,
-                project_id=clause.project_id,
-                tenant_id=clause.tenant_id,
                 type="clause",
                 text=clause.title or clause.full_text or clause.clause_code,
                 page=page_number,
@@ -606,7 +617,7 @@ async def download_document_endpoint(
     user_id: CurrentUserId,
     tenant_id: CurrentTenantId,
     download_use_case: DownloadDocumentUseCase = Depends(get_download_use_case),
-):
+) -> FileResponse:
     file_path, media_type = await download_use_case.execute(document_id, user_id, tenant_id)
     return FileResponse(path=file_path, filename=file_path.name, media_type=media_type)
 
@@ -621,9 +632,8 @@ async def delete_document_endpoint(
     user_id: CurrentUserId,
     tenant_id: CurrentTenantId,
     delete_use_case: DeleteDocumentUseCase = Depends(get_delete_use_case),
-):
+) -> None:
     await delete_use_case.execute(document_id, user_id, tenant_id)
-    return status.HTTP_204_NO_CONTENT
 
 
 @router.get(
@@ -650,7 +660,7 @@ async def list_documents_for_project(
         DocumentListItem(
             id=doc.id,
             filename=doc.filename,
-            document_type=doc.document_type.value if hasattr(doc.document_type, "value") else str(doc.document_type) if doc.document_type else None,
+            document_type=doc.document_type.value if doc.document_type is not None else None,
             status=_normalize_document_status_for_polling(doc.upload_status),
             status_detail=_document_status_detail_for_polling(doc.upload_status),
             error_message=doc.parsing_error if doc.upload_status == DocumentStatus.ERROR else None,
@@ -680,7 +690,7 @@ async def parse_document_endpoint(
     _user_id: CurrentUserId,
     tenant_id: CurrentTenantId,
     parse_use_case: ParseDocumentUseCase = Depends(get_parse_document_use_case),
-):
+) -> DocumentUploadResponse:
     try:
         await parse_use_case.execute(tenant_id, document_id, _user_id)
     except ValueError as exc:
@@ -743,7 +753,7 @@ async def answer_project_question(
     _user_id: CurrentUserId,
     tenant_id: CurrentTenantId,
     use_case: AnswerRagQuestionUseCase = Depends(get_answer_rag_use_case),
-):
+) -> RagAnswerResponse:
     try:
         result = await use_case.execute(
             question=payload.question,

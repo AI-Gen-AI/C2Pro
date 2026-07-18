@@ -9,7 +9,6 @@ using PyMuPDF (Fitz), with OCR fallback for scanned documents using Tesseract.
 
 import io
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import fitz  # PyMuPDF
@@ -17,15 +16,19 @@ import structlog
 
 logger = structlog.get_logger()
 
-# OCR imports - optional, will be None if not available
+# OCR imports - optional, will be None if not available. `pytesseract` and
+# `Image` stay public module attributes: tests patch pdf_file_parser.Image.
+pytesseract: Any = None
+Image: Any = None
+OCR_AVAILABLE = False
+
 try:
-    import pytesseract
-    from PIL import Image
+    import pytesseract as _pytesseract_imported
+    from PIL import Image as _PILImage_imported
+    pytesseract = _pytesseract_imported
+    Image = _PILImage_imported
     OCR_AVAILABLE = True
 except ImportError:
-    Image = SimpleNamespace(open=lambda *_args, **_kwargs: None)
-    pytesseract = None
-    OCR_AVAILABLE = False
     logger.warning("ocr_not_available", message="pytesseract/Pillow not installed, OCR disabled")
 
 
@@ -111,7 +114,7 @@ class PDFFileParser:
 
         return text_blocks
 
-    def _extract_page_text_blocks(self, page, page_num: int) -> list[dict[str, Any]]:
+    def _extract_page_text_blocks(self, page: fitz.Page, page_num: int) -> list[dict[str, Any]]:
         """Extract text blocks from a PDF page using PyMuPDF."""
         blocks = []
         data = page.get_text("dict")
@@ -133,7 +136,7 @@ class PDFFileParser:
 
         return blocks
 
-    def _ocr_page(self, page, page_num: int) -> str | None:
+    def _ocr_page(self, page: fitz.Page, page_num: int) -> str | None:
         """Apply OCR to a PDF page to extract text from images."""
         if not OCR_AVAILABLE:
             return None
@@ -150,13 +153,13 @@ class PDFFileParser:
             image = Image.open(io.BytesIO(img_data))
 
             # Run OCR
-            text = pytesseract.image_to_string(image, lang=self.ocr_language)
+            ocr_text: str = pytesseract.image_to_string(image, lang=self.ocr_language)
 
             # Clean up
-            text = text.strip()
-            if text:
-                logger.debug("ocr_page_success", page=page_num + 1, chars=len(text))
-                return text
+            ocr_text = ocr_text.strip()
+            if ocr_text:
+                logger.debug("ocr_page_success", page=page_num + 1, chars=len(ocr_text))
+                return ocr_text
 
         except Exception as e:
             logger.warning("ocr_page_failed", page=page_num + 1, error=str(e))

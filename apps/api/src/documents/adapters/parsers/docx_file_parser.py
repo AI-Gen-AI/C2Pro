@@ -6,6 +6,7 @@ Refers to Suite ID: TS-UAD-DOC-002.
 This adapter extracts text blocks from Microsoft Word .docx files.
 """
 
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +38,7 @@ class DocxFileParser:
             raise DocxParsingError(f"File is not a DOCX: {docx_path}")
 
         try:
-            document = DocxDocument(docx_path)
+            document = DocxDocument(str(docx_path))
         except PackageNotFoundError as exc:
             raise DocxParsingError(f"Failed to open DOCX {docx_path}: {exc}") from exc
 
@@ -61,7 +62,7 @@ class DocxFileParser:
         return texts
 
     @staticmethod
-    def _iter_block_items(document: Any):
+    def _iter_block_items(document: Any) -> Iterator[Paragraph | Table]:
         body = document.element.body
         for child in body.iterchildren():
             if isinstance(child, CT_P):

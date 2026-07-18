@@ -8,7 +8,7 @@ using the openpyxl library, encapsulating external library details.
 import re
 from numbers import Number
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import openpyxl
 from openpyxl.utils.exceptions import InvalidFileException
@@ -26,7 +26,7 @@ class BudgetRows(list[dict[str, Any]]):
         self,
         rows: list[dict[str, Any]] | None = None,
         *,
-        stated_total: float | int | None = None,
+        stated_total: float | None = None,
     ) -> None:
         super().__init__(rows or [])
         self.stated_total = stated_total
@@ -123,7 +123,7 @@ class ExcelFileParser:
             if required.issubset(set(canonical_headers)):
                 return row_index, canonical_headers
 
-        first_row = getattr(sheet, "__getitem__", lambda _: [])(1)
+        first_row: Any = getattr(sheet, "__getitem__", lambda _: [])(1)
         fallback_headers = [
             str(getattr(cell, "value", cell)).strip().lower() if cell is not None else ""
             for cell in first_row
@@ -260,7 +260,7 @@ class ExcelFileParser:
             if required.issubset(set(canonical_headers)):
                 return row_index, canonical_headers
 
-        first_row = getattr(sheet, "__getitem__", lambda _: [])(1)
+        first_row: Any = getattr(sheet, "__getitem__", lambda _: [])(1)
         fallback_headers = [
             getattr(cell, "value", cell) if cell is not None else ""
             for cell in first_row
@@ -290,9 +290,13 @@ class ExcelFileParser:
         ]
 
     @staticmethod
-    def _coerce_budget_number(value: Any) -> Any:
-        if value is None or isinstance(value, Number):
-            return value
+    def _coerce_budget_number(value: Any) -> float | None:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, Number):
+            return float(cast(float, value))
         if not isinstance(value, str):
             return None
 
@@ -324,7 +328,7 @@ class ExcelFileParser:
             return None
 
     @classmethod
-    def _extract_declared_total(cls, row_data: dict[str, Any]) -> float | int | None:
+    def _extract_declared_total(cls, row_data: dict[str, Any]) -> float | None:
         item = row_data.get("item")
         quantity = row_data.get("quantity")
         unit_price = row_data.get("unit price")

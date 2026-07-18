@@ -12,7 +12,7 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any, BinaryIO, Protocol
+from typing import Any, BinaryIO, Protocol, cast
 from uuid import UUID
 
 import structlog
@@ -24,6 +24,7 @@ from src.core.resilience import (
     CircuitBreakerOpenError,
     CircuitBreakerRegistry,
 )
+from src.core.resilience.circuit_breaker import CircuitBreaker
 from src.core.resilience.config import get_circuit_breaker_settings
 from src.documents.ports.storage_service import IStorageService
 
@@ -49,7 +50,7 @@ class R2StorageService(IStorageService):
         self._endpoint = settings.storage_endpoint.rstrip("/")
         self._circuit_breaker = self._init_circuit_breaker()
 
-    def _init_circuit_breaker(self):
+    def _init_circuit_breaker(self) -> CircuitBreaker | None:
         """Initialize circuit breaker for R2 operations."""
         cb_settings = get_circuit_breaker_settings()
         if not cb_settings.enable_circuit_breakers:
@@ -160,7 +161,7 @@ class R2StorageService(IStorageService):
     async def _read_content(self, file_content: BinaryIO) -> bytes:
         read_method = file_content.read
         if inspect.iscoroutinefunction(read_method):
-            return await read_method()
+            return cast(bytes, await read_method())
         return read_method()
 
     async def _read_body(self, body: Any) -> bytes:
@@ -170,5 +171,5 @@ class R2StorageService(IStorageService):
         if read_method is None:
             return bytes(body)
         if inspect.iscoroutinefunction(read_method):
-            return await read_method()
-        return read_method()
+            return cast(bytes, await read_method())
+        return cast(bytes, read_method())

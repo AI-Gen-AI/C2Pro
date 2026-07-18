@@ -84,8 +84,8 @@ class CompositeFileParser(IFileParserService):
 
         if file_format == ".bc3":
             try:
-                budget = await self.bc3_parser.parse(file_path)
-                return {"file_format": file_format, "budget": budget}
+                bc3_budget = await self.bc3_parser.parse(file_path)
+                return {"file_format": file_format, "budget": bc3_budget}
             except BC3ParsingError as e:
                 raise ValueError(f"BC3 parsing failed: {e}")
 
