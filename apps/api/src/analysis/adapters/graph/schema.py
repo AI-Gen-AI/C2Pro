@@ -5,16 +5,16 @@ from typing import Annotated, Any, TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
-from src.analysis.domain.contracts import BudgetItem, Citation, RiskItem, WbsActivity
 from src.analysis.domain.documentation_health import DocumentationHealthSignal
 from src.analysis.domain.node_result import NodeResult, merge_node_results
+from src.core.json_types import JsonDict
 
-Risk = RiskItem
-Task = WbsActivity
+Risk = JsonDict
+Task = JsonDict
 StakeholderDict = dict[str, Any]
 RaciEntry = dict[str, Any]
 CoherenceBreakdown = dict[str, float | None]
-BomEntry = BudgetItem
+BomEntry = JsonDict
 
 
 class ProjectState(TypedDict):
@@ -68,7 +68,7 @@ class ProjectState(TypedDict):
     decision_package: dict[str, Any]
 
     # ── N15: Citation Validator ──
-    citations: list[Citation]
+    citations: list[JsonDict]
     citation_validation_passed: bool
 
     # ── N16: Final Assembler ──

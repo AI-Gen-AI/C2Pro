@@ -39,6 +39,7 @@ from src.analysis.domain.contracts import BudgetItem, Citation
 from src.analysis.domain.document_classification import DocumentCategoryClassifier
 from src.analysis.domain.documentation_health import build_documentation_health_signal
 from src.analysis.domain.node_result import ErrorRecord, NodeResult, NodeStatus
+from src.core.database import get_session_with_tenant
 
 logger = structlog.get_logger()
 
@@ -77,10 +78,10 @@ def _budget_contract_payload(item: BudgetItem | dict[str, Any]) -> dict[str, Any
 
 
 def _node_update_with_health(
-    update: dict[str, Any],
+    update: ProjectState | dict[str, Any],
     *,
     existing_results: list[NodeResult] | None,
-) -> dict[str, Any]:
+) -> ProjectState | dict[str, Any]:
     node_results = [*list(existing_results or []), *list(update.get("node_results") or [])]
     update["documentation_health_signal"] = build_documentation_health_signal(node_results)
     return update
@@ -232,8 +233,8 @@ async def pii_anonymizer_node(state: ProjectState) -> ProjectState:
     from src.anonymizer.application.anonymization_service import (
         AnonymizationConfig,
         AnonymizationStrategy,
-        PiiType,
     )
+    from src.anonymizer.domain.pii_detector_service import PiiType
 
     text = state["document_text"]
     detector = get_pii_detector_service()
@@ -590,14 +591,19 @@ async def knowledge_graph_builder_node(state: ProjectState) -> ProjectState:
         return state
 
     try:
-        from src.analysis.adapters.graph.knowledge_graph import KnowledgeGraphAdapter
+        from src.analysis.adapters.graph import build_project_knowledge_graph
         from src.analysis.application.build_project_knowledge_graph_use_case import (
             BuildProjectKnowledgeGraphUseCase,
         )
 
-        adapter = KnowledgeGraphAdapter()
-        use_case = BuildProjectKnowledgeGraphUseCase(knowledge_graph=adapter)
-        graph = await use_case.execute(project_id=UUID(project_id), tenant_id=UUID(tenant_id))
+        tenant_uuid = UUID(tenant_id)
+        async with get_session_with_tenant(tenant_uuid) as session:
+            adapter = build_project_knowledge_graph(session)
+            use_case = BuildProjectKnowledgeGraphUseCase(knowledge_graph=adapter)
+            graph = await use_case.execute(
+                project_id=UUID(project_id),
+                tenant_id=tenant_uuid,
+            )
         nodes = [{"id": str(n), "data": graph.nodes[n]} for n in graph.nodes]
         edges = [
             {"source": str(u), "target": str(v), "data": graph.edges[u, v]}

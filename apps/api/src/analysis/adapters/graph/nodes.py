@@ -47,6 +47,7 @@ from src.analysis.domain.contracts import RiskItem, WbsActivity
 from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.analysis.domain.prompts import DOC_TYPES
 from src.core.database import get_session_with_tenant
+from src.shared_kernel.enums import AlertSeverity
 
 # Stateless domain services (reusable across requests)
 _risk_rules = DeterministicRiskRulesService()
@@ -212,15 +213,13 @@ def _deterministic_wbs_items(text: str) -> list[dict[str, Any]]:
     return _wbs_rules.extract(text)
 
 
-def _map_risk_severity(item: dict[str, Any]):
+def _map_risk_severity(item: dict[str, Any]) -> AlertSeverity:
     """Map a risk dict to an AlertSeverity enum.
 
     Backwards-compat shim — legacy tests (tests/ai/test_risk_extractor.py)
     still import this helper by name. Production alert generation now lives
     in ``src.coherence.alert_generator.AlertGenerator``.
     """
-    from src.shared_kernel.enums import AlertSeverity
-
     severity_source = item.get("severity") or item.get("impact") or "low"
     severity_value = str(severity_source).lower()
     for candidate in AlertSeverity:
@@ -478,8 +477,9 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                     "document_id": state["document_id"],
                     "review_type": "analysis_critique",
                 }
-                if state.get("thread_id"):
-                    metadata["thread_id"] = state["thread_id"]
+                thread_id = state.get("thread_id")
+                if thread_id:
+                    metadata["thread_id"] = thread_id
 
                 review_status = await service.route_for_review(
                     item_id=UUID(state["document_id"]),
