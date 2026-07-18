@@ -11,6 +11,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.evidence.domain.runtime_trust import EvidenceRef
 from src.temporal.adapters.persistence.models import ProjectEventORM
 from src.temporal.domain.project_event import ProjectEvent
 from src.temporal.ports.project_event_repository import IProjectEventRepository
@@ -31,7 +32,7 @@ class SqlAlchemyProjectEventRepository(IProjectEventRepository):
             actor=orm.actor,
             confidence=orm.confidence,
             source_revision_id=orm.source_revision_id,
-            evidence_refs=orm.evidence_refs,
+            evidence_refs=[EvidenceRef.model_validate(ref) for ref in (orm.evidence_refs or []) if isinstance(ref, dict)],
             occurred_at=orm.occurred_at,
             created_at=orm.created_at,
         )

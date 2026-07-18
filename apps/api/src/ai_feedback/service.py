@@ -14,7 +14,7 @@ class AIFeedbackService:
     to the appropriate observability platform (LangSmith).
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.langsmith_client = LangSmithClient()
 
     def submit_feedback(self, feedback: AIFeedbackCreate) -> None:

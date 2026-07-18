@@ -71,7 +71,6 @@ class ChangeSet(BaseModel):
     created_at: datetime
 
     @computed_field
-    @property
     def summary_counts(self) -> dict[str, int]:
         return {
             "added": sum(1 for change in self.changes if change.change_type == "added"),

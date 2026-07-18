@@ -6,6 +6,8 @@ import json
 from typing import Any
 from uuid import UUID, uuid4
 
+from pydantic import TypeAdapter
+
 # Temporary import for AI dependencies. This will be refactored into an adapter later.
 from src.core.ai.model_router import AITaskType
 
@@ -88,7 +90,7 @@ class ExtractStakeholdersUseCase:
             if "id" not in item:
                 item["id"] = str(uuid4())
 
-        return [Stakeholder.model_validate(item) for item in raw_items]
+        return [TypeAdapter(Stakeholder).validate_python(item) for item in raw_items]
 
 
 def _extract_json_array(raw: str) -> str:

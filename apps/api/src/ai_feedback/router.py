@@ -21,7 +21,7 @@ router = APIRouter(
 def submit_ai_feedback(
     feedback_data: AIFeedbackCreate,
     feedback_service: AIFeedbackService = Depends(get_feedback_service),
-):
+) -> AIFeedbackResponse:
     """
     Submits feedback about an AI interaction.
 
