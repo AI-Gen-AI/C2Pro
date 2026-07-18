@@ -886,7 +886,7 @@ async def bulk_create_wbs(
         register_job(
             job_id,
             _build_bulk_job_payload(total_items=len(request.items)),
-            tenant_id=current_user.tenant_id,
+            tenant_id=require_tenant_id(current_user.tenant_id),
         )
         return JSONResponse(
             status_code=status.HTTP_202_ACCEPTED,
@@ -969,7 +969,7 @@ async def export_project_data(
     register_job(
         export_id,
         _build_bulk_job_payload(total_items=max(len(request.include), 1)),
-        tenant_id=current_user.tenant_id,
+        tenant_id=require_tenant_id(current_user.tenant_id),
     )
 
     return {
