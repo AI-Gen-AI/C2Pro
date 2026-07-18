@@ -15,7 +15,9 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from langchain_core.runnables import RunnableLambda
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from src.analysis.adapters.graph.project_coherence_result import ProjectCoherenceResult
 from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
@@ -23,17 +25,28 @@ from src.analysis.adapters.graph.risk_signal_bridge import build_risk_signals
 from src.analysis.domain.contracts import (
     BudgetItem,
     Citation,
+    CoherenceFinding,
     DocumentArtifact,
     RiskItem,
     WbsActivity,
 )
+from src.analysis.domain.contracts import (
+    Severity as ArtifactSeverity,
+)
 from src.analysis.domain.documentation_health import DocumentationHealthSignal
 from src.analysis.domain.node_result import ErrorRecord, NodeResult, NodeStatus
 from src.change_intelligence.application.change_impact_report import build_change_impact_report
-from src.change_intelligence.domain.contracts import ChangeSet, SemanticChange
+from src.change_intelligence.domain.contracts import ChangeSet, ObjectType, SemanticChange
 from src.coherence.graph.graph import evaluate_coherence_async
 from src.coherence.graph.state import EvaluationConfig
-from src.coherence.models import EnrichedCoherenceResult, FindingSignal
+from src.coherence.models import (
+    CoherenceCategory as FindingCategory,
+)
+from src.coherence.models import (
+    EnrichedCoherenceResult,
+    FindingSignal,
+    SeverityLevel,
+)
 from src.health.application.coherence_subscore import coherence_subscore_from_result
 from src.health.application.contract_scorer import score_contract_dimension
 from src.health.application.documentation_scorer import score_documentation_dimension
@@ -107,9 +120,9 @@ def align_entities(state: ProjectGraphState) -> dict[str, object]:
     }
 
 
-def _coherence_category(value: str | None) -> str | None:
+def _coherence_category(value: str | None) -> FindingCategory | None:
     normalized = (value or "").upper().strip()
-    aliases = {
+    aliases: dict[str, FindingCategory] = {
         "SCHEDULE": "TIME",
         "TIME": "TIME",
         "TECH": "TECHNICAL",
@@ -121,6 +134,14 @@ def _coherence_category(value: str | None) -> str | None:
         "QUALITY": "QUALITY",
     }
     return aliases.get(normalized)
+
+
+def _finding_severity(value: ArtifactSeverity | None) -> SeverityLevel:
+    if value is ArtifactSeverity.HIGH:
+        return "high"
+    if value is ArtifactSeverity.LOW:
+        return "low"
+    return "medium"
 
 
 def _severity_to_impact(value: object) -> float:
@@ -135,15 +156,16 @@ def _severity_to_impact(value: object) -> float:
 def _finding_signal_for_artifact(
     artifact: DocumentArtifact,
     finding_index: int,
-    finding: object,
+    finding: CoherenceFinding,
 ) -> FindingSignal | None:
     category = _coherence_category(getattr(finding, "category", None))
     if category is None:
         return None
+    score = finding.score
     impact = (
-        1.0 - (float(finding.score) / 100.0)
-        if getattr(finding, "score", None) is not None
-        else _severity_to_impact(getattr(finding, "severity", None))
+        1.0 - (score / 100.0)
+        if score is not None
+        else _severity_to_impact(finding.severity)
     )
     return FindingSignal(
         rule_id=finding.rule_id or "ARTIFACT-COHERENCE-FINDING",
@@ -151,7 +173,7 @@ def _finding_signal_for_artifact(
         source="deterministic",
         impact_score=max(0.0, min(1.0, impact)),
         confidence=finding.confidence or 0.7,
-        severity=str(getattr(getattr(finding, "severity", None), "value", "MEDIUM")).lower(),
+        severity=_finding_severity(finding.severity),
         category=category,
         evidence_summary=finding.message,
         quote=finding.evidence_ref or finding.message,
@@ -193,10 +215,10 @@ def _aggregate_cross_doc_inputs(
         coverage.update(risk_result.coverage_seed)
 
         for index, finding in enumerate(artifact.coherence_findings):
-            signal = _finding_signal_for_artifact(artifact, index, finding)
-            if signal is not None:
-                signals.append(signal)
-                coverage[signal.category] = True
+            finding_signal = _finding_signal_for_artifact(artifact, index, finding)
+            if finding_signal is not None:
+                signals.append(finding_signal)
+                coverage[finding_signal.category] = True
                 finding_count += 1
 
     return signals, coverage, finding_count
@@ -442,7 +464,7 @@ def _paired_entries(
 
 def _collection_changes(
     *,
-    object_type: str,
+    object_type: ObjectType,
     prior: list[_PayloadEntry],
     current: list[_PayloadEntry],
 ) -> list[SemanticChange]:
@@ -629,6 +651,7 @@ def health(state: ProjectGraphState) -> dict[str, object]:
             for risk in artifact.extracted_risks
         ]
         coherence = state.get("coherence_result")
+        coherence_result: ProjectCoherenceResult | None
         if isinstance(coherence, dict):
             coherence_result = ProjectCoherenceResult.model_validate(coherence)
         else:
@@ -721,20 +744,20 @@ def snapshot_delta(state: ProjectGraphState) -> dict[str, object]:
     }
 
 
-def write_snapshot(_state: ProjectGraphState) -> dict[str, object]:
+def write_snapshot(_state: ProjectGraphState) -> dict[str, Any]:
     return {
         "snapshot_id": None,
         "node_results": _skipped("write_snapshot", "pending ADR-015 snapshot write"),
     }
 
 
-def alert_correlation(_state: ProjectGraphState) -> dict[str, object]:
+def alert_correlation(_state: ProjectGraphState) -> dict[str, Any]:
     return {
         "node_results": _skipped("alert_correlation", "pending ADR-019 alert correlation"),
     }
 
 
-def hitl_routing(_state: ProjectGraphState) -> dict[str, object]:
+def hitl_routing(_state: ProjectGraphState) -> dict[str, Any]:
     return {
         "node_results": _skipped("hitl_routing", "pending ADR-020 HITL routing"),
     }
@@ -790,19 +813,42 @@ async def is_coherence_llm_enabled(tenant_id: UUID) -> bool:
         return False
 
 
-def build_project_graph():
+def build_project_graph() -> CompiledStateGraph[
+    ProjectGraphState,
+    None,
+    ProjectGraphState,
+    ProjectGraphState,
+]:
     """Build the serial Tier-2 graph skeleton."""
 
-    workflow = StateGraph(ProjectGraphState)
-    workflow.add_node("load_current_artifacts", load_current_artifacts)
-    workflow.add_node("align_entities", align_entities)
-    workflow.add_node("cross_doc_coherence", cross_doc_coherence)
-    workflow.add_node("change_impact", change_impact)
-    workflow.add_node("health", health)
-    workflow.add_node("snapshot_delta", snapshot_delta)
-    workflow.add_node("write_snapshot", write_snapshot)
-    workflow.add_node("alert_correlation", alert_correlation)
-    workflow.add_node("hitl_routing", hitl_routing)
+    workflow = StateGraph[ProjectGraphState, None, ProjectGraphState, ProjectGraphState](
+        ProjectGraphState
+    )
+    workflow.add_node(
+        "load_current_artifacts",
+        load_current_artifacts,
+        input_schema=ProjectGraphState,
+    )
+    workflow.add_node("align_entities", align_entities, input_schema=ProjectGraphState)
+    workflow.add_node("cross_doc_coherence", cross_doc_coherence, input_schema=ProjectGraphState)
+    workflow.add_node("change_impact", change_impact, input_schema=ProjectGraphState)
+    workflow.add_node("health", health, input_schema=ProjectGraphState)
+    workflow.add_node("snapshot_delta", snapshot_delta, input_schema=ProjectGraphState)
+    workflow.add_node(
+        "write_snapshot",
+        RunnableLambda(write_snapshot),
+        input_schema=ProjectGraphState,
+    )
+    workflow.add_node(
+        "alert_correlation",
+        RunnableLambda(alert_correlation),
+        input_schema=ProjectGraphState,
+    )
+    workflow.add_node(
+        "hitl_routing",
+        RunnableLambda(hitl_routing),
+        input_schema=ProjectGraphState,
+    )
 
     workflow.set_entry_point("load_current_artifacts")
     workflow.add_edge("load_current_artifacts", "align_entities")
