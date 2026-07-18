@@ -225,7 +225,9 @@ def _build_project_quick_view_summary(
             ProjectQuickViewAlertResponse(
                 id=alert.id,
                 title=alert.title,
-                severity=alert.severity.value if hasattr(alert.severity, "value") else str(alert.severity),
+                severity=alert.severity.value
+                if hasattr(alert.severity, "value")
+                else str(alert.severity),
                 status=alert.status.value if hasattr(alert.status, "value") else str(alert.status),
                 created_at=alert.created_at,
             )
@@ -237,7 +239,15 @@ def _build_project_quick_view_summary(
 
 def _apply_project_update(project: ProjectORM, updates: dict) -> None:
     metadata = dict(_extract_project_metadata(project))
-    for field in ("name", "code", "description", "project_type", "status", "estimated_budget", "currency"):
+    for field in (
+        "name",
+        "code",
+        "description",
+        "project_type",
+        "status",
+        "estimated_budget",
+        "currency",
+    ):
         if field in updates:
             setattr(project, field, updates[field])
 
@@ -284,7 +294,9 @@ def _validate_wbs_items(items: Sequence[object]) -> tuple[list[object], list[dic
     errors: list[dict[str, object]] = []
 
     for index, item in enumerate(items):
-        missing_fields = [field for field in ("code", "name", "level") if getattr(item, field) in (None, "")]
+        missing_fields = [
+            field for field in ("code", "name", "level") if getattr(item, field) in (None, "")
+        ]
         if missing_fields:
             errors.append(
                 {
@@ -575,7 +587,9 @@ async def update_project(
                 detail="Project not found",
             )
 
-        current_version = int(_extract_project_metadata(project).get(PROJECT_METADATA_VERSION_KEY, 1))
+        current_version = int(
+            _extract_project_metadata(project).get(PROJECT_METADATA_VERSION_KEY, 1)
+        )
 
         if_match = request.headers.get("If-Match")
         update_data = updates.model_dump(exclude_unset=True)
@@ -642,7 +656,9 @@ async def update_project(
                     detail="Project code already exists",
                 )
 
-        _apply_project_update(project, {k: v for k, v in update_data.items() if k != "expected_version"})
+        _apply_project_update(
+            project, {k: v for k, v in update_data.items() if k != "expected_version"}
+        )
         await session.commit()
         await session.refresh(project)
 
@@ -691,7 +707,9 @@ async def update_project_status(
 
         project.status = new_status
         metadata = dict(_extract_project_metadata(project))
-        metadata[PROJECT_METADATA_VERSION_KEY] = int(metadata.get(PROJECT_METADATA_VERSION_KEY, 1)) + 1
+        metadata[PROJECT_METADATA_VERSION_KEY] = (
+            int(metadata.get(PROJECT_METADATA_VERSION_KEY, 1)) + 1
+        )
         project.metadata_json = metadata
         await session.commit()
         await session.refresh(project)
@@ -865,7 +883,11 @@ async def bulk_create_wbs(
 
     if len(request.items) >= 100 and not errors:
         job_id = str(uuid4())
-        register_job(job_id, _build_bulk_job_payload(total_items=len(request.items)), tenant_id=str(current_user.tenant_id))
+        register_job(
+            job_id,
+            _build_bulk_job_payload(total_items=len(request.items)),
+            tenant_id=require_tenant_id(current_user.tenant_id),
+        )
         return JSONResponse(
             status_code=status.HTTP_202_ACCEPTED,
             content={
@@ -947,7 +969,7 @@ async def export_project_data(
     register_job(
         export_id,
         _build_bulk_job_payload(total_items=max(len(request.include), 1)),
-        tenant_id=str(current_user.tenant_id),
+        tenant_id=require_tenant_id(current_user.tenant_id),
     )
 
     return {
@@ -1014,7 +1036,9 @@ async def get_project_budget(
     async with get_session_with_tenant(current_user.tenant_id) as session:
         budget_repo = SQLAlchemyBudgetRepository(session)
         budget_use_case = GetBudgetUseCase(budget_repo)
-        budget_response = await budget_use_case.execute(project_id, require_tenant_id(current_user.tenant_id))
+        budget_response = await budget_use_case.execute(
+            project_id, require_tenant_id(current_user.tenant_id)
+        )
 
     total_budget = budget_response.total_budget
     spent_amount = Decimal("0")
@@ -1052,7 +1076,9 @@ def _serialize_wbs_item_tree(item) -> dict[str, object]:
         "description": item.description,
         "parent_code": item.parent_code,
         "item_type": item.item_type.value if item.item_type else None,
-        "budget_allocated": float(item.budget_allocated) if item.budget_allocated is not None else None,
+        "budget_allocated": float(item.budget_allocated)
+        if item.budget_allocated is not None
+        else None,
         "budget_spent": float(item.budget_spent),
         "planned_start": item.planned_start.isoformat() if item.planned_start else None,
         "planned_end": item.planned_end.isoformat() if item.planned_end else None,
@@ -1071,7 +1097,9 @@ def _build_wbs_coverage(items: Sequence[object]) -> dict[str, object]:
     completed_items = sum(1 for item in items if getattr(item, "actual_end", None) is not None)
     return {
         "total_items": total_items,
-        "items_with_budget": sum(1 for item in items if getattr(item, "budget_allocated", None) is not None),
+        "items_with_budget": sum(
+            1 for item in items if getattr(item, "budget_allocated", None) is not None
+        ),
         "items_with_dates": sum(
             1
             for item in items
@@ -1079,7 +1107,9 @@ def _build_wbs_coverage(items: Sequence[object]) -> dict[str, object]:
             and getattr(item, "planned_end", None) is not None
         ),
         "items_with_alerts": 0,
-        "completion_average": 0.0 if total_items == 0 else round((completed_items / total_items) * 100, 2),
+        "completion_average": 0.0
+        if total_items == 0
+        else round((completed_items / total_items) * 100, 2),
     }
 
 
@@ -1103,10 +1133,14 @@ async def get_project_wbs(
     async with get_session_with_tenant(current_user.tenant_id) as session:
         wbs_repo = SQLAlchemyWBSRepository(session)
         wbs_use_case = GetWBSTreeUseCase(wbs_repo)
-        tree_items = await wbs_use_case.execute(project_id, require_tenant_id(current_user.tenant_id))
+        tree_items = await wbs_use_case.execute(
+            project_id, require_tenant_id(current_user.tenant_id)
+        )
 
         list_use_case = ListWBSItemsUseCase(wbs_repo)
-        flat_items = await list_use_case.execute(project_id, require_tenant_id(current_user.tenant_id))
+        flat_items = await list_use_case.execute(
+            project_id, require_tenant_id(current_user.tenant_id)
+        )
 
     return {
         "project_id": str(project_id),
@@ -1115,5 +1149,3 @@ async def get_project_wbs(
         "alerts": [],
         "total_items": len(flat_items),
     }
-
-

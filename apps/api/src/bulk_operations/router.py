@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from src.bulk_operations.store import get_job
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
+from src.core.tenants.types import require_tenant_id
 
 router = APIRouter(prefix="/bulk-operations", tags=["bulk-operations"])
 
@@ -39,7 +40,7 @@ async def get_bulk_operation_progress(
     Raises:
         404: Job not found
     """
-    job = get_job(job_id, tenant_id=str(current_user.tenant_id))
+    job = get_job(job_id, tenant_id=require_tenant_id(current_user.tenant_id))
 
     if not job:
         raise HTTPException(
