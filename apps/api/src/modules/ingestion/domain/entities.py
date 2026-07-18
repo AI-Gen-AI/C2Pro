@@ -12,6 +12,7 @@ Increment I2: OCR + Table Parsing Reliability
 """
 
 import re
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -77,7 +78,7 @@ class IngestionChunk(BaseModel):
         description="Confidence score (0.0-1.0) of the chunk's extraction/OCR accuracy."
     )
 
-    metadata: dict = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional arbitrary metadata for the chunk (e.g., needs_review flag for HITL routing)."
     )
@@ -195,7 +196,7 @@ class TableData(BaseModel):
         description="Bounding box [x1, y1, x2, y2] of the table on the page, normalized 0-1."
     )
 
-    metadata: dict = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional arbitrary metadata for the table (e.g., needs_human_review flag)."
     )

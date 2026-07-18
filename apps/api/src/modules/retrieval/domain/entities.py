@@ -9,6 +9,7 @@ Increment I4: Hybrid RAG Retrieval Correctness
 """
 
 from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -82,7 +83,7 @@ class RetrievalResult(BaseModel):
         description="Relevance score of the retrieved item (0.0-1.0)."
     )
 
-    metadata: dict = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional metadata about the retrieval source or process."
     )

@@ -8,6 +8,7 @@ Increment I3: Clause Extraction + Normalization
 """
 
 from datetime import date
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -101,7 +102,7 @@ class ExtractedClause(BaseModel):
         description="List of parties/actors involved in the clause (e.g., 'Contractor', 'Client')."
     )
 
-    metadata: dict = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional arbitrary metadata for the clause (e.g., section, importance, review flags)."
     )
@@ -116,7 +117,7 @@ class ExtractedClause(BaseModel):
 
     @field_validator("due_date", mode="before")
     @classmethod
-    def validate_due_date_format(cls, v):
+    def validate_due_date_format(cls, v: Any) -> date | None:
         """
         Validate and convert due_date to proper date object.
 
@@ -150,7 +151,7 @@ class ExtractedClause(BaseModel):
 
     @field_validator("ambiguity_flag", mode="before")
     @classmethod
-    def validate_ambiguity_flag_type(cls, v):
+    def validate_ambiguity_flag_type(cls, v: Any) -> bool:
         """Validate that ambiguity_flag is a boolean."""
         if not isinstance(v, bool):
             raise ValueError(
@@ -160,7 +161,7 @@ class ExtractedClause(BaseModel):
 
     @field_validator("actors", mode="before")
     @classmethod
-    def normalize_actors(cls, value):
+    def normalize_actors(cls, value: Any) -> list[str]:
         """
         Normalize actor names by trimming whitespace, removing empties,
         and deduplicating while preserving order.

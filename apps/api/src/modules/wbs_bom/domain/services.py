@@ -40,7 +40,7 @@ class WBSBOMIntegrityService:
         for item in wbs_items:
             if item.clause_id is None:
                 violations.append(f"WBS item {item.code} is missing clause traceability.")
-        for item in bom_items:
-            if item.clause_id is None:
-                violations.append(f"BOM item {item.description} is missing clause traceability.")
+        for bom_item in bom_items:
+            if bom_item.clause_id is None:
+                violations.append(f"BOM item {bom_item.description} is missing clause traceability.")
         return violations

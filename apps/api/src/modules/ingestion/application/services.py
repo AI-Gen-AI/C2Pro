@@ -400,6 +400,7 @@ class TableParserService:
             return TableData(
                 rows=[[""]],
                 confidence=0.0,
+                bbox=None,
                 metadata={"empty_table": True}
             )
 
