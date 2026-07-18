@@ -5,6 +5,7 @@ HTTP routes for DLQ admin operations.
 
 from __future__ import annotations
 
+from typing import cast
 from uuid import UUID
 
 import structlog
@@ -54,7 +55,7 @@ class DLQServiceAdminAdapter:
                 .limit(limit)
                 .offset(offset)
             )
-            return list(result.scalars().all())
+            return cast(list[DLQEntryView], list(result.scalars().all()))
 
     async def count_by_status(self, status: str) -> int:
         """Return the total number of DLQ entries for the given status."""
@@ -68,7 +69,7 @@ class DLQServiceAdminAdapter:
 
     async def get_by_id(self, dlq_id: UUID) -> DLQEntryView | None:
         """Return a DLQ entry by id using the existing service read path."""
-        return await self._service.get_by_id(dlq_id)
+        return cast(DLQEntryView | None, await self._service.get_by_id(dlq_id))
 
     async def retry(self, dlq_id: UUID) -> None:
         """Retry a DLQ entry using the existing service retry path."""

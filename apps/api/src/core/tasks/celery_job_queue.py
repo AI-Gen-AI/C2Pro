@@ -21,7 +21,9 @@ class CeleryAsyncResult(Protocol):
 class CeleryClient(Protocol):
     """Minimal celery client contract."""
 
-    def send_task(self, task_name: str, args: tuple[Any, ...], kwargs: dict[str, Any]) -> CeleryAsyncResult: ...
+    def send_task(
+        self, task_name: str, args: tuple[Any, ...], kwargs: dict[str, Any]
+    ) -> CeleryAsyncResult: ...
 
     def AsyncResult(self, task_id: str) -> CeleryAsyncResult: ...  # noqa: N802
 

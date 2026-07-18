@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import DateTime, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -42,7 +43,7 @@ class CookieConsentORM(Base):
     version: Mapped[str] = mapped_column(
         String(50), nullable=False
     )
-    categories: Mapped[dict] = mapped_column(
+    categories: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict
     )
     created_at: Mapped[datetime] = mapped_column(
@@ -52,5 +53,5 @@ class CookieConsentORM(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
     )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<CookieConsent tenant={self.tenant_id} user={self.user_id} version={self.version}>"

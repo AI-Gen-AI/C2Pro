@@ -125,7 +125,7 @@ class PermissionDeniedException(C2ProException):
 class TenantNotFoundError(C2ProException):
     """Tenant no encontrado en el contexto."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
             message="Tenant context not found", code="TENANT_NOT_FOUND", status_code=401
         )
@@ -431,8 +431,3 @@ class DatabaseError(ExternalServiceError):
 # ALIASES FOR BACKWARD COMPATIBILITY
 # ===========================================
 
-# Alias for NotFoundError (commonly used in services)
-NotFoundError = ResourceNotFoundError
-
-# Alias for ConflictError (commonly used in services)
-ConflictError = ResourceAlreadyExistsError

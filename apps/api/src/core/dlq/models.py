@@ -7,7 +7,7 @@ from __future__ import annotations
 from sqlalchemy import Column, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
 
@@ -62,13 +62,13 @@ class DLQFailedTask(Base):
     error_traceback = Column(Text, nullable=True, comment="Full error traceback for debugging")
 
     # Retry logic
-    retry_count = Column(
+    retry_count: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         server_default=text("0"),
         comment="Number of retry attempts",
     )
-    max_retries = Column(
+    max_retries: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         server_default=text("3"),

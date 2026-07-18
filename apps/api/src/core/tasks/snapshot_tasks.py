@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select, text
@@ -39,7 +40,7 @@ def enqueue_project_snapshot(
     tenant_id: UUID,
     trigger: SnapshotTrigger,
     source_event_id: UUID | None = None,
-):
+) -> Any:
     return write_project_snapshot.delay(
         project_id=str(project_id),
         tenant_id=str(tenant_id),
@@ -92,7 +93,7 @@ async def _write_project_snapshot_async(
     retry_backoff_max=60,
 )
 def write_project_snapshot(
-    self,  # noqa: ARG001
+    self: Any,  # noqa: ARG001
     *,
     project_id: str,
     tenant_id: str,
@@ -130,5 +131,5 @@ async def _enqueue_daily_project_snapshots_async(batch_size: int = 500) -> dict[
 
 
 @celery_app.task(name="project_snapshots.enqueue_daily", bind=True)
-def enqueue_daily_project_snapshots(self, batch_size: int = 500) -> dict[str, int | str]:  # noqa: ARG001
+def enqueue_daily_project_snapshots(self: Any, batch_size: int = 500) -> dict[str, int | str]:  # noqa: ARG001
     return asyncio.run(_enqueue_daily_project_snapshots_async(batch_size=batch_size))

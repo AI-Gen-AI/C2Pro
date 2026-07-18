@@ -4,11 +4,14 @@ C2Pro - Custom SQLAlchemy Types
 Tipos personalizados que funcionan tanto en PostgreSQL como SQLite.
 """
 
+from typing import Any
+
 from sqlalchemy import JSON, TypeDecorator
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.engine.interfaces import Dialect
 
 
-class JSONType(TypeDecorator):
+class JSONType(TypeDecorator[JSON]):
     """
     JSON type que usa JSONB en PostgreSQL y JSON en otros dialectos.
 
@@ -19,7 +22,7 @@ class JSONType(TypeDecorator):
     impl = JSON
     cache_ok = True
 
-    def load_dialect_impl(self, dialect):
+    def load_dialect_impl(self, dialect: Dialect) -> Any:
         if dialect.name == "postgresql":
             return dialect.type_descriptor(JSONB())
         else:

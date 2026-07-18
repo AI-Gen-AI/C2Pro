@@ -9,6 +9,7 @@ import re
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
+from typing import Any
 from uuid import UUID
 
 import structlog
@@ -48,13 +49,17 @@ def _validate_uuid_for_sql(value: UUID | str) -> str:
 
 
 @event.listens_for(Engine, "before_cursor_execute")
-def _receive_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):  # noqa: ARG001
+def _receive_before_cursor_execute(
+    conn: Any, cursor: Any, statement: Any, parameters: Any, context: Any, executemany: Any  # noqa: ARG001
+) -> None:
     """SQLAlchemy event handler - all args required by event listener interface."""
     conn.info.setdefault("query_start_time", []).append(time.perf_counter())
 
 
 @event.listens_for(Engine, "after_cursor_execute")
-def _receive_after_cursor_execute(conn, cursor, statement, parameters, context, executemany):  # noqa: ARG001
+def _receive_after_cursor_execute(
+    conn: Any, cursor: Any, statement: Any, parameters: Any, context: Any, executemany: Any  # noqa: ARG001
+) -> None:
     """SQLAlchemy event handler - all args required by event listener interface."""
     start_times = conn.info.get("query_start_time", [])
     if start_times:
@@ -84,7 +89,7 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 @event.listens_for(Engine, "connect")
-def _initialize_tenant_guc(dbapi_connection, connection_record) -> None:  # noqa: ARG001
+def _initialize_tenant_guc(dbapi_connection: Any, connection_record: Any) -> None:  # noqa: ARG001
     """
     SQLAlchemy event handler - connection_record required by event listener interface.
     Ensure PostgreSQL custom GUC exists on every new DB connection.
