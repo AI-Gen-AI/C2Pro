@@ -34,7 +34,7 @@ def get_observability_service(
 @router.get("/status", response_model=SystemStatusResponse, summary="Get system health status")
 async def get_system_status(
     service: ObservabilityService = Depends(get_observability_service),
-):
+) -> SystemStatusResponse:
     """
     Retrieves the overall health status of the API and its dependencies, such as the database.
     """
@@ -49,7 +49,7 @@ async def get_recent_analyses(
     limit: int = 10,
     offset: int = 0,
     service: ObservabilityService = Depends(get_observability_service),
-):
+) -> RecentAnalysesResponse:
     """
     Retrieves a list of recent coherence analysis runs with their status and key metrics.
     Results are filtered by tenant.
