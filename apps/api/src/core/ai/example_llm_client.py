@@ -16,10 +16,10 @@ Usage:
 import asyncio
 from uuid import uuid4
 
-from src.core.ai.llm_client import LLMRequest, create_llm_client
+from src.core.ai.llm_client import LLMErrorType, LLMRequest, create_llm_client
 
 
-async def example_basic_usage():
+async def example_basic_usage() -> None:
     """Ejemplo básico de uso del LLM Client."""
     print("=" * 60)
     print("EJEMPLO 1: Uso Básico")
@@ -59,7 +59,7 @@ async def example_basic_usage():
         print("   (Demo sin API key válida)")
 
 
-async def example_retry_behavior():
+async def example_retry_behavior() -> None:
     """Ejemplo de comportamiento de retry."""
     print("\n" + "=" * 60)
     print("EJEMPLO 2: Retry Behavior")
@@ -79,11 +79,11 @@ async def example_retry_behavior():
 
     print("\n📊 Retry delays (exponential backoff):")
     for attempt in range(4):
-        delay = client._calculate_retry_delay(attempt, error_type="server_error")
+        delay = client._calculate_retry_delay(attempt, error_type=LLMErrorType.SERVER_ERROR)
         print(f"   Attempt {attempt + 1}: ~{delay:.1f}s")
 
 
-async def example_circuit_breaker():
+async def example_circuit_breaker() -> None:
     """Ejemplo de circuit breaker."""
     print("\n" + "=" * 60)
     print("EJEMPLO 3: Circuit Breaker")
@@ -116,7 +116,7 @@ async def example_circuit_breaker():
     print(f"\n❓ Can execute request? {can_execute}")
 
 
-async def example_cost_tracking():
+async def example_cost_tracking() -> None:
     """Ejemplo de cost tracking."""
     print("\n" + "=" * 60)
     print("EJEMPLO 4: Cost Tracking")
@@ -143,7 +143,7 @@ async def example_cost_tracking():
     print(f"   Avg retries/request: {stats['avg_retries_per_request']:.2f}")
 
 
-async def example_error_classification():
+async def example_error_classification() -> None:
     """Ejemplo de clasificación de errores."""
     print("\n" + "=" * 60)
     print("EJEMPLO 5: Error Classification")
@@ -168,7 +168,7 @@ async def example_error_classification():
     print("   5. Record in circuit breaker")
 
 
-async def example_logging():
+async def example_logging() -> None:
     """Ejemplo de logging estructurado."""
     print("\n" + "=" * 60)
     print("EJEMPLO 6: Structured Logging")
@@ -207,7 +207,7 @@ async def example_logging():
     print("     - final_error")
 
 
-async def main():
+async def main() -> None:
     """Ejecuta todos los ejemplos."""
     print("\n🚀 C2Pro - LLM Client Wrapper Examples\n")
 

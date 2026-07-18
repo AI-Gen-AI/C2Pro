@@ -169,7 +169,7 @@ class ABExperiment:
     # Metadata
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.metrics_a = PromptMetrics(self.variant_a_version)
         self.metrics_b = PromptMetrics(self.variant_b_version)
 
@@ -390,7 +390,7 @@ class ABExperimentService:
         comparison = service.get_comparison(exp.id)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the experiment service."""
         # In-memory storage (for production, use database)
         self._experiments: dict[str, ABExperiment] = {}
