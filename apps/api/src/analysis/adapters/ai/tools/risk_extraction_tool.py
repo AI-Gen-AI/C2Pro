@@ -305,13 +305,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
 
         # Update confidence score based on result quality
         if result.confidence_score:
-            if risks:
-                confidences = [item.confidence for item in risks]
-                state["confidence_score"] = (
-                    sum(confidences) / len(confidences) if confidences else 0.9
-                )
-            else:
-                state["confidence_score"] = 0.9
+            state["confidence_score"] = result.confidence_score
         else:
             # Calculate average confidence if individual risks have confidence
             confidences = [
