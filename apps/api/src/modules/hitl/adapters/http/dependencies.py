@@ -59,7 +59,7 @@ def get_confidence_router() -> ConfidenceRouter:
 
 def get_notification_service(
     config_repo: NotificationConfigRepository = Depends(get_notification_config_repository),
-) -> INotificationService:
+) -> NotificationRouter:
     settings = get_settings()
 
     email_svc = None

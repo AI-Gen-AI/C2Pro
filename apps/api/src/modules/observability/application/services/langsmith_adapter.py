@@ -3,6 +3,7 @@ I12 Observability LangSmith Adapter Service
 Test Suite IDs: TS-I12-OBS-APP-001, TS-I12-OBS-APP-004, TS-I12-OBS-ADP-001
 """
 
+from typing import Any
 from uuid import UUID
 
 from src.modules.observability.domain.entities import EvalMetricResult
@@ -23,7 +24,7 @@ class LangSmithAdapter(ILangSmithGateway):
     def __init__(self, langsmith_client: LangSmithClientSDKProtocol):
         self.client = langsmith_client
 
-    def _sanitize_payload(self, payload: dict | None) -> dict:
+    def _sanitize_payload(self, payload: dict[str, Any] | None) -> dict[str, Any]:
         if not payload:
             return {}
         sanitized = self._sanitize_value(payload)
@@ -31,7 +32,7 @@ class LangSmithAdapter(ILangSmithGateway):
 
     def _sanitize_value(self, value: object) -> object:
         if isinstance(value, dict):
-            sanitized: dict = {}
+            sanitized: dict[str, Any] = {}
             for key, item in value.items():
                 if isinstance(key, str) and key.lower() in _REDACTED_KEYS:
                     sanitized[key] = "[REDACTED]"
@@ -48,9 +49,9 @@ class LangSmithAdapter(ILangSmithGateway):
         self,
         name: str,
         run_type: str,
-        inputs: dict,
+        inputs: dict[str, Any],
         parent_run_id: UUID | None = None,
-        metadata: dict | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> LangSmithRunProtocol:
         safe_inputs = self._sanitize_payload(inputs)
         safe_metadata = self._sanitize_payload(metadata)
@@ -66,9 +67,9 @@ class LangSmithAdapter(ILangSmithGateway):
         self,
         name: str,
         run_type: str,
-        inputs: dict,
+        inputs: dict[str, Any],
         parent_run_id: UUID | None,
-        metadata: dict,
+        metadata: dict[str, Any],
     ) -> LangSmithRunProtocol:
         return self.client.create_run(
             name=name,
@@ -81,9 +82,9 @@ class LangSmithAdapter(ILangSmithGateway):
     async def end_run(
         self,
         run: LangSmithRunProtocol,
-        outputs: dict | None = None,
-        error: dict | None = None,
-        **kwargs,
+        outputs: dict[str, Any] | None = None,
+        error: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> None:
         run.end(outputs=outputs, error=error, **kwargs)
 

@@ -7,7 +7,7 @@ Refers to Suite ID: TS-I13-E2E-REAL-001.
 from __future__ import annotations
 
 import base64
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -73,23 +73,23 @@ def _get_runtime_port(request: Request, state_key: str) -> Any:
 
 
 def get_ingestion_service(request: Request) -> IngestionPort:
-    return _get_runtime_port(request, "decision_ingestion_service")
+    return cast(IngestionPort, _get_runtime_port(request, "decision_ingestion_service"))
 
 
 def get_extraction_service(request: Request) -> ExtractionPort:
-    return _get_runtime_port(request, "decision_extraction_service")
+    return cast(ExtractionPort, _get_runtime_port(request, "decision_extraction_service"))
 
 
 def get_retrieval_service(request: Request) -> RetrievalPort:
-    return _get_runtime_port(request, "decision_retrieval_service")
+    return cast(RetrievalPort, _get_runtime_port(request, "decision_retrieval_service"))
 
 
 def get_coherence_scoring_service(request: Request) -> CoherenceScoringPort:
-    return _get_runtime_port(request, "decision_coherence_scoring_service")
+    return cast(CoherenceScoringPort, _get_runtime_port(request, "decision_coherence_scoring_service"))
 
 
 def get_hitl_service(request: Request) -> HITLPort:
-    return _get_runtime_port(request, "decision_hitl_service")
+    return cast(HITLPort, _get_runtime_port(request, "decision_hitl_service"))
 
 
 def get_decision_orchestration_service(

@@ -153,7 +153,8 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         orm.confidence = item.confidence
         orm.impact_level = item.impact_level
         orm.approved_by = item.approved_by
-        orm.approved_at = self._normalize_naive_utc(item.approved_at)
+        approved_at_value = self._normalize_naive_utc(item.approved_at)
+        orm.approved_at = approved_at_value
         orm.item_data = item.item_data
         orm.review_metadata = metadata  # Store remaining metadata
         # TASK-BCK-024: Update checkpoint tracking fields
@@ -169,11 +170,11 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
             orm.review_type = review_type
         if review_decision is not None:
             orm.review_decision = review_decision
-        orm.updated_at = self._normalize_naive_utc(datetime.now(UTC))
+        orm.updated_at = datetime.now(UTC).replace(tzinfo=None)
         await self.session.flush()
 
     async def get_overdue_items(self) -> list[ReviewItem]:
-        now = self._normalize_naive_utc(datetime.now(UTC))
+        now: datetime = datetime.now(UTC).replace(tzinfo=None)
         stmt = select(ReviewItemORM).where(
             ReviewItemORM.sla_due_date < now,
             ReviewItemORM.current_status.in_(

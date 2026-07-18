@@ -4,7 +4,7 @@ Test Suite IDs: TS-I12-OBS-PORT-001, TS-I12-OBS-APP-001, TS-I12-OBS-APP-004
 """
 
 from datetime import datetime
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from src.modules.observability.domain.entities import EvalMetricResult
@@ -15,13 +15,13 @@ class LangSmithRunProtocol(Protocol):
     parent_run_id: UUID | None
     name: str
     run_type: str
-    inputs: dict | None
-    outputs: dict | None
-    error: dict | None
+    inputs: dict[str, Any] | None
+    outputs: dict[str, Any] | None
+    error: dict[str, Any] | None
     end_time: datetime | None
-    extra_attrs: dict
+    extra_attrs: dict[str, Any]
 
-    def end(self, outputs: dict | None = None, error: dict | None = None, **kwargs) -> None:
+    def end(self, outputs: dict[str, Any] | None = None, error: dict[str, Any] | None = None, **kwargs: Any) -> None:
         ...
 
 
@@ -30,13 +30,13 @@ class LangSmithClientSDKProtocol(Protocol):
         self,
         name: str,
         run_type: str,
-        inputs: dict,
+        inputs: dict[str, Any],
         parent_run_id: UUID | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> LangSmithRunProtocol:
         ...
 
-    def update_run(self, run: LangSmithRunProtocol, **kwargs) -> None:
+    def update_run(self, run: LangSmithRunProtocol | UUID, **kwargs: Any) -> None:
         ...
 
     def get_dataset_eval_metrics(self, dataset_name: str) -> object:
@@ -48,18 +48,18 @@ class ILangSmithGateway(Protocol):
         self,
         name: str,
         run_type: str,
-        inputs: dict,
+        inputs: dict[str, Any],
         parent_run_id: UUID | None = None,
-        metadata: dict | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> LangSmithRunProtocol:
         ...
 
     async def end_run(
         self,
         run: LangSmithRunProtocol,
-        outputs: dict | None = None,
-        error: dict | None = None,
-        **kwargs,
+        outputs: dict[str, Any] | None = None,
+        error: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> None:
         ...
 

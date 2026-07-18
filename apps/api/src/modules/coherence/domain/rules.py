@@ -6,7 +6,7 @@ Test Suite ID: TS-I6-COH-RULES-001
 from datetime import date, timedelta
 from typing import Protocol
 
-from src.modules.coherence.domain.entities import CoherenceAlert, RuleInput
+from src.modules.coherence.domain.entities import CoherenceAlert, CoherenceAlertEvidence, RuleInput
 
 
 class CoherenceRuleProtocol(Protocol):
@@ -38,11 +38,13 @@ class ScheduleMismatchRule:
                 type="Schedule Mismatch",
                 severity="Critical",
                 message=f"Project delayed by {delay_days} days against contract schedule.",
-                evidence={
-                    "scheduled_end": project_end.isoformat(),
-                    "actual_end": actual_end.isoformat(),
-                    "delay_days": delay_days,
-                },
+                evidence=CoherenceAlertEvidence.model_validate(
+                    {
+                        "scheduled_end": project_end.isoformat(),
+                        "actual_end": actual_end.isoformat(),
+                        "delay_days": delay_days,
+                    }
+                ),
                 triggered_by_rule=self.name,
                 doc_id=rule_input.doc_id,
             )
@@ -69,7 +71,9 @@ class BudgetMismatchRule:
                 type="Budget Mismatch",
                 severity="High",
                 message=f"Budget exceeded by {overage}.",
-                evidence={"allocated": allocated, "actual_spend": actual_spend, "overage": overage},
+                evidence=CoherenceAlertEvidence.model_validate(
+                    {"allocated": allocated, "actual_spend": actual_spend, "overage": overage}
+                ),
                 triggered_by_rule=self.name,
                 doc_id=rule_input.doc_id,
             )
@@ -97,11 +101,13 @@ class ScopeProcurementMismatchRule:
                 type="Scope-Procurement Mismatch",
                 severity="Medium",
                 message=f"Missing procurement for scope items: {', '.join(missing)}.",
-                evidence={
-                    "required_items": sorted(required_items),
-                    "procured_items": sorted(procured_items),
-                    "missing_items": missing,
-                },
+                evidence=CoherenceAlertEvidence.model_validate(
+                    {
+                        "required_items": sorted(required_items),
+                        "procured_items": sorted(procured_items),
+                        "missing_items": missing,
+                    }
+                ),
                 triggered_by_rule=self.name,
                 doc_id=rule_input.doc_id,
             )

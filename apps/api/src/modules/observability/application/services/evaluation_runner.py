@@ -91,8 +91,8 @@ class ICoherenceEvaluator(Protocol):
         self,
         clause_text: str,
         clause_type: str | None = None,
-        additional_clauses: list[dict] | None = None,
-        project_context: dict | None = None,
+        additional_clauses: list[dict[str, Any]] | None = None,
+        project_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Analyze a clause for coherence issues."""
         ...
@@ -165,7 +165,7 @@ class EvaluationRunner:
             raise ValueError("Coherence evaluator not configured")
 
         started_at = datetime.now()
-        results = {
+        results: dict[str, Any] = {
             "total": 0,
             "passed": 0,
             "failed": 0,
@@ -313,7 +313,7 @@ class EvaluationRunner:
             raise ValueError("Extraction evaluator not configured")
 
         started_at = datetime.now()
-        results = {
+        results: dict[str, Any] = {
             "total": 0,
             "passed": 0,
             "failed": 0,
@@ -460,7 +460,7 @@ class EvaluationRunner:
             raise ValueError("Retrieval evaluator not configured")
 
         started_at = datetime.now()
-        results = {
+        results: dict[str, Any] = {
             "total": 0,
             "passed": 0,
             "failed": 0,
@@ -578,8 +578,8 @@ class EvaluationRunner:
         config: EvalRunConfig,
         example_id: str,
         passed: bool,
-        expected: dict,
-        actual: dict,
+        expected: dict[str, Any],
+        actual: dict[str, Any],
     ) -> None:
         """Log evaluation result to LangSmith."""
         if not self.langsmith_adapter:
@@ -605,7 +605,7 @@ class EvaluationRunner:
             pass  # Non-critical, don't fail the evaluation
 
 
-def load_dataset_from_file(file_path: Path) -> tuple[list[dict], list[dict] | None]:
+def load_dataset_from_file(file_path: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]] | None]:
     """
     Load evaluation dataset from local JSON file.
 

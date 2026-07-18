@@ -6,6 +6,7 @@ Part of TASK-BCK-025: Add real notification delivery beyond log-only.
 from __future__ import annotations
 
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator, model_validator
 
@@ -99,7 +100,7 @@ class NotificationConfigResponse(BaseModel):
     )
 
     @classmethod
-    def from_config(cls, config: dict) -> NotificationConfigResponse:
+    def from_config(cls, config: dict[str, Any]) -> NotificationConfigResponse:
         """Create response from internal config dict with sensitive data masking."""
         # Mask sensitive data in response
         webhook_auth_token = config.get("webhook_auth_token")

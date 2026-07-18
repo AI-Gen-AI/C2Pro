@@ -165,6 +165,8 @@ class WebhookNotificationService:
 
     def _compute_signature(self, payload: dict[str, Any]) -> str:
         """Compute HMAC-SHA256 signature for payload verification."""
+        if self.signing_secret is None:
+            raise ValueError("signing_secret is required to compute a webhook signature")
         payload_bytes = json.dumps(payload, sort_keys=True).encode("utf-8")
         signature = hmac.new(
             self.signing_secret.encode("utf-8"), payload_bytes, hashlib.sha256

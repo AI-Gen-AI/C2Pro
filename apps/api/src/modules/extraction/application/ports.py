@@ -32,7 +32,7 @@ class LangSmithClientProtocol(Protocol):
     """Protocol for LangSmith client interface."""
 
     def start_span(
-        self, name: str, input: Any = None, run_type: str = "tool", **kwargs
+        self, name: str, input: Any = None, run_type: str = "tool", **kwargs: Any
     ) -> Any:
         """Start a new span for tracing."""
         ...

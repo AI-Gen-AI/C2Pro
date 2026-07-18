@@ -68,7 +68,7 @@ class QueryRouter:
         "together with",
     ]
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the query router with pattern matching rules."""
         logger.info("query_router_initialized")
 

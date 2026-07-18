@@ -10,9 +10,13 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import structlog
+
+if TYPE_CHECKING:
+    from src.modules.hitl.adapters.checkpoint_service import CheckpointService
 
 from src.core.observability.monitoring import (
     record_hitl_checkpoint_load_error,
@@ -72,9 +76,9 @@ class ResumeWorkflowUseCase:
     def __init__(
         self,
         review_queue_repo: IReviewQueueRepository,
-        checkpoint_service=None,
-        graph_app=None,
-    ):
+        checkpoint_service: CheckpointService | None = None,
+        graph_app: Any = None,
+    ) -> None:
         """
         Initialize use case with dependencies.
 
@@ -87,25 +91,27 @@ class ResumeWorkflowUseCase:
         self._checkpoint_service = checkpoint_service
         self._graph_app = graph_app
 
-    def _get_checkpoint_service(self):
+    def _get_checkpoint_service(self) -> CheckpointService:
         """Get or create checkpoint service lazily."""
         if self._checkpoint_service is None:
             from src.analysis.adapters.graph.workflow import get_graph_app
             from src.modules.hitl.adapters.checkpoint_service import CheckpointService
 
-            graph_app = get_graph_app()
+            _gga: Any = get_graph_app
+            graph_app = _gga()
             checkpointer = getattr(graph_app, "checkpointer", None)
             if checkpointer is None:
                 raise RuntimeError("Graph app has no checkpointer configured")
             self._checkpoint_service = CheckpointService(checkpointer)
         return self._checkpoint_service
 
-    def _get_graph_app(self):
+    def _get_graph_app(self) -> Any:
         """Get graph app lazily."""
         if self._graph_app is None:
             from src.analysis.adapters.graph.workflow import get_graph_app
 
-            self._graph_app = get_graph_app()
+            _gga: Any = get_graph_app
+            self._graph_app = _gga()
         return self._graph_app
 
     async def execute(
