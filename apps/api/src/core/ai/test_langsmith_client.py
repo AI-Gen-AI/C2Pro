@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import os
+from typing import cast
 from uuid import UUID
+
+import pytest
+from langsmith import Client as NativeLangSmithClient
 
 from src.core.ai.langsmith_client import LangSmithClient
 
 
-def test_langsmith_client_disabled_without_api_key(monkeypatch):
+def test_langsmith_client_disabled_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """TS-AI-LANGSMITH-001: Client disables tracing when API key is absent."""
     monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
 
@@ -17,7 +21,7 @@ def test_langsmith_client_disabled_without_api_key(monkeypatch):
     assert client.enabled is False
 
 
-def test_langsmith_client_builds_metadata_tags(monkeypatch):
+def test_langsmith_client_builds_metadata_tags(monkeypatch: pytest.MonkeyPatch) -> None:
     """TS-AI-LANGSMITH-001: Tags and metadata always include tenant/task context."""
     monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
 
@@ -35,21 +39,21 @@ def test_langsmith_client_builds_metadata_tags(monkeypatch):
     assert metadata["environment"] == os.getenv("ENVIRONMENT", "development")
 
 
-def test_langsmith_client_start_span_supplies_default_inputs(monkeypatch):
+def test_langsmith_client_start_span_supplies_default_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
     """TS-AI-LANGSMITH-001: LangSmith span creation satisfies current SDK contract."""
 
     class _FakeNativeClient:
         def __init__(self) -> None:
             self.calls: list[dict[str, object]] = []
 
-        def create_run(self, **kwargs):
+        def create_run(self, **kwargs: object) -> None:
             self.calls.append(kwargs)
             return None
 
     monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
     client = LangSmithClient(project_name="c2pro-test", enabled=True)
     fake_native_client = _FakeNativeClient()
-    client._client = fake_native_client
+    client._client = cast(NativeLangSmithClient, fake_native_client)
 
     span = client.start_span(name="coherence_node:prepare_context", run_type="chain")
 
@@ -66,18 +70,19 @@ def test_langsmith_client_start_span_supplies_default_inputs(monkeypatch):
     }]
 
 
-def test_langsmith_client_start_span_fails_open_on_api_error(monkeypatch):
+def test_langsmith_client_start_span_fails_open_on_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """TS-AI-LANGSMITH-001: LangSmith API failures must not block application responses."""
 
     class _FailingNativeClient:
         def create_run(
             self,
-            **kwargs,  # noqa: ARG002 - required by the native client method signature
-        ):
+            **kwargs: object,
+        ) -> None:
+            _ = kwargs
             raise RuntimeError("403 Forbidden")
 
     monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
     client = LangSmithClient(project_name="c2pro-test", enabled=True)
-    client._client = _FailingNativeClient()
+    client._client = cast(NativeLangSmithClient, _FailingNativeClient())
 
     assert client.start_span(name="rag_answer", run_type="llm") is None

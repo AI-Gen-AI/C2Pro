@@ -14,21 +14,20 @@ Usage:
 
 import asyncio
 import time
+from uuid import uuid4
 
 from src.core.ai.model_router import TaskType
 from src.core.ai.prompt_cache import build_prompt_hash, get_prompt_cache_service
 from src.core.ai.service import AIRequest, AIService
 
 
-async def example_basic_cache():
+async def example_basic_cache() -> None:
     """Ejemplo básico de cache hit/miss."""
     print("=" * 60)
     print("EJEMPLO 1: Cache Hit/Miss Básico")
     print("=" * 60)
 
     # Simular tenant ID
-    from uuid import uuid4
-
     tenant_id = uuid4()
 
     # Crear servicio de AI
@@ -88,7 +87,7 @@ async def example_basic_cache():
         print("   (En producción, el cache funcionaría correctamente)")
 
 
-async def example_hash_stability():
+async def example_hash_stability() -> None:
     """Ejemplo de estabilidad del hash SHA-256."""
     print("\n" + "=" * 60)
     print("EJEMPLO 2: Estabilidad del Hash SHA-256")
@@ -125,13 +124,11 @@ async def example_hash_stability():
     print("   - Cualquier cambio → hash diferente → cache MISS")
 
 
-async def example_cache_control():
+async def example_cache_control() -> None:
     """Ejemplo de control manual del cache."""
     print("\n" + "=" * 60)
     print("EJEMPLO 3: Control Manual del Cache")
     print("=" * 60)
-
-    from uuid import uuid4
 
     service = AIService(tenant_id=uuid4())
 
@@ -159,7 +156,7 @@ async def example_cache_control():
         print(f"⚠️  Demo sin API key: {e}")
 
 
-async def example_cache_stats():
+async def example_cache_stats() -> None:
     """Ejemplo de estadísticas del cache."""
     print("\n" + "=" * 60)
     print("EJEMPLO 4: Estadísticas del Cache")
@@ -180,7 +177,7 @@ async def example_cache_stats():
     print("   - Compatible con Prometheus/Grafana")
 
 
-async def main():
+async def main() -> None:
     """Ejecuta todos los ejemplos."""
     print("\n🚀 C2Pro - Prompt Cache Examples\n")
 
