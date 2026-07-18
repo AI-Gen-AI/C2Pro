@@ -16,6 +16,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database import Base
+from src.core.json_types import JsonDict
 
 
 def _utcnow_naive() -> datetime:
@@ -70,7 +71,21 @@ class ProjectORM(Base):
 
     # Project metadata (flexible JSON storage)
     # Note: Column is named 'metadata_json' to avoid conflict with SQLAlchemy's reserved 'metadata' attribute
-    metadata_json: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True, default=dict)
+    metadata_json: Mapped[JsonDict | None] = mapped_column(
+        "metadata",
+        JSONB,
+        nullable=True,
+        default=dict,
+    )
+
+    @property
+    def project_metadata(self) -> JsonDict:
+        """Backward-compatible alias for the persisted metadata payload."""
+        return self.metadata_json or {}
+
+    @project_metadata.setter
+    def project_metadata(self, value: JsonDict) -> None:
+        self.metadata_json = value
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow_naive)
