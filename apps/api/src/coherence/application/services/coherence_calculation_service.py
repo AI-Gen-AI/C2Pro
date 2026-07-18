@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import warnings
 from datetime import UTC, datetime
-from typing import Protocol, Any
+from typing import Any, Protocol
 from uuid import UUID
 
 from src.coherence.application.dtos import (

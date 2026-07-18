@@ -44,7 +44,7 @@ class GlobalScoreCalculator:
         self,
         subscores: Subscores,
         weights: WeightConfig | None = None,
-        normalize_weights: bool = True     
+        normalize_weights: bool = True
     ) -> dict[ScoreScopeEnum, float]:
         effective_weights = weights or self.DEFAULT_WEIGHTS
         relevant_weights = {

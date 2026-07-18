@@ -9,7 +9,7 @@ Refers to Suite ID: TS-UA-COH-V2-ADAPT-001.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, cast, Literal
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from src.coherence.application.dtos.coherence_v2_dtos import (

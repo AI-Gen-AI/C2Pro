@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, TypeGuard
 
 from ..models import Clause, FindingSignal, impact_to_severity
 from .base import ApplicabilityState, Finding, RuleEvaluator
@@ -1171,7 +1171,6 @@ def get_all_deterministic_evaluators(
         ScheduleVsBomDeliveryEvaluator(),
         ScopeVsBudgetCoverageEvaluator(),
     ]
-from typing import Any, TypeGuard
 
 # ═══════════════════════════════════════════════════════════════
 #  HELPERS

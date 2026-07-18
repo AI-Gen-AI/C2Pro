@@ -5,7 +5,6 @@ TS-I6-COH-SVC-001: Coherence alert generator.
 from __future__ import annotations
 
 from typing import Any
-
 from uuid import UUID
 
 from src.analysis.application.dtos import AlertCreate
