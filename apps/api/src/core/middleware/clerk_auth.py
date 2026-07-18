@@ -14,7 +14,7 @@ CRITICAL FOR SECURITY:
 import contextlib
 from collections.abc import Awaitable, Callable
 from functools import lru_cache
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, TypeAlias, cast
 from uuid import UUID
 
 import httpx
@@ -32,6 +32,11 @@ from src.core.resilience import CircuitBreaker, CircuitBreakerConfig, CircuitBre
 from src.core.resilience.config import get_circuit_breaker_settings
 
 logger = structlog.get_logger()
+
+if TYPE_CHECKING:
+    RequestType: TypeAlias = Request[Any]
+else:
+    RequestType = Request
 
 # Initialize circuit breaker for Clerk JWKS fetch
 _clerk_circuit_breaker = None
@@ -244,7 +249,7 @@ class ClerkUser:
         return bool(self.tenant_id)
 
 
-async def extract_clerk_claims(request: Request[Any]) -> dict[str, Any]:
+async def extract_clerk_claims(request: RequestType) -> dict[str, Any]:
     """
     Extract Clerk JWT from request and verify it.
 
@@ -361,7 +366,7 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
     ]
 
     async def dispatch(
-        self, request: Request[Any], call_next: Callable[[Request[Any]], Awaitable[Response]]
+        self, request: RequestType, call_next: Callable[[RequestType], Awaitable[Response]]
     ) -> Response:
         # Allow public paths
         if self._is_public_path(request.url.path):

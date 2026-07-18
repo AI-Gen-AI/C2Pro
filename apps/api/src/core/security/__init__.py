@@ -8,7 +8,7 @@ Utilidades de seguridad: validacion de JWT, obtencion de usuario actual, etc.
 
 from __future__ import annotations
 
-from typing import Annotated, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, TypeAlias, cast
 from uuid import UUID
 
 import structlog
@@ -26,11 +26,16 @@ from src.core.tenants.types import TenantId
 
 logger = structlog.get_logger()
 
+if TYPE_CHECKING:
+    RequestType: TypeAlias = Request[Any]
+else:
+    RequestType = Request
+
 # HTTP Bearer scheme para OpenAPI docs
 security_scheme = HTTPBearer(auto_error=False)
 
 
-async def get_current_tenant_id(request: Request[Any]) -> UUID:
+async def get_current_tenant_id(request: RequestType) -> UUID:
     """
     Obtiene el tenant_id del contexto de la request.
 
@@ -44,7 +49,7 @@ async def get_current_tenant_id(request: Request[Any]) -> UUID:
     return cast(UUID, tenant_id)
 
 
-async def get_current_user_id(request: Request[Any]) -> UUID:
+async def get_current_user_id(request: RequestType) -> UUID:
     """
     Obtiene el user_id del contexto de la request.
     """
@@ -57,14 +62,14 @@ async def get_current_user_id(request: Request[Any]) -> UUID:
 
 
 async def get_current_user_id_with_bearer(
-    request: Request[Any],
+    request: RequestType,
     _credentials: HTTPAuthorizationCredentials | None = Depends(security_scheme),
 ) -> UUID:
     """Same as get_current_user_id, but exposes HTTP Bearer in OpenAPI/Swagger."""
     return await get_current_user_id(request)
 
 
-async def get_optional_user_id(request: Request[Any]) -> UUID | None:
+async def get_optional_user_id(request: RequestType) -> UUID | None:
     """
     Obtiene el user_id si existe, None si no esta autenticado.
     """
@@ -109,7 +114,7 @@ class Permissions:
 
 
 async def validate_api_key(
-    request: Request[Any],
+    request: RequestType,
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
 ) -> str | None:
     """

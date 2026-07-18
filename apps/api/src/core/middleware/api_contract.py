@@ -7,12 +7,17 @@ con los contratos establecidos (headers, formatos, etc.)
 
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.config import settings
+
+if TYPE_CHECKING:
+    RequestType: TypeAlias = Request[Any]
+else:
+    RequestType = Request
 
 
 class APIContractMiddleware(BaseHTTPMiddleware):
@@ -25,7 +30,7 @@ class APIContractMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(
-        self, request: Request[Any], call_next: Callable[[Request[Any]], Awaitable[Response]]
+        self, request: RequestType, call_next: Callable[[RequestType], Awaitable[Response]]
     ) -> Response:
         # Record start time
         start_time = time.perf_counter()
