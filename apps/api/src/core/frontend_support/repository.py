@@ -6,6 +6,7 @@ Refers to TASK-REV-020.
 """
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -44,7 +45,7 @@ class CookieConsentRepository:
         tenant_id: UUID,
         user_id: str,
         version: str,
-        categories: dict,
+        categories: dict[str, Any],
     ) -> CookieConsentORM:
         """Create a new consent record."""
         consent = CookieConsentORM(
@@ -62,7 +63,7 @@ class CookieConsentRepository:
         tenant_id: UUID,
         user_id: str,
         version: str,
-        categories: dict,
+        categories: dict[str, Any],
     ) -> CookieConsentORM | None:
         """Update an existing consent record."""
         consent = await self.get_consent(tenant_id, user_id, version)
@@ -76,7 +77,7 @@ class CookieConsentRepository:
         tenant_id: UUID,
         user_id: str,
         version: str,
-        categories: dict,
+        categories: dict[str, Any],
     ) -> CookieConsentORM:
         """Create or update a consent record."""
         existing = await self.get_consent(tenant_id, user_id, version)

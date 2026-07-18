@@ -48,7 +48,7 @@ DOCUMENT_PARSING_QUEUE = "document_parsing"
     summary="Liveness Probe",
     description="Checks if the application process is running. This should not have external dependencies."
 )
-async def liveness_check():
+async def liveness_check() -> dict[str, str]:
     """
     Checks if the application process is running (liveness).
 
@@ -69,7 +69,7 @@ async def liveness_check():
     tags=["Public"],
     description="Checks if the application is ready to accept traffic by verifying connections to dependencies."
 )
-async def readiness_check():
+async def readiness_check() -> dict[str, Any]:
     """
     Checks if the application is ready to handle requests.
 
@@ -180,7 +180,7 @@ def _get_circuit_breaker_summary() -> dict[str, dict[str, Any]]:
     summary="Circuit Breaker Status",
     description="Detailed status of all circuit breakers for external services."
 )
-async def circuit_breaker_status():
+async def circuit_breaker_status() -> dict[str, Any]:
     """
     Get detailed status of all circuit breakers.
 
@@ -209,7 +209,7 @@ async def circuit_breaker_status():
     summary="Generic Health Check",
     description="Simple uptime check. Returns {status: ok} for basic monitoring."
 )
-async def generic_health_check():
+async def generic_health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 

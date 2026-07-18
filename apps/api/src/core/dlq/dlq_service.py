@@ -5,7 +5,7 @@ Part of TASK-BCK-022: Wire TriggerDocumentAnalysisUseCase to Celery ingestion co
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -72,7 +72,7 @@ class DLQService:
             await session.commit()
             await session.refresh(dlq_record)
 
-            return dlq_record.id
+            return cast(UUID, dlq_record.id)
 
     async def increment_retry(self, dlq_id: UUID) -> None:
         """
@@ -98,7 +98,7 @@ class DLQService:
             if dlq_record is None:
                 raise ValueError(f"DLQ record {dlq_id} not found")
 
-            tenant_id = dlq_record.tenant_id
+            tenant_id = cast(UUID, dlq_record.tenant_id)
 
         # Now use tenant-scoped session for update
         async with get_session_with_tenant(tenant_id) as session:
@@ -109,18 +109,18 @@ class DLQService:
             dlq_record = result.scalar_one()
 
             # Increment retry count
-            new_retry_count = dlq_record.retry_count + 1
+            new_retry_count: int = int(dlq_record.retry_count) + 1
             now = datetime.now(UTC)
 
             # Determine new status and next_retry_at
-            if new_retry_count >= dlq_record.max_retries:
+            if new_retry_count >= int(dlq_record.max_retries):
                 # Exhausted after max retries
-                new_status = "exhausted"
-                next_retry_at = None
+                new_status: str = "exhausted"
+                next_retry_at: datetime | None = None
             else:
                 # Still have retries left - calculate exponential backoff
                 new_status = "retrying"
-                backoff_minutes = 2 ** new_retry_count
+                backoff_minutes: int = 2 ** new_retry_count
                 next_retry_at = now + timedelta(minutes=backoff_minutes)
 
             # Update record
