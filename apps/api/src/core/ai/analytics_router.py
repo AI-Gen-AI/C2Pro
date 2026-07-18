@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.ai.analytics_service import AIAnalyticsService
 from src.core.cache import cached
 from src.core.database import get_session
+from src.core.json_types import JsonDict
 from src.core.security import CurrentTenantId
 
 router = APIRouter(prefix="/ai/analytics", tags=["AI Analytics"])
@@ -23,7 +24,7 @@ async def get_cost_analytics(
     tenant_id: CurrentTenantId,
     timeframe: str = Query(default="7d", examples=["24h", "7d", "30d"]),
     service: AIAnalyticsService = Depends(get_analytics_service),
-) -> dict:
+) -> JsonDict:
     try:
         return await service.cost_breakdown(tenant_id=tenant_id, timeframe=timeframe)
     except ValueError as exc:
@@ -36,7 +37,7 @@ async def get_version_analytics(
     tenant_id: CurrentTenantId,
     timeframe: str = Query(default="30d", examples=["7d", "30d", "90d"]),
     service: AIAnalyticsService = Depends(get_analytics_service),
-) -> dict:
+) -> JsonDict:
     try:
         return await service.version_performance(tenant_id=tenant_id, timeframe=timeframe)
     except ValueError as exc:
@@ -51,7 +52,7 @@ async def compare_prompt_versions(
     candidate_version: str = Query(min_length=1),
     timeframe: str = Query(default="30d", examples=["7d", "30d", "90d"]),
     service: AIAnalyticsService = Depends(get_analytics_service),
-) -> dict:
+) -> JsonDict:
     try:
         return await service.compare_versions(
             tenant_id=tenant_id,
@@ -69,7 +70,7 @@ async def get_quality_drift(
     tenant_id: CurrentTenantId,
     timeframe: str = Query(default="30d", examples=["7d", "30d", "90d"]),
     service: AIAnalyticsService = Depends(get_analytics_service),
-) -> dict:
+) -> JsonDict:
     try:
         return await service.quality_drift(tenant_id=tenant_id, timeframe=timeframe)
     except ValueError as exc:

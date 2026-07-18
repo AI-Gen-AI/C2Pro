@@ -8,9 +8,8 @@ Version: 1.0.0
 Sprint: P2-02
 """
 
-from typing import Any
-
 from src.core.ai.prompts.registry import PromptRegistry, PromptTemplate
+from src.core.json_types import JsonDict
 
 # ===========================================
 # SYSTEM PROMPTS
@@ -294,7 +293,7 @@ Verifica:
 # ===========================================
 
 
-def format_clauses_block(clauses: list[dict]) -> str:
+def format_clauses_block(clauses: list[JsonDict]) -> str:
     """Formatea un bloque de cláusulas para el prompt."""
     blocks = []
     for i, clause in enumerate(clauses, 1):
@@ -309,7 +308,7 @@ def format_clauses_block(clauses: list[dict]) -> str:
     return "\n".join(blocks)
 
 
-def format_rules_block(rules: list[dict]) -> str:
+def format_rules_block(rules: list[JsonDict]) -> str:
     """Formatea un bloque de reglas para el prompt."""
     blocks = []
     for rule in rules:
@@ -350,7 +349,7 @@ def build_rule_verification_prompt(
     detection_logic: str,
     clause_id: str,
     clause_text: str,
-    clause_data: dict[str, Any] | None = None,
+    clause_data: JsonDict | None = None,
 ) -> str:
     """Construye prompt para verificación de regla."""
     import json
@@ -371,7 +370,7 @@ def build_rule_verification_prompt(
     )
 
 
-def build_cross_clause_prompt(clauses: list[dict]) -> str:
+def build_cross_clause_prompt(clauses: list[JsonDict]) -> str:
     """Construye prompt para análisis cruzado de cláusulas."""
     clauses_block = format_clauses_block(clauses)
     return CROSS_CLAUSE_ANALYSIS_TEMPLATE.format(clauses_block=clauses_block)
@@ -387,72 +386,66 @@ def register_coherence_prompts(registry: PromptRegistry) -> None:
     # Clause analysis
     registry.register(
         PromptTemplate(
-            name="coherence_clause_analysis",
+            task_name="coherence_clause_analysis",
             version="1.0",
             system_prompt=COHERENCE_ANALYST_SYSTEM,
             user_prompt_template=CLAUSE_ANALYSIS_TEMPLATE,
             description="Analiza una cláusula individual buscando problemas de coherencia",
-            task_type="coherence_analysis",
         )
     )
 
     # Rule verification
     registry.register(
         PromptTemplate(
-            name="coherence_rule_verification",
+            task_name="coherence_rule_verification",
             version="1.0",
             system_prompt=RULE_CHECKER_SYSTEM,
             user_prompt_template=RULE_VERIFICATION_TEMPLATE,
             description="Verifica si una cláusula viola una regla de coherencia",
-            task_type="coherence_check",
         )
     )
 
     # Cross-clause analysis
     registry.register(
         PromptTemplate(
-            name="coherence_cross_clause",
+            task_name="coherence_cross_clause",
             version="1.0",
             system_prompt=COHERENCE_ANALYST_SYSTEM,
             user_prompt_template=CROSS_CLAUSE_ANALYSIS_TEMPLATE,
             description="Analiza coherencia entre múltiples cláusulas",
-            task_type="coherence_analysis",
         )
     )
 
     # Project coherence
     registry.register(
         PromptTemplate(
-            name="coherence_project_analysis",
+            task_name="coherence_project_analysis",
             version="1.0",
             system_prompt=COHERENCE_ANALYST_SYSTEM,
             user_prompt_template=PROJECT_COHERENCE_TEMPLATE,
             description="Análisis completo de coherencia de un proyecto",
-            task_type="coherence_analysis",
         )
     )
 
     # Budget analysis
     registry.register(
         PromptTemplate(
-            name="coherence_budget_analysis",
+            task_name="coherence_budget_analysis",
             version="1.0",
             system_prompt=COHERENCE_ANALYST_SYSTEM,
             user_prompt_template=BUDGET_ANALYSIS_TEMPLATE,
             description="Análisis de coherencia de cláusulas financieras",
-            task_type="coherence_analysis",
         )
     )
 
     # Schedule analysis
     registry.register(
         PromptTemplate(
-            name="coherence_schedule_analysis",
+            task_name="coherence_schedule_analysis",
             version="1.0",
             system_prompt=COHERENCE_ANALYST_SYSTEM,
             user_prompt_template=SCHEDULE_ANALYSIS_TEMPLATE,
             description="Análisis de coherencia de cláusulas de cronograma",
-            task_type="coherence_analysis",
         )
     )
 

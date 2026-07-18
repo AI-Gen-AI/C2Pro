@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import structlog
@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.cache import CacheService
+from src.core.json_types import JsonDict
 
 logger = structlog.get_logger()
 
@@ -34,16 +35,16 @@ class AIAnalyticsService:
     def _cache_key(*, tenant_id: UUID, metric: str, timeframe: str, scope: str = "default") -> str:
         return f"analytics:{tenant_id}:{metric}:{timeframe}:{scope}"
 
-    async def _get_cached(self, key: str) -> Any | None:
+    async def _get_cached(self, key: str) -> JsonDict | None:
         if self._cache is None:
             return None
         try:
-            return await self._cache.get(key)
+            return cast(JsonDict | None, await self._cache.get(key))
         except Exception as exc:
             logger.warning("analytics_cache_get_failed", cache_key=key, error=str(exc))
             return None
 
-    async def _set_cached(self, key: str, payload: Any, ttl_seconds: int) -> None:
+    async def _set_cached(self, key: str, payload: JsonDict, ttl_seconds: int) -> None:
         if self._cache is None:
             return
         try:
@@ -60,7 +61,7 @@ class AIAnalyticsService:
             for metric in metrics:
                 await self._cache.delete(self._cache_key(tenant_id=tenant_id, metric=metric, timeframe=timeframe))
 
-    async def cost_breakdown(self, *, tenant_id: UUID, timeframe: str) -> dict[str, Any]:
+    async def cost_breakdown(self, *, tenant_id: UUID, timeframe: str) -> JsonDict:
         key = self._cache_key(tenant_id=tenant_id, metric="cost", timeframe=timeframe)
         if cached := await self._get_cached(key):
             return cached
@@ -124,7 +125,7 @@ class AIAnalyticsService:
         await self._set_cached(key, payload, ttl_seconds=15 * 60)
         return payload
 
-    async def version_performance(self, *, tenant_id: UUID, timeframe: str) -> dict[str, Any]:
+    async def version_performance(self, *, tenant_id: UUID, timeframe: str) -> JsonDict:
         key = self._cache_key(tenant_id=tenant_id, metric="versions", timeframe=timeframe)
         if cached := await self._get_cached(key):
             return cached
@@ -178,7 +179,7 @@ class AIAnalyticsService:
         timeframe: str,
         baseline_version: str,
         candidate_version: str,
-    ) -> dict[str, Any]:
+    ) -> JsonDict:
         compare_scope = hashlib.sha1(f"{baseline_version}:{candidate_version}".encode()).hexdigest()[:12]
         key = self._cache_key(
             tenant_id=tenant_id,
@@ -255,7 +256,7 @@ class AIAnalyticsService:
         await self._set_cached(key, payload, ttl_seconds=30 * 60)
         return payload
 
-    async def quality_drift(self, *, tenant_id: UUID, timeframe: str) -> dict[str, Any]:
+    async def quality_drift(self, *, tenant_id: UUID, timeframe: str) -> JsonDict:
         key = self._cache_key(tenant_id=tenant_id, metric="quality-drift", timeframe=timeframe)
         if cached := await self._get_cached(key):
             return cached
