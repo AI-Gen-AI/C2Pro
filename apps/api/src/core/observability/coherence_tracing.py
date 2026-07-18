@@ -23,7 +23,7 @@ def _validate_attributes(attributes: dict[str, Any]) -> None:
 
 def traced_coherence_node(
     node_name: str,
-) -> Callable:
+) -> Callable[..., Any]:
     """
     A decorator that wraps a Coherence graph node function to create a LangSmith span.
 
@@ -31,7 +31,7 @@ def traced_coherence_node(
     and records the span. This decorator works for both sync and async functions.
     """
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             langsmith_client = get_client()

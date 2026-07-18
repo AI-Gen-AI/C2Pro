@@ -26,11 +26,12 @@ Date: 2026-01-13
 
 import traceback
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from fastapi import HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -81,7 +82,7 @@ def _create_error_response(
     return error_response
 
 
-def _transform_pydantic_errors(errors: list[dict[str, Any]]) -> dict[str, str]:
+def _transform_pydantic_errors(errors: Sequence[Any]) -> dict[str, str]:
     """
     Transforma errores de Pydantic en un diccionario campo -> mensaje.
 
@@ -361,7 +362,7 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
     # Mensaje para el usuario (genérico en producción)
     if settings.is_production:
         user_message = "An internal error occurred. Please contact support with the reference ID."
-        details = {
+        details: dict[str, Any] = {
             "reference_id": error_reference_id,
             "support_email": "support@c2pro.app",
         }
@@ -400,7 +401,7 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
 # ===========================================
 
 
-def register_exception_handlers(app) -> None:
+def register_exception_handlers(app: FastAPI) -> None:
     """
     Registra todos los exception handlers en la aplicación FastAPI.
 
@@ -417,13 +418,13 @@ def register_exception_handlers(app) -> None:
         register_exception_handlers(app)
     """
     # Handler para excepciones personalizadas de C2Pro
-    app.add_exception_handler(C2ProException, c2pro_exception_handler)
+    app.add_exception_handler(C2ProException, c2pro_exception_handler)  # type: ignore[arg-type, unused-ignore]
 
     # Handler para HTTPException de FastAPI
-    app.add_exception_handler(HTTPException, http_exception_handler)
+    app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type, unused-ignore]
 
     # Handler para errores de validación de Pydantic
-    app.add_exception_handler(RequestValidationError, request_validation_error_handler)
+    app.add_exception_handler(RequestValidationError, request_validation_error_handler)  # type: ignore[arg-type, unused-ignore]
 
     # Handler para excepciones genéricas (catch-all)
     app.add_exception_handler(Exception, general_exception_handler)
