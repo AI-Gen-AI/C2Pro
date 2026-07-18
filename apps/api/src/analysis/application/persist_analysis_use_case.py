@@ -58,7 +58,7 @@ class PersistAnalysisUseCase:
         self._session = session
 
     async def execute(self, command: PersistAnalysisCommand) -> PersistAnalysisResult:
-        from src.analysis.adapters.persistence.models import Alert, Analysis
+        from src.analysis.ports.types import AlertWrite, AnalysisWrite
         from src.coherence.alert_generator import AlertGenerator
         from src.procurement.adapters.persistence.models import WBSItemORM
 
@@ -68,7 +68,7 @@ class PersistAnalysisUseCase:
         analysis_id = uuid4()
 
         completed_at = datetime.now(UTC).replace(tzinfo=None)
-        analysis = Analysis(
+        analysis = AnalysisWrite(
             id=analysis_id,
             tenant_id=command.tenant_id,
             project_id=command.project_id,
@@ -93,7 +93,7 @@ class PersistAnalysisUseCase:
             )
             alert_dtos = generator.generate_risk_alerts(command.extracted_risks)
             alerts = [
-                Alert(
+                AlertWrite(
                     tenant_id=command.tenant_id,
                     project_id=dto.project_id,
                     analysis_id=dto.analysis_id,

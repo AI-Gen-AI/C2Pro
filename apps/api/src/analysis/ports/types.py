@@ -3,12 +3,57 @@ Protocol types for Analysis ports.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from src.analysis.domain.enums import AlertSeverity, AlertStatus, AnalysisStatus, AnalysisType
+from src.analysis.domain.enums import (
+    AlertSeverity,
+    AlertStatus,
+    AlertType,
+    AnalysisStatus,
+    AnalysisType,
+)
 from src.core.json_types import JsonDict, JsonValue
+
+
+@dataclass(frozen=True)
+class AnalysisWrite:
+    """Tenant-owned analysis data accepted by the persistence port."""
+
+    id: UUID
+    tenant_id: UUID
+    project_id: UUID
+    analysis_type: AnalysisType
+    status: AnalysisStatus
+    result_json: JsonDict
+    coherence_score: int | float | None
+    coherence_breakdown: JsonDict
+    alerts_count: int
+    completed_at: datetime
+
+
+@dataclass(frozen=True)
+class AlertWrite:
+    """Tenant-owned alert data accepted by the persistence port."""
+
+    tenant_id: UUID
+    project_id: UUID
+    analysis_id: UUID | None
+    alert_type: AlertType
+    severity: AlertSeverity
+    title: str
+    message: str
+    description: str
+    category: str | None
+    impact_level: str | None
+    alert_metadata: JsonDict
+    rule_id: str | None
+    source_clause_id: UUID | None
+    related_clause_ids: list[UUID] | None
+    affected_entities: JsonDict
+    recommendation: str | None
 
 
 class AlertRecord(Protocol):
