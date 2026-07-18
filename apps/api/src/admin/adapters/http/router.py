@@ -55,7 +55,8 @@ class DLQServiceAdminAdapter:
                 .limit(limit)
                 .offset(offset)
             )
-            return cast(list[DLQEntryView], list(result.scalars().all()))
+            entries = list(result.scalars().all())
+            return [cast(DLQEntryView, entry) for entry in entries]
 
     async def count_by_status(self, status: str) -> int:
         """Return the total number of DLQ entries for the given status."""

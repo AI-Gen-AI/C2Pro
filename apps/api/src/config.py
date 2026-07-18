@@ -28,6 +28,10 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
     )
 
+    def __init__(self, **values: Any) -> None:
+        """Initialize settings through Pydantic's configured environment sources."""
+        super().__init__(**values)
+
     # ===========================================
     # GENERAL
     # ===========================================

@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 from uuid import UUID
 
 
@@ -29,7 +30,7 @@ class WBSItemDTO:
     start_date: date
     end_date: date
     parent_id: UUID | None = None
-    specifications: dict | None = None
+    specifications: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if not 1 <= self.level <= 4:
