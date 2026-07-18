@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.coherence.category_registry import (
     CanonicalCategory,
@@ -94,7 +94,7 @@ class RouteResult:
         t = self._thresholds.insufficient_evidence
         return [cat for cat, rel in self.category_relevance.items() if rel <= t]
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "doc_type": self.doc_type,
             "category_relevance": {cat.value: rel for cat, rel in self.category_relevance.items()},
@@ -137,7 +137,7 @@ class CategoryRouter:
 
         # Pre-extract structural signals and lexicon for each category
         self._cat_structural: dict[CanonicalCategory, list[str]] = {}
-        self._cat_patterns: dict[CanonicalCategory, list[re.Pattern]] = {}
+        self._cat_patterns: dict[CanonicalCategory, list[re.Pattern[str]]] = {}
         self._cat_lexicon: dict[CanonicalCategory, dict[str, list[str]]] = {}
 
         for cat in CanonicalCategory:

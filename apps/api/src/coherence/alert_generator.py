@@ -4,6 +4,7 @@ TS-I6-COH-SVC-001: Coherence alert generator.
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from src.analysis.application.dtos import AlertCreate
@@ -177,11 +178,13 @@ class AlertGenerator:
                         "grouped": False,
                         "group_size": 1,
                     },
+                    recommendation=None,
+                    impact_level=None,
                 )
             )
         return alerts
 
-    def generate_risk_alerts(self, risk_items: list[dict]) -> list[AlertCreate]:
+    def generate_risk_alerts(self, risk_items: list[dict[str, Any]]) -> list[AlertCreate]:
         """
         Generate risk alerts from AI extraction (TASK-BCK-026).
 
@@ -216,12 +219,16 @@ class AlertGenerator:
                         "confidence": confidence,
                         "raw": item,
                     },
+                                    recommendation=None,
+                    rule_id=None,
+                    source_clause_id=None,
+                    related_clause_ids=None,
                 )
             )
 
         return alerts
 
-    def _map_risk_severity(self, risk_item: dict) -> AlertSeverity:
+    def _map_risk_severity(self, risk_item: dict[str, Any]) -> AlertSeverity:
         """
         Map risk impact_level to AlertSeverity.
 
@@ -242,14 +249,14 @@ class AlertGenerator:
 
         return severity_mapping.get(impact_level, AlertSeverity.LOW)
 
-    def _should_group(self, rule_id: str, items: list[dict]) -> bool:
+    def _should_group(self, rule_id: str, items: list[dict[str, Any]]) -> bool:
         return rule_id in SUMMARY_TEMPLATES and len(items) > 1
 
     def _build_summary_alert(
         self,
         rule_id: str,
-        evidence: dict,
-        items: list[dict],
+        evidence: dict[str, Any],
+        items: list[dict[str, Any]],
     ) -> AlertCreate:
         summary_evidence = dict(evidence)
         group_size = len(items)
@@ -279,9 +286,11 @@ class AlertGenerator:
                 "grouped": True,
                 "group_size": group_size,
             },
+            recommendation=None,
+            impact_level=None,
         )
 
-    def _expand_evidence_items(self, rule_id: str, evidence: dict) -> list[dict]:
+    def _expand_evidence_items(self, rule_id: str, evidence: dict[str, Any]) -> list[dict[str, Any]]:
         if rule_id == "R12":
             return [self._merge_evidence(evidence, item) for item in evidence.get("violations", [])]
         if rule_id == "R14":
@@ -298,7 +307,7 @@ class AlertGenerator:
             ]
         return [evidence]
 
-    def _merge_evidence(self, base: dict, item: dict) -> dict:
+    def _merge_evidence(self, base: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
         merged = dict(base)
         merged.update(item)
         return merged
@@ -306,7 +315,7 @@ class AlertGenerator:
     def _render_message(
         self,
         rule_id: str,
-        evidence: dict,
+        evidence: dict[str, Any],
         *,
         grouped: bool,
         item_count: int,
@@ -326,7 +335,7 @@ class AlertGenerator:
     def _title_for(self, rule_id: str) -> str:
         return RULE_TITLES.get(rule_id, f"Alerta {rule_id}")
 
-    def _severity_for(self, rule_id: str, evidence: dict) -> AlertSeverity:
+    def _severity_for(self, rule_id: str, evidence: dict[str, Any]) -> AlertSeverity:
         severity = str(evidence.get("severity", "")).lower()
         if severity:
             for candidate in AlertSeverity:
@@ -375,7 +384,7 @@ class AlertGenerator:
         canonical = normalize_category(raw)
         return canonical.value if canonical is not None else None
 
-    def _source_clause_id(self, evidence: dict) -> UUID | None:
+    def _source_clause_id(self, evidence: dict[str, Any]) -> UUID | None:
         clause_id = evidence.get("source_clause_id")
         if clause_id:
             try:
@@ -384,7 +393,7 @@ class AlertGenerator:
                 return None
         return None
 
-    def _related_clause_ids(self, evidence: dict) -> list[UUID] | None:
+    def _related_clause_ids(self, evidence: dict[str, Any]) -> list[UUID] | None:
         clause_ids = evidence.get("related_clause_ids")
         if not clause_ids:
             return None
@@ -396,7 +405,7 @@ class AlertGenerator:
                 continue
         return result or None
 
-    def _affected_entities(self, rule_id: str, evidence: dict) -> dict:
+    def _affected_entities(self, rule_id: str, evidence: dict[str, Any]) -> dict[str, Any]:
         entities: dict[str, list[str]] = {}
         if rule_id == "R12":
             ids = []
@@ -414,7 +423,7 @@ class AlertGenerator:
             entities["task_names"] = [str(evidence["task_name"])]
         return entities
 
-    def _summary_source_clause_id(self, items: list[dict]) -> UUID | None:
+    def _summary_source_clause_id(self, items: list[dict[str, Any]]) -> UUID | None:
         source_clause_ids = {
             parsed
             for item in items
@@ -424,7 +433,7 @@ class AlertGenerator:
             return next(iter(source_clause_ids))
         return None
 
-    def _summary_related_clause_ids(self, items: list[dict]) -> list[UUID] | None:
+    def _summary_related_clause_ids(self, items: list[dict[str, Any]]) -> list[UUID] | None:
         related: list[UUID] = []
         for item in items:
             parsed = self._related_clause_ids(item)
@@ -434,7 +443,7 @@ class AlertGenerator:
             return None
         return list(dict.fromkeys(related))
 
-    def _summary_affected_entities(self, rule_id: str, items: list[dict]) -> dict:
+    def _summary_affected_entities(self, rule_id: str, items: list[dict[str, Any]]) -> dict[str, Any]:
         merged: dict[str, list[str]] = {}
         for item in items:
             entities = self._affected_entities(rule_id, item)
@@ -443,7 +452,7 @@ class AlertGenerator:
                 merged[key].extend(values)
         return {key: list(dict.fromkeys(values)) for key, values in merged.items()}
 
-    def _summary_examples(self, rule_id: str, evidence: dict) -> str:
+    def _summary_examples(self, rule_id: str, evidence: dict[str, Any]) -> str:
         sample_items = evidence.get("sample_items") or []
         if rule_id == "R12":
             labels = [

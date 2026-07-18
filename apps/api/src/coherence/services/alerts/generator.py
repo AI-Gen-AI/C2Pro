@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Iterable
 from datetime import UTC, datetime
+from typing import Any
+from uuid import UUID
 
 from src.analysis.application.dtos import AlertCreate
 from src.analysis.ports.alert_repository import AlertRepository
@@ -18,7 +20,7 @@ class AlertGeneratorService:
 
     async def process_violations(
         self,
-        project_id,
+        project_id: UUID,
         violations: list[AlertCreate],
         *,
         auto_resolve: bool = True,
@@ -69,10 +71,10 @@ class AlertGeneratorService:
 
     async def process_rule_results(
         self,
-        project_id,
+        project_id: UUID,
         rule_results: Iterable[CoherenceRuleResult],
         *,
-        analysis_id=None,
+        analysis_id: UUID | None = None,
         auto_resolve: bool = True,
     ) -> list[AlertRecord]:
         generator = AlertGenerator(project_id=project_id, analysis_id=analysis_id)
@@ -85,7 +87,7 @@ class AlertGeneratorService:
             auto_resolve=auto_resolve,
         )
 
-    async def _load_existing(self, project_id) -> list[AlertRecord]:
+    async def _load_existing(self, project_id: UUID) -> list[AlertRecord]:
         items: list[AlertRecord] = []
         cursor = None
         while True:
@@ -101,7 +103,7 @@ class AlertGeneratorService:
         return items
 
     async def _create_alert(
-        self, project_id, violation: AlertCreate, fingerprint: str
+        self, project_id: UUID, violation: AlertCreate, fingerprint: str
     ) -> AlertRecord:
         metadata = self._build_metadata(violation, fingerprint)
         payload = violation.model_copy(update={"alert_metadata": metadata, "project_id": project_id})
@@ -130,7 +132,7 @@ class AlertGeneratorService:
         )
         self._update_alert(alert, violation, fingerprint)
 
-    def _build_metadata(self, violation: AlertCreate, fingerprint: str) -> dict:
+    def _build_metadata(self, violation: AlertCreate, fingerprint: str) -> dict[str, Any]:
         metadata = dict(violation.alert_metadata or {})
         metadata["fingerprint"] = fingerprint
         metadata["requires_human_review"] = self._requires_human_review(violation)
@@ -153,7 +155,7 @@ class AlertGeneratorService:
         base = f"{rule_id}_" + "_".join(entities) if entities else rule_id
         return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
-    def _flatten_entities(self, payload: dict) -> list[str]:
+    def _flatten_entities(self, payload: dict[str, Any]) -> list[str]:
         if not payload:
             return []
         collected: list[str] = []

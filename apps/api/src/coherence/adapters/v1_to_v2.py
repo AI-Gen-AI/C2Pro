@@ -9,7 +9,7 @@ Refers to Suite ID: TS-UA-COH-V2-ADAPT-001.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from src.coherence.application.dtos.coherence_v2_dtos import (
@@ -49,7 +49,7 @@ def adapt_v1_dashboard(
         return CoherenceV2Payload(
             project_id=project_id,
             generated_at=generated_at,
-            **{
+            **cast(dict[str, Any], {
                 "global": GlobalV2(
                     coherence_score=None,
                     completeness_score=0.0,
@@ -58,7 +58,7 @@ def adapt_v1_dashboard(
                     score_reason="insufficient_active_weight" if sub_scores else "no_v1_data",
                     active_weight=0.0,
                 )
-            },
+            }),
             categories=categories,
         )
 
@@ -105,7 +105,7 @@ def adapt_v1_dashboard(
         return CoherenceV2Payload(
             project_id=project_id,
             generated_at=generated_at,
-            **{
+            **cast(dict[str, Any], {
                 "global": GlobalV2(
                     coherence_score=None,
                     completeness_score=0.0,
@@ -114,7 +114,7 @@ def adapt_v1_dashboard(
                     score_reason="insufficient_active_weight",
                     active_weight=round(active_weight, 4),
                 )
-            },
+            }),
             categories=categories,
         )
 
@@ -129,16 +129,16 @@ def adapt_v1_dashboard(
     return CoherenceV2Payload(
         project_id=project_id,
         generated_at=generated_at,
-        **{
+        **cast(dict[str, Any], {
             "global": GlobalV2(
                 coherence_score=computed_score,
                 completeness_score=1.0,
                 technical_reliability_index=1.0,
-                status=status,
+                status=cast(Literal["scored", "partial", "insufficient_active_weight", "pending_documents"], status),
                 score_reason="scored_categories_only",
                 active_weight=round(active_weight, 4),
             )
-        },
+        }),
         categories=categories,
     )
 

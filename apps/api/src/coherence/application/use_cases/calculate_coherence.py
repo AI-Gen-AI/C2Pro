@@ -9,6 +9,7 @@ Refers to Suite ID: TS-UA-COH-UC-001.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from uuid import UUID
 
 from src.coherence.application.dtos import (
     CalculateCoherenceCommand,
@@ -159,7 +160,7 @@ class CalculateCoherenceUseCase:
 
         return WeightConfig(weights=scope_weights)
 
-    def _build_gaming_events(self, project_id) -> list[AlertEvent]:  # noqa: ARG002
+    def _build_gaming_events(self, project_id: UUID) -> list[AlertEvent]:  # noqa: ARG002
         """Build gaming events for anti-gaming detection."""
         # In real implementation, this would fetch from event store
         # For now, return empty list

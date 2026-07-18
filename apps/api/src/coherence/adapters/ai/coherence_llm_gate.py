@@ -27,7 +27,7 @@ PROMPT_VERSION = "p3-v3"
 ESTIMATED_HAIKU_COST_USD = 0.0008  # conservative per-call estimate for budget pre-check
 
 
-def _next_month_first():
+def _next_month_first() -> datetime.date:
     """First of next calendar month — matches cost_controller's monthly reset boundary."""
     today = datetime.date.today()
     if today.month == 12:
