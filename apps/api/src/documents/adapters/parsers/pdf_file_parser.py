@@ -10,23 +10,23 @@ using PyMuPDF (Fitz), with OCR fallback for scanned documents using Tesseract.
 import io
 from pathlib import Path
 from typing import Any
-from typing import Any as _Any
 
 import fitz  # PyMuPDF
 import structlog
 
 logger = structlog.get_logger()
 
-# OCR imports - optional, will be None if not available
-_pytesseract: _Any = None
-_PILImage_module: _Any = None
+# OCR imports - optional, will be None if not available. `pytesseract` and
+# `Image` stay public module attributes: tests patch pdf_file_parser.Image.
+pytesseract: Any = None
+Image: Any = None
 OCR_AVAILABLE = False
 
 try:
     import pytesseract as _pytesseract_imported
     from PIL import Image as _PILImage_imported
-    _pytesseract = _pytesseract_imported
-    _PILImage_module = _PILImage_imported
+    pytesseract = _pytesseract_imported
+    Image = _PILImage_imported
     OCR_AVAILABLE = True
 except ImportError:
     logger.warning("ocr_not_available", message="pytesseract/Pillow not installed, OCR disabled")
@@ -140,7 +140,7 @@ class PDFFileParser:
         """Apply OCR to a PDF page to extract text from images."""
         if not OCR_AVAILABLE:
             return None
-        if _pytesseract is None:
+        if pytesseract is None:
             return None
 
         try:
@@ -150,10 +150,10 @@ class PDFFileParser:
 
             # Convert to PIL Image
             img_data = pix.tobytes("png")
-            image = _PILImage_module.open(io.BytesIO(img_data))
+            image = Image.open(io.BytesIO(img_data))
 
             # Run OCR
-            ocr_text: str = _pytesseract.image_to_string(image, lang=self.ocr_language)
+            ocr_text: str = pytesseract.image_to_string(image, lang=self.ocr_language)
 
             # Clean up
             ocr_text = ocr_text.strip()
