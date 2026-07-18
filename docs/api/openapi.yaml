@@ -451,7 +451,8 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
+                additionalProperties:
+                  type: string
                 type: object
                 title: Response Health Check Api V1 Projects Health Get
   /api/v1/projects/stats:

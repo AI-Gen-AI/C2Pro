@@ -9,13 +9,15 @@ import asyncio
 from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypedDict
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import case, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from src.analysis.adapters.persistence.models import Alert
 from src.analysis.domain.enums import AlertSeverity, AlertStatus
@@ -23,11 +25,13 @@ from src.bulk_operations.store import register_job
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session_with_tenant
+from src.core.json_types import JsonDict
 from src.core.tenants.types import require_tenant_id
 from src.procurement.adapters.persistence.budget_repository import SQLAlchemyBudgetRepository
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.application.budget_use_cases import GetBudgetUseCase
 from src.procurement.application.use_cases import GetWBSTreeUseCase, ListWBSItemsUseCase
+from src.procurement.domain.models import WBSItem
 from src.projects.adapters.persistence.models import ProjectORM
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -37,6 +41,25 @@ PROJECT_METADATA_VERSION_KEY = "version"
 PROJECT_METADATA_LOCATION_KEY = "location"
 PROJECT_METADATA_CLIENT_NAME_KEY = "client_name"
 PROJECT_METADATA_BUDGET_PLANNED_KEY = "budget_planned"
+
+
+class ProjectPayload(TypedDict):
+    """Internal project representation used to construct API responses."""
+
+    id: UUID
+    tenant_id: UUID
+    name: str
+    code: str | None
+    description: str | None
+    project_type: str
+    status: str
+    coherence_score: float | None
+    location: str | None
+    client_name: str | None
+    budget_planned: float | None
+    estimated_budget: float | None
+    currency: str
+    version: int
 
 
 class ProjectResponse(BaseModel):
@@ -126,7 +149,7 @@ class ProjectUpdateRequest(BaseModel):
     expected_version: int | None = None
 
 
-def _project_to_response(project_data: dict) -> ProjectResponse:
+def _project_to_response(project_data: ProjectPayload) -> ProjectResponse:
     """Normalize internal project dict into API contract."""
     return ProjectResponse(
         id=project_data["id"],
@@ -146,12 +169,12 @@ def _project_to_response(project_data: dict) -> ProjectResponse:
     )
 
 
-def _extract_project_metadata(project: ProjectORM) -> dict:
+def _extract_project_metadata(project: ProjectORM) -> JsonDict:
     metadata = project.metadata_json or {}
     return metadata if isinstance(metadata, dict) else {}
 
 
-def _project_orm_to_dict(project: ProjectORM) -> dict:
+def _project_orm_to_dict(project: ProjectORM) -> ProjectPayload:
     metadata = _extract_project_metadata(project)
     version = metadata.get(PROJECT_METADATA_VERSION_KEY, 1)
     return {
@@ -172,7 +195,7 @@ def _project_orm_to_dict(project: ProjectORM) -> dict:
     }
 
 
-def _severity_rank_expression():
+def _severity_rank_expression() -> ColumnElement[int]:
     return case(
         (Alert.severity == AlertSeverity.CRITICAL, 0),
         (Alert.severity == AlertSeverity.HIGH, 1),
@@ -237,7 +260,7 @@ def _build_project_quick_view_summary(
     )
 
 
-def _apply_project_update(project: ProjectORM, updates: dict) -> None:
+def _apply_project_update(project: ProjectORM, updates: JsonDict) -> None:
     metadata = dict(_extract_project_metadata(project))
     for field in (
         "name",
@@ -262,7 +285,11 @@ def _apply_project_update(project: ProjectORM, updates: dict) -> None:
     project.metadata_json = metadata
 
 
-async def _get_project_for_tenant(session, project_id: UUID, tenant_id: UUID) -> ProjectORM | None:
+async def _get_project_for_tenant(
+    session: AsyncSession,
+    project_id: UUID,
+    tenant_id: UUID,
+) -> ProjectORM | None:
     result = await session.execute(
         select(ProjectORM).where(
             ProjectORM.id == project_id,
@@ -279,7 +306,9 @@ def _not_implemented_subresource(detail: str) -> HTTPException:
     )
 
 
-def _build_bulk_job_payload(*, total_items: int, status_value: str = "processing") -> dict:
+def _build_bulk_job_payload(
+    *, total_items: int, status_value: str = "processing"
+) -> dict[str, object]:
     return {
         "status": status_value,
         "percentage": 0 if total_items else 100,
@@ -289,8 +318,10 @@ def _build_bulk_job_payload(*, total_items: int, status_value: str = "processing
     }
 
 
-def _validate_wbs_items(items: Sequence[object]) -> tuple[list[object], list[dict[str, object]]]:
-    valid_items: list[object] = []
+def _validate_wbs_items(
+    items: Sequence["BulkWBSItem"],
+) -> tuple[list["BulkWBSItem"], list[dict[str, object]]]:
+    valid_items: list[BulkWBSItem] = []
     errors: list[dict[str, object]] = []
 
     for index, item in enumerate(items):
@@ -318,7 +349,7 @@ def _validate_wbs_items(items: Sequence[object]) -> tuple[list[object], list[dic
 
 
 @router.get("/health", summary="Projects Service Health Check")
-async def health_check() -> dict:
+async def health_check() -> dict[str, str]:
     """Health check endpoint (no authentication required)."""
     return {"status": "ok", "service": "projects"}
 
@@ -326,7 +357,7 @@ async def health_check() -> dict:
 @router.get("/stats", summary="Project statistics")
 async def get_project_stats(
     current_user: Annotated[User, Depends(get_current_user)],
-) -> dict:
+) -> dict[str, object]:
     """Return aggregate project statistics for current tenant."""
     async with get_session_with_tenant(current_user.tenant_id) as session:
         result = await session.execute(
@@ -1065,7 +1096,7 @@ async def get_project_budget(
     }
 
 
-def _serialize_wbs_item_tree(item) -> dict[str, object]:
+def _serialize_wbs_item_tree(item: WBSItem) -> dict[str, object]:
     """TS-E2E-FLW-BLK-001: serialize procurement WBS domain rows as a hierarchy."""
     return {
         "id": str(item.id),

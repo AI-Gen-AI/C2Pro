@@ -47,7 +47,7 @@ class Project:
     end_date: datetime | None
 
     # Analysis results are part of the project's state
-    coherence_score: int | None
+    coherence_score: float | None
     last_analysis_at: datetime | None
 
     # Timestamps
@@ -77,7 +77,7 @@ class Project:
         """
         return "contract" in self._document_types
 
-    def update_document_list(self, document_types: list[str]):
+    def update_document_list(self, document_types: list[str]) -> None:
         """A method to update the internal state used by business rules."""
         self._document_types = document_types
 
