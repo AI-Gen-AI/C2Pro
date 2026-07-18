@@ -117,6 +117,16 @@ class TestBudgetAPI:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
+    async def test_budget_hides_missing_project_as_not_found(self, client, get_auth_headers):
+        """TS-I9-PROC-BUDGET-001: unknown projects return the same 404 as foreign projects."""
+        response = await client.get(
+            f"{API_PREFIX}/{uuid4()}/budget",
+            headers=get_auth_headers(),
+        )
+
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
     async def test_budget_total_calculation_is_correct(
         self, client, db, test_project, get_auth_headers
     ):
