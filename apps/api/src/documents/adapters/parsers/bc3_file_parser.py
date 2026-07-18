@@ -22,15 +22,15 @@ except ImportError:
         pass
 
     class MockFiebdc:
-        def __init__(self, file_path):
+        def __init__(self, file_path: Path) -> None:
             self.file_path = file_path
             self.is_valid_bc3 = self._check_validity(file_path)
 
-        def _check_validity(self, file_path):
+        def _check_validity(self, file_path: Path) -> bool:
             # Simulate basic validity check
             return file_path.name.endswith(".bc3") and file_path.exists()
 
-        def parse(self):
+        def parse(self) -> dict[str, Any]:
             if not self.is_valid_bc3:
                 raise MockInvalidFileException(
                     f"Invalid or non-existent BC3 file: {self.file_path}"
@@ -97,7 +97,7 @@ class BC3FileParser:
 
         try:
             fiebdc = pyfiebdc.Fiebdc(file_path)
-            parsed_data = fiebdc.parse()
+            parsed_data: dict[str, Any] = fiebdc.parse()
             return parsed_data
         except InvalidFileException as e:
             raise BC3ParsingError(f"Invalid BC3 file format: {e}")
