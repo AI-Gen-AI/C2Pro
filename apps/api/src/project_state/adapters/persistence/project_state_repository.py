@@ -8,6 +8,7 @@ Enforced by tests/unit/project_state/test_no_commit_in_repository.py.
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 import structlog
@@ -24,6 +25,7 @@ from src.project_state.domain.entities import (
     Clause,
     Obligation,
     ProjectBudgetItem,
+    ProjectEntity,
     ProjectRisk,
     ProjectWbsActivity,
     RaciCell,
@@ -34,7 +36,7 @@ from src.project_state.ports.project_state_repository import ProjectStateReposit
 
 logger = structlog.get_logger()
 
-_ENTITY_TYPE_MAP: dict[type, str] = {
+_ENTITY_TYPE_MAP: dict[type[ProjectEntity], str] = {
     Clause: "clause",
     Obligation: "obligation",
     ProjectRisk: "risk",
@@ -44,7 +46,7 @@ _ENTITY_TYPE_MAP: dict[type, str] = {
     RaciCell: "raci_cell",
 }
 
-_ENTITY_CLASS_MAP: dict[str, type] = {v: k for k, v in _ENTITY_TYPE_MAP.items()}
+_ENTITY_CLASS_MAP: dict[str, type[ProjectEntity]] = {v: k for k, v in _ENTITY_TYPE_MAP.items()}
 
 _ENTITY_TYPE_TO_COLLECTION: dict[str, str] = {
     "clause": "clauses",
@@ -90,7 +92,7 @@ class SqlAlchemyProjectStateRepository(ProjectStateRepository):
 
         entity_orms: list[ProjectStateEntityORM] = []
         for collection_name, entity_cls in _ENTITY_COLLECTIONS:
-            entities: list = getattr(state, collection_name)
+            entities: list[ProjectEntity] = getattr(state, collection_name)
             discriminator = _ENTITY_TYPE_MAP[entity_cls]
             for entity in entities:
                 payload_dict = entity.model_dump(mode="json")
@@ -114,7 +116,7 @@ class SqlAlchemyProjectStateRepository(ProjectStateRepository):
     ) -> ProjectState:
         state_orm, entity_orms = orm_data
 
-        collection_buckets: dict[str, list] = {
+        collection_buckets: dict[str, list[Any]] = {
             "clauses": [],
             "obligations": [],
             "risks": [],
@@ -158,14 +160,14 @@ class SqlAlchemyProjectStateRepository(ProjectStateRepository):
         if state_orm is None:
             return None
 
-        result = await self._session.execute(
+        entities_result = await self._session.execute(
             select(ProjectStateEntityORM).where(
                 ProjectStateEntityORM.project_id == project_id,
                 ProjectStateEntityORM.tenant_id == tenant_id,
                 ProjectStateEntityORM.lifecycle_status == "active",
             )
         )
-        entity_orms: list[ProjectStateEntityORM] = list(result.scalars().all())
+        entity_orms: list[ProjectStateEntityORM] = list(entities_result.scalars().all())
 
         return self._from_orm_rows((state_orm, entity_orms))
 

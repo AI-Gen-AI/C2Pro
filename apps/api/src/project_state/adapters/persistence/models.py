@@ -25,6 +25,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database import Base
+from src.core.json_types import JsonDict
 
 
 class ProjectStateORM(Base):
@@ -84,7 +85,7 @@ class ProjectStateEntityORM(Base):
     extraction_run_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), nullable=True, index=True
     )
-    payload: Mapped[dict] = mapped_column(
+    payload: Mapped[JsonDict] = mapped_column(
         JSONB, nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(

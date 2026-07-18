@@ -9,10 +9,11 @@ project-level aggregate.
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from src.analysis.domain.contracts import BudgetItem, RiskItem, WbsActivity
 from src.project_state.domain.aggregate import ProjectState
@@ -31,11 +32,11 @@ logger = structlog.get_logger()
 
 
 def _parse_entities(
-    raw_items: list,
-    entity_class: type,
+    raw_items: list[Any],
+    entity_class: type[BaseModel],
     extraction_run_id: UUID | None,
-) -> list:
-    entities: list = []
+) -> list[Any]:
+    entities: list[Any] = []
     for item in raw_items:
         if not isinstance(item, dict):
             logger.warning(
@@ -59,12 +60,12 @@ def _parse_entities(
 
 
 def _parse_payload_entities(
-    raw_items: list,
-    wrapper_class: type,
-    payload_class: type,
+    raw_items: list[Any],
+    wrapper_class: type[BaseModel],
+    payload_class: type[BaseModel],
     extraction_run_id: UUID | None,
-) -> list:
-    entities: list = []
+) -> list[Any]:
+    entities: list[Any] = []
     for item in raw_items:
         if not isinstance(item, dict):
             logger.warning(
@@ -95,7 +96,7 @@ def _parse_payload_entities(
 def map_pipeline_output_to_project_state(
     project_id: UUID,
     tenant_id: UUID,
-    pipeline_state: dict,
+    pipeline_state: dict[str, Any],
     extraction_run_id: UUID | None = None,
 ) -> ProjectState:
     return ProjectState(

@@ -1,6 +1,7 @@
 """Base classes and data structures for evaluators."""
 
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -17,7 +18,7 @@ class EvaluationResult:
     passed: bool
     score: float
     failures: list[str] = field(default_factory=list)
-    details: dict | None = None
+    details: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         """Validate score is in valid range."""
@@ -25,7 +26,7 @@ class EvaluationResult:
             raise ValueError(f"Score must be between 0.0 and 1.0, got {self.score}")
 
     @classmethod
-    def success(cls, score: float = 1.0, details: dict | None = None) -> "EvaluationResult":
+    def success(cls, score: float = 1.0, details: dict[str, Any] | None = None) -> "EvaluationResult":
         """Create a successful evaluation result.
 
         Args:
@@ -39,7 +40,7 @@ class EvaluationResult:
 
     @classmethod
     def failure(
-        cls, failures: list[str], score: float = 0.0, details: dict | None = None
+        cls, failures: list[str], score: float = 0.0, details: dict[str, Any] | None = None
     ) -> "EvaluationResult":
         """Create a failed evaluation result.
 

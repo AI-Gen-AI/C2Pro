@@ -19,6 +19,7 @@ Refers to Suite ID: TS-INT-DB-EVI-SHADOW-001.
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +28,7 @@ from src.evidence.adapters.persistence.models import (
     EvidenceClaimORM,
     EvidenceExtractionEventORM,
 )
+from src.evidence.domain.models import EvidenceClaim
 from src.evidence.legal.adapter import AdapterResult
 from src.evidence.ports.evidence_shadow_repository import IEvidenceShadowRepository
 
@@ -89,7 +91,7 @@ class SqlAlchemyEvidenceShadowRepository(IEvidenceShadowRepository):
     # --- Mappers (domain -> ORM) ---
     @staticmethod
     def _claim_to_orm(
-        claim,
+        claim: EvidenceClaim,
         *,
         tenant_id: UUID,
         project_id: UUID,
@@ -128,7 +130,7 @@ class SqlAlchemyEvidenceShadowRepository(IEvidenceShadowRepository):
         dimension: str | None,
         claim_type: str | None,
         reason: str,
-        payload_trace: dict,
+        payload_trace: dict[str, Any],
     ) -> EvidenceExtractionEventORM:
         return EvidenceExtractionEventORM(
             extraction_run_id=extraction_run_id,

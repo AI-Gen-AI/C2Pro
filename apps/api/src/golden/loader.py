@@ -367,12 +367,12 @@ class GoldenDatasetLoader:
         """
         if use_difficulty_dir:
             difficulty_dir = case.difficulty.value.lower()
-            target_dir = self.cases_dir / difficulty_dir
+            target_dir: Path = self.cases_dir / difficulty_dir
             target_dir.mkdir(parents=True, exist_ok=True)
         else:
             target_dir = self.cases_dir
 
-        case_file = target_dir / f"{case.case_id}.json"
+        case_file: Path = target_dir / f"{case.case_id}.json"
         with open(case_file, "w", encoding="utf-8") as f:
             json.dump(case.model_dump(mode="json"), f, indent=2, ensure_ascii=False)
 
