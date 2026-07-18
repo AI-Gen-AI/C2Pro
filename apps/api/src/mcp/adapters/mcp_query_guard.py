@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 from collections.abc import AsyncIterator
-from typing import Any, NamedTuple, Protocol
+from typing import Any, NamedTuple, Protocol, cast
 
 from pydantic import BaseModel, Field
 
@@ -69,10 +69,10 @@ class MCPQueryGuard:
                     timed_out = False
             elif hasattr(raw_result, "__aiter__"):
                 data, truncated, timed_out = await self._collect_from_stream(
-                    raw_result, config.max_execution_time_seconds, config.max_rows_returned
+                    cast(Any, raw_result), config.max_execution_time_seconds, config.max_rows_returned
                 )
             else:
-                data, truncated = self._truncate_rows(list(raw_result), config.max_rows_returned)
+                data, truncated = self._truncate_rows(list(cast(Any, raw_result)), config.max_rows_returned)
                 timed_out = False
         except TimeoutError:
             await self.audit_service.log_query_timeout(
