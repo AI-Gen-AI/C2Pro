@@ -98,7 +98,7 @@ class JwtValidator:
             iat=iat_dt,
         )
 
-    def decode_authorization_header(
+    async def decode_authorization_header(
         self,
         authorization_header: str,
         expected_token_type: str = "access",
@@ -106,4 +106,4 @@ class JwtValidator:
         if not authorization_header.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
         token = authorization_header[7:].strip()
-        return self.decode(token=token, expected_token_type=expected_token_type)
+        return await self.decode(token=token, expected_token_type=expected_token_type)

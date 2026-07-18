@@ -4,6 +4,7 @@ JWT validation domain tests.
 
 from __future__ import annotations
 
+import inspect
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -129,6 +130,20 @@ class TestJwtValidator:
         validator = JwtValidator(public_key_provider=_PublicKeyProvider("test-secret-key"))
         with pytest.raises(HTTPException, match="Invalid authentication credentials"):
             await validator.decode("")
+
+    def test_013_decode_authorization_header_is_declared_async(self) -> None:
+        """BCK-118 regression.
+
+        `decode_authorization_header` delegates entirely to the async
+        `decode()` coroutine but was declared as a plain sync method with
+        return type `JWTClaims`. That let a type-checked caller omit
+        `await` without complaint, silently receiving an un-awaited
+        (always truthy) coroutine object instead of validated claims,
+        bypassing every check (expiry, revocation, missing claims). The
+        method must be declared `async def` so its coroutine nature is
+        honest to both the type checker and the caller.
+        """
+        assert inspect.iscoroutinefunction(JwtValidator.decode_authorization_header)
 
     @staticmethod
     def _build_token(
