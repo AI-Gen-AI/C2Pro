@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, Float, ForeignKey, Index, String, Text
@@ -55,8 +56,8 @@ class ReviewItemORM(Base):
     approved_by: Mapped[str | None] = mapped_column(String(256), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     sla_due_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    item_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-    review_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    item_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    review_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
     # TASK-BCK-024: Checkpoint tracking for LangGraph workflow resumption
     checkpoint_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -100,14 +101,14 @@ class NotificationConfigModel(Base):
     tenant_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), nullable=False, unique=True, index=True
     )
-    notification_channels: Mapped[list] = mapped_column(
+    notification_channels: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list
     )
-    email_recipients: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    email_recipients: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     slack_webhook_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     webhook_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     webhook_auth_token: Mapped[str | None] = mapped_column(Text, nullable=True)
-    custom_headers: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    custom_headers: Mapped[dict[str, str] | None] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utc_now_naive, nullable=False

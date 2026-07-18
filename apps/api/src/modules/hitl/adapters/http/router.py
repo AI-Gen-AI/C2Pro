@@ -423,7 +423,11 @@ async def resume_workflow(
             status=result.status,
         )
 
-        return result
+        return ResumeWorkflowResponse(
+            review_id=result.review_id,
+            status=result.status,
+            message=result.message,
+        )
 
     except ValueError as exc:
         error_msg = str(exc)

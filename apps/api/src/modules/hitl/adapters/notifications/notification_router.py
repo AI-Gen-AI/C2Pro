@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 import structlog
@@ -186,4 +186,4 @@ class NotificationRouter:
         # Cache the result
         self._config_cache[tenant_id] = (config, now)
 
-        return config
+        return cast(dict[str, Any], config)

@@ -4,7 +4,7 @@ Part of TASK-BCK-031: Implement LangGraph checkpoint restoration for HITL resume
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -19,7 +19,7 @@ class CheckpointService:
     checkpoint restoration in HITL workflows.
     """
 
-    def __init__(self, checkpointer):
+    def __init__(self, checkpointer: Any) -> None:
         """
         Initialize checkpoint service with a LangGraph checkpointer.
 
@@ -65,7 +65,7 @@ class CheckpointService:
                 channel_values_keys=list(checkpoint.get("channel_values", {}).keys()),
             )
 
-            return checkpoint
+            return cast(dict[str, Any], checkpoint)
 
         except Exception as e:
             logger.error("checkpoint_load_failed", thread_id=thread_id, error=str(e), exc_info=True)
@@ -99,4 +99,4 @@ class CheckpointService:
             if isinstance(state[first_key], dict):
                 state = state[first_key]
 
-        return state
+        return cast(dict[str, Any], state)

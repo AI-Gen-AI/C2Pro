@@ -12,7 +12,7 @@ from typing import Protocol
 from uuid import UUID
 
 import structlog
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = structlog.get_logger()
 
@@ -31,7 +31,7 @@ class DbRecipientResolver:
     ``None`` so callers can log/fall-back instead of raising.
     """
 
-    def __init__(self, session_factory: async_sessionmaker) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
     async def resolve_email(self, recipient_id: UUID) -> str | None:
