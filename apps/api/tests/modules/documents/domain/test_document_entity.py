@@ -17,6 +17,7 @@ class TestDocumentEntity:
     def test_001_document_creation_minimum_fields(self):
         doc = Document(
             id=uuid4(),
+            tenant_id=uuid4(),
             project_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="contract.pdf",
@@ -31,6 +32,7 @@ class TestDocumentEntity:
         now = datetime.now(UTC)
         doc = Document(
             id=uuid4(),
+            tenant_id=uuid4(),
             project_id=uuid4(),
             document_type=DocumentType.SPECIFICATION,
             filename="specs.docx",
@@ -53,6 +55,7 @@ class TestDocumentEntity:
     def test_003_is_parsed_true_when_status_parsed(self):
         doc = Document(
             id=uuid4(),
+            tenant_id=uuid4(),
             project_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="c.pdf",
@@ -63,6 +66,7 @@ class TestDocumentEntity:
     def test_004_has_error_true_when_status_error(self):
         doc = Document(
             id=uuid4(),
+            tenant_id=uuid4(),
             project_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="c.pdf",
@@ -73,6 +77,7 @@ class TestDocumentEntity:
     def test_005_clause_count_matches_list(self):
         doc = Document(
             id=uuid4(),
+            tenant_id=uuid4(),
             project_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="c.pdf",
@@ -81,6 +86,7 @@ class TestDocumentEntity:
         assert doc.clause_count() == 0
         clause = Clause(
             id=uuid4(),
+            tenant_id=doc.tenant_id,
             project_id=doc.project_id,
             document_id=doc.id,
             clause_code="1",
@@ -94,6 +100,7 @@ class TestDocumentEntity:
     def test_006_add_clause_rejects_wrong_document(self):
         doc = Document(
             id=uuid4(),
+            tenant_id=uuid4(),
             project_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="c.pdf",
@@ -101,6 +108,7 @@ class TestDocumentEntity:
         )
         clause = Clause(
             id=uuid4(),
+            tenant_id=uuid4(),
             project_id=doc.project_id,
             document_id=uuid4(),
             clause_code="1",
@@ -114,6 +122,7 @@ class TestDocumentEntity:
     def test_007_transition_uploaded_to_queued(self):
         doc = Document(
             id=uuid4(),
+            tenant_id=uuid4(),
             project_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="c.pdf",
@@ -126,6 +135,7 @@ class TestDocumentEntity:
     def test_008_transition_parsing_to_parsed(self):
         doc = Document(
             id=uuid4(),
+            tenant_id=uuid4(),
             project_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="c.pdf",
@@ -137,6 +147,7 @@ class TestDocumentEntity:
     def test_009_transition_any_to_error(self):
         doc = Document(
             id=uuid4(),
+            tenant_id=uuid4(),
             project_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="c.pdf",
@@ -148,6 +159,7 @@ class TestDocumentEntity:
     def test_010_transition_invalid_raises(self):
         doc = Document(
             id=uuid4(),
+            tenant_id=uuid4(),
             project_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="c.pdf",

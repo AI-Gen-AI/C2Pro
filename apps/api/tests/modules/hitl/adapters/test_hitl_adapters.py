@@ -524,7 +524,7 @@ class TestReviewQueueProjectFiltering:
         repo = SqlAlchemyReviewQueueRepository(session=mock_session, tenant_id=tenant_id)
         import asyncio
 
-        asyncio.get_event_loop().run_until_complete(repo.list_by_status(project_id=project_id))
+        asyncio.run(repo.list_by_status(project_id=project_id))
 
         call_args = mock_session.execute.call_args[0][0]
         sql_str = str(call_args.compile(compile_kwargs={"literal_binds": True}))
@@ -552,7 +552,7 @@ class TestReviewQueueProjectFiltering:
         repo = SqlAlchemyReviewQueueRepository(session=mock_session, tenant_id=tenant_id)
         import asyncio
 
-        asyncio.get_event_loop().run_until_complete(repo.list_by_status(project_id=None))
+        asyncio.run(repo.list_by_status(project_id=None))
 
         call_args = mock_session.execute.call_args[0][0]
         sql_str = str(call_args.compile(compile_kwargs={"literal_binds": True}))
@@ -587,7 +587,7 @@ class TestReviewQueueProjectFiltering:
 
         import asyncio
 
-        count = asyncio.get_event_loop().run_until_complete(repo.count_by_status())
+        count = asyncio.run(repo.count_by_status())
         assert count == 7, f"Expected true count 7, got {count}"
 
     def test_repository_count_by_status_cross_tenant_returns_zero(self):
@@ -609,7 +609,7 @@ class TestReviewQueueProjectFiltering:
         repo = SqlAlchemyReviewQueueRepository(session=mock_session, tenant_id=tenant_id)
         import asyncio
 
-        asyncio.get_event_loop().run_until_complete(repo.count_by_status(project_id=other_project_id))
+        asyncio.run(repo.count_by_status(project_id=other_project_id))
         call_args = mock_session.execute.call_args[0][0]
         sql_str = str(call_args.compile(compile_kwargs={"literal_binds": True}))
         tid_hex = str(tenant_id).replace("-", "")
