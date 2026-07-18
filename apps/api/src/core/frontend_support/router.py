@@ -9,7 +9,7 @@ TASK-REV-020: Cookie consent now persisted to database.
 from __future__ import annotations
 
 import secrets
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, TypeAlias
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
@@ -28,6 +28,13 @@ from src.core.security.secret_channel import (
     VaultKvBundleProvider,
     redact_clerk_bundle,
 )
+
+# FastAPI re-evaluates route annotations at registration, so a literal
+# Request[Any] raises at import — mypy-only generic, concrete class at runtime.
+if TYPE_CHECKING:
+    RequestType: TypeAlias = Request[Any]
+else:
+    RequestType = Request
 
 router = APIRouter(tags=["frontend-support"])
 
@@ -75,7 +82,7 @@ def _get_consent_repository(
     return CookieConsentRepository(session=db)
 
 
-def _accepted_scopes(request: Request[Any]) -> set[str]:
+def _accepted_scopes(request: RequestType) -> set[str]:
     scopes = getattr(request.app.state, "accepted_disclaimer_scopes", None)
     if scopes is None:
         scopes = set()
@@ -136,7 +143,7 @@ def _resolve_secret_channel_bundle() -> dict[str, str]:
 @router.post("/compliance/cookies/consent")
 async def create_cookie_consent(
     payload: CookieConsentCreateRequest,
-    _request: Request[Any],
+    _request: RequestType,
     response: Response,
     repo: CookieConsentRepository = Depends(_get_consent_repository),
 ) -> dict[str, Any]:
@@ -206,7 +213,7 @@ async def update_cookie_consent(
 @router.get("/projects/{project_id}/gates/gate-8/disclaimer/status")
 async def get_legal_disclaimer_status(
     project_id: str,
-    request: Request[Any],
+    request: RequestType,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, Any]:
     scope = _disclaimer_scope(project_id, str(current_user.tenant_id), str(current_user.id))
@@ -223,7 +230,7 @@ async def get_legal_disclaimer_status(
 async def accept_legal_disclaimer(
     project_id: str,
     payload: DisclaimerAcceptRequest,
-    request: Request[Any],
+    request: RequestType,
     response: Response,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, Any]:
