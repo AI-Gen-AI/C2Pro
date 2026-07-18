@@ -7,7 +7,7 @@ Soporta múltiples ambientes (dev, staging, prod).
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, no_type_check
 from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
@@ -524,6 +524,7 @@ class Settings(BaseSettings):
 
 
 @lru_cache
+@no_type_check
 def get_settings() -> Settings:
     """
     Obtiene la instancia singleton de settings.
