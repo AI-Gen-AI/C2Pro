@@ -12,7 +12,7 @@ from fastapi import APIRouter
 from src.core.tenants import __getattr__ as tenants_getattr
 from src.core.tenants import router as tenants_router_module
 from src.core.tenants import schemas as tenants_schemas
-from src.core.tenants.service import TenantService, get_tenant_by_id
+from src.core.tenants.service import TenantService, get_tenant_by_id, list_tenants
 from src.core.tenants.types import require_tenant_id
 
 
@@ -61,6 +61,25 @@ async def test_core_tenants_get_tenant_by_id_returns_scalar_result():
     resolved = await get_tenant_by_id(_FakeSession(), tenant.id)
 
     assert resolved is tenant
+
+
+@pytest.mark.asyncio
+async def test_list_tenants_active_only_filters_with_a_sql_predicate() -> None:
+    """TS-E2E-SEC-TNT-001: active-only filtering must not collapse to ``WHERE false``."""
+    captured_statement = None
+    result = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: []))
+
+    class _FakeSession:
+        async def execute(self, statement):
+            nonlocal captured_statement
+            captured_statement = statement
+            return result
+
+    await list_tenants(_FakeSession(), active_only=True)
+
+    assert captured_statement is not None
+    assert "is_active" in str(captured_statement)
+    assert "false" not in str(captured_statement).lower()
 
 
 def test_require_tenant_id_parses_task_boundary_string() -> None:
