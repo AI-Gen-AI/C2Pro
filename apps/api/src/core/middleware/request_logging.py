@@ -6,6 +6,7 @@ Middleware para logging estructurado de todas las requests HTTP.
 
 import time
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 import structlog
 from fastapi import Request, Response
@@ -20,7 +21,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+        self, request: Request[Any], call_next: Callable[[Request[Any]], Awaitable[Response]]
     ) -> Response:
         # Generar request ID
         request_id = request.headers.get("X-Request-ID", str(time.time_ns()))
@@ -74,7 +75,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         return response
 
-    def _get_client_ip(self, request: Request) -> str:
+    def _get_client_ip(self, request: Request[Any]) -> str:
         """Obtiene IP del cliente, considerando proxies."""
         # Check common proxy headers
         forwarded_for = request.headers.get("X-Forwarded-For")

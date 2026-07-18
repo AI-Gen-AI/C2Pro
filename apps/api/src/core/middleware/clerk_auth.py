@@ -97,7 +97,7 @@ def get_clerk_jwks() -> dict[str, Any] | None:
             cb.record_success_sync()
 
         logger.debug("clerk_jwks_fetched", url=jwks_url)
-        return response.json()
+        return cast(dict[str, Any], response.json())
 
     except Exception as e:
         if cb:
@@ -244,7 +244,7 @@ class ClerkUser:
         return bool(self.tenant_id)
 
 
-async def extract_clerk_claims(request: Request) -> dict[str, Any]:
+async def extract_clerk_claims(request: Request[Any]) -> dict[str, Any]:
     """
     Extract Clerk JWT from request and verify it.
 
@@ -361,7 +361,7 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
     ]
 
     async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+        self, request: Request[Any], call_next: Callable[[Request[Any]], Awaitable[Response]]
     ) -> Response:
         # Allow public paths
         if self._is_public_path(request.url.path):

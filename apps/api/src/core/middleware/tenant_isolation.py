@@ -9,6 +9,7 @@ CRITICAL FOR SECURITY:
 
 import json
 from collections.abc import Awaitable, Callable
+from typing import Any
 from uuid import UUID
 
 import jwt
@@ -69,8 +70,8 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(
         self,
-        request: Request,
-        call_next: Callable[[Request], Awaitable[Response]],
+        request: Request[Any],
+        call_next: Callable[[Request[Any]], Awaitable[Response]],
     ) -> Response:
         # Allow CORS preflight requests (OPTIONS)
         if request.method == "OPTIONS":
@@ -161,7 +162,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
             return True
         return any(path.startswith(p) for p in self.PUBLIC_PATHS if p != "/")
 
-    def _extract_tenant_id(self, request: Request) -> tuple[UUID | None, str | None]:
+    def _extract_tenant_id(self, request: Request[Any]) -> tuple[UUID | None, str | None]:
         """
         Extrae y valida tenant_id del JWT en el header Authorization.
 
@@ -219,7 +220,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
 
     async def _extract_auth_context(
         self,
-        request: Request,
+        request: Request[Any],
     ) -> tuple[UUID | None, UUID | str | None, bool, str | None, str | None]:
         """
         Extract tenant/user context from either a local JWT or a Clerk JWT.
@@ -332,7 +333,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
                 "invalid_authentication_credentials",
             )
 
-    def _extract_user_id(self, request: Request) -> UUID | None:
+    def _extract_user_id(self, request: Request[Any]) -> UUID | None:
         """Extrae user_id del JWT."""
         auth_header = request.headers.get("Authorization", "")
 
