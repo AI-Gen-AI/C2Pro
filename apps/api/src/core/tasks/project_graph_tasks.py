@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
@@ -64,22 +65,21 @@ async def run_project_graph_once(
         project_id=project_id,
         tenant_id=tenant_id,
     )
-    result = await build_project_graph().ainvoke(
-        {
-            "project_id": project_id,
-            "tenant_id": tenant_id,
-            "trigger_event_id": trigger_event_id,
-            "previous_snapshot_id": None,
-            "changed_artifact_ids": [],
-            "artifacts": artifacts,
-            "coherence_result": None,
-            "impact_result": None,
-            "health_result": None,
-            "snapshot_id": None,
-            "node_results": [],
-            "artifact_repository": artifact_repository,
-        }
-    )
+    graph_input: dict[str, Any] = {
+        "project_id": project_id,
+        "tenant_id": tenant_id,
+        "trigger_event_id": trigger_event_id,
+        "previous_snapshot_id": None,
+        "changed_artifact_ids": [],
+        "artifacts": artifacts,
+        "coherence_result": None,
+        "impact_result": None,
+        "health_result": None,
+        "snapshot_id": None,
+        "node_results": [],
+        "artifact_repository": artifact_repository,
+    }
+    result = await build_project_graph().ainvoke(graph_input)
     return {
         "status": "ok",
         "artifact_count": len(artifacts),
