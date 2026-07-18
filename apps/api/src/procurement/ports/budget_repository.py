@@ -49,7 +49,7 @@ class BudgetRepository(Protocol):
         ...
 
     @abstractmethod
-    async def get_by_id(self, item_id: UUID, tenant_id: TenantId) -> dict | None:
+    async def get_by_id(self, item_id: UUID, tenant_id: TenantId) -> dict[str, object] | None:
         """Get a budget item by ID."""
         ...
 

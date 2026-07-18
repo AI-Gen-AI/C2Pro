@@ -7,6 +7,7 @@ import structlog
 from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel
 
 # Import from the new domain models file
@@ -34,12 +35,14 @@ class WBSGenerationService:
     """
     Application service to generate a Work Breakdown Structure using a self-correcting AI graph.
     """
+    workflow: CompiledStateGraph[WBSGenerationState, None, WBSGenerationState, WBSGenerationState]
+
     def __init__(self, llm: ChatAnthropic):
         # The LLM adapter is injected, following Clean Architecture.
         self.llm = llm
         self.workflow = self._build_graph()
 
-    def _build_graph(self) -> StateGraph:
+    def _build_graph(self) -> CompiledStateGraph[WBSGenerationState, None, WBSGenerationState, WBSGenerationState]:
         graph = StateGraph(WBSGenerationState)
         graph.add_node("generator_node", self.generator_node)
         graph.add_node("auditor_node", self.auditor_node)
@@ -52,7 +55,7 @@ class WBSGenerationService:
         graph.add_edge("generator_node", "auditor_node")
         return graph.compile()
 
-    def generator_node(self, state: WBSGenerationState) -> dict:
+    def generator_node(self, state: WBSGenerationState) -> dict[str, object]:
         logger.info(f"Generating WBS (Attempt: {state['attempt_count'] + 1})")
         system_prompt = """
 You are an expert in project management and civil engineering, specialized in creating Work Breakdown Structures (WBS) for large-scale EPC (Engineering, Procurement, and Construction) projects. Your task is to analyze the provided contract text to generate a detailed, hierarchical WBS.
@@ -81,7 +84,7 @@ You are an expert in project management and civil engineering, specialized in cr
         })
         return {"wbs_items": wbs_item_list, "attempt_count": state["attempt_count"] + 1}
 
-    def auditor_node(self, state: WBSGenerationState) -> dict:
+    def auditor_node(self, state: WBSGenerationState) -> dict[str, object]:
         logger.info("Auditing generated WBS...")
         errors = []
         if not state["wbs_items"] or not state["wbs_items"].items:
@@ -114,7 +117,7 @@ You are an expert in project management and civil engineering, specialized in cr
         logger.info("Validation successful or max retries reached. Ending generation.")
         return "end"
 
-    def run(self, contract_text: str) -> dict:
+    def run(self, contract_text: str) -> dict[str, object]:
         """Entry point to run the WBS generation graph."""
         initial_state: WBSGenerationState = {
             "contract_text": contract_text,
