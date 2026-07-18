@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import structlog
@@ -23,10 +23,17 @@ from src.core.ai.model_router import AITaskType
 from src.core.database import get_session_with_tenant
 from src.core.exceptions import AIServiceError
 
+if TYPE_CHECKING:
+    from src.core.ai.cost_controller import (
+        BudgetExceededException,
+        CostControllerService,
+    )
+
 logger = structlog.get_logger()
 
 
-def _get_cost_controller():
+def _get_cost_controller(
+) -> tuple[type[CostControllerService] | None, type[BudgetExceededException] | None]:
     if os.getenv("C2PRO_TEST_LIGHT") == "1":
         return None, None
     from src.core.ai.cost_controller import (
@@ -45,9 +52,10 @@ class AIService:
     def __init__(
         self,
         wrapper: AnthropicWrapper | None = None,
-        tenant_id: str | None = None,
+        tenant_id: UUID | str | None = None,
         db: AsyncSession | None = None,
     ) -> None:
+        self.cost_controller: CostControllerService | None
         if os.getenv("C2PRO_AI_MOCK") == "1":
             self.wrapper = wrapper
         else:
@@ -70,13 +78,20 @@ class AIService:
         reraise=True,
     )
     async def _call_wrapper(self, system_prompt: str, user_content: str) -> Any:
+        if self.wrapper is None:
+            raise AIServiceError(message="AI client is not configured.")
         request = WrapperRequest(
             prompt=user_content,
             system_prompt=system_prompt,
             task_type=AITaskType.COMPLEX_EXTRACTION,
-            tenant_id=self.tenant_id,
+            tenant_id=self._tenant_uuid(),
         )
         return await self.wrapper.generate(request)
+
+    def _tenant_uuid(self) -> UUID | None:
+        if self.tenant_id is None:
+            return None
+        return UUID(str(self.tenant_id))
 
     async def run_extraction(self, system_prompt: str, user_content: str) -> Any:
         """
@@ -100,7 +115,9 @@ class AIService:
             logger.error("Tenant ID missing, cannot proceed with AI call.")
             raise AIServiceError(message="El tenant no está configurado.")
 
-        tenant_uuid = UUID(self.tenant_id)
+        tenant_uuid = self._tenant_uuid()
+        if tenant_uuid is None:
+            raise AIServiceError(message="El tenant no está configurado.")
 
         if not self.cost_controller:
             if os.getenv("C2PRO_TEST_LIGHT") == "1":
@@ -122,7 +139,7 @@ class AIService:
                     )
         except Exception as exc:
             if self._budget_exception and isinstance(exc, self._budget_exception):
-                raise AIServiceError(message=exc.message) from exc
+                raise AIServiceError(message=str(exc)) from exc
             if os.getenv("C2PRO_TEST_LIGHT") == "1" and self._budget_exception is None:
                 logger.warning("budget_check_skipped_light_mode")
             else:

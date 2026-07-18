@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
+from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -206,7 +208,7 @@ async def get_document_text_from_rag(
 
     doc_result = await db.execute(doc_stmt, doc_params)
     documents = doc_result.fetchall()
-    fallback_docs = []
+    fallback_docs: list[dict[str, Any]] = []
     for row in documents:
         doc_id = str(row[0])
         doc_type = row[1] or "unknown"
@@ -300,9 +302,10 @@ async def analyze_document(
         document_id=str(payload.document_id) if payload.document_id else None,
         tenant_id=tenant_id,
     )
-    message_contents = [
-        message.content for message in result.get("messages", []) if hasattr(message, "content")
-    ]
+    message_contents: list[str] = []
+    for message in result.get("messages", []):
+        if isinstance(message, BaseMessage) and isinstance(message.content, str):
+            message_contents.append(message.content)
     return AnalyzeResponse(
         project_id=result["project_id"],
         analysis_id=result.get("analysis_id"),
@@ -338,7 +341,7 @@ async def stream_project_processing(
         tenant_id,
     )
 
-    async def event_stream():
+    async def event_stream() -> AsyncIterator[bytes]:
         for stage in PROCESSING_STAGE_TEMPLATE:
             yield _sse_frame("stage", stage)
         yield _sse_frame(

@@ -69,12 +69,16 @@ async def test_risk_tool_logs_raw_output_length_and_parsed_count(monkeypatch) ->
         (
             "risk_extraction_parse_diagnostics",
             {
-                "raw_output_chars": len(response.content),
-                "raw_output_sample": response.content,
-                "payload_type": "dict",
-                "payload_keys": ["risks"],
-                "candidate_item_count": 0,
-                "parsed_risk_count": 0,
+                # stdlib logging carries structured fields via `extra=`; flat
+                # structlog-style kwargs raise TypeError on a logging.Logger.
+                "extra": {
+                    "raw_output_chars": len(response.content),
+                    "raw_output_sample": response.content,
+                    "payload_type": "dict",
+                    "payload_keys": ["risks"],
+                    "candidate_item_count": 0,
+                    "parsed_risk_count": 0,
+                },
             },
         )
     ]

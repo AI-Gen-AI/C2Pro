@@ -4,7 +4,7 @@ Part of TASK-BCK-022: Wire TriggerDocumentAnalysisUseCase to Celery ingestion co
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from src.analysis.ports.orchestrator import AnalysisOrchestrator
 
@@ -56,7 +56,7 @@ class LangGraphOrchestrator(AnalysisOrchestrator):
         )
 
         await persist_artifact_and_enqueue_project_graph(result)
-        return result
+        return cast(dict[str, Any], result)
 
 
 class AnalysisOrchestratorFactory:

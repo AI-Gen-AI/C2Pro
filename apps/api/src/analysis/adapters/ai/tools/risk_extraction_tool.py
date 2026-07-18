@@ -17,12 +17,11 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from src.analysis.adapters.ai.agents.risk_extractor import (
-    RiskCategory,
     RiskImpact,
     RiskItem,
     RiskProbability,
 )
-from src.analysis.domain.risk_categories import normalize_category
+from src.analysis.domain.risk_categories import RiskCategory, normalize_category
 from src.core.ai.anthropic_wrapper import AIResponse
 from src.core.ai.model_router import AITaskType
 from src.core.ai.tools import BaseTool, RetryPolicy, ToolResult, register_tool
@@ -185,7 +184,12 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
     description = "Extracts and scores risks from contract documents"
     task_type = AITaskType.COMPLEX_EXTRACTION
     prompt_template_name = None  # Using inline prompt for now
-    retry_policy = RetryPolicy(max_retries=0)
+    retry_policy = RetryPolicy(
+        max_retries=0,
+        retry_on_validation_error=True,
+        exponential_backoff=True,
+        initial_delay_ms=1000,
+    )
 
     async def _execute_impl(
         self,
@@ -224,12 +228,16 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
 
         logger.info(
             "risk_extraction_parse_diagnostics",
-            raw_output_chars=len(ai_response.content or ""),
-            raw_output_sample=(ai_response.content or "")[:600],
-            payload_type=type(payload).__name__,
-            payload_keys=list(payload.keys())[:20] if isinstance(payload, dict) else None,
-            candidate_item_count=len(items),
-            parsed_risk_count=len(risks),
+            extra={
+                "raw_output_chars": len(ai_response.content or ""),
+                "raw_output_sample": (ai_response.content or "")[:600],
+                "payload_type": type(payload).__name__,
+                "payload_keys": list(payload.keys())[:20]
+                if isinstance(payload, dict)
+                else None,
+                "candidate_item_count": len(items),
+                "parsed_risk_count": len(risks),
+            },
         )
 
         if not risks:
@@ -297,13 +305,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
 
         # Update confidence score based on result quality
         if result.confidence_score:
-            if risks:
-                confidences = [item.confidence for item in risks]
-                state["confidence_score"] = (
-                    sum(confidences) / len(confidences) if confidences else 0.9
-                )
-            else:
-                state["confidence_score"] = 0.9
+            state["confidence_score"] = result.confidence_score
         else:
             # Calculate average confidence if individual risks have confidence
             confidences = [

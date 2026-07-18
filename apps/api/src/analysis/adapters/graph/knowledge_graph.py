@@ -7,7 +7,6 @@ from uuid import UUID
 
 import networkx as nx
 
-from src.analysis.adapters.persistence.models import Alert
 from src.analysis.ports.alert_repository import AlertRepository
 from src.analysis.ports.graph_entities import (
     ClauseView,
@@ -16,6 +15,7 @@ from src.analysis.ports.graph_entities import (
     WBSTaskView,
 )
 from src.analysis.ports.knowledge_graph import KnowledgeGraphPort
+from src.analysis.ports.types import AlertRecord
 from src.core.tenants.types import TenantId, require_tenant_id
 from src.documents.ports.document_repository import IDocumentRepository
 from src.procurement.ports.wbs_repository import IWBSRepository
@@ -174,7 +174,10 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
             return []
 
     def degree_centrality(self) -> dict[str, float]:
-        return nx.degree_centrality(self.graph)
+        return {
+            str(node_id): float(score)
+            for node_id, score in nx.degree_centrality(self.graph).items()
+        }
 
     async def _load_stakeholders(
         self, project_id: UUID, tenant_id: TenantId
@@ -190,11 +193,12 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
     async def _load_tasks(
         self, project_id: UUID, tenant_id: TenantId
     ) -> list[WBSTaskView]:
-        return await self.wbs_repository.get_by_project(project_id, tenant_id)
+        tasks = await self.wbs_repository.get_by_project(project_id, tenant_id)
+        return list(tasks)
 
     async def _load_risks(
         self, project_id: UUID, tenant_id: TenantId
-    ) -> list[Alert]:
+    ) -> list[AlertRecord]:
         """Load risks with tenant isolation."""
         page = await self.alert_repository.list_for_project(
             project_id=project_id,
@@ -206,7 +210,7 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
 
     async def _load_clauses(
         self,
-        risks: Iterable[Alert],
+        risks: Iterable[AlertRecord],
         tasks: Iterable[WBSTaskView],
         tenant_id: TenantId,
     ) -> list[ClauseView]:
@@ -214,18 +218,27 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
         clause_ids.update({task.source_clause_id for task in tasks if task.source_clause_id})
         if not clause_ids:
             return []
-        return await self.document_repository.get_clauses_by_ids(
+        clauses = await self.document_repository.get_clauses_by_ids(
             tenant_id, list(clause_ids)
         )
+        return list(clauses)
 
     async def _load_raci(
         self, project_id: UUID, tenant_id: TenantId
     ) -> list[RaciAssignmentView]:
-        return await self.stakeholder_repository.list_raci_assignments(
+        assignments = await self.stakeholder_repository.list_raci_assignments(
             project_id, tenant_id
         )
+        return list(assignments)
 
-    def _add_node(self, node_id: str, *, node_type: str, label: str, properties: dict[str, Any]):
+    def _add_node(
+        self,
+        node_id: str,
+        *,
+        node_type: str,
+        label: str,
+        properties: dict[str, Any],
+    ) -> None:
         self.graph.add_node(
             node_id,
             type=node_type,
@@ -240,7 +253,7 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
         *,
         relation: str,
         properties: dict[str, Any] | None = None,
-    ):
+    ) -> None:
         self.graph.add_edge(
             source_id,
             target_id,
@@ -265,7 +278,7 @@ def _clause_node_id(clause_id: UUID) -> str:
     return f"cl_{clause_id}"
 
 
-def _extract_wbs_ids(risk: Alert) -> list[UUID]:
+def _extract_wbs_ids(risk: AlertRecord) -> list[UUID]:
     wbs_ids: list[UUID] = []
     payload = risk.affected_entities or {}
     candidates = payload.get("wbs") or payload.get("wbs_items") or []

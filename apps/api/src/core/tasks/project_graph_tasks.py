@@ -16,6 +16,7 @@ from src.analysis.adapters.graph.project_graph import (
     build_project_graph,
     is_project_graph_enabled,
 )
+from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
 from src.analysis.adapters.persistence.document_artifact_repository import (
     SqlAlchemyDocumentArtifactRepository,
 )
@@ -64,22 +65,21 @@ async def run_project_graph_once(
         project_id=project_id,
         tenant_id=tenant_id,
     )
-    result = await build_project_graph().ainvoke(
-        {
-            "project_id": project_id,
-            "tenant_id": tenant_id,
-            "trigger_event_id": trigger_event_id,
-            "previous_snapshot_id": None,
-            "changed_artifact_ids": [],
-            "artifacts": artifacts,
-            "coherence_result": None,
-            "impact_result": None,
-            "health_result": None,
-            "snapshot_id": None,
-            "node_results": [],
-            "artifact_repository": artifact_repository,
-        }
-    )
+    graph_input: ProjectGraphState = {
+        "project_id": project_id,
+        "tenant_id": tenant_id,
+        "trigger_event_id": trigger_event_id,
+        "previous_snapshot_id": None,
+        "changed_artifact_ids": [],
+        "artifacts": artifacts,
+        "coherence_result": None,
+        "impact_result": None,
+        "health_result": None,
+        "snapshot_id": None,
+        "node_results": [],
+        "artifact_repository": artifact_repository,
+    }
+    result = await build_project_graph().ainvoke(graph_input)
     return {
         "status": "ok",
         "artifact_count": len(artifacts),

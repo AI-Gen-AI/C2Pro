@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import os
+from importlib import import_module
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
 
 import structlog
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
+from langgraph.graph._node import StateNode
+from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import Checkpointer
 
 from src.analysis.adapters.graph.nodes import (
     budget_parser_node,
@@ -31,9 +37,27 @@ from src.analysis.adapters.graph.nodes_extended import (
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
 
+if TYPE_CHECKING:
+    from psycopg import AsyncConnection
+    from psycopg_pool import AsyncConnectionPool
+
 logger = structlog.get_logger()
 
-_graph_app = None
+ProjectWorkflow = StateGraph[ProjectState, None, ProjectState, ProjectState]
+ProjectGraph = CompiledStateGraph[ProjectState, None, ProjectState, ProjectState]
+
+
+class AsyncPostgresSaverFactory(Protocol):
+    """Factory protocol shared by the legacy and current checkpoint imports."""
+
+    def __call__(
+        self,
+        *,
+        conn: AsyncConnectionPool[AsyncConnection[dict[str, Any]]],
+    ) -> BaseCheckpointSaver[str]: ...
+
+
+_graph_app: ProjectGraph | None = None
 
 # Stateless routing service — reused across all conditional-edge evaluations.
 _critique_evaluator = CritiqueEvaluationService()
@@ -69,14 +93,23 @@ def _next_after_critique_v2(state: ProjectState) -> Literal[
       still complete. ``human_approval_required`` remains in state for
       visibility, but the workflow routes through enrichment_dispatch.
     """
-    return _critique_evaluator.determine_next_step(  # type: ignore[return-value]
-        human_approval_required=bool(state.get("human_approval_required")),
-        critique_notes=state.get("critique_notes", "") or "",
-        retry_count=int(state.get("retry_count", 0)),
-        doc_type=state.get("doc_type") or "",
-        skip_hitl=(
-            os.getenv("C2PRO_SKIP_HITL", "0") == "1"
-            or os.getenv("C2PRO_AI_MOCK", "0") == "1"
+    return cast(
+        Literal[
+            "risk_extractor",
+            "wbs_extractor",
+            "budget_parser",
+            "human_interrupt",
+            "stakeholder_extractor",
+        ],
+        _critique_evaluator.determine_next_step(
+            human_approval_required=bool(state.get("human_approval_required")),
+            critique_notes=state.get("critique_notes", "") or "",
+            retry_count=int(state.get("retry_count", 0)),
+            doc_type=state.get("doc_type") or "",
+            skip_hitl=(
+                os.getenv("C2PRO_SKIP_HITL", "0") == "1"
+                or os.getenv("C2PRO_AI_MOCK", "0") == "1"
+            ),
         ),
     )
 
@@ -111,7 +144,7 @@ async def enrichment_dispatch_node(_state: ProjectState) -> dict[str, Any]:
 # ── Graph builder ────────────────────────────────────────────────────────────
 
 
-def build_workflow() -> StateGraph:
+def build_workflow() -> ProjectWorkflow:
     """Build the full N1–N17 orchestration graph with parallel enrichment.
 
     Topology::
@@ -169,7 +202,7 @@ def build_workflow() -> StateGraph:
         below remaps that *logical* destination to the *physical* dispatch
         node. Tests are not affected.
     """
-    workflow = StateGraph(ProjectState)
+    workflow: ProjectWorkflow = StateGraph(ProjectState)
 
     # ── Node registration ────────────────────────────────────────────────
     # Pre-processing
@@ -187,7 +220,10 @@ def build_workflow() -> StateGraph:
     workflow.add_node("human_interrupt", human_interrupt_node)              # N13/N14
 
     # Parallel-enrichment fan-out point (passthrough — no business logic)
-    workflow.add_node("enrichment_dispatch", enrichment_dispatch_node)
+    workflow.add_node(
+        "enrichment_dispatch",
+        cast(StateNode[ProjectState, None], enrichment_dispatch_node),
+    )
 
     # Enrichment branches (run concurrently after dispatch)
     workflow.add_node("stakeholder_extractor", stakeholder_extractor_node)  # N6
@@ -286,11 +322,21 @@ def build_workflow() -> StateGraph:
 
 # ── Infrastructure helpers (unchanged) ───────────────────────────────────────
 
-_checkpointer_pool = None
+_checkpointer_pool: AsyncConnectionPool[AsyncConnection[dict[str, Any]]] | None = None
 _checkpointer_ready = False
 _checkpointer_setup_lock = asyncio.Lock()
 
-def _build_checkpointer():
+
+def _async_postgres_saver_factory() -> AsyncPostgresSaverFactory:
+    """Load the saver across the two supported LangGraph module layouts."""
+    try:
+        module = import_module("langgraph.checkpoint.postgres.aio")
+    except ImportError:
+        module = import_module("langgraph.checkpoint.postgres")
+    return cast(AsyncPostgresSaverFactory, module.AsyncPostgresSaver)
+
+
+def _build_checkpointer() -> BaseCheckpointSaver[str]:
     """
     Build a checkpointer for persistent state management.
 
@@ -308,11 +354,6 @@ def _build_checkpointer():
         return MemorySaver()
 
     try:
-        try:
-            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-        except ImportError:
-            from langgraph.checkpoint.postgres import AsyncPostgresSaver
-
         from psycopg.rows import dict_row
         from psycopg_pool import AsyncConnectionPool
 
@@ -320,20 +361,25 @@ def _build_checkpointer():
         if _checkpointer_pool is None:
             conn_string = settings.database_url_async.replace("postgresql+asyncpg://", "postgresql://")
 
-            _checkpointer_pool = AsyncConnectionPool(
-                conninfo=conn_string,
-                min_size=0,
-                max_size=10,
-                open=False,
-                kwargs={
-                    "autocommit": True,
-                    # Disable prepared statements entirely for PgBouncer/Railway pooler compatibility.
-                    "prepare_threshold": None,
-                    "row_factory": dict_row,
-                },
+            # String form: cast()'s type argument is evaluated at runtime, and
+            # AsyncConnection is only imported under TYPE_CHECKING.
+            _checkpointer_pool = cast(
+                "AsyncConnectionPool[AsyncConnection[dict[str, Any]]]",
+                AsyncConnectionPool(
+                    conninfo=conn_string,
+                    min_size=0,
+                    max_size=10,
+                    open=False,
+                    kwargs={
+                        "autocommit": True,
+                        # Disable prepared statements entirely for PgBouncer/Railway pooler compatibility.
+                        "prepare_threshold": None,
+                        "row_factory": dict_row,
+                    },
+                ),
             )
 
-        return AsyncPostgresSaver(conn=_checkpointer_pool)
+        return _async_postgres_saver_factory()(conn=_checkpointer_pool)
     except ImportError as e:
         logger.warning(
             "checkpointer_fallback",
@@ -402,11 +448,11 @@ async def close_checkpointer_resources() -> None:
     _graph_app = None
 
 
-def _persist_graph_diagram(app) -> None:
+def _persist_graph_diagram(app: ProjectGraph) -> None:
     from src.config import settings
 
     try:
-        png_bytes = app.get_graph().draw_png()
+        png_bytes = app.get_graph().draw_png(None)
     except Exception:
         logger.warning("langgraph_diagram_failed", exc_info=True)
         return
@@ -418,7 +464,10 @@ def _persist_graph_diagram(app) -> None:
     logger.info("langgraph_diagram_written", path=str(output_path))
 
 
-def compile_workflow(checkpointer=None, persist_diagram: bool = True):
+def compile_workflow(
+    checkpointer: Checkpointer = None,
+    persist_diagram: bool = True,
+) -> ProjectGraph:
     workflow = build_workflow()
     app = workflow.compile(checkpointer=checkpointer)
     if persist_diagram:
@@ -426,7 +475,7 @@ def compile_workflow(checkpointer=None, persist_diagram: bool = True):
     return app
 
 
-def get_graph_app():
+def get_graph_app() -> ProjectGraph:
     global _graph_app
     if _graph_app is not None:
         return _graph_app
@@ -436,7 +485,7 @@ def get_graph_app():
     return _graph_app
 
 
-async def run_orchestration(initial_state: dict, thread_id: str) -> dict:
+async def run_orchestration(initial_state: dict[str, Any], thread_id: str) -> dict[str, Any]:
     """
     Run the LangGraph orchestration workflow with the given initial state.
 
@@ -459,7 +508,7 @@ async def run_orchestration(initial_state: dict, thread_id: str) -> dict:
     run_name = f"C2Pro_Orchestration_{doc_type}_{project_id[:8] if project_id != 'unknown' else 'new'}"
 
     # Configure the thread for checkpointing + LangSmith tracing
-    config = {
+    config: RunnableConfig = {
         "configurable": {
             "thread_id": thread_id
         },
@@ -472,7 +521,7 @@ async def run_orchestration(initial_state: dict, thread_id: str) -> dict:
     }
 
     # Invoke the graph with the initial state
-    result = await app.ainvoke(initial_state, config)
+    result = await app.ainvoke(cast(ProjectState, initial_state), config)
 
     logger.info(
         "orchestration_completed",
@@ -482,4 +531,4 @@ async def run_orchestration(initial_state: dict, thread_id: str) -> dict:
         human_approval_required=result.get("human_approval_required", False),
     )
 
-    return result
+    return cast(dict[str, Any], result)
