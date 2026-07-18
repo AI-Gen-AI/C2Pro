@@ -14,6 +14,8 @@ SEGURIDAD CRÍTICA:
 CTO GATE 3: MCP Security
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import time
@@ -178,14 +180,14 @@ class RedisRateLimitBackend:
 
     def __init__(
         self,
-        redis_client: redis.Redis | None = None,
+        redis_client: redis.Redis[Any] | None = None,
         redis_url: str | None = None,
     ) -> None:
         self._redis = redis_client
         self._redis_url = redis_url
         self._loop_id: int | None = None
 
-    async def _get_redis(self) -> redis.Redis:
+    async def _get_redis(self) -> redis.Redis[Any]:
         if self._redis is not None and self._redis_url is None:
             return self._redis
 
@@ -440,7 +442,7 @@ class DatabaseMCPServer:
 
         # Construir query base
         query = f"SELECT * FROM {request.view_name}"
-        params = {}
+        params: dict[str, Any] = {}
 
         # Filtros obligatorios
         where_clauses = []

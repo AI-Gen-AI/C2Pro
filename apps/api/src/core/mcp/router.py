@@ -19,12 +19,16 @@ Security:
 
 import json
 import time
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi import Request as FastAPIRequest
+
+if TYPE_CHECKING:
+    FastAPIRequest = Any
+else:
+    from fastapi import Request as FastAPIRequest
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,7 +65,7 @@ async def get_current_tenant_id(request: FastAPIRequest) -> UUID:
         logger.error("tenant_id_missing_from_state")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-    return request.state.tenant_id
+    return cast(UUID, request.state.tenant_id)
 
 
 async def get_current_user_id(request: FastAPIRequest) -> UUID | None:
@@ -82,7 +86,7 @@ class MCPExecuteRequest(BaseModel):
     """
 
     operation: str = Field(..., description="Operation name (view or function)")
-    params: dict = Field(default_factory=dict, description="Operation parameters")
+    params: dict[str, Any] = Field(default_factory=dict, description="Operation parameters")
 
 
 # Allowlist for /execute endpoint (from PLAN_ARQUITECTURA_v2.1.md)
@@ -134,17 +138,17 @@ EXECUTE_FUNCTION_TO_DB_FUNCTION = {
 }
 
 
-def _parse_limit(params: dict, default: int = 100) -> int:
+def _parse_limit(params: dict[str, Any], default: int = 100) -> int:
     return min(int(params.get("limit", default)), 1000)
 
 
-def _parse_offset(params: dict) -> int:
+def _parse_offset(params: dict[str, Any]) -> int:
     return int(params.get("offset", 0))
 
 
 def _build_query_result(
     *,
-    data: list[dict],
+    data: list[dict[str, Any]],
     execution_time_ms: float,
     view_name: str | None = None,
     function_name: str | None = None,
@@ -176,7 +180,7 @@ async def _safe_audit_query(
             db=db,
             tenant_id=tenant_id,
             user_id=user_id,
-            query_type=cast(Literal["view", "function"], query_type),
+            query_type=query_type,
             view_name=view_name,
             function_name=function_name,
             project_id=project_id,
@@ -196,7 +200,7 @@ async def _safe_audit_query(
 async def _execute_documents_metadata_query(
     db: AsyncSession,
     tenant_id: UUID,
-    params: dict,
+    params: dict[str, Any],
 ) -> QueryResult:
     start_time = time.perf_counter()
     query_params = {
@@ -240,7 +244,7 @@ async def _execute_documents_metadata_query(
 async def _execute_audit_recent_query(
     db: AsyncSession,
     tenant_id: UUID,
-    params: dict,
+    params: dict[str, Any],
 ) -> QueryResult:
     start_time = time.perf_counter()
     query_params = {
@@ -294,7 +298,7 @@ async def _execute_audit_recent_query(
     )
 
 
-def _require_param(params: dict, name: str) -> str:
+def _require_param(params: dict[str, Any], name: str) -> str:
     value = params.get(name)
     if value in (None, ""):
         raise HTTPException(
@@ -308,7 +312,7 @@ async def _execute_function_operation(
     operation: str,
     db: AsyncSession,
     tenant_id: UUID,
-    params: dict,
+    params: dict[str, Any],
 ) -> QueryResult:
     start_time = time.perf_counter()
 
@@ -682,7 +686,7 @@ async def list_allowed_functions() -> dict[str, list[str]]:
 async def get_rate_limit_status(
     tenant_id: UUID = Depends(get_current_tenant_id),
     mcp_server: DatabaseMCPServer = Depends(get_mcp_server),
-) -> dict:
+) -> dict[str, Any]:
     """
     Obtiene estado del rate limit.
 
@@ -723,7 +727,7 @@ async def execute_mcp_operation(
     user_id: UUID | None = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_session),
     mcp_server: DatabaseMCPServer = Depends(get_mcp_server),
-) -> dict:
+) -> dict[str, Any]:
     """
     Execute MCP operation (view or function).
 
