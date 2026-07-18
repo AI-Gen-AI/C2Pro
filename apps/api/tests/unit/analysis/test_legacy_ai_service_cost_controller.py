@@ -45,6 +45,17 @@ class _FakeCostController:
         self.tracks.append((tenant_id, cost))
 
 
+class _BudgetBlockingCostController:
+    def __init__(self, db: object) -> None:
+        self.db = db
+
+    async def check_budget_availability(self, tenant_id: object, cost: float) -> None:
+        _ = tenant_id, cost
+        from src.core.ai.cost_controller import BudgetExceededException
+
+        raise BudgetExceededException("budget exhausted")
+
+
 class _FakeWrapperResponse:
     content = '{"status": "OK", "notes": ""}'
     model_used = "claude-test"
@@ -92,3 +103,32 @@ async def test_ai_service_without_constructor_db_uses_tenant_session_cost_contro
     assert result == {"status": "OK", "notes": ""}
     assert len(_FakeCostController.checks) == 1
     assert len(_FakeCostController.tracks) == 1
+
+
+@pytest.mark.asyncio
+async def test_ai_service_translates_budget_denial_to_service_error(monkeypatch) -> None:
+    """Test Suite ID: TS-QA-SWAGGER-ANALYSIS-002."""
+    from src.analysis.adapters.ai import anthropic_client
+    from src.core.ai.cost_controller import BudgetExceededException
+    from src.core.exceptions import AIServiceError
+
+    monkeypatch.delenv("C2PRO_TEST_LIGHT", raising=False)
+    monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+    monkeypatch.setattr(
+        anthropic_client,
+        "_get_cost_controller",
+        lambda: (_BudgetBlockingCostController, BudgetExceededException),
+    )
+    monkeypatch.setattr(
+        anthropic_client,
+        "get_session_with_tenant",
+        lambda tenant_id: _AsyncContext(value={"tenant_id": tenant_id}),
+    )
+
+    service = anthropic_client.AIService(
+        wrapper=_FakeWrapper(),
+        tenant_id="00000000-0000-0000-0000-000000000099",
+    )
+
+    with pytest.raises(AIServiceError, match="budget exhausted"):
+        await service.run_extraction("critique system", "critique payload")
