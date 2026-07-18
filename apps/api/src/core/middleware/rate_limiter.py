@@ -10,6 +10,7 @@ import os
 import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, TypeAlias
 from uuid import UUID
 
 import jwt
@@ -24,6 +25,11 @@ from starlette.types import ASGIApp
 from src.config import settings
 
 logger = structlog.get_logger()
+
+if TYPE_CHECKING:
+    RequestType: TypeAlias = Request[Any]
+else:
+    RequestType = Request
 
 DEFAULT_USER_LIMIT = 20
 DEFAULT_TENANT_LIMIT = 60
@@ -58,7 +64,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._requests: dict[str, list[float]] = {}
 
     async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+        self, request: RequestType, call_next: Callable[[RequestType], Awaitable[Response]]
     ) -> Response:
         if not settings.rate_limit_enabled:
             return await call_next(request)
@@ -159,7 +165,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return response
 
     async def _dispatch_in_memory(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+        self, request: RequestType, call_next: Callable[[RequestType], Awaitable[Response]]
     ) -> Response:
         client_id = self._get_client_identifier(request)
         if self._is_rate_limited(client_id, request.url.path):
@@ -194,7 +200,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             logger.error("rate_limiter_init_failed", error=str(exc))
             return None
 
-    def _extract_ids(self, request: Request) -> tuple[UUID | None, UUID | None]:
+    def _extract_ids(self, request: RequestType) -> tuple[UUID | None, UUID | None]:
         tenant_id = getattr(request.state, "tenant_id", None)
         user_id = getattr(request.state, "user_id", None)
 
@@ -276,7 +282,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             logger.warning("rate_limiter_redis_error", error=str(exc))
             return None, None
 
-    def _get_client_identifier(self, request: Request) -> str:
+    def _get_client_identifier(self, request: RequestType) -> str:
         tenant_id = getattr(request.state, "tenant_id", None)
         if tenant_id:
             return f"tenant:{tenant_id}"
