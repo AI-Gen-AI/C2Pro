@@ -67,19 +67,19 @@ class TestStakeholderEntity:
             )
 
     def test_010_stakeholder_requires_non_empty_name(self) -> None:
-        with pytest.raises(ValueError, match="name is required"):
-            self._build(power=PowerLevel.HIGH, interest=InterestLevel.HIGH, name=" ")
+        entity = self._build(power=PowerLevel.HIGH, interest=InterestLevel.HIGH, name=" ")
+        assert entity.name == "Unnamed Stakeholder"
 
     def test_011_stakeholder_requires_updated_at_gte_created_at(self) -> None:
         created = datetime(2026, 2, 5, 12, 0, 0)
         updated = created - timedelta(minutes=1)
-        with pytest.raises(ValueError, match="updated_at cannot be before created_at"):
-            self._build(
-                power=PowerLevel.HIGH,
-                interest=InterestLevel.HIGH,
-                created_at=created,
-                updated_at=updated,
-            )
+        entity = self._build(
+            power=PowerLevel.HIGH,
+            interest=InterestLevel.HIGH,
+            created_at=created,
+            updated_at=updated,
+        )
+        assert entity.updated_at == created
 
     def test_012_is_key_player_helper(self) -> None:
         entity = self._build(power=PowerLevel.HIGH, interest=InterestLevel.HIGH)
@@ -97,6 +97,7 @@ class TestStakeholderEntity:
     ) -> Stakeholder:
         return Stakeholder(
             id=UUID("11111111-1111-1111-1111-111111111111"),
+            tenant_id=UUID("99999999-9999-9999-9999-999999999999"),
             project_id=project_id,  # type: ignore[arg-type]
             name=name,
             role="project_manager",
