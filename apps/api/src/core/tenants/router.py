@@ -116,7 +116,10 @@ async def update_ai_spend(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found",
         )
-    return await service.get_budget_status(tenant_id)
+    budget_status = await service.get_budget_status(tenant_id)
+    if budget_status is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    return budget_status
 
 
 @router.post(
@@ -137,7 +140,10 @@ async def reset_ai_spend(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found",
         )
-    return await service.get_budget_status(tenant_id)
+    budget_status = await service.get_budget_status(tenant_id)
+    if budget_status is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    return budget_status
 
 
 @router.get(
@@ -152,7 +158,10 @@ async def get_budget_status(
     """
     Get AI budget status for a tenant.
     """
-    return await service.get_budget_status(tenant_id)
+    budget_status = await service.get_budget_status(tenant_id)
+    if budget_status is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    return budget_status
 
 
 @router.get(
