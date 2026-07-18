@@ -324,9 +324,11 @@ All 14 subtasks (TASK-QA-200..213) complete:
 
 ### TASK-QA-322: mypy per-wave ratchet + regression certification
 
-**Priority**: P2 · **Owner**: qa · **Depends on**: TASK-DEV-031 · **Epic**: EPIC-MYPY-STRICT
+**Status**: Completed 2026-07-18 · **Priority**: P2 · **Owner**: qa · **Depends on**: TASK-DEV-031 · **Epic**: EPIC-MYPY-STRICT
 
 After each EPIC-MYPY-STRICT wave, independently verify the `mypy-baseline.txt` ratchet strictly decreased (no new errors, no suppressed strictness) and run risk-proportionate regression tests for the touched bounded contexts (tenant-isolation tests mandatory for any tenant/security-typed change).
+
+✅ Done (PR #284): mypy-baseline.txt refreshed from Linux CI report of main@f200c9ab — 1406 -> 740 lines (666 errors locked in as fixed). Verified new=0 before refresh; self-check new=0 fixed=0; LF-only.
 
 ### TASK-QA-323: mypy final zero-error certification
 
