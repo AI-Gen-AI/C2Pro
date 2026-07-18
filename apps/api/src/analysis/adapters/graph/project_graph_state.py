@@ -12,6 +12,7 @@ from src.analysis.adapters.graph.project_coherence_result import ProjectCoherenc
 from src.analysis.domain.contracts import DocumentArtifact
 from src.analysis.domain.node_result import NodeResult, merge_node_results
 from src.change_intelligence.domain.change_impact_report import ChangeImpactReport
+from src.core.tenants.types import TenantId
 
 
 class ProjectGraphArtifactRepository(Protocol):
@@ -21,7 +22,7 @@ class ProjectGraphArtifactRepository(Protocol):
         self,
         *,
         project_id: UUID,
-        tenant_id: UUID,
+        tenant_id: TenantId,
         document_id: UUID,
     ) -> list[DocumentArtifact]: ...
 
@@ -30,7 +31,7 @@ class ProjectGraphState(TypedDict):
     """Small Tier-2 state, separate from the Tier-1 document graph state."""
 
     project_id: UUID
-    tenant_id: UUID
+    tenant_id: TenantId
     trigger_event_id: UUID | None
     previous_snapshot_id: UUID | None
     changed_artifact_ids: list[UUID | str]
