@@ -173,7 +173,7 @@ def _ensure_accountable(
     stakeholders: Iterable[StakeholderInput],
 ) -> list[RaciAssignment]:
     existing = list(assignments)
-    by_wbs = {item.id: [] for item in wbs_items}
+    by_wbs: dict[UUID, list[RaciAssignment]] = {item.id: [] for item in wbs_items}
     for assignment in existing:
         by_wbs.setdefault(assignment.wbs_item_id, []).append(assignment)
 
