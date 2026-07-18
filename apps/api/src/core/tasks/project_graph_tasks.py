@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
@@ -17,6 +16,7 @@ from src.analysis.adapters.graph.project_graph import (
     build_project_graph,
     is_project_graph_enabled,
 )
+from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
 from src.analysis.adapters.persistence.document_artifact_repository import (
     SqlAlchemyDocumentArtifactRepository,
 )
@@ -65,7 +65,7 @@ async def run_project_graph_once(
         project_id=project_id,
         tenant_id=tenant_id,
     )
-    graph_input: dict[str, Any] = {
+    graph_input: ProjectGraphState = {
         "project_id": project_id,
         "tenant_id": tenant_id,
         "trigger_event_id": trigger_event_id,

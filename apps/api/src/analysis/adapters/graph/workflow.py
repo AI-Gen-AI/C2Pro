@@ -361,8 +361,10 @@ def _build_checkpointer() -> BaseCheckpointSaver[str]:
         if _checkpointer_pool is None:
             conn_string = settings.database_url_async.replace("postgresql+asyncpg://", "postgresql://")
 
+            # String form: cast()'s type argument is evaluated at runtime, and
+            # AsyncConnection is only imported under TYPE_CHECKING.
             _checkpointer_pool = cast(
-                AsyncConnectionPool[AsyncConnection[dict[str, Any]]],
+                "AsyncConnectionPool[AsyncConnection[dict[str, Any]]]",
                 AsyncConnectionPool(
                     conninfo=conn_string,
                     min_size=0,
