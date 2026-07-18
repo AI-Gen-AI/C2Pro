@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.auth.models import Tenant
+from src.core.tenants.schemas import BudgetStatusResponse
 
 logger = structlog.get_logger()
 
@@ -142,7 +143,7 @@ class TenantService:
             return True
         return tenant.is_at_user_limit
 
-    async def get_budget_status(self, tenant_id: UUID) -> dict:
+    async def get_budget_status(self, tenant_id: UUID) -> BudgetStatusResponse | None:
         """
         Get budget status for a tenant.
 
@@ -150,18 +151,18 @@ class TenantService:
             tenant_id: Tenant UUID
 
         Returns:
-            Dict with budget info
+            Budget status, or None when the tenant is unavailable.
         """
         tenant = await self.get_tenant(tenant_id)
         if not tenant:
-            return {"error": "Tenant not found"}
+            return None
 
-        return {
-            "tenant_id": str(tenant.id),
-            "monthly_budget": tenant.ai_budget_monthly,
-            "current_spend": tenant.ai_spend_current,
-            "remaining": max(0, tenant.ai_budget_monthly - tenant.ai_spend_current),
-            "usage_percentage": tenant.budget_usage_percentage,
-            "is_over_budget": tenant.is_over_budget,
-            "last_reset": tenant.ai_spend_last_reset.isoformat() if tenant.ai_spend_last_reset else None,
-        }
+        return BudgetStatusResponse(
+            tenant_id=str(tenant.id),
+            monthly_budget=tenant.ai_budget_monthly,
+            current_spend=tenant.ai_spend_current,
+            remaining=max(0, tenant.ai_budget_monthly - tenant.ai_spend_current),
+            usage_percentage=tenant.budget_usage_percentage,
+            is_over_budget=tenant.is_over_budget,
+            last_reset=tenant.ai_spend_last_reset.isoformat() if tenant.ai_spend_last_reset else None,
+        )
