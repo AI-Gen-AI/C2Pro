@@ -17,7 +17,28 @@ import pytest
 
 from src.coherence.graph.graph import evaluate_coherence
 from src.coherence.graph.state import EvaluationConfig
-from src.coherence.models import Clause
+from src.coherence.models import Clause, EnrichedCoherenceResult
+
+
+def _assert_honest_null_score(result: EnrichedCoherenceResult) -> None:
+    """
+    Assert the graceful-degradation contract for insufficient category coverage.
+
+    Coherence scores are honest: when there isn't enough assessed-category
+    evidence to be confident, the score is null (never a fabricated number).
+    Refers to: Honest Coherence Scoring (#136), ADR-009 SS14 active-weight guard,
+    TASK-COH-V1-06 AUDIT_INCOMPLETE meta-alert.
+    """
+    assert result.overall_score is None, (
+        f"expected an honest null score for insufficient evidence, got {result.overall_score}"
+    )
+    assert result.score_reason in ("insufficient_evidence", "insufficient_active_weight"), (
+        f"expected an honest-null reason, got {result.score_reason!r}"
+    )
+    assert any(a.rule_id == "AUDIT_INCOMPLETE" for a in result.alerts), (
+        "insufficient-evidence results must surface an AUDIT_INCOMPLETE meta-alert"
+    )
+
 
 # =============================================================================
 # EMPTY INPUT TESTS
@@ -34,7 +55,7 @@ def test_empty_clauses_handled_gracefully(clauses):
 
     Success Criteria:
     - No exceptions raised
-    - Returns valid result with score ~100 (no issues found)
+    - Returns an honest null score (zero categories assessed = insufficient evidence)
     """
     config = EvaluationConfig(low_budget_mode=True, include_rag_similarity=False)
 
@@ -50,8 +71,7 @@ def test_empty_clauses_handled_gracefully(clauses):
 
     # Should not crash
     assert result is not None
-    assert result.overall_score >= 95.0  # No issues = high score
-    assert len(result.alerts) == 0
+    _assert_honest_null_score(result)
     assert result.llm_cost_usd == pytest.approx(0.0)
 
 
@@ -90,7 +110,7 @@ def test_missing_data_fields_handled_gracefully(clause_data):
 
     # Should not crash
     assert result is not None
-    assert 0.0 <= result.overall_score <= 100.0
+    _assert_honest_null_score(result)
     assert result.llm_cost_usd == pytest.approx(0.0)
 
 
@@ -136,7 +156,7 @@ def test_malformed_dates_handled_gracefully(date_value):
 
     # Should not crash
     assert result is not None
-    assert 0.0 <= result.overall_score <= 100.0
+    _assert_honest_null_score(result)
     assert result.llm_cost_usd == pytest.approx(0.0)
 
 
@@ -182,7 +202,7 @@ def test_invalid_numeric_values_handled_gracefully(numeric_field, value):
 
     # Should not crash
     assert result is not None
-    assert 0.0 <= result.overall_score <= 100.0
+    _assert_honest_null_score(result)
     assert result.llm_cost_usd == pytest.approx(0.0)
 
 
@@ -225,7 +245,7 @@ def test_null_field_values_handled_gracefully(field_name, null_value):
 
     # Should not crash
     assert result is not None
-    assert 0.0 <= result.overall_score <= 100.0
+    _assert_honest_null_score(result)
     assert result.llm_cost_usd == pytest.approx(0.0)
 
 
@@ -270,7 +290,7 @@ def test_unicode_and_special_chars_handled(text_value):
 
     # Should not crash
     assert result is not None
-    assert 0.0 <= result.overall_score <= 100.0
+    _assert_honest_null_score(result)
     assert result.llm_cost_usd == pytest.approx(0.0)
 
 
@@ -318,7 +338,7 @@ def test_large_clause_count_handled_efficiently(clause_count):
 
     # Should not crash
     assert result is not None
-    assert 0.0 <= result.overall_score <= 100.0
+    _assert_honest_null_score(result)
     assert result.llm_cost_usd == pytest.approx(0.0)
 
     # Should complete in reasonable time
@@ -365,7 +385,7 @@ def test_very_long_clause_text_handled(text_length):
 
     # Should not crash
     assert result is not None
-    assert 0.0 <= result.overall_score <= 100.0
+    _assert_honest_null_score(result)
     assert result.llm_cost_usd == pytest.approx(0.0)
 
 
@@ -413,6 +433,6 @@ def test_mixed_edge_cases_all_together():
 
     # Should not crash
     assert result is not None
-    assert 0.0 <= result.overall_score <= 100.0
+    _assert_honest_null_score(result)
     assert result.llm_cost_usd == pytest.approx(0.0)
     assert isinstance(result.alerts, list)  # May or may not have alerts
