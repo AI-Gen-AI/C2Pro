@@ -63,7 +63,7 @@ async def test_legacy_coherence_dashboard_route_remains_supported(
 
     result = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
 
-    assert result["project_id"] == str(project.id)
+    assert result.project_id == str(project.id)
 
 
 @pytest.mark.asyncio
