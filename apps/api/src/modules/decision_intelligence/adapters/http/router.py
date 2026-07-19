@@ -7,10 +7,16 @@ Refers to Suite ID: TS-I13-E2E-REAL-001.
 from __future__ import annotations
 
 import base64
-from typing import Annotated, Any, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeAlias, cast
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+if TYPE_CHECKING:
+    RequestType: TypeAlias = Request[Any]
+else:
+    RequestType = Request
+
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -59,7 +65,7 @@ class ExecuteDecisionResponseDTO(BaseModel):
     approved_at: str | None = None
 
 
-def _get_runtime_port(request: Request, state_key: str) -> Any:
+def _get_runtime_port(request: RequestType, state_key: str) -> Any:
     service = getattr(request.app.state, state_key, None)
     if service is None:
         raise HTTPException(
@@ -72,23 +78,23 @@ def _get_runtime_port(request: Request, state_key: str) -> Any:
     return service
 
 
-def get_ingestion_service(request: Request) -> IngestionPort:
+def get_ingestion_service(request: RequestType) -> IngestionPort:
     return cast(IngestionPort, _get_runtime_port(request, "decision_ingestion_service"))
 
 
-def get_extraction_service(request: Request) -> ExtractionPort:
+def get_extraction_service(request: RequestType) -> ExtractionPort:
     return cast(ExtractionPort, _get_runtime_port(request, "decision_extraction_service"))
 
 
-def get_retrieval_service(request: Request) -> RetrievalPort:
+def get_retrieval_service(request: RequestType) -> RetrievalPort:
     return cast(RetrievalPort, _get_runtime_port(request, "decision_retrieval_service"))
 
 
-def get_coherence_scoring_service(request: Request) -> CoherenceScoringPort:
+def get_coherence_scoring_service(request: RequestType) -> CoherenceScoringPort:
     return cast(CoherenceScoringPort, _get_runtime_port(request, "decision_coherence_scoring_service"))
 
 
-def get_hitl_service(request: Request) -> HITLPort:
+def get_hitl_service(request: RequestType) -> HITLPort:
     return cast(HITLPort, _get_runtime_port(request, "decision_hitl_service"))
 
 
@@ -129,7 +135,7 @@ def get_decision_orchestration_service(
 )
 async def execute_decision_intelligence(
     payload: ExecuteDecisionRequestDTO,
-    request: Request,
+    request: RequestType,
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[DecisionOrchestrationService, Depends(get_decision_orchestration_service)],
 ) -> ExecuteDecisionResponseDTO | JSONResponse:

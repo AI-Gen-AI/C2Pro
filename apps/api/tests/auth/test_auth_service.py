@@ -926,3 +926,55 @@ class TestAuthServiceOtherMethods:
 
         with pytest.raises(AuthenticationError, match="Invalid token"):
             await AuthService.refresh_access_token(db, refresh_token)
+
+
+class TestDecodeTokenClaimRobustness:
+    """Signed-but-incomplete tokens must be a clean 401, never a 500.
+
+    Regression for the 52-residual sweep: decode_token fed payload.get("exp")/
+    ("iat")/("email") straight into fromtimestamp/TokenPayload — a token
+    missing any of them escaped as TypeError/ValidationError (unhandled 500)
+    instead of AuthenticationError.
+    """
+
+    @pytest.mark.asyncio
+    async def test_token_without_exp_iat_raises_authentication_error(self):
+        import jwt as pyjwt
+
+        token = pyjwt.encode(
+            {
+                "sub": str(uuid4()),
+                "tenant_id": str(uuid4()),
+                "email": "noexp@test.com",
+                "role": UserRole.VIEWER.value,
+                # no exp / iat
+            },
+            settings.jwt_secret_key,
+            algorithm=settings.jwt_algorithm,
+        )
+
+        with pytest.raises(AuthenticationError, match="Invalid token"):
+            await decode_token(token)
+
+    @pytest.mark.asyncio
+    async def test_token_without_email_raises_authentication_error(self):
+        import time
+
+        import jwt as pyjwt
+
+        now = int(time.time())
+        token = pyjwt.encode(
+            {
+                "sub": str(uuid4()),
+                "tenant_id": str(uuid4()),
+                "role": UserRole.VIEWER.value,
+                "exp": now + 600,
+                "iat": now,
+                # no email
+            },
+            settings.jwt_secret_key,
+            algorithm=settings.jwt_algorithm,
+        )
+
+        with pytest.raises(AuthenticationError, match="Invalid token"):
+            await decode_token(token)

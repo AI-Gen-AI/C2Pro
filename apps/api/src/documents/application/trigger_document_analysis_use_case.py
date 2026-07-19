@@ -61,7 +61,10 @@ class TriggerDocumentAnalysisUseCase:
             return await self._document_repository.get_by_id(
                 require_tenant_id(tenant_id), document_id
             )
-        return await self._document_repository.get_by_id(document_id)  # type: ignore[call-arg]
+        # Untenanted trigger path (Celery ingestion completion): the port's
+        # tenant-scoped get_by_id requires both args, so the previous one-arg
+        # call raised TypeError at runtime; the internal lookup exists for this.
+        return await self._document_repository.get_by_id_internal(document_id)
 
     async def execute(
         self, *, document_id: UUID, tenant_id: UUID | None = None

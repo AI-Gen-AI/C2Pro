@@ -71,3 +71,47 @@ async def test_trigger_enqueues_full_analysis_task_on_document_parsing_queue() -
             "queue": "document_parsing",
         }
     ]
+
+
+@dataclass
+class _StrictPortRepository:
+    """Implements the full port: tenant-scoped get_by_id requires BOTH args."""
+
+    document: Document | None
+    internal_calls: int = 0
+
+    async def get_by_id(self, tenant_id: UUID, document_id: UUID) -> Document | None:
+        assert tenant_id is not None and document_id is not None
+        return self.document
+
+    async def get_by_id_internal(self, document_id: UUID) -> Document | None:
+        self.internal_calls += 1
+        assert document_id is not None
+        return self.document
+
+
+@pytest.mark.asyncio
+async def test_untenanted_trigger_uses_internal_lookup() -> None:
+    """Regression: the tenant_id=None path called get_by_id with one arg
+    (suppressed by an ignore) — a TypeError at runtime that killed analysis
+    triggering from ingestion completion. It must use get_by_id_internal."""
+    document_id = uuid4()
+    document = Document(
+        id=document_id,
+        project_id=uuid4(),
+        tenant_id=uuid4(),
+        document_type=DocumentType.CONTRACT,
+        filename="contract.pdf",
+        upload_status=DocumentStatus.PARSED_PENDING_ANALYSIS,
+        document_metadata={"parsed_text": "Contract text"},
+    )
+    repo = _StrictPortRepository(document)
+    use_case = TriggerDocumentAnalysisUseCase(
+        document_repository=repo,
+        analysis_task=_TaskStub(),
+    )
+
+    result = await use_case.execute(tenant_id=None, document_id=document_id)
+
+    assert repo.internal_calls == 1
+    assert result["status"] == "queued"

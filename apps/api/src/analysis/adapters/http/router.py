@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, TypeAlias
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+if TYPE_CHECKING:
+    RequestType: TypeAlias = Request[Any]
+else:
+    RequestType = Request
+
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
@@ -275,7 +281,7 @@ class AnalyzeResponse(BaseModel):
 )
 async def analyze_document(
     payload: AnalyzeRequest,
-    _request: Request,
+    _request: RequestType,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
     use_case: AnalyzeDocumentUseCase = Depends(get_analyze_use_case),
@@ -329,7 +335,7 @@ async def analyze_document(
 @router.get("/projects/{project_id}/process/stream")
 async def stream_project_processing(
     project_id: UUID,
-    _request: Request,
+    _request: RequestType,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
 ) -> StreamingResponse:

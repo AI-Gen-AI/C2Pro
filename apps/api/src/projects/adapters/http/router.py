@@ -9,10 +9,16 @@ import asyncio
 from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Literal, TypedDict
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeAlias, TypedDict
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+
+if TYPE_CHECKING:
+    RequestType: TypeAlias = Request[Any]
+else:
+    RequestType = Request
+
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import case, func, select
@@ -599,7 +605,7 @@ async def put_project(
 async def update_project(
     project_id: UUID,
     updates: ProjectUpdateRequest,
-    request: Request,
+    request: RequestType,
     response: Response,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> ProjectResponse | JSONResponse:

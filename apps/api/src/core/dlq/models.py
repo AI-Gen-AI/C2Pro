@@ -4,6 +4,8 @@ Part of TASK-BCK-022: Wire TriggerDocumentAnalysisUseCase to Celery ingestion co
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import Column, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -74,7 +76,7 @@ class DLQFailedTask(Base):
         server_default=text("3"),
         comment="Maximum retry attempts before exhaustion",
     )
-    status = Column(
+    status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
         server_default=text("'pending'"),
@@ -87,12 +89,12 @@ class DLQFailedTask(Base):
         nullable=False,
         server_default=text("NOW()"),
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
         server_default=text("NOW()"),
     )
-    next_retry_at = Column(
+    next_retry_at: Mapped[datetime | None] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=True,
         comment="Scheduled time for next retry (exponential backoff)",

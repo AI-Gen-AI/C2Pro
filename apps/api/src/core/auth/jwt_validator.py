@@ -87,9 +87,12 @@ class JwtValidator:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
         exp_raw = payload.get("exp")
-        exp_dt = datetime.fromtimestamp(exp_raw) if isinstance(exp_raw, int | float) else exp_raw
         iat_raw = payload.get("iat")
-        iat_dt = datetime.fromtimestamp(iat_raw) if isinstance(iat_raw, int | float) else iat_raw
+        if not isinstance(exp_raw, int | float) or not isinstance(iat_raw, int | float):
+            # A signed token without numeric exp/iat is invalid, not a 500.
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        exp_dt = datetime.fromtimestamp(exp_raw)
+        iat_dt = datetime.fromtimestamp(iat_raw)
         return JWTClaims(
             sub=sub_uuid,
             tenant_id=tenant_uuid,

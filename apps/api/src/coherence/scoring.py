@@ -27,7 +27,12 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 from functools import total_ordering
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
+from uuid import UUID
+
+if TYPE_CHECKING:
+    from src.coherence.application.dtos.coherence_v2_dtos import CoherenceV2Payload
+    from src.coherence.services.v2.evidence_service import EvidenceBundle
 
 # Temporarily add the parent directory to sys.path to allow relative imports when run directly
 script_dir = os.path.dirname(__file__)
@@ -47,10 +52,14 @@ from src.coherence.domain.v2_constants import (  # noqa: E402
 )
 from src.coherence.models import (  # noqa: E402
     Alert,
+    AlertCategory,
     CategoryBreakdown,
+    CoherenceCategory,
     Evidence,
     FindingSignal,
+    FindingSource,
     SeverityCount,
+    SeverityLevel,
 )
 
 # =============================================================================
@@ -446,10 +455,15 @@ class ScoringService:
                 },
             )
 
-        # Weighted mean over assessed categories only (no coverage_ratio multiplier)
+        # Weighted mean over assessed categories only (no coverage_ratio multiplier).
+        # Every assessed category was scored in the loop above, so filter the
+        # Optional dict down to the proven-non-None entries.
+        assessed_scores = {
+            c: score for c in assessed if (score := category_scores[c]) is not None
+        }
         assessed_weight_sum = sum(DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) for c in assessed)
         global_score = round(
-            sum(DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) * category_scores[c] for c in assessed)
+            sum(DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) * s for c, s in assessed_scores.items())
             / assessed_weight_sum,
             1,
         )
@@ -556,7 +570,7 @@ class ScoringService:
         impact = self._severity_to_impact(alert.severity)
 
         # Infer source from rule_id pattern
-        source = "llm" if alert.rule_id.startswith("R-") else "deterministic"
+        source: FindingSource = "llm" if alert.rule_id.startswith("R-") else "deterministic"
 
         # Map category
         category = self._alert_category_to_coherence_category(alert.category)
@@ -567,7 +581,7 @@ class ScoringService:
             source=source,
             impact_score=impact,
             confidence=1.0,  # Legacy alerts assumed high confidence
-            severity=alert.severity.lower(),
+            severity=self._normalize_severity(alert.severity),
             category=category,
             evidence_summary=alert.message,
             quote=alert.evidence.quote if alert.evidence else "",
@@ -585,9 +599,24 @@ class ScoringService:
         return mapping.get(severity.lower(), 0.50)
 
     @staticmethod
-    def _alert_category_to_coherence_category(category: str) -> str:
+    def _normalize_severity(severity: str) -> SeverityLevel:
+        """Clamp a free-form alert severity to the strict taxonomy.
+
+        Alert.severity is an unvalidated str; an out-of-set value used to blow
+        up FindingSignal's Literal validation mid-evaluation. Unknown values
+        fall back to "medium", matching _severity_to_impact's 0.50 default.
+        """
+        normalized = severity.lower()
+        allowed: tuple[SeverityLevel, ...] = ("critical", "high", "medium", "low", "info")
+        for level in allowed:
+            if normalized == level:
+                return level
+        return "medium"
+
+    @staticmethod
+    def _alert_category_to_coherence_category(category: str) -> CoherenceCategory:
         """Map legacy alert categories to v0.3 coherence categories."""
-        mapping = {
+        mapping: dict[str, CoherenceCategory] = {
             "financial": "BUDGET",
             "legal": "LEGAL",
             "technical": "TECHNICAL",
@@ -681,7 +710,7 @@ class ScoringService:
 
             breakdown_list.append(
                 CategoryBreakdown(
-                    category=category,
+                    category=cast(AlertCategory, category),
                     score=category_score,
                     alert_count=len(cat_alerts),
                     severity_breakdown=severity_breakdown,
@@ -826,11 +855,11 @@ if __name__ == "__main__":
 # Source of truth: ADR-009 §5, §6, §14.
 # =============================================================================
 def calculate_v2_from_signals(
-    signals,
-    evidence_bundles,
-    applicability_map,
-    project_id,
-):
+    signals: list[FindingSignal] | None,
+    evidence_bundles: dict[str, EvidenceBundle],
+    applicability_map: dict[str, tuple[bool, str | None]],
+    project_id: UUID,
+) -> CoherenceV2Payload:
     """Compute the canonical v2 payload.
 
     Args:
@@ -910,9 +939,13 @@ def calculate_v2_from_signals(
         )
 
     global_block = global_agg.aggregate(categories)
-    return CoherenceV2Payload(
-        project_id=project_id,
-        generated_at=datetime.now(UTC),
-        **{"global": global_block},
-        categories=categories,
+    # model_validate: "global" is a Python keyword, so it can only be supplied
+    # via its alias through a dict — a **{"global": ...} unpack defeats mypy.
+    return CoherenceV2Payload.model_validate(
+        {
+            "project_id": project_id,
+            "generated_at": datetime.now(UTC),
+            "global": global_block,
+            "categories": categories,
+        }
     )

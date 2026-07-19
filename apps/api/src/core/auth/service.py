@@ -189,13 +189,20 @@ async def decode_token(token: str) -> TokenPayload:
         tenant_id = UUID(tenant_id_raw)
 
         email = payload.get("email")
+        if not email:
+            raise AuthenticationError("Invalid token")
         role_raw = payload.get("role")
         if not role_raw:
             raise AuthenticationError("Invalid token")
         role = UserRole(role_raw)
 
-        exp = datetime.fromtimestamp(payload.get("exp"))
-        iat = datetime.fromtimestamp(payload.get("iat"))
+        # A signed token missing exp/iat must be a clean 401, not a TypeError 500.
+        exp_raw = payload.get("exp")
+        iat_raw = payload.get("iat")
+        if exp_raw is None or iat_raw is None:
+            raise AuthenticationError("Invalid token")
+        exp = datetime.fromtimestamp(exp_raw)
+        iat = datetime.fromtimestamp(iat_raw)
 
         # Check if token is revoked (TASK-ARCH-009)
         if await is_token_revoked_async(token):
