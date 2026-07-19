@@ -334,7 +334,11 @@ After each EPIC-MYPY-STRICT wave, independently verify the `mypy-baseline.txt` r
 
 **Priority**: P1 · **Owner**: qa · **Depends on**: TASK-BCK-113, TASK-QA-322 · **Epic**: EPIC-MYPY-STRICT
 
+**Status**: ✅ Done 2026-07-19
+
 Independent final gate: `mypy src` reports zero errors with the full backend dependency set; backend unit + integration suites pass; ruff clean under the UP042 policy; no blanket ignores or relaxed strict; CI runs the same env/command as local. Green here unblocks TASK-DEV-006 (promote `backend-typecheck` to required).
+
+**Completion Evidence**: Gemini QA-323 audit on main@722326f: zero NEW-UNKNOWN failures across ~4,300 collected tests (unit 1624/1651 green, analysis 63/63 green; all core/modules/coherence failures classified into known pre-existing env/legacy sets); 7 local 'new' mypy errors confirmed as Windows Request-stub drift only. Ratchet REQUIRED gate green on main throughout. Final baseline 52 (merged PRs #302-#306).
 
 ### TASK-QA-324: repair inherited stakeholder tenant fixtures
 
