@@ -112,7 +112,8 @@ async def test_processing_stream_returns_stage_and_complete_events(
     )
 
     response = await client.get(
-        f"/api/v1/analysis/projects/{project.id}/process/stream?access_token={token}"
+        f"/api/v1/analysis/projects/{project.id}/process/stream",
+        headers={"Authorization": f"Bearer {token}"},
     )
 
     assert response.status_code == 200
