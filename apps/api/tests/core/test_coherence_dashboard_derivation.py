@@ -5,7 +5,6 @@ TS-E2E-FLW-DOC-001: Coherence dashboard persisted derivation tests.
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
@@ -25,7 +24,7 @@ def _request_for_tenant(tenant_id):
 
 @pytest.mark.asyncio
 async def test_dashboard_defaults_to_zero_when_no_persisted_coherence_sources(
-    db, test_tenant, monkeypatch
+    db, test_tenant
 ) -> None:
     project = ProjectORM(
         id=uuid4(),
@@ -46,12 +45,6 @@ async def test_dashboard_defaults_to_zero_when_no_persisted_coherence_sources(
     db.add(project)
     await db.commit()
 
-    @asynccontextmanager
-    async def _session_with_tenant(_tenant_id):
-        yield db
-
-    monkeypatch.setattr("src.coherence.router.get_session_with_tenant", _session_with_tenant)
-
     response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
 
     assert response["coherence_score"] == 0
@@ -68,7 +61,7 @@ async def test_dashboard_defaults_to_zero_when_no_persisted_coherence_sources(
 
 @pytest.mark.asyncio
 async def test_dashboard_uses_analysis_updated_at_and_falls_back_to_coherence_results(
-    db, test_tenant, monkeypatch
+    db, test_tenant
 ) -> None:
     coherence_time = datetime.now(UTC).replace(tzinfo=None, microsecond=0) - timedelta(hours=2)
     project = ProjectORM(
@@ -127,12 +120,6 @@ async def test_dashboard_uses_analysis_updated_at_and_falls_back_to_coherence_re
     db.add(analysis)
     await db.commit()
 
-    @asynccontextmanager
-    async def _session_with_tenant(_tenant_id):
-        yield db
-
-    monkeypatch.setattr("src.coherence.router.get_session_with_tenant", _session_with_tenant)
-
     response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
 
     assert response["coherence_score"] == 61
@@ -143,7 +130,7 @@ async def test_dashboard_uses_analysis_updated_at_and_falls_back_to_coherence_re
 
 @pytest.mark.asyncio
 async def test_dashboard_tolerates_malformed_analysis_breakdown_payloads(
-    db, test_tenant, monkeypatch
+    db, test_tenant
 ) -> None:
     project = ProjectORM(
         id=uuid4(),
@@ -178,12 +165,6 @@ async def test_dashboard_tolerates_malformed_analysis_breakdown_payloads(
     )
     db.add(analysis)
     await db.commit()
-
-    @asynccontextmanager
-    async def _session_with_tenant(_tenant_id):
-        yield db
-
-    monkeypatch.setattr("src.coherence.router.get_session_with_tenant", _session_with_tenant)
 
     response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
 
