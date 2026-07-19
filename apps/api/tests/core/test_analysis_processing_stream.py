@@ -45,7 +45,7 @@ async def test_processing_stream_returns_stage_and_complete_events(
         status="active",
         currency="EUR",
         coherence_score=78,
-        last_analysis_at=datetime.now(UTC),
+        last_analysis_at=datetime.now(UTC).replace(tzinfo=None),
     )
     db.add(project)
     await db.flush()
@@ -86,7 +86,7 @@ async def test_processing_stream_returns_stage_and_complete_events(
         result_json={"source": "test"},
         coherence_score=78,
         alerts_count=2,
-        completed_at=datetime.now(UTC),
+        completed_at=datetime.now(UTC).replace(tzinfo=None),
     )
     db.add(analysis)
     db.add(
