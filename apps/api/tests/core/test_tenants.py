@@ -34,18 +34,19 @@ def test_core_tenants_router_exports_apirouter():
     assert isinstance(tenants_router_module.router, APIRouter)
 
 
-def test_core_tenants_schema_accepts_empty_payload():
-    """Should keep the placeholder tenant schema instantiable."""
-    schema = tenants_schemas.Tenant()
+def test_core_tenants_create_schema_requires_the_live_tenant_fields():
+    """Tenant creation keeps the name and slug boundary required by the API."""
+    schema = tenants_schemas.TenantCreate(name="Core Test Tenant", slug="core-test-tenant")
 
-    assert schema.model_dump() == {}
+    assert schema.model_dump() == {"name": "Core Test Tenant", "slug": "core-test-tenant"}
 
 
-def test_core_tenant_service_placeholder_is_instantiable():
-    """Should keep the placeholder service constructible for DI wiring."""
-    service = TenantService()
+def test_core_tenant_service_retains_the_injected_database_session():
+    """Tenant service construction uses the database session injected by the router."""
+    db = SimpleNamespace()
+    service = TenantService(db)
 
-    assert isinstance(service, TenantService)
+    assert service.db is db
 
 
 @pytest.mark.asyncio
