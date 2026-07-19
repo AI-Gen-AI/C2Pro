@@ -71,7 +71,11 @@ from src.project_state.adapters.persistence import (
 from src.projects.adapters.persistence import models as project_models  # noqa: F401, E402
 from src.stakeholders.adapters.persistence import models as stakeholder_models  # noqa: F401, E402
 from src.temporal.adapters.persistence import models as temporal_models  # noqa: F401, E402
-from tests._bootstrap import _ensure_test_fk_stub_tables  # noqa: E402
+from tests._bootstrap import (  # noqa: E402
+    _create_metadata_enum_types,
+    _ensure_test_fk_stub_tables,
+    _set_metadata_enum_create_type,
+)
 from tests.support.postgres_bootstrap import ensure_pgvector_extension  # noqa: E402
 from tests.support.seeded_identity_guard import assert_seeded_identity_isolation_safe  # noqa: E402
 
@@ -193,15 +197,13 @@ async def seeded_auth_context() -> dict[str, str]:
     database_url = settings.database_url
     if database_url.startswith("postgresql://"):
         database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    root_database_url = database_url.rsplit("/", 1)[0] + "/postgres"
 
     assert_seeded_identity_isolation_safe(database_url)
 
     engine = create_async_engine(
-        root_database_url,
+        database_url,
         echo=False,
         pool_pre_ping=True,
-        isolation_level="AUTOCOMMIT",
         connect_args={"statement_cache_size": 0},
     )
     session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
@@ -210,7 +212,12 @@ async def seeded_auth_context() -> dict[str, str]:
     async with engine.begin() as conn:
         await conn.execute(text("SET LOCAL search_path TO public"))
         await ensure_pgvector_extension(conn)
-        await conn.run_sync(Base.metadata.create_all)
+        await _create_metadata_enum_types(conn)
+        _set_metadata_enum_create_type(False)
+        try:
+            await conn.run_sync(Base.metadata.create_all)
+        finally:
+            _set_metadata_enum_create_type(True)
 
     async with session_factory() as session:
         tenant_result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
