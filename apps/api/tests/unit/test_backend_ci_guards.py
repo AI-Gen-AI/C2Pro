@@ -450,7 +450,7 @@ def test_backend_integration_job_is_required_gate_in_ci_workflow() -> None:
     assert "Advisory notice" not in contents
 
 
-def test_frontend_build_job_present_and_advisory_in_ci_workflow() -> None:
+def test_frontend_build_job_present_and_required_in_ci_workflow() -> None:
     """Test Suite ID: TS-CI-BACKEND-GUARDS-001 (TASK-DEV-018)."""
     repo_root = Path(__file__).resolve().parents[4]
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
@@ -473,8 +473,8 @@ def test_frontend_build_job_present_and_advisory_in_ci_workflow() -> None:
     # ci-status must wait on it so a build break is visible in the summary...
     assert "frontend-build" in jobs["ci-status"]["needs"]
 
-    # ...but it must be ADVISORY, not REQUIRED, until proven stable in CI
-    # (TASK-DEV-018 explicitly proposes rather than forces promotion).
+    # ...and it is REQUIRED (TASK-DEV-032: promoted 2026-07-19 after a stable
+    # green streak; skipped-by-path-filter still counts as pass in the join).
     assert '"frontend-build:$RESULT_FRONTEND_BUILD"' in contents
 
     advisory_block_started = False
@@ -501,6 +501,6 @@ def test_frontend_build_job_present_and_advisory_in_ci_workflow() -> None:
                 continue
             advisory_jobs.append(line_stripped.strip('"'))
 
-    assert "frontend-build" in [job.split(":")[0] for job in advisory_jobs]
-    assert "frontend-build" not in [job.split(":")[0] for job in required_jobs]
+    assert "frontend-build" in [job.split(":")[0] for job in required_jobs]
+    assert "frontend-build" not in [job.split(":")[0] for job in advisory_jobs]
     assert "Advisory: the integration suite has pre-existing failures on main" not in contents

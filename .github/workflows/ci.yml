@@ -7,7 +7,7 @@
 #     so docs-only PRs finish in under a minute. The workflow itself has NO
 #     `paths:` trigger filter on purpose: the final `ci-status` join job must
 #     always report, because it is the single required branch-protection check.
-#   * Advisory (non-gating) job: frontend-build only (added 2026-07-17,
+#   * Advisory (non-gating) jobs: none (frontend-build promoted to required 2026-07-19;
 #     TASK-DEV-018 — no CI job previously ran `next build`, only Vercel at deploy
 #     time; advisory until it has run green for a while, then promote to
 #     REQUIRED_JOBS). backend-typecheck (mypy ratchet) was promoted to required
@@ -696,10 +696,9 @@ jobs:
             "frontend-quality:$RESULT_FRONTEND_QUALITY"
             "frontend-test:$RESULT_FRONTEND_TEST"
             "frontend-e2e-smoke:$RESULT_FRONTEND_E2E"
-          )
-          ADVISORY_JOBS=(
             "frontend-build:$RESULT_FRONTEND_BUILD"
           )
+          ADVISORY_JOBS=()
 
           {
             echo "## CI Gate"
