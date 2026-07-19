@@ -30,7 +30,7 @@ jobs:
       SUPABASE_URL: https://test.supabase.co
       SUPABASE_ANON_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock
       SUPABASE_SERVICE_ROLE_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock.service
-      ANTHROPIC_API_KEY: sk-ant-test-mock-key
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       REDIS_URL: redis://localhost:6379/0
 
     services:
