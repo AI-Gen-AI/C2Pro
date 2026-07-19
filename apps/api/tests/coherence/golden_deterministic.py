@@ -84,8 +84,14 @@ GOLDEN_CASES = [
                 },
             },
         ],
-        "expected_findings": 3,
-        "expected_rules_triggered": {"DET-BUD-SUM", "DET-CRS-BUDCON", "DET-TIM-PREDECESSOR"},
+        # c3's bom_items has item_name/lead_time_days (material content) but no
+        # spec_reference/standard/norm field, so DET-TEC-SPEC legitimately fires
+        # too (src/coherence/rules_engine/deterministic.py:757-774). The original
+        # expected set under-counted this rule since the fixture's introduction.
+        "expected_findings": 4,
+        "expected_rules_triggered": {
+            "DET-BUD-SUM", "DET-CRS-BUDCON", "DET-TIM-PREDECESSOR", "DET-TEC-SPEC",
+        },
     },
     {
         "case_id": "GOLD-DET-003",
