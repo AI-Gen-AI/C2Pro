@@ -99,18 +99,61 @@ def sample_payment_clause() -> Clause:
 
 
 @pytest.fixture
+def sample_legal_clause() -> Clause:
+    """Legal/contract clause with warranty and termination terms."""
+    return Clause(
+        id="LEG-001",
+        text=(
+            "Contract warranty and liability: Contractor warrants all work for 24 months "
+            "against defects. Termination notice period is 30 days. Any dispute shall be "
+            "resolved via binding arbitration under the agreement's indemnity clause."
+        ),
+        data={
+            "warranty_months": 24,
+            "notice_period_days": 30,
+        }
+    )
+
+
+@pytest.fixture
+def sample_quality_clause() -> Clause:
+    """Quality/inspection clause with explicit standards."""
+    return Clause(
+        id="QUA-001",
+        text=(
+            "Quality inspection and testing: All materials shall be inspected against "
+            "ISO 9001 quality standards prior to acceptance. Inspection frequency is weekly "
+            "and any defect tolerance exceeding specification triggers rejection."
+        ),
+        data={
+            "quality_standards": ["ISO 9001"],
+            "inspection_frequency": "weekly",
+        }
+    )
+
+
+@pytest.fixture
 def sample_clauses(
     sample_budget_clause,
     sample_schedule_clause,
     sample_scope_clause,
     sample_payment_clause,
+    sample_legal_clause,
+    sample_quality_clause,
 ) -> list[Clause]:
-    """Collection of sample clauses for full graph testing."""
+    """Collection of sample clauses for full graph testing.
+
+    Spans BUDGET, TIME, SCOPE, LEGAL, and QUALITY signals so category
+    coverage clears MIN_ACTIVE_WEIGHT (ADR-009 SS14) and the graph
+    produces a real (non-honest-null) score.
+    """
     return [
         sample_budget_clause,
         sample_schedule_clause,
         sample_scope_clause,
         sample_payment_clause,
+        sample_legal_clause,
+        sample_quality_clause,
     ]
 
 
@@ -164,8 +207,12 @@ class TestGraphStructure:
         # Should return same compiled instance
         assert graph1 is graph2
 
-    def test_subgraph_can_be_invoked(self, sample_clauses, low_budget_config):
-        """Graph can be invoked with initial state."""
+    async def test_subgraph_can_be_invoked(self, sample_clauses, low_budget_config):
+        """Graph can be invoked with initial state.
+
+        The graph's llm_semantic_evaluate node is async-only (fix for the
+        coherence LLM event-loop bug), so it must be invoked via ainvoke.
+        """
         graph = get_coherence_subgraph()
 
         initial_state = CoherenceGraphState(
@@ -175,7 +222,7 @@ class TestGraphStructure:
         )
 
         # Should not raise
-        final_state = graph.invoke(initial_state)
+        final_state = await graph.ainvoke(initial_state)
         assert final_state is not None
 
 
@@ -341,7 +388,13 @@ class TestScoringArbiterNode:
     """Tests for the scoring_arbiter node."""
 
     def test_calculates_score_from_signals(self, low_budget_config):
-        """Score is calculated from combined signals."""
+        """Score is calculated from combined signals.
+
+        scoring_arbiter is coverage-aware (ADR-009 SS14): it needs
+        coverage_map to reflect which categories were actually assessed,
+        with enough weight to clear MIN_ACTIVE_WEIGHT (0.35), otherwise it
+        honestly returns score=None regardless of signals present.
+        """
         signals = [
             FindingSignal(
                 rule_id="TEST-001",
@@ -362,6 +415,7 @@ class TestScoringArbiterNode:
             deterministic_signals=signals,
             llm_signals=[],
             cross_signals=[],
+            coverage_map={"BUDGET": True, "SCOPE": True, "TIME": True},
             config=low_budget_config,
         )
 
@@ -377,20 +431,30 @@ class TestScoringArbiterNode:
         assert len(result["all_signals"]) == 1
 
     def test_perfect_score_no_findings(self, low_budget_config):
-        """No findings results in high score."""
+        """No findings results in the inherent-risk ceiling when all categories are assessed.
+
+        HeuristicBaselineProvider caps an assessed-but-clean category at 90.0
+        (never a fabricated 100) — "clean so far" isn't proof of zero risk.
+        Refers to: src/coherence/scoring.py HeuristicBaselineProvider docstring
+        (Band [80, 90]; clean elsewhere -> 90).
+        """
         state = CoherenceGraphState(
             project_id="test",
             clauses=[],
             deterministic_signals=[],
             llm_signals=[],
             cross_signals=[],
+            coverage_map={
+                "SCOPE": True, "BUDGET": True, "TIME": True,
+                "TECHNICAL": True, "LEGAL": True, "QUALITY": True,
+            },
             config=low_budget_config,
         )
 
         result = scoring_arbiter(state)
 
-        # No findings = perfect score (close to 97.0)
-        assert result["score"] >= 95.0
+        # No findings, full coverage = inherent-risk ceiling, not a fabricated 100
+        assert result["score"] == pytest.approx(90.0)
 
     def test_high_impact_findings_lower_score(self, low_budget_config):
         """High impact findings result in lower score."""
@@ -415,13 +479,16 @@ class TestScoringArbiterNode:
             deterministic_signals=signals,
             llm_signals=[],
             cross_signals=[],
+            coverage_map={"BUDGET": True, "SCOPE": True, "TIME": True},
             config=low_budget_config,
         )
 
         result = scoring_arbiter(state)
 
-        # Multiple critical findings = low score
-        assert result["score"] < 50.0
+        # Multiple critical findings in one category pull the weighted-average
+        # score well below the clean baseline (~90, see test_perfect_score_no_findings)
+        # even though the other two assessed categories stay clean.
+        assert result["score"] < 65.0
 
 
 class TestFormatOutputNode:
@@ -484,24 +551,56 @@ class TestFullGraphInvocation:
         assert 5.0 <= result.overall_score <= 97.0
 
     def test_evaluate_coherence_with_budget_overrun(self):
-        """Budget overrun clause reduces score."""
+        """Budget overrun clause reduces score.
+
+        Paired with clean SCOPE/LEGAL/QUALITY clauses so enough category
+        weight is assessed to clear MIN_ACTIVE_WEIGHT (ADR-009 SS14) and
+        produce a real (non-honest-null) score.
+        """
         overrun_clause = Clause(
             id="BUD-SEVERE",
             text="Severe budget overrun: 50% over approved budget. Immediate action required.",
             data={"planned": 100000, "current": 150000, "variance_pct": 50.0}
         )
+        clean_scope_clause = Clause(
+            id="SCP-CLEAN",
+            text="Scope: Construct a 500 sqm warehouse including concrete foundation, steel structure, metal roof, and 2 loading docks.",
+            data={"area_sqm": 500, "structure_type": "steel"},
+        )
+        clean_legal_clause = Clause(
+            id="LEG-CLEAN",
+            text=(
+                "Contract warranty and liability: Contractor warrants all work for 24 months "
+                "against defects. Termination notice period is 30 days."
+            ),
+            data={"warranty_months": 24, "notice_period_days": 30},
+        )
+        clean_quality_clause = Clause(
+            id="QUA-CLEAN",
+            text=(
+                "Quality inspection and testing: All materials shall be inspected against "
+                "ISO 9001 quality standards prior to acceptance."
+            ),
+            data={"quality_standards": ["ISO 9001"], "inspection_frequency": "weekly", "inspection_method": "visual and dimensional check"},
+        )
 
         result = evaluate_coherence(
-            clauses=[overrun_clause],
+            clauses=[overrun_clause, clean_scope_clause, clean_legal_clause, clean_quality_clause],
             project_id="test",
             config=EvaluationConfig(low_budget_mode=True),
         )
 
         # Severe overrun should lower score
+        assert result.overall_score is not None
         assert result.overall_score < 90.0
 
     def test_evaluate_coherence_with_clean_clauses(self):
-        """Clean clauses result in high score."""
+        """Clean clauses result in high score.
+
+        Spans SCOPE/LEGAL/QUALITY (each clears the router's per-category
+        evidence threshold on its own, unlike the terser BUDGET/TIME text
+        below) so enough weight is assessed to clear MIN_ACTIVE_WEIGHT.
+        """
         clean_clauses = [
             Clause(
                 id="CLEAN-001",
@@ -510,8 +609,31 @@ class TestFullGraphInvocation:
             ),
             Clause(
                 id="CLEAN-002",
-                text="Delivery: All materials shall be delivered by 2024-06-01 to the project site.",
-                data={"date": "2024-06-01", "location": "project site"}
+                text=(
+                    "Scope: Construct a 500 sqm warehouse including concrete foundation, "
+                    "steel structure, metal roof, and 2 loading docks."
+                ),
+                data={
+                    "area_sqm": 500,
+                    "structure_type": "steel",
+                    "deliverables": ["warehouse", "concrete foundation", "steel structure"],
+                },
+            ),
+            Clause(
+                id="CLEAN-003",
+                text=(
+                    "Contract warranty and liability: Contractor warrants all work for 24 months "
+                    "against defects. Termination notice period is 30 days."
+                ),
+                data={"warranty_months": 24, "notice_period_days": 30},
+            ),
+            Clause(
+                id="CLEAN-004",
+                text=(
+                    "Quality inspection and testing: All materials shall be inspected against "
+                    "ISO 9001 quality standards prior to acceptance."
+                ),
+                data={"quality_standards": ["ISO 9001"], "inspection_frequency": "weekly", "inspection_method": "visual and dimensional check"},
             ),
         ]
 
@@ -522,6 +644,7 @@ class TestFullGraphInvocation:
         )
 
         # Clean clauses = high score
+        assert result.overall_score is not None
         assert result.overall_score >= 80.0
 
     def test_graph_populates_finding_signals(self, sample_clauses):
@@ -612,7 +735,7 @@ class TestHelperFunctions:
 class TestStateFlow:
     """Tests for state flow through the graph."""
 
-    def test_state_accumulates_signals(self, sample_clauses, low_budget_config):
+    async def test_state_accumulates_signals(self, sample_clauses, low_budget_config):
         """Signals accumulate through the graph execution."""
         initial_state = CoherenceGraphState(
             project_id="test",
@@ -621,14 +744,14 @@ class TestStateFlow:
         )
 
         graph = get_coherence_subgraph()
-        final_state = graph.invoke(initial_state)
+        final_state = await graph.ainvoke(initial_state)
 
         # Final state should have accumulated all signals
         assert "all_signals" in final_state
         assert "score" in final_state
         assert "result" in final_state
 
-    def test_errors_captured_in_state(self, low_budget_config):
+    async def test_errors_captured_in_state(self, low_budget_config):
         """Errors during execution are captured in state."""
         # Empty clauses should still work (edge case)
         initial_state = CoherenceGraphState(
@@ -638,7 +761,7 @@ class TestStateFlow:
         )
 
         graph = get_coherence_subgraph()
-        final_state = graph.invoke(initial_state)
+        final_state = await graph.ainvoke(initial_state)
 
         # Should complete without crashing
         assert final_state is not None
