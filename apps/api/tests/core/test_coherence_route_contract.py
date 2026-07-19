@@ -4,7 +4,7 @@ TS-E2E-FLW-DOC-001: Coherence route contract tests.
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -14,16 +14,7 @@ from src.projects.adapters.persistence.models import ProjectORM
 
 
 def _request_for_tenant(tenant_id):
-    class _State:
-        pass
-
-    state = _State()
-    state.tenant_id = tenant_id
-    class _Req:
-        pass
-    req = _Req()
-    req.state = state
-    return req
+    return SimpleNamespace(tenant_id=tenant_id)
 
 
 @pytest.mark.asyncio
@@ -58,7 +49,6 @@ async def test_canonical_coherence_dashboard_route_exists(
 async def test_legacy_coherence_dashboard_route_remains_supported(
     db,
     test_tenant,
-    monkeypatch,
 ) -> None:
     project = ProjectORM(
         id=uuid4(),
@@ -71,13 +61,7 @@ async def test_legacy_coherence_dashboard_route_remains_supported(
     db.add(project)
     await db.commit()
 
-    @asynccontextmanager
-    async def _session_with_tenant(_tenant_id):
-        yield db
-
-    monkeypatch.setattr("src.coherence.router.get_session_with_tenant", _session_with_tenant)
-
-    result = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id))
+    result = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
 
     assert result["project_id"] == str(project.id)
 
