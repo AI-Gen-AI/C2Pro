@@ -1,30 +1,93 @@
-"""
-Test Suite ID: TASK-051
+"""Test Suite ID: TASK-051.
 
-Frontend support route contract tests for backend endpoints that were only
-available through MSW mocks.
+Frontend support route contracts, including their database and authenticated
+dependency seams.
 """
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from types import SimpleNamespace
+from uuid import UUID, uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.core.frontend_support.router import router as frontend_support_router
+from src.core.auth.dependencies import get_current_user
+from src.core.auth.models import User, UserRole
+from src.core.frontend_support.router import (
+    _get_consent_repository,
+)
+from src.core.frontend_support.router import (
+    router as frontend_support_router,
+)
 
 
-def _build_client() -> TestClient:
+@dataclass
+class _ConsentRecord:
+    categories: dict[str, bool]
+
+
+class _FakeConsentRepository:
+    """TS-TASK-051: In-memory seam for the repository-backed consent routes."""
+
+    def __init__(self) -> None:
+        self._records: dict[tuple[UUID, str, str], _ConsentRecord] = {}
+        self.session = SimpleNamespace(commit=self._commit)
+
+    async def _commit(self) -> None:
+        return None
+
+    async def upsert_consent(
+        self,
+        *,
+        tenant_id: UUID,
+        user_id: str,
+        version: str,
+        categories: dict[str, bool],
+    ) -> None:
+        self._records[(tenant_id, user_id, version)] = _ConsentRecord(categories=categories)
+
+    async def get_consent(
+        self, tenant_id: UUID, user_id: str, version: str
+    ) -> _ConsentRecord | None:
+        return self._records.get((tenant_id, user_id, version))
+
+
+def _current_user() -> User:
+    return User(
+        id=uuid4(),
+        tenant_id=uuid4(),
+        email="frontend-support@example.com",
+        hashed_password="not-used-by-route-contract-tests",
+        first_name="Frontend",
+        last_name="Support",
+        role=UserRole.USER,
+        is_active=True,
+        is_verified=True,
+    )
+
+
+def _build_client() -> tuple[TestClient, User]:
     app = FastAPI()
     app.include_router(frontend_support_router, prefix="/api/v1")
-    return TestClient(app)
+    consent_repository = _FakeConsentRepository()
+    user = _current_user()
+    app.dependency_overrides[_get_consent_repository] = lambda: consent_repository
+    app.dependency_overrides[get_current_user] = lambda: user
+    return TestClient(app), user
 
 
 def test_cookie_consent_round_trip_contract() -> None:
-    client = _build_client()
+    client, _user = _build_client()
+    tenant_id = str(uuid4())
+    user_id = "user_demo"
 
     create_response = client.post(
         "/api/v1/compliance/cookies/consent",
         json={
-            "tenantId": "tenant_demo",
-            "userId": "user_demo",
+            "tenantId": tenant_id,
+            "userId": user_id,
             "version": "2026-02",
             "categories": {
                 "necessary": True,
@@ -48,8 +111,8 @@ def test_cookie_consent_round_trip_contract() -> None:
     fetch_response = client.get(
         "/api/v1/compliance/cookies/consent",
         params={
-            "tenantId": "tenant_demo",
-            "userId": "user_demo",
+            "tenantId": tenant_id,
+            "userId": user_id,
             "version": "2026-02",
         },
     )
@@ -69,8 +132,8 @@ def test_cookie_consent_round_trip_contract() -> None:
     update_response = client.patch(
         "/api/v1/compliance/cookies/consent",
         json={
-            "tenantId": "tenant_demo",
-            "userId": "user_demo",
+            "tenantId": tenant_id,
+            "userId": user_id,
             "version": "2026-02",
             "categories": {
                 "necessary": True,
@@ -92,12 +155,12 @@ def test_cookie_consent_round_trip_contract() -> None:
 
 
 def test_cookie_consent_persist_error_contract() -> None:
-    client = _build_client()
+    client, _user = _build_client()
 
     response = client.post(
         "/api/v1/compliance/cookies/consent",
         json={
-            "tenantId": "tenant_demo",
+            "tenantId": str(uuid4()),
             "userId": "user_demo",
             "version": "2026-02",
             "forceError": True,
@@ -112,15 +175,11 @@ def test_cookie_consent_persist_error_contract() -> None:
 
 
 def test_legal_disclaimer_status_and_acceptance_contract() -> None:
-    client = _build_client()
-    headers = {
-        "x-tenant-id": "tenant_demo",
-        "x-user-id": "user_demo",
-    }
+    client, user = _build_client()
+    expected_scope = f"{user.tenant_id}:{user.id}:v1.0"
 
     status_response = client.get(
         "/api/v1/projects/proj_demo_001/gates/gate-8/disclaimer/status",
-        headers=headers,
     )
 
     assert status_response.status_code == 200
@@ -128,12 +187,11 @@ def test_legal_disclaimer_status_and_acceptance_contract() -> None:
         "accepted": False,
         "version": "v1.0",
         "mustPrompt": True,
-        "scope": "tenant_demo:user_demo:v1.0",
+        "scope": expected_scope,
     }
 
     accept_response = client.post(
         "/api/v1/projects/proj_demo_001/gates/gate-8/disclaimer/accept",
-        headers=headers,
         json={"version": "v1.0"},
     )
 
@@ -146,7 +204,6 @@ def test_legal_disclaimer_status_and_acceptance_contract() -> None:
 
     accepted_status_response = client.get(
         "/api/v1/projects/proj_demo_001/gates/gate-8/disclaimer/status",
-        headers=headers,
     )
 
     assert accepted_status_response.status_code == 200
@@ -154,19 +211,15 @@ def test_legal_disclaimer_status_and_acceptance_contract() -> None:
         "accepted": True,
         "version": "v1.0",
         "mustPrompt": False,
-        "scope": "tenant_demo:user_demo:v1.0",
+        "scope": expected_scope,
     }
 
 
 def test_legal_disclaimer_accept_persist_error_contract() -> None:
-    client = _build_client()
+    client, _user = _build_client()
 
     response = client.post(
         "/api/v1/projects/proj_demo_001/gates/gate-8/disclaimer/accept",
-        headers={
-            "x-tenant-id": "tenant_demo",
-            "x-user-id": "user_demo",
-        },
         json={"version": "v1.0", "forceError": True},
     )
 
@@ -178,7 +231,7 @@ def test_legal_disclaimer_accept_persist_error_contract() -> None:
 
 
 def test_onboarding_sample_project_contract() -> None:
-    client = _build_client()
+    client, _user = _build_client()
 
     start_response = client.post("/api/v1/onboarding/sample-project/start")
     assert start_response.status_code == 200
