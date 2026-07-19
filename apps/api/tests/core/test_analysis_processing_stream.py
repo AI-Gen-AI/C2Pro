@@ -54,6 +54,7 @@ async def test_processing_stream_returns_stage_and_complete_events(
         [
             DocumentORM(
                 id=uuid4(),
+                tenant_id=test_tenant.id,
                 project_id=project.id,
                 document_type=DocumentType.CONTRACT,
                 filename="a.pdf",
@@ -64,6 +65,7 @@ async def test_processing_stream_returns_stage_and_complete_events(
             ),
             DocumentORM(
                 id=uuid4(),
+                tenant_id=test_tenant.id,
                 project_id=project.id,
                 document_type=DocumentType.SCHEDULE,
                 filename="b.pdf",
@@ -77,6 +79,7 @@ async def test_processing_stream_returns_stage_and_complete_events(
 
     analysis = Analysis(
         id=uuid4(),
+        tenant_id=test_tenant.id,
         project_id=project.id,
         analysis_type=AnalysisType.COHERENCE,
         status=AnalysisStatus.COMPLETED,
@@ -89,6 +92,7 @@ async def test_processing_stream_returns_stage_and_complete_events(
     db.add(
         CoherenceResultORM(
             project_id=project.id,
+            tenant_id=test_tenant.id,
             global_score=78,
             category_scores={"SCOPE": 80},
             category_details=[],

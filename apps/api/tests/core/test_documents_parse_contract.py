@@ -37,6 +37,7 @@ async def test_canonical_documents_parse_route_is_available(
 
     document = DocumentORM(
         id=uuid4(),
+        tenant_id=test_tenant.id,
         project_id=project.id,
         document_type=DocumentType.CONTRACT,
         filename="contract.pdf",
@@ -87,6 +88,7 @@ async def test_legacy_parse_route_remains_backward_compatible(
 
     document = DocumentORM(
         id=uuid4(),
+        tenant_id=test_tenant.id,
         project_id=project.id,
         document_type=DocumentType.CONTRACT,
         filename="legacy.pdf",
