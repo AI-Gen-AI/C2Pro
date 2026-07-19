@@ -61,7 +61,7 @@ async def test_canonical_documents_parse_route_is_available(
     body = response.json()
     assert body["document_id"] == str(document.id)
     assert body["status"] == "parsed"
-    mock_use_case.execute.assert_awaited_once_with(document.id, test_user.id)
+    mock_use_case.execute.assert_awaited_once_with(test_tenant.id, document.id, test_user.id)
 
     app.dependency_overrides.clear()
 
@@ -109,6 +109,6 @@ async def test_legacy_parse_route_remains_backward_compatible(
     )
 
     assert response.status_code == 202
-    mock_use_case.execute.assert_awaited_once_with(document.id, test_user.id)
+    mock_use_case.execute.assert_awaited_once_with(test_tenant.id, document.id, test_user.id)
 
     app.dependency_overrides.clear()
