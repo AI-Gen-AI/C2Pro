@@ -47,9 +47,9 @@ async def test_dashboard_defaults_to_zero_when_no_persisted_coherence_sources(
 
     response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
 
-    assert response["coherence_score"] == 0
-    assert response["global_score"] == 0
-    assert response["sub_scores"] == {
+    assert response.coherence_score == 0
+    assert response.global_score == 0
+    assert response.sub_scores == {
         "SCOPE": None,
         "BUDGET": None,
         "QUALITY": None,
@@ -122,10 +122,12 @@ async def test_dashboard_uses_analysis_updated_at_and_falls_back_to_coherence_re
 
     response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
 
-    assert response["coherence_score"] == 61
-    assert response["sub_scores"]["TECHNICAL"] == 63
-    assert response["alert_count"] == 4
-    assert response["last_updated"].startswith(analysis.updated_at.replace(tzinfo=None).isoformat())
+    assert response.coherence_score == 61
+    assert response.sub_scores["TECHNICAL"] == 63
+    assert response.alert_count == 4
+    assert response.last_updated.isoformat().startswith(
+        analysis.updated_at.replace(tzinfo=None).isoformat()
+    )
 
 
 @pytest.mark.asyncio
@@ -168,9 +170,9 @@ async def test_dashboard_tolerates_malformed_analysis_breakdown_payloads(
 
     response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
 
-    assert response["coherence_score"] == 71
-    assert response["alert_count"] == 2
-    assert response["sub_scores"] == {
+    assert response.coherence_score == 71
+    assert response.alert_count == 2
+    assert response.sub_scores == {
         "SCOPE": None,
         "BUDGET": None,
         "QUALITY": None,
