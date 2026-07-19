@@ -213,11 +213,11 @@ class CategoryBreakdown(BaseModel):
         ..., description="Percentage of impact this category has on the overall score."
     )
     state: str = Field(
-        "assessed_findings",
+        default="assessed_findings",
         description="unassessed | assessed_clean | assessed_findings",
     )
     baseline_estimated: bool = Field(
-        False, description="True when score is the inherent-risk baseline (clean)."
+        default=False, description="True when score is the inherent-risk baseline (clean)."
     )
 
 

@@ -18,7 +18,12 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from langgraph.graph.state import CompiledStateGraph
 
 from langgraph.graph import END, StateGraph
 
@@ -41,6 +46,8 @@ from .nodes import (
     scoring_arbiter,
 )
 from .state import CoherenceGraphState, EvaluationConfig
+
+CoherenceStateGraph = StateGraph[CoherenceGraphState, None, CoherenceGraphState, CoherenceGraphState]
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +91,7 @@ def _honest_null_result(final_state: dict[str, Any]) -> EnrichedCoherenceResult:
 # =============================================================================
 
 
-def build_coherence_subgraph() -> StateGraph:
+def build_coherence_subgraph() -> CoherenceStateGraph:
     """
     Build the coherence evaluation subgraph.
 
@@ -142,7 +149,7 @@ def build_coherence_subgraph() -> StateGraph:
     return graph
 
 
-def build_parallel_coherence_subgraph() -> StateGraph:
+def build_parallel_coherence_subgraph() -> CoherenceStateGraph:
     """
     Build coherence subgraph with parallel evaluation (future enhancement).
 
@@ -279,10 +286,10 @@ def _segment_type_for_doc_type(doc_type: str) -> SegmentType:
 
 
 # Compile the default subgraph
-_compiled_graph = None
+_compiled_graph: CompiledStateGraph[CoherenceGraphState, None, CoherenceGraphState, CoherenceGraphState] | None = None
 
 
-def get_coherence_subgraph():
+def get_coherence_subgraph() -> CompiledStateGraph[CoherenceGraphState, None, CoherenceGraphState, CoherenceGraphState]:
     """
     Get the compiled coherence subgraph (lazy initialization).
 
@@ -428,7 +435,7 @@ def evaluate_coherence_with_streaming(
     clauses: list[Clause],
     project_id: str = "default",
     config: EvaluationConfig | None = None,
-):
+) -> Iterator[tuple[str, Any]]:
     """
     Evaluate coherence with streaming updates.
 

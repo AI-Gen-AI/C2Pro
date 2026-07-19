@@ -4,6 +4,8 @@ C2Pro - Authentication Router
 Endpoints de autenticación y gestión de usuarios.
 """
 
+from typing import TYPE_CHECKING, Any, TypeAlias
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
@@ -29,6 +31,12 @@ from src.core.auth.token_revocation import revoke_token_async
 from src.core.database import get_session
 from src.core.exceptions import AuthenticationError, ConflictError, NotFoundError
 from src.core.security import CurrentUserId
+
+if TYPE_CHECKING:
+    RequestType: TypeAlias = Request[Any]
+else:
+    RequestType = Request
+
 
 logger = structlog.get_logger()
 
@@ -318,7 +326,7 @@ async def update_me(
     removing the tokens. This endpoint is for logging purposes.
     """,
 )
-async def logout(request: Request, user_id: CurrentUserId) -> None:
+async def logout(request: RequestType, user_id: CurrentUserId) -> None:
     """
     Cierra sesión del usuario actual.
 

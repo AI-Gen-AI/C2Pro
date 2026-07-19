@@ -1,6 +1,6 @@
 import base64
 import binascii
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -39,8 +39,8 @@ class Page(BaseModel, Generic[T]):
     )
 
 async def paginate(
-    query,
-    model,
+    query: Any,
+    model: Any,
     cursor: str | None,
     limit: int,
     order_by: str,

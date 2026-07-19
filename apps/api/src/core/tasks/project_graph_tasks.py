@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
@@ -173,7 +174,7 @@ async def record_project_graph_dead_letter(
     retry_backoff_max=60,
 )
 def run_project_graph(
-    self,  # noqa: ARG001
+    self: Any,  # noqa: ARG001
     *,
     project_id: str,
     tenant_id: str,

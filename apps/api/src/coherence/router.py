@@ -3,6 +3,7 @@
 Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 """
 
+from collections.abc import Sequence
 from contextlib import suppress
 from datetime import UTC, datetime
 from uuid import UUID
@@ -196,12 +197,12 @@ _CATEGORY_KEYWORDS: dict[str, list[str]] = {
 _CLAUSES_PER_CATEGORY = 10
 
 
-def _build_clause(row: tuple) -> Clause | None:
+def _build_clause(row: Sequence[object]) -> Clause | None:
     clause_id = str(row[0])
-    text_value = row[1] or ""
+    text_value = str(row[1]) if row[1] else ""
     extracted = row[2] or {}
     doc_id = str(row[3])
-    doc_type = row[4] or "unknown"
+    doc_type = str(row[4]) if row[4] else "unknown"
     if not text_value:
         return None
     extracted_dict = extracted if isinstance(extracted, dict) else {}
@@ -224,7 +225,7 @@ def _build_clause(row: tuple) -> Clause | None:
 
 
 def _append_unique_clause(
-    row: tuple[object, ...],
+    row: Sequence[object],
     clauses: list[Clause],
     seen_ids: set[str],
 ) -> bool:
@@ -642,12 +643,17 @@ async def evaluate_with_diagnostics(
 
     This is a convenience endpoint equivalent to POST /evaluate?include_diagnostics=true
     """
-    return await evaluate_project_coherence(
+    result = await evaluate_project_coherence(
         payload=payload,
         include_diagnostics=True,
         db=db,
         current_user=current_user,
     )
+    if not isinstance(result, EnrichedCoherenceResult):
+        # include_diagnostics=True always yields the enriched variant; anything
+        # else would fail this route's response_model, so fail loudly here.
+        raise HTTPException(status_code=500, detail="Diagnostics result unavailable")
+    return result
 
 
 # ======================================================================

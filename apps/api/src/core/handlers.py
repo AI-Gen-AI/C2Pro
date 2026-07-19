@@ -28,10 +28,16 @@ import traceback
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import structlog
 from fastapi import FastAPI, HTTPException, Request, status
+
+if TYPE_CHECKING:
+    RequestType: TypeAlias = Request[Any]
+else:
+    RequestType = Request
+
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -137,7 +143,7 @@ def _transform_pydantic_errors(errors: Sequence[Any]) -> dict[str, str]:
 # ===========================================
 
 
-async def c2pro_exception_handler(request: Request, exc: C2ProException) -> JSONResponse:
+async def c2pro_exception_handler(request: RequestType, exc: C2ProException) -> JSONResponse:
     """
     Handler para excepciones personalizadas de C2Pro.
 
@@ -181,7 +187,7 @@ async def c2pro_exception_handler(request: Request, exc: C2ProException) -> JSON
     )
 
 
-async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+async def http_exception_handler(request: RequestType, exc: HTTPException) -> JSONResponse:
     """
     Handler para HTTPException de FastAPI.
 
@@ -250,7 +256,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 
 async def request_validation_error_handler(
-    request: Request, exc: RequestValidationError
+    request: RequestType, exc: RequestValidationError
 ) -> JSONResponse:
     """
     Handler para errores de validación de Pydantic (RequestValidationError).
@@ -323,7 +329,7 @@ async def request_validation_error_handler(
     )
 
 
-async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+async def general_exception_handler(request: RequestType, exc: Exception) -> JSONResponse:
     """
     Handler para excepciones no manejadas (Internal Server Error).
 

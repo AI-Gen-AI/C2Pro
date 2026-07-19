@@ -158,3 +158,35 @@ def test_compute_score_determinism(
     score2 = scoring_service.compute_score(alerts2)
 
     assert score1 == score2
+
+
+class TestSeverityNormalization:
+    """Out-of-taxonomy alert severities must degrade gracefully, not crash.
+
+    Regression for the 52-residual sweep: Alert.severity is an unvalidated
+    str, and _alert_to_signal used to hand it raw to FindingSignal's strict
+    Literal — any nonstandard value blew up the evaluation mid-flight.
+    """
+
+    def test_unknown_severity_clamps_to_medium_instead_of_raising(self):
+        alert = Alert(
+            rule_id="DET-XXX-001",
+            severity="warning",  # not in the 5-level taxonomy
+            message="nonstandard severity from legacy/LLM data",
+            evidence=Evidence(source_clause_id="c1", claim="", quote=""),
+        )
+
+        signal = ScoringService()._alert_to_signal(alert)
+
+        assert signal.severity == "medium"
+        assert signal.impact_score == 0.50  # consistent with _severity_to_impact
+
+    def test_known_severities_pass_through_unchanged(self):
+        for level in ("critical", "HIGH", "Medium", "low", "info"):
+            alert = Alert(
+                rule_id="DET-XXX-002",
+                severity=level,
+                message="known severity",
+                evidence=Evidence(source_clause_id="c1", claim="", quote=""),
+            )
+            assert ScoringService()._alert_to_signal(alert).severity == level.lower()

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Awaitable, Callable
-from typing import ParamSpec, TypeVar
+from typing import Any, ParamSpec, TypeVar, cast
 
 import structlog
 
@@ -37,7 +37,9 @@ T = TypeVar("T")
 
 def with_circuit_breaker(
     service_name: str,
-    fallback: Callable[..., T] | Callable[..., Awaitable[T]] | None = None,
+    # Callable[..., Any]: tying the fallback to T makes mypy solve T=Never when
+    # no fallback is passed, poisoning every decorated function's return type.
+    fallback: Callable[..., Any] | None = None,
     failure_threshold: int | None = None,
     recovery_timeout: float | None = None,
     reraise: bool = True,
@@ -104,10 +106,10 @@ def with_circuit_breaker(
                         service=service_name,
                         function=func.__name__,
                     )
-                    result = fallback(*args, **kwargs)
-                    if hasattr(result, "__await__"):
-                        return await result
-                    return result
+                    fb_result = fallback(*args, **kwargs)
+                    if hasattr(fb_result, "__await__"):
+                        return cast(T, await fb_result)
+                    return cast(T, fb_result)
 
                 raise CircuitBreakerOpenError(
                     service_name,
@@ -129,10 +131,10 @@ def with_circuit_breaker(
                         function=func.__name__,
                         error=str(e),
                     )
-                    result = fallback(*args, **kwargs)
-                    if hasattr(result, "__await__"):
-                        return await result
-                    return result
+                    fb_result = fallback(*args, **kwargs)
+                    if hasattr(fb_result, "__await__"):
+                        return cast(T, await fb_result)
+                    return cast(T, fb_result)
 
                 raise
 
@@ -143,7 +145,7 @@ def with_circuit_breaker(
 
 def with_circuit_breaker_sync(
     service_name: str,
-    fallback: Callable[..., T] | None = None,
+    fallback: Callable[..., Any] | None = None,
     failure_threshold: int | None = None,
     recovery_timeout: float | None = None,
     reraise: bool = True,
@@ -186,7 +188,7 @@ def with_circuit_breaker_sync(
                         service=service_name,
                         function=func.__name__,
                     )
-                    return fallback(*args, **kwargs)
+                    return cast(T, fallback(*args, **kwargs))
 
                 raise CircuitBreakerOpenError(
                     service_name,
@@ -207,7 +209,7 @@ def with_circuit_breaker_sync(
                         function=func.__name__,
                         error=str(e),
                     )
-                    return fallback(*args, **kwargs)
+                    return cast(T, fallback(*args, **kwargs))
 
                 raise
 

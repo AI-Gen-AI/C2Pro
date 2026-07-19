@@ -9,11 +9,17 @@ import re
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 from uuid import UUID
 
 import structlog
 from fastapi import Request  # Import Request
+
+if TYPE_CHECKING:
+    RequestType: TypeAlias = Request[Any]
+else:
+    RequestType = Request
+
 from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import (
@@ -187,7 +193,7 @@ async def close_db() -> None:
         logger.info("database_engine_closed")
 
 
-async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
+async def get_session(request: RequestType) -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency para obtener sesión de base de datos.
 

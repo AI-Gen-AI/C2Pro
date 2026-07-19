@@ -72,11 +72,14 @@ class CoherenceV2Orchestrator:
             )
 
         global_block = self._global_agg.aggregate(categories)
-        return CoherenceV2Payload(
-            project_id=project_id,
-            generated_at=datetime.now(UTC),
-            **{"global": global_block},
-            categories=categories,
+        # model_validate: "global" is a Python keyword, only expressible via alias.
+        return CoherenceV2Payload.model_validate(
+            {
+                "project_id": project_id,
+                "generated_at": datetime.now(UTC),
+                "global": global_block,
+                "categories": categories,
+            }
         )
 
 
