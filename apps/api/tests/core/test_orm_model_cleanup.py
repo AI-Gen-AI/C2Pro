@@ -47,5 +47,9 @@ def test_reenabled_foreign_keys_reference_real_tables() -> None:
         str(next(iter(StakeholderORM.__table__.c.extracted_from_document_id.foreign_keys)).target_fullname)
         == "documents.id"
     )
-    assert str(next(iter(WBSItemORM.__table__.c.project_id.foreign_keys)).target_fullname) == "projects.id"
+    wbs_project_targets = {
+        str(foreign_key.target_fullname)
+        for foreign_key in WBSItemORM.__table__.c.project_id.foreign_keys
+    }
+    assert "projects.id" in wbs_project_targets
     assert str(next(iter(BOMItemORM.__table__.c.project_id.foreign_keys)).target_fullname) == "projects.id"
