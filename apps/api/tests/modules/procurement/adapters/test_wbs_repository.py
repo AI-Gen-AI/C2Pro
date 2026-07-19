@@ -104,8 +104,8 @@ class TestWBSRepositoryIntegration:
             coherence_score=None,
             last_analysis_at=None,
             metadata_json={},
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+            updated_at=datetime.now(UTC).replace(tzinfo=None),
         )
         session.add(project_a)
         await session.commit()
@@ -128,8 +128,8 @@ class TestWBSRepositoryIntegration:
 
         async with get_session_with_tenant(tenant_a) as tenant_a_session:
             repo = SQLAlchemyWBSRepository(tenant_a_session)
-            await repo.create(parent)
-            await repo.create(child)
+            await repo.create(tenant_id=tenant_a, wbs_item=parent)
+            await repo.create(tenant_id=tenant_a, wbs_item=child)
 
             tree = await repo.get_tree(project_id=project_a.id, tenant_id=tenant_a)
             assert len(tree) == 1
@@ -169,8 +169,8 @@ class TestWBSRepositoryIntegration:
             coherence_score=None,
             last_analysis_at=None,
             metadata_json={},
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+            updated_at=datetime.now(UTC).replace(tzinfo=None),
         )
         project_b = ProjectORM(
             id=uuid4(),
@@ -187,8 +187,8 @@ class TestWBSRepositoryIntegration:
             coherence_score=None,
             last_analysis_at=None,
             metadata_json={},
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+            updated_at=datetime.now(UTC).replace(tzinfo=None),
         )
         session.add_all([project_a, project_b])
         await session.commit()
@@ -199,8 +199,8 @@ class TestWBSRepositoryIntegration:
 
         async with get_session_with_tenant(tenant_id) as tenant_session:
             repo = SQLAlchemyWBSRepository(tenant_session)
-            created_a = await repo.create(item_a)
-            created_b = await repo.create(item_b)
+            created_a = await repo.create(tenant_id=tenant_id, wbs_item=item_a)
+            created_b = await repo.create(tenant_id=tenant_id, wbs_item=item_b)
 
             assert created_a.code == code
             assert created_b.code == code

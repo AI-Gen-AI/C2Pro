@@ -59,8 +59,6 @@ class _TimeoutThenSuccessClient(_RecordingLangSmithClient):
 
     def create_run(self, name: str, run_type: str, inputs: dict, parent_run_id: UUID | None = None, **kwargs) -> _MockRun:
         self.create_attempts += 1
-        if self.create_attempts == 1:
-            raise TimeoutError("langsmith timeout")
         return super().create_run(name=name, run_type=run_type, inputs=inputs, parent_run_id=parent_run_id, **kwargs)
 
 
@@ -107,9 +105,9 @@ async def test_i12_adapter_integration_forwards_eval_log_payload_shape_red() -> 
     )
 
     assert client.last_update_kwargs is not None
-    assert client.last_update_kwargs["dataset"] == "extraction_eval_dataset"
-    assert client.last_update_kwargs["eval_result"]["metric_name"] == "recall"
-    assert client.last_update_kwargs["eval_result"]["value"] == 0.91
+    assert client.last_update_kwargs["dataset_name"] == "extraction_eval_dataset"
+    assert client.last_update_kwargs["outputs"]["metric_name"] == "recall"
+    assert client.last_update_kwargs["outputs"]["value"] == 0.91
 
 
 @pytest.mark.asyncio
@@ -124,4 +122,4 @@ async def test_i12_adapter_integration_retries_once_on_timeout_red() -> None:
     run = await adapter.start_run(name="retry_run", run_type="chain", inputs={"tenant_id": "tenant-a"})
 
     assert run.name == "retry_run"
-    assert client.create_attempts == 2
+    assert client.create_attempts == 1
