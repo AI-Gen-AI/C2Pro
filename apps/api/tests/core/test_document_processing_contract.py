@@ -54,7 +54,7 @@ async def test_upload_response_exposes_non_terminal_processing_state(
     assert response.status_code == 202
     payload = response.json()
     assert payload["processing_status"] == "queued"
-    assert "analysis has not started" in payload["status_detail"].lower()
+    assert "background processing will start when the worker is available" in payload["status_detail"].lower()
 
 
 @pytest.mark.asyncio
