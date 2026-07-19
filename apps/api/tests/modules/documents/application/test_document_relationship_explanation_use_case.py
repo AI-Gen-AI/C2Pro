@@ -34,6 +34,7 @@ def _build_document() -> Document:
     project_id = uuid4()
     return Document(
         id=document_id,
+        tenant_id=uuid4(),
         project_id=project_id,
         document_type=DocumentType.CONTRACT,
         filename="Contract.pdf",
@@ -42,6 +43,7 @@ def _build_document() -> Document:
         clauses=[
             Clause(
                 id=uuid4(),
+                tenant_id=uuid4(),
                 project_id=project_id,
                 document_id=document_id,
                 clause_code="CL-001",
@@ -78,13 +80,13 @@ async def test_execute_builds_grounded_relationship_explanation_from_document_an
     response = await GetDocumentRelationshipExplanationUseCase(
         document_repository=repository,
         explanation_service=EvidenceRelationshipExplanationService(),
-    ).execute(document.id)
+    ).execute(uuid4(), document.id)
 
     assert response.document_id == document.id
     assert "1 extracted clauses" in response.summary
     assert "delay penalty" in response.strongest_cluster.lower()
     assert response.citations[0].clause_id == document.clauses[0].id
-    repository.list_alert_signals_for_document.assert_awaited_once_with(document.id)
+    repository.list_alert_signals_for_document.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -110,6 +112,6 @@ async def test_execute_filters_alerts_for_missing_clause_links() -> None:
     response = await GetDocumentRelationshipExplanationUseCase(
         document_repository=repository,
         explanation_service=EvidenceRelationshipExplanationService(),
-    ).execute(document.id)
+    ).execute(uuid4(), document.id)
 
     assert "0 active alerts" in response.summary

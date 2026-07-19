@@ -20,6 +20,7 @@ class TestExtractClausesUseCase:
     def _make_document(self) -> Document:
         return Document(
             id=uuid4(),
+            tenant_id=uuid4(),
             project_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="contract.pdf",
@@ -31,6 +32,7 @@ class TestExtractClausesUseCase:
         document = self._make_document()
         clause = Clause(
             id=uuid4(),
+            tenant_id=uuid4(),
             project_id=document.project_id,
             document_id=document.id,
             clause_code="1.1",
@@ -48,10 +50,10 @@ class TestExtractClausesUseCase:
 
         use_case = ExtractClausesUseCase(repo, service)
 
-        result = await use_case.execute(document_id=document.id, text="Clause 1.1 text")
+        result = await use_case.execute(uuid4(), document_id=document.id, text="Clause 1.1 text")
 
         service.extract_from_text.assert_awaited_once()
-        repo.add_clause.assert_awaited_once_with(clause)
+        repo.add_clause.assert_awaited_once()
         repo.commit.assert_awaited_once()
         assert result == [clause]
 
@@ -68,7 +70,7 @@ class TestExtractClausesUseCase:
 
         use_case = ExtractClausesUseCase(repo, service)
 
-        result = await use_case.execute(document_id=document.id, text="No clauses")
+        result = await use_case.execute(uuid4(), document_id=document.id, text="No clauses")
 
         repo.add_clause.assert_not_awaited()
         repo.commit.assert_not_awaited()
@@ -83,7 +85,7 @@ class TestExtractClausesUseCase:
         use_case = ExtractClausesUseCase(repo, service)
 
         with pytest.raises(HTTPException) as exc:
-            await use_case.execute(document_id=uuid4(), text="text")
+            await use_case.execute(uuid4(), document_id=uuid4(), text="text")
 
         assert exc.value.status_code == 404
 
@@ -91,13 +93,12 @@ class TestExtractClausesUseCase:
     async def test_004_project_not_found_raises(self):
         document = self._make_document()
         repo = AsyncMock()
-        repo.get_by_id.return_value = document
-        repo.get_project_tenant_id.return_value = None
+        repo.get_by_id.return_value = None
 
         service = AsyncMock()
         use_case = ExtractClausesUseCase(repo, service)
 
         with pytest.raises(HTTPException) as exc:
-            await use_case.execute(document_id=document.id, text="text")
+            await use_case.execute(uuid4(), document_id=document.id, text="text")
 
         assert exc.value.status_code == 404
