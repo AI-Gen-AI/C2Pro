@@ -23,7 +23,7 @@ def _request_for_tenant(tenant_id):
 
 
 @pytest.mark.asyncio
-async def test_dashboard_defaults_to_zero_when_no_persisted_coherence_sources(
+async def test_dashboard_returns_unassessed_scores_when_no_persisted_coherence_sources(
     db, test_tenant
 ) -> None:
     project = ProjectORM(
@@ -47,8 +47,8 @@ async def test_dashboard_defaults_to_zero_when_no_persisted_coherence_sources(
 
     response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
 
-    assert response.coherence_score == 0
-    assert response.global_score == 0
+    assert response.coherence_score is None
+    assert response.global_score is None
     assert response.sub_scores == {
         "SCOPE": None,
         "BUDGET": None,
