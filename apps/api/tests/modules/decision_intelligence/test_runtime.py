@@ -8,6 +8,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -20,6 +21,7 @@ from src.modules.decision_intelligence.application.ports import (
 )
 from src.modules.decision_intelligence.runtime import (
     DecisionIntelligenceServices,
+    _SessionFactoryHITLAdapter,
     build_decision_intelligence_services,
 )
 
@@ -64,3 +66,37 @@ async def test_built_services_can_be_attached_to_app_state_shape() -> None:
     # Sanity: ingestion adapter still functions independently.
     result = await services.ingestion.ingest_document(b"hello world")
     assert result["source"] in {"plaintext", "pdf"}
+
+
+@pytest.mark.asyncio
+async def test_hitl_runtime_binds_authenticated_tenant_to_review_queue(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TS-I13-E2E-REAL-001: review items retain the request tenant at persistence."""
+
+    captured_tenant_ids: list[UUID] = []
+
+    class CapturingReviewQueueRepository:
+        def __init__(self, *, session: object, tenant_id: UUID) -> None:
+            _ = session
+            captured_tenant_ids.append(tenant_id)
+
+        async def add_review_item(self, item: object) -> UUID:
+            _ = item
+            return uuid4()
+
+    monkeypatch.setattr(
+        "src.modules.decision_intelligence.runtime.SqlAlchemyReviewQueueRepository",
+        CapturingReviewQueueRepository,
+    )
+    tenant_id = uuid4()
+    adapter = _SessionFactoryHITLAdapter(session_provider=_stub_session_provider)
+
+    await adapter.route_for_review(
+        item_id=uuid4(),
+        item_type="final_decision_package",
+        confidence=0.1,
+        impact_level="HIGH",
+        item_data={"project_id": str(uuid4())},
+        tenant_id=tenant_id,
+    )
+
+    assert captured_tenant_ids == [tenant_id]

@@ -46,13 +46,27 @@ class MockCoherenceScoringService:
 
 class MockHumanInTheLoopService:
     async def route_for_review(
-        self, item_id: UUID, item_type: str, confidence: float, impact_level: str, item_data: dict[str, Any]
+        self,
+        item_id: UUID,
+        item_type: str,
+        confidence: float,
+        impact_level: str,
+        item_data: dict[str, Any],
+        tenant_id: UUID,
     ) -> str:
+        _ = tenant_id
         if confidence < 0.5:
             return "PENDING_REVIEW_REQUIRED"
         return "APPROVED"
 
-    async def approve_item(self, item_id: UUID, reviewer_id: UUID, reviewer_name: str) -> dict[str, Any]:
+    async def approve_item(
+        self,
+        item_id: UUID,
+        reviewer_id: UUID,
+        reviewer_name: str,
+        tenant_id: UUID,
+    ) -> dict[str, Any]:
+        _ = tenant_id
         return {
             "item_id": item_id,
             "current_status": "APPROVED",
@@ -140,6 +154,8 @@ async def test_i13_e2e_low_confidence_output_blocked_from_finalization(
             document_bytes=mock_doc_bytes, tenant_id=tenant_id, project_id=project_id
         )
 
+    assert mock_full_stack_services["hitl_service"].route_for_review.await_args.kwargs["tenant_id"] == tenant_id
+
 
 @pytest.mark.asyncio
 async def test_i13_e2e_missing_citations_prevents_finalization(
@@ -197,6 +213,7 @@ async def test_i13_e2e_reviewer_approval_unlocks_final_decision_package(
     assert isinstance(final_package, FinalDecisionPackage)
     assert final_package.approved_by == reviewer_name
     assert final_package.approved_at is not None
+    assert mock_full_stack_services["hitl_service"].approve_item.await_args.kwargs["tenant_id"] == tenant_id
 
 
 @pytest.mark.asyncio
