@@ -408,6 +408,7 @@ class TestHITLServiceAdapter:
             confidence=0.1,
             impact_level="LOW",
             item_data={},
+            tenant_id=uuid4(),
         )
         assert isinstance(result, str)
         assert result == "PENDING_REVIEW_REQUIRED"
@@ -431,6 +432,7 @@ class TestHITLServiceAdapter:
             confidence=0.99,
             impact_level="critical",  # lowercase
             item_data={},
+            tenant_id=uuid4(),
         )
         assert result == "PENDING_REVIEW_REQUIRED"  # critical always requires review
 
@@ -454,6 +456,7 @@ class TestHITLServiceAdapter:
             item_id=pending.item_id,
             reviewer_id=uuid4(),
             reviewer_name="Maria Garcia",
+            tenant_id=uuid4(),
         )
         # HITLPort expects dict[str, Any]
         assert isinstance(result, dict)

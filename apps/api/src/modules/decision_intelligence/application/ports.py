@@ -38,10 +38,22 @@ class CoherenceScoringPort(Protocol):
 @runtime_checkable
 class HITLPort(Protocol):
     async def route_for_review(
-        self, item_id: UUID, item_type: str, confidence: float, impact_level: str, item_data: dict[str, Any]
+        self,
+        item_id: UUID,
+        item_type: str,
+        confidence: float,
+        impact_level: str,
+        item_data: dict[str, Any],
+        tenant_id: UUID,
     ) -> str: ...
 
-    async def approve_item(self, item_id: UUID, reviewer_id: UUID, reviewer_name: str) -> dict[str, Any]: ...
+    async def approve_item(
+        self,
+        item_id: UUID,
+        reviewer_id: UUID,
+        reviewer_name: str,
+        tenant_id: UUID,
+    ) -> dict[str, Any]: ...
 
 
 def _require(name: str, value: object) -> None:
@@ -150,6 +162,7 @@ class DecisionOrchestrationService:
                 item_id=UUID(str(review_decision["item_id"])),
                 reviewer_id=UUID(str(review_decision["reviewer_id"])),
                 reviewer_name=str(review_decision["reviewer_name"]),
+                tenant_id=tenant_id,
             )
 
         if score < 0.5:
@@ -159,6 +172,7 @@ class DecisionOrchestrationService:
                 confidence=score,
                 impact_level="HIGH",
                 item_data={"project_id": str(project_id)},
+                tenant_id=tenant_id,
             )
             if status == "PENDING_REVIEW_REQUIRED":
                 # Security invariant: low-confidence/high-impact output cannot be

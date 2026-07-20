@@ -90,6 +90,7 @@ class _SessionFactoryHITLAdapter:
         confidence: float,
         impact_level: str,
         item_data: dict[str, Any],
+        tenant_id: UUID,
     ) -> str:
         try:
             level = ImpactLevel(impact_level.upper())
@@ -97,7 +98,7 @@ class _SessionFactoryHITLAdapter:
             level = ImpactLevel.MEDIUM
 
         async with self._session_provider() as session:
-            service = self._build_service(session)
+            service = self._build_service(session, tenant_id=tenant_id)
             status = await service.route_for_review(
                 item_id=item_id,
                 item_type=item_type,
@@ -112,9 +113,10 @@ class _SessionFactoryHITLAdapter:
         item_id: UUID,
         reviewer_id: UUID,
         reviewer_name: str,
+        tenant_id: UUID,
     ) -> dict[str, Any]:
         async with self._session_provider() as session:
-            service = self._build_service(session)
+            service = self._build_service(session, tenant_id=tenant_id)
             item = await service.approve_item(
                 item_id=item_id,
                 reviewer_id=reviewer_id,
@@ -130,8 +132,8 @@ class _SessionFactoryHITLAdapter:
                 "approved_at": item.approved_at.isoformat() if item.approved_at else None,
             }
 
-    def _build_service(self, session: AsyncSession) -> HumanInTheLoopService:
-        repo = SqlAlchemyReviewQueueRepository(session=session)
+    def _build_service(self, session: AsyncSession, *, tenant_id: UUID) -> HumanInTheLoopService:
+        repo = SqlAlchemyReviewQueueRepository(session=session, tenant_id=tenant_id)
         return HumanInTheLoopService(
             review_queue_repo=repo,
             notification_service=self._notification_service,

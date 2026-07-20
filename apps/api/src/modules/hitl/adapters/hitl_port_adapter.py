@@ -30,7 +30,10 @@ class HITLServiceAdapter:
         confidence: float,
         impact_level: str,
         item_data: dict[str, Any],
+        tenant_id: UUID,
     ) -> str:
+        # This adapter receives a service whose repository is tenant-bound at composition.
+        _ = tenant_id
         # Convert string impact_level to ImpactLevel enum
         try:
             level = ImpactLevel(impact_level.upper())
@@ -51,7 +54,9 @@ class HITLServiceAdapter:
         item_id: UUID,
         reviewer_id: UUID,
         reviewer_name: str,
+        tenant_id: UUID,
     ) -> dict[str, Any]:
+        _ = tenant_id
         item = await self._service.approve_item(
             item_id=item_id,
             reviewer_id=reviewer_id,

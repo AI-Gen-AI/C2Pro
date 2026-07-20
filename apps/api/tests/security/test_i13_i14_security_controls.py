@@ -43,13 +43,27 @@ class _StubCoherenceScoring:
 
 class _StubHITL:
     async def route_for_review(
-        self, item_id: UUID, item_type: str, confidence: float, impact_level: str, item_data: dict[str, Any]
+        self,
+        item_id: UUID,
+        item_type: str,
+        confidence: float,
+        impact_level: str,
+        item_data: dict[str, Any],
+        tenant_id: UUID,
     ) -> str:
+        _ = tenant_id
         if confidence < 0.5:
             return "PENDING_REVIEW_REQUIRED"
         return "APPROVED"
 
-    async def approve_item(self, item_id: UUID, reviewer_id: UUID, reviewer_name: str) -> dict[str, Any]:
+    async def approve_item(
+        self,
+        item_id: UUID,
+        reviewer_id: UUID,
+        reviewer_name: str,
+        tenant_id: UUID,
+    ) -> dict[str, Any]:
+        _ = tenant_id
         return {
             "item_id": item_id,
             "current_status": "APPROVED",
