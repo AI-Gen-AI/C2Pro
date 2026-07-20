@@ -6,43 +6,36 @@ Refers to Suite ID: TS-UA-SEC-UC-002.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from unittest.mock import AsyncMock
 
 import pytest
 
+from src.anonymizer.application.anonymization_service import (
+    AnonymizationConfig,
+    AnonymizationService,
+)
 from src.core.security.application.anonymize_document_use_case import (
     AnonymizeDocumentUseCase,
 )
 
 
-@dataclass
-class _FakeResult:
-    anonymized_text: str
-    mapping: dict[str, str]
-
-
-class _FakeAnonymizer:
-    def anonymize_document(self, text: str) -> _FakeResult:
-        return _FakeResult(anonymized_text="ANONYMIZED", mapping={"X": "Y"})
-
-
 class TestAnonymizeDocumentUseCase:
     """Refers to Suite ID: TS-UA-SEC-UC-002."""
 
-    def test_anonymizes_document_text(self, monkeypatch) -> None:
-        def _fake_get_anonymizer():
-            return _FakeAnonymizer()
+    @pytest.mark.asyncio
+    async def test_anonymizes_document_text(self) -> None:
+        """Uses the injected application-service seam, not the removed global factory."""
+        anonymization_service = AsyncMock(spec=AnonymizationService)
+        anonymization_service.anonymize.return_value = "ANONYMIZED"
+        use_case = AnonymizeDocumentUseCase(anonymization_service=anonymization_service)
 
-        monkeypatch.setattr(
-            "src.core.security.application.anonymize_document_use_case.get_anonymizer",
-            _fake_get_anonymizer,
+        result = await use_case.execute("Sensitive content")
+
+        assert result == "ANONYMIZED"
+        anonymization_service.anonymize.assert_awaited_once_with(
+            "Sensitive content",
+            config=AnonymizationConfig(),
         )
-
-        use_case = AnonymizeDocumentUseCase()
-        result = use_case.execute("Sensitive content")
-
-        assert result.anonymized_text == "ANONYMIZED"
-        assert result.mapping == {"X": "Y"}
 
     @pytest.mark.asyncio
     async def test_execute_awaits_underlying_anonymize_call(self) -> None:
