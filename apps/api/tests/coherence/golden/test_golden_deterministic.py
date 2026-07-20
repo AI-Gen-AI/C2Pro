@@ -22,14 +22,34 @@ from .golden_deterministic import GOLDEN_TEST_CASES
 # =============================================================================
 
 
+def _assert_honest_null_score(result) -> None:
+    """
+    Coherence scores are honest: when category coverage doesn't clear
+    MIN_ACTIVE_WEIGHT (ADR-009 SS14), the score is null (never a fabricated
+    number) and an AUDIT_INCOMPLETE meta-alert explains why.
+    Refers to: Honest Coherence Scoring (#136), src/coherence/scoring.py:431.
+    """
+    assert result.overall_score is None, (
+        f"expected an honest null score for insufficient category coverage, "
+        f"got {result.overall_score}"
+    )
+    assert result.score_reason in ("insufficient_evidence", "insufficient_active_weight"), (
+        f"expected an honest-null reason, got {result.score_reason!r}"
+    )
+    assert any(a.rule_id == "AUDIT_INCOMPLETE" for a in result.alerts), (
+        "insufficient-evidence results must surface an AUDIT_INCOMPLETE meta-alert"
+    )
+
+
 @pytest.mark.parametrize("test_case", GOLDEN_TEST_CASES, ids=lambda tc: tc["name"])
 def test_golden_score_curve(test_case):
     """
     Validate score curve against golden test cases.
 
     Success Criteria:
-    - Score falls within expected range
-    - Alert count matches expected
+    - Cases with enough assessed category coverage score within range
+    - Cases without enough coverage (narrow, single-issue fixtures) return
+      an honest null score rather than a fabricated number
     - No crashes on edge cases
     """
     # Extract test case data
@@ -50,18 +70,23 @@ def test_golden_score_curve(test_case):
         config=config,
     )
 
-    # Verify score is in expected range
-    assert expected_min <= result.overall_score <= expected_max, (
-        f"{test_case['name']}: Score {result.overall_score:.2f} outside expected range "
-        f"[{expected_min}, {expected_max}]. Description: {description}"
-    )
+    if result.overall_score is None:
+        # Narrow fixtures (1-2 clauses) don't clear MIN_ACTIVE_WEIGHT
+        # (ADR-009 SS14) — an honest null is the correct outcome, not a
+        # fabricated number squeezed into the legacy expected range.
+        _assert_honest_null_score(result)
+    else:
+        assert expected_min <= result.overall_score <= expected_max, (
+            f"{test_case['name']}: Score {result.overall_score:.2f} outside expected range "
+            f"[{expected_min}, {expected_max}]. Description: {description}"
+        )
 
-    # Verify alert count (allow ±1 tolerance for edge cases)
-    alert_count_diff = abs(len(result.alerts) - expected_alerts)
-    assert alert_count_diff <= 1, (
-        f"{test_case['name']}: Got {len(result.alerts)} alerts, expected {expected_alerts}. "
-        f"Description: {description}"
-    )
+        # Verify alert count (allow ±1 tolerance for edge cases)
+        alert_count_diff = abs(len(result.alerts) - expected_alerts)
+        assert alert_count_diff <= 1, (
+            f"{test_case['name']}: Got {len(result.alerts)} alerts, expected {expected_alerts}. "
+            f"Description: {description}"
+        )
 
     # Verify cost is zero (low_budget_mode)
     assert result.llm_cost_usd == pytest.approx(0.0), (
@@ -76,10 +101,16 @@ def test_golden_score_curve(test_case):
 
 def test_golden_perfect_project_scores_100():
     """
-    GOLD-PERFECT-001: Perfect project with no issues should score ~100.
+    GOLD-PERFECT-001: Perfect project with no issues scores at the
+    inherent-risk ceiling (90.0), not a fabricated 100.
+
+    HeuristicBaselineProvider caps an assessed-but-clean category at 90.0 —
+    "clean so far" isn't proof of zero risk. Refers to:
+    src/coherence/scoring.py HeuristicBaselineProvider docstring
+    (Band [80, 90]; clean elsewhere -> 90).
 
     Success Criteria:
-    - Score ≥95
+    - Score at the 90.0 ceiling
     - Zero alerts
     - Zero cost
     """
@@ -92,18 +123,21 @@ def test_golden_perfect_project_scores_100():
         config=config,
     )
 
-    assert result.overall_score >= 95.0, f"Perfect project scored {result.overall_score}, expected ≥95"
+    assert result.overall_score == pytest.approx(90.0), (
+        f"Perfect project scored {result.overall_score}, expected the 90.0 inherent-risk ceiling"
+    )
     assert len(result.alerts) == 0, f"Perfect project had {len(result.alerts)} alerts, expected 0"
     assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 def test_golden_moderate_scores_50_to_80():
     """
-    GOLD-MODERATE-*: Moderate issues should score 50-80.
+    GOLD-MODERATE-*: Moderate issues should score 50-80 when enough
+    category coverage is assessed; narrow single/dual-clause fixtures
+    honestly return null instead (ADR-009 SS14 active-weight guard).
 
     Success Criteria:
-    - Score in 50-80 range
-    - 1-3 alerts (moderate severity)
+    - Score in 50-80 range OR an honest null with AUDIT_INCOMPLETE
     - Zero cost
     """
     from .golden_deterministic import (
@@ -121,22 +155,26 @@ def test_golden_moderate_scores_50_to_80():
             config=config,
         )
 
-        assert 50.0 <= result.overall_score <= 80.0, (
-            f"{test_case['name']} scored {result.overall_score}, expected 50-80"
-        )
-        assert 1 <= len(result.alerts) <= 4, (
-            f"{test_case['name']} had {len(result.alerts)} alerts, expected 1-4"
-        )
+        if result.overall_score is None:
+            _assert_honest_null_score(result)
+        else:
+            assert 50.0 <= result.overall_score <= 80.0, (
+                f"{test_case['name']} scored {result.overall_score}, expected 50-80"
+            )
+            assert 1 <= len(result.alerts) <= 4, (
+                f"{test_case['name']} had {len(result.alerts)} alerts, expected 1-4"
+            )
         assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 def test_golden_severe_scores_10_to_30():
     """
-    GOLD-SEVERE-*: Severe issues should score low (5-35 range).
+    GOLD-SEVERE-*: Severe issues should score low (5-35 range) when enough
+    category coverage is assessed; narrow single/dual-clause fixtures
+    honestly return null instead (ADR-009 SS14 active-weight guard).
 
     Success Criteria:
-    - Score in 5-35 range (5 is min_score floor for extreme cases)
-    - At least 1 critical/high severity alert
+    - Score in the fixture's expected range OR an honest null with AUDIT_INCOMPLETE
     - Zero cost
     """
     from .golden_deterministic import (
@@ -154,15 +192,16 @@ def test_golden_severe_scores_10_to_30():
             config=config,
         )
 
-        # Use expected score range from test case
-        expected_min, expected_max = test_case["expected_score_range"]
-        assert expected_min <= result.overall_score <= expected_max, (
-            f"{test_case['name']} scored {result.overall_score}, expected {expected_min}-{expected_max}"
-        )
-        # Verify at least 1 alert (all severe cases have at least 1 critical issue)
-        assert len(result.alerts) >= 1, (
-            f"{test_case['name']} had {len(result.alerts)} alerts, expected ≥1"
-        )
+        if result.overall_score is None:
+            _assert_honest_null_score(result)
+        else:
+            expected_min, expected_max = test_case["expected_score_range"]
+            assert expected_min <= result.overall_score <= expected_max, (
+                f"{test_case['name']} scored {result.overall_score}, expected {expected_min}-{expected_max}"
+            )
+            assert len(result.alerts) >= 1, (
+                f"{test_case['name']} had {len(result.alerts)} alerts, expected ≥1"
+            )
         assert result.llm_cost_usd == pytest.approx(0.0)
 
 
@@ -175,10 +214,12 @@ def test_golden_empty_project_does_not_crash():
     """
     GOLD-EDGE-001: Empty project should not crash.
 
+    Zero clauses means zero assessed categories — an honest null score,
+    not a fabricated "no issues = 95+".
+
     Success Criteria:
     - No exceptions raised
-    - Score ≥95 (no issues)
-    - Zero alerts
+    - Honest null score with AUDIT_INCOMPLETE
     """
     from .golden_deterministic import GOLD_EDGE_EMPTY_PROJECT
 
@@ -189,8 +230,7 @@ def test_golden_empty_project_does_not_crash():
         config=config,
     )
 
-    assert result.overall_score >= 95.0
-    assert len(result.alerts) == 0
+    _assert_honest_null_score(result)
     assert result.llm_cost_usd == pytest.approx(0.0)
 
 
@@ -200,7 +240,7 @@ def test_golden_missing_data_handled_gracefully():
 
     Success Criteria:
     - No exceptions raised
-    - Score reasonable (rules skip clauses with missing data)
+    - Real score in [0, 100] OR an honest null with AUDIT_INCOMPLETE
     - Zero cost
     """
     from .golden_deterministic import GOLD_EDGE_MISSING_DATA
@@ -213,8 +253,10 @@ def test_golden_missing_data_handled_gracefully():
     )
 
     # Should not crash
-    assert result.overall_score >= 0.0
-    assert result.overall_score <= 100.0
+    if result.overall_score is None:
+        _assert_honest_null_score(result)
+    else:
+        assert 0.0 <= result.overall_score <= 100.0
     assert result.llm_cost_usd == pytest.approx(0.0)
 
 
@@ -224,7 +266,7 @@ def test_golden_malformed_dates_handled_gracefully():
 
     Success Criteria:
     - No exceptions raised
-    - Score reasonable (date parsing fails gracefully)
+    - Real score in [0, 100] OR an honest null with AUDIT_INCOMPLETE
     - Zero cost
     """
     from .golden_deterministic import GOLD_EDGE_MALFORMED_DATES
@@ -237,8 +279,10 @@ def test_golden_malformed_dates_handled_gracefully():
     )
 
     # Should not crash
-    assert result.overall_score >= 0.0
-    assert result.overall_score <= 100.0
+    if result.overall_score is None:
+        _assert_honest_null_score(result)
+    else:
+        assert 0.0 <= result.overall_score <= 100.0
     assert result.llm_cost_usd == pytest.approx(0.0)
 
 

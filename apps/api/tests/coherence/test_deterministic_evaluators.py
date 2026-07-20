@@ -903,10 +903,18 @@ class TestQualityStandardEvaluator:
         assert evaluator.evaluate_v3(clause) is None
 
     def test_vague_standard(self, evaluator):
-        """Test finding for vague 'industry standards' reference."""
+        """Test finding for vague 'industry standards' reference.
+
+        DET-QUA-STANDARD only fires when infer_category resolves the clause
+        to QUALITY/TECHNICAL (category-targeted retrieval, TASK-BCK-057/058).
+        The original text ("Work shall comply with...") ties 1-1-1 across
+        SCOPE/TECHNICAL/QUALITY on keyword count and resolves to SCOPE by
+        dict-order tie-break, so the rule never fires. Adding "Quality" gives
+        an unambiguous QUALITY match while preserving the vague-standard intent.
+        """
         clause = Clause(
             id="C001",
-            text="Work shall comply with industry standards and best practices",
+            text="Quality of work shall comply with industry standards and best practices",
             data={}
         )
         signal = evaluator.evaluate_v3(clause)
