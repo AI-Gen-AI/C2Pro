@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 
+from src.documents.adapters.http import router as document_router
 from src.documents.adapters.persistence.models import DocumentORM
 from src.documents.domain.models import DocumentStatus, DocumentType
 from src.projects.adapters.persistence.models import ProjectORM
@@ -21,7 +22,10 @@ async def test_upload_response_exposes_non_terminal_processing_state(
     test_tenant,
     test_user,
     generate_token,
+    monkeypatch,
 ) -> None:
+    monkeypatch.setattr(document_router, "_enqueue_document_processing", lambda _document_id: None)
+
     project = ProjectORM(
         id=uuid4(),
         tenant_id=test_tenant.id,
@@ -50,7 +54,7 @@ async def test_upload_response_exposes_non_terminal_processing_state(
     assert response.status_code == 202
     payload = response.json()
     assert payload["processing_status"] == "queued"
-    assert "analysis has not started" in payload["status_detail"].lower()
+    assert "background processing will start when the worker is available" in payload["status_detail"].lower()
 
 
 @pytest.mark.asyncio
@@ -74,6 +78,7 @@ async def test_document_list_marks_parsed_as_pre_analysis_state(
     db.add(
         DocumentORM(
             id=uuid4(),
+            tenant_id=test_tenant.id,
             project_id=project.id,
             document_type=DocumentType.CONTRACT,
             filename="contract.pdf",

@@ -45,7 +45,7 @@ async def test_processing_stream_returns_stage_and_complete_events(
         status="active",
         currency="EUR",
         coherence_score=78,
-        last_analysis_at=datetime.now(UTC),
+        last_analysis_at=datetime.now(UTC).replace(tzinfo=None),
     )
     db.add(project)
     await db.flush()
@@ -54,6 +54,7 @@ async def test_processing_stream_returns_stage_and_complete_events(
         [
             DocumentORM(
                 id=uuid4(),
+                tenant_id=test_tenant.id,
                 project_id=project.id,
                 document_type=DocumentType.CONTRACT,
                 filename="a.pdf",
@@ -64,6 +65,7 @@ async def test_processing_stream_returns_stage_and_complete_events(
             ),
             DocumentORM(
                 id=uuid4(),
+                tenant_id=test_tenant.id,
                 project_id=project.id,
                 document_type=DocumentType.SCHEDULE,
                 filename="b.pdf",
@@ -77,18 +79,20 @@ async def test_processing_stream_returns_stage_and_complete_events(
 
     analysis = Analysis(
         id=uuid4(),
+        tenant_id=test_tenant.id,
         project_id=project.id,
         analysis_type=AnalysisType.COHERENCE,
         status=AnalysisStatus.COMPLETED,
         result_json={"source": "test"},
         coherence_score=78,
         alerts_count=2,
-        completed_at=datetime.now(UTC),
+        completed_at=datetime.now(UTC).replace(tzinfo=None),
     )
     db.add(analysis)
     db.add(
         CoherenceResultORM(
             project_id=project.id,
+            tenant_id=test_tenant.id,
             global_score=78,
             category_scores={"SCOPE": 80},
             category_details=[],
@@ -108,7 +112,8 @@ async def test_processing_stream_returns_stage_and_complete_events(
     )
 
     response = await client.get(
-        f"/api/v1/analysis/projects/{project.id}/process/stream?access_token={token}"
+        f"/api/v1/analysis/projects/{project.id}/process/stream",
+        headers={"Authorization": f"Bearer {token}"},
     )
 
     assert response.status_code == 200

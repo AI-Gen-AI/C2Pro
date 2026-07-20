@@ -6,7 +6,7 @@ Priority: P1
 Tests the DocumentsEntityExtractionService adapter.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 
@@ -77,6 +77,28 @@ class TestLocalFileStorage:
 
         # Check required methods exist
         assert hasattr(service, "upload_file")
+
+    def test_storage_falls_back_when_preferred_directory_is_not_writable(self, tmp_path):
+        """Uses the fallback directory when a created path cannot accept writes."""
+        from src.documents.adapters.storage import local_file_storage_service
+        from src.documents.adapters.storage.local_file_storage_service import (
+            LocalFileStorageService,
+        )
+
+        preferred_dir = tmp_path / "preferred"
+        fallback_dir = tmp_path / "fallback"
+
+        with (
+            patch.object(local_file_storage_service, "_FALLBACK_UPLOAD_DIR", fallback_dir),
+            patch.object(
+                local_file_storage_service.tempfile,
+                "NamedTemporaryFile",
+                side_effect=PermissionError,
+            ),
+        ):
+            service = LocalFileStorageService(base_dir=preferred_dir)
+
+        assert service._base_dir == fallback_dir
 
 
 class TestRagIngestionService:

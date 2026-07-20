@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncGenerator
+from importlib import import_module
 
 import pytest
 import pytest_asyncio
@@ -116,6 +117,27 @@ def _set_metadata_enum_create_type(enabled: bool) -> None:
 # ---------------------------------------------------------------------------
 # Schema inspection helpers
 # ---------------------------------------------------------------------------
+
+
+_ORM_MODEL_MODULES = (
+    "src.analysis.adapters.persistence.models",
+    "src.coherence.adapters.persistence.models",
+    "src.core.ai.models",
+    "src.core.auth.models",
+    "src.core.security.adapters.persistence.models",
+    "src.documents.adapters.persistence.models",
+    "src.procurement.adapters.persistence.models",
+    "src.project_state.adapters.persistence.models",
+    "src.projects.adapters.persistence.models",
+    "src.stakeholders.adapters.persistence.models",
+    "src.temporal.adapters.persistence.models",
+)
+
+
+def _register_test_orm_models() -> None:
+    """Register every ORM table before creating the isolated test schema."""
+    for module_name in _ORM_MODEL_MODULES:
+        import_module(module_name)
 
 
 async def _table_exists(conn, table_name: str) -> bool:
@@ -306,6 +328,7 @@ async def test_engine():
             connect_args={"statement_cache_size": 0},
         )
 
+        _register_test_orm_models()
         _ensure_test_fk_stub_tables()
 
         async def _cleanup_bootstrap(conn) -> None:

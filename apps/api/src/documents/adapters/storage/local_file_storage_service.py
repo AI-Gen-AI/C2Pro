@@ -35,6 +35,10 @@ class LocalFileStorageService(IStorageService):
     def _ensure_writable_directory(preferred_dir: Path) -> Path:
         try:
             preferred_dir.mkdir(parents=True, exist_ok=True)
+            # mkdir succeeding does not guarantee that the process can create
+            # files there (for example, a read-only mounted Docker volume).
+            with tempfile.NamedTemporaryFile(dir=preferred_dir):
+                pass
             return preferred_dir
         except OSError:
             _FALLBACK_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

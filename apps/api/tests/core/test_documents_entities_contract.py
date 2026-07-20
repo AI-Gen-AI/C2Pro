@@ -34,6 +34,7 @@ async def test_document_entities_route_returns_clause_derived_entities(
 
     document = DocumentORM(
         id=uuid4(),
+        tenant_id=test_tenant.id,
         project_id=project.id,
         document_type=DocumentType.CONTRACT,
         filename="contract.pdf",
@@ -47,6 +48,7 @@ async def test_document_entities_route_returns_clause_derived_entities(
 
     clause = ClauseORM(
         id=uuid4(),
+        tenant_id=test_tenant.id,
         project_id=project.id,
         document_id=document.id,
         clause_code="1.1",
