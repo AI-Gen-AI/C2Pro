@@ -104,7 +104,16 @@ async def _reset_metadata_enum_types(conn) -> None:
 async def _create_metadata_enum_types(conn) -> None:
     def _create(sync_conn) -> None:
         for enum_type in _iter_metadata_enum_types():
-            enum_type.create(sync_conn, checkfirst=True)
+            # Temporarily enable create_type so that enums declared with
+            # create_type=False (e.g. coherence_score_version) are still
+            # pre-created before Base.metadata.create_all runs.  Without
+            # this, CREATE TABLE fails with "type does not exist".
+            original = enum_type.create_type
+            enum_type.create_type = True
+            try:
+                enum_type.create(sync_conn, checkfirst=True)
+            finally:
+                enum_type.create_type = original
 
     await conn.run_sync(_create)
 
