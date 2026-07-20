@@ -23,6 +23,7 @@ def _build_document() -> Document:
 
     return Document(
         id=document_id,
+        tenant_id=uuid4(),
         project_id=project_id,
         document_type=DocumentType.CONTRACT,
         filename="Contract.pdf",
@@ -32,6 +33,7 @@ def _build_document() -> Document:
         clauses=[
             Clause(
                 id=uuid4(),
+                tenant_id=uuid4(),
                 project_id=project_id,
                 document_id=document_id,
                 clause_code="CL-001",
@@ -43,6 +45,7 @@ def _build_document() -> Document:
             ),
             Clause(
                 id=uuid4(),
+                tenant_id=uuid4(),
                 project_id=project_id,
                 document_id=document_id,
                 clause_code="CL-002",

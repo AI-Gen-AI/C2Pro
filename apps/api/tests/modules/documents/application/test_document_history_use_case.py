@@ -26,6 +26,7 @@ from src.documents.domain.models import (
 def _build_document() -> Document:
     return Document(
         id=uuid4(),
+        tenant_id=uuid4(),
         project_id=uuid4(),
         document_type=DocumentType.CONTRACT,
         filename="Prime Contract.pdf",
@@ -61,7 +62,7 @@ async def test_execute_builds_sorted_document_and_alert_history() -> None:
         )
     )
 
-    response = await GetDocumentHistoryUseCase(document_repository=repository).execute(document.id)
+    response = await GetDocumentHistoryUseCase(document_repository=repository).execute(uuid4(), document.id)
 
     assert response.document_id == document.id
     assert [item.title for item in response.items] == [
@@ -94,7 +95,7 @@ async def test_execute_uses_alert_created_at_when_history_omits_created_event() 
         )
     )
 
-    response = await GetDocumentHistoryUseCase(document_repository=repository).execute(document.id)
+    response = await GetDocumentHistoryUseCase(document_repository=repository).execute(uuid4(), document.id)
 
     created_events = [item for item in response.items if item.source_id == str(alert_id)]
     assert len(created_events) == 1

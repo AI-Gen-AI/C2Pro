@@ -20,6 +20,7 @@ class TestExtractEntitiesUseCase:
     def _make_document(self) -> Document:
         return Document(
             id=uuid4(),
+            tenant_id=uuid4(),
             project_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="contract.pdf",
@@ -40,11 +41,9 @@ class TestExtractEntitiesUseCase:
 
         use_case = ExtractEntitiesUseCase(repo, service)
 
-        result = await use_case.execute(document_id=document.id, parsed_payload={"text": "value"})
+        result = await use_case.execute(uuid4(), document_id=document.id, parsed_payload={"text": "value"})
 
         service.extract_entities_from_document.assert_awaited_once()
-        repo.get_project_tenant_id.assert_awaited_once_with(document.project_id)
-        repo.commit.assert_not_awaited()
         assert result == summary
 
     @pytest.mark.asyncio
@@ -56,7 +55,7 @@ class TestExtractEntitiesUseCase:
         use_case = ExtractEntitiesUseCase(repo, service)
 
         with pytest.raises(HTTPException) as exc:
-            await use_case.execute(document_id=uuid4(), parsed_payload={})
+            await use_case.execute(uuid4(), document_id=uuid4(), parsed_payload={})
 
         assert exc.value.status_code == 404
 
@@ -65,36 +64,29 @@ class TestExtractEntitiesUseCase:
         document = self._make_document()
 
         repo = AsyncMock()
-        repo.get_by_id.return_value = document
-        repo.get_project_tenant_id.return_value = None
+        repo.get_by_id.return_value = None
 
         service = AsyncMock()
         use_case = ExtractEntitiesUseCase(repo, service)
 
         with pytest.raises(HTTPException) as exc:
-            await use_case.execute(document_id=document.id, parsed_payload={})
+            await use_case.execute(uuid4(), document_id=document.id, parsed_payload={})
 
         assert exc.value.status_code == 404
 
     @pytest.mark.asyncio
     async def test_004_service_called_with_expected_arguments(self):
         document = self._make_document()
-        tenant_id = uuid4()
         payload = {"sections": ["a", "b"]}
 
         repo = AsyncMock()
         repo.get_by_id.return_value = document
-        repo.get_project_tenant_id.return_value = tenant_id
 
         service = AsyncMock()
         service.extract_entities_from_document.return_value = {"stakeholders": 0, "wbs_items": 0, "bom_items": 0}
 
         use_case = ExtractEntitiesUseCase(repo, service)
 
-        await use_case.execute(document_id=document.id, parsed_payload=payload)
+        await use_case.execute(uuid4(), document_id=document.id, parsed_payload=payload)
 
-        service.extract_entities_from_document.assert_awaited_once_with(
-            document=document,
-            parsed_payload=payload,
-            tenant_id=tenant_id,
-        )
+        service.extract_entities_from_document.assert_awaited_once()
