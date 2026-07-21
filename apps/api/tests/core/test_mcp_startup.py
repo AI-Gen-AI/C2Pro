@@ -154,7 +154,7 @@ def test_create_application_skips_mcp_router_when_import_fails() -> None:
     ):
         app = create_application()
 
-    paths = {route.path for route in app.routes}
+    paths = set(app.openapi()["paths"].keys())
 
     assert not any("/mcp" in path for path in paths)
     warning_calls = [
