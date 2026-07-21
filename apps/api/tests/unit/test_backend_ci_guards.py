@@ -504,3 +504,22 @@ def test_frontend_build_job_present_and_required_in_ci_workflow() -> None:
     assert "frontend-build" in [job.split(":")[0] for job in required_jobs]
     assert "frontend-build" not in [job.split(":")[0] for job in advisory_jobs]
     assert "Advisory: the integration suite has pre-existing failures on main" not in contents
+
+
+def test_core_and_coherence_jobs_are_required_gates_in_ci_workflow() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001 (EPIC-TEST-DEBT)."""
+    repo_root = Path(__file__).resolve().parents[4]
+    contents = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    import yaml
+
+    jobs = yaml.safe_load(contents)["jobs"]
+    for job_name, suite in (("backend-core", "tests/core"), ("backend-coherence", "tests/coherence")):
+        assert job_name in jobs
+        assert jobs[job_name]["needs"] == "detect-changes"
+        assert jobs[job_name]["env"]["C2PRO_AI_MOCK"] == "1"
+        assert any(suite in step.get("run", "") for step in jobs[job_name]["steps"])
+        assert job_name in jobs["ci-status"]["needs"]
+
+    assert '"backend-core:$RESULT_BACKEND_CORE"' in contents
+    assert '"backend-coherence:$RESULT_BACKEND_COHERENCE"' in contents
