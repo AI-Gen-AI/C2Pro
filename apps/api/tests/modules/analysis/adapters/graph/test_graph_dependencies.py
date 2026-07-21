@@ -135,10 +135,22 @@ class TestGraphDependencyProviders:
 
     @pytest.mark.asyncio
     async def test_coherence_scorer_uses_dependency_provider(self, monkeypatch) -> None:
+        # TASK-COH-V1-02 rewired N8 to delegate scoring to the canonical
+        # `/coherence/evaluate` subgraph via `evaluate_coherence_async` — the
+        # pre-v1 `build_coherence_calculation_service` seam this test used to
+        # patch no longer runs in N8 (see tests/unit/analysis/
+        # test_coherence_scorer_node.py, skipped for the same reason, and its
+        # replacement test_coherence_scorer_node_canonical_subgraph.py). This
+        # test now patches the provider N8 actually calls.
         from src.analysis.adapters.graph import nodes_extended
         from src.analysis.domain import coherence_derivation
-        from src.coherence.application import dependencies
-        from src.coherence.domain.category_weights import CoherenceCategory
+        from src.coherence.domain.alert_mapping import AlertCategory
+        from src.coherence.graph import graph as coherence_graph
+        from src.coherence.models import (
+            CategoryBreakdown,
+            EnrichedCoherenceResult,
+            SeverityCount,
+        )
 
         class FakeDerivationService:
             def derive(self, input_data):
@@ -155,13 +167,29 @@ class TestGraphDependencyProviders:
                     quality_note="",
                 )
 
-        class FakeService:
-            def calculate_coherence(self, **kwargs):
-                assert kwargs["scope_defined"] is True
-                return SimpleNamespace(
-                    global_score=88,
-                    category_scores=dict.fromkeys(CoherenceCategory, 88),
-                )
+        async def fake_evaluate_coherence_async(
+            clauses,
+            project_id="default",
+            config=None,
+            seed_signals=None,
+            seed_coverage=None,
+        ):
+            _ = (clauses, project_id, config, seed_signals, seed_coverage)
+            return EnrichedCoherenceResult(
+                overall_score=88,
+                score_version="coherence-v1",
+                score_reason="ok",
+                score_missing_dimensions=[],
+                category_breakdown=[
+                    CategoryBreakdown(
+                        category=AlertCategory.SCOPE,
+                        score=88,
+                        alert_count=0,
+                        severity_breakdown=SeverityCount(),
+                        impact_percentage=0.0,
+                    )
+                ],
+            )
 
         monkeypatch.setattr(
             coherence_derivation,
@@ -169,9 +197,9 @@ class TestGraphDependencyProviders:
             FakeDerivationService,
         )
         monkeypatch.setattr(
-            dependencies,
-            "build_coherence_calculation_service",
-            lambda event_publisher=None: FakeService(),
+            coherence_graph,
+            "evaluate_coherence_async",
+            fake_evaluate_coherence_async,
         )
 
         result = await nodes_extended.coherence_scorer_node(
