@@ -104,7 +104,20 @@ async def _reset_metadata_enum_types(conn) -> None:
 async def _create_metadata_enum_types(conn) -> None:
     def _create(sync_conn) -> None:
         for enum_type in _iter_metadata_enum_types():
-            enum_type.create(sync_conn, checkfirst=True)
+            # Only postgresql.ENUM carries `create_type`; the generic
+            # sqlalchemy.Enum does not.  Enums declared create_type=False
+            # (e.g. coherence_score_version) are skipped by create_all, so
+            # pre-create them here by toggling the flag temporarily.  Every
+            # other enum keeps the original plain .create() behaviour.
+            create_type = getattr(enum_type, "create_type", None)
+            if create_type is False:
+                enum_type.create_type = True
+                try:
+                    enum_type.create(sync_conn, checkfirst=True)
+                finally:
+                    enum_type.create_type = False
+            else:
+                enum_type.create(sync_conn, checkfirst=True)
 
     await conn.run_sync(_create)
 
