@@ -68,4 +68,5 @@ class TestRlsAndIndexesMigration:
         contents = self._migration_path().read_text(encoding="utf-8")
 
         assert "pg_stat_statements" in contents
-        assert "CREATE EXTENSION IF NOT EXISTS pg_stat_statements" in contents
+        assert '_ensure_extension("pg_stat_statements")' in contents
+        assert "CREATE EXTENSION IF NOT EXISTS {extension_name}" in contents
