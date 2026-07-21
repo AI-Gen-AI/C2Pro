@@ -203,6 +203,7 @@ async def approved_review_item(db, test_project, test_document, test_tenant):
     return review_item
 
 
+@pytest.mark.requires_services
 class TestResumeEndpointExistence:
     """Test that the resume endpoint exists and has correct signature."""
 
@@ -233,6 +234,7 @@ class TestResumeEndpointExistence:
         assert response.status_code in [400, 422], "Should reject invalid decision value"
 
 
+@pytest.mark.requires_services
 class TestApprovalFlow:
     """Test workflow resumption with approval decision."""
 
@@ -300,6 +302,7 @@ class TestApprovalFlow:
         assert test_review_item.review_decision == feedback_text, "Feedback should be persisted in review_decision"
 
 
+@pytest.mark.requires_services
 class TestRejectionFlow:
     """Test workflow termination with rejection decision."""
 
@@ -362,6 +365,7 @@ class TestRejectionFlow:
         assert test_review_item.review_decision == rejection_reason, "Rejection reason should be persisted in review_decision"
 
 
+@pytest.mark.requires_services
 class TestCheckpointRestoration:
     """Test LangGraph checkpoint state restoration."""
 
@@ -425,6 +429,7 @@ class TestCheckpointRestoration:
         assert response.status_code in [400, 500], "Should fail without checkpoint_id"
 
 
+@pytest.mark.requires_services
 class TestStateInjection:
     """Test approval/rejection data injection into workflow state."""
 
@@ -469,6 +474,7 @@ class TestStateInjection:
         assert graph_app.updates[-1][1]["termination_reason"] == reason
 
 
+@pytest.mark.requires_services
 class TestErrorCases:
     """Test error handling for resume endpoint."""
 
@@ -510,6 +516,7 @@ class TestErrorCases:
         assert response.status_code == 422, "Should return 422 for missing body"
 
 
+@pytest.mark.requires_services
 class TestConcurrency:
     """Test concurrent resume attempts."""
 

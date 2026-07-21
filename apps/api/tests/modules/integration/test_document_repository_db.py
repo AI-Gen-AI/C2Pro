@@ -154,6 +154,7 @@ async def project_b(session: AsyncSession, tenant_b_id: UUID) -> ProjectORM:
     return project
 
 
+@pytest.mark.requires_services
 @pytest.mark.asyncio
 class TestDocumentRepositoryDB:
     """Refers to Suite ID: TS-INT-DB-DOC-001"""

@@ -56,6 +56,7 @@ def coherence_result(test_project: ProjectORM) -> CoherenceCalculationResult:
     return use_case.execute(command)
 
 
+@pytest.mark.requires_services
 @pytest.mark.asyncio
 class TestCoherenceRepository:
     """Refers to Suite ID: TS-INT-DB-COH-001"""

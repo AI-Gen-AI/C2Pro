@@ -11,6 +11,7 @@ import pytest
 from httpx import AsyncClient
 
 
+@pytest.mark.requires_services
 class TestNotificationConfigEndpoints:
     """Integration tests for notification configuration API endpoints."""
 

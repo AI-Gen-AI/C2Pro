@@ -56,6 +56,7 @@ async def test_project(db):
     return project
 
 
+@pytest.mark.requires_services
 class TestDocumentVersioningSchema:
     """Test that document versioning schema exists in database."""
 
@@ -124,6 +125,7 @@ class TestDocumentVersioningSchema:
         assert row[0] == "ix_documents_id_version"
 
 
+@pytest.mark.requires_services
 class TestDocumentVersionTracking:
     """Test document version tracking behavior."""
 
@@ -202,6 +204,7 @@ class TestDocumentVersionTracking:
         assert document.version == 2
 
 
+@pytest.mark.requires_services
 class TestReUploadDetection:
     """Test re-upload detection logic."""
 
@@ -278,6 +281,7 @@ class TestReUploadDetection:
         assert document_v1.file_hash == hash_v2
 
 
+@pytest.mark.requires_services
 class TestCancelInProgressAnalysis:
     """Test canceling in-progress analysis when document is re-uploaded."""
 
@@ -314,6 +318,7 @@ class TestCancelInProgressAnalysis:
         assert document.version == 2
 
 
+@pytest.mark.requires_services
 class TestVersionHistory:
     """Test version history tracking (future feature - defines requirements)."""
 

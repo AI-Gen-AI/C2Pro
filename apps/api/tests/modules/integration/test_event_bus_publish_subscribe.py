@@ -11,6 +11,7 @@ import pytest
 from src.core.events.event_bus import EventBus
 
 
+@pytest.mark.requires_services
 @pytest.mark.asyncio
 class TestEventBusPublishSubscribe:
     """Refers to Suite ID: TS-INT-EVT-BUS-001"""

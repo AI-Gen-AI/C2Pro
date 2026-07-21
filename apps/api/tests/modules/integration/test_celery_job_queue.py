@@ -37,6 +37,7 @@ class _FakeCeleryClient:
         return self.results[task_id]
 
 
+@pytest.mark.requires_services
 class TestCeleryJobQueue:
     """Refers to Suite ID: TS-INT-EVT-CEL-001"""
 

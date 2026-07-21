@@ -14,6 +14,7 @@ from src.documents.adapters.storage.local_file_storage_service import (
 MAX_UPLOAD_SIZE_MB = 50
 
 
+@pytest.mark.requires_services
 @pytest.mark.asyncio
 class TestDocumentUpload:
     """

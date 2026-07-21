@@ -80,6 +80,7 @@ def extraction_run_id() -> UUID:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.requires_services
 @pytest.mark.asyncio
 class TestEvidencePersistenceRoundtrip:
     """Full round-trip: adapter → repository → DB verification."""

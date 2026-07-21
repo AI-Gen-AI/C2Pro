@@ -68,6 +68,7 @@ async def _add_budget_item(
     return item
 
 
+@pytest.mark.requires_services
 class TestBudgetAPI:
     """Integration coverage for the active project budget endpoint."""
 

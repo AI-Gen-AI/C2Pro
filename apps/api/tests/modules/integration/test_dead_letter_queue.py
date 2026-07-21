@@ -6,9 +6,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import pytest
+
 from src.core.events.dead_letter_queue import DeadLetterQueue, DLQMessage
 
 
+@pytest.mark.requires_services
 class TestDeadLetterQueue:
     """Refers to Suite ID: TS-INT-EVT-DLQ-001"""
 

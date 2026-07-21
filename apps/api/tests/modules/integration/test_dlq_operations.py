@@ -68,6 +68,7 @@ async def test_document(db):
     return document
 
 
+@pytest.mark.requires_services
 class TestDLQTableExists:
     """Test that dlq_failed_tasks table exists in database."""
 
@@ -118,6 +119,7 @@ class TestDLQTableExists:
         assert required_columns.issubset(columns), f"Missing columns: {required_columns - columns}"
 
 
+@pytest.mark.requires_services
 class TestDLQService:
     """Test DLQ service operations."""
 
@@ -239,6 +241,7 @@ class TestDLQService:
         assert dlq_record.next_retry_at is None
 
 
+@pytest.mark.requires_services
 class TestDLQAdminEndpoint:
     """Legacy RED-phase placeholders for unimplemented DLQ admin endpoints."""
 

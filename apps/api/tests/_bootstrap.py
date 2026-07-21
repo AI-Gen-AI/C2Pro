@@ -53,6 +53,7 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "gate3_mcp: Gate 3 - MCP Security verification")
     config.addinivalue_line("markers", "gate4_traceability: Gate 4 - Traceability & Audit Logging verification")
     config.addinivalue_line("markers", "contract: Contract tests (API/frontend alignment)")
+    config.addinivalue_line("markers", "requires_services: test needs a live DB/Redis/Celery/Neo4j service")
 
 
 # ---------------------------------------------------------------------------

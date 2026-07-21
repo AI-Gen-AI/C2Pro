@@ -82,6 +82,7 @@ async def test_document(db, test_user_and_project):
     return document
 
 
+@pytest.mark.requires_services
 class TestDocumentReuploadEndpoint:
     """Test PATCH /api/v1/documents/{id}/file endpoint."""
 
