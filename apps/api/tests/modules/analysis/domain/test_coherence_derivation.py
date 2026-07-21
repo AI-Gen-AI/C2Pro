@@ -33,10 +33,10 @@ def test_derivation_exposes_calculation_inputs_for_coherence_service() -> None:
         "contract_price": 1250.0,
         "bom_items": [{"amount": 1250.0, "budget_line_assigned": True}],
         "scope_defined": True,
-        "schedule_within_contract": True,
-        "technical_consistent": True,
+        "schedule_within_contract": None,
+        "technical_consistent": None,
         "legal_compliant": False,
-        "quality_standard_met": True,
+        "quality_standard_met": None,
         "document_count": 1,
     }
 

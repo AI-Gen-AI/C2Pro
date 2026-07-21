@@ -57,6 +57,7 @@ async def test_document(db):
     document = DocumentORM(
         id=uuid4(),
         project_id=project.id,
+        tenant_id=tenant.id,
         document_type="contract",
         filename="test.pdf",
         upload_status="parsed",
