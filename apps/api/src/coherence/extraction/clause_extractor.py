@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any, cast
 from uuid import UUID
 
@@ -122,6 +123,10 @@ def _is_valid_uuid(value: str) -> bool:
 
 async def _call_llm(clause_text: str) -> dict[str, Any]:
     """Call Claude Haiku with the combined extraction prompt."""
+    if os.getenv("C2PRO_AI_MOCK") == "1":
+        # Same mock convention as src.analysis.adapters.ai.anthropic_client.AIService:
+        # deterministic, zero-latency, no real Anthropic call.
+        return {}
     try:
         from anthropic import AsyncAnthropic
 
