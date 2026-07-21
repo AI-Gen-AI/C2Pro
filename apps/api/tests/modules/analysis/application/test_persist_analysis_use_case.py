@@ -7,6 +7,7 @@ Uses mocked ORM models to avoid SQLAlchemy mapper initialization issues.
 from __future__ import annotations
 
 import sys
+from collections.abc import Generator
 from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
@@ -40,9 +41,6 @@ class _StubAlert:
 
 _stub_analysis_models.Analysis = _StubAnalysis  # type: ignore[attr-defined]
 _stub_analysis_models.Alert = _StubAlert  # type: ignore[attr-defined]
-sys.modules.setdefault(
-    "src.analysis.adapters.persistence.models", _stub_analysis_models
-)
 
 _stub_wbs_models = ModuleType("src.procurement.adapters.persistence.models")
 
@@ -52,9 +50,6 @@ class _StubWBSItemORM:
 
 
 _stub_wbs_models.WBSItemORM = _StubWBSItemORM  # type: ignore[attr-defined]
-sys.modules.setdefault(
-    "src.procurement.adapters.persistence.models", _stub_wbs_models
-)
 
 # Stub AlertGenerator
 _stub_alert_gen_mod = ModuleType("src.coherence.alert_generator")
@@ -87,7 +82,31 @@ class _StubAlertGenerator:
 
 
 _stub_alert_gen_mod.AlertGenerator = _StubAlertGenerator  # type: ignore[attr-defined]
-sys.modules.setdefault("src.coherence.alert_generator", _stub_alert_gen_mod)
+
+_STUB_MODULES = {
+    "src.analysis.adapters.persistence.models": _stub_analysis_models,
+    "src.procurement.adapters.persistence.models": _stub_wbs_models,
+    "src.coherence.alert_generator": _stub_alert_gen_mod,
+}
+
+
+@pytest.fixture(autouse=True)
+def _isolate_sys_modules() -> Generator[None, None, None]:
+    """Inject stub modules only for the duration of each test.
+    
+    The use case lazy-imports these inside execute().  Using a fixture
+    avoids polluting sys.modules for the rest of the test session.
+    """
+    saved: dict[str, object] = {}
+    for name, stub in _STUB_MODULES.items():
+        saved[name] = sys.modules.get(name)
+        sys.modules[name] = stub
+    yield
+    for name, original in saved.items():
+        if original is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = original
 
 from src.analysis.application.persist_analysis_use_case import (
     PersistAnalysisCommand,
