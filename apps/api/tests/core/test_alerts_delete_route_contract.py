@@ -10,16 +10,12 @@ def test_alert_delete_route_uses_204_without_response_model() -> None:
     """TS-BCK-050-001: 204 delete routes must not register a response body."""
     app = create_application()
 
-    assert "/api/v1/alerts/{alert_id}" in app.openapi()["paths"], \
-        "DELETE /api/v1/alerts/{alert_id} route not found"
+    # FastAPI no longer flattens include_router() routes into app.routes as
+    # APIRoute (they are nested in _IncludedRouter), so assert the 204/no-body
+    # contract via the OpenAPI schema — the version-agnostic source of truth.
+    delete_op = app.openapi()["paths"].get("/api/v1/alerts/{alert_id}", {}).get("delete")
+    assert delete_op is not None, "DELETE /api/v1/alerts/{alert_id} route not found"
 
-    routes = [
-        r for r in app.routes
-        if getattr(r, "path", None) == "/api/v1/alerts/{alert_id}"
-        and "DELETE" in getattr(r, "methods", set())
-    ]
-    assert routes, "DELETE /api/v1/alerts/{alert_id} route not found"
-    route = routes[0]
-
-    assert route.status_code == 204
-    assert route.response_model is None
+    responses = delete_op.get("responses", {})
+    assert "204" in responses, f"expected a 204 response, got {sorted(responses)}"
+    assert "content" not in responses["204"], "204 delete route must not register a response body"
