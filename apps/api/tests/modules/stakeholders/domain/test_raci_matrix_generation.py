@@ -23,6 +23,7 @@ class TestRaciMatrixGeneration:
         return RaciAssignment(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             stakeholder_id=uuid4(),
             wbs_item_id=wbs_item_id,
             raci_role=raci_role,

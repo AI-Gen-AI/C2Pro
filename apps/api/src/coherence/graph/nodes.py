@@ -33,7 +33,6 @@ from src.coherence.domain.ports.coherence_llm_gate_port import (
 from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.core.observability.coherence_tracing import traced_coherence_node
 
-from ..alert_generator import TEMPLATES  # TASK-COH-V1-06
 from ..models import (
     Alert,
     CategoryBreakdown,
@@ -1201,6 +1200,8 @@ def _create_audit_incomplete_alert(
     missing_dimensions: list[str],
 ) -> Alert:
     """Create AUDIT_INCOMPLETE meta-alert when score is None."""
+    from src.coherence.alert_generator import TEMPLATES
+
     missing_str = ", ".join(missing_dimensions)
     return Alert(
         rule_id="AUDIT_INCOMPLETE",
