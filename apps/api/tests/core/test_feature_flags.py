@@ -105,7 +105,7 @@ class TestRouterRegistrationGating:
     """Tests that create_application() conditionally registers routers."""
 
     def _get_route_paths(self, app: FastAPI) -> set[str]:
-        return {route.path for route in app.routes}
+        return set(app.openapi()["paths"].keys())
 
     def test_coherence_routers_registered_when_enabled(self):
         """Coherence routers registered when feature_coherence_analysis=True."""
