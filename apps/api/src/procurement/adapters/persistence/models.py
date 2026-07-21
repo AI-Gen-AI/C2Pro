@@ -104,11 +104,12 @@ class WBSItemORM(Base):
         uselist=False,
         foreign_keys=[project_id, parent_code],
     )
-    children: Mapped[Any] = relationship(
+    children: Mapped[list["WBSItemORM"]] = relationship(
         "WBSItemORM",
         back_populates="parent",
         cascade="all, delete-orphan",
         foreign_keys=[project_id, parent_code],
+        uselist=True,
     )
 
     def __repr__(self) -> str:
