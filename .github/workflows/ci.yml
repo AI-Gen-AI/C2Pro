@@ -467,6 +467,45 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.test.yml down -v
 
+  backend-modules:
+    name: Backend Modules Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      ENVIRONMENT: test
+      C2PRO_AI_MOCK: "1"
+      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
+      REDIS_URL: redis://localhost:6379/0
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+      - name: Bootstrap test infrastructure
+        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
+      - name: Run modules tests
+        working-directory: apps/api
+        run: python -m pytest tests/modules -m "not requires_services" --tb=short --junit-xml=modules-test-results.xml
+      - name: Upload modules test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: modules-test-results
+          path: apps/api/modules-test-results.xml
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
   backend-migrations:
     name: Migrations Check (Alembic)
     runs-on: ubuntu-latest
@@ -660,6 +699,7 @@ jobs:
       - backend-integration
       - backend-core
       - backend-coherence
+      - backend-modules
       - backend-migrations
       - frontend-quality
       - frontend-test
@@ -761,6 +801,7 @@ jobs:
           RESULT_BACKEND_INTEGRATION: ${{ needs.backend-integration.result }}
           RESULT_BACKEND_CORE: ${{ needs.backend-core.result }}
           RESULT_BACKEND_COHERENCE: ${{ needs.backend-coherence.result }}
+          RESULT_BACKEND_MODULES: ${{ needs.backend-modules.result }}
           RESULT_FRONTEND_BUILD: ${{ needs.frontend-build.result }}
         run: |
           set -euo pipefail
@@ -776,6 +817,7 @@ jobs:
             "backend-integration:$RESULT_BACKEND_INTEGRATION"
             "backend-core:$RESULT_BACKEND_CORE"
             "backend-coherence:$RESULT_BACKEND_COHERENCE"
+            "backend-modules:$RESULT_BACKEND_MODULES"
             "backend-migrations:$RESULT_BACKEND_MIGRATIONS"
             "frontend-quality:$RESULT_FRONTEND_QUALITY"
             "frontend-test:$RESULT_FRONTEND_TEST"

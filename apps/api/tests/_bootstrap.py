@@ -31,6 +31,11 @@ from tests.support.postgres_bootstrap import (
     run_postgres_test_bootstrap,
 )
 
+# The test suite shares one PostgreSQL database.  Schema DDL must therefore be
+# exclusive for the entire lifetime of a test_engine fixture, not just while
+# the DROP/CREATE statements are executing.
+_TEST_SCHEMA_DDL_LOCK_ID = 2_026_072_100
+
 # ---------------------------------------------------------------------------
 # Pytest configuration (markers + Prometheus reset)
 # ---------------------------------------------------------------------------
@@ -344,55 +349,79 @@ async def test_engine():
             connect_args={"statement_cache_size": 0},
         )
 
-        _register_test_orm_models()
-        _ensure_test_fk_stub_tables()
-
-        async def _cleanup_bootstrap(conn) -> None:
-            await reset_public_schema(conn)
-
-        async def _prepare_bootstrap(conn) -> None:
-            await _reset_metadata_enum_types(conn)
-            await _create_metadata_enum_types(conn)
-            _set_metadata_enum_create_type(False)
-            try:
-                await conn.run_sync(Base.metadata.create_all)
-            finally:
-                _set_metadata_enum_create_type(True)
-            await _ensure_rls_and_audit_compatibility(conn)
-
-        await run_postgres_test_bootstrap(
-            engine,
-            cleanup_step=_cleanup_bootstrap,
-            prepare_step=_prepare_bootstrap,
-            warning_sink=lambda exc: print(f"[WARNING] Bootstrap drop_all skipped: {exc}"),
-        )
-
-        # Recreate engine after schema reset to avoid stale pooled connections.
-        await engine.dispose()
-        engine = create_async_engine(
+        # A session-level advisory lock prevents another concurrently running
+        # test_engine fixture from dropping/recreating public (or its enum
+        # types) while this test is using the schema.  Keep it on a dedicated
+        # connection because the test engine is recreated after bootstrap.
+        schema_lock_engine = create_async_engine(
             database_url,
             echo=False,
             pool_pre_ping=True,
-            pool_size=5,
-            max_overflow=10,
             connect_args={"statement_cache_size": 0},
         )
-        async with engine.begin() as conn:
-            _set_metadata_enum_create_type(False)
-            try:
-                await conn.run_sync(Base.metadata.create_all)
-            finally:
-                _set_metadata_enum_create_type(True)
+        schema_lock_connection = await schema_lock_engine.connect()
+        await schema_lock_connection.execute(
+            text("SELECT pg_advisory_lock(:lock_id)"),
+            {"lock_id": _TEST_SCHEMA_DDL_LOCK_ID},
+        )
 
-        yield engine
+        try:
+            _register_test_orm_models()
+            _ensure_test_fk_stub_tables()
 
-        async with engine.begin() as conn:
-            try:
-                await conn.run_sync(Base.metadata.drop_all)
-            except Exception as exc:
-                print(f"[WARNING] Teardown drop_all skipped: {exc}")
+            async def _cleanup_bootstrap(conn) -> None:
+                await reset_public_schema(conn)
 
-        await engine.dispose()
+            async def _prepare_bootstrap(conn) -> None:
+                await _reset_metadata_enum_types(conn)
+                await _create_metadata_enum_types(conn)
+                _set_metadata_enum_create_type(False)
+                try:
+                    await conn.run_sync(Base.metadata.create_all)
+                finally:
+                    _set_metadata_enum_create_type(True)
+                await _ensure_rls_and_audit_compatibility(conn)
+
+            await run_postgres_test_bootstrap(
+                engine,
+                cleanup_step=_cleanup_bootstrap,
+                prepare_step=_prepare_bootstrap,
+                warning_sink=lambda exc: print(f"[WARNING] Bootstrap drop_all skipped: {exc}"),
+            )
+
+            # Recreate engine after schema reset to avoid stale pooled connections.
+            await engine.dispose()
+            engine = create_async_engine(
+                database_url,
+                echo=False,
+                pool_pre_ping=True,
+                pool_size=5,
+                max_overflow=10,
+                connect_args={"statement_cache_size": 0},
+            )
+            async with engine.begin() as conn:
+                _set_metadata_enum_create_type(False)
+                try:
+                    await conn.run_sync(Base.metadata.create_all)
+                finally:
+                    _set_metadata_enum_create_type(True)
+
+            yield engine
+
+            async with engine.begin() as conn:
+                try:
+                    await conn.run_sync(Base.metadata.drop_all)
+                except Exception as exc:
+                    print(f"[WARNING] Teardown drop_all skipped: {exc}")
+
+            await engine.dispose()
+        finally:
+            await schema_lock_connection.execute(
+                text("SELECT pg_advisory_unlock(:lock_id)"),
+                {"lock_id": _TEST_SCHEMA_DDL_LOCK_ID},
+            )
+            await schema_lock_connection.close()
+            await schema_lock_engine.dispose()
 
     except (OperationalError, OSError) as exc:
         pytest.fail(
