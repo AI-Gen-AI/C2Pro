@@ -51,6 +51,7 @@ class TestStakeholdersRaciIntegration:
             Stakeholder(
                 id=uuid4(),
                 project_id=project_id,
+                tenant_id=uuid4(),
                 power_level=PowerLevel.HIGH,
                 interest_level=InterestLevel.MEDIUM,
                 approval_status="approved",
@@ -64,6 +65,7 @@ class TestStakeholdersRaciIntegration:
             Stakeholder(
                 id=uuid4(),
                 project_id=project_id,
+                tenant_id=uuid4(),
                 power_level=PowerLevel.LOW,
                 interest_level=InterestLevel.HIGH,
                 approval_status="approved",

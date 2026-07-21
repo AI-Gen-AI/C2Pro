@@ -139,6 +139,7 @@ class TestDocumentVersionTracking:
         document = DocumentORM(
             id=uuid4(),
             project_id=test_project.id,
+            tenant_id=test_project.tenant_id,
             document_type="contract",
             filename="test.pdf",
             upload_status="uploaded",
@@ -163,6 +164,7 @@ class TestDocumentVersionTracking:
         document = DocumentORM(
             id=uuid4(),
             project_id=test_project.id,
+            tenant_id=test_project.tenant_id,
             document_type="contract",
             filename="test.pdf",
             upload_status="uploaded",
@@ -186,6 +188,7 @@ class TestDocumentVersionTracking:
         document = DocumentORM(
             id=uuid4(),
             project_id=test_project.id,
+            tenant_id=test_project.tenant_id,
             document_type="contract",
             filename="test.pdf",
             upload_status="uploaded",
@@ -219,6 +222,7 @@ class TestReUploadDetection:
         document = DocumentORM(
             id=uuid4(),
             project_id=test_project.id,
+            tenant_id=test_project.tenant_id,
             document_type="contract",
             filename="test.pdf",
             upload_status="uploaded",
@@ -254,6 +258,7 @@ class TestReUploadDetection:
         document_v1 = DocumentORM(
             id=doc_id,
             project_id=test_project.id,
+            tenant_id=test_project.tenant_id,
             document_type="contract",
             filename="test.pdf",
             upload_status="parsed",
@@ -296,6 +301,7 @@ class TestCancelInProgressAnalysis:
         document = DocumentORM(
             id=uuid4(),
             project_id=test_project.id,
+            tenant_id=test_project.tenant_id,
             document_type="contract",
             filename="test.pdf",
             upload_status=DocumentStatus.PARSED_PENDING_ANALYSIS,
@@ -334,6 +340,7 @@ class TestVersionHistory:
         document = DocumentORM(
             id=doc_id,
             project_id=test_project.id,
+            tenant_id=test_project.tenant_id,
             document_type="contract",
             filename="test.pdf",
             upload_status="parsed",
