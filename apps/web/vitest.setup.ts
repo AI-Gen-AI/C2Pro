@@ -24,6 +24,11 @@ if (!globalThis.TransformStream) {
     TransformStream as unknown as typeof globalThis.TransformStream;
 }
 
+// Vitest spawns multiple workers; each worker's setup registers a
+// process.on("warning") listener.  Raise the default limit so the
+// MaxListenersExceededWarning does not pollute the test output.
+process.setMaxListeners(20);
+
 const originalWarn = console.warn.bind(console);
 console.warn = (...args: unknown[]) => {
   if (

@@ -9,6 +9,12 @@ export default defineConfig({
   root: appRoot,
   define: {
     "process.env.VITEST": JSON.stringify("true"),
+    "process.env.NEXT_PUBLIC_API_URL": JSON.stringify("/api"),
+    "process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": JSON.stringify("pk_test_mock"),
+    "process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL": JSON.stringify("/sign-in"),
+    "process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL": JSON.stringify("/sign-up"),
+    "process.env.NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL": JSON.stringify("/"),
+    "process.env.NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL": JSON.stringify("/"),
   },
   esbuild: {
     jsxInject: "import React from 'react'",
