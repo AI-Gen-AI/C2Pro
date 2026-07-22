@@ -93,7 +93,7 @@ _STUB_MODULES = {
 @pytest.fixture(autouse=True)
 def _isolate_sys_modules() -> Generator[None, None, None]:
     """Inject stub modules only for the duration of each test.
-    
+
     The use case lazy-imports these inside execute().  Using a fixture
     avoids polluting sys.modules for the rest of the test session.
     """
