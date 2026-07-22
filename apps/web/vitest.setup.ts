@@ -24,26 +24,40 @@ if (!globalThis.TransformStream) {
     TransformStream as unknown as typeof globalThis.TransformStream;
 }
 
-const originalWarn = console.warn.bind(console);
-console.warn = (...args: unknown[]) => {
-  if (
-    typeof args[0] === "string" &&
-    args[0].includes("CJS build of Vite's Node API is deprecated")
-  ) {
-    return;
-  }
-  originalWarn(...args);
+// Vitest spawns multiple workers; each worker's setup registers a
+// vitest re-executes this setup file per worker/thread on a shared process, so
+// register the Vite-CJS-deprecation suppression EXACTLY ONCE. Otherwise the
+// process-level "warning" listener (and the console.warn wrapper) accumulate on
+// every setup run and trip Node's MaxListenersExceededWarning.
+const SUPPRESS_GUARD = Symbol.for("c2pro.vitest.viteCjsWarningSuppressed");
+const guardedProcess = process as typeof process & {
+  [SUPPRESS_GUARD]?: boolean;
 };
 
-process.on("warning", (warning) => {
-  if (
-    warning.name === "DeprecationWarning" &&
-    warning.message.includes("CJS build of Vite's Node API is deprecated")
-  ) {
-    return;
-  }
-  console.warn(warning);
-});
+if (!guardedProcess[SUPPRESS_GUARD]) {
+  guardedProcess[SUPPRESS_GUARD] = true;
+
+  const originalWarn = console.warn.bind(console);
+  console.warn = (...args: unknown[]) => {
+    if (
+      typeof args[0] === "string" &&
+      args[0].includes("CJS build of Vite's Node API is deprecated")
+    ) {
+      return;
+    }
+    originalWarn(...args);
+  };
+
+  process.on("warning", (warning) => {
+    if (
+      warning.name === "DeprecationWarning" &&
+      warning.message.includes("CJS build of Vite's Node API is deprecated")
+    ) {
+      return;
+    }
+    console.warn(warning);
+  });
+}
 
 if (!window.matchMedia) {
   Object.defineProperty(window, "matchMedia", {
