@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Severity gate for osv-scanner JSON output (TASK-DEV-024).
+"""Test Suite ID: TS-DEV-024-OSV-GATE-001. Severity gate for osv-scanner JSON output (TASK-DEV-024).
 
 The retired ``pnpm audit --audit-level critical`` blocked CI only on findings
 at or above a severity threshold. osv-scanner's own exit code fails on *any*
@@ -7,11 +7,11 @@ advisory regardless of severity, which would spuriously block on pre-existing
 Medium/Low advisories in pinned or transitive dependencies.
 
 This gate restores threshold semantics: it fails only when the dependency tree
-contains a High or Critical advisory (CVSS base score >= 7.0). Everything is
+contains a Critical advisory (CVSS base score >= 9.0). Everything is
 still reported (to stdout and the GitHub step summary) for visibility, so
 Medium/Low advisories remain tracked without breaking the build.
 
-Usage: ``python osv_gate.py <osv-results.json> [--threshold 7.0]``
+Usage: ``python osv_gate.py <osv-results.json> [--threshold 9.0]``
 
 Fail-closed: a missing or unparseable results file exits non-zero, so a broken
 scan can never be mistaken for a clean tree.
@@ -24,7 +24,7 @@ import json
 import os
 import sys
 
-DEFAULT_THRESHOLD = 7.0  # CVSS v3 base score: >=7.0 High, >=9.0 Critical.
+DEFAULT_THRESHOLD = 9.0  # CVSS v3 base score for Critical severity.
 
 
 def _score(group: dict) -> float | None:
@@ -98,14 +98,14 @@ def main(argv: list[str]) -> int:
 
     if blocking:
         print(
-            f"::error::{len(blocking)} High/Critical advisory(ies) "
+            f"::error::{len(blocking)} Critical advisory(ies) "
             "(CVSS >= {:g}) in the dependency tree.".format(args.threshold)
         )
         return 1
 
     print(
-        "No High/Critical advisories. "
-        "(Medium/Low advisories are reported above but do not block.)"
+        "No Critical advisories. "
+        "(High/Medium/Low advisories are reported above but do not block.)"
     )
     return 0
 

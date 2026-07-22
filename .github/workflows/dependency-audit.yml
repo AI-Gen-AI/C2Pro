@@ -3,7 +3,7 @@
 #
 #   * pip-audit: advisory — reports to the job summary, never blocks.
 #   * osv-scan: scans the JS dependency tree (pnpm-lock.yaml) against the OSV
-#     database and blocks on High/Critical advisories (CVSS >= 7.0). Replaces the
+#     database and blocks on Critical advisories (CVSS >= 9.0). Replaces the
 #     former `pnpm audit`, which stopped working when the npm legacy audit
 #     endpoint was retired (HTTP 410 — ERR_PNPM_AUDIT_BAD_RESPONSE). The old job
 #     gated on `--audit-level critical`; the severity gate here preserves that
@@ -63,7 +63,7 @@ jobs:
           exit "${AUDIT_FAILED:-0}"
 
   osv-scan:
-    name: OSV scan (blocks on High/Critical)
+    name: OSV scan (blocks on Critical)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -74,8 +74,8 @@ jobs:
 
       # osv-scanner exits non-zero on ANY advisory regardless of severity. We let
       # it run to completion (continue-on-error) to emit JSON, then gate on
-      # severity below — so a High/Critical advisory blocks CI while pre-existing
-      # Medium/Low advisories in pinned/transitive deps do not. Pinned to a
+      # severity below — so only a Critical advisory blocks CI while pre-existing
+      # High/Medium/Low advisories in pinned/transitive deps do not. Pinned to a
       # specific release for stable scanner behavior.
       - name: Scan dependency lockfile against the OSV database
         id: osv
@@ -87,8 +87,8 @@ jobs:
             --output=osv-results.json
             --lockfile=pnpm-lock.yaml
 
-      # Fails only on CVSS >= 7.0 (High/Critical), preserving the old
+      # Fails only on CVSS >= 9.0 (Critical), preserving the old
       # `pnpm audit --audit-level critical` threshold. Fail-closed if the
       # scanner produced no parseable results.
-      - name: Gate on High/Critical severity
+      - name: Gate on Critical severity
         run: python3 .github/scripts/osv_gate.py osv-results.json
