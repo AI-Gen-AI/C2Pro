@@ -41,24 +41,6 @@ paths:
                   type: string
                 type: object
                 title: Response Root  Get
-  /api/v1/health/worker:
-    get:
-      tags:
-      - Health
-      - Public
-      summary: Celery Worker Health
-      description: Checks that a Celery worker is online and consuming the document_parsing
-        queue.
-      operationId: worker_health_check_api_v1_health_worker_get
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                additionalProperties: true
-                type: object
-                title: Response Worker Health Check Api V1 Health Worker Get
   /health/live:
     get:
       tags:
@@ -224,6 +206,24 @@ paths:
                   type: string
                 type: object
                 title: Response Generic Health Check Api V1 Health Get
+  /api/v1/health/worker:
+    get:
+      tags:
+      - Health
+      - Public
+      summary: Celery Worker Health
+      description: Checks that a Celery worker is online and consuming the document_parsing
+        queue.
+      operationId: worker_health_check_api_v1_health_worker_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Worker Health Check Api V1 Health Worker Get
   /api/v1/auth/register:
     post:
       tags:
