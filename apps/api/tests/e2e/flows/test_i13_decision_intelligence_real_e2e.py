@@ -7,12 +7,19 @@ No service mocking; assertions are strict and expected to fail in RED.
 
 from __future__ import annotations
 
-from uuid import uuid4
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from src.config import settings
+from src.modules.hitl.adapters.persistence.models import ReviewItemORM
+from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 
 
 def _skip_if_decision_ports_not_wired(response) -> None:
@@ -27,6 +34,46 @@ def _skip_if_decision_ports_not_wired(response) -> None:
 async def live_app(app):
     async with LifespanManager(app):
         yield app
+
+
+@pytest_asyncio.fixture
+async def pending_i13_review_item(
+    seeded_auth_context: dict[str, str],
+) -> AsyncGenerator[UUID, None]:
+    """Seed an approvable review item for the authenticated I13 tenant."""
+    database_url = settings.database_url
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    engine = create_async_engine(database_url, connect_args={"statement_cache_size": 0})
+    session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    item_id = uuid4()
+    try:
+        async with session_factory() as session:
+            session.add(
+                ReviewItemORM(
+                    id=item_id,
+                    item_id=item_id,
+                    item_type="final_decision_package",
+                    current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+                    confidence=0.4,
+                    impact_level=ImpactLevel.HIGH,
+                    tenant_id=UUID(seeded_auth_context["tenant_id"]),
+                    sla_due_date=datetime.now(UTC).replace(tzinfo=None),
+                    item_data={},
+                    review_metadata={},
+                )
+            )
+            await session.commit()
+
+        yield item_id
+    finally:
+        async with session_factory() as session:
+            review_item = await session.get(ReviewItemORM, item_id)
+            if review_item is not None:
+                await session.delete(review_item)
+                await session.commit()
+        await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -125,13 +172,14 @@ async def test_i13_real_e2e_missing_citations_blocks_finalization(
 async def test_i13_real_e2e_reviewer_approval_unlocks_package(
     live_app,
     seeded_auth_headers,
+    pending_i13_review_item,
 ) -> None:
     headers = seeded_auth_headers
     payload = {
         "project_id": str(uuid4()),
         "document_bytes_b64": "cmV2aWV3LXJlcXVpcmVk",
         "review_decision": {
-            "item_id": str(uuid4()),
+            "item_id": str(pending_i13_review_item),
             "reviewer_id": str(uuid4()),
             "reviewer_name": "I13 Reviewer",
             "action": "approve",
