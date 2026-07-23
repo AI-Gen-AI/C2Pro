@@ -46,7 +46,6 @@ from src.core.middleware import (
 )
 from src.core.observability.router import router as observability_router
 from src.core.routers.health import router as health_router
-from src.core.routers.health import worker_health_check
 from src.documents.adapters.http.router import router as documents_router
 from src.health.adapters.http.router import router as project_health_router
 from src.modules.decision_intelligence.adapters.http.router import (
@@ -281,14 +280,6 @@ def create_application() -> FastAPI:
         }
 
     api_v1_prefix = settings.api_v1_prefix
-
-    app.add_api_route(
-        f"{api_v1_prefix}/health/worker",
-        worker_health_check,
-        methods=["GET"],
-        tags=["Health"],
-        summary="Celery Worker Health",
-    )
 
     # --- Core routers (always enabled) ---
     app.include_router(health_router)  # raw: /health/... (docker-compose, infra probes)
