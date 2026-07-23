@@ -36,7 +36,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run wireframe coverage tracker
-        run: npx tsx apps/web/scripts/wireframe_coverage.ts --ci
+        run: pnpm dlx tsx apps/web/scripts/wireframe_coverage.ts --ci
         working-directory: ${{ github.workspace }}
 
       - name: Upload coverage artifact

@@ -10,7 +10,7 @@
  * project review. Tests viewing coherence scores, reviewing alerts,
  * checking WBS progress, and updating completion status.
  *
- * Run: npx playwright test journey-2-review.spec.ts
+ * Run: pnpm exec playwright test journey-2-review.spec.ts
  */
 
 import { test, expect } from "@playwright/test";

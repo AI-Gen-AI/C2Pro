@@ -15,7 +15,7 @@
  *   5. Test approval/rejection flows
  *   6. Test error scenarios (invalid file, large file)
  *
- * Run: npx playwright test document-analysis-pipeline.spec.ts
+ * Run: pnpm exec playwright test document-analysis-pipeline.spec.ts
  */
 
 import { test, expect, type Page } from "@playwright/test";

@@ -13,7 +13,7 @@
  *   1 — one or more wireframes have zero coverage
  *
  * Usage:
- *   npx tsx apps/web/scripts/wireframe_coverage.ts [--ci]
+ *   pnpm dlx tsx apps/web/scripts/wireframe_coverage.ts [--ci]
  */
 
 import fs from "node:fs";

@@ -352,6 +352,7 @@ def test_wireframe_coverage_installs_pnpm_before_node_cache_setup() -> None:
     contents = workflow.read_text(encoding="utf-8")
 
     assert contents.index("uses: pnpm/action-setup@") < contents.index("uses: actions/setup-node@")
+    assert "run: pnpm dlx tsx apps/web/scripts/wireframe_coverage.ts --ci" in contents
 
 
 def test_gitleaks_config_is_valid_toml() -> None:

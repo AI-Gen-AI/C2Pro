@@ -9,7 +9,7 @@
  * End-to-end test simulating a first-time user creating their first project.
  * Tests the complete flow from login to project dashboard.
  *
- * Run: npx playwright test journey-1-setup.spec.ts
+ * Run: pnpm exec playwright test journey-1-setup.spec.ts
  */
 
 import { test, expect } from "@playwright/test";
