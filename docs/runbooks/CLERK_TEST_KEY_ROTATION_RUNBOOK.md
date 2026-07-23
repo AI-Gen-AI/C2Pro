@@ -122,7 +122,7 @@ Pass criteria:
 From `apps/web` run:
 
 ```bash
-npm run test:e2e -- src/tests/e2e/cross-browser-smoke.spec.ts --project cross-browser-chromium
+pnpm test:e2e -- src/tests/e2e/cross-browser-smoke.spec.ts --project cross-browser-chromium
 ```
 
 Expected result:

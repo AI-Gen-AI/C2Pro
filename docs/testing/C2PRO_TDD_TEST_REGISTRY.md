@@ -350,22 +350,22 @@ ptw tests/modules/wbs
 
 ```bash
 # Run all component tests
-npm test -- --testPathPattern="components/wbs"
+pnpm test -- --testPathPattern="components/wbs"
 
 # Run with coverage
-npm test -- --coverage --collectCoverageFrom="components/wbs/**/*.tsx"
+pnpm test -- --coverage --collectCoverageFrom="components/wbs/**/*.tsx"
 
 # Run specific test file
-npm test -- WBSTree.test.tsx
+pnpm test -- WBSTree.test.tsx
 
 # Run in watch mode
-npm test -- --watch
+pnpm test -- --watch
 
 # Run E2E tests
-npm run test:e2e
+pnpm test:e2e
 
 # Run accessibility tests
-npm test -- --testPathPattern="accessibility"
+pnpm test -- --testPathPattern="accessibility"
 ```
 
 ### All Tests
@@ -375,13 +375,13 @@ npm test -- --testPathPattern="accessibility"
 pytest apps/api/tests --cov --cov-report=term-missing
 
 # Frontend
-npm test -- --coverage --watchAll=false
+pnpm test -- --coverage --watchAll=false
 
 # E2E
-npm run test:e2e
+pnpm test:e2e
 
 # Contract tests (both sides)
-pytest tests/contract && npm run test:contract
+pytest tests/contract && pnpm test:contract
 ```
 
 ---

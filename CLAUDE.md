@@ -31,7 +31,7 @@ make backend-init           # Install deps + run migrations (runs apps/api/setup
 ```bash
 make backend-dev            # Backend only, Supabase cloud (runs apps/api/dev.py)
 make dev-api                # Backend uvicorn reload (requires venv activated)
-make dev-web                # Frontend only (cd apps/web && npm run dev)
+make dev-web                # Frontend only (cd apps/web && pnpm dev)
 make dev                    # Full local dev (Docker infra + instructions for api/web)
 ```
 
