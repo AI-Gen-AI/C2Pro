@@ -117,7 +117,10 @@ describe("UsageMetricsTable", () => {
     fireEvent.click(tokensHeader);
 
     const rows = dataRows();
-    expect(rows[0]).toHaveTextContent("7000");
+    // Component renders tokens via toLocaleString(), which inserts a
+    // thousands separator under full-ICU (CI) but not under small-ICU
+    // (some local runtimes). Match the same formatting to stay locale-robust.
+    expect(rows[0]).toHaveTextContent((7000).toLocaleString());
   });
 
   it("sorts by cost", () => {
