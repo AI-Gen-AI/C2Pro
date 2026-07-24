@@ -28,6 +28,10 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      - dependency-name: "structlog"
+        # 26.x breaks the current add_logger_name + PrintLoggerFactory configuration at runtime.
+        versions: ["26.x"]
 
   - package-ecosystem: npm
     directory: "/"
