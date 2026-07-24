@@ -121,11 +121,13 @@ jobs:
       - name: Create I13 release summary
         if: always() && github.event_name == 'workflow_dispatch'
         shell: bash
+        env:
+          RELEASE_SHA: ${{ inputs.release_commit_sha }}
         run: |
           mkdir -p apps/api/release-evidence
           cat <<EOF > apps/api/release-evidence/i13-release-summary.txt
           reliability_release=pass
-          release_commit_sha=${{ inputs.release_commit_sha }}
+          release_commit_sha="$RELEASE_SHA"
           executed_commit_sha=$(git rev-parse HEAD)
           artifact=i13-scheduled-real-e2e-results.xml
           EOF
