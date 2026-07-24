@@ -18,7 +18,7 @@ def test_unit_workflow_excludes_integration_marked_tests() -> None:
     assert "--cov-report=xml:coverage.xml" in contents
     assert "backend-coverage:" in contents
     assert "coverage combine coverage-data/unit/.coverage coverage-data/core/.coverage" in contents
-    assert "--fail-under=48" in contents
+    assert "--fail-under=70" in contents
     assert "backend-coverage:$RESULT_BACKEND_COVERAGE" in contents
 
 
@@ -32,7 +32,7 @@ def test_coverage_policy_uses_current_baselines_and_high_patch_target() -> None:
     )
     workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
-    assert "target: 48%" in codecov_config
+    assert "target: 70%" in codecov_config
     assert "threshold: 0.5%" in codecov_config
     assert "target: 80%" in codecov_config
     assert "threshold: 0%" in codecov_config

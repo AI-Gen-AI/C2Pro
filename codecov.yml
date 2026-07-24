@@ -2,9 +2,9 @@ coverage:
   status:
     project:
       default:
-        # Current Codecov backend baseline is 48.67%; CI also enforces 48%.
-        # Aspirational target: raise this ratchet toward 70%, then 80%.
-        target: 48%
+        # CI-confirmed combined backend coverage is 72% (33,945 statements).
+        # Keep a two-point buffer while ratcheting toward the 80% aspiration.
+        target: 70%
         threshold: 0.5%
     patch:
       default:
