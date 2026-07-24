@@ -232,8 +232,7 @@ jobs:
             --junit-xml=unit-test-results.xml \
             --cov=src \
             --cov-report=xml:coverage.xml \
-            --cov-report=term-missing:skip-covered \
-            --cov-fail-under=0
+            --cov-report=term-missing:skip-covered
 
       - name: Upload unit test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -250,17 +249,11 @@ jobs:
         if: always()
         with:
           name: unit-coverage-py${{ matrix.python-version }}
-          path: apps/api/coverage.xml
+          path: |
+            apps/api/coverage.xml
+            apps/api/.coverage
+          include-hidden-files: true
           retention-days: 14
-
-      - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.11'
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
-        with:
-          files: apps/api/coverage.xml
-          flags: backend
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
 
   backend-security:
     name: Backend Security Suite (multi-tenant isolation)
@@ -417,13 +410,19 @@ jobs:
         run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
       - name: Run core tests
         working-directory: apps/api
-        run: python -m pytest tests/core --tb=short --junit-xml=core-test-results.xml
+        run: python -m pytest tests/core --tb=short --junit-xml=core-test-results.xml --cov=src --cov-report=xml:coverage.xml
       - name: Upload core test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: core-test-results
           path: apps/api/core-test-results.xml
+      - name: Upload core coverage data
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: core-coverage
+          path: apps/api/.coverage
+          include-hidden-files: true
       - name: Cleanup
         if: always()
         run: docker compose -f docker-compose.test.yml down -v
@@ -456,13 +455,19 @@ jobs:
         run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
       - name: Run coherence tests
         working-directory: apps/api
-        run: python -m pytest tests/coherence --tb=short --junit-xml=coherence-test-results.xml
+        run: python -m pytest tests/coherence --tb=short --junit-xml=coherence-test-results.xml --cov=src --cov-report=xml:coverage.xml
       - name: Upload coherence test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coherence-test-results
           path: apps/api/coherence-test-results.xml
+      - name: Upload coherence coverage data
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coherence-coverage
+          path: apps/api/.coverage
+          include-hidden-files: true
       - name: Cleanup
         if: always()
         run: docker compose -f docker-compose.test.yml down -v
@@ -495,16 +500,75 @@ jobs:
         run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
       - name: Run modules tests
         working-directory: apps/api
-        run: python -m pytest tests/modules -m "not requires_services" --tb=short --junit-xml=modules-test-results.xml
+        run: python -m pytest tests/modules -m "not requires_services" --tb=short --junit-xml=modules-test-results.xml --cov=src --cov-report=xml:coverage.xml
       - name: Upload modules test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: modules-test-results
           path: apps/api/modules-test-results.xml
+      - name: Upload modules coverage data
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: modules-coverage
+          path: apps/api/.coverage
+          include-hidden-files: true
       - name: Cleanup
         if: always()
         run: docker compose -f docker-compose.test.yml down -v
+
+  # Merge the reports from separately-gated suites. A per-suite fail-under
+  # would measure mostly unrelated source files rather than project coverage.
+  backend-coverage:
+    name: Backend Combined Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [detect-changes, backend-unit, backend-core, backend-coherence, backend-modules]
+    if: needs.detect-changes.outputs.backend == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+      - name: Download Python 3.11 unit coverage data
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: unit-coverage-py3.11
+          path: apps/api/coverage-data/unit
+      - name: Download core coverage data
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: core-coverage
+          path: apps/api/coverage-data/core
+      - name: Download coherence coverage data
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: coherence-coverage
+          path: apps/api/coverage-data/coherence
+      - name: Download modules coverage data
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: modules-coverage
+          path: apps/api/coverage-data/modules
+      - name: Merge and enforce backend coverage ratchet
+        working-directory: apps/api
+        run: |
+          coverage combine coverage-data/unit/.coverage coverage-data/core/.coverage coverage-data/coherence/.coverage coverage-data/modules/.coverage
+          coverage report --fail-under=48
+          coverage xml -o merged-coverage.xml
+      - name: Upload merged backend coverage report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: backend-combined-coverage
+          path: apps/api/merged-coverage.xml
+          retention-days: 14
+      - name: Upload merged backend coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: apps/api/merged-coverage.xml
+          flags: backend
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   backend-migrations:
     name: Migrations Check (Alembic)
@@ -613,6 +677,18 @@ jobs:
         working-directory: apps/web
         run: pnpm test:all
 
+      - name: Enforce frontend coverage ratchet
+        working-directory: apps/web
+        run: pnpm test:coverage
+
+      - name: Upload frontend coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: apps/web/coverage/lcov.info
+          flags: frontend
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
       - name: API generation drift check
         working-directory: apps/web
         run: pnpm generate:api:check
@@ -700,6 +776,7 @@ jobs:
       - backend-core
       - backend-coherence
       - backend-modules
+      - backend-coverage
       - backend-migrations
       - frontend-quality
       - frontend-test
@@ -802,6 +879,7 @@ jobs:
           RESULT_BACKEND_CORE: ${{ needs.backend-core.result }}
           RESULT_BACKEND_COHERENCE: ${{ needs.backend-coherence.result }}
           RESULT_BACKEND_MODULES: ${{ needs.backend-modules.result }}
+          RESULT_BACKEND_COVERAGE: ${{ needs.backend-coverage.result }}
           RESULT_FRONTEND_BUILD: ${{ needs.frontend-build.result }}
         run: |
           set -euo pipefail
@@ -818,6 +896,7 @@ jobs:
             "backend-core:$RESULT_BACKEND_CORE"
             "backend-coherence:$RESULT_BACKEND_COHERENCE"
             "backend-modules:$RESULT_BACKEND_MODULES"
+            "backend-coverage:$RESULT_BACKEND_COVERAGE"
             "backend-migrations:$RESULT_BACKEND_MIGRATIONS"
             "frontend-quality:$RESULT_FRONTEND_QUALITY"
             "frontend-test:$RESULT_FRONTEND_TEST"

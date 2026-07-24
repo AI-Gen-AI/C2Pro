@@ -38,6 +38,7 @@ describe("uploadDocument", () => {
   });
 
   it("uploads through the same-origin API proxy when the browser is configured with a relative API base", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "/api");
     const { uploadDocument } = await import("./index");
 
     fetchMock.mockResolvedValueOnce({
