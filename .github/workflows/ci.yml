@@ -679,7 +679,7 @@ jobs:
 
       - name: Enforce frontend coverage ratchet
         working-directory: apps/web
-        run: pnpm exec vitest run --coverage --config vitest.config.mts
+        run: pnpm test:coverage
 
       - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0

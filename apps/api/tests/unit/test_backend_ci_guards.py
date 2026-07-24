@@ -40,7 +40,7 @@ def test_coverage_policy_uses_current_baselines_and_high_patch_target() -> None:
     assert "branches: 65" in frontend_config
     assert "functions: 78" in frontend_config
     assert "lines: 80" in frontend_config
-    assert "pnpm exec vitest run --coverage --config vitest.config.mts" in workflow
+    assert "pnpm test:coverage" in workflow
     assert "flags: frontend" in workflow
 
 
