@@ -111,6 +111,7 @@
 |[x]|P2|`TASK-QA-326`|—|EPIC-TEST-DEBT: tests/core green (21 failures; Codex, branch test/debt-core). ✅ Done 2026-07-22: tests/core 259 passed / 0F, now REQUIRED CI gate backend-core (#315/#331/#332/#334).|`backlogs/QA_QUALITY_ASSURANCE.md`|
 |[x]|P2|`TASK-QA-327`|—|EPIC-TEST-DEBT: tests/modules green (56F+50E; DeepSeek, branch test/debt-modules, tests-only scope). ✅ Done 2026-07-22: tests/modules 1611 passed (0F+0E under -m "not requires_services"), now REQUIRED CI gate backend-modules; Celery-worker tests marked requires_services (#316/#327/#329/#330/#336/#337/#338).|`backlogs/QA_QUALITY_ASSURANCE.md`|
 |[x]|P2|`TASK-QA-328`|—|EPIC-TEST-DEBT: tests/coherence green (60F; Sonnet, branch test/debt-coherence; score-shift STOP-flag rule). ✅ Done 2026-07-22: tests/coherence 743 passed / 0F, now REQUIRED CI gate backend-coherence; C2PRO_AI_MOCK honored in clause_extractor (#317/#328).|`backlogs/QA_QUALITY_ASSURANCE.md`|
+|[x]|P2|`TASK-QA-329`|`TASK-DEV-019`|Unit-test coverage for 5 previously-0%-covered backend domain/use-case modules (supports DEV-019 ratchet floor). ✅ Done 2026-07-24 (#350, all required CI green): 28 behavioral unit tests (AsyncMock ports, zero DB/HTTP) took create_wbs_node, update_wbs_node, governance/domain/services (safety-policy engine), hitl_port_adapter, and route_for_graph_review_use_case from 0% to full coverage. Real assertions (allow/block decision matrix, confidence→impact boundaries, not-found→None), not smoke tests. Dispatched to DeepSeek; Fable fixed 2 skipped-ruff F401s + rebuilt off stale base.|`backlogs/QA_QUALITY_ASSURANCE.md`|
 
 ## Pending Tasks by Category
 
@@ -540,6 +541,8 @@ FOLLOW-UPS (open):
 ---
 
 ## Change Log
+
+**2026-07-24**: TASK-QA-329 DONE (#350): unit tests for 5 previously-0%-covered backend modules (wbs create/update_wbs_node, governance safety-policy engine, hitl_port_adapter, route_for_graph_review) — 28 behavioral tests, modules now fully covered. Raises the coverage baseline ahead of DEV-019 (which will set the enforced ratchet floor from the actual combined coverage — Gemini measured per-suite backend at 34%/26%/50%; aspirational pyproject 70 / codecov 80 remain targets).
 
 **2026-07-24**: DEV-016 DONE (#348): npm→pnpm standardization finished — Playwright web server now pnpm dev, wireframe CI pnpm dlx tsx, doc commands pnpm-consistent (regression guards added). The pnpm-only toolchain (only-allow guard, engines, .nvmrc/.npmrc) was already in place. Unblocks DEV-022 (package.json hygiene).
 
