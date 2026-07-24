@@ -7,7 +7,7 @@ Pure unit tests: no DB, no HTTP, no external services.
 
 import pytest
 
-from src.modules.governance.domain.entities import GovernanceDecision, GovernanceInput, RiskLevel
+from src.modules.governance.domain.entities import GovernanceInput, RiskLevel
 from src.modules.governance.domain.services import (
     MANDATORY_LEGAL_DISCLAIMER,
     SafetyPolicyEngine,

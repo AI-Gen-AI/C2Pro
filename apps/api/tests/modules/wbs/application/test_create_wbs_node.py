@@ -5,7 +5,7 @@ Pure unit tests: no DB, no HTTP, no external services.
 """
 
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
