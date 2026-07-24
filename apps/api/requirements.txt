@@ -55,7 +55,7 @@ bcrypt==5.0.0
 
 # Observability
 sentry-sdk[fastapi]>=2.0.0
-structlog==24.1.0
+structlog==26.1.0
 prometheus-client==0.25.0
 
 # HTTP Client

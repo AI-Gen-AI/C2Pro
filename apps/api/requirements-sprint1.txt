@@ -20,7 +20,7 @@ passlib[bcrypt]>=1.7.4
 cryptography>=44.0.0
 
 # Observability (básico)
-structlog>=24.4.0
+structlog>=26.1.0
 
 # Utilities
 python-dotenv>=1.0.1
