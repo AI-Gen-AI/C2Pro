@@ -50,7 +50,7 @@ jobs:
       migrations: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.migrations }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Filter changed paths
         id: filter
@@ -91,10 +91,10 @@ jobs:
     if: needs.detect-changes.outputs.backend == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
@@ -140,7 +140,7 @@ jobs:
     if: needs.detect-changes.outputs.backend == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Full backend env so mypy sees the real type surface (SQLAlchemy, Pydantic,
       # FastAPI, ...), matching local runs. This is the CI-parity fix.
@@ -183,7 +183,7 @@ jobs:
         python-version: ${{ github.event_name == 'pull_request' && fromJSON('["3.11"]') || fromJSON('["3.11", "3.12"]') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup backend environment
         uses: ./.github/actions/setup-python-backend
@@ -289,7 +289,7 @@ jobs:
           --health-retries 5
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup backend environment
         uses: ./.github/actions/setup-python-backend
@@ -358,7 +358,7 @@ jobs:
           --health-retries 5
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup backend environment
         uses: ./.github/actions/setup-python-backend
@@ -403,7 +403,7 @@ jobs:
           --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup backend environment
         uses: ./.github/actions/setup-python-backend
       - name: Bootstrap test infrastructure
@@ -448,7 +448,7 @@ jobs:
           --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup backend environment
         uses: ./.github/actions/setup-python-backend
       - name: Bootstrap test infrastructure
@@ -493,7 +493,7 @@ jobs:
           --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup backend environment
         uses: ./.github/actions/setup-python-backend
       - name: Bootstrap test infrastructure
@@ -527,7 +527,7 @@ jobs:
     if: needs.detect-changes.outputs.backend == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup backend environment
         uses: ./.github/actions/setup-python-backend
       - name: Download Python 3.11 unit coverage data
@@ -586,7 +586,7 @@ jobs:
       JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup backend environment
         uses: ./.github/actions/setup-python-backend
@@ -620,7 +620,7 @@ jobs:
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup web environment
         uses: ./.github/actions/setup-node-web
@@ -668,7 +668,7 @@ jobs:
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup web environment
         uses: ./.github/actions/setup-node-web
@@ -708,7 +708,7 @@ jobs:
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup web environment
         uses: ./.github/actions/setup-node-web
@@ -749,7 +749,7 @@ jobs:
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup web environment
         uses: ./.github/actions/setup-node-web
@@ -788,7 +788,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download all test artifacts
         continue-on-error: true
