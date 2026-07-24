@@ -554,7 +554,7 @@ jobs:
         working-directory: apps/api
         run: |
           coverage combine coverage-data/unit/.coverage coverage-data/core/.coverage coverage-data/coherence/.coverage coverage-data/modules/.coverage
-          coverage report --fail-under=48
+          coverage report --fail-under=70
           coverage xml -o merged-coverage.xml
       - name: Upload merged backend coverage report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
