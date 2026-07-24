@@ -16,7 +16,32 @@ def test_unit_workflow_excludes_integration_marked_tests() -> None:
 
     assert '-m "not integration"' in contents
     assert "--cov-report=xml:coverage.xml" in contents
-    assert "--cov-fail-under=0" in contents
+    assert "backend-coverage:" in contents
+    assert "coverage combine coverage-data/unit/.coverage coverage-data/core/.coverage" in contents
+    assert "--fail-under=48" in contents
+    assert "backend-coverage:$RESULT_BACKEND_COVERAGE" in contents
+
+
+def test_coverage_policy_uses_current_baselines_and_high_patch_target() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    codecov_config = (repo_root / "codecov.yml").read_text(encoding="utf-8")
+    frontend_config = (repo_root / "apps" / "web" / "vitest.config.mts").read_text(
+        encoding="utf-8"
+    )
+    workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "target: 48%" in codecov_config
+    assert "threshold: 0.5%" in codecov_config
+    assert "target: 80%" in codecov_config
+    assert "threshold: 0%" in codecov_config
+    assert "statements: 79" in frontend_config
+    assert "branches: 65" in frontend_config
+    assert "functions: 78" in frontend_config
+    assert "lines: 80" in frontend_config
+    assert "pnpm exec vitest run --coverage --config vitest.config.mts" in workflow
+    assert "flags: frontend" in workflow
 
 
 def test_database_backed_ci_workflows_export_test_database_url() -> None:
