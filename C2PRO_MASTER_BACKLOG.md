@@ -53,7 +53,7 @@
 |[x]|P1|`TASK-DEV-013`|`TASK-DEV-003`|Repair the advisory Python dependency audit: `pip-audit --disable-pip` rejects the unhashed API requirements unless `--no-deps` is also used, so the current workflow exits before auditing packages. `[x] Implemented (RED/GREEN guard + live resolved dependency audit)`|`backlogs/DEV_DEVOPS.md`|
 |[x]|P1|`TASK-DEV-014`|`TASK-SEC-DEPENDABOT-001`|Resolve conflicts and land js-minor-patch group bump (#223): 45 same-major updates with TS-inference/prettier drift fixes verified intact post-merge; merge commit e6f5028a. `[x] Implemented (drift fixes verified: typecheck/lint/prettier clean; CI green except pre-existing SonarCloud cognitive-complexity from edited pages)`|`backlogs/DEV_DEVOPS.md`|
 |[ ]|P3|`TASK-DEV-015`|—|SonarCloud "New Code" quality debt cleanup: cognitive-complexity code smells (Reliability/Security rating C on new code) in `apps/web/app/(app)/raci/page.tsx`, `.../projects/page.tsx`, `.../projects/[id]/budget/page.tsx`. Non-blocking; unrelated to dependencies.|`backlogs/DEV_DEVOPS.md`|
-|[ ]|P1|`TASK-DEV-016`|—|npm→pnpm standardization, enforced end-to-end: only-allow guard + engines + .nvmrc + engine-strict, Makefile 8 npm targets → pnpm, `verify:openspec` script → `pnpm -w`, README/QUICK_START/README_SETUP → pnpm. Audit `docs/audits/TECH_DEBT_AUDIT_2026-07-14.md` §4.|`backlogs/DEV_DEVOPS.md`|
+|[x]|P1|`TASK-DEV-016`|—|✅ Done 2026-07-24 (#348, all required CI green; Frontend E2E Smoke passed with the new `pnpm dev` web server). Most standardization was already present on main; this closed the last live npm/npx usages (Playwright web-server → pnpm dev; wireframe CI → pnpm dlx tsx) + doc commands, each with a regression guard. Minor follow-up noted: a supabase runbook line uses `pnpm exec supabase` (should likely be `pnpm dlx supabase`).|`backlogs/DEV_DEVOPS.md`|
 |[ ]|P1|`TASK-DEV-017`|—|Dependabot major-bump triage: rebase + re-triage #233 (bcrypt 5, passlib incompat) and #230 (redis 8); resolve #227 (vite 8) `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` from root override pin; merge decision on green trio #224/#225/#226.|`backlogs/DEV_DEVOPS.md`|
 |[x]|P1|`TASK-DEV-018`|—|Add frontend production build to CI (no job runs `next build`; only Vercel at deploy time) and/or require the Vercel preview check in the ruleset. Update workflow meta-tests. ✅ Done (PR #254): frontend production-build CI job (advisory) + structural guard test.|`backlogs/DEV_DEVOPS.md`|
 |[ ]|P1|`TASK-DEV-019`|—|Coverage policy alignment: ci.yml enforces 0, pyproject says 70, codecov.yml says 80, vitest has none. Measure actuals → enforce one number per stack (ratchet, never lower).|`backlogs/DEV_DEVOPS.md`|
@@ -540,6 +540,8 @@ FOLLOW-UPS (open):
 ---
 
 ## Change Log
+
+**2026-07-24**: DEV-016 DONE (#348): npm→pnpm standardization finished — Playwright web server now pnpm dev, wireframe CI pnpm dlx tsx, doc commands pnpm-consistent (regression guards added). The pnpm-only toolchain (only-allow guard, engines, .nvmrc/.npmrc) was already in place. Unblocks DEV-022 (package.json hygiene).
 
 **2026-07-23**: BCK-094 DONE (#346): removed the duplicate worker_health_check OpenAPI operation ID (a redundant manual add_api_route shadowing the canonical health router). Both worker-health paths preserved; unique-operation-id regression test added; openapi.yaml regenerated (OpenAPI Drift Check green).
 
