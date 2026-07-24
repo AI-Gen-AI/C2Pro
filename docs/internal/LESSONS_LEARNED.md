@@ -46,13 +46,13 @@ Durante la refactorización para sincronizar tipos entre frontend/backend:
 
 1. Restaurar el badge de alertas críticas
 2. Agregar validación de null safety: `project.critical_alerts && project.critical_alerts > 0`
-3. Verificar el build de TypeScript: `npm run build`
+3. Verificar el build de TypeScript: `pnpm build`
 4. Validar visualmente el dashboard en localhost
 
 ### Prevención Futura
 
 **Checklist Pre-Commit para Cambios de UI:**
-- [ ] Ejecutar `npm run build` para verificar errores de TypeScript
+- [ ] Ejecutar `pnpm build` para verificar errores de TypeScript
 - [ ] Iniciar dev server y verificar visualmente los componentes modificados
 - [ ] Revisar git diff para asegurar que no se eliminaron elementos críticos
 - [ ] Documentar elementos UI críticos en comentarios del código

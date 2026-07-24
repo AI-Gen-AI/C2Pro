@@ -14,7 +14,7 @@ export default defineConfig({
   },
   webServer: useManagedWebServer
     ? {
-        command: "npm run dev -- --hostname localhost --port 3100 --webpack",
+        command: "pnpm dev -- --hostname localhost --port 3100 --webpack",
         url: baseURL,
         reuseExistingServer: false,
         timeout: 120_000,

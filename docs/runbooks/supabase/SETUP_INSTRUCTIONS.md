@@ -27,7 +27,7 @@
 2. **CLI de Supabase** (opcional, pero recomendado)
 
    ```bash
-   npm install -g supabase
+   pnpm exec supabase
    ```
 
 3. **psql** (cliente PostgreSQL)
