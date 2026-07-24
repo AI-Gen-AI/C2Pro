@@ -39,22 +39,6 @@
     "supabase": "^2.109.1",
     "vitest": "^4.1.10"
   },
-  "dependencies": {
-    "@fontsource-variable/inter": "^5.2.8",
-    "@fontsource/jetbrains-mono": "^5.2.8",
-    "@google/generative-ai": "^0.24.1",
-    "@sentry/react": "^10.65.0",
-    "@supabase/ssr": "^0.12.0",
-    "@supabase/supabase-js": "^2.110.2",
-    "class-variance-authority": "^0.7.1",
-    "dotenv": "^17.4.2",
-    "lucide-react": "^0.563.0",
-    "next": "16.2.10",
-    "react": "^19.2.7",
-    "recharts": "^3.7.0",
-    "tailwindcss": "^4.3.2",
-    "tailwindcss-animate": "^1.0.7"
-  },
   "pnpm": {
     "overrides": {
       "axios": "1.16.0",
