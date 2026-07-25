@@ -9,8 +9,8 @@ setup("authenticate", async ({ page }) => {
   await clerk.signIn({
     page,
     signInParams: {
-      strategy: "phone_code",
-      identifier: "+15555550100",
+      strategy: "email_code",
+      identifier: "your_email+clerk_test@example.com",
     },
   });
 
