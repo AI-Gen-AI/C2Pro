@@ -46,7 +46,10 @@ def should_trace_request(tenant_id: UUID | str, rollout_percentage: int) -> bool
         return True
 
     stable_key = str(tenant_id).strip().lower().encode("utf-8")
-    hash_value = int(hashlib.md5(stable_key).hexdigest(), 16)
+    # Non-cryptographic: MD5 is used only for uniform, deterministic bucketing of
+    # tenants into the canary cohort (not for security). usedforsecurity=False
+    # documents intent and satisfies weak-hash scanners.
+    hash_value = int(hashlib.md5(stable_key, usedforsecurity=False).hexdigest(), 16)
     return (hash_value % 100) < rollout_percentage
 
 
