@@ -1,0 +1,60 @@
+name: Nightly Full E2E
+
+on:
+  schedule:
+    # Run before the 04:00 I13 and 05:00 evaluation lanes.
+    - cron: "30 1 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-full-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  full-playwright-suite:
+    name: Full Playwright suite (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # The full suite is observability-only until its data-dependent specs are
+    # deterministic. Keep failures visible without blocking unrelated work.
+    continue-on-error: true
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsubW9jay5sb2NhbCQ' }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsubW9jay5sb2NhbCQ' }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup web environment
+        uses: ./.github/actions/setup-node-web
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: pnpm --ignore-scripts exec playwright install --with-deps chromium
+
+      - name: Run full Playwright suite
+        if: ${{ env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '' }}
+        working-directory: apps/web
+        run: pnpm test:e2e -- --project=chromium
+
+      - name: Skip full Playwright suite when Clerk credentials are unavailable
+        if: ${{ env.CLERK_SECRET_KEY == '' && env.CLERK_TESTING_TOKEN == '' }}
+        run: echo "::notice::Skipping Clerk-backed full E2E tests because CLERK_SECRET_KEY and CLERK_TESTING_TOKEN are not configured for this scheduled run."
+
+      - name: Upload Playwright diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-full-e2e-diagnostics
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          if-no-files-found: warn
+          retention-days: 14
