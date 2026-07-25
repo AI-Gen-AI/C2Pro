@@ -28,13 +28,6 @@ updates:
         update-types:
           - minor
           - patch
-    ignore:
-      - dependency-name: "structlog"
-        # 26+ breaks the current add_logger_name + PrintLoggerFactory config at
-        # runtime; lifted once the logging config is adapted (TASK-DEV-036).
-        # pip ignore conditions require PEP 440 specifiers ("26.x" is invalid).
-        versions: [">=26.0.0"]
-
   - package-ecosystem: npm
     directory: "/"
     schedule:
