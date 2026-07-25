@@ -37,7 +37,7 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: apps/web
-        run: pnpm --ignore-scripts exec playwright install --with-deps chromium
+        run: ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: Run full Playwright suite
         if: ${{ env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '' }}
