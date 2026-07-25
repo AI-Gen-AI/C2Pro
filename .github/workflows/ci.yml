@@ -700,8 +700,8 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.frontend == 'true'
     env:
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsubW9jay5sb2NhbCQ' }}
-      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsubW9jay5sb2NhbCQ' }}
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
       CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
       NEXT_PUBLIC_API_URL: http://localhost:8000
@@ -718,13 +718,13 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: E2E smoke tests
-        if: ${{ env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '' }}
+        if: ${{ env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
         working-directory: apps/web
-        run: pnpm test:e2e -- src/tests/e2e/coherence-v1.spec.ts src/tests/e2e/journeys/journey-3-wedge.spec.ts --project=chromium
+        run: ./node_modules/.bin/playwright test src/tests/e2e/coherence-v1.spec.ts src/tests/e2e/journeys/journey-3-wedge.spec.ts --project=chromium
 
       - name: Skip E2E smoke tests when Clerk credentials are unavailable
-        if: ${{ env.CLERK_SECRET_KEY == '' && env.CLERK_TESTING_TOKEN == '' }}
-        run: echo "::notice::Skipping Clerk-backed E2E smoke tests because CLERK_SECRET_KEY and CLERK_TESTING_TOKEN are not configured for this workflow run."
+        if: ${{ env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY == '' || (env.CLERK_SECRET_KEY == '' && env.CLERK_TESTING_TOKEN == '') }}
+        run: echo "::notice::Skipping Clerk-backed E2E smoke tests because a matching NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY or CLERK_TESTING_TOKEN are required."
 
       - name: Upload Playwright report on failure
         if: failure()
