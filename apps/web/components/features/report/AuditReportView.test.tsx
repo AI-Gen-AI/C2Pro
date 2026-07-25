@@ -144,4 +144,24 @@ describe("AuditReportView", () => {
     expect(screen.queryByText("Rejected legal finding.")).not.toBeInTheDocument();
     expect(screen.getByText(/No findings selected for this report/i)).toBeInTheDocument();
   });
+
+  it("distinguishes an empty project-scoped decision queue from an unavailable source", () => {
+    renderWithProviders(
+      <AuditReportView
+        payload={{
+          ...payload,
+          reviewDecisionSource: "project_scoped",
+        }}
+        includeOpenFindings
+        includeRejectedFindings={false}
+        onIncludeOpenFindingsChange={() => undefined}
+        onIncludeRejectedFindingsChange={() => undefined}
+        onDownloadJson={() => undefined}
+        onPrint={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText(/No completed HITL decisions are available for this project/i)).toBeInTheDocument();
+    expect(screen.queryByText(/HITL decisions require a project-scoped queue/i)).not.toBeInTheDocument();
+  });
 });

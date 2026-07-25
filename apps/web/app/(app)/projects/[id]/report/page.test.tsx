@@ -11,6 +11,7 @@ const useProjectMock = vi.fn();
 const getDashboardSummaryMock = vi.fn();
 const useProjectAlertsMock = vi.fn();
 const useProjectDocumentsMock = vi.fn();
+const useReviewQueueMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useParams: () => useParamsMock(),
@@ -31,6 +32,11 @@ vi.mock("@/lib/api/services/dashboard", () => ({
 vi.mock("@/lib/api/generated/alerts/alerts", () => ({
   useListProjectAlertsApiV1AlertsProjectsProjectIdGet: (...args: unknown[]) =>
     useProjectAlertsMock(...args),
+}));
+
+vi.mock("@/lib/api/generated/hitl/hitl", () => ({
+  useListReviewQueueApiV1HitlQueueGet: (...args: unknown[]) =>
+    useReviewQueueMock(...args),
 }));
 
 describe("ProjectReportPage", () => {
@@ -99,6 +105,27 @@ describe("ProjectReportPage", () => {
       error: null,
       refetch: vi.fn(),
     });
+    useReviewQueueMock.mockReturnValue({
+      data: {
+        items: [
+          {
+            item_id: "review-1",
+            item_type: "final_decision_package",
+            current_status: "approved",
+            confidence: 0.95,
+            impact_level: "high",
+            approved_by: "Rosa Reviewer",
+            approved_at: "2026-07-11T10:00:00Z",
+            sla_due_date: "2026-07-12T10:00:00Z",
+            created_at: "2026-07-10T10:00:00Z",
+            item_data: { summary: "Decision package approved for release." },
+          },
+        ],
+        total: 1,
+      },
+      isLoading: false,
+      error: null,
+    });
   });
 
   it("composes the audit report from project, dashboard, alerts, and document sources", async () => {
@@ -111,10 +138,15 @@ describe("ProjectReportPage", () => {
     expect(useProjectMock).toHaveBeenCalledWith("proj-188");
     expect(useProjectAlertsMock).toHaveBeenCalledWith("proj-188", undefined);
     expect(useProjectDocumentsMock).toHaveBeenCalledWith("proj-188");
+    expect(useReviewQueueMock).toHaveBeenCalledWith(
+      { project_id: "proj-188", limit: 200 },
+      { query: { enabled: true } },
+    );
     expect(
       await screen.findByRole("heading", { name: /audit report/i }),
     ).toBeInTheDocument();
     expect(screen.getByText("Hospital North")).toBeInTheDocument();
     expect(screen.getByText("Budget mismatch requires review.")).toBeInTheDocument();
+    expect(screen.getByText("Decision package approved for release.")).toBeInTheDocument();
   });
 });

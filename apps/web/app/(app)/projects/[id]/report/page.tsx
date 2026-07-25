@@ -16,6 +16,7 @@ import {
 import { useProject } from "@/hooks/useProject";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
 import { useListProjectAlertsApiV1AlertsProjectsProjectIdGet } from "@/lib/api/generated/alerts/alerts";
+import { useListReviewQueueApiV1HitlQueueGet } from "@/lib/api/generated/hitl/hitl";
 import { getDashboardSummary } from "@/lib/api/services/dashboard";
 
 export default function ProjectReportPage() {
@@ -30,6 +31,10 @@ export default function ProjectReportPage() {
     projectId,
     undefined,
   );
+  const reviewItemsQuery = useListReviewQueueApiV1HitlQueueGet(
+    { project_id: projectId, limit: 200 },
+    { query: { enabled: Boolean(projectId) } },
+  );
   const dashboardQuery = useQuery({
     queryKey: ["audit-report-dashboard", projectId],
     queryFn: () => getDashboardSummary(projectId),
@@ -40,11 +45,13 @@ export default function ProjectReportPage() {
     projectQuery.isLoading ||
     documentsQuery.loading ||
     alertsQuery.isLoading ||
+    reviewItemsQuery.isLoading ||
     dashboardQuery.isLoading;
   const error =
     projectQuery.error ||
     documentsQuery.error ||
     alertsQuery.error ||
+    reviewItemsQuery.error ||
     dashboardQuery.error;
 
   const payload = useMemo(() => {
@@ -57,8 +64,8 @@ export default function ProjectReportPage() {
       dashboard: dashboardQuery.data ?? null,
       alerts: alertsQuery.data?.items ?? [],
       documents: documentsQuery.documents,
-      reviewItems: undefined,
-      reviewItemsProjectScoped: false,
+      reviewItems: reviewItemsQuery.data?.items,
+      reviewItemsProjectScoped: true,
       generatedAt: new Date().toISOString(),
     });
   }, [
@@ -66,6 +73,7 @@ export default function ProjectReportPage() {
     dashboardQuery.data,
     documentsQuery.documents,
     projectQuery.data,
+    reviewItemsQuery.data?.items,
   ]);
 
   if (isLoading) {
