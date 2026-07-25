@@ -123,7 +123,7 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
     const count = await alertItems.count();
 
     if (count === 0) {
-      test.skip(true, "No alerts available in demo project");
+      test.skip(true, "TASK-QA-336: demo project has no seeded alerts");
       return;
     }
 
@@ -163,7 +163,7 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
     const hasReview = (await reviewBtn.count()) > 0;
 
     if (!hasApprove && !hasReject && !hasReview) {
-      test.skip(true, "No review actions available - alerts may not be in reviewable state");
+      test.skip(true, "TASK-QA-336: demo project has no reviewable alert state");
       return;
     }
 
@@ -209,7 +209,7 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
     );
 
     if ((await deleteBtn.count()) === 0) {
-      test.skip(true, "No delete buttons visible - may need documents first");
+      test.skip(true, "TASK-QA-336: demo project has no seeded document to delete");
       return;
     }
 
@@ -304,7 +304,7 @@ test.describe("TS-E2E-DAP-002: HITL Review Flow", () => {
     const approveBtn = page.getByRole("button", { name: /approve/i });
 
     if ((await approveBtn.count()) === 0) {
-      test.skip(true, "No approve buttons visible in current state");
+      test.skip(true, "TASK-QA-336: demo project has no seeded approvable review item");
       return;
     }
 
@@ -339,7 +339,7 @@ test.describe("TS-E2E-DAP-002: HITL Review Flow", () => {
     const rejectBtn = page.getByRole("button", { name: /reject/i });
 
     if ((await rejectBtn.count()) === 0) {
-      test.skip(true, "No reject buttons visible in current state");
+      test.skip(true, "TASK-QA-336: demo project has no seeded rejectable review item");
       return;
     }
 

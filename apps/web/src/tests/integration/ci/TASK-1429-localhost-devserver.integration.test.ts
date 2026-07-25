@@ -12,6 +12,6 @@ describe("TASK-1429 RED - localhost Playwright dev server", () => {
     const config = readFileSync(configPath, "utf8");
 
     expect(config).toContain('const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3100"');
-    expect(config).toContain('command: "pnpm dev -- --hostname localhost --port 3100 --webpack"');
+    expect(config).toContain('command: "pnpm dev --hostname localhost --port 3100 --webpack"');
   });
 });

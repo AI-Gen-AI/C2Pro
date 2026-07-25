@@ -73,7 +73,7 @@ describe("S2-11 RED - three-layer Server Component test strategy", () => {
     const ci = readFileSync(ciPath, "utf-8");
 
     expect(ci).toContain("pnpm test");
-    expect(ci).toContain("pnpm test:e2e");
+    expect(ci).toContain("./node_modules/.bin/playwright test");
   });
 
   it("[S2-11-RED-05] defines a dedicated frontend E2E job", () => {
