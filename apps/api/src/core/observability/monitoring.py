@@ -54,7 +54,7 @@ def configure_logging() -> None:
             logging.getLevelName(settings.log_level)
         ),
         context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
+        logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
 
