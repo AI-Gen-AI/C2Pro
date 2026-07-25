@@ -45,6 +45,12 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     pool: "vmThreads",
+    poolMatchGlobs: [
+      {
+        glob: "**/waitlist/route.test.ts",
+        pool: "forks",
+      },
+    ],
     setupFiles: ["./vitest.setup.ts", "./src/tests/setup.ts"],
     server: {
       deps: {
