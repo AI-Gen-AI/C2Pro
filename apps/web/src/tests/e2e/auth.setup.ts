@@ -1,32 +1,20 @@
-import { test as setup, expect } from "@playwright/test";
-import { setupClerkTestingToken } from "@clerk/testing/playwright";
+import { expect, test as setup } from "@playwright/test";
+import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 
 const authFile = "playwright/.auth/user.json";
 
 setup("authenticate", async ({ page }) => {
-  // 1. Setup Clerk testing token to bypass bot detection
   await setupClerkTestingToken({ page });
+  await page.goto("/");
+  await clerk.signIn({
+    page,
+    signInParams: {
+      strategy: "phone_code",
+      identifier: "+15555550100",
+    },
+  });
 
-  // 2. Navigate to sign-in page
-  await page.goto("/sign-in");
-
-  // 3. Fill sign-in form (assuming custom identifiers if Clerk UI is customized, 
-  // or standard Clerk ones if not)
-  // For standard Clerk UI, we might need to wait for selectors
-  await page.waitForSelector('[data-clerk-component="SignIn"]');
-  
-  // Fill email
-  await page.locator('input[name="identifier"]').fill("testuser@c2pro.com");
-  await page.locator('button:has-text("Continue")').click();
-  
-  // Fill password
-  await page.locator('input[name="password"]').fill("testpassword123!");
-  await page.locator('button:has-text("Continue")').click();
-
-  // 4. Wait for successful login (redirect to projects)
-  await page.waitForURL(/.*\/projects/);
+  await page.goto("/projects");
   await expect(page.locator('h1:has-text("Projects")')).toBeVisible();
-
-  // 5. Save storage state
   await page.context().storageState({ path: authFile });
 });
