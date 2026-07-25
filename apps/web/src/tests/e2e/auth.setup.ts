@@ -17,15 +17,17 @@ setup("authenticate", async ({ page }) => {
   
   // Fill email
   await page.locator('input[name="identifier"]').fill("testuser@c2pro.com");
-  await page.locator('button:has-text("Continue")').click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
   
   // Fill password
   await page.locator('input[name="password"]').fill("testpassword123!");
-  await page.locator('button:has-text("Continue")').click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
 
   // 4. Wait for successful login (redirect to projects)
   await page.waitForURL(/.*\/projects/);
-  await expect(page.locator('h1:has-text("Projects")')).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Projects", exact: true }),
+  ).toBeVisible();
 
   // 5. Save storage state
   await page.context().storageState({ path: authFile });
