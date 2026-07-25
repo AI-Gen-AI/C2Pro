@@ -8,10 +8,7 @@ setup("authenticate", async ({ page }) => {
   await page.goto("/");
   await clerk.signIn({
     page,
-    signInParams: {
-      strategy: "email_code",
-      identifier: "your_email+clerk_test@example.com",
-    },
+    emailAddress: "testuser@c2pro.com",
   });
 
   await page.goto("/projects");
