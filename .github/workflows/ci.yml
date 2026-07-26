@@ -750,6 +750,7 @@ jobs:
         run: |
           python - <<'PY'
           import asyncio
+          import hashlib
           import json
           import os
           from pathlib import Path
@@ -765,6 +766,8 @@ jobs:
 
 
           async def main() -> None:
+              database_url_hash = hashlib.sha256(os.environ["DATABASE_URL"].encode()).hexdigest()
+              print(f"FRT-192 seed DATABASE_URL_SHA256={database_url_hash}")
               async with httpx.AsyncClient(timeout=30.0) as client:
                   jwks_response = await client.get(
                       "https://api.clerk.com/v1/jwks",
@@ -781,35 +784,49 @@ jobs:
               try:
                   async with get_raw_session() as db:
                       await seed_wedge_e2e(db)
-                  user = await db.get(User, USER_ID)
-                  if user is None:
-                      raise RuntimeError("FRT-192 seed user was not created")
-                  tenant = await db.get(Tenant, user.tenant_id)
-                  if tenant is None:
-                      raise RuntimeError("FRT-192 seed tenant was not created")
-                  user.clerk_user_id = clerk_user_id
-                  # Match the existing no-organization Clerk provisioning policy so
-                  # the authenticated test user resolves to the seeded tenant.
-                  tenant.name = f"Personal-{clerk_user_id}"
-                  await db.flush()
-                  matching_users = await db.scalar(
-                      select(func.count()).select_from(User).where(User.clerk_user_id == clerk_user_id)
-                  )
-                  document_count = await db.scalar(
-                      select(func.count()).select_from(DocumentORM).where(
-                          DocumentORM.project_id == PROJECT_ID,
-                          DocumentORM.tenant_id == TENANT_ID,
+                      user = await db.get(User, USER_ID)
+                      if user is None:
+                          raise RuntimeError("FRT-192 seed user was not created")
+                      tenant = await db.get(Tenant, user.tenant_id)
+                      if tenant is None:
+                          raise RuntimeError("FRT-192 seed tenant was not created")
+                      user.clerk_user_id = clerk_user_id
+                      # Match the existing no-organization Clerk provisioning policy so
+                      # the authenticated test user resolves to the seeded tenant.
+                      tenant.name = f"Personal-{clerk_user_id}"
+                      await db.commit()
+
+                  # The backend runs in a different process and connection.  Verify
+                  # committed visibility from a fresh session before it starts.
+                  async with get_raw_session() as verification_db:
+                      matching_users = await verification_db.scalar(
+                          select(func.count()).select_from(User).where(User.clerk_user_id == clerk_user_id)
                       )
-                  )
-                  project = await db.get(ProjectORM, PROJECT_ID)
-                  if matching_users != 1 or user.tenant_id != TENANT_ID or project is None or document_count != 3:
-                      raise RuntimeError(
-                          "FRT-192 seed diagnostic failed: "
-                          f"users={matching_users} tenant={user.tenant_id} "
-                          f"project={project is not None} documents={document_count}"
+                      user = await verification_db.get(User, USER_ID)
+                      document_count = await verification_db.scalar(
+                          select(func.count()).select_from(DocumentORM).where(
+                              DocumentORM.project_id == PROJECT_ID,
+                              DocumentORM.tenant_id == TENANT_ID,
+                          )
                       )
-                  print(f"FRT-192 seed diagnostic: clerk_user_id={clerk_user_id} tenant_id={user.tenant_id} project_id={PROJECT_ID} documents={document_count}")
-                  await db.commit()
+                      project = await verification_db.get(ProjectORM, PROJECT_ID)
+                      if (
+                          matching_users != 1
+                          or user is None
+                          or user.tenant_id != TENANT_ID
+                          or project is None
+                          or document_count != 3
+                      ):
+                          raise RuntimeError(
+                              "FRT-192 seed diagnostic failed: "
+                              f"users={matching_users} tenant={user.tenant_id if user else None} "
+                              f"project={project is not None} documents={document_count}"
+                          )
+                      print(
+                          "FRT-192 fresh-session seed diagnostic: "
+                          f"clerk_user_id={clerk_user_id} tenant_id={user.tenant_id} "
+                          f"project_id={PROJECT_ID} documents={document_count}"
+                      )
               finally:
                   await close_db()
 
@@ -820,6 +837,7 @@ jobs:
       - name: Start E2E backend
         if: ${{ (vars.RUN_FULL_E2E == 'true' || github.ref == 'refs/heads/ci/frt192-e2e-harness') && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         run: |
+          printf 'FRT-192 backend DATABASE_URL_SHA256=%s\n' "$(printf %s "$DATABASE_URL" | sha256sum | cut -d' ' -f1)"
           python -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP" \
             > "$RUNNER_TEMP/c2pro-e2e-jwks.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/c2pro-e2e-jwks.pid"
