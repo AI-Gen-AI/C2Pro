@@ -119,7 +119,10 @@ def test_frontend_e2e_workflows_export_clerk_test_keys() -> None:
         assert "CLERK_PUBLISHABLE_KEY:" in contents
         assert "CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}" in contents
         assert "CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}" in contents
-        assert "Skipping Clerk-backed E2E smoke tests" in contents
+        # QA-338: the E2E smoke is gated behind RUN_FULL_E2E until a backend+seed
+        # harness exists; verify both the gate flag and the skip-notice path remain.
+        assert "RUN_FULL_E2E" in contents
+        assert "E2E smoke skipped" in contents
 
 
 def test_frontend_api_generation_check_formats_orval_output_before_diff() -> None:
