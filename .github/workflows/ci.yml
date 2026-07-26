@@ -728,20 +728,22 @@ jobs:
       # The selected E2E specs supply deterministic browser-route fixtures, but
       # auth setup and proxy calls must still have a live backend available.
       - name: Setup backend environment
-        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && env.CLERK_SECRET_KEY != '' }}
+        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         uses: ./.github/actions/setup-python-backend
 
       - name: Bootstrap E2E backend infrastructure
-        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && env.CLERK_SECRET_KEY != '' }}
+        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
 
       - name: Seed FRT-192 full-stack E2E wedge
-        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && env.CLERK_SECRET_KEY != '' }}
+        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         working-directory: apps/api
         run: |
           python - <<'PY'
           import asyncio
+          import json
           import os
+          from pathlib import Path
 
           import httpx
 
@@ -759,6 +761,15 @@ jobs:
                   )
                   response.raise_for_status()
                   payload = response.json()
+
+                  jwks_response = await client.get(
+                      "https://api.clerk.com/v1/jwks",
+                      headers={"Authorization": f"Bearer {os.environ['CLERK_SECRET_KEY']}"},
+                  )
+                  jwks_response.raise_for_status()
+                  Path(os.environ["RUNNER_TEMP"], "clerk-jwks.json").write_text(
+                      json.dumps(jwks_response.json()), encoding="utf-8"
+                  )
 
               users = payload.get("data") if isinstance(payload, dict) else payload
               if not isinstance(users, list) or len(users) != 1:
@@ -785,11 +796,15 @@ jobs:
           PY
 
       - name: Start E2E backend
-        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && env.CLERK_SECRET_KEY != '' }}
+        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         run: |
+          python -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP" \
+            > "$RUNNER_TEMP/c2pro-e2e-jwks.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-e2e-jwks.pid"
           (
             cd apps/api
-            python -m uvicorn src.main:app --host 127.0.0.1 --port 8000
+            CLERK_JWKS_URL=http://127.0.0.1:8765/clerk-jwks.json \
+              python -m uvicorn src.main:app --host 127.0.0.1 --port 8000
           ) > "$RUNNER_TEMP/c2pro-e2e-api.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/c2pro-e2e-api.pid"
           for _ in {1..30}; do
@@ -812,7 +827,7 @@ jobs:
       # the repository variable after the live run is certified. The seeded
       # backend covers auth/proxy availability without using a real Claude call.
       - name: E2E smoke tests
-        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && env.CLERK_SECRET_KEY != '' }}
+        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         working-directory: apps/web
         run: ./node_modules/.bin/playwright test src/tests/e2e/coherence-v1.spec.ts src/tests/e2e/journeys/journey-3-wedge.spec.ts --project=chromium
 
@@ -839,7 +854,11 @@ jobs:
 
       - name: Cleanup E2E backend infrastructure
         if: always()
-        run: docker compose -f docker-compose.test.yml down -v
+        run: |
+          if [ -f "$RUNNER_TEMP/c2pro-e2e-jwks.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/c2pro-e2e-jwks.pid")" || true
+          fi
+          docker compose -f docker-compose.test.yml down -v
 
   # TASK-DEV-018: previously only Vercel ran `next build` at deploy time — a
   # production build break was never caught in CI, only at deploy. Advisory
