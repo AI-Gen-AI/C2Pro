@@ -716,7 +716,6 @@ jobs:
       NEXT_PUBLIC_API_URL: /api
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
       BACKEND_URL: http://localhost:8000
-      E2E_SMOKE_ENABLED: ${{ vars.RUN_FULL_E2E == 'true' || github.ref_name == 'ci/frt192-e2e-harness' }}
     services:
       redis:
         image: redis:7-alpine
@@ -730,15 +729,15 @@ jobs:
       # The selected E2E specs supply deterministic browser-route fixtures, but
       # auth setup and proxy calls must still have a live backend available.
       - name: Setup backend environment
-        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         uses: ./.github/actions/setup-python-backend
 
       - name: Bootstrap E2E backend infrastructure
-        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
 
       - name: Resolve Clerk E2E user
-        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         run: |
           CLERK_E2E_USER_ID=$(curl -fsS "https://api.clerk.com/v1/users?email_address=testuser@c2pro.com" \
             -H "Authorization: Bearer ${CLERK_SECRET_KEY}" | jq -r '.[0].id')
@@ -746,7 +745,7 @@ jobs:
           echo "CLERK_E2E_USER_ID=$CLERK_E2E_USER_ID" >> "$GITHUB_ENV"
 
       - name: Seed FRT-192 full-stack E2E wedge
-        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         working-directory: apps/api
         run: |
           python - <<'PY'
@@ -798,7 +797,7 @@ jobs:
           PY
 
       - name: Start E2E backend
-        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         run: |
           python -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP" \
             > "$RUNNER_TEMP/c2pro-e2e-jwks.log" 2>&1 &
@@ -829,12 +828,12 @@ jobs:
       # the repository variable after the live run is certified. The seeded
       # backend covers auth/proxy availability without using a real Claude call.
       - name: E2E smoke tests
-        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         working-directory: apps/web
         run: ./node_modules/.bin/playwright test src/tests/e2e/coherence-v1.spec.ts src/tests/e2e/journeys/journey-3-wedge.spec.ts --project=chromium
 
       - name: Skip E2E smoke tests when full-stack harness is unavailable
-        if: ${{ env.E2E_SMOKE_ENABLED != 'true' || env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY == '' || env.CLERK_SECRET_KEY == '' }}
+        if: ${{ vars.RUN_FULL_E2E != 'true' || env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY == '' || env.CLERK_SECRET_KEY == '' }}
         run: echo "::notice::E2E smoke skipped — the coherence-v1/journey-3-wedge specs need the seeded backend and Clerk secret key in CI (FRT-192). Set repo variable RUN_FULL_E2E=true to make this gate blocking."
 
       - name: Upload Playwright report on failure
