@@ -256,8 +256,8 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await page.getByRole("button", { name: /evaluate coherence/i }).click();
 
   await page.goto(`/projects/${projectId}/coherence?cohV1Scenario=full-triplet`);
-  await expect(page.getByText(/coherence score v1 is active/i).first()).toBeVisible();
-  await expect(page.getByLabel(/v1 exponential-decay coherence score/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Coherence Dashboard" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Coherence Score: 82/100, Good" })).toBeVisible();
 
   await page.goto(`/projects/${projectId}/documents`);
   await page.getByRole("link", { name: /baseline-contract.pdf/i }).click();
@@ -273,7 +273,7 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
 
   await page.goto(`/projects/${projectId}/report`);
   await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
-  await expect(page.getByText(projectName)).toBeVisible();
+  await expect(page.getByRole("heading", { name: projectName })).toBeVisible();
   await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled();
 });
 
@@ -305,7 +305,7 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
 
   await page.goto(`/projects/${liveProjectId}/report`);
   await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
-  await expect(page.getByText(projectName)).toBeVisible();
+  await expect(page.getByRole("heading", { name: projectName })).toBeVisible();
   await expect(page.getByText("HITL decisions")).toBeVisible();
   await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled();
 });
