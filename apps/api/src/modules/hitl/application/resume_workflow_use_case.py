@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -31,7 +31,7 @@ from src.modules.hitl.ports.review_queue_repository import IReviewQueueRepositor
 logger = structlog.get_logger()
 
 
-class WorkflowDecision(str, Enum):
+class WorkflowDecision(StrEnum):
     """Decision for workflow resumption."""
     APPROVE = "approve"
     REJECT = "reject"
