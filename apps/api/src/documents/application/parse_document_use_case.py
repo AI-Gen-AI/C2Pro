@@ -176,7 +176,7 @@ class ParseDocumentUseCase:
             if stated_total is not None:
                 metadata["stated_total"] = stated_total
             await self.document_repository.update_metadata(
-                scoped_tenant_id, document_id, cast(JsonDict, metadata)
+                scoped_tenant_id, document_id, metadata
             )
 
             # 8. Update document status to PARSED
