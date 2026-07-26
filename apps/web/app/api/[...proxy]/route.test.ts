@@ -1,19 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-import { GET } from "./route";
-import { buildBackendUrl } from "./route-utils";
-
 const fetchMock = vi.fn();
+let GET: typeof import("./route").GET;
+let buildBackendUrl: typeof import("./route-utils").buildBackendUrl;
 
 describe("API proxy coherence routing", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // route-utils resolves the server-only backend URL during module import.
+    vi.stubEnv("BACKEND_URL", "http://localhost:8000/api/v1");
     vi.stubGlobal("fetch", fetchMock);
+    vi.resetModules();
+
+    ({ GET } = await import("./route"));
+    ({ buildBackendUrl } = await import("./route-utils"));
   });
 
   afterEach(() => {
     fetchMock.mockReset();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("routes coherence paths to canonical backend namespace", () => {
