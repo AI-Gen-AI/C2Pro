@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 from collections.abc import AsyncIterator
-from typing import Any, NamedTuple, Protocol, cast
+from typing import Any, NamedTuple, Protocol, TypeGuard, cast
 
 from pydantic import BaseModel, Field
 
@@ -41,6 +41,11 @@ class AuditService(Protocol):
     async def log_query_row_limit(self, tenant_id: str, query: str, row_limit: int) -> None: ...
 
 
+def _is_async_iterator(value: object) -> TypeGuard[AsyncIterator[Any]]:
+    """Narrow the query executor's structural streaming result."""
+    return hasattr(value, "__aiter__")
+
+
 class MCPQueryGuard:
     """Refers to Suite ID: TS-UC-SEC-MCP-003."""
 
@@ -60,12 +65,14 @@ class MCPQueryGuard:
                 resolved = await asyncio.wait_for(
                     raw_result, timeout=config.max_execution_time_seconds
                 )
-                if hasattr(resolved, "__aiter__"):
+                if _is_async_iterator(resolved):
                     data, truncated, timed_out = await self._collect_from_stream(
                         resolved, config.max_execution_time_seconds, config.max_rows_returned
                     )
                 else:
-                    data, truncated = self._truncate_rows(list(resolved), config.max_rows_returned)
+                    data, truncated = self._truncate_rows(
+                        cast(list[Any], resolved), config.max_rows_returned
+                    )
                     timed_out = False
             elif hasattr(raw_result, "__aiter__"):
                 data, truncated, timed_out = await self._collect_from_stream(

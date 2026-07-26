@@ -428,7 +428,7 @@ class PredecessorOverlapEvaluator(RuleEvaluator):
                 lookup[item["id"]] = item
 
         worst_overlap = 0
-        worst_pair = ("", "")
+        worst_pair: tuple[Any | None, Any | None] = ("", "")
         for item in items:
             if not isinstance(item, dict):
                 continue
