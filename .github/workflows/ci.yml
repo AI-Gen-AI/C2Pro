@@ -704,11 +704,52 @@ jobs:
       CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
       CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      ENVIRONMENT: test
+      C2PRO_AI_MOCK: "1"
+      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
+      AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
+      REDIS_URL: redis://localhost:6379/0
       NEXT_PUBLIC_API_URL: http://localhost:8000
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+      BACKEND_URL: http://localhost:8000
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The selected E2E specs supply deterministic browser-route fixtures, but
+      # auth setup and proxy calls must still have a live backend available.
+      - name: Setup backend environment
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Bootstrap E2E backend infrastructure
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
+        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
+
+      - name: Start E2E backend
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
+        run: |
+          (
+            cd apps/api
+            python -m uvicorn src.main:app --host 127.0.0.1 --port 8000
+          ) > "$RUNNER_TEMP/c2pro-e2e-api.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-e2e-api.pid"
+          for _ in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:8000/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/c2pro-e2e-api.log"
+          exit 1
 
       - name: Setup web environment
         uses: ./.github/actions/setup-node-web
@@ -717,11 +758,10 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
 
-      # QA-338: the coherence-v1 / journey-3-wedge specs are FULL-STACK (they call the
-      # backend API), but this job runs only the Next server — no backend, no seed data.
-      # Clerk auth itself is fixed and passes. Until a backend+seed E2E harness exists,
-      # gate execution behind the RUN_FULL_E2E repo variable so this required check does
-      # not block on missing infrastructure. Set vars.RUN_FULL_E2E=true to re-enable.
+      # QA-338: keep this required lane opt-in until an operator enables the
+      # repository variable after the live run is certified. The selected tests
+      # keep their browser-level deterministic fixtures; the backend above covers
+      # auth/proxy availability without using a real Claude call.
       - name: E2E smoke tests
         if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
         working-directory: apps/web
@@ -738,6 +778,19 @@ jobs:
           name: playwright-report
           path: apps/web/playwright-report/
           retention-days: 7
+
+      - name: Upload E2E backend log on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-backend-log
+          path: ${{ runner.temp }}/c2pro-e2e-api.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Cleanup E2E backend infrastructure
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
 
   # TASK-DEV-018: previously only Vercel ran `next build` at deploy time — a
   # production build break was never caught in CI, only at deploy. Advisory
