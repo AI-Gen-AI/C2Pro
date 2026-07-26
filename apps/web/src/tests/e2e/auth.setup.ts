@@ -8,7 +8,11 @@ setup("authenticate", async ({ page }) => {
   await page.goto("/");
   await clerk.signIn({
     page,
-    emailAddress: "testuser@c2pro.com",
+    signInParams: {
+      strategy: "password",
+      identifier: "testuser@c2pro.com",
+      password: "Testpasword123",
+    },
   });
 
   await page.goto("/projects");

@@ -737,6 +737,14 @@ jobs:
         if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
 
+      - name: Resolve Clerk E2E user
+        if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
+        run: |
+          CLERK_E2E_USER_ID=$(curl -fsS "https://api.clerk.com/v1/users?email_address=testuser@c2pro.com" \
+            -H "Authorization: Bearer ${CLERK_SECRET_KEY}" | jq -r '.[0].id')
+          test -n "$CLERK_E2E_USER_ID" && test "$CLERK_E2E_USER_ID" != "null"
+          echo "CLERK_E2E_USER_ID=$CLERK_E2E_USER_ID" >> "$GITHUB_ENV"
+
       - name: Seed FRT-192 full-stack E2E wedge
         if: ${{ env.E2E_SMOKE_ENABLED == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         working-directory: apps/api
@@ -756,14 +764,6 @@ jobs:
 
           async def main() -> None:
               async with httpx.AsyncClient(timeout=30.0) as client:
-                  response = await client.get(
-                      "https://api.clerk.com/v1/users",
-                      params={"email_address": "testuser@c2pro.com", "limit": 1},
-                      headers={"Authorization": f"Bearer {os.environ['CLERK_SECRET_KEY']}"},
-                  )
-                  response.raise_for_status()
-                  payload = response.json()
-
                   jwks_response = await client.get(
                       "https://api.clerk.com/v1/jwks",
                       headers={"Authorization": f"Bearer {os.environ['CLERK_SECRET_KEY']}"},
@@ -773,13 +773,7 @@ jobs:
                       json.dumps(jwks_response.json()), encoding="utf-8"
                   )
 
-              users = payload.get("data") if isinstance(payload, dict) else payload
-              if not isinstance(users, list) or len(users) != 1:
-                  raise RuntimeError("Expected exactly one Clerk E2E user for testuser@c2pro.com")
-
-              clerk_user_id = users[0].get("id") if isinstance(users[0], dict) else None
-              if not isinstance(clerk_user_id, str) or not clerk_user_id:
-                  raise RuntimeError("Clerk E2E user is missing an ID")
+              clerk_user_id = os.environ["CLERK_E2E_USER_ID"]
 
               await init_db()
               try:

@@ -2,7 +2,6 @@
  * Test Suite ID: TS-E2E-WEDGE-003
  * Coverage: E2E-W1..W5 Level-1 wedge journey.
  */
-import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 const projectId = "proj-wedge-3";
@@ -200,17 +199,6 @@ async function waitForAuthenticatedSession(page: Page) {
   await page.goto("/projects");
   await projectsResponse;
 }
-
-test.beforeEach(async ({ page }) => {
-  await setupClerkTestingToken({ page });
-  await page.goto("/");
-  await clerk.signOut({ page });
-  await clerk.signIn({
-    page,
-    emailAddress: "testuser@c2pro.com",
-  });
-  await waitForAuthenticatedSession(page);
-});
 
 test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await installWedgeRoutes(page);
