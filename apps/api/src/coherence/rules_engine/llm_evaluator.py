@@ -226,7 +226,7 @@ class LlmRuleEvaluator(RuleEvaluator):
         self.rule_description = rule_description
         self.detection_logic = detection_logic
         self.default_severity = default_severity
-        self.category = cast(CoherenceCategory, self.CATEGORY_MAP.get(category.lower(), "SCOPE"))  # type: ignore[misc]
+        self.category = self.CATEGORY_MAP.get(category.lower(), "SCOPE")  # type: ignore[misc]
         self.rule_category = category
         self.low_budget_mode = low_budget_mode
         self.tenant_id = tenant_id

@@ -339,7 +339,7 @@ def _coherence_category_for(evaluator: RuleEvaluator | LlmRuleEvaluator) -> Cohe
     mapped = category_map.get(str(raw_category).lower())
     if mapped is None:
         if isinstance(raw_category, str) and raw_category in C2PRO_CATEGORIES:
-            return cast(CoherenceCategory, raw_category)
+            return raw_category
         raise ValueError(f"Unknown evaluator category: {raw_category}")
     return mapped
 
