@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
 
-class EvidenceTier(str, Enum):
+class EvidenceTier(StrEnum):
     """Evidence confidence tier used by Runtime Trust and downstream health."""
 
     VERIFIED = "verified"

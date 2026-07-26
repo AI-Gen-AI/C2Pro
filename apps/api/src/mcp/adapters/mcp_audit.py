@@ -8,10 +8,10 @@ import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 
-class MCPAuditEventType(str, Enum):
+class MCPAuditEventType(StrEnum):
     """Refers to Suite ID: TS-UC-SEC-MCP-004."""
 
     OPERATION_ALLOWED = "mcp.operation_allowed"
