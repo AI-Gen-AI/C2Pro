@@ -15,7 +15,7 @@ asyncpg>=0.30.0
 alembic>=1.18.5
 
 # Security
-PyJWT[crypto]>=2.8.0
+PyJWT[crypto]>=2.13.0
 passlib[bcrypt]>=1.7.4
 cryptography>=44.0.0
 
