@@ -203,7 +203,7 @@ describe("API highlight helper contracts", () => {
 });
 
 describe("API wrapper contracts", () => {
-  it("fetches document-scoped alerts through the alerts endpoint", async () => {
+  it("fetches document-scoped alerts through the tenant-filtered alerts endpoint", async () => {
     mockedApiClient.get.mockResolvedValueOnce({
       data: {
         items: [{ id: "alert-1" }],
@@ -214,7 +214,7 @@ describe("API wrapper contracts", () => {
     await expect(getDocumentAlerts("doc-1")).resolves.toEqual([
       { id: "alert-1" },
     ]);
-    expect(mockedApiClient.get).toHaveBeenCalledWith("/alerts", {
+    expect(mockedApiClient.get).toHaveBeenCalledWith("/alerts/tenant", {
       params: { document_id: "doc-1" },
     });
   });

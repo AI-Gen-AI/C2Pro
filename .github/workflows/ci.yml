@@ -711,7 +711,9 @@ jobs:
       JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
       AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
       REDIS_URL: redis://localhost:6379/0
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      # Browser calls must use the Next.js proxy so the Clerk bearer token is
+      # forwarded to the local backend without a cross-origin preflight.
+      NEXT_PUBLIC_API_URL: /api
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
       BACKEND_URL: http://localhost:8000
     services:
@@ -727,19 +729,122 @@ jobs:
       # The selected E2E specs supply deterministic browser-route fixtures, but
       # auth setup and proxy calls must still have a live backend available.
       - name: Setup backend environment
-        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         uses: ./.github/actions/setup-python-backend
 
       - name: Bootstrap E2E backend infrastructure
-        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
 
-      - name: Start E2E backend
-        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
+      - name: Resolve Clerk E2E user
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         run: |
+          CLERK_E2E_USER_ID=$(curl -fsS "https://api.clerk.com/v1/users?email_address=testuser@c2pro.com" \
+            -H "Authorization: Bearer ${CLERK_SECRET_KEY}" | jq -r '.[0].id')
+          test -n "$CLERK_E2E_USER_ID" && test "$CLERK_E2E_USER_ID" != "null"
+          echo "CLERK_E2E_USER_ID=$CLERK_E2E_USER_ID" >> "$GITHUB_ENV"
+
+      - name: Seed FRT-192 full-stack E2E wedge
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          import asyncio
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          import httpx
+          from sqlalchemy import func, select
+
+          from src.core.auth.models import Tenant, User
+          from src.core.database import close_db, get_raw_session, init_db
+          from src.documents.adapters.persistence.models import DocumentORM
+          from src.projects.adapters.persistence.models import ProjectORM
+          from tests.e2e_seed.seed_wedge import PROJECT_ID, TENANT_ID, USER_ID, seed_wedge_e2e
+
+
+          async def main() -> None:
+              database_url_hash = hashlib.sha256(os.environ["DATABASE_URL"].encode()).hexdigest()
+              print(f"FRT-192 seed DATABASE_URL_SHA256={database_url_hash}")
+              async with httpx.AsyncClient(timeout=30.0) as client:
+                  jwks_response = await client.get(
+                      "https://api.clerk.com/v1/jwks",
+                      headers={"Authorization": f"Bearer {os.environ['CLERK_SECRET_KEY']}"},
+                  )
+                  jwks_response.raise_for_status()
+                  Path(os.environ["RUNNER_TEMP"], "clerk-jwks.json").write_text(
+                      json.dumps(jwks_response.json()), encoding="utf-8"
+                  )
+
+              clerk_user_id = os.environ["CLERK_E2E_USER_ID"]
+
+              await init_db()
+              try:
+                  async with get_raw_session() as db:
+                      await seed_wedge_e2e(db)
+                      user = await db.get(User, USER_ID)
+                      if user is None:
+                          raise RuntimeError("FRT-192 seed user was not created")
+                      tenant = await db.get(Tenant, user.tenant_id)
+                      if tenant is None:
+                          raise RuntimeError("FRT-192 seed tenant was not created")
+                      user.clerk_user_id = clerk_user_id
+                      # Match the existing no-organization Clerk provisioning policy so
+                      # the authenticated test user resolves to the seeded tenant.
+                      tenant.name = f"Personal-{clerk_user_id}"
+                      await db.commit()
+
+                  # The backend runs in a different process and connection.  Verify
+                  # committed visibility from a fresh session before it starts.
+                  async with get_raw_session() as verification_db:
+                      matching_users = await verification_db.scalar(
+                          select(func.count()).select_from(User).where(User.clerk_user_id == clerk_user_id)
+                      )
+                      user = await verification_db.get(User, USER_ID)
+                      document_count = await verification_db.scalar(
+                          select(func.count()).select_from(DocumentORM).where(
+                              DocumentORM.project_id == PROJECT_ID,
+                              DocumentORM.tenant_id == TENANT_ID,
+                          )
+                      )
+                      project = await verification_db.get(ProjectORM, PROJECT_ID)
+                      if (
+                          matching_users != 1
+                          or user is None
+                          or user.tenant_id != TENANT_ID
+                          or project is None
+                          or document_count != 3
+                      ):
+                          raise RuntimeError(
+                              "FRT-192 seed diagnostic failed: "
+                              f"users={matching_users} tenant={user.tenant_id if user else None} "
+                              f"project={project is not None} documents={document_count}"
+                          )
+                      print(
+                          "FRT-192 fresh-session seed diagnostic: "
+                          f"clerk_user_id={clerk_user_id} tenant_id={user.tenant_id} "
+                          f"project_id={PROJECT_ID} documents={document_count}"
+                      )
+              finally:
+                  await close_db()
+
+
+          asyncio.run(main())
+          PY
+
+      - name: Start E2E backend
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
+        run: |
+          printf 'FRT-192 backend DATABASE_URL_SHA256=%s\n' "$(printf %s "$DATABASE_URL" | sha256sum | cut -d' ' -f1)"
+          python -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP" \
+            > "$RUNNER_TEMP/c2pro-e2e-jwks.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-e2e-jwks.pid"
           (
             cd apps/api
-            python -m uvicorn src.main:app --host 127.0.0.1 --port 8000
+            CLERK_JWKS_URL=http://127.0.0.1:8765/clerk-jwks.json \
+              python -m uvicorn src.main:app --host 127.0.0.1 --port 8000
           ) > "$RUNNER_TEMP/c2pro-e2e-api.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/c2pro-e2e-api.pid"
           for _ in {1..30}; do
@@ -758,18 +863,19 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
 
-      # QA-338: keep this required lane opt-in until an operator enables the
-      # repository variable after the live run is certified. The selected tests
-      # keep their browser-level deterministic fixtures; the backend above covers
-      # auth/proxy availability without using a real Claude call.
+      # QA-338/FRT-192: keep this required lane opt-in until an operator enables
+      # the repository variable after the live run is certified. The seeded
+      # backend covers auth/proxy availability without using a real Claude call.
       - name: E2E smoke tests
-        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         working-directory: apps/web
-        run: ./node_modules/.bin/playwright test src/tests/e2e/coherence-v1.spec.ts src/tests/e2e/journeys/journey-3-wedge.spec.ts --project=chromium
+        run: |
+          ./node_modules/.bin/playwright test src/tests/e2e/coherence-v1.spec.ts --project=chromium
+          ./node_modules/.bin/playwright test src/tests/e2e/journeys/journey-3-wedge.spec.ts --grep '@real-backend' --project=chromium
 
       - name: Skip E2E smoke tests when full-stack harness is unavailable
-        if: ${{ vars.RUN_FULL_E2E != 'true' || env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY == '' || (env.CLERK_SECRET_KEY == '' && env.CLERK_TESTING_TOKEN == '') }}
-        run: echo "::notice::E2E smoke skipped — the coherence-v1/journey-3-wedge specs need a running backend + seed data in CI (QA-338). Clerk auth is fixed; set repo variable RUN_FULL_E2E=true once the full-stack harness exists to make this gate blocking again."
+        if: ${{ vars.RUN_FULL_E2E != 'true' || env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY == '' || env.CLERK_SECRET_KEY == '' }}
+        run: echo "::notice::E2E smoke skipped — the coherence-v1/journey-3-wedge specs need the seeded backend and Clerk secret key in CI (FRT-192). Set repo variable RUN_FULL_E2E=true to make this gate blocking."
 
       - name: Upload Playwright report on failure
         if: failure()
@@ -790,7 +896,11 @@ jobs:
 
       - name: Cleanup E2E backend infrastructure
         if: always()
-        run: docker compose -f docker-compose.test.yml down -v
+        run: |
+          if [ -f "$RUNNER_TEMP/c2pro-e2e-jwks.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/c2pro-e2e-jwks.pid")" || true
+          fi
+          docker compose -f docker-compose.test.yml down -v
 
   # TASK-DEV-018: previously only Vercel ran `next build` at deploy time — a
   # production build break was never caught in CI, only at deploy. Advisory

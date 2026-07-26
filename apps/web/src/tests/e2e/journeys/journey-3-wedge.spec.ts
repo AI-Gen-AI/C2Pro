@@ -2,10 +2,16 @@
  * Test Suite ID: TS-E2E-WEDGE-003
  * Coverage: E2E-W1..W5 Level-1 wedge journey.
  */
+import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-const projectId = "proj-wedge-3";
+const liveProjectId = "00000000-0000-0000-0000-00000000c303";
+const projectId = liveProjectId;
 const projectName = "Wedge Gate Pilot";
+const liveContractId = "00000000-0000-0000-0000-00000000d401";
+// The public HITL API is keyed by the reviewed item's ID, not the review row ID.
+const liveReviewItemId = "00000000-0000-0000-0000-00000000f601";
+const clerkE2eUserId = "user_3H0l5NCcPYLnfWokjdm2D8m3iGR";
 
 const documents = [
   {
@@ -184,6 +190,58 @@ async function installWedgeRoutes(page: Page) {
   );
 }
 
+async function waitForAuthenticatedSession(page: Page) {
+  const projectsResponse = page.waitForResponse(
+    (response) =>
+      ["/api/projects", "/api/v1/projects"].includes(
+        new URL(response.url()).pathname,
+      ) &&
+      response.status() === 200,
+  );
+
+  await page.goto("/projects");
+  await projectsResponse;
+}
+
+async function getSessionSubject(page: Page): Promise<string | null> {
+  return page.evaluate(async () => {
+    const token = await window.Clerk?.session?.getToken();
+    if (!token) return null;
+
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+
+    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const subject = (JSON.parse(atob(normalizedPayload)) as { sub?: unknown }).sub;
+    return typeof subject === "string" ? subject : null;
+  });
+}
+
+test.beforeEach(async ({ page }) => {
+  await setupClerkTestingToken({ page });
+  await page.goto("/");
+  await page.waitForFunction(() => window.Clerk?.loaded === true);
+
+  if (await getSessionSubject(page)) {
+    await page.evaluate(async () => window.Clerk?.signOut());
+    await page.waitForFunction(() => window.Clerk?.session === null);
+  }
+
+  await clerk.signIn({
+    page,
+    signInParams: {
+      strategy: "password",
+      identifier: "testuser@c2pro.com",
+      password: "Testpasword123",
+    },
+  });
+
+  const sessionSubject = await getSessionSubject(page);
+  expect(sessionSubject).toBe(clerkE2eUserId);
+
+  await waitForAuthenticatedSession(page);
+});
+
 test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await installWedgeRoutes(page);
 
@@ -197,12 +255,14 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await page.getByRole("button", { name: /evaluate coherence/i }).click();
 
   await page.goto(`/projects/${projectId}/coherence?cohV1Scenario=full-triplet`);
-  await expect(page.getByText(/coherence score v1 is active/i).first()).toBeVisible();
-  await expect(page.getByLabel(/v1 exponential-decay coherence score/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Coherence Dashboard" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Coherence Score: 82/100, Good" })).toBeVisible();
 
   await page.goto(`/projects/${projectId}/documents`);
-  await page.getByRole("link", { name: /baseline-contract.pdf/i }).click();
-  await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/evidence\\?documentId=doc-contract`));
+  await expect(page.getByRole("link", { name: "baseline-contract.pdf" })).toHaveAttribute(
+    "href",
+    `/projects/${projectId}/evidence?documentId=doc-contract`,
+  );
 
   await page.goto(`/projects/${projectId}/review`);
   await expect(page.getByTestId("review-page")).toBeVisible();
@@ -214,11 +274,39 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
 
   await page.goto(`/projects/${projectId}/report`);
   await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
-  await expect(page.getByText(projectName)).toBeVisible();
+  await expect(page.getByRole("heading", { name: projectName }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled();
 });
 
-test.skip("E2E-W3..W5 @real-backend validates the same wedge against a live backend", async () => {
-  // TODO(TASK-FRT-192): enable in the scheduled real-backend workflow
-  // after the backend fixture can seed a typed triplet, HITL item, and report payload.
+test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => {
+  await page.goto(`/projects/${liveProjectId}/documents`);
+  await expect(page.getByTestId("documents-page")).toBeVisible();
+  await expect(page.getByText("baseline-contract.pdf")).toBeVisible();
+  await expect(page.getByText("validated-budget.xlsx")).toBeVisible();
+  await expect(page.getByText("approved-schedule.xlsx")).toBeVisible();
+
+  await expect(page.getByRole("link", { name: "baseline-contract.pdf" })).toHaveAttribute(
+    "href",
+    `/projects/${liveProjectId}/evidence?documentId=${liveContractId}`,
+  );
+
+  await page.goto(`/projects/${liveProjectId}/review`);
+  await expect(page.getByTestId("review-page")).toBeVisible();
+  await expect(page.getByTestId(`review-item-${liveReviewItemId}`)).toBeVisible();
+
+  const approveResponse = page.waitForResponse((response) =>
+    response.request().method() === "POST" &&
+    response.url().includes(`/api/hitl/queue/${liveReviewItemId}/approve`),
+  );
+  await page.getByTestId(`approve-${liveReviewItemId}`).click();
+  await expect(page.getByRole("dialog", { name: /approve review item/i })).toBeVisible();
+  await page.getByRole("button", { name: /confirm approve/i }).click();
+  await expect((await approveResponse).status()).toBe(200);
+  await expect(page.getByTestId("stat-approved")).toContainText("1");
+
+  await page.goto(`/projects/${liveProjectId}/report`);
+  await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: projectName }).first()).toBeVisible();
+  await expect(page.getByText("HITL decisions")).toBeVisible();
+  await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled();
 });

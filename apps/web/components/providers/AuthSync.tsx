@@ -13,6 +13,7 @@ interface SignedInOrganizationEffectsProps {
   isLoaded: boolean;
   organization: ReturnType<typeof useOrganization>["organization"];
   setAuth: (auth: { token: string | null; tenantId: string | null }) => void;
+  onTokenSynchronized: () => void;
 }
 
 function SignedInOrganizationEffects({
@@ -20,6 +21,7 @@ function SignedInOrganizationEffects({
   isLoaded,
   organization,
   setAuth,
+  onTokenSynchronized,
 }: SignedInOrganizationEffectsProps) {
   const { isLoaded: orgListLoaded, setActive, userMemberships } =
     useOrganizationList({
@@ -58,6 +60,7 @@ function SignedInOrganizationEffects({
         }
         const tenantId = getTenantIdFromOrganizationMetadata(organization);
         setAuth({ token, tenantId });
+        onTokenSynchronized();
       } catch (error) {
         console.error("AuthSync: Failed to get token", error);
         handleAuthErrorStatus(401);
@@ -72,6 +75,7 @@ function SignedInOrganizationEffects({
     organization,
     organizationMemberships.length,
     getToken,
+    onTokenSynchronized,
     setAuth,
   ]);
 
@@ -84,6 +88,7 @@ interface SignedInAuthSyncProps {
   queryClient: ReturnType<typeof useQueryClient>;
   setAuth: (auth: { token: string | null; tenantId: string | null }) => void;
   prevOrgId: string | null;
+  onTokenSynchronized: () => void;
 }
 
 function SignedInAuthSync({
@@ -92,6 +97,7 @@ function SignedInAuthSync({
   queryClient,
   setAuth,
   prevOrgId,
+  onTokenSynchronized,
 }: SignedInAuthSyncProps) {
   const { organization } = useOrganization();
 
@@ -109,6 +115,7 @@ function SignedInAuthSync({
       isLoaded={isLoaded}
       organization={organization}
       setAuth={setAuth}
+      onTokenSynchronized={onTokenSynchronized}
     />
   );
 }
@@ -119,15 +126,26 @@ export function AuthSync({ children }: { children: React.ReactNode }) {
   const setAuth = useAuthStore((s) => s.setAuth);
   const clearAuth = useAuthStore((s) => s.clear);
   const prevOrgId = useAuthStore((s) => s.tenantId);
+  const [isTokenSynchronized, setIsTokenSynchronized] = React.useState(false);
+  const markTokenSynchronized = React.useCallback(
+    () => setIsTokenSynchronized(true),
+    [],
+  );
 
   useEffect(() => {
     // Wait for Clerk to load before doing anything
-    if (!isLoaded) return;
+    if (!isLoaded) {
+      setIsTokenSynchronized(false);
+      return;
+    }
 
     if (!isSignedIn) {
       clearAuth();
+      setIsTokenSynchronized(true);
       return;
     }
+
+    setIsTokenSynchronized(false);
   }, [isLoaded, isSignedIn, clearAuth]);
 
   return (
@@ -139,9 +157,10 @@ export function AuthSync({ children }: { children: React.ReactNode }) {
           queryClient={queryClient}
           setAuth={setAuth}
           prevOrgId={prevOrgId}
+          onTokenSynchronized={markTokenSynchronized}
         />
       ) : null}
-      {children}
+      {isLoaded && (!isSignedIn || isTokenSynchronized) ? children : null}
     </>
   );
 }

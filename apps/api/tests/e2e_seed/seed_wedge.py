@@ -257,8 +257,11 @@ async def seed_wedge_e2e(db: AsyncSession) -> dict[str, UUID]:
     Returns a dict of all created IDs for downstream assertions.
     """
     await _upsert_tenant(db)
+    await db.flush()
     await _upsert_user(db)
+    await db.flush()
     await _upsert_project(db)
+    await db.flush()
     await _upsert_documents(db)
     await _upsert_coherence(db)
     await _upsert_alert(db)

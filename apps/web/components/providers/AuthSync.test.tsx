@@ -112,12 +112,36 @@ describe("AuthSync", () => {
       </AuthSync>,
     );
 
-    expect(screen.getByText("Child")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Child")).toBeInTheDocument());
     await waitFor(() =>
       expect(setAuth).toHaveBeenCalledWith({
         token: "token-123",
         tenantId: "tenant-uuid-1",
       }),
+    );
+  });
+
+  it("TS-FRT-192-AUTH-001 waits for Clerk token synchronization before rendering protected children", async () => {
+    let resolveToken: (token: string) => void;
+    getTokenMock = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveToken = resolve;
+        }),
+    );
+
+    renderWithProviders(
+      <AuthSync>
+        <div>Token dependent child</div>
+      </AuthSync>,
+    );
+
+    expect(screen.queryByText("Token dependent child")).not.toBeInTheDocument();
+
+    resolveToken!("token-123");
+
+    await waitFor(() =>
+      expect(screen.getByText("Token dependent child")).toBeInTheDocument(),
     );
   });
 
