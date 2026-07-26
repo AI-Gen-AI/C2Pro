@@ -26,7 +26,7 @@ Conventions:
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -43,13 +43,13 @@ _VALUE_OBJECT = ConfigDict(
 )
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     HIGH = "HIGH"
     MEDIUM = "MEDIUM"
     LOW = "LOW"
 
 
-class CoherenceCategory(str, Enum):
+class CoherenceCategory(StrEnum):
     """The six canonical product categories (+ ``general`` fallback)."""
 
     SCOPE = "SCOPE"

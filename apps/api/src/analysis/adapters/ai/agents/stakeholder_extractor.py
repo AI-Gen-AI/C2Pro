@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from .base_agent import BaseAgent
@@ -37,7 +37,7 @@ Esquema estricto:
 """.strip()
 
 
-class StakeholderType(str, Enum):
+class StakeholderType(StrEnum):
     CLIENT = "CLIENT"
     CONTRACTOR = "CONTRACTOR"
     SUBCONTRACTOR = "SUBCONTRACTOR"

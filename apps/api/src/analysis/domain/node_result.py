@@ -17,7 +17,7 @@ the Health Engine (ADR-018 / TASK-V3-013-07).
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 T = TypeVar("T")
 
 
-class NodeStatus(str, Enum):
+class NodeStatus(StrEnum):
     OK = "ok"            # full, clean result
     DEGRADED = "degraded"  # partial / fallback used (still usable)
     FAILED = "failed"    # caught exception; no usable result (error is set)

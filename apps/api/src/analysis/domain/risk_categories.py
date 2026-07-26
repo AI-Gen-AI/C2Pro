@@ -11,10 +11,10 @@ Refers to EPIC-CORE-DECOUPLE — risk-category unification.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class RiskCategory(str, Enum):
+class RiskCategory(StrEnum):
     """Canonical six-category taxonomy used across the platform."""
 
     LEGAL = "LEGAL"
