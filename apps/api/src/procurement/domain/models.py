@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID, uuid4
 
 # ===========================================
@@ -19,7 +19,7 @@ from uuid import UUID, uuid4
 from src.shared_kernel.enums import WBSItemType as WBSItemType  # re-export
 
 
-class BOMCategory(str, Enum):
+class BOMCategory(StrEnum):
     """Categories of BOM items."""
 
     MATERIAL = "material"
@@ -28,7 +28,7 @@ class BOMCategory(str, Enum):
     CONSUMABLE = "consumable"
 
 
-class ProcurementStatus(str, Enum):
+class ProcurementStatus(StrEnum):
     """Procurement statuses."""
 
     PENDING = "pending"
@@ -39,7 +39,7 @@ class ProcurementStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class ProcurementPriority(str, Enum):
+class ProcurementPriority(StrEnum):
     """Priority for procurement execution order."""
 
     CRITICAL = "critical"
