@@ -43,7 +43,7 @@ pytesseract==0.3.13  # OCR for scanned PDFs
 Pillow>=12.3.0  # Image processing for OCR
 
 # Security
-PyJWT[crypto]>=2.8.0
+PyJWT[crypto]>=2.13.0
 bcrypt==5.0.0
 
 # Privacy & GDPR Compliance
