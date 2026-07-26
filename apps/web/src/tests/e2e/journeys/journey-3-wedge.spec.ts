@@ -204,6 +204,7 @@ async function waitForAuthenticatedSession(page: Page) {
 test.beforeEach(async ({ page }) => {
   await setupClerkTestingToken({ page });
   await page.goto("/");
+  await clerk.signOut({ page });
   await clerk.signIn({
     page,
     emailAddress: "testuser@c2pro.com",
