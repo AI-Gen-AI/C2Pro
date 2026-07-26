@@ -711,7 +711,9 @@ jobs:
       JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
       AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
       REDIS_URL: redis://localhost:6379/0
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      # Browser calls must use the Next.js proxy so the Clerk bearer token is
+      # forwarded to the local backend without a cross-origin preflight.
+      NEXT_PUBLIC_API_URL: /api
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
       BACKEND_URL: http://localhost:8000
       E2E_SMOKE_ENABLED: ${{ vars.RUN_FULL_E2E == 'true' || github.ref_name == 'ci/frt192-e2e-harness' }}
@@ -747,7 +749,7 @@ jobs:
 
           import httpx
 
-          from src.core.auth.models import User
+          from src.core.auth.models import Tenant, User
           from src.core.database import close_db, get_raw_session, init_db
           from tests.e2e_seed.seed_wedge import USER_ID, seed_wedge_e2e
 
@@ -783,11 +785,17 @@ jobs:
               try:
                   async with get_raw_session() as db:
                       await seed_wedge_e2e(db)
-                      user = await db.get(User, USER_ID)
-                      if user is None:
-                          raise RuntimeError("FRT-192 seed user was not created")
-                      user.clerk_user_id = clerk_user_id
-                      await db.commit()
+                  user = await db.get(User, USER_ID)
+                  if user is None:
+                      raise RuntimeError("FRT-192 seed user was not created")
+                  tenant = await db.get(Tenant, user.tenant_id)
+                  if tenant is None:
+                      raise RuntimeError("FRT-192 seed tenant was not created")
+                  user.clerk_user_id = clerk_user_id
+                  # Match the existing no-organization Clerk provisioning policy so
+                  # the authenticated test user resolves to the seeded tenant.
+                  tenant.name = f"Personal-{clerk_user_id}"
+                  await db.commit()
               finally:
                   await close_db()
 
