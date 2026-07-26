@@ -2,7 +2,7 @@
  * Test Suite ID: TS-E2E-WEDGE-003
  * Coverage: E2E-W1..W5 Level-1 wedge journey.
  */
-import { setupClerkTestingToken } from "@clerk/testing/playwright";
+import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 const projectId = "proj-wedge-3";
@@ -203,11 +203,16 @@ async function waitForAuthenticatedSession(page: Page) {
 
 test.beforeEach(async ({ page }) => {
   await setupClerkTestingToken({ page });
+  await page.goto("/");
+  await clerk.signIn({
+    page,
+    emailAddress: "testuser@c2pro.com",
+  });
+  await waitForAuthenticatedSession(page);
 });
 
 test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await installWedgeRoutes(page);
-  await waitForAuthenticatedSession(page);
 
   await page.goto(`/projects/${projectId}/documents`);
   await expect(page.getByTestId("documents-page")).toBeVisible();
@@ -241,8 +246,6 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
 });
 
 test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => {
-  await waitForAuthenticatedSession(page);
-
   await page.goto(`/projects/${liveProjectId}/documents`);
   await expect(page.getByTestId("documents-page")).toBeVisible();
   await expect(page.getByText("baseline-contract.pdf")).toBeVisible();
