@@ -21,7 +21,11 @@ import {
   FileText,
 } from 'lucide-react';
 
-// Configure PDF.js worker (local mjs build for Next.js)
+// Configure PDF.js worker (local mjs build for Next.js).
+// This resolves the worker from the app's own `pdfjs-dist`, so that package MUST
+// stay pinned to the exact version react-pdf imports as its API — PDF.js throws
+// on any API/worker version skew when a document opens (see TASK-QA-340 and
+// PDFViewer.worker-version.test.ts).
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
   import.meta.url
