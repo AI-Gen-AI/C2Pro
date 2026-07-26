@@ -791,6 +791,7 @@ jobs:
                   # Match the existing no-organization Clerk provisioning policy so
                   # the authenticated test user resolves to the seeded tenant.
                   tenant.name = f"Personal-{clerk_user_id}"
+                  await db.flush()
                   matching_users = await db.scalar(
                       select(func.count()).select_from(User).where(User.clerk_user_id == clerk_user_id)
                   )
