@@ -21,6 +21,8 @@ from src.projects.adapters.persistence.models import ProjectORM
 
 from .seed_wedge import (
     ALERT_ID,
+    CLERK_E2E_ORG_ID,
+    CLERK_E2E_USER_ID,
     COHERENCE_ID,
     DOC_BUDGET_ID,
     DOC_CONTRACT_ID,
@@ -47,11 +49,13 @@ async def test_seed_wedge_creates_tenant_and_user(db: AsyncSession) -> None:
     assert tenant.slug == "i13-real-e2e-tenant"
     assert tenant.subscription_plan.value == "professional"
     assert tenant.is_active is True
+    assert tenant.clerk_org_id == CLERK_E2E_ORG_ID
 
     user = await db.get(User, USER_ID)
     assert user is not None
     assert user.email == "testuser@c2pro.com"
     assert user.role.value == "admin"
+    assert user.clerk_user_id == CLERK_E2E_USER_ID
 
 
 @pytest.mark.requires_services

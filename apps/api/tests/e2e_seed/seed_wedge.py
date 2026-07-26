@@ -9,6 +9,7 @@ Reuses seeded_auth_context logic (conftest.py) for tenant/user creation.
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -41,6 +42,11 @@ REVIEW_ID = UUID("00000000-0000-0000-0000-00000000f701")
 
 TEST_PASSWORD_HASH = hash_password("TestPassword123!")
 
+# Clerk identifiers — supplied by Codex's CI harness via env vars.
+# Stable defaults allow local dev without Clerk configured.
+CLERK_E2E_ORG_ID = os.environ.get("CLERK_E2E_ORG_ID", "org_e2e_wedge_default")
+CLERK_E2E_USER_ID = os.environ.get("CLERK_E2E_USER_ID", "user_e2e_wedge_default")
+
 
 def _utcnow_naive() -> datetime:
     """Return naive UTC for TIMESTAMP WITHOUT TIME ZONE columns."""
@@ -56,6 +62,7 @@ async def _upsert_tenant(db: AsyncSession) -> None:
     if existing is not None:
         existing.is_active = True
         existing.subscription_status = "active"
+        existing.clerk_org_id = CLERK_E2E_ORG_ID
         return
     db.add(
         Tenant(
@@ -70,6 +77,7 @@ async def _upsert_tenant(db: AsyncSession) -> None:
             max_users=25,
             max_storage_gb=100,
             is_active=True,
+            clerk_org_id=CLERK_E2E_ORG_ID,
         )
     )
 
@@ -83,6 +91,7 @@ async def _upsert_user(db: AsyncSession) -> None:
         existing.role = UserRole.ADMIN
         existing.is_active = True
         existing.is_verified = True
+        existing.clerk_user_id = CLERK_E2E_USER_ID
         return
     db.add(
         User(
@@ -96,6 +105,7 @@ async def _upsert_user(db: AsyncSession) -> None:
             is_active=True,
             is_verified=True,
             last_login=_utcnow_naive(),
+            clerk_user_id=CLERK_E2E_USER_ID,
         )
     )
 
