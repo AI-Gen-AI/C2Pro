@@ -203,8 +203,8 @@ export const demoDataHandlers = [
     return HttpResponse.json(alerts);
   }),
 
-  // Flat route used by useDocumentAlerts → GET /alerts?document_id=...
-  http.get("*/api/v1/alerts", ({ request }) => {
+  // Tenant-filtered route used by useDocumentAlerts → GET /alerts/tenant?document_id=...
+  http.get("*/api/v1/alerts/tenant", ({ request }) => {
     const url = new URL(request.url);
     const documentId = url.searchParams.get("document_id");
 

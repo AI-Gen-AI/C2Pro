@@ -5,10 +5,9 @@
 import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-const projectId = "proj-wedge-3";
-const projectName = "Wedge Gate Pilot";
-
 const liveProjectId = "00000000-0000-0000-0000-00000000c303";
+const projectId = liveProjectId;
+const projectName = "Wedge Gate Pilot";
 const liveContractId = "00000000-0000-0000-0000-00000000d401";
 // The public HITL API is keyed by the reviewed item's ID, not the review row ID.
 const liveReviewItemId = "00000000-0000-0000-0000-00000000f601";

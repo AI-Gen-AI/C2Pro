@@ -100,7 +100,7 @@ export async function getDocumentAlerts(documentId: string): Promise<Alert[]> {
   const response = await apiClient.get<{
     items: AlertResponse[];
     total: number;
-  }>("/alerts", {
+  }>("/alerts/tenant", {
     params: { document_id: documentId },
   });
   return response.data.items;
