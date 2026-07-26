@@ -6,14 +6,14 @@ Refers to Suite ID: TS-UD-COH-ALR-001.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 from src.shared_kernel.enums import AlertSeverity  # noqa: F401 — canonical enum
 
 
-class AlertCategory(str, Enum):
+class AlertCategory(StrEnum):
     SCOPE = "SCOPE"
     BUDGET = "BUDGET"
     TIME = "TIME"

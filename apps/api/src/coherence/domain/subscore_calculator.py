@@ -6,19 +6,19 @@ Refers to Suite ID: TS-UD-COH-SCR-001.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel
 
 
-class CoherenceSeverity(str, Enum):
+class CoherenceSeverity(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
     CRITICAL = "CRITICAL"
 
 
-class ScoreScope(str, Enum):
+class ScoreScope(StrEnum):
     SCOPE = "SCOPE"
     BUDGET = "BUDGET"
     QUALITY = "QUALITY"

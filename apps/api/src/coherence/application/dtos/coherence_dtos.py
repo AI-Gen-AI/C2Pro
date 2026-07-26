@@ -7,7 +7,7 @@ Refers to Suite ID: TS-UA-COH-UC-001.
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -17,7 +17,7 @@ from src.coherence.domain.category_weights import CoherenceCategory
 from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 
 
-class AlertAction(str, Enum):
+class AlertAction(StrEnum):
     """Actions that can be taken on alerts."""
 
     RESOLVED = "resolved"

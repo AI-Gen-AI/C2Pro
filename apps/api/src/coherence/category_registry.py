@@ -9,14 +9,14 @@ from __future__ import annotations
 import datetime
 import os
 import re
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-class CanonicalCategory(str, Enum):
+class CanonicalCategory(StrEnum):
     """The six canonical risk / coherence categories."""
 
     LEGAL = "LEGAL"

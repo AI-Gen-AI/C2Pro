@@ -6,19 +6,19 @@ Refers to Suite ID: TS-UD-COH-RUL-006.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
 
-class CoherenceStatus(str, Enum):
+class CoherenceStatus(StrEnum):
     PASS = "PASS"
     FAIL = "FAIL"
     WARN = "WARN"
 
 
-class CoherenceSeverity(str, Enum):
+class CoherenceSeverity(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"

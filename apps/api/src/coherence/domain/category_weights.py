@@ -6,10 +6,10 @@ Refers to Suite ID: TS-UD-COH-CAT-001.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class CoherenceCategory(str, Enum):
+class CoherenceCategory(StrEnum):
     """Canonical coherence categories used by score calculators."""
 
     SCOPE = "SCOPE"

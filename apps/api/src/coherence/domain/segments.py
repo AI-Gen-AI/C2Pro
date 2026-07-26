@@ -11,13 +11,13 @@ Per ADR D7/D8/D9:
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
 
-class SegmentType(str, Enum):
+class SegmentType(StrEnum):
     """Canonical segment types aligned with CategoryRegistry CanonicalCategory."""
     LEGAL = "LEGAL"
     SCOPE = "SCOPE"
@@ -28,7 +28,7 @@ class SegmentType(str, Enum):
     MIXED = "MIXED"
 
 
-class SegmentSource(str, Enum):
+class SegmentSource(StrEnum):
     """How the segment boundary was determined."""
     FILE = "file"
     MONOLITH_MARKER = "monolith_marker"
