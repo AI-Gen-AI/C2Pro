@@ -9,14 +9,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     pass
 
 
-class AlertSeverityLevel(str, Enum):
+class AlertSeverityLevel(StrEnum):
     """Alert severity levels for SLA calculation."""
     CRITICAL = "critical"
     HIGH = "high"

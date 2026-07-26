@@ -5,24 +5,24 @@ Pure Python enums for alert domain.
 """
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class AlertSeverity(str, Enum):
+class AlertSeverity(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
 
 
-class AlertStatus(str, Enum):
+class AlertStatus(StrEnum):
     OPEN = "open"
     ACKNOWLEDGED = "acknowledged"
     RESOLVED = "resolved"
     DISMISSED = "dismissed"
 
 
-class ApprovalStatus(str, Enum):
+class ApprovalStatus(StrEnum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
