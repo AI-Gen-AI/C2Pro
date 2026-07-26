@@ -274,7 +274,7 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
 
   await page.goto(`/projects/${projectId}/report`);
   await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
-  await expect(page.getByRole("heading", { name: projectName })).toBeVisible();
+  await expect(page.getByRole("heading", { name: projectName }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled();
 });
 
@@ -306,7 +306,7 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
 
   await page.goto(`/projects/${liveProjectId}/report`);
   await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
-  await expect(page.getByRole("heading", { name: projectName })).toBeVisible();
+  await expect(page.getByRole("heading", { name: projectName }).first()).toBeVisible();
   await expect(page.getByText("HITL decisions")).toBeVisible();
   await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled();
 });
