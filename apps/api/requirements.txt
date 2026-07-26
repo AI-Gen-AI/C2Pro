@@ -97,7 +97,7 @@ freezegun==1.5.5  # Deterministic time control for boundary-sensitive tests
 
 # Linting & Formatting
 ruff==0.16.0
-mypy==1.8.0
+mypy==2.3.0
 
 # Type stubs
 types-redis==4.6.0.20241004
