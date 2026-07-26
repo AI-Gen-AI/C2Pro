@@ -140,8 +140,8 @@ class CategoryRegistry(BaseModel):
     def validate_canonical_categories(
         cls, v: dict[CanonicalCategory, CategoryDefinition]
     ) -> dict[CanonicalCategory, CategoryDefinition]:
-        required = set(CanonicalCategory)
-        provided = set(v.keys())
+        required = {CanonicalCategory(category) for category in CanonicalCategory}
+        provided = {CanonicalCategory(category) for category in v}
         if required != provided:
             missing = required - provided
             extra = provided - required

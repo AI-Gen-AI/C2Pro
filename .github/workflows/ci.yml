@@ -77,12 +77,7 @@ jobs:
 
   # ──────────────────────────── Backend lane ────────────────────────────
 
-  # Required gate (promoted from advisory on 2026-07-15, TASK-DEV-009). `ruff
-  # check .` reports zero violations: the baseline was cleaned to 88 findings,
-  # all UP042 (str+Enum -> StrEnum), which are globally ignored in
-  # apps/api/pyproject.toml pending the semantic migration in TASK-DEV-030. The
-  # UP042 baseline-guard step below fails if new str+Enum classes push the count
-  # above 88.
+  # Required gate (promoted from advisory on 2026-07-15, TASK-DEV-009).
   backend-lint:
     name: Backend Lint (ruff)
     runs-on: ubuntu-latest
@@ -106,24 +101,6 @@ jobs:
       - name: Ruff check
         working-directory: apps/api
         run: python -m ruff check .
-
-      # UP042 is ignored (see pyproject.toml). Count the deferred str+Enum
-      # classes with --select UP042 and fail if the count regresses above the
-      # audited baseline of 88, so new enums are written as StrEnum from the start.
-      - name: UP042 baseline guard (str+Enum, deferred to TASK-DEV-030)
-        working-directory: apps/api
-        run: |
-          set -euo pipefail
-          # --exit-zero: ruff exits non-zero when it finds violations; here that
-          # is the expected state (UP042 is deferred), so we ignore the exit code
-          # and gate on the parsed count instead.
-          COUNT=$(python -m ruff check . --select UP042 --statistics --exit-zero 2>/dev/null | awk '/UP042/{print $1}')
-          COUNT=${COUNT:-0}
-          echo "UP042 (str+Enum classes pending StrEnum migration): ${COUNT} (baseline 88)"
-          if [ "${COUNT}" -gt 88 ]; then
-            echo "::error title=UP042 baseline exceeded::${COUNT} str+Enum classes exceed the audited baseline of 88 (TASK-DEV-030). Write new enums as enum.StrEnum."
-            exit 1
-          fi
 
   # EPIC-MYPY-STRICT Wave 0 (TASK-DEV-031). Runs strict mypy with the FULL backend
   # dependency graph (so types resolve — the old job installed only mypy, which

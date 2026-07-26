@@ -7,11 +7,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 
-class ProjectStatus(str, Enum):
+class ProjectStatus(StrEnum):
     """Possible states of a project in its lifecycle."""
     DRAFT = "draft"
     ACTIVE = "active"
@@ -19,7 +19,7 @@ class ProjectStatus(str, Enum):
     ARCHIVED = "archived"
 
 
-class ProjectType(str, Enum):
+class ProjectType(StrEnum):
     """Types of projects supported by the system."""
     CONSTRUCTION = "construction"
     ENGINEERING = "engineering"

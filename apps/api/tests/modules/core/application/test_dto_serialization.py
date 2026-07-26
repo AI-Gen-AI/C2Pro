@@ -5,7 +5,7 @@ DTO serialization/deserialization tests.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID, uuid4
 
 import pytest
@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, ValidationError
 from src.core.serialization.dto_serializer import DTOSerializer
 
 
-class _Status(str, Enum):
+class _Status(StrEnum):
     OK = "ok"
     FAIL = "fail"
 

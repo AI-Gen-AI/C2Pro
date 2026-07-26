@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -38,7 +38,7 @@ Salida esperada:
 """.strip()
 
 
-class MendelowQuadrant(str, Enum):
+class MendelowQuadrant(StrEnum):
     MANAGE_CLOSELY = "MANAGE_CLOSELY"
     KEEP_SATISFIED = "KEEP_SATISFIED"
     KEEP_INFORMED = "KEEP_INFORMED"
