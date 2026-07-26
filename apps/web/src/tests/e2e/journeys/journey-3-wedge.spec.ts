@@ -7,6 +7,11 @@ import { expect, test, type Page } from "@playwright/test";
 const projectId = "proj-wedge-3";
 const projectName = "Wedge Gate Pilot";
 
+const liveProjectId = "00000000-0000-0000-0000-00000000c303";
+const liveContractId = "00000000-0000-0000-0000-00000000d401";
+// The public HITL API is keyed by the reviewed item's ID, not the review row ID.
+const liveReviewItemId = "00000000-0000-0000-0000-00000000f601";
+
 const documents = [
   {
     id: "doc-contract",
@@ -218,7 +223,35 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled();
 });
 
-test.skip("E2E-W3..W5 @real-backend validates the same wedge against a live backend", async () => {
-  // TODO(TASK-FRT-192): enable in the scheduled real-backend workflow
-  // after the backend fixture can seed a typed triplet, HITL item, and report payload.
+test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => {
+  await page.goto(`/projects/${liveProjectId}/documents`);
+  await expect(page.getByTestId("documents-page")).toBeVisible();
+  await expect(page.getByText("baseline-contract.pdf")).toBeVisible();
+  await expect(page.getByText("validated-budget.xlsx")).toBeVisible();
+  await expect(page.getByText("approved-schedule.xlsx")).toBeVisible();
+
+  await page.getByRole("link", { name: /baseline-contract\.pdf/i }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/projects/${liveProjectId}/evidence\\?documentId=${liveContractId}`),
+  );
+
+  await page.goto(`/projects/${liveProjectId}/review`);
+  await expect(page.getByTestId("review-page")).toBeVisible();
+  await expect(page.getByTestId(`review-item-${liveReviewItemId}`)).toBeVisible();
+
+  const approveResponse = page.waitForResponse((response) =>
+    response.request().method() === "POST" &&
+    response.url().includes(`/api/hitl/queue/${liveReviewItemId}/approve`),
+  );
+  await page.getByTestId(`approve-${liveReviewItemId}`).click();
+  await expect(page.getByRole("dialog", { name: /approve review item/i })).toBeVisible();
+  await page.getByRole("button", { name: /confirm approve/i }).click();
+  await expect((await approveResponse).status()).toBe(200);
+  await expect(page.getByTestId("stat-approved")).toContainText("1");
+
+  await page.goto(`/projects/${liveProjectId}/report`);
+  await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
+  await expect(page.getByText(projectName)).toBeVisible();
+  await expect(page.getByText("HITL decisions")).toBeVisible();
+  await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled();
 });

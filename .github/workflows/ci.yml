@@ -727,15 +727,64 @@ jobs:
       # The selected E2E specs supply deterministic browser-route fixtures, but
       # auth setup and proxy calls must still have a live backend available.
       - name: Setup backend environment
-        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && env.CLERK_SECRET_KEY != '' }}
         uses: ./.github/actions/setup-python-backend
 
       - name: Bootstrap E2E backend infrastructure
-        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && env.CLERK_SECRET_KEY != '' }}
         run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
 
+      - name: Seed FRT-192 full-stack E2E wedge
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && env.CLERK_SECRET_KEY != '' }}
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          import asyncio
+          import os
+
+          import httpx
+
+          from src.core.auth.models import User
+          from src.core.database import close_db, get_raw_session, init_db
+          from tests.e2e_seed.seed_wedge import USER_ID, seed_wedge_e2e
+
+
+          async def main() -> None:
+              async with httpx.AsyncClient(timeout=30.0) as client:
+                  response = await client.get(
+                      "https://api.clerk.com/v1/users",
+                      params={"email_address": "testuser@c2pro.com", "limit": 1},
+                      headers={"Authorization": f"Bearer {os.environ['CLERK_SECRET_KEY']}"},
+                  )
+                  response.raise_for_status()
+                  payload = response.json()
+
+              users = payload.get("data") if isinstance(payload, dict) else payload
+              if not isinstance(users, list) or len(users) != 1:
+                  raise RuntimeError("Expected exactly one Clerk E2E user for testuser@c2pro.com")
+
+              clerk_user_id = users[0].get("id") if isinstance(users[0], dict) else None
+              if not isinstance(clerk_user_id, str) or not clerk_user_id:
+                  raise RuntimeError("Clerk E2E user is missing an ID")
+
+              await init_db()
+              try:
+                  async with get_raw_session() as db:
+                      await seed_wedge_e2e(db)
+                      user = await db.get(User, USER_ID)
+                      if user is None:
+                          raise RuntimeError("FRT-192 seed user was not created")
+                      user.clerk_user_id = clerk_user_id
+                      await db.commit()
+              finally:
+                  await close_db()
+
+
+          asyncio.run(main())
+          PY
+
       - name: Start E2E backend
-        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && env.CLERK_SECRET_KEY != '' }}
         run: |
           (
             cd apps/api
@@ -758,18 +807,17 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
 
-      # QA-338: keep this required lane opt-in until an operator enables the
-      # repository variable after the live run is certified. The selected tests
-      # keep their browser-level deterministic fixtures; the backend above covers
-      # auth/proxy availability without using a real Claude call.
+      # QA-338/FRT-192: keep this required lane opt-in until an operator enables
+      # the repository variable after the live run is certified. The seeded
+      # backend covers auth/proxy availability without using a real Claude call.
       - name: E2E smoke tests
-        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && env.CLERK_SECRET_KEY != '' }}
         working-directory: apps/web
         run: ./node_modules/.bin/playwright test src/tests/e2e/coherence-v1.spec.ts src/tests/e2e/journeys/journey-3-wedge.spec.ts --project=chromium
 
       - name: Skip E2E smoke tests when full-stack harness is unavailable
-        if: ${{ vars.RUN_FULL_E2E != 'true' || env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY == '' || (env.CLERK_SECRET_KEY == '' && env.CLERK_TESTING_TOKEN == '') }}
-        run: echo "::notice::E2E smoke skipped — the coherence-v1/journey-3-wedge specs need a running backend + seed data in CI (QA-338). Clerk auth is fixed; set repo variable RUN_FULL_E2E=true once the full-stack harness exists to make this gate blocking again."
+        if: ${{ vars.RUN_FULL_E2E != 'true' || env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY == '' || env.CLERK_SECRET_KEY == '' }}
+        run: echo "::notice::E2E smoke skipped — the coherence-v1/journey-3-wedge specs need the seeded backend and Clerk secret key in CI (FRT-192). Set repo variable RUN_FULL_E2E=true to make this gate blocking."
 
       - name: Upload Playwright report on failure
         if: failure()
