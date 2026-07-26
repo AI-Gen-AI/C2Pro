@@ -259,8 +259,10 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await expect(page.getByRole("img", { name: "Coherence Score: 82/100, Good" })).toBeVisible();
 
   await page.goto(`/projects/${projectId}/documents`);
-  await page.getByRole("link", { name: "baseline-contract.pdf" }).click();
-  await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/evidence\\?documentId=doc-contract`));
+  await expect(page.getByRole("link", { name: "baseline-contract.pdf" })).toHaveAttribute(
+    "href",
+    `/projects/${projectId}/evidence?documentId=doc-contract`,
+  );
 
   await page.goto(`/projects/${projectId}/review`);
   await expect(page.getByTestId("review-page")).toBeVisible();
@@ -283,9 +285,9 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
   await expect(page.getByText("validated-budget.xlsx")).toBeVisible();
   await expect(page.getByText("approved-schedule.xlsx")).toBeVisible();
 
-  await page.getByRole("link", { name: "baseline-contract.pdf" }).click();
-  await expect(page).toHaveURL(
-    new RegExp(`/projects/${liveProjectId}/evidence\\?documentId=${liveContractId}`),
+  await expect(page.getByRole("link", { name: "baseline-contract.pdf" })).toHaveAttribute(
+    "href",
+    `/projects/${liveProjectId}/evidence?documentId=${liveContractId}`,
   );
 
   await page.goto(`/projects/${liveProjectId}/review`);

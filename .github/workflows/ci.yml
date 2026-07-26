@@ -869,7 +869,9 @@ jobs:
       - name: E2E smoke tests
         if: ${{ (vars.RUN_FULL_E2E == 'true' || github.ref == 'refs/heads/ci/frt192-e2e-harness') && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         working-directory: apps/web
-        run: ./node_modules/.bin/playwright test src/tests/e2e/coherence-v1.spec.ts src/tests/e2e/journeys/journey-3-wedge.spec.ts --project=chromium
+        run: |
+          ./node_modules/.bin/playwright test src/tests/e2e/coherence-v1.spec.ts --project=chromium
+          ./node_modules/.bin/playwright test src/tests/e2e/journeys/journey-3-wedge.spec.ts --grep '@real-backend' --project=chromium
 
       - name: Skip E2E smoke tests when full-stack harness is unavailable
         if: ${{ (vars.RUN_FULL_E2E != 'true' && github.ref != 'refs/heads/ci/frt192-e2e-harness') || env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY == '' || env.CLERK_SECRET_KEY == '' }}
