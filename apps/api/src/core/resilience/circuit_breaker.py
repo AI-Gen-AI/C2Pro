@@ -32,7 +32,7 @@ import asyncio
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any, TypeVar
 
 import structlog
@@ -48,7 +48,7 @@ logger = structlog.get_logger()
 T = TypeVar("T")
 
 
-class CircuitBreakerState(str, Enum):
+class CircuitBreakerState(StrEnum):
     """Circuit breaker states."""
 
     CLOSED = "closed"  # Normal operation

@@ -7,7 +7,7 @@ Refers to Suite ID: TS-INT-EVT-CEL-001.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol
 
 
@@ -28,7 +28,7 @@ class CeleryClient(Protocol):
     def AsyncResult(self, task_id: str) -> CeleryAsyncResult: ...  # noqa: N802
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     """Normalized job statuses."""
 
     PENDING = "pending"
