@@ -12,7 +12,7 @@ from __future__ import annotations
 import statistics
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
@@ -28,7 +28,7 @@ logger = structlog.get_logger()
 # ===========================================
 
 
-class ExperimentStatus(str, Enum):
+class ExperimentStatus(StrEnum):
     """Status of an A/B experiment."""
 
     DRAFT = "draft"

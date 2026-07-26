@@ -13,7 +13,7 @@ import statistics
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import structlog
@@ -35,7 +35,7 @@ def _normalize_timestamp(value: datetime) -> datetime:
 # ===========================================
 
 
-class TimePeriod(str, Enum):
+class TimePeriod(StrEnum):
     """Time periods for analytics aggregation."""
 
     HOUR = "hour"
@@ -44,7 +44,7 @@ class TimePeriod(str, Enum):
     MONTH = "month"
 
 
-class AlertSeverity(str, Enum):
+class AlertSeverity(StrEnum):
     """Alert severity levels."""
 
     INFO = "info"

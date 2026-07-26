@@ -4,6 +4,12 @@ from enum import StrEnum
 
 import pytest
 
+from src.core.ai.ab_experiment import ExperimentStatus
+from src.core.ai.llm_client import LLMErrorType
+from src.core.ai.model_router import AITaskType, ModelTier
+from src.core.ai.tools.metadata import ToolStatus
+from src.core.ai.usage_analytics import AlertSeverity as AnalyticsAlertSeverity
+from src.core.ai.usage_analytics import TimePeriod
 from src.core.approval import ApprovalStatus
 from src.core.auth.models import SubscriptionPlan, UserRole
 from src.core.resilience.circuit_breaker import CircuitBreakerState
@@ -24,6 +30,13 @@ from src.shared_kernel.enums import AlertSeverity, AlertStatus, AlertType, RACIR
         AlertType,
         RACIRole,
         WBSItemType,
+        ExperimentStatus,
+        LLMErrorType,
+        AITaskType,
+        ModelTier,
+        ToolStatus,
+        TimePeriod,
+        AnalyticsAlertSeverity,
     ],
 )
 def test_shared_and_core_enums_are_strenum(enum_type: type[StrEnum]) -> None:

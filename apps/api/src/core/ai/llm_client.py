@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -69,7 +69,7 @@ CIRCUIT_BREAKER_RECOVERY_TIMEOUT = 60.0  # seconds
 # ===========================================
 
 
-class LLMErrorType(str, Enum):
+class LLMErrorType(StrEnum):
     """Tipos de errores del LLM."""
 
     RATE_LIMIT = "rate_limit"  # 429: Too many requests
