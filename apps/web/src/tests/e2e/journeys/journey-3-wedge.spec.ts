@@ -189,8 +189,20 @@ async function installWedgeRoutes(page: Page) {
   );
 }
 
+async function waitForAuthenticatedSession(page: Page) {
+  const projectsResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/projects" &&
+      response.status() === 200,
+  );
+
+  await page.goto("/projects");
+  await projectsResponse;
+}
+
 test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await installWedgeRoutes(page);
+  await waitForAuthenticatedSession(page);
 
   await page.goto(`/projects/${projectId}/documents`);
   await expect(page.getByTestId("documents-page")).toBeVisible();
@@ -224,6 +236,8 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
 });
 
 test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => {
+  await waitForAuthenticatedSession(page);
+
   await page.goto(`/projects/${liveProjectId}/documents`);
   await expect(page.getByTestId("documents-page")).toBeVisible();
   await expect(page.getByText("baseline-contract.pdf")).toBeVisible();
