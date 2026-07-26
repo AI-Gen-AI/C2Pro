@@ -221,19 +221,21 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => window.Clerk?.loaded === true);
 
-  let sessionSubject = await getSessionSubject(page);
-  if (!sessionSubject) {
-    await clerk.signIn({
-      page,
-      signInParams: {
-        strategy: "password",
-        identifier: "testuser@c2pro.com",
-        password: "Testpasword123",
-      },
-    });
-    sessionSubject = await getSessionSubject(page);
+  if (await getSessionSubject(page)) {
+    await page.evaluate(async () => window.Clerk?.signOut());
+    await page.waitForFunction(() => window.Clerk?.session === null);
   }
 
+  await clerk.signIn({
+    page,
+    signInParams: {
+      strategy: "password",
+      identifier: "testuser@c2pro.com",
+      password: "Testpasword123",
+    },
+  });
+
+  const sessionSubject = await getSessionSubject(page);
   expect(sessionSubject).toBe(clerkE2eUserId);
 
   await waitForAuthenticatedSession(page);
