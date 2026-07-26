@@ -202,19 +202,8 @@ async function waitForAuthenticatedSession(page: Page) {
   await projectsResponse;
 }
 
-test.beforeEach(async ({ page }) => {
-  await setupClerkTestingToken({ page });
-  await page.goto("/");
-  await clerk.signIn({
-    page,
-    signInParams: {
-      strategy: "password",
-      identifier: "testuser@c2pro.com",
-      password: "Testpasword123",
-    },
-  });
-
-  const sessionSubject = await page.evaluate(async () => {
+async function getSessionSubject(page: Page): Promise<string | null> {
+  return page.evaluate(async () => {
     const token = await window.Clerk?.session?.getToken();
     if (!token) return null;
 
@@ -222,8 +211,29 @@ test.beforeEach(async ({ page }) => {
     if (!payload) return null;
 
     const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
-    return (JSON.parse(atob(normalizedPayload)) as { sub?: unknown }).sub;
+    const subject = (JSON.parse(atob(normalizedPayload)) as { sub?: unknown }).sub;
+    return typeof subject === "string" ? subject : null;
   });
+}
+
+test.beforeEach(async ({ page }) => {
+  await setupClerkTestingToken({ page });
+  await page.goto("/");
+  await page.waitForFunction(() => window.Clerk?.loaded === true);
+
+  let sessionSubject = await getSessionSubject(page);
+  if (!sessionSubject) {
+    await clerk.signIn({
+      page,
+      signInParams: {
+        strategy: "password",
+        identifier: "testuser@c2pro.com",
+        password: "Testpasword123",
+      },
+    });
+    sessionSubject = await getSessionSubject(page);
+  }
+
   expect(sessionSubject).toBe(clerkE2eUserId);
 
   await waitForAuthenticatedSession(page);
