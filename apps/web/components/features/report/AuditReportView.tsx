@@ -233,8 +233,9 @@ export function AuditReportView({
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                HITL decisions require a project-scoped queue; the current client
-                does not expose one for this report.
+                {payload.reviewDecisionSource === "project_scoped"
+                  ? "No completed HITL decisions are available for this project."
+                  : "HITL decisions require a project-scoped queue; the current client does not expose one for this report."}
               </p>
             )}
           </CardContent>
