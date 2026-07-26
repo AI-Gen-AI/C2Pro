@@ -32,7 +32,9 @@ test("contract-only audit shows AUDIT_INCOMPLETE then full triplet unlocks v1 sc
   });
 
   await page.getByRole("button", { name: /show v0 historical row/i }).click();
-  await expect(page.getByLabel(/legacy flag-based coherence score/i)).toBeVisible();
+  // ADR-009 Phase F canonicalizes score_version: legacy v0/v1 values both
+  // render the same "v1 coherence score" badge until the DB backfill lands.
+  await expect(page.getByLabel(/v1 coherence score/i)).toBeVisible();
   await page.screenshot({
     fullPage: true,
     path: path.join(screenshotDir, "phase9-v0-historical.png"),
@@ -41,7 +43,7 @@ test("contract-only audit shows AUDIT_INCOMPLETE then full triplet unlocks v1 sc
   await page.getByRole("button", { name: /supply schedule and budget/i }).click();
 
   await expect(page.getByText(/coherence score v1 is active/i).first()).toBeVisible();
-  await expect(page.getByLabel(/v1 exponential-decay coherence score/i)).toBeVisible();
+  await expect(page.getByLabel(/v1 coherence score/i)).toBeVisible();
   await expect(page.getByText(/82/)).toBeVisible();
   await expect(
     page.getByText(/supply missing dimensions to unlock full coherence score/i),
