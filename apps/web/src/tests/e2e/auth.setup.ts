@@ -30,7 +30,5 @@ setup("authenticate", async ({ page }) => {
 
   await page.goto("/projects");
   await expect(page.locator('h1:has-text("Projects")')).toBeVisible();
-  // Clerk persists the session token in IndexedDB; cookies alone do not
-  // authenticate the fresh browser contexts created for downstream specs.
-  await page.context().storageState({ path: authFile, indexedDB: true });
+  await page.context().storageState({ path: authFile });
 });

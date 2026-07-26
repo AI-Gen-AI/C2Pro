@@ -2,6 +2,7 @@
  * Test Suite ID: TS-E2E-WEDGE-003
  * Coverage: E2E-W1..W5 Level-1 wedge journey.
  */
+import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 const projectId = "proj-wedge-3";
@@ -11,6 +12,7 @@ const liveProjectId = "00000000-0000-0000-0000-00000000c303";
 const liveContractId = "00000000-0000-0000-0000-00000000d401";
 // The public HITL API is keyed by the reviewed item's ID, not the review row ID.
 const liveReviewItemId = "00000000-0000-0000-0000-00000000f601";
+const clerkE2eUserId = "user_3H0l5NCcPYLnfWokjdm2D8m3iGR";
 
 const documents = [
   {
@@ -199,6 +201,33 @@ async function waitForAuthenticatedSession(page: Page) {
   await page.goto("/projects");
   await projectsResponse;
 }
+
+test.beforeEach(async ({ page }) => {
+  await setupClerkTestingToken({ page });
+  await page.goto("/");
+  await clerk.signIn({
+    page,
+    signInParams: {
+      strategy: "password",
+      identifier: "testuser@c2pro.com",
+      password: "Testpasword123",
+    },
+  });
+
+  const sessionSubject = await page.evaluate(async () => {
+    const token = await window.Clerk?.session?.getToken();
+    if (!token) return null;
+
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+
+    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    return (JSON.parse(atob(normalizedPayload)) as { sub?: unknown }).sub;
+  });
+  expect(sessionSubject).toBe(clerkE2eUserId);
+
+  await waitForAuthenticatedSession(page);
+});
 
 test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await installWedgeRoutes(page);
