@@ -2,6 +2,7 @@
  * Test Suite ID: TS-E2E-WEDGE-003
  * Coverage: E2E-W1..W5 Level-1 wedge journey.
  */
+import { setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 const projectId = "proj-wedge-3";
@@ -42,7 +43,7 @@ const documents = [
 async function installWedgeRoutes(page: Page) {
   let approved = false;
 
-  await page.route(`**/api/projects/${projectId}`, (route) =>
+  await page.route(`**/api/v1/projects/${projectId}`, (route) =>
     route.fulfill({
       json: {
         id: projectId,
@@ -58,7 +59,7 @@ async function installWedgeRoutes(page: Page) {
     }),
   );
 
-  await page.route(`**/api/projects/${projectId}/documents`, async (route) => {
+  await page.route(`**/api/v1/projects/${projectId}/documents`, async (route) => {
     if (route.request().method() === "POST") {
       const form = await route.request().postDataBuffer();
       expect(form?.byteLength ?? 0).toBeGreaterThan(0);
@@ -78,7 +79,7 @@ async function installWedgeRoutes(page: Page) {
     });
   });
 
-  await page.route("**/api/coherence/dashboard/**", (route) =>
+  await page.route("**/api/v1/coherence/dashboard/**", (route) =>
     route.fulfill({
       json: {
         project_id: projectId,
@@ -112,14 +113,14 @@ async function installWedgeRoutes(page: Page) {
     }),
   );
 
-  await page.route("**/api/coherence/evaluate", (route) =>
+  await page.route("**/api/v1/coherence/evaluate", (route) =>
     route.fulfill({
       status: 202,
       json: { project_id: projectId, status: "queued" },
     }),
   );
 
-  await page.route(`**/api/alerts/projects/${projectId}**`, (route) =>
+  await page.route(`**/api/v1/alerts/projects/${projectId}**`, (route) =>
     route.fulfill({
       json: {
         items: [
@@ -137,7 +138,7 @@ async function installWedgeRoutes(page: Page) {
     }),
   );
 
-  await page.route("**/api/hitl/queue**", (route) =>
+  await page.route("**/api/v1/hitl/queue**", (route) =>
     route.fulfill({
       json: {
         items: [
@@ -163,7 +164,7 @@ async function installWedgeRoutes(page: Page) {
     }),
   );
 
-  await page.route("**/api/hitl/queue/review-wedge-1/approve", (route) => {
+  await page.route("**/api/v1/hitl/queue/review-wedge-1/approve", (route) => {
     approved = true;
     return route.fulfill({
       json: {
@@ -179,7 +180,7 @@ async function installWedgeRoutes(page: Page) {
     });
   });
 
-  await page.route("**/api/documents/doc-contract/**", (route) =>
+  await page.route("**/api/v1/documents/doc-contract/**", (route) =>
     route.fulfill({
       json: {
         items: [],
@@ -199,6 +200,10 @@ async function waitForAuthenticatedSession(page: Page) {
   await page.goto("/projects");
   await projectsResponse;
 }
+
+test.beforeEach(async ({ page }) => {
+  await setupClerkTestingToken({ page });
+});
 
 test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await installWedgeRoutes(page);
@@ -255,7 +260,7 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
 
   const approveResponse = page.waitForResponse((response) =>
     response.request().method() === "POST" &&
-    response.url().includes(`/api/hitl/queue/${liveReviewItemId}/approve`),
+    response.url().includes(`/api/v1/hitl/queue/${liveReviewItemId}/approve`),
   );
   await page.getByTestId(`approve-${liveReviewItemId}`).click();
   await expect(page.getByRole("dialog", { name: /approve review item/i })).toBeVisible();
