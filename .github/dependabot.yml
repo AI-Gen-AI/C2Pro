@@ -21,6 +21,10 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    # AI-pipeline pin; bump only via reviewed compat check.
+    ignore:
+      - dependency-name: "langchain-anthropic"
+        versions: [">=1.5.0"]
     groups:
       python-minor-patch:
         patterns:
