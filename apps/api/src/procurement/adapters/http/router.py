@@ -454,10 +454,15 @@ async def update_budget_item(
 async def delete_budget_item(
     item_id: UUID,
     tenant_id: CurrentTenantId,
+    is_baseline_change: bool = False,
     use_case: DeleteBudgetItemUseCase = Depends(get_delete_budget_item_use_case),
 ) -> None:
     """Delete a budget item."""
-    deleted = await use_case.execute(item_id, tenant_id)
+    deleted = await use_case.execute(
+        item_id,
+        tenant_id,
+        is_baseline_change=is_baseline_change,
+    )
     if not deleted:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
