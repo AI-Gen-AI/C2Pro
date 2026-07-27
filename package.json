@@ -51,6 +51,7 @@
       "handlebars": "4.7.9",
       "js-cookie": "3.0.7",
       "minimatch": "10.2.4",
+      "pdfjs-dist": "5.4.296",
       "picomatch": "4.0.4",
       "postcss": "8.5.18",
       "rollup": "4.60.0",
