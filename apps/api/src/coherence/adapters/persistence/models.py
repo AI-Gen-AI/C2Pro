@@ -114,7 +114,12 @@ class ClauseEmbeddingORM(Base):
 
     __tablename__ = "clause_embeddings"
 
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+        server_default=func.gen_random_uuid(),
+    )
     tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
     clause_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     project_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
@@ -127,7 +132,9 @@ class ClauseEmbeddingORM(Base):
     category: Mapped[str] = mapped_column(
         String(50), nullable=False, server_default="SCOPE", index=True
     )
-    embedding_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    embedding_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, nullable=False, server_default="{}"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

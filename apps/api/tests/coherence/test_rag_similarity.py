@@ -9,6 +9,7 @@ Tests the embedding-based similarity detection for cross-document analysis:
 4. Zero-LLM cost verification
 
 Location: apps/api/tests/coherence/test_rag_similarity.py
+Test Suite ID: TS-COH-RAG-SIM-001.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ from src.coherence.ports.embedding_repository import (
     EmbeddingSearchResult,
     IEmbeddingRepository,
 )
+from src.core.tenants.types import TenantId
 
 # =============================================================================
 # FIXTURES
@@ -163,9 +165,10 @@ def test_embedding_search_result_top_match(sample_project_id: UUID):
 
 @pytest.mark.asyncio
 async def test_pgvector_store_embedding_validates_dimension(sample_project_id: UUID):
-    """Test that store_embedding validates embedding dimension."""
+    """TS-COH-RAG-SIM-001: store_embedding validates embedding dimension."""
     mock_session = AsyncMock()
-    repo = PgvectorEmbeddingRepository(mock_session)
+    repo = PgvectorEmbeddingRepository(mock_session, tenant_id=TenantId(uuid4()))
+    repo._verify_project_tenant = AsyncMock(return_value=True)
 
     # Invalid dimension should raise ValueError
     with pytest.raises(ValueError, match="Invalid embedding dimension"):
@@ -180,13 +183,14 @@ async def test_pgvector_store_embedding_validates_dimension(sample_project_id: U
 async def test_pgvector_store_embedding_truncates_text(
     sample_project_id: UUID, sample_embedding: list[float]
 ):
-    """Test that store_embedding truncates long text."""
+    """TS-COH-RAG-SIM-001: store_embedding truncates long text."""
     mock_session = AsyncMock()
     mock_result = MagicMock()
     mock_result.fetchone.return_value = (datetime.now(UTC),)
     mock_session.execute.return_value = mock_result
 
-    repo = PgvectorEmbeddingRepository(mock_session)
+    repo = PgvectorEmbeddingRepository(mock_session, tenant_id=TenantId(uuid4()))
+    repo._verify_project_tenant = AsyncMock(return_value=True)
 
     long_text = "A" * 2000  # 2000 chars
     record = await repo.store_embedding(
@@ -204,9 +208,10 @@ async def test_pgvector_store_embedding_truncates_text(
 async def test_pgvector_store_embeddings_batch_validates_all(
     sample_project_id: UUID, sample_embedding: list[float]
 ):
-    """Test that batch store validates all embeddings."""
+    """TS-COH-RAG-SIM-001: batch store validates all embeddings."""
     mock_session = AsyncMock()
-    repo = PgvectorEmbeddingRepository(mock_session)
+    repo = PgvectorEmbeddingRepository(mock_session, tenant_id=TenantId(uuid4()))
+    repo._verify_project_tenant = AsyncMock(return_value=True)
 
     records = [
         EmbeddingRecord(
