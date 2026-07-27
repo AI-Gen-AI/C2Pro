@@ -8,10 +8,12 @@ This adapter provides zero-LLM-cost similarity detection for cross-document
 coherence analysis.
 
 Location: apps/api/src/coherence/adapters/persistence/pgvector_embedding_repository.py
+Test Suite ID: TS-INT-DB-COH-EMBED-TENANT-001.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from typing import Any, Literal, cast
@@ -128,7 +130,10 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
             ValueError: If embedding dimension is invalid
             PermissionError: If project does not belong to current tenant
         """
-        if self.tenant_id is not None and not await self._verify_project_tenant(project_id):
+        if self.tenant_id is None:
+            raise ValueError("Embedding writes require a tenant context")
+
+        if not await self._verify_project_tenant(project_id):
             raise PermissionError("Cannot store embedding for project outside tenant")
 
         if len(embedding) != 1536:
@@ -144,13 +149,14 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
 
         # Prepare metadata
         meta = metadata or {}
+        metadata_json = json.dumps(meta)
 
         # Upsert using INSERT ... ON CONFLICT DO UPDATE
         sql_text(
             """INSERT INTO clause_embeddings
-            (clause_id, project_id, document_id, document_type, text, embedding, category, metadata)
-            VALUES (:clause_id, :project_id, :document_id, :document_type, :text,
-                    :embedding::vector, :category, :metadata::jsonb)
+            (tenant_id, clause_id, project_id, document_id, document_type, text, embedding, category, metadata)
+            VALUES (CAST(:tenant_id AS uuid), :clause_id, :project_id, :document_id, :document_type, :text,
+                    CAST(:embedding AS vector), :category, CAST(:metadata AS jsonb))
             ON CONFLICT (clause_id, project_id)
             DO UPDATE SET
                 document_id = EXCLUDED.document_id,
@@ -166,9 +172,9 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         result = await self.session.execute(
             sql_text(
                 """INSERT INTO clause_embeddings
-                (clause_id, project_id, document_id, document_type, text, embedding, category, metadata)
-                VALUES (:clause_id, :project_id, :document_id, :document_type, :text,
-                        :embedding::vector, :category, :metadata::jsonb)
+                (tenant_id, clause_id, project_id, document_id, document_type, text, embedding, category, metadata)
+                VALUES (CAST(:tenant_id AS uuid), :clause_id, :project_id, :document_id, :document_type, :text,
+                        CAST(:embedding AS vector), :category, CAST(:metadata AS jsonb))
                 ON CONFLICT (clause_id, project_id)
                 DO UPDATE SET
                     document_id = EXCLUDED.document_id,
@@ -181,6 +187,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
                 RETURNING created_at"""
             ),
             {
+                "tenant_id": str(self.tenant_id),
                 "clause_id": clause_id,
                 "project_id": str(project_id),
                 "document_id": str(document_id) if document_id else None,
@@ -188,7 +195,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
                 "text": truncated_text,
                 "embedding": embedding_str,
                 "category": category,
-                "metadata": meta,
+                "metadata": metadata_json,
             },
         )
 
@@ -234,12 +241,14 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         if not records:
             return 0
 
-        if self.tenant_id is not None:
-            for rec in records:
-                if not await self._verify_project_tenant(rec.project_id):
-                    raise PermissionError(
-                        f"Cannot store embedding for project {rec.project_id} outside tenant"
-                    )
+        if self.tenant_id is None:
+            raise ValueError("Embedding writes require a tenant context")
+
+        for rec in records:
+            if not await self._verify_project_tenant(rec.project_id):
+                raise PermissionError(
+                    f"Cannot store embedding for project {rec.project_id} outside tenant"
+                )
 
         # Validate dimensions
         for rec in records:
@@ -257,6 +266,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
 
             values.append(
                 {
+                    "tenant_id": str(self.tenant_id),
                     "clause_id": rec.clause_id,
                     "project_id": str(rec.project_id),
                     "document_id": str(rec.document_id) if rec.document_id else None,
@@ -264,7 +274,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
                     "text": truncated_text,
                     "embedding": embedding_str,
                     "category": rec.category,
-                    "metadata": rec.metadata,
+                    "metadata": json.dumps(rec.metadata),
                 }
             )
 
@@ -272,9 +282,9 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         # (we could also use DO UPDATE for full upsert)
         stmt = sql_text(
             """INSERT INTO clause_embeddings
-            (clause_id, project_id, document_id, document_type, text, embedding, category, metadata)
-            VALUES (:clause_id, :project_id, :document_id, :document_type, :text,
-                    :embedding::vector, :category, :metadata::jsonb)
+            (tenant_id, clause_id, project_id, document_id, document_type, text, embedding, category, metadata)
+            VALUES (CAST(:tenant_id AS uuid), :clause_id, :project_id, :document_id, :document_type, :text,
+                    CAST(:embedding AS vector), :category, CAST(:metadata AS jsonb))
             ON CONFLICT (clause_id, project_id) DO NOTHING"""
         )
 
