@@ -1,6 +1,7 @@
 # Qualitative Rules for Coherence Engine (CE-24)
 # These rules use LLM for evaluation instead of deterministic code.
 # The detection_logic field contains natural language instructions for the LLM.
+# Prompts are authored in English (LLM native language) per the project principle.
 
 # ===========================================
 # SCOPE RULES
@@ -8,52 +9,52 @@
 
 - id: R-SCOPE-CLARITY-01
   name: "Scope Clarity Check"
-  description: "El alcance del trabajo debe estar claramente definido sin términos ambiguos"
+  description: "The scope of work must be clearly defined without ambiguous terms"
   evaluator_type: llm
   category: scope
   severity: high
   detection_logic: |
-    PRIMERO determina si esta cláusula es del tipo SCOPE y contiene una obligación/contenido sustantivo evaluable.
-    Si es un ENCABEZADO, TÍTULO, fila de tabla, partida presupuestaria, lista de apéndices, o NO impone obligación relevante a esta categoría → responde rule_violated=false con impact 0.
-    SÓLO si es aplicable, evalúa la regla.
+    FIRST determine whether this clause is of type SCOPE and contains a substantive, evaluable obligation/content.
+    If it is a HEADING, TITLE, table row, budget line item, appendix list, or does NOT impose an obligation relevant to this category → respond with rule_violated=false and impact 0.
+    ONLY if it is applicable, evaluate the rule.
 
-    Verifica que el alcance del trabajo NO contenga:
+    Verify that the scope of work does NOT contain:
 
-    1. TÉRMINOS VAGOS como:
-       - "según sea necesario"
-       - "cuando corresponda"
-       - "razonable" / "razonablemente"
-       - "apropiado" / "apropiadamente"
-       - "oportuno" / "oportunamente"
-       - "suficiente" / "suficientemente"
-       - "adecuado" / "adecuadamente"
-       - "aproximadamente"
+    1. VAGUE TERMS such as:
+       - "as necessary"
+       - "where applicable"
+       - "reasonable" / "reasonably"
+       - "appropriate" / "appropriately"
+       - "timely" / "in a timely manner"
+       - "sufficient" / "sufficiently"
+       - "adequate" / "adequately"
+       - "approximately"
 
-    2. FRASES ABIERTAS como:
-       - "y otros trabajos relacionados"
-       - "incluyendo pero no limitado a"
-       - "entre otros"
-       - "y similares"
+    2. OPEN-ENDED PHRASES such as:
+       - "and other related work"
+       - "including but not limited to"
+       - "among others"
+       - "and the like"
        - "etc."
 
-    3. REFERENCIAS INDEFINIDAS como:
-       - "según las necesidades del proyecto"
-       - "a satisfacción del cliente"
-       - "de acuerdo a los estándares aplicables" (sin especificar cuáles)
-       - "conforme a las buenas prácticas" (sin definir)
+    3. UNDEFINED REFERENCES such as:
+       - "according to the project's needs"
+       - "to the client's satisfaction"
+       - "in accordance with applicable standards" (without specifying which)
+       - "in line with good practices" (without defining them)
 
-    4. CANTIDADES NO ESPECIFICADAS:
-       - "suficiente cantidad"
-       - "las necesarias"
-       - "según requerimiento"
+    4. UNSPECIFIED QUANTITIES:
+       - "sufficient quantity"
+       - "as needed"
+       - "as required"
 
-    Si encuentra CUALQUIERA de estos elementos, la regla está VIOLADA.
+    If ANY of these elements is found, the rule is VIOLATED.
 
-    La severidad depende de:
-    - critical: Si afecta el alcance principal del contrato
-    - high: Si afecta entregables importantes
-    - medium: Si afecta aspectos secundarios
-    - low: Si es en contexto de flexibilidad aceptable
+    Severity depends on:
+    - critical: If it affects the contract's main scope
+    - high: If it affects important deliverables
+    - medium: If it affects secondary aspects
+    - low: If it is in a context of acceptable flexibility
   inputs: []
   evidence_fields: ["clause.text"]
 
@@ -63,37 +64,37 @@
 
 - id: R-PAYMENT-CLARITY-01
   name: "Payment Terms Clarity"
-  description: "Las condiciones de pago deben especificar montos, plazos y condiciones exactas"
+  description: "Payment terms must specify exact amounts, deadlines, and conditions"
   evaluator_type: llm
   category: financial
   severity: high
   detection_logic: |
-    PRIMERO determina si esta cláusula es del tipo BUDGET y contiene una obligación/contenido sustantivo evaluable.
-    Si es un ENCABEZADO, TÍTULO, fila de tabla, partida presupuestaria, lista de apéndices, o NO impone obligación relevante a esta categoría → responde rule_violated=false con impact 0.
-    SÓLO si es aplicable, evalúa la regla.
+    FIRST determine whether this clause is of type BUDGET and contains a substantive, evaluable obligation/content.
+    If it is a HEADING, TITLE, table row, budget line item, appendix list, or does NOT impose an obligation relevant to this category → respond with rule_violated=false and impact 0.
+    ONLY if it is applicable, evaluate the rule.
 
-    Verifica que las condiciones de pago especifiquen CLARAMENTE:
+    Verify that the payment terms CLEARLY specify:
 
-    1. MONTOS:
-       - Valores exactos en números (no solo palabras)
-       - O porcentajes específicos (30%, 50%, etc.)
-       - Moneda claramente indicada (USD, MXN, EUR)
+    1. AMOUNTS:
+       - Exact values in figures (not words only)
+       - Or specific percentages (30%, 50%, etc.)
+       - Currency clearly indicated (USD, MXN, EUR)
 
-    2. PLAZOS:
-       - Días calendario específicos (15 días, 30 días)
-       - NO usar "oportuno", "razonable", "a la brevedad"
-       - Fecha de inicio del plazo claramente definida
+    2. DEADLINES:
+       - Specific calendar days (15 days, 30 days)
+       - Do NOT use "timely", "reasonable", "as soon as possible"
+       - Clearly defined start date for the deadline
 
-    3. CONDICIONES:
-       - Qué debe cumplirse para facturar (entregable, hito, aprobación)
-       - Documentación requerida (factura, reporte, certificado)
-       - Proceso de aprobación si aplica
+    3. CONDITIONS:
+       - What must be met in order to invoice (deliverable, milestone, approval)
+       - Required documentation (invoice, report, certificate)
+       - Approval process if applicable
 
-    4. FORMA DE PAGO:
-       - Método especificado (transferencia, cheque, etc.)
-       - Datos bancarios o referencia a dónde encontrarlos
+    4. PAYMENT METHOD:
+       - Specified method (wire transfer, check, etc.)
+       - Bank details or a reference to where to find them
 
-    Si FALTA alguno de estos elementos o usa términos vagos, la regla está VIOLADA.
+    If any of these elements is MISSING or vague terms are used, the rule is VIOLATED.
   inputs: []
   evidence_fields: ["clause.text"]
 
@@ -103,89 +104,89 @@
 
 - id: R-RESPONSIBILITY-01
   name: "Responsibility Assignment"
-  description: "Las responsabilidades deben asignarse claramente a una parte específica"
+  description: "Responsibilities must be clearly assigned to a specific party"
   evaluator_type: llm
   category: legal
   severity: medium
   detection_logic: |
-    PRIMERO determina si esta cláusula es del tipo LEGAL y contiene una obligación/contenido sustantivo evaluable.
-    Si es un ENCABEZADO, TÍTULO, fila de tabla, partida presupuestaria, lista de apéndices, o NO impone obligación relevante a esta categoría → responde rule_violated=false con impact 0.
-    SÓLO si es aplicable, evalúa la regla.
+    FIRST determine whether this clause is of type LEGAL and contains a substantive, evaluable obligation/content.
+    If it is a HEADING, TITLE, table row, budget line item, appendix list, or does NOT impose an obligation relevant to this category → respond with rule_violated=false and impact 0.
+    ONLY if it is applicable, evaluate the rule.
 
-    Verifica que las responsabilidades:
+    Verify that responsibilities:
 
-    1. SE ASIGNEN A UNA PARTE ESPECÍFICA:
-       - "El Contratista deberá..."
-       - "El Cliente proporcionará..."
-       - NO usar "las partes" para obligaciones específicas
-       - NO usar voz pasiva sin sujeto ("se realizará", "será entregado")
+    1. ARE ASSIGNED TO A SPECIFIC PARTY:
+       - "The Contractor shall..."
+       - "The Client shall provide..."
+       - Do NOT use "the parties" for specific obligations
+       - Do NOT use passive voice without a subject ("shall be performed", "shall be delivered")
 
-    2. TENGAN VERBOS CLAROS DE ACCIÓN:
-       - "deberá", "realizará", "proporcionará", "entregará"
-       - NO usar "podrá", "podría", "debería" para obligaciones
+    2. HAVE CLEAR ACTION VERBS:
+       - "shall", "will perform", "will provide", "will deliver"
+       - Do NOT use "may", "might", "should" for obligations
 
-    3. NO CONTENGAN RESPONSABILIDADES COMPARTIDAS AMBIGUAS:
-       - "ambas partes colaborarán" sin especificar cómo
-       - "conjuntamente" sin roles definidos
+    3. DO NOT CONTAIN AMBIGUOUS SHARED RESPONSIBILITIES:
+       - "both parties shall collaborate" without specifying how
+       - "jointly" without defined roles
 
-    4. ESPECIFIQUEN EL ALCANCE DE LA RESPONSABILIDAD:
-       - Qué incluye y qué no incluye
-       - Límites claros
+    4. SPECIFY THE SCOPE OF THE RESPONSIBILITY:
+       - What is included and what is not
+       - Clear limits
 
-    GUARDIA DE NO VIOLACIÓN:
-    - Si aparece una parte nombrada (por ejemplo, Contratista, Cliente, Propietario,
-      Ingeniero, Comprador, Vendedor, Suministrador) junto con un verbo obligatorio
-      ("deberá", "será responsable", "garantizará", "proporcionará", "entregará",
-      "shall", "must", "is responsible"), NO es violación aunque el alcance sea
-      amplio o la cláusula haga referencia a otras cláusulas o contratos.
-    - Las cláusulas estándar de incumplimiento cruzado (cross-default), de garantía de
-      desempeño ("dará un rendimiento satisfactorio") y de asignación de riesgo/coste
-      NO son violaciones por sí mismas.
-    - La amplitud de alcance o las referencias cruzadas, por sí solas, son a lo sumo
-      severidad "low" — NUNCA "high".
+    NON-VIOLATION GUARD:
+    - If a named party appears (for example, Contractor, Client, Owner,
+      Engineer, Buyer, Seller, Supplier) together with a mandatory verb
+      ("shall", "will be responsible", "will guarantee", "will provide",
+      "will deliver", "must", "is responsible"), it is NOT a violation even
+      if the scope is broad or the clause references other clauses or contracts.
+    - Standard cross-default clauses, performance-guarantee clauses
+      ("shall give satisfactory performance"), and risk/cost-allocation clauses
+      are NOT violations in themselves.
+    - Broad scope or cross-references, on their own, are at most
+      "low" severity — NEVER "high".
 
-    Sólo si NINGUNA parte específica es identificable como responsable, la regla está VIOLADA.
+    Only if NO specific party is identifiable as responsible, the rule is VIOLATED.
   inputs: []
   evidence_fields: ["clause.text"]
 
 - id: R-TERMINATION-01
   name: "Termination Conditions"
-  description: "Las condiciones de terminación deben ser específicas y balanceadas"
+  description: "Termination conditions must be specific and balanced"
   evaluator_type: llm
   category: legal
   severity: high
   detection_logic: |
-    PRIMERO determina si esta cláusula es del tipo LEGAL y contiene una obligación/contenido sustantivo evaluable.
-    Si es un ENCABEZADO, TÍTULO, fila de tabla, partida presupuestaria, lista de apéndices, o NO impone obligación relevante a esta categoría → responde rule_violated=false con impact 0.
-    SÓLO si es aplicable, evalúa la regla.
+    FIRST determine whether this clause is of type LEGAL and contains a substantive, evaluable obligation/content.
+    If it is a HEADING, TITLE, table row, budget line item, appendix list, or does NOT impose an obligation relevant to this category → respond with rule_violated=false and impact 0.
+    ONLY if it is applicable, evaluate the rule.
 
-    Verifica que las condiciones de terminación:
+    Verify that the termination conditions:
 
-    1. ESPECIFIQUEN CAUSALES CLARAS:
-       - NO solo "por incumplimiento" sin definir qué constituye incumplimiento
-       - Listar causales específicas (falta de pago, retraso > X días, etc.)
-       - Distinguir entre terminación con causa y sin causa
+    1. SPECIFY CLEAR GROUNDS:
+       - NOT only "for breach" without defining what constitutes a breach
+       - List specific grounds (non-payment, delay > X days, etc.)
+       - Distinguish between termination for cause and without cause
 
-    2. INCLUYAN PERÍODO DE NOTIFICACIÓN:
-       - Días específicos de anticipación (30 días, 60 días)
-       - NO usar "con anticipación razonable"
-       - Formato de notificación (escrita, certificada, etc.)
+    2. INCLUDE A NOTICE PERIOD:
+       - Specific number of days in advance (30 days, 60 days)
+       - Do NOT use "with reasonable notice"
+       - Notice format (written, certified, etc.)
 
-    3. DESCRIBAN CONSECUENCIAS:
-       - Qué pasa con trabajos en progreso
-       - Cómo se liquidan pagos pendientes
-       - Devolución de materiales/información
+    3. DESCRIBE CONSEQUENCES:
+       - What happens to work in progress
+       - How pending payments are settled
+       - Return of materials/information
 
-    4. SEAN BALANCEADAS:
-       - Ambas partes deben poder terminar en condiciones similares
-       - NO permitir terminación solo a una parte sin justa causa
+    4. BE BALANCED:
+       - Both parties must be able to terminate under similar conditions
+       - Do NOT allow termination by only one party without just cause
 
-    5. INCLUYAN PROCEDIMIENTO:
-       - Pasos a seguir para terminar
-       - Período de cura para incumplimientos subsanables
+    5. INCLUDE A PROCEDURE:
+       - Steps to follow to terminate
+       - Cure period for remediable breaches
 
-    Si las condiciones son VAGAS, DESBALANCEADAS o INCOMPLETAS,
-    la regla está VIOLADA.
+    If the conditions are VAGUE, UNBALANCED, or INCOMPLETE,
+    the rule is VIOLATED.
   inputs: []
   evidence_fields: ["clause.text"]
 
@@ -195,41 +196,41 @@
 
 - id: R-QUALITY-STANDARDS-01
   name: "Quality Standards Definition"
-  description: "Los estándares de calidad deben referenciarse específicamente"
+  description: "Quality standards must be referenced specifically"
   evaluator_type: llm
   category: quality
   severity: medium
   detection_logic: |
-    PRIMERO determina si esta cláusula es del tipo QUALITY y contiene una obligación/contenido sustantivo evaluable.
-    Si es un ENCABEZADO, TÍTULO, fila de tabla, partida presupuestaria, lista de apéndices, o NO impone obligación relevante a esta categoría → responde rule_violated=false con impact 0.
-    SÓLO si es aplicable, evalúa la regla.
+    FIRST determine whether this clause is of type QUALITY and contains a substantive, evaluable obligation/content.
+    If it is a HEADING, TITLE, table row, budget line item, appendix list, or does NOT impose an obligation relevant to this category → respond with rule_violated=false and impact 0.
+    ONLY if it is applicable, evaluate the rule.
 
-    Verifica que los estándares de calidad:
+    Verify that the quality standards:
 
-    1. REFERENCIEN NORMAS ESPECÍFICAS:
-       - ISO con número completo (ISO 9001:2015, ISO 14001)
-       - ASTM con designación (ASTM A36, ASTM D6400)
-       - NOM/NMX con número (NOM-001-SEDE-2012)
-       - Otras normas aplicables con referencia completa
+    1. REFERENCE SPECIFIC STANDARDS:
+       - ISO with full number (ISO 9001:2015, ISO 14001)
+       - ASTM with designation (ASTM A36, ASTM D6400)
+       - NOM/NMX with number (NOM-001-SEDE-2012)
+       - Other applicable standards with a full reference
 
-    2. NO USEN SOLO REFERENCIAS GENÉRICAS:
-       - "buenas prácticas de la industria" sin especificar cuáles
-       - "estándares internacionales" sin nombrarlos
-       - "normas aplicables" sin listarlas
-       - "calidad aceptable" sin criterios
+    2. DO NOT USE ONLY GENERIC REFERENCES:
+       - "good industry practices" without specifying which
+       - "international standards" without naming them
+       - "applicable standards" without listing them
+       - "acceptable quality" without criteria
 
-    3. INCLUYAN CRITERIOS DE ACEPTACIÓN:
-       - Tolerancias numéricas donde aplique
-       - Parámetros medibles
-       - Método de verificación
+    3. INCLUDE ACCEPTANCE CRITERIA:
+       - Numerical tolerances where applicable
+       - Measurable parameters
+       - Verification method
 
-    4. ESPECIFIQUEN PROCEDIMIENTOS DE INSPECCIÓN:
-       - Quién inspecciona
-       - Frecuencia de inspección
-       - Documentación requerida
+    4. SPECIFY INSPECTION PROCEDURES:
+       - Who inspects
+       - Inspection frequency
+       - Required documentation
 
-    Si los estándares son VAGOS o NO REFERENCIADOS específicamente,
-    la regla está VIOLADA.
+    If the standards are VAGUE or NOT specifically REFERENCED,
+    the rule is VIOLATED.
   inputs: []
   evidence_fields: ["clause.text"]
 
@@ -239,31 +240,31 @@
 
 - id: R-TECHNICAL-SPEC-CLARITY-01
   name: "Technical Specification Clarity"
-  description: "Las especificaciones técnicas deben identificar normas, materiales y criterios verificables"
+  description: "Technical specifications must identify standards, materials, and verifiable criteria"
   evaluator_type: llm
   category: technical
   severity: high
   detection_logic: |
-    PRIMERO determina si esta cláusula es del tipo TECHNICAL y contiene una obligación/contenido sustantivo evaluable.
-    Si es un ENCABEZADO, TÍTULO, fila de tabla, partida presupuestaria, lista de apéndices, o NO impone obligación relevante a esta categoría → responde rule_violated=false con impact 0.
-    SÓLO si es aplicable, evalúa la regla.
+    FIRST determine whether this clause is of type TECHNICAL and contains a substantive, evaluable obligation/content.
+    If it is a HEADING, TITLE, table row, budget line item, appendix list, or does NOT impose an obligation relevant to this category → respond with rule_violated=false and impact 0.
+    ONLY if it is applicable, evaluate the rule.
 
-    Verifica que las especificaciones técnicas:
+    Verify that the technical specifications:
 
-    1. IDENTIFIQUEN MATERIALES O SISTEMAS CONCRETOS:
-       - Tipo, grado, modelo o familia técnica aplicable
-       - NO usar solo "material adecuado" o "equipo apropiado"
+    1. IDENTIFY CONCRETE MATERIALS OR SYSTEMS:
+       - Applicable type, grade, model, or technical family
+       - Do NOT use only "suitable material" or "appropriate equipment"
 
-    2. REFERENCIEN NORMAS O DOCUMENTOS TÉCNICOS:
-       - ISO, EN, ASTM, UNE, DIN u otra norma aplicable
-       - Planos, fichas técnicas o memorias con código identificable
+    2. REFERENCE STANDARDS OR TECHNICAL DOCUMENTS:
+       - ISO, EN, ASTM, UNE, DIN, or another applicable standard
+       - Drawings, datasheets, or technical reports with an identifiable code
 
-    3. INCLUYAN CRITERIOS DE VERIFICACIÓN:
-       - Ensayo, inspección, certificado o tolerancia medible
-       - Responsable de aceptación técnica
+    3. INCLUDE VERIFICATION CRITERIA:
+       - Test, inspection, certificate, or measurable tolerance
+       - Party responsible for technical acceptance
 
-    Si la especificación es genérica o no permite verificar cumplimiento,
-    la regla está VIOLADA.
+    If the specification is generic or does not allow verifying compliance,
+    the rule is VIOLATED.
   inputs: []
   evidence_fields: ["clause.text"]
 
@@ -273,40 +274,40 @@
 
 - id: R-SCHEDULE-CLARITY-01
   name: "Schedule Terms Clarity"
-  description: "Los plazos y cronogramas deben estar claramente definidos"
+  description: "Deadlines and schedules must be clearly defined"
   evaluator_type: llm
   category: schedule
   severity: high
   detection_logic: |
-    PRIMERO determina si esta cláusula es del tipo TIME y contiene una obligación/contenido sustantivo evaluable.
-    Si es un ENCABEZADO, TÍTULO, fila de tabla, partida presupuestaria, lista de apéndices, o NO impone obligación relevante a esta categoría → responde rule_violated=false con impact 0.
-    SÓLO si es aplicable, evalúa la regla.
+    FIRST determine whether this clause is of type TIME and contains a substantive, evaluable obligation/content.
+    If it is a HEADING, TITLE, table row, budget line item, appendix list, or does NOT impose an obligation relevant to this category → respond with rule_violated=false and impact 0.
+    ONLY if it is applicable, evaluate the rule.
 
-    Verifica que los términos de cronograma:
+    Verify that the schedule terms:
 
-    1. ESPECIFIQUEN FECHAS O DURACIONES CONCRETAS:
-       - Fechas específicas (15 de enero de 2026)
-       - O duraciones en días/semanas/meses calendario
-       - NO usar "a la brevedad", "lo antes posible", "oportunamente"
+    1. SPECIFY CONCRETE DATES OR DURATIONS:
+       - Specific dates (January 15, 2026)
+       - Or durations in calendar days/weeks/months
+       - Do NOT use "as soon as possible", "at the earliest", "in a timely manner"
 
-    2. DEFINAN CLARAMENTE LOS HITOS:
-       - Nombre del hito
-       - Criterio de cumplimiento
-       - Fecha o plazo
+    2. CLEARLY DEFINE MILESTONES:
+       - Milestone name
+       - Completion criterion
+       - Date or deadline
 
-    3. ESTABLEZCAN PUNTO DE INICIO:
-       - Cuándo empieza a contar el plazo
-       - Evento disparador claro (firma, anticipo, notificación)
+    3. ESTABLISH A STARTING POINT:
+       - When the deadline starts counting
+       - Clear triggering event (signature, advance payment, notification)
 
-    4. INDIQUEN CONSECUENCIAS DE RETRASO:
-       - Penalizaciones si aplican (monto específico)
-       - Procedimiento para extensiones
-       - Causales de fuerza mayor
+    4. INDICATE CONSEQUENCES OF DELAY:
+       - Penalties if applicable (specific amount)
+       - Procedure for extensions
+       - Force majeure grounds
 
-    5. MANEJEN DEPENDENCIAS:
-       - Si un plazo depende de otro, especificar la relación
-       - Responsabilidad por retrasos causados por la otra parte
+    5. HANDLE DEPENDENCIES:
+       - If one deadline depends on another, specify the relationship
+       - Responsibility for delays caused by the other party
 
-    Si los plazos son AMBIGUOS o INCOMPLETOS, la regla está VIOLADA.
+    If the deadlines are AMBIGUOUS or INCOMPLETE, the rule is VIOLATED.
   inputs: []
   evidence_fields: ["clause.text"]
