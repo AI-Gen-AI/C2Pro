@@ -5,7 +5,7 @@ in evaluating LangGraph multi-agent workflows across 6 coherence dimensions:
 Legal, Quality, Scope, Schedule, Cost, and Technical.
 """
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -45,7 +45,7 @@ def _check_depth(obj: Any, current_depth: int = 0) -> int:
         return current_depth
 
 
-class CoherenceDimension(str, Enum):
+class CoherenceDimension(StrEnum):
     """The 6 coherence dimensions for EPC contract analysis."""
 
     Legal = "Legal"
@@ -56,7 +56,7 @@ class CoherenceDimension(str, Enum):
     Technical = "Technical"
 
 
-class DifficultyLevel(str, Enum):
+class DifficultyLevel(StrEnum):
     """Difficulty levels for golden dataset cases."""
 
     Trivial = "Trivial"

@@ -7,7 +7,7 @@ Refers to Test Suite IDs: TS-E2E-SEC-TNT-001, TS-AUTH-CORE-001.
 
 import re
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -38,7 +38,7 @@ def _utcnow_naive() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-class SubscriptionPlan(str, Enum):
+class SubscriptionPlan(StrEnum):
     """Planes de suscripción disponibles."""
 
     FREE = "free"
@@ -47,7 +47,7 @@ class SubscriptionPlan(str, Enum):
     ENTERPRISE = "enterprise"
 
 
-class UserRole(str, Enum):
+class UserRole(StrEnum):
     """Roles de usuario."""
 
     ADMIN = "admin"  # Administrador del tenant

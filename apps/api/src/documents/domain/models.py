@@ -8,14 +8,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from src.core.json_types import JsonDict
 
 
 # Canonical status for a document's lifecycle.
-class DocumentStatus(str, Enum):
+class DocumentStatus(StrEnum):
     """Represents the status of a document during its lifecycle."""
     UPLOADED = "uploaded"
     QUEUED = "queued"
@@ -25,7 +25,7 @@ class DocumentStatus(str, Enum):
     ANALYZED = "analyzed"  # TASK-BCK-022: Analysis orchestration completed
     ERROR = "error"
 
-class DocumentType(str, Enum):
+class DocumentType(StrEnum):
     """Supported document types."""
     CONTRACT = "contract"
     SCHEDULE = "schedule"
@@ -35,7 +35,7 @@ class DocumentType(str, Enum):
     TECHNICAL_SPEC = "technical_spec"
     OTHER = "other"
 
-class ClauseType(str, Enum):
+class ClauseType(StrEnum):
     """Types of contractual clauses."""
     PENALTY = "penalty"
     MILESTONE = "milestone"

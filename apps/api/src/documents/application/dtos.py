@@ -9,7 +9,7 @@ of the API, making the system more modular and easier to test.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -88,7 +88,7 @@ class RagAnswer:
     sources: list[RetrievedChunk] = field(default_factory=list)
 
 
-class DocumentPollingStatus(str, Enum):
+class DocumentPollingStatus(StrEnum):
     """Polling status exposed to clients."""
     QUEUED = "queued"
     PROCESSING = "processing"

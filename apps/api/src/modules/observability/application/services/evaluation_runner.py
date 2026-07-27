@@ -12,7 +12,7 @@ Test Suite IDs: TS-I12-EVAL-RUN-001, TS-I12-EVAL-RUN-002, TS-I12-EVAL-RUN-003
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol
 from uuid import UUID, uuid4
@@ -21,7 +21,7 @@ from src.modules.observability.domain.entities import EvalMetricResult
 from src.modules.observability.ports.langsmith_gateway import ILangSmithGateway
 
 
-class ServiceType(str, Enum):
+class ServiceType(StrEnum):
     """Supported service types for evaluation."""
     COHERENCE = "coherence_engine_v2"
     EXTRACTION = "document_extraction_i3"

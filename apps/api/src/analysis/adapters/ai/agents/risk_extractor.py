@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -17,13 +17,13 @@ from .base_agent import BaseAgent
 from .risk_prompts import RISK_SYSTEM_PROMPT
 
 
-class RiskProbability(str, Enum):
+class RiskProbability(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
 
 
-class RiskImpact(str, Enum):
+class RiskImpact(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"

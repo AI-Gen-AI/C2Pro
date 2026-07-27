@@ -5,13 +5,13 @@ Part of TASK-BCK-025: Add real notification delivery beyond log-only.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator, model_validator
 
 
-class NotificationChannel(str, Enum):
+class NotificationChannel(StrEnum):
     """Valid notification channel types."""
 
     EMAIL = "email"

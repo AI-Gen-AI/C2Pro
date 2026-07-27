@@ -4,14 +4,14 @@ Test Suite ID: TS-I11-HITL-DOM-001
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 
-class ReviewStatus(str, Enum):
+class ReviewStatus(StrEnum):
     DRAFT = "DRAFT"
     PENDING_REVIEW_REQUIRED = "PENDING_REVIEW_REQUIRED"
     PENDING_REVIEW_CONDITIONAL = "PENDING_REVIEW_CONDITIONAL"
@@ -21,7 +21,7 @@ class ReviewStatus(str, Enum):
     CLOSED = "CLOSED"
 
 
-class ImpactLevel(str, Enum):
+class ImpactLevel(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"

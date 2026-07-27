@@ -7,17 +7,17 @@ Refers to Suite ID: TS-UD-PROC-LTM-002.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class Party(str, Enum):
+class Party(StrEnum):
     """Party responsible for a logistics leg."""
 
     SELLER = "seller"
     BUYER = "buyer"
 
 
-class Incoterm(str, Enum):
+class Incoterm(StrEnum):
     """Supported incoterms."""
 
     EXW = "EXW"

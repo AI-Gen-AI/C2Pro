@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 from uuid import UUID, uuid4
 
@@ -25,7 +25,7 @@ class PartyResolutionResult:
     warning_message: str | None = None
 
 
-class PowerLevel(str, Enum):
+class PowerLevel(StrEnum):
     """Level of power of the stakeholder."""
 
     LOW = "low"
@@ -33,7 +33,7 @@ class PowerLevel(str, Enum):
     HIGH = "high"
 
 
-class InterestLevel(str, Enum):
+class InterestLevel(StrEnum):
     """Level of interest of the stakeholder."""
 
     LOW = "low"
@@ -41,7 +41,7 @@ class InterestLevel(str, Enum):
     HIGH = "high"
 
 
-class StakeholderQuadrant(str, Enum):
+class StakeholderQuadrant(StrEnum):
     """Power/interest quadrant (Mendelow Matrix)."""
 
     KEY_PLAYER = "key_player"  # high/high

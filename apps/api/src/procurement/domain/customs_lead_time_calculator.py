@@ -7,10 +7,10 @@ Refers to Suite ID: TS-UD-PROC-LTM-003.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 
-class Incoterm(str, Enum):
+class Incoterm(StrEnum):
     """Supported incoterms for customs responsibility."""
 
     EXW = "EXW"
@@ -19,7 +19,7 @@ class Incoterm(str, Enum):
     DDP = "DDP"
 
 
-class TransportMode(str, Enum):
+class TransportMode(StrEnum):
     """Transport mode impacting customs time."""
 
     ROAD = "road"

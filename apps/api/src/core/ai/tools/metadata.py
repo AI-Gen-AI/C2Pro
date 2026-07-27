@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Generic, TypeVar
 from uuid import uuid4
 
@@ -20,7 +20,7 @@ from src.core.ai.model_router import AITaskType, ModelTier
 T = TypeVar("T")
 
 
-class ToolStatus(str, Enum):
+class ToolStatus(StrEnum):
     """Tool execution status."""
 
     SUCCESS = "success"

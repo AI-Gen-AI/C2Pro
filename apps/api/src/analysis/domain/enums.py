@@ -2,7 +2,7 @@
 Domain enums for Analysis module.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 from src.shared_kernel.enums import (
     AlertSeverity as AlertSeverity,
@@ -23,7 +23,7 @@ __all__ = [
 ]
 
 
-class AnalysisType(str, Enum):
+class AnalysisType(StrEnum):
     COHERENCE = "coherence"
     RISK = "risk"
     COST = "cost"
@@ -31,7 +31,7 @@ class AnalysisType(str, Enum):
     QUALITY = "quality"
 
 
-class AnalysisStatus(str, Enum):
+class AnalysisStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"

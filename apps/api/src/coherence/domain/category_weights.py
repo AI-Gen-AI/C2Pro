@@ -6,10 +6,10 @@ Refers to Suite ID: TS-UD-COH-CAT-001.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class CoherenceCategory(str, Enum):
+class CoherenceCategory(StrEnum):
     """Canonical coherence categories used by score calculators."""
 
     SCOPE = "SCOPE"
@@ -37,7 +37,9 @@ def get_default_category_weights() -> dict[CoherenceCategory, float]:
 
 def validate_category_weights(weights: dict[CoherenceCategory, float]) -> None:
     """Validates full category coverage and normalized weight sum."""
-    missing = set(CoherenceCategory) - set(weights.keys())
+    required = {CoherenceCategory(category) for category in CoherenceCategory}
+    provided = {CoherenceCategory(category) for category in weights}
+    missing = required - provided
     if missing:
         missing_values = ", ".join(sorted(category.value for category in missing))
         raise ValueError(f"Missing category weights: {missing_values}")

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 from uuid import UUID
 
@@ -23,7 +23,7 @@ from src.documents.domain.models import DocumentType
 # ---------------------------------------------------------------------------
 
 
-class Dimension(str, Enum):
+class Dimension(StrEnum):
     """Canonical six-dimension taxonomy for EPC contract analysis.
 
     Matches CoherenceCategory semantically but is decoupled to preserve
@@ -38,7 +38,7 @@ class Dimension(str, Enum):
     QUALITY = "QUALITY"
 
 
-class LocatorQuality(str, Enum):
+class LocatorQuality(StrEnum):
     """Quality of the text anchor localization within the source document.
 
     ADR-011 §4.2: Not all extractors return exact spans. EXACT requires
@@ -51,7 +51,7 @@ class LocatorQuality(str, Enum):
     MISSING = "missing"
 
 
-class VerificationStatus(str, Enum):
+class VerificationStatus(StrEnum):
     """Post-CVC verification state for an evidence claim.
 
     ADR-011 §5.4: Only four states. UNCERTAIN covers both intermediate

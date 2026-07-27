@@ -5,24 +5,24 @@ Canonical definitions — each owning module re-exports for backward
 compatibility.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class AlertSeverity(str, Enum):
+class AlertSeverity(StrEnum):
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
 
 
-class AlertStatus(str, Enum):
+class AlertStatus(StrEnum):
     OPEN = "open"
     ACKNOWLEDGED = "acknowledged"
     RESOLVED = "resolved"
     DISMISSED = "dismissed"
 
 
-class AlertType(str, Enum):
+class AlertType(StrEnum):
     """Alert type discriminator (TASK-BCK-026)."""
     RISK = "risk"
     COHERENCE = "coherence"
@@ -31,14 +31,14 @@ class AlertType(str, Enum):
     AUDIT_INCOMPLETE = "audit_incomplete"
 
 
-class RACIRole(str, Enum):
+class RACIRole(StrEnum):
     RESPONSIBLE = "R"
     ACCOUNTABLE = "A"
     CONSULTED = "C"
     INFORMED = "I"
 
 
-class WBSItemType(str, Enum):
+class WBSItemType(StrEnum):
     DELIVERABLE = "deliverable"
     WORK_PACKAGE = "work_package"
     ACTIVITY = "activity"

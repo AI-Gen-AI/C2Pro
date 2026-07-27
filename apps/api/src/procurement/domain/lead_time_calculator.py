@@ -8,17 +8,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from enum import Enum
+from enum import StrEnum
 
 
-class LeadTimeSeverity(str, Enum):
+class LeadTimeSeverity(StrEnum):
     """Alert severity levels for lead time risk."""
 
     CRITICAL = "critical"
     WARNING = "warning"
 
 
-class LeadTimeStatus(str, Enum):
+class LeadTimeStatus(StrEnum):
     """Lead time alert statuses."""
 
     DATE_PASSED = "date_passed"

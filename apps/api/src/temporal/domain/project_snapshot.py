@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class SnapshotTrigger(str, Enum):
+class SnapshotTrigger(StrEnum):
     REVISION_INGESTED = "revision_ingested"
     GRAPH_COMPLETED = "graph_completed"
     HITL_CORRECTION = "hitl_correction"

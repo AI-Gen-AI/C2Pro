@@ -93,7 +93,7 @@ async def test_healthy_path_emits_ok_node_result_with_nodes_and_edges(monkeypatc
 
 @pytest.mark.asyncio
 async def test_missing_project_or_tenant_skips_without_degrading() -> None:
-    """No project/tenant → empty graph, no FAILED NodeResult."""
+    """No project/tenant → empty graph and an explicit SKIPPED NodeResult."""
     from src.analysis.adapters.graph import nodes_extended
 
     result = await nodes_extended.knowledge_graph_builder_node(
@@ -102,7 +102,10 @@ async def test_missing_project_or_tenant_skips_without_degrading() -> None:
 
     assert result["knowledge_graph_nodes"] == []
     assert result["knowledge_graph_edges"] == []
-    assert result["node_results"] == []
+    node_result = result["node_results"][-1]
+    assert node_result.node == "knowledge_graph"
+    assert node_result.status is NodeStatus.SKIPPED
+    assert node_result.degradation_reason == "missing_project_or_tenant_id"
 
 
 @pytest.mark.asyncio

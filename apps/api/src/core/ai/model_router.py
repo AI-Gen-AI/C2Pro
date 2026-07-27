@@ -15,7 +15,7 @@ Modelos disponibles:
 Version: 1.0.0
 """
 
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +33,7 @@ logger = structlog.get_logger()
 # ===========================================
 
 
-class AITaskType(str, Enum):
+class AITaskType(StrEnum):
     """
     Tipos de tareas de IA para routing de modelos (ROADMAP §3.2).
 
@@ -91,7 +91,7 @@ class AITaskType(str, Enum):
 TaskType = AITaskType
 
 
-class ModelTier(str, Enum):
+class ModelTier(StrEnum):
     """Tiers de modelos Claude."""
 
     FLASH = "flash"  # Haiku - Rápido, económico

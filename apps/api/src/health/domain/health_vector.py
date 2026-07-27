@@ -8,7 +8,7 @@ score/band, while confidence remains a separate evidence-quality axis.
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -18,7 +18,7 @@ from src.evidence.domain.runtime_trust import EvidenceRef
 _FROZEN_CONTRACT = ConfigDict(extra="forbid", frozen=True)
 
 
-class HealthDimension(str, Enum):
+class HealthDimension(StrEnum):
     CONTRACT = "contract"
     RISK = "risk"
     DOCUMENTATION = "documentation"
@@ -28,7 +28,7 @@ class HealthDimension(str, Enum):
     DELIVERABLES = "deliverables"
 
 
-class HealthBand(str, Enum):
+class HealthBand(StrEnum):
     HEALTHY = "healthy"
     WATCH = "watch"
     AT_RISK = "at_risk"
@@ -36,14 +36,14 @@ class HealthBand(str, Enum):
     UNKNOWN = "unknown"
 
 
-class HealthTrend(str, Enum):
+class HealthTrend(StrEnum):
     UP = "up"
     DOWN = "down"
     FLAT = "flat"
     UNKNOWN = "unknown"
 
 
-class HealthNullReason(str, Enum):
+class HealthNullReason(StrEnum):
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
     NOT_APPLICABLE = "not_applicable"
     BUDGET_EXHAUSTED = "budget_exhausted"

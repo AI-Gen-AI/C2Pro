@@ -4,10 +4,10 @@ C2Pro - WBS Domain Enums
 Work Breakdown Structure enumerations for node types and statuses.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class WBSNodeType(str, Enum):
+class WBSNodeType(StrEnum):
     """WBS Node Type classification."""
 
     DELIVERABLE = "deliverable"
@@ -19,7 +19,7 @@ class WBSNodeType(str, Enum):
         return self.value
 
 
-class WBSNodeStatus(str, Enum):
+class WBSNodeStatus(StrEnum):
     """WBS Node execution status."""
 
     NOT_STARTED = "not_started"

@@ -9,14 +9,14 @@ Refers to Suite ID: TS-UA-COH-V2-DTO-001.
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-class CategoryStatus(str, Enum):
+class CategoryStatus(StrEnum):
     PENDING_DOCUMENTS = "pending_documents"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
     SCORED = "scored"
