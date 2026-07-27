@@ -73,6 +73,74 @@ async def test_store_embedding_rejects_missing_tenant_context() -> None:
 
 
 @pytest.mark.asyncio
+async def test_store_embeddings_batch_rejects_missing_tenant_context() -> None:
+    """TS-INT-DB-COH-EMBED-TENANT-001: batch writes never fabricate a tenant ID."""
+    session = AsyncMock()
+    repository = PgvectorEmbeddingRepository(session, tenant_id=None)
+
+    with pytest.raises(ValueError, match="tenant context"):
+        await repository.store_embeddings_batch(
+            [
+                EmbeddingRecord(
+                    clause_id="missing-tenant-batch",
+                    project_id=uuid4(),
+                    document_type="contract",
+                    text="Tenant context is mandatory",
+                    embedding=[0.1] * 1536,
+                    category="SCOPE",
+                )
+            ]
+        )
+
+    session.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_store_embedding_rejects_project_outside_repository_tenant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TS-INT-DB-COH-EMBED-TENANT-001: single writes honor project tenancy."""
+    session = AsyncMock()
+    repository = PgvectorEmbeddingRepository(session, tenant_id=TenantId(uuid4()))
+    monkeypatch.setattr(repository, "_verify_project_tenant", AsyncMock(return_value=False))
+
+    with pytest.raises(PermissionError, match="outside tenant"):
+        await repository.store_embedding(
+            clause_id="foreign-project",
+            project_id=uuid4(),
+            embedding=[0.1] * 1536,
+        )
+
+    session.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_store_embeddings_batch_rejects_project_outside_repository_tenant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TS-INT-DB-COH-EMBED-TENANT-001: batch writes honor project tenancy."""
+    session = AsyncMock()
+    repository = PgvectorEmbeddingRepository(session, tenant_id=TenantId(uuid4()))
+    monkeypatch.setattr(repository, "_verify_project_tenant", AsyncMock(return_value=False))
+
+    with pytest.raises(PermissionError, match="outside tenant"):
+        await repository.store_embeddings_batch(
+            [
+                EmbeddingRecord(
+                    clause_id="foreign-project-batch",
+                    project_id=uuid4(),
+                    document_type="contract",
+                    text="Foreign project",
+                    embedding=[0.1] * 1536,
+                    category="SCOPE",
+                )
+            ]
+        )
+
+    session.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_store_embedding_persists_and_filters_by_repository_tenant(
     db: AsyncSession,
 ) -> None:
