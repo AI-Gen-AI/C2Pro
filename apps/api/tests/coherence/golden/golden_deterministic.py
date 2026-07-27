@@ -364,7 +364,9 @@ GOLD_EDGE_EMPTY_PROJECT = {
     "name": "GOLD-EDGE-001",
     "description": "Empty project with no clauses",
     "clauses": [],
-    "expected_score_range": (95.0, 100.0),  # No issues = perfect score
+    # Zero clauses → zero assessed categories → active_weight = 0 < 0.35
+    # → honest null, not a fabricated "no issues = 95+".
+    "expected_score_range": (95.0, 100.0),  # unused when score is None
     "expected_alert_count": 0,
 }
 
@@ -414,6 +416,36 @@ GOLD_EDGE_MALFORMED_DATES = {
 
 
 # =============================================================================
+# HONEST-NULL: UNASSESSED SCOPE (V3-P1-HEALTH-13)
+# =============================================================================
+
+GOLD_UNASSESSED_SCOPE = {
+    "name": "GOLD-NULL-SCOPE-001",
+    "description": (
+        "Single-category fixture (BUDGET only) — SCOPE is unassessed. "
+        "active_weight = 0.20 < MIN_ACTIVE_WEIGHT(0.35), so the scorer "
+        "must return an honest null, never a fabricated score."
+    ),
+    "clauses": [
+        Clause(
+            id="BUD-001",
+            text="Project budget: $500,000",
+            data={
+                "planned": 500000,
+                "current": 500000,
+                "currency": "USD",
+            },
+        ),
+    ],
+    # No SCOPE clause at all — the SCOPE dimension is genuinely unassessed.
+    # With only BUDGET assessed (weight 0.20), active_weight = 0.20 < 0.35,
+    # triggering the insufficient_active_weight guard → score must be None.
+    "expected_score_range": (None, None),  # honest-null expected
+    "expected_alert_count": 0,
+}
+
+
+# =============================================================================
 # GOLDEN TEST SUITE
 # =============================================================================
 
@@ -430,6 +462,9 @@ GOLDEN_TEST_CASES = [
     GOLD_SEVERE_BUDGET_COLLAPSE,
     GOLD_SEVERE_SCHEDULE_CRISIS,
     GOLD_SEVERE_MULTI_CATEGORY,
+
+    # Honest-null: unassessed SCOPE
+    GOLD_UNASSESSED_SCOPE,
 
     # Edge cases
     GOLD_EDGE_EMPTY_PROJECT,
