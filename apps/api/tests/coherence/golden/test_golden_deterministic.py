@@ -130,6 +130,57 @@ def test_golden_perfect_project_scores_100():
     assert result.llm_cost_usd == pytest.approx(0.0)
 
 
+def test_golden_unassessed_scope_produces_honest_null():
+    """
+    GOLD-NULL-SCOPE-001 (V3-P1-HEALTH-13): When SCOPE is unassessed and
+    active_weight < MIN_ACTIVE_WEIGHT (0.35), the scorer returns an honest
+    null — not a fabricated 0, not an inflated 100, and not the 90.0
+    inherent-risk baseline.
+
+    The fixture has only a BUDGET clause (weight 0.20). SCOPE (weight 0.20)
+    is genuinely absent. Total active_weight = 0.20 < 0.35, triggering
+    insufficient_active_weight → score = None.
+
+    Success Criteria:
+    - overall_score is None (honest null)
+    - score_reason is 'insufficient_active_weight'
+    - AUDIT_INCOMPLETE meta-alert present
+    - SCOPE shows as unassessed in category_breakdown
+    - Zero cost
+    """
+    from .golden_deterministic import GOLD_UNASSESSED_SCOPE
+
+    config = EvaluationConfig(low_budget_mode=True, include_rag_similarity=False)
+    result = evaluate_coherence(
+        clauses=GOLD_UNASSESSED_SCOPE["clauses"],
+        project_id="golden-null-scope-001",
+        config=config,
+    )
+
+    _assert_honest_null_score(result)
+
+    # Verify SCOPE specifically is in the missing dimensions
+    assert "SCOPE" in (result.score_missing_dimensions or []), (
+        f"SCOPE should be in missing_dimensions, got {result.score_missing_dimensions}"
+    )
+
+    # Verify category_breakdown shows SCOPE as unassessed
+    if hasattr(result, "category_breakdown"):
+        scope_breakdown = [
+            cb for cb in result.category_breakdown
+            if cb.category.lower() == "scope"
+        ]
+        assert len(scope_breakdown) == 1, "SCOPE should appear in category_breakdown"
+        assert scope_breakdown[0].state == "unassessed", (
+            f"SCOPE state should be 'unassessed', got {scope_breakdown[0].state}"
+        )
+        assert scope_breakdown[0].score is None, (
+            f"SCOPE score should be None, got {scope_breakdown[0].score}"
+        )
+
+    assert result.llm_cost_usd == pytest.approx(0.0)
+
+
 def test_golden_moderate_scores_50_to_80():
     """
     GOLD-MODERATE-*: Moderate issues should score 50-80 when enough
