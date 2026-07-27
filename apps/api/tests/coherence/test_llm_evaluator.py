@@ -240,10 +240,9 @@ class TestLlmRuleEvaluatorEvaluate:
             rule_id="R-RESPONSIBILITY-01",
             rule_name="Responsibility Assignment",
             rule_description=(
-                "Las responsabilidades deben asignarse claramente a una parte "
-                "específica"
+                "Responsibilities must be clearly assigned to a specific party"
             ),
-            detection_logic="Sólo si NINGUNA parte específica es identificable.",
+            detection_logic="Only if NO specific party is identifiable.",
             default_severity="medium",
             category="legal",
             llm_port=fake_port,
@@ -294,10 +293,9 @@ class TestLlmRuleEvaluatorEvaluate:
             rule_id="R-RESPONSIBILITY-01",
             rule_name="Responsibility Assignment",
             rule_description=(
-                "Las responsabilidades deben asignarse claramente a una parte "
-                "específica"
+                "Responsibilities must be clearly assigned to a specific party"
             ),
-            detection_logic="Una parte nombrada con verbo obligatorio NO es violación.",
+            detection_logic="A named party with a mandatory verb is NOT a violation.",
             default_severity="medium",
             category="legal",
             llm_port=fake_port,
@@ -600,9 +598,9 @@ class TestQualitativeRules:
             if rule["id"] not in active_rule_ids:
                 continue
             logic = rule["detection_logic"].lower()
-            assert "primero determina" in logic
-            assert "encabezado" in logic
-            assert "título" in logic or "titulo" in logic
+            assert "first determine" in logic
+            assert "heading" in logic
+            assert "title" in logic
             assert "rule_violated=false" in logic
 
     def test_responsibility_rule_does_not_flag_named_party_obligations(self):
@@ -625,7 +623,7 @@ class TestQualitativeRules:
 
         logic = responsibility_rule["detection_logic"].lower()
 
-        assert "no es violación" in logic
-        assert "parte nombrada" in logic
-        assert "incumplimiento cruzado" in logic
-        assert 'severidad "low"' in logic
+        assert "not a violation" in logic
+        assert "named party" in logic
+        assert "cross-default" in logic
+        assert '"low" severity' in logic

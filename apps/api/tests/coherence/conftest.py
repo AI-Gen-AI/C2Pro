@@ -406,8 +406,8 @@ def llm_evaluator_scope_clarity(mock_llm_rule_port):
     return LlmRuleEvaluator(
         rule_id="R-SCOPE-CLARITY-01",
         rule_name="Scope Clarity Check",
-        rule_description="El alcance del trabajo debe estar claramente definido",
-        detection_logic="Verifica que el alcance no contenga términos ambiguos",
+        rule_description="The scope of work must be clearly defined",
+        detection_logic="Verify that the scope does not contain ambiguous terms",
         default_severity="high",
         category="scope",
         low_budget_mode=True,
