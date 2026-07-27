@@ -73,5 +73,5 @@ class ProjectState(TypedDict):
 
     # ── N16: Final Assembler ──
     final_report: dict[str, Any]
-    node_results: Annotated[list[NodeResult], merge_node_results]
+    node_results: Annotated[list[NodeResult[object]], merge_node_results]
     documentation_health_signal: DocumentationHealthSignal | None

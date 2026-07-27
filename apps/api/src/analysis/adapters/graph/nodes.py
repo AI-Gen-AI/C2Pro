@@ -234,9 +234,21 @@ def _map_risk_severity(item: dict[str, Any]) -> AlertSeverity:
 async def router_node(state: ProjectState) -> ProjectState:
     """N3 — Delegates doc-type classification to ClassifyDocumentUseCase."""
     if state.get("doc_type") in DOC_TYPES:
+        state["node_results"] = [
+            *state.get("node_results", []),
+            _ok_node_result("router", {"doc_type": state["doc_type"]}),
+        ]
         return state
     if not _has_extractable_text(state.get("document_text")):
         state["doc_type"] = "insufficient_extractable_text"
+        state["node_results"] = [
+            *state.get("node_results", []),
+            NodeResult(
+                node="router",
+                status=NodeStatus.SKIPPED,
+                degradation_reason="insufficient_extractable_text",
+            ),
+        ]
         state["messages"].append(AIMessage(content=_insufficient_extractable_text_message()))
         return state
     use_case = ClassifyDocumentUseCase(ai=get_ai_service(state.get("tenant_id")))
@@ -244,6 +256,10 @@ async def router_node(state: ProjectState) -> ProjectState:
         ClassifyDocumentCommand(text=state["document_text"])
     )
     state["doc_type"] = doc_type
+    state["node_results"] = [
+        *state.get("node_results", []),
+        _ok_node_result("router", {"doc_type": doc_type}),
+    ]
     state["messages"].append(AIMessage(content=f"Router doc_type={doc_type}"))
     return state
 

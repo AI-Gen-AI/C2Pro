@@ -116,6 +116,7 @@ class TestRouterNodeThinDelegation:
         result = await nodes.router_node(_make_state(document_text=" \n\t "))
 
         assert result["doc_type"] == "insufficient_extractable_text"
+        assert result["node_results"][-1].status is NodeStatus.SKIPPED
         assert any(
             "No extractable text" in message.content
             and "OCR required" in message.content
@@ -135,6 +136,7 @@ class TestRouterNodeThinDelegation:
         msg_count_before = len(state["messages"])
         result = await nodes.router_node(state)
         assert result["doc_type"] == "contract"
+        assert result["node_results"][-1].status is NodeStatus.OK
         # Parity with original: short-circuit adds no new message.
         assert len(result["messages"]) == msg_count_before
 

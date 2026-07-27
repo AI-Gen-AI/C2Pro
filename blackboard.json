@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-07-17T07:07:54Z",
+  "updated_at": "2026-07-27T05:32:44Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -3364,6 +3364,40 @@
         "mensaje": "BOM persistence is source-document scoped and idempotent; budget extraction performs one set-level replacement per parsed budget document.",
         "tests_pasados": true,
         "validacion_lint": true
+      }
+    },
+    {
+      "tarea_id": "T145",
+      "backlog_id": "TASK-V3-013-01/TASK-V3-013-02",
+      "tipo": "backend",
+      "descripcion": "Freeze the ADR-013 payload boundary and generic NodeResult/ErrorRecord envelope for the N1-N17 analysis graph.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Canonical payload models publish an explicit version and immutable persisted artifact; NodeResult[T] captures material node outputs without swallowing failures; required CI passes.",
+      "archivos_modificados": [
+        "apps/api/src/analysis/domain/contracts.py",
+        "apps/api/src/analysis/domain/node_result.py",
+        "apps/api/src/analysis/adapters/graph/nodes.py",
+        "apps/api/src/analysis/adapters/graph/nodes_extended.py",
+        "apps/api/tests/unit/analysis/contracts/",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-07-27T05:32:44Z",
+        "completado": "2026-07-27T05:32:44Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "V3-013-01/02 completed on feat/v3-013-payload-contract; PR #392 passed all required Linux CI gates.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "Focused contracts/graph/AI-adapter suite: 151 passed.",
+          "Honesty/contract suite: 18 passed.",
+          "PR #392: mypy ratchet, lint, unit, core, modules, coherence, integration, security, OpenAPI drift, coverage, and CI Status passed."
+        ]
       }
     },
     {

@@ -30,7 +30,9 @@ class RiskImpact(str, Enum):
     CRITICAL = "CRITICAL"
 
 
-class RiskItem(BaseModel):
+class RiskExtractionCandidate(BaseModel):
+    """Adapter-local LLM response normalized to the canonical RiskItem at N4."""
+
     title: str | None = Field(None, description="Brief risk title")
     summary: str | None = Field(None, description="Short risk summary")
     description: str | None = None
@@ -51,7 +53,7 @@ class RiskExtractorAgent(BaseAgent):
     Extracts contractual and project risks from narrative contract sections.
     """
 
-    async def extract(self, text_chunk: str) -> list[RiskItem]:
+    async def extract(self, text_chunk: str) -> list[RiskExtractionCandidate]:
         if not text_chunk or not text_chunk.strip():
             return []
 
@@ -59,7 +61,7 @@ class RiskExtractorAgent(BaseAgent):
         payload = await self._run_with_retry(RISK_SYSTEM_PROMPT, filtered_text)
         items = _extract_items(payload)
 
-        risks: list[RiskItem] = []
+        risks: list[RiskExtractionCandidate] = []
         for item in items:
             risk = _coerce_risk(item)
             if risk:
@@ -83,7 +85,7 @@ def _extract_items(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
-def _coerce_risk(item: dict[str, Any]) -> RiskItem | None:
+def _coerce_risk(item: dict[str, Any]) -> RiskExtractionCandidate | None:
     title = _clean_text(item.get("title"))
     summary = _clean_text(item.get("summary"))
     description = _clean_text(item.get("description"))
@@ -100,7 +102,7 @@ def _coerce_risk(item: dict[str, Any]) -> RiskItem | None:
     if category is None or probability is None or impact is None:
         return None
 
-    return RiskItem(
+    return RiskExtractionCandidate(
         title=title,
         category=category,
         summary=summary,
@@ -113,11 +115,11 @@ def _coerce_risk(item: dict[str, Any]) -> RiskItem | None:
     )
 
 
-def _is_immediate_alert(risk: RiskItem) -> bool:
+def _is_immediate_alert(risk: RiskExtractionCandidate) -> bool:
     return risk.impact == RiskImpact.CRITICAL and risk.probability == RiskProbability.HIGH
 
 
-def _risk_score(risk: RiskItem) -> int:
+def _risk_score(risk: RiskExtractionCandidate) -> int:
     impact_score = {
         RiskImpact.LOW: 1,
         RiskImpact.MEDIUM: 2,

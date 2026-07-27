@@ -80,7 +80,7 @@ def _budget_contract_payload(item: BudgetItem | dict[str, Any]) -> dict[str, Any
 def _node_update_with_health(
     update: ProjectState | dict[str, Any],
     *,
-    existing_results: list[NodeResult] | None,
+    existing_results: list[NodeResult[object]] | None,
 ) -> ProjectState | dict[str, Any]:
     node_results = [*list(existing_results or []), *list(update.get("node_results") or [])]
     update["documentation_health_signal"] = build_documentation_health_signal(node_results)
@@ -92,7 +92,7 @@ async def _maybe_await(value: object) -> None:
         await value
 
 
-def _failed_node_result(node: str, exc: Exception) -> NodeResult:
+def _failed_node_result(node: str, exc: Exception) -> NodeResult[object]:
     tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
     return NodeResult(
         node=node,
@@ -106,11 +106,15 @@ def _failed_node_result(node: str, exc: Exception) -> NodeResult:
     )
 
 
-def _ok_node_result(node: str, data: object, confidence: float | None = None) -> NodeResult:
+def _ok_node_result(
+    node: str,
+    data: object,
+    confidence: float | None = None,
+) -> NodeResult[object]:
     return NodeResult(node=node, status=NodeStatus.OK, data=data, confidence=confidence)
 
 
-async def _persist_node_error(state: ProjectState, result: NodeResult) -> None:
+async def _persist_node_error(state: ProjectState, result: NodeResult[object]) -> None:
     """TS-ADR-013-GRAPH-001 - Persist failed material-node errors to evidence events."""
     if result.error is None:
         return
@@ -213,6 +217,10 @@ async def document_ingestion_node(state: ProjectState) -> ProjectState:
 
     state["document_parsed"] = True
     state["document_category"] = category
+    state["node_results"] = [
+        *state.get("node_results", []),
+        _ok_node_result("document_ingestion", {"document_category": category}),
+    ]
     state["messages"].append(
         AIMessage(content=f"N1 document_ingestion: category={category}")
     )
@@ -253,6 +261,10 @@ async def pii_anonymizer_node(state: ProjectState) -> ProjectState:
 
     state["anonymized_text"] = anonymized
     state["pii_redactions"] = redactions
+    state["node_results"] = [
+        *state.get("node_results", []),
+        _ok_node_result("pii_anonymizer", {"pii_redaction_count": len(redactions)}),
+    ]
     state["messages"].append(
         AIMessage(content=f"N2 pii_anonymizer: {len(redactions)} PII items redacted")
     )
@@ -270,7 +282,7 @@ async def stakeholder_extractor_node(state: ProjectState) -> dict[str, Any]:
     text = state.get("anonymized_text") or state["document_text"]
 
     if not tenant_id:
-        node_result = NodeResult(
+        node_result: NodeResult[object] = NodeResult(
             node="stakeholder_extractor",
             status=NodeStatus.SKIPPED,
             degradation_reason="missing_tenant_id",
@@ -328,7 +340,7 @@ async def raci_generator_node(state: ProjectState) -> dict[str, Any]:
     wbs_items = state.get("extracted_wbs", [])
 
     if not stakeholders or not wbs_items:
-        node_result = NodeResult(
+        node_result: NodeResult[object] = NodeResult(
             node="raci_generator",
             status=NodeStatus.SKIPPED,
             degradation_reason="missing_stakeholders_or_wbs",
@@ -382,7 +394,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
     project_id = state.get("project_id")
 
     if not project_id:
-        node_result = NodeResult(
+        node_result: NodeResult[object] = NodeResult(
             node="coherence_scorer",
             status=NodeStatus.SKIPPED,
             degradation_reason="missing_project_id",
@@ -585,6 +597,14 @@ async def knowledge_graph_builder_node(state: ProjectState) -> ProjectState:
     if not project_id or not tenant_id:
         state["knowledge_graph_nodes"] = []
         state["knowledge_graph_edges"] = []
+        state["node_results"] = [
+            *state.get("node_results", []),
+            NodeResult(
+                node="knowledge_graph",
+                status=NodeStatus.SKIPPED,
+                degradation_reason="missing_project_or_tenant_id",
+            ),
+        ]
         state["messages"].append(
             AIMessage(content="N10 knowledge_graph: skipped (missing project/tenant)")
         )
@@ -662,6 +682,10 @@ async def decision_intelligence_node(state: ProjectState) -> ProjectState:
     )
 
     state["decision_package"] = package
+    state["node_results"] = [
+        *state.get("node_results", []),
+        _ok_node_result("decision_intelligence", package),
+    ]
     state["messages"].append(AIMessage(content="N11 decision_intelligence: package assembled"))
     logger.info(
         "node_decision_intelligence",
@@ -764,6 +788,10 @@ async def final_assembler_node(state: ProjectState) -> ProjectState:
     )
 
     state["final_report"] = report
+    state["node_results"] = [
+        *state.get("node_results", []),
+        _ok_node_result("final_assembler", report),
+    ]
     _node_update_with_health(state, existing_results=[])
     state["messages"].append(
         AIMessage(

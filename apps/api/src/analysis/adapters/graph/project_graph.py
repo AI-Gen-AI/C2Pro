@@ -70,19 +70,19 @@ PROJECT_GRAPH_NODE_ORDER = [
 ]
 
 
-def _ok(node: str, data: object = None) -> list[NodeResult]:
+def _ok(node: str, data: object = None) -> list[NodeResult[object]]:
     return [NodeResult(node=node, status=NodeStatus.OK, data=data)]
 
 
-def _skipped(node: str, reason: str) -> list[NodeResult]:
+def _skipped(node: str, reason: str) -> list[NodeResult[object]]:
     return [NodeResult(node=node, status=NodeStatus.SKIPPED, degradation_reason=reason)]
 
 
-def _degraded(node: str, reason: str) -> list[NodeResult]:
+def _degraded(node: str, reason: str) -> list[NodeResult[object]]:
     return [NodeResult(node=node, status=NodeStatus.DEGRADED, degradation_reason=reason)]
 
 
-def _failed(node: str, exc: Exception) -> list[NodeResult]:
+def _failed(node: str, exc: Exception) -> list[NodeResult[object]]:
     return [
         NodeResult(
             node=node,

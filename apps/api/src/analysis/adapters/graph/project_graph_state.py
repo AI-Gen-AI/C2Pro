@@ -40,7 +40,7 @@ class ProjectGraphState(TypedDict):
     impact_result: ChangeImpactReport | dict[str, object] | None
     health_result: dict[str, object] | None
     snapshot_id: UUID | None
-    node_results: Annotated[list[NodeResult], merge_node_results]
+    node_results: Annotated[list[NodeResult[object]], merge_node_results]
     artifact_repository: NotRequired[ProjectGraphArtifactRepository]
 
 
