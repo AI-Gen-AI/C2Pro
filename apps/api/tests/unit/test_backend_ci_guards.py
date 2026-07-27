@@ -557,3 +557,16 @@ def test_core_coherence_and_modules_jobs_are_required_gates_in_ci_workflow() -> 
     assert '"backend-core:$RESULT_BACKEND_CORE"' in contents
     assert '"backend-coherence:$RESULT_BACKEND_COHERENCE"' in contents
     assert '"backend-modules:$RESULT_BACKEND_MODULES"' in contents
+
+
+def test_backend_lint_has_no_up042_baseline_exemption() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001 (TASK-V3-P0-04)."""
+    repo_root = Path(__file__).resolve().parents[4]
+    workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    pyproject = tomllib.loads((repo_root / "apps" / "api" / "pyproject.toml").read_text(encoding="utf-8"))
+
+    ignored_rules = pyproject["tool"]["ruff"]["lint"].get("ignore", [])
+    assert "UP042" not in ignored_rules
+    assert "python -m ruff check ." in workflow
+    assert '"backend-lint:$RESULT_BACKEND_LINT"' in workflow
+    assert "UP042 ignored pending TASK-DEV-030" not in workflow

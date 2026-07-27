@@ -12,7 +12,7 @@
 #     time; advisory until it has run green for a while, then promote to
 #     REQUIRED_JOBS). backend-typecheck (mypy ratchet) was promoted to required
 #     after EPIC-MYPY-STRICT (main at new=0). backend-lint was promoted to required
-#     2026-07-15 (ruff zero enforced, UP042 ignored pending TASK-DEV-030) and
+#     2026-07-27 (strict zero baseline after TASK-DEV-030 / V3-P0-04) and
 #     backend-integration 2026-07-16 (suite green after TASK-DEV-004).
 #     ci-status enumerates required jobs explicitly; advisory jobs are excluded.
 #   * Secret scanning is owned by secret-scan.yml; OpenAPI drift by
