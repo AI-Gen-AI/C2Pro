@@ -176,17 +176,24 @@ async def _safe_audit_query(
     execution_time_ms: float,
 ) -> None:
     try:
-        await mcp_server._log_query(
-            db=db,
-            tenant_id=tenant_id,
-            user_id=user_id,
-            query_type=query_type,
-            view_name=view_name,
-            function_name=function_name,
-            project_id=project_id,
-            row_count=row_count,
-            execution_time_ms=execution_time_ms,
-        )
+        # Isolate the audit write in its own SAVEPOINT: if it fails, only this
+        # savepoint is rolled back. Without this, a failed audit INSERT leaves
+        # the whole session's transaction aborted, and the caller's later
+        # `session.commit()` (see get_session) silently discards the mutation
+        # this audit entry was meant to log — even though the API already
+        # returned a 200 with the (never-persisted) result.
+        async with db.begin_nested():
+            await mcp_server._log_query(
+                db=db,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                query_type=query_type,
+                view_name=view_name,
+                function_name=function_name,
+                project_id=project_id,
+                row_count=row_count,
+                execution_time_ms=execution_time_ms,
+            )
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
         logger.warning(
             "mcp_audit_log_unavailable",
@@ -332,11 +339,14 @@ async def _execute_function_operation(
                 """
                 INSERT INTO alerts (
                     id,
+                    tenant_id,
                     project_id,
                     severity,
+                    alert_type,
                     category,
                     rule_id,
                     title,
+                    message,
                     description,
                     affected_entities,
                     alert_metadata,
@@ -347,11 +357,14 @@ async def _execute_function_operation(
                 )
                 SELECT
                     gen_random_uuid(),
+                    p.tenant_id,
                     p.id,
                     CAST(:severity AS alertseverity),
+                    'risk'::alerttype,
                     :category,
                     :rule_code,
                     :title,
+                    :description,
                     :description,
                     CAST(:affected_entities AS JSONB),
                     '{}'::jsonb,
