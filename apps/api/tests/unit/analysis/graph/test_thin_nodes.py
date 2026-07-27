@@ -735,7 +735,7 @@ class TestSaveToDbNodeShortCircuit:
 
     @pytest.mark.asyncio
     async def test_success_emits_ok_node_result(self, monkeypatch) -> None:
-        """TS-ADR-013-GRAPH-001: N17 success must be visible in node_results."""
+        """TS-ADR-013-GRAPH-001: N17 success writes a graph-completed snapshot trigger."""
         from src.analysis.adapters.graph import nodes
         from src.analysis.application import persist_analysis_use_case as persist_module
 
@@ -756,6 +756,18 @@ class TestSaveToDbNodeShortCircuit:
             lambda tenant_id: _AsyncContext(value=object()),
             raising=False,
         )
+        trigger_calls: list[dict[str, Any]] = []
+
+        async def _record_trigger(**kwargs: Any) -> UUID:
+            trigger_calls.append(kwargs)
+            return uuid4()
+
+        monkeypatch.setattr(
+            nodes,
+            "record_project_event_and_enqueue_snapshot",
+            _record_trigger,
+            raising=False,
+        )
 
         result = await nodes.save_to_db_node(_make_state())
 
@@ -764,6 +776,19 @@ class TestSaveToDbNodeShortCircuit:
         assert node_result.node == "save_to_db"
         assert node_result.status is NodeStatus.OK
         assert node_result.data == {"analysis_id": str(analysis_id)}
+        assert trigger_calls == [
+            {
+                "project_id": UUID(result["project_id"]),
+                "tenant_id": UUID(result["tenant_id"]),
+                "event_type": "graph.completed",
+                "payload": {
+                    "analysis_id": str(analysis_id),
+                    "document_id": result["document_id"],
+                },
+                "trigger": nodes.SnapshotTrigger.GRAPH_COMPLETED,
+                "actor": "analysis_graph",
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_db_failure_emits_failed_node_result_and_persists_error(

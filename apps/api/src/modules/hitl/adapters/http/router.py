@@ -34,6 +34,10 @@ from src.modules.hitl.application.resume_workflow_use_case import (  # TASK-BCK-
     WorkflowDecision,
 )
 from src.modules.hitl.domain.entities import ReviewStatus
+from src.temporal.application.project_snapshot_trigger import (
+    record_project_event_and_enqueue_snapshot,
+)
+from src.temporal.domain.project_snapshot import SnapshotTrigger
 
 logger = structlog.get_logger()
 
@@ -43,6 +47,53 @@ router = APIRouter(
     dependencies=[Depends(security_scheme)],
     responses={404: {"description": "Not found"}},
 )
+
+
+async def _record_hitl_correction_snapshot(
+    *,
+    item_id: UUID,
+    item_data: dict[str, Any],
+    metadata: dict[str, Any],
+    tenant_id: CurrentTenantId,
+    decision: ReviewStatus,
+    reviewer: str | None,
+) -> None:
+    """Record a project-scoped human decision and enqueue its temporal snapshot."""
+    project_id_raw = metadata.get("project_id") or item_data.get("project_id")
+    if project_id_raw is None:
+        logger.info("hitl_correction_snapshot_skipped_no_project", item_id=str(item_id))
+        return
+
+    try:
+        project_id = UUID(str(project_id_raw))
+    except (TypeError, ValueError):
+        logger.warning(
+            "hitl_correction_snapshot_skipped_invalid_project",
+            item_id=str(item_id),
+            project_id=project_id_raw,
+        )
+        return
+
+    try:
+        await record_project_event_and_enqueue_snapshot(
+            project_id=project_id,
+            tenant_id=tenant_id,
+            event_type="hitl.correction",
+            payload={
+                "review_item_id": str(item_id),
+                "decision": decision.value,
+                "reviewer": reviewer,
+            },
+            trigger=SnapshotTrigger.HITL_CORRECTION,
+            actor=reviewer,
+        )
+    except Exception:  # noqa: BLE001 - a temporal trigger must not block a reviewed decision.
+        logger.warning(
+            "hitl_correction_snapshot_trigger_failed",
+            item_id=str(item_id),
+            tenant_id=str(tenant_id),
+            exc_info=True,
+        )
 
 
 # -- Endpoints ----------------------------------------------------------------
@@ -178,6 +229,14 @@ async def approve_item(
         )
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    await _record_hitl_correction_snapshot(
+        item_id=item.item_id,
+        item_data=item.item_data,
+        metadata=item.metadata,
+        tenant_id=_tenant_id,
+        decision=item.current_status,
+        reviewer=item.approved_by,
+    )
     logger.info("hitl_item_approved", item_id=str(item_id), reviewer=payload.reviewer_name)
     return ReviewItemResponse(
         item_id=item.item_id,
@@ -221,6 +280,14 @@ async def reject_item(
     item.approved_at = datetime.now(UTC)
     item.metadata["rejection_reason"] = payload.reason
     await service.review_queue_repo.update_review_item(item)
+    await _record_hitl_correction_snapshot(
+        item_id=item.item_id,
+        item_data=item.item_data,
+        metadata=item.metadata,
+        tenant_id=_tenant_id,
+        decision=item.current_status,
+        reviewer=item.approved_by,
+    )
     logger.info("hitl_item_rejected", item_id=str(item_id), reviewer=payload.reviewer_name)
     return ReviewItemResponse(
         item_id=item.item_id,

@@ -48,6 +48,10 @@ from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.analysis.domain.prompts import DOC_TYPES
 from src.core.database import get_session_with_tenant
 from src.shared_kernel.enums import AlertSeverity
+from src.temporal.application.project_snapshot_trigger import (
+    record_project_event_and_enqueue_snapshot,
+)
+from src.temporal.domain.project_snapshot import SnapshotTrigger
 
 # Stateless domain services (reusable across requests)
 _risk_rules = DeterministicRiskRulesService()
@@ -593,6 +597,25 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
         return state
 
     state["analysis_id"] = str(result.analysis_id)
+    try:
+        await record_project_event_and_enqueue_snapshot(
+            project_id=UUID(state["project_id"]),
+            tenant_id=tenant_id,
+            event_type="graph.completed",
+            payload={
+                "analysis_id": str(result.analysis_id),
+                "document_id": state["document_id"],
+            },
+            trigger=SnapshotTrigger.GRAPH_COMPLETED,
+            actor="analysis_graph",
+        )
+    except Exception:  # noqa: BLE001 - temporal observability must not fail analysis persistence.
+        logger.warning(
+            "graph_completed_snapshot_trigger_failed",
+            project_id=state.get("project_id"),
+            tenant_id=state.get("tenant_id"),
+            exc_info=True,
+        )
     state["node_results"] = [
         *state.get("node_results", []),
         _ok_node_result("save_to_db", {"analysis_id": str(result.analysis_id)}),
