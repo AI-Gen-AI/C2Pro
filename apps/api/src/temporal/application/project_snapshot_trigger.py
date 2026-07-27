@@ -22,11 +22,22 @@ from src.temporal.domain.project_snapshot import SnapshotTrigger
 logger = structlog.get_logger(__name__)
 
 
-def enqueue_project_snapshot(**kwargs: object) -> object:
+def enqueue_project_snapshot(
+    *,
+    project_id: UUID,
+    tenant_id: TenantId,
+    trigger: SnapshotTrigger,
+    source_event_id: UUID | None,
+) -> None:
     """Load Celery only when a material event has committed."""
     from src.core.tasks.snapshot_tasks import enqueue_project_snapshot as enqueue
 
-    return enqueue(**kwargs)
+    enqueue(
+        project_id=project_id,
+        tenant_id=tenant_id,
+        trigger=trigger,
+        source_event_id=source_event_id,
+    )
 
 
 async def record_project_event_and_enqueue_snapshot(
