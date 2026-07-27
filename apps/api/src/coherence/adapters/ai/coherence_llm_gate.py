@@ -11,6 +11,8 @@ Test Suite ID: TS-UD-COH-LLMGATE-001
 from __future__ import annotations
 
 import datetime
+import hashlib
+import json
 from dataclasses import dataclass, field
 from typing import Any, cast
 
@@ -35,16 +37,52 @@ def _next_month_first() -> datetime.date:
     return datetime.date(today.year, today.month + 1, 1)
 
 
-def _content_hash(rule_id: str, clause_text: str) -> str:
-    """SHA-256 of (rule_id, prompt_version, canonical(clause_text)).
+def _content_hash(
+    rule_id: str,
+    clause_text: str,
+    *,
+    rule_name: str,
+    rule_description: str,
+    detection_logic: str,
+    category: str,
+) -> str:
+    """SHA-256 of the semantic LLM prompt inputs and canonical clause text.
 
-    Canonicalization: strip + lower. Cache key is stable across whitespace
-    and case changes; cache invalidates implicitly when PROMPT_VERSION bumps.
+    Rule fields are normalized only for whitespace. Their case and punctuation
+    remain part of the digest, so any semantic prompt edit invalidates cached
+    findings without requiring a manual ``PROMPT_VERSION`` bump.
     """
-    import hashlib
     canonical = (clause_text or "").strip().lower()
-    digest = hashlib.sha256(f"{rule_id}|{PROMPT_VERSION}|{canonical}".encode())
+    rule_fields = {
+        "category": " ".join(category.split()),
+        "detection_logic": " ".join(detection_logic.split()),
+        "rule_description": " ".join(rule_description.split()),
+        "rule_name": " ".join(rule_name.split()),
+    }
+    rule_fingerprint = hashlib.sha256(
+        json.dumps(rule_fields, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    digest = hashlib.sha256(
+        f"{rule_id}|{PROMPT_VERSION}|{rule_fingerprint}|{canonical}".encode()
+    )
     return digest.hexdigest()
+
+
+def _rule_cache_key(rule_id: str, clause_text: str) -> str:
+    """Build a cache key from the current semantic configuration of an LLM rule."""
+    from src.coherence.rules_engine.registry import LLM_RULE_CONFIGS, load_qualitative_rules
+
+    if rule_id not in LLM_RULE_CONFIGS:
+        load_qualitative_rules()
+    config = LLM_RULE_CONFIGS[rule_id]
+    return _content_hash(
+        rule_id,
+        clause_text,
+        rule_name=str(config.get("name", config["id"])),
+        rule_description=str(config["description"]),
+        detection_logic=str(config["detection_logic"]),
+        category=str(config.get("category", "general")),
+    )
 
 
 @dataclass
@@ -105,7 +143,7 @@ class CoherenceLlmGate:
         clause: Clause,
     ) -> GateDecision:
         # Step 1: content-hash cache check (before budget / rollout / LLM).
-        cache_key = _content_hash(rule_id, clause.text)
+        cache_key = _rule_cache_key(rule_id, clause.text)
         cache = self._get_cache()
         cached = await cache.get(cache_key)
         if cached is not None:

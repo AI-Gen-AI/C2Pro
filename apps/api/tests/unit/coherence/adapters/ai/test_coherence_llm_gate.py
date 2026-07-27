@@ -200,12 +200,69 @@ async def test_gate_cache_hit_applies_calibrated_thresholds():
 
 def test_content_hash_is_deterministic_and_canonicalized():
     from src.coherence.adapters.ai.coherence_llm_gate import _content_hash
-    h1 = _content_hash("R-SCOPE-CLARITY-01", "  Some Text  ")
-    h2 = _content_hash("R-SCOPE-CLARITY-01", "some text")
+    rule = {
+        "rule_name": "Scope clarity",
+        "rule_description": "Detect ambiguous contractual scope wording.",
+        "detection_logic": "Flag undefined delivery obligations.",
+        "category": "scope",
+    }
+    h1 = _content_hash("R-SCOPE-CLARITY-01", "  Some Text  ", **rule)
+    h2 = _content_hash("R-SCOPE-CLARITY-01", "some text", **rule)
     assert h1 == h2, "canonicalization (strip + lower) must produce stable key"
     # Different rule_id → different key
-    h3 = _content_hash("R-PAYMENT-CLARITY-01", "some text")
+    h3 = _content_hash("R-PAYMENT-CLARITY-01", "some text", **rule)
     assert h1 != h3
+
+
+def test_content_hash_invalidates_when_detection_logic_changes():
+    """TS-UD-COH-LLMGATE-001: a rule prompt edit must produce a cache miss."""
+    from src.coherence.adapters.ai.coherence_llm_gate import _content_hash
+
+    rule = {
+        "rule_name": "Scope clarity",
+        "rule_description": "Detect ambiguous contractual scope wording.",
+        "detection_logic": "Flag undefined delivery obligations.",
+        "category": "scope",
+    }
+    unchanged_key = _content_hash("R-SCOPE-CLARITY-01", "Deliver the substation.", **rule)
+    repeated_key = _content_hash("R-SCOPE-CLARITY-01", "Deliver the substation.", **rule)
+    assert unchanged_key == repeated_key
+    for field, edited_value in {
+        "rule_name": "Scope delivery clarity",
+        "rule_description": "Detect every ambiguous contractual obligation.",
+        "detection_logic": "Flag undefined delivery obligations and dates.",
+        "category": "legal",
+    }.items():
+        edited_key = _content_hash(
+            "R-SCOPE-CLARITY-01",
+            "Deliver the substation.",
+            **{**rule, field: edited_value},
+        )
+        assert unchanged_key != edited_key
+
+
+def test_gate_rule_cache_key_auto_invalidates_after_prompt_edit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TS-UD-COH-LLMGATE-001: gate lookup misses when YAML logic changes."""
+    from src.coherence.adapters.ai.coherence_llm_gate import _rule_cache_key
+    from src.coherence.rules_engine import registry
+
+    rule_id = "R-SCOPE-CLARITY-01"
+    original = dict(registry.LLM_RULE_CONFIGS[rule_id])
+    monkeypatch.setitem(registry.LLM_RULE_CONFIGS, rule_id, original)
+
+    initial_key = _rule_cache_key(rule_id, "Deliver the substation.")
+    unchanged_key = _rule_cache_key(rule_id, "Deliver the substation.")
+    monkeypatch.setitem(
+        registry.LLM_RULE_CONFIGS,
+        rule_id,
+        {**original, "detection_logic": f"{original['detection_logic']} New constraint."},
+    )
+    edited_key = _rule_cache_key(rule_id, "Deliver the substation.")
+
+    assert initial_key == unchanged_key
+    assert initial_key != edited_key
 
 
 @pytest.mark.asyncio
