@@ -24,10 +24,11 @@ MCP Gateway Configuration (from PLAN_ARQUITECTURA_v2.1.md):
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import text
 
 from src.core.auth.models import SubscriptionPlan, Tenant, User, UserRole
 from src.core.auth.service import hash_password
@@ -78,6 +79,28 @@ async def mcp_user(db, mcp_tenant: Tenant) -> User:
     await db.commit()
     await db.refresh(user)
     return user
+
+
+@pytest_asyncio.fixture
+async def mcp_other_tenant(db) -> Tenant:
+    """Create a second, unrelated tenant to assert cross-tenant isolation."""
+    tenant = Tenant(
+        id=uuid4(),
+        name="MCP Other Company",
+        slug=f"mcp-other-{uuid4().hex[:8]}",
+        subscription_plan=SubscriptionPlan.PROFESSIONAL,
+        subscription_status="active",
+        ai_budget_monthly=100.0,
+        ai_spend_current=0.0,
+        max_projects=50,
+        max_users=10,
+        max_storage_gb=100,
+        is_active=True,
+    )
+    db.add(tenant)
+    await db.commit()
+    await db.refresh(tenant)
+    return tenant
 
 
 @pytest_asyncio.fixture
@@ -201,6 +224,89 @@ async def test_002_mcp_function_operations_allowed(
     assert body["status"] == "success"
     assert body["function_name"] == "fn_create_alert"
     assert body["row_count"] == 1
+
+
+# ===========================================
+# TEST 2b: Regression - create_alert sets tenant_id (MCP-ALERT-TENANTID)
+# ===========================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+@pytest.mark.e2e
+async def test_002b_mcp_create_alert_sets_tenant_id_and_is_tenant_scoped(
+    client,
+    db,
+    mcp_user: User,
+    mcp_tenant: Tenant,
+    mcp_other_tenant: Tenant,
+    mcp_project: ProjectORM,
+    generate_token,
+):
+    """
+    GIVEN A valid authenticated user creates an alert via the MCP create_alert function
+    WHEN The alert is persisted
+    THEN tenant_id is populated with the requesting tenant (not NULL)
+    AND The alert is visible under a tenant-scoped query for the owning tenant
+    AND The alert is NOT visible under a tenant-scoped query for a different tenant
+
+    Regression test for MCP-ALERT-TENANTID: the raw INSERT in
+    `_execute_function_operation` (create_alert branch) previously omitted
+    `tenant_id` from both the column list and the SELECT, silently persisting
+    alerts with tenant_id=NULL. Under the production RLS policy
+    (`tenant_id = current_setting('app.current_tenant')`), a NULL tenant_id
+    makes the alert permanently invisible/orphaned to every tenant.
+    """
+    token = generate_token(
+        user_id=mcp_user.id,
+        tenant_id=mcp_tenant.id,
+        email=mcp_user.email,
+        role="admin",
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = await client.post(
+        "/api/v1/mcp/execute",
+        headers=headers,
+        json={
+            "operation": "create_alert",
+            "params": {
+                "project_id": str(mcp_project.id),
+                "rule_code": "R1",
+                "severity": "high",
+                "message": "Tenant scoping regression test alert",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["row_count"] == 1
+    alert_id = UUID(body["data"][0]["id"])
+
+    # tenant_id must be populated with the requesting tenant, never NULL.
+    result = await db.execute(
+        text("SELECT tenant_id FROM alerts WHERE id = :alert_id"),
+        {"alert_id": alert_id},
+    )
+    persisted_tenant_id = result.scalar_one()
+    assert persisted_tenant_id is not None
+    assert persisted_tenant_id == mcp_tenant.id
+
+    # Simulates the production RLS policy predicate (tenant_id = app.current_tenant):
+    # visible to the owning tenant...
+    visible_to_owner = await db.execute(
+        text("SELECT id FROM alerts WHERE id = :alert_id AND tenant_id = :tenant_id"),
+        {"alert_id": alert_id, "tenant_id": mcp_tenant.id},
+    )
+    assert visible_to_owner.scalar_one_or_none() == alert_id
+
+    # ...and invisible to an unrelated tenant.
+    visible_to_other = await db.execute(
+        text("SELECT id FROM alerts WHERE id = :alert_id AND tenant_id = :tenant_id"),
+        {"alert_id": alert_id, "tenant_id": mcp_other_tenant.id},
+    )
+    assert visible_to_other.scalar_one_or_none() is None
 
 
 # ===========================================
