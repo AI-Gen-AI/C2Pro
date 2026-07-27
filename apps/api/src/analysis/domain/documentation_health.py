@@ -22,7 +22,7 @@ class DocumentationHealthSignal(BaseModel):
 
 
 def build_documentation_health_signal(
-    node_results: list[NodeResult],
+    node_results: list[NodeResult[object]],
 ) -> DocumentationHealthSignal:
     failed = [result.node for result in node_results if result.status is NodeStatus.FAILED]
     degraded = [

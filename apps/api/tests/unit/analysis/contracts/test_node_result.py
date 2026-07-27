@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from src.analysis.domain.contracts import RiskItem
 from src.analysis.domain.node_result import (
     ErrorRecord,
     NodeResult,
@@ -20,6 +21,17 @@ from src.analysis.domain.node_result import (
 def test_ok_result_is_usable():
     r = NodeResult(node="risk_extractor", status=NodeStatus.OK, confidence=0.9)
     assert r.ok and r.usable and not r.is_failure
+
+
+def test_node_result_validates_its_parameterized_payload() -> None:
+    """Test Suite ID: TS-UD-V3-013-002."""
+    result = NodeResult[list[RiskItem]](
+        node="risk_extractor",
+        status=NodeStatus.OK,
+        data=[{"title": "Delay", "description": "Liquidated damages"}],
+    )
+
+    assert isinstance(result.data[0], RiskItem)
 
 
 def test_degraded_is_usable_but_not_ok():

@@ -1,5 +1,7 @@
 """FROZEN node-execution contract (ADR-013 / TASK-V3-013-02).
 
+Test Suite ID: TS-UD-V3-013-002.
+
 Every *material* graph node (extractors N4/N5/N9, synthesis N8/N15, etc.) returns
 a ``NodeResult``. Trivial passthrough nodes (e.g. ``enrichment_dispatch``) are
 exempt.
@@ -16,9 +18,11 @@ the Health Engine (ADR-018 / TASK-V3-013-07).
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+T = TypeVar("T")
 
 
 class NodeStatus(str, Enum):
@@ -39,7 +43,7 @@ class ErrorRecord(BaseModel):
     traceback_digest: str | None = None
 
 
-class NodeResult(BaseModel):
+class NodeResult(BaseModel, Generic[T]):
     """Uniform return envelope for material graph nodes.
 
     ``data`` carries the node's typed payload (a model or list of models from
@@ -52,13 +56,13 @@ class NodeResult(BaseModel):
 
     node: str
     status: NodeStatus
-    data: Any = None
+    data: T | None = None
     error: ErrorRecord | None = None
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     degradation_reason: str | None = None
 
     @model_validator(mode="after")
-    def _failed_requires_error(self) -> NodeResult:
+    def _failed_requires_error(self) -> NodeResult[T]:
         # ADR-013: a failure with no ErrorRecord is exactly the silent failure
         # this contract exists to ban.
         if self.status is NodeStatus.FAILED and self.error is None:
@@ -83,9 +87,9 @@ class NodeResult(BaseModel):
 
 
 def merge_node_results(
-    existing: list[NodeResult] | None,
-    incoming: list[NodeResult] | None,
-) -> list[NodeResult]:
+    existing: list[NodeResult[object]] | None,
+    incoming: list[NodeResult[object]] | None,
+) -> list[NodeResult[object]]:
     """LangGraph channel reducer for ``node_results`` (ADR-013).
 
     Two node patterns write this channel: parallel branch nodes (N6/N8) return a
@@ -97,7 +101,7 @@ def merge_node_results(
     so both patterns are safe and the channel never collides under parallel
     fan-out.
     """
-    merged: list[NodeResult] = list(existing or [])
+    merged: list[NodeResult[object]] = list(existing or [])
     seen = {_node_result_signature(r) for r in merged}
     for result in incoming or []:
         signature = _node_result_signature(result)
@@ -107,7 +111,7 @@ def merge_node_results(
     return merged
 
 
-def _node_result_signature(result: NodeResult) -> tuple[object, ...]:
+def _node_result_signature(result: NodeResult[object]) -> tuple[object, ...]:
     return (
         result.node,
         result.status,

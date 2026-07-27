@@ -1,8 +1,12 @@
 """FROZEN domain contracts for the analysis graph (ADR-013 / TASK-V3-013-01).
 
-These Pydantic v2 value objects replace the ``dict[str, Any]`` channel aliases in
-``ProjectState`` (see ``schema.py``). They are the canonical typed shapes every
-graph node — and the Tier-2 ProjectGraph (ADR-017) — must produce and consume.
+Test Suite ID: TS-UD-V3-013-001.
+
+These Pydantic v2 value objects are the canonical validation boundary between
+the JSON-compatible Tier-1 LangGraph state and persisted/consumed Tier-2
+``DocumentArtifact`` values (ADR-017). The live ``ProjectState`` deliberately
+remains JSON-shaped because LangGraph checkpoints serialise it directly; nodes
+normalise their emitted payloads before the artifact boundary.
 
 FROZEN CONTRACT — do not add/rename/remove fields without re-freezing and
 notifying every implementer. Multi-agent execution (Codex/Gemini/DeepSeek) relies
@@ -23,13 +27,20 @@ Conventions:
 from __future__ import annotations
 
 from enum import Enum
+from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.analysis.domain.documentation_health import DocumentationHealthSignal
 
-# Immutable, drift-rejecting value-object config.
-_VALUE_OBJECT = ConfigDict(extra="forbid", frozen=True)
+# Schema-visible versioning prevents persisted/API payload consumers from
+# accepting contract drift silently.
+PAYLOAD_CONTRACT_VERSION: Final[str] = "v1"
+_VALUE_OBJECT = ConfigDict(
+    extra="forbid",
+    frozen=True,
+    json_schema_extra={"x-contract-version": PAYLOAD_CONTRACT_VERSION},
+)
 
 
 class Severity(str, Enum):
@@ -135,10 +146,13 @@ class CoherenceFinding(BaseModel):
 
 class DocumentArtifact(BaseModel):
     """Typed Tier-1 → Tier-2 contract (ADR-017): the analysis output for ONE
-    document, consumed by the ProjectGraph. Not frozen — assembled across nodes;
-    still ``extra="forbid"`` to reject drift."""
+    document, consumed by the ProjectGraph and immutable once emitted."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        json_schema_extra={"x-contract-version": PAYLOAD_CONTRACT_VERSION},
+    )
 
     document_id: str
     document_revision_id: str | None = None  # ADR-015 temporal lineage
@@ -155,6 +169,7 @@ class DocumentArtifact(BaseModel):
 
 
 __all__ = [
+    "PAYLOAD_CONTRACT_VERSION",
     "Severity",
     "CoherenceCategory",
     "RiskItem",

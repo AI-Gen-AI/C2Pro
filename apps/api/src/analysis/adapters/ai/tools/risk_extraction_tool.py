@@ -17,8 +17,8 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from src.analysis.adapters.ai.agents.risk_extractor import (
+    RiskExtractionCandidate,
     RiskImpact,
-    RiskItem,
     RiskProbability,
 )
 from src.analysis.domain.risk_categories import RiskCategory, normalize_category
@@ -165,7 +165,7 @@ class RiskExtractionInput(BaseModel):
 
 
 @register_tool("risk_extraction", version="1.0")
-class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
+class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandidate]]):
     """
     Extracts contractual and project risks from narrative contract sections.
 
@@ -176,7 +176,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
     - Filters out irrelevant sections (pricing tables, BOMs)
 
     Input: Document text
-    Output: List of RiskItem with category, probability, impact, mitigation
+    Output: list of adapter-local candidates with category, probability, impact, mitigation.
     """
 
     name = "risk_extraction"
@@ -196,7 +196,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
         input_data: RiskExtractionInput,
         tenant_id: UUID | None,
         ai_response: AIResponse,
-    ) -> list[RiskItem]:
+    ) -> list[RiskExtractionCandidate]:
         """Parse AI response and apply domain logic.
 
         Note: relevance filtering is applied in ``extract_input_from_state``
@@ -216,8 +216,8 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
         # Extract risk items
         items = self._extract_items(payload)
 
-        # Coerce to RiskItem models with validation
-        risks: list[RiskItem] = []
+        # Coerce adapter-local candidates before N4 normalizes the graph contract.
+        risks: list[RiskExtractionCandidate] = []
         for item in items:
             risk = self._coerce_risk(item)
             if risk:
@@ -292,7 +292,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
     def inject_output_into_state(
         self,
         state: ProjectState,
-        result: ToolResult[list[RiskItem]],
+        result: ToolResult[list[RiskExtractionCandidate]],
     ) -> ProjectState:
         """Inject output into LangGraph state."""
         risks = result.data or []
@@ -380,7 +380,7 @@ CRITICAL OUTPUT RULES:
     # DOMAIN LOGIC (migrated from risk_extractor.py)
     # ============================================
 
-    def _calculate_risk_score(self, risk: RiskItem) -> int:
+    def _calculate_risk_score(self, risk: RiskExtractionCandidate) -> int:
         """Calculate numeric risk score (1-12)."""
         impact_score = {
             RiskImpact.LOW: 1,
@@ -395,7 +395,7 @@ CRITICAL OUTPUT RULES:
         }
         return impact_score[risk.impact] * probability_score[risk.probability]
 
-    def _is_immediate_alert(self, risk: RiskItem) -> bool:
+    def _is_immediate_alert(self, risk: RiskExtractionCandidate) -> bool:
         """Check if risk requires immediate alert."""
         return (
             risk.impact == RiskImpact.CRITICAL
@@ -440,8 +440,8 @@ CRITICAL OUTPUT RULES:
             return [item for item in payload if isinstance(item, dict)]
         return []
 
-    def _coerce_risk(self, item: dict[str, Any]) -> RiskItem | None:
-        """Coerce dict to RiskItem with validation."""
+    def _coerce_risk(self, item: dict[str, Any]) -> RiskExtractionCandidate | None:
+        """Coerce a raw response to an adapter-local candidate."""
         title = self._first_text(item, "title", "risk", "name")
         summary = self._clean_text(item.get("summary"))
         description = self._first_text(item, "description", "detail")
@@ -462,7 +462,7 @@ CRITICAL OUTPUT RULES:
         if category is None or probability is None or impact is None:
             return None
 
-        return RiskItem(
+        return RiskExtractionCandidate(
             title=title,
             category=category,
             summary=summary,
@@ -620,8 +620,8 @@ CRITICAL OUTPUT RULES:
 
         return {}
 
-    def _risk_item_to_dict(self, risk: RiskItem) -> dict[str, Any]:
-        """Convert RiskItem to dict for state storage."""
+    def _risk_item_to_dict(self, risk: RiskExtractionCandidate) -> dict[str, Any]:
+        """Convert an adapter-local candidate to the legacy graph-state shape."""
         return {
             "category": risk.category.value if risk.category else None,
             "title": risk.title,

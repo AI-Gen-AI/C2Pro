@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from src.analysis.adapters.ai.agents.risk_extractor import (
+    RiskExtractionCandidate,
     RiskExtractorAgent,
     RiskImpact,
-    RiskItem,
     RiskProbability,
     _clean_text,
     _coerce_risk,
@@ -81,7 +81,7 @@ class TestNormalizeImpact:
 
 class TestIsImmediateAlert:
     def test_alert_when_critical_high(self) -> None:
-        risk = RiskItem(
+        risk = RiskExtractionCandidate(
             category=RiskCategory.LEGAL,
             probability=RiskProbability.HIGH,
             impact=RiskImpact.CRITICAL,
@@ -89,7 +89,7 @@ class TestIsImmediateAlert:
         assert _is_immediate_alert(risk) is True
 
     def test_not_alert_when_low_high(self) -> None:
-        risk = RiskItem(
+        risk = RiskExtractionCandidate(
             category=RiskCategory.SCOPE,
             probability=RiskProbability.HIGH,
             impact=RiskImpact.LOW,
@@ -97,7 +97,7 @@ class TestIsImmediateAlert:
         assert _is_immediate_alert(risk) is False
 
     def test_not_alert_when_critical_low(self) -> None:
-        risk = RiskItem(
+        risk = RiskExtractionCandidate(
             category=RiskCategory.BUDGET,
             probability=RiskProbability.LOW,
             impact=RiskImpact.CRITICAL,
@@ -107,15 +107,15 @@ class TestIsImmediateAlert:
 
 class TestRiskScore:
     def test_critical_high_is_12(self) -> None:
-        risk = RiskItem(category=RiskCategory.LEGAL, probability=RiskProbability.HIGH, impact=RiskImpact.CRITICAL)
+        risk = RiskExtractionCandidate(category=RiskCategory.LEGAL, probability=RiskProbability.HIGH, impact=RiskImpact.CRITICAL)
         assert _risk_score(risk) == 12
 
     def test_medium_medium_is_4(self) -> None:
-        risk = RiskItem(category=RiskCategory.SCHEDULE, probability=RiskProbability.MEDIUM, impact=RiskImpact.MEDIUM)
+        risk = RiskExtractionCandidate(category=RiskCategory.SCHEDULE, probability=RiskProbability.MEDIUM, impact=RiskImpact.MEDIUM)
         assert _risk_score(risk) == 4
 
     def test_low_low_is_1(self) -> None:
-        risk = RiskItem(category=RiskCategory.QUALITY, probability=RiskProbability.LOW, impact=RiskImpact.LOW)
+        risk = RiskExtractionCandidate(category=RiskCategory.QUALITY, probability=RiskProbability.LOW, impact=RiskImpact.LOW)
         assert _risk_score(risk) == 1
 
 

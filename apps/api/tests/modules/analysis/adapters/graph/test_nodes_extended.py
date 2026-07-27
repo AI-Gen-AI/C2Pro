@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 
 from src.analysis.adapters.graph.schema import ProjectState
+from src.analysis.domain.node_result import NodeStatus
 
 
 def _make_state(**overrides) -> ProjectState:
@@ -265,6 +266,18 @@ class TestDecisionIntelligenceNode:
         assert pkg["approved_by"] is None
 
     @pytest.mark.asyncio
+    async def test_emits_material_node_result(self):
+        """Test Suite ID: TS-UD-V3-013-003."""
+        from src.analysis.adapters.graph.nodes_extended import decision_intelligence_node
+
+        result = await decision_intelligence_node(_make_state())
+
+        node_result = result["node_results"][-1]
+        assert node_result.node == "decision_intelligence"
+        assert node_result.status is NodeStatus.OK
+        assert node_result.data == result["decision_package"]
+
+    @pytest.mark.asyncio
     async def test_marks_human_approval(self):
         from src.analysis.adapters.graph.nodes_extended import decision_intelligence_node
 
@@ -345,6 +358,18 @@ class TestFinalAssemblerNode:
         assert report["summary"]["confidence_score"] == 0.88
         assert report["summary"]["pii_items_redacted"] == 1
         assert report["summary"]["citation_validation_passed"] is True
+
+    @pytest.mark.asyncio
+    async def test_emits_material_node_result(self):
+        """Test Suite ID: TS-UD-V3-013-004."""
+        from src.analysis.adapters.graph.nodes_extended import final_assembler_node
+
+        result = await final_assembler_node(_make_state())
+
+        node_result = result["node_results"][-1]
+        assert node_result.node == "final_assembler"
+        assert node_result.status is NodeStatus.OK
+        assert node_result.data == result["final_report"]
 
     @pytest.mark.asyncio
     async def test_handles_empty_state(self):

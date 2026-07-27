@@ -13,6 +13,7 @@ import pytest
 from pydantic import ValidationError
 
 from src.analysis.domain.contracts import (
+    PAYLOAD_CONTRACT_VERSION,
     BudgetItem,
     Citation,
     CoherenceFinding,
@@ -110,6 +111,15 @@ class TestCoherenceFinding:
 
 
 class TestDocumentArtifact:
+    def test_contract_schema_is_versioned_and_artifact_is_immutable(self):
+        """Test Suite ID: TS-UD-V3-013-001."""
+        artifact = DocumentArtifact(document_id="doc-1", doc_type="contract")
+
+        assert PAYLOAD_CONTRACT_VERSION == "v1"
+        assert artifact.model_json_schema()["x-contract-version"] == "v1"
+        with pytest.raises(ValidationError):
+            artifact.doc_type = "budget"
+
     def test_aggregates_typed_payloads(self):
         art = DocumentArtifact(
             document_id="doc-1",
