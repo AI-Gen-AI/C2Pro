@@ -3,6 +3,7 @@ TS-UD-COH-ALRT-001: Unit tests for AlertGeneratorService and helper methods.
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -255,6 +256,108 @@ class TestProcessViolations:
 
 
 from unittest.mock import patch
+
+
+class _StatefulAlertRepo:
+    """In-memory alert repository that mimics real create/list/update semantics.
+
+    Unlike the per-test MagicMocks above, this repo *persists* created alerts so
+    that a subsequent ``process_violations`` run sees the alerts from the prior
+    run — the exact condition under which re-analysis could double-count.
+    """
+
+    def __init__(self) -> None:
+        self._alerts: list[SimpleNamespace] = []
+        self.create_calls = 0
+        self.update_calls = 0
+
+    async def list_for_project(self, project_id, cursor=None, limit=200):  # noqa: ANN001, ARG002
+        return _make_mock_page(list(self._alerts), has_more=False)
+
+    async def create(self, payload):  # noqa: ANN001
+        self.create_calls += 1
+        record = SimpleNamespace(
+            id=uuid4(),
+            status=AlertStatus.OPEN,
+            alert_metadata=dict(payload.alert_metadata or {}),
+            severity=payload.severity,
+            category=payload.category,
+            rule_id=payload.rule_id,
+            title=payload.title,
+            description=payload.description,
+            recommendation=getattr(payload, "recommendation", None),
+            source_clause_id=payload.source_clause_id,
+            related_clause_ids=getattr(payload, "related_clause_ids", None),
+            affected_entities=payload.affected_entities,
+            impact_level=getattr(payload, "impact_level", None),
+            resolved_at=None,
+            resolved_by=None,
+            resolution_notes=None,
+        )
+        self._alerts.append(record)
+        return record
+
+    async def update(self, alert):  # noqa: ANN001
+        self.update_calls += 1
+
+    async def commit(self):
+        pass
+
+    @property
+    def open_count(self) -> int:
+        return sum(1 for a in self._alerts if a.status == AlertStatus.OPEN)
+
+
+class TestReanalysisSupersedesRatherThanAccumulates:
+    """TASK-HOTFIX-F2: a 2nd analysis must not double the alert count."""
+
+    @pytest.mark.asyncio
+    async def test_second_run_with_same_violations_does_not_double_count(self) -> None:
+        repo = _StatefulAlertRepo()
+        svc = AlertGeneratorService(repository=repo)
+        project_id = uuid4()
+        violations = [
+            _make_alert_create(rule_id="DET-SCP-DELIVERABLES", category="SCOPE"),
+            _make_alert_create(rule_id="DET-BUD-INTERNAL", category="BUDGET"),
+            _make_alert_create(rule_id="DET-LEG-PENALTY", category="LEGAL"),
+        ]
+
+        first = await svc.process_violations(project_id=project_id, violations=violations)
+        assert len(first) == 3
+        assert repo.create_calls == 3
+        assert repo.open_count == 3
+
+        # Re-run analysis with the *same* violations — must supersede, not stack.
+        second = await svc.process_violations(project_id=project_id, violations=violations)
+        assert len(second) == 3
+        # No new alerts were created on the second run …
+        assert repo.create_calls == 3
+        # … existing ones were updated in place instead.
+        assert repo.update_calls == 3
+        # Total persisted alerts stays at 3 (not 6).
+        assert len(repo._alerts) == 3
+        assert repo.open_count == 3
+
+    @pytest.mark.asyncio
+    async def test_dropped_violation_is_auto_resolved_on_reanalysis(self) -> None:
+        repo = _StatefulAlertRepo()
+        svc = AlertGeneratorService(repository=repo)
+        project_id = uuid4()
+        run_one = [
+            _make_alert_create(rule_id="DET-SCP-DELIVERABLES", category="SCOPE"),
+            _make_alert_create(rule_id="DET-BUD-INTERNAL", category="BUDGET"),
+        ]
+        await svc.process_violations(project_id=project_id, violations=run_one)
+        assert repo.open_count == 2
+
+        # Second run only re-detects one violation; the other must be auto-resolved,
+        # not left dangling as a stacked open alert.
+        run_two = [_make_alert_create(rule_id="DET-SCP-DELIVERABLES", category="SCOPE")]
+        await svc.process_violations(project_id=project_id, violations=run_two)
+
+        assert len(repo._alerts) == 2  # still no duplicates created
+        assert repo.create_calls == 2
+        assert repo.open_count == 1  # the dropped violation was auto-resolved
 
 
 class TestProcessRuleResults:
