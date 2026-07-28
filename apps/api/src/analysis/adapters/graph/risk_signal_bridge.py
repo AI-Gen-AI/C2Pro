@@ -33,6 +33,34 @@ Design notes:
 * This is an **interim bridge**.  It will be removed when 2A.5 wires
   the evidence module to the coherence engine through ``EvidenceClaim``
   + CVC.
+
+IR-3 (TASK-V3-013-12) — producer/consumer key drift:
+    ``_risk_contract_item`` (``analysis/adapters/graph/nodes.py``) validates
+    N4's raw extractor dict against the FROZEN ``RiskItem`` contract
+    (``analysis/domain/contracts.py``) and ``.model_dump()``s the result before
+    it reaches ``state["extracted_risks"]``. Both real callers of this bridge
+    (``nodes_extended.py`` N8 and ``project_graph.py`` cross-artifact
+    aggregation) therefore hand it ``RiskItem``-shaped dicts, not N4's raw
+    dict. The field helpers below read both the canonical ``RiskItem`` key
+    and N4's legacy raw key (preferring the former) so the bridge works
+    against either shape — this also keeps it a true "bridge" between the
+    pre-contract extractor tests and the post-contract pipeline shape:
+      - ``likelihood`` (canonical) / ``probability`` (legacy raw) — same
+        concept, diagnostic-only (not used for scoring).
+      - ``description`` (canonical) / ``summary`` (legacy raw) — used to
+        build ``evidence_summary``.
+      - ``source`` (canonical) / ``source_quote`` + ``source_text_snippet``
+        (legacy raw) — used to build ``quote``.
+    ``risk_score``, ``immediate_alert``, and ``mitigation_suggestion`` have
+    **no equivalent field on ``RiskItem``** — they are genuinely dropped at
+    the contract boundary, not renamed. Re-adding them would require
+    re-freezing the contract with implementer sign-off (out of scope here;
+    see TASK-V3-013-12). Decision recorded: leave them out of the frozen
+    contract. This is not material — ``risk_score`` already has a graceful
+    categorical fallback via ``impact`` (see above), and
+    ``immediate_alert``/``mitigation_suggestion`` are informational-only
+    ``raw_data`` fields that are simply absent (``None``) for
+    contract-shaped input, same as any other optional field with no data.
 """
 from __future__ import annotations
 
@@ -143,8 +171,12 @@ def build_risk_signals(
                 quote=_quote_for(raw),
                 raw_data={
                     "extractor_category": raw_category,
-                    "probability": raw.get("probability"),
+                    # `likelihood` is the RiskItem contract field; `probability`
+                    # is N4's pre-contract raw key for the same concept (IR-3).
+                    "likelihood": raw.get("likelihood", raw.get("probability")),
                     "impact": raw.get("impact"),
+                    # Dropped at the RiskItem contract boundary — see IR-3 module
+                    # docstring. Only present for pre-contract raw extractor dicts.
                     "risk_score": raw.get("risk_score"),
                     "title": raw.get("title"),
                     "immediate_alert": raw.get("immediate_alert", False),
@@ -188,14 +220,23 @@ def _severity_for(raw: dict[str, Any]) -> SeverityLevel:
 
 def _summary_for(raw: dict[str, Any]) -> str:
     title = (raw.get("title") or "").strip()
-    summary = (raw.get("summary") or "").strip()
+    # `description` is the RiskItem contract field; `summary` is N4's
+    # pre-contract raw key for the same concept (IR-3).
+    summary = (raw.get("description") or raw.get("summary") or "").strip()
     if title and summary:
         return f"{title} — {summary}"
     return title or summary or "Risk extracted by LLM"
 
 
 def _quote_for(raw: dict[str, Any]) -> str:
-    quote = raw.get("source_quote") or raw.get("source_text_snippet") or ""
+    # `source` is the RiskItem contract field; `source_quote` /
+    # `source_text_snippet` are N4's pre-contract raw keys (IR-3).
+    quote = (
+        raw.get("source")
+        or raw.get("source_quote")
+        or raw.get("source_text_snippet")
+        or ""
+    )
     quote = str(quote).strip()
     if len(quote) > _QUOTE_MAX_CHARS:
         return quote[:_QUOTE_MAX_CHARS] + "..."

@@ -16,6 +16,7 @@ from src.analysis.adapters.graph.risk_signal_bridge import (
     RiskBridgeResult,
     build_risk_signals,
 )
+from src.analysis.domain.contracts import RiskItem
 from src.coherence.models import FindingSignal
 
 # ---------------------------------------------------------------------------
@@ -175,6 +176,62 @@ class TestCoverageSeeding:
     def test_coverage_seed_is_bool(self):
         result = build_risk_signals([_risk()], clause_id="c")
         assert result.coverage_seed["LEGAL"] is True
+
+
+class TestRiskItemShapedInput:
+    """IR-3 (TASK-V3-013-12) regression: bridge must handle the RiskItem
+    contract shape, not just N4's pre-contract raw extractor shape.
+
+    Both production callers (nodes_extended.py N8 and project_graph.py's
+    cross-artifact aggregation) hand ``build_risk_signals`` dicts that have
+    already been validated against the FROZEN ``RiskItem`` contract — i.e.
+    ``likelihood``/``description``/``source``, never
+    ``probability``/``summary``/``source_quote``. Before this fix, those
+    RiskItem-only dicts silently produced signals stripped of summary/quote/
+    likelihood metadata (no crash — the bridge is dict-shaped and every
+    field access is a ``.get()`` — but downstream diagnostics quietly lost
+    richness for every AI-extracted risk).
+    """
+
+    def _risk_item_dict(self, **overrides: object) -> dict:
+        base: dict = {
+            "title": "Cross-contract default risk",
+            "description": "Owner may default on cross-contract obligations",
+            "category": "LEGAL",
+            "severity": "HIGH",
+            "impact": "HIGH",
+            "likelihood": "MEDIUM",
+            "confidence": 0.8,
+            "source": "The Contractor shall be entitled to suspend...",
+        }
+        base.update(overrides)
+        return RiskItem.model_validate(base).model_dump(mode="json")
+
+    def test_signal_richness_from_riskitem_shaped_dict(self):
+        result = build_risk_signals([self._risk_item_dict()], clause_id="c1")
+        assert len(result.signals) == 1
+        sig = result.signals[0]
+
+        # evidence_summary is built from title + description (not `summary`).
+        assert "Cross-contract default risk" in sig.evidence_summary
+        assert "Owner may default on cross-contract obligations" in sig.evidence_summary
+
+        # quote is built from `source` (not `source_quote`/`source_text_snippet`).
+        assert sig.quote == "The Contractor shall be entitled to suspend..."
+
+        # likelihood metadata survives into raw_data under the canonical key.
+        assert sig.raw_data["likelihood"] == "MEDIUM"
+
+        # impact_score still resolves via the categorical `impact` fallback
+        # since RiskItem carries no `risk_score`.
+        assert sig.impact_score == pytest.approx(0.7)  # HIGH
+        assert sig.category == "LEGAL"
+        assert result.dropped_count == 0
+
+    def test_riskitem_dict_without_likelihood_has_no_probability_leak(self):
+        risk = self._risk_item_dict(likelihood=None)
+        result = build_risk_signals([risk], clause_id="c1")
+        assert result.signals[0].raw_data["likelihood"] is None
 
 
 class TestRiskBridgeResult:
