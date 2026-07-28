@@ -335,7 +335,11 @@ async def test_ai_service_delegates_uncached_generation_to_pii_wrapper(monkeypat
     service.budget_remaining_usd = None
     service.prompt_cache = SimpleNamespace(enabled=False)
     service.router = SimpleNamespace(
-        select_model=MagicMock(return_value=SimpleNamespace(name="claude-haiku-test", max_tokens=100)),
+        select_model=MagicMock(
+            return_value=SimpleNamespace(
+                name="claude-haiku-test", max_tokens=100, tier=ModelTier.FLASH
+            )
+        ),
         estimate_cost=MagicMock(return_value=0.01),
     )
     service.usage_logger = SimpleNamespace(log_success=AsyncMock())
@@ -346,7 +350,7 @@ async def test_ai_service_delegates_uncached_generation_to_pii_wrapper(monkeypat
                 model_used="claude-haiku-test",
                 input_tokens=2,
                 output_tokens=1,
-                cost_usd=0.01,
+                cost_usd=0.02,
                 latency_ms=3.0,
             )
         )
@@ -361,6 +365,21 @@ async def test_ai_service_delegates_uncached_generation_to_pii_wrapper(monkeypat
     wrapper_request = service.wrapper.generate.await_args.args[0]
     assert wrapper_request.tenant_id == tenant_id
     assert wrapper_request.bypass_anonymization is False
+    assert wrapper_request.force_model_tier is ModelTier.FLASH
+    assert response.cost_usd == 0.02
+
+
+def test_ai_service_binds_an_injected_api_key_to_its_wrapper(monkeypatch) -> None:
+    """TS-AI-050-003: an injected provider key must not fall back to global settings."""
+    wrapper_factory = MagicMock()
+    monkeypatch.setattr("src.core.ai.service.AnthropicWrapper", wrapper_factory, raising=False)
+    monkeypatch.setattr("src.core.ai.service.get_anthropic_wrapper", MagicMock())
+    monkeypatch.setattr("src.core.ai.service.get_model_router", MagicMock())
+    monkeypatch.setattr("src.core.ai.service.get_prompt_cache_service", MagicMock())
+
+    AIService(anthropic_api_key="sk-ant-injected-key")
+
+    wrapper_factory.assert_called_once_with(api_key="sk-ant-injected-key")
 
 
 @pytest.mark.asyncio

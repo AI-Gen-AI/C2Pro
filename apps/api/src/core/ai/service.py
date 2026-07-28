@@ -30,7 +30,7 @@ from tenacity import (
 
 from src.config import settings
 from src.core.ai.anthropic_wrapper import AIRequest as WrapperRequest
-from src.core.ai.anthropic_wrapper import get_anthropic_wrapper
+from src.core.ai.anthropic_wrapper import AnthropicWrapper, get_anthropic_wrapper
 from src.core.ai.llm_client import ProviderAPIError, ProviderRateLimitError
 from src.core.ai.model_router import (
     ModelTier,
@@ -160,10 +160,14 @@ class AIService:
 
         self.router = get_model_router()
         self.prompt_cache = get_prompt_cache_service()
-        if wrapper is None:
-            self.wrapper = get_anthropic_wrapper()
-        else:
+        if wrapper is not None:
             self.wrapper = wrapper
+        elif anthropic_api_key is not None:
+            # Honor explicitly injected credentials instead of silently using
+            # the process-wide wrapper configured from settings.
+            self.wrapper = AnthropicWrapper(api_key=self.api_key)
+        else:
+            self.wrapper = get_anthropic_wrapper()
         self.usage_logger = AIUsageLogger()
 
         logger.info(
@@ -305,9 +309,7 @@ class AIService:
         logger.info(
             "ai_request_started",
             tenant_id=str(self.tenant_id) if self.tenant_id else None,
-            task_type=request.task_type
-            if isinstance(request.task_type, str)
-            else request.task_type.value,
+            task_type=task_value,
             model=model_config.name,
             input_tokens_estimate=input_token_estimate,
         )
@@ -320,7 +322,7 @@ class AIService:
                     task_type=request.task_type,
                     max_tokens=max_tokens,
                     temperature=request.temperature,
-                    force_model_tier=request.force_model_tier,
+                    force_model_tier=model_config.tier,
                     tenant_id=self.tenant_id,
                     use_cache=False,
                 )
@@ -338,12 +340,8 @@ class AIService:
         # 3. The wrapper rehydrates content after provider transport.
         content = response.content
 
-        # 5. Calculate actual cost
-        actual_cost = self.router.estimate_cost(
-            model=model_config,
-            input_tokens=response.input_tokens,
-            output_tokens=response.output_tokens,
-        )
+        # 5. The wrapper reports the cost for the exact model it selected.
+        actual_cost = response.cost_usd
 
         execution_time_ms = (time.perf_counter() - start_time) * 1000
 
@@ -351,10 +349,8 @@ class AIService:
         logger.info(
             "ai_request_completed",
             tenant_id=str(self.tenant_id) if self.tenant_id else None,
-            task_type=request.task_type
-            if isinstance(request.task_type, str)
-            else request.task_type.value,
-            model=model_config.name,
+            task_type=task_value,
+            model=response.model_used,
             prompt_version=request.prompt_version,  # CRÍTICO para auditoría
             input_tokens=response.input_tokens,
             output_tokens=response.output_tokens,
@@ -377,7 +373,7 @@ class AIService:
                 extraction_fingerprint,
                 {
                     "content": content,
-                    "model": model_config.name,
+                    "model": response.model_used,
                     "input_tokens": response.input_tokens,
                     "output_tokens": response.output_tokens,
                     "cost_usd": actual_cost,
@@ -388,7 +384,7 @@ class AIService:
         await self._save_usage_log(
             tenant_id=self.tenant_id,
             project_id=None,
-            model=model_config.name,
+            model=response.model_used,
             operation=request.task_type,
             prompt_version=request.prompt_version,
             input_tokens=response.input_tokens,

@@ -1,6 +1,6 @@
 """Tests for AI usage log persistence (TASK-FRT-128)."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -20,12 +20,12 @@ def service(tenant_id: UUID) -> AIService:
     with (
         patch("src.core.ai.service.get_model_router"),
         patch("src.core.ai.service.get_prompt_cache_service"),
-        patch("src.core.ai.anthropic_wrapper.get_anthropic_wrapper"),
     ):
         return AIService(
             anthropic_api_key="sk-ant-test-key",
             tenant_id=tenant_id,
             budget_remaining_usd=100.0,
+            wrapper=MagicMock(),
         )
 
 
