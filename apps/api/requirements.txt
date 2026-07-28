@@ -91,7 +91,7 @@ pytest-benchmark==5.2.3
 schemathesis>=4.24.3  # TASK-QA-200/TASK-OPS-DOCFLOW-015: OpenAPI contract testing
 factory-boy==3.3.3
 Faker==40.36.0  # For factory-boy
-docker>=7.0.0  # Required by testcontainers-backed persistence tests
+docker>=7.2.0  # Required by testcontainers-backed persistence tests
 testcontainers>=4.14.0  # PostgreSQL integration tests
 freezegun==1.5.5  # Deterministic time control for boundary-sensitive tests
 
