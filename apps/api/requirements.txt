@@ -46,12 +46,20 @@ Pillow>=12.3.0  # Image processing for OCR
 PyJWT[crypto]>=2.13.0
 bcrypt==5.0.0
 
-# Privacy & GDPR Compliance
-# presidio-analyzer==2.2.354  # Requires spacy
-# presidio-anonymizer==2.2.354  # Requires spacy
-# spacy==3.7.2  # Requires Visual Studio Build Tools on Windows - commented out
-# Note: Install Spanish model separately:
-#   python -m spacy download es_core_news_lg
+# Privacy & GDPR Compliance (SEC-002: PII gate NER hardening)
+# spacy on Windows needs a prebuilt wheel or Visual Studio Build Tools to
+# compile from source; both are available as manylinux wheels on Linux
+# (CI/Docker), where this actually installs and runs.
+presidio-analyzer==2.2.354  # Requires spacy
+presidio-anonymizer==2.2.354  # Requires spacy
+spacy==3.7.2
+# The Spanish spaCy model is not pip-installable — it's a separate ~100MB
+# download, provisioned in the Docker image (see apps/api/Dockerfile) via:
+#   python -m spacy download es_core_news_md
+# If the model isn't installed (e.g. a local dev machine that skipped this
+# step), src.core.privacy.anonymizer degrades to regex-only PII detection —
+# it never fails closed by crashing, and never fails open by skipping
+# anonymization silently.
 
 # Observability
 sentry-sdk[fastapi]>=2.0.0
