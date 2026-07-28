@@ -18,7 +18,6 @@ def tenant_id() -> UUID:
 def service(tenant_id: UUID) -> AIService:
     """Create AIService with mocked dependencies."""
     with (
-        patch("src.core.ai.service.Anthropic"),
         patch("src.core.ai.service.get_model_router"),
         patch("src.core.ai.service.get_prompt_cache_service"),
         patch("src.core.ai.anthropic_wrapper.get_anthropic_wrapper"),

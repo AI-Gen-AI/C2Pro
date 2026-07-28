@@ -19,10 +19,7 @@ import time
 from typing import Any
 from uuid import UUID
 
-import anthropic
 import structlog
-from anthropic import Anthropic
-from anthropic.types import Message
 from tenacity import (
     RetryError,
     retry,
@@ -32,6 +29,9 @@ from tenacity import (
 )
 
 from src.config import settings
+from src.core.ai.anthropic_wrapper import AIRequest as WrapperRequest
+from src.core.ai.anthropic_wrapper import get_anthropic_wrapper
+from src.core.ai.llm_client import ProviderAPIError, ProviderRateLimitError
 from src.core.ai.model_router import (
     ModelTier,
     TaskType,
@@ -158,12 +158,9 @@ class AIService:
         if not self.api_key:
             raise ValueError("Anthropic API key not configured")
 
-        self.client = Anthropic(api_key=self.api_key)
         self.router = get_model_router()
         self.prompt_cache = get_prompt_cache_service()
         if wrapper is None:
-            from src.core.ai.anthropic_wrapper import get_anthropic_wrapper
-
             self.wrapper = get_anthropic_wrapper()
         else:
             self.wrapper = wrapper
@@ -200,7 +197,7 @@ class AIService:
 
         Raises:
             ValueError: Si se excede el budget
-            anthropic.APIError: Si hay error en la API
+            ProviderAPIError: Si hay error en el proveedor
         """
         start_time = time.perf_counter()
 
@@ -304,15 +301,7 @@ class AIService:
                 f"estimated cost: ${estimated_cost:.4f}"
             )
 
-        # 2. Prepare request
-        messages = [
-            {
-                "role": "user",
-                "content": request.prompt,
-            }
-        ]
-
-        # 3. Call API
+        # 2. Call the canonical PII-safe provider boundary.
         logger.info(
             "ai_request_started",
             tenant_id=str(self.tenant_id) if self.tenant_id else None,
@@ -324,15 +313,20 @@ class AIService:
         )
 
         try:
-            response = self.client.messages.create(
-                model=model_config.name,
-                max_tokens=max_tokens,
-                temperature=request.temperature,
-                system=request.system_prompt or "",
-                messages=messages,  # type: ignore[arg-type]
+            response = await self.wrapper.generate(
+                WrapperRequest(
+                    prompt=request.prompt,
+                    system_prompt=request.system_prompt,
+                    task_type=request.task_type,
+                    max_tokens=max_tokens,
+                    temperature=request.temperature,
+                    force_model_tier=request.force_model_tier,
+                    tenant_id=self.tenant_id,
+                    use_cache=False,
+                )
             )
 
-        except anthropic.APIError as e:
+        except ProviderAPIError as e:
             logger.error(
                 "ai_request_failed",
                 error=str(e),
@@ -341,14 +335,14 @@ class AIService:
             )
             raise
 
-        # 4. Extract content
-        content = self._extract_content(response)
+        # 3. The wrapper rehydrates content after provider transport.
+        content = response.content
 
         # 5. Calculate actual cost
         actual_cost = self.router.estimate_cost(
             model=model_config,
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
         )
 
         execution_time_ms = (time.perf_counter() - start_time) * 1000
@@ -362,8 +356,8 @@ class AIService:
             else request.task_type.value,
             model=model_config.name,
             prompt_version=request.prompt_version,  # CRÍTICO para auditoría
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
             cost_usd=actual_cost,
             execution_time_ms=execution_time_ms,
             system_prompt=request.system_prompt,
@@ -384,8 +378,8 @@ class AIService:
                 {
                     "content": content,
                     "model": model_config.name,
-                    "input_tokens": response.usage.input_tokens,
-                    "output_tokens": response.usage.output_tokens,
+                    "input_tokens": response.input_tokens,
+                    "output_tokens": response.output_tokens,
                     "cost_usd": actual_cost,
                 },
             )
@@ -397,8 +391,8 @@ class AIService:
             model=model_config.name,
             operation=request.task_type,
             prompt_version=request.prompt_version,
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
             cost_usd=actual_cost,
             cached=False,
             latency_ms=round(execution_time_ms, 2),
@@ -408,9 +402,9 @@ class AIService:
 
         return AIResponse(
             content=content,
-            model=model_config.name,
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+            model=response.model_used,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
             cost_usd=actual_cost,
             cached=False,
             execution_time_ms=round(execution_time_ms, 2),
@@ -424,11 +418,10 @@ class AIService:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=4, max=10),
-        retry=retry_if_exception_type((anthropic.RateLimitError, anthropic.APIError)),
+        retry=retry_if_exception_type((ProviderRateLimitError, ProviderAPIError)),
         reraise=True,
     )
     async def _call_wrapper(self, system_prompt: str, user_content: str) -> Any:
-        from src.core.ai.anthropic_wrapper import AIRequest as WrapperRequest
         from src.core.ai.model_router import AITaskType
 
         request = WrapperRequest(
@@ -454,7 +447,7 @@ class AIService:
             raise AIServiceError(
                 message="AI service temporarily unavailable. Please retry shortly."
             ) from exc
-        except anthropic.APIError as exc:
+        except ProviderAPIError as exc:
             raise AIServiceError(
                 message="AI service temporarily unavailable. Please retry shortly."
             ) from exc
@@ -484,15 +477,6 @@ class AIService:
         Regla aproximada: 1 token ≈ 4 caracteres
         """
         return len(text) // 4
-
-    def _extract_content(self, message: Message) -> str:
-        """Extrae contenido de texto de la respuesta."""
-        for block in message.content:
-            text = getattr(block, "text", None)
-            if isinstance(text, str):
-                return text
-
-        return ""
 
     async def _save_usage_log(
         self,

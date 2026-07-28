@@ -23,8 +23,6 @@ from typing import Any, TypeVar
 from uuid import UUID, uuid4
 
 import structlog
-from anthropic import AsyncAnthropic
-from anthropic.types import Message
 from pydantic import BaseModel
 
 from src.config import settings
@@ -146,7 +144,7 @@ class AIResponse:
     task_type: str = ""
 
     # Raw response (opcional)
-    raw_response: Message | None = None
+    raw_response: Any | None = None
 
     @property
     def usage(self) -> dict[str, int]:
@@ -246,9 +244,6 @@ class AnthropicWrapper:
             timeout_seconds=resolved_timeout,
         )
         self.anonymizer_service: PiiAnonymizerService = PiiAnonymizerService()
-
-        # Initialize async client for direct calls
-        self.async_client = AsyncAnthropic(api_key=self.api_key, timeout=resolved_timeout)
 
         # Statistics
         self.total_requests = 0

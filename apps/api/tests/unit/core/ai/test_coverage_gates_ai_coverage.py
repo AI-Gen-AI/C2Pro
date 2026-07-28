@@ -149,6 +149,54 @@ async def test_llm_client_cached_generation_short_circuits_api(monkeypatch) -> N
 
 
 @pytest.mark.asyncio
+async def test_llm_client_forwards_tools_to_provider(monkeypatch) -> None:
+    """TS-AI-048-003: provider calls preserve Anthropic tool-use payloads."""
+    client = object.__new__(LLMClient)
+    client.circuit_breaker = None
+    client.total_requests = 0
+    client.total_retries = 0
+    client.total_cost_usd = 0.0
+    client.max_retries = 0
+    client.flash_cache = SimpleNamespace(
+        get=AsyncMock(return_value=None),
+        set=AsyncMock(),
+        size=0,
+    )
+    client.client = MagicMock()
+    client.client.messages.create.return_value = SimpleNamespace(
+        content=[SimpleNamespace(text="ok")],
+        usage=SimpleNamespace(input_tokens=2, output_tokens=1),
+    )
+    client._calculate_cost = lambda **_kwargs: 0.01
+
+    monkeypatch.setattr("src.core.ai.llm_client.record_ai_cache_miss", lambda *args: None)
+    monkeypatch.setattr("src.core.ai.llm_client.record_ai_cache_size", lambda *args: None)
+    monkeypatch.setattr(
+        "src.core.ai.llm_client.get_token_counter",
+        lambda: SimpleNamespace(
+            estimate_request=lambda **_kwargs: SimpleNamespace(
+                input_tokens=2,
+                estimated_output_tokens=1,
+                total_cost_usd=0.01,
+                context_usage_percent=0.0,
+                warnings=[],
+            )
+        ),
+    )
+    tools = [{"name": "lookup_clause", "description": "Find a clause", "input_schema": {}}]
+
+    await client.generate(
+        LLMRequest(
+            model="claude-haiku-test",
+            messages=[{"role": "user", "content": "Find the clause."}],
+            tools=tools,
+        )
+    )
+
+    assert client.client.messages.create.call_args.kwargs["tools"] == tools
+
+
+@pytest.mark.asyncio
 async def test_prompt_cache_hit_expired_decode_and_invalidate_paths(monkeypatch) -> None:
     """TS-AI-049-001: Cover prompt-cache hit, expiry, decode failure, set, and invalidation."""
     fresh = CachedPromptResponse(
@@ -276,6 +324,43 @@ async def test_ai_service_cache_budget_json_and_batch_paths(monkeypatch) -> None
 
     service.generate = AsyncMock(side_effect=["a", "b"])
     assert await service.generate_batch([MagicMock(), MagicMock()]) == ["a", "b"]
+
+
+@pytest.mark.asyncio
+async def test_ai_service_delegates_uncached_generation_to_pii_wrapper(monkeypatch) -> None:
+    """TS-AI-050-002: legacy service calls the PII-safe wrapper, never a raw SDK client."""
+    tenant_id = uuid4()
+    service = object.__new__(AIService)
+    service.tenant_id = tenant_id
+    service.budget_remaining_usd = None
+    service.prompt_cache = SimpleNamespace(enabled=False)
+    service.router = SimpleNamespace(
+        select_model=MagicMock(return_value=SimpleNamespace(name="claude-haiku-test", max_tokens=100)),
+        estimate_cost=MagicMock(return_value=0.01),
+    )
+    service.usage_logger = SimpleNamespace(log_success=AsyncMock())
+    service.wrapper = SimpleNamespace(
+        generate=AsyncMock(
+            return_value=WrapperResponse(
+                content='{"status": "ok"}',
+                model_used="claude-haiku-test",
+                input_tokens=2,
+                output_tokens=1,
+                cost_usd=0.01,
+                latency_ms=3.0,
+            )
+        )
+    )
+    monkeypatch.setattr("src.core.ai.service.get_cache_service", lambda: None)
+
+    response = await service.generate(
+        AIRequest(prompt="Contact alice@example.com", task_type=TaskType.SIMPLE_EXTRACTION)
+    )
+
+    assert response.content == '{"status": "ok"}'
+    wrapper_request = service.wrapper.generate.await_args.args[0]
+    assert wrapper_request.tenant_id == tenant_id
+    assert wrapper_request.bypass_anonymization is False
 
 
 @pytest.mark.asyncio
