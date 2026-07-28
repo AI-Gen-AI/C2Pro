@@ -46,6 +46,11 @@ from src.core.resilience.config import get_circuit_breaker_settings
 
 logger = structlog.get_logger()
 
+# Application layers handle provider failures through these boundary aliases,
+# keeping Anthropic SDK imports confined to this client implementation.
+ProviderAPIError = anthropic.APIError
+ProviderRateLimitError = anthropic.RateLimitError
+
 # ===========================================
 # CONSTANTS
 # ===========================================
@@ -382,6 +387,8 @@ class LLMClient:
                     api_kwargs["top_p"] = request.top_p
                 if request.top_k is not None:
                     api_kwargs["top_k"] = request.top_k
+                if request.tools is not None:
+                    api_kwargs["tools"] = request.tools
 
                 raw_response = self.client.messages.create(**api_kwargs)
 
