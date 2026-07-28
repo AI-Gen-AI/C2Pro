@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.core.ai.model_router import TaskType
+from src.core.ai.model_router import ModelTier, TaskType
 from src.core.ai.service import AIRequest, AIService
 from src.core.cache import (
     build_extraction_cache_fingerprint,
@@ -104,12 +104,14 @@ async def test_extraction_service_uses_one_contract_fingerprint_for_cache_read_a
 
     service = object.__new__(AIService)
     service.budget_remaining_usd = None
-    service.client = SimpleNamespace(
-        messages=SimpleNamespace(
-            create=MagicMock(
-                return_value=SimpleNamespace(
-                    usage=SimpleNamespace(input_tokens=10, output_tokens=5),
-                )
+    service.wrapper = SimpleNamespace(
+        generate=AsyncMock(
+            return_value=SimpleNamespace(
+                content='{"clauses": []}',
+                model_used="claude-haiku-4-20250514",
+                input_tokens=10,
+                output_tokens=5,
+                cost_usd=0.01,
             )
         )
     )
@@ -117,12 +119,15 @@ async def test_extraction_service_uses_one_contract_fingerprint_for_cache_read_a
     service.router = SimpleNamespace(
         estimate_cost=MagicMock(return_value=0.01),
         select_model=MagicMock(
-            return_value=SimpleNamespace(name="claude-haiku-4-20250514", max_tokens=1024)
+            return_value=SimpleNamespace(
+                name="claude-haiku-4-20250514",
+                max_tokens=1024,
+                tier=ModelTier.FLASH,
+            )
         ),
     )
     service.tenant_id = None
     service._estimate_tokens = lambda _prompt: 10
-    service._extract_content = MagicMock(return_value='{"clauses": []}')
     service._save_usage_log = AsyncMock()
 
     request = AIRequest(
