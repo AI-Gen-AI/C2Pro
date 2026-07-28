@@ -1,5 +1,5 @@
 """
-TASK-BCK-055: Coherence structured extraction layer.
+TS-SEC-CLAUSE-PII-001 / TASK-BCK-055: Coherence structured extraction layer.
 
 Extracts the specific fields that deterministic rules need from raw clause text
 using a targeted Claude Haiku prompt. Results are cached in
@@ -23,6 +23,8 @@ from typing import Any, cast
 from uuid import UUID
 
 from src.coherence.models import Clause
+from src.core.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper
+from src.core.ai.model_router import AITaskType, ModelTier
 
 logger = logging.getLogger(__name__)
 
@@ -122,25 +124,23 @@ def _is_valid_uuid(value: str) -> bool:
 
 
 async def _call_llm(clause_text: str) -> dict[str, Any]:
-    """Call Claude Haiku with the combined extraction prompt."""
+    """Call Claude Haiku through the PII-safe Anthropic wrapper."""
     if os.getenv("C2PRO_AI_MOCK") == "1":
         # Same mock convention as src.analysis.adapters.ai.anthropic_client.AIService:
         # deterministic, zero-latency, no real Anthropic call.
         return {}
     try:
-        from anthropic import AsyncAnthropic
-
-        client = AsyncAnthropic()
-        try:
-            response = await client.messages.create(
-                model="claude-haiku-4-5-20251001",
+        response = await get_anthropic_wrapper().generate(
+            AIRequest(
+                prompt=_build_prompt(clause_text),
+                system_prompt=_SYSTEM_PROMPT,
+                task_type=AITaskType.CONTRACT_EXTRACTION,
+                force_model_tier=ModelTier.FLASH,
                 max_tokens=2048,
-                system=_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": _build_prompt(clause_text)}],
+                use_cache=False,
             )
-            raw = cast(Any, response.content[0]).text.strip()
-        finally:
-            await client.close()
+        )
+        raw = response.content.strip()
 
         # Strip markdown fences if present
         if raw.startswith("```"):
