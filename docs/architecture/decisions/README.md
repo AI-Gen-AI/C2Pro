@@ -15,7 +15,7 @@ This section contains the active architecture decision records for the current r
 
 > **Reserved (in-flight, not yet filed):** ADR-010 (Evidence Maturity), ADR-011 (Evidence Intelligence), ADR-012 (deferred) are referenced in `CHANGELOG.md` / `CLAUDE.md`. The v3.0 canon starts at ADR-013 to avoid collision.
 
-## C2Pro v3.0 — Project Intelligence Overlay (ADR-013 → ADR-021)
+## C2Pro v3.0 — Project Intelligence Overlay (ADR-013 → ADR-022)
 
 Canonical set ratified 2026-06-07 by multi-model arbitration (DeepSeek / Codex / Claude / Gemini blueprints + Architecture Challenger verdict; sources in [`docs/audits/`](../../audits/)). Cross-cutting invariant **INV-1 (Evidence & Provenance, tiered)** is defined in ADR-013 and extends the in-flight evidence layer.
 
@@ -28,6 +28,7 @@ Canonical set ratified 2026-06-07 by multi-model arbitration (DeepSeek / Codex /
 - [ADR-019 Alert Correlation & Action Lifecycle](./ADR-019-alert-correlation-action-lifecycle.md) — **P2 Differentiation**
 - [ADR-020 HITL Workflow System](./ADR-020-hitl-workflow-system.md) — **P2 Differentiation**
 - [ADR-021 Read-Model & Briefing Projection](./ADR-021-read-model-briefing-projection.md) — **P3 · Deferred**
+- [ADR-022 Contract Clarity Findings (Health v0, Findings-Only)](./ADR-022-contract-clarity-findings.md) — **P2 · extends ADR-018** · resolves TASK-V3-P1-SCOPE-11
 
 **Critical path:** 013 → 014 → 015 (revisions) → 016 (L1) → 017 → 018 (v0).
 **Build gate:** the canon is *ratified*, not simultaneously funded. Build the **Thin Spine** (013–018 v0) first; everything after Month 3 (019, 020, 018-v1, 021) is gated behind one real Contract Manager using the Change-Impact loop weekly.
