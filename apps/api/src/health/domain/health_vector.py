@@ -14,6 +14,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.evidence.domain.runtime_trust import EvidenceRef
+from src.health.domain.contract_clarity import ContractClarityFinding
 
 _FROZEN_CONTRACT = ConfigDict(extra="forbid", frozen=True)
 
@@ -112,6 +113,9 @@ class HealthVector(BaseModel):
     composite_band: HealthBand = HealthBand.UNKNOWN
     composite_trend: HealthTrend = HealthTrend.UNKNOWN
     computed_at: datetime
+    # ADR-022 (V3-P1-SCOPE-11): findings-only, never rolled into a dimension
+    # score or composite_score. See health.domain.contract_clarity.
+    contract_clarity_findings: list[ContractClarityFinding] = Field(default_factory=list)
 
 
 __all__ = [

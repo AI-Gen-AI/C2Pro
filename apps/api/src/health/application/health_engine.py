@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
+from src.health.domain.contract_clarity import ContractClarityFinding
 from src.health.domain.health_vector import (
     HealthBand,
     HealthSignal,
@@ -22,8 +23,15 @@ def assemble_health_vector(
     *,
     signals: list[HealthSignal],
     prior_composite: float | None,
+    contract_clarity_findings: list[ContractClarityFinding] | None = None,
 ) -> HealthVector:
-    """Assemble a project HealthVector from already honest-null dimension signals."""
+    """Assemble a project HealthVector from already honest-null dimension signals.
+
+    ``contract_clarity_findings`` (ADR-022 / V3-P1-SCOPE-11) is passed through
+    verbatim and is NEVER included in the weighted rollup below — it has no
+    score/confidence to weigh. Only ``signals`` (HealthSignal dimensions)
+    contribute to ``composite_score``.
+    """
 
     scored = [signal for signal in signals if signal.score is not None]
     if not scored:
@@ -48,6 +56,7 @@ def assemble_health_vector(
         composite_score=composite_score,
         composite_band=composite_band,
         composite_trend=trend,
+        contract_clarity_findings=contract_clarity_findings or [],
         computed_at=datetime.now(UTC).replace(tzinfo=None),
     )
 
