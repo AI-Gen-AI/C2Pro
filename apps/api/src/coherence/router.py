@@ -32,6 +32,7 @@ from .domain.v2_constants import SCORE_VERSION_V1
 from .graph.graph import evaluate_coherence_async
 from .graph.state import EvaluationConfig
 from .models import Clause, CoherenceResult, DashboardSummary, EnrichedCoherenceResult
+from .schedule_clause_builder import build_schedule_clauses
 
 # Coherence evaluate router — mounted with api_v1_prefix in main.py
 logger = structlog.get_logger()
@@ -263,6 +264,9 @@ async def get_clauses_from_rag(
     targeted_clauses = await _with_budget_clause_candidates(
         targeted_clauses, db, project_id, tenant_id
     )
+    targeted_clauses = await _with_schedule_clause_candidates(
+        targeted_clauses, db, project_id, tenant_id, max_chunks=max_chunks
+    )
     if targeted_clauses:
         return targeted_clauses
 
@@ -283,6 +287,29 @@ async def _with_budget_clause_candidates(
     combined = list(clauses)
     seen_ids = {clause.id for clause in clauses}
     for clause in await build_budget_clauses(db, project_id, tenant_id):
+        if clause.id not in seen_ids:
+            combined.append(clause)
+            seen_ids.add(clause.id)
+    return combined
+
+
+async def _with_schedule_clause_candidates(
+    clauses: list[Clause],
+    db: AsyncSession,
+    project_id: UUID,
+    tenant_id: UUID,
+    *,
+    max_chunks: int,
+) -> list[Clause]:
+    """Return persisted clauses plus tenant-scoped synthetic schedule clauses."""
+    combined = list(clauses)
+    seen_ids = {clause.id for clause in clauses}
+    for clause in await build_schedule_clauses(
+        db,
+        project_id,
+        tenant_id,
+        max_items=max_chunks,
+    ):
         if clause.id not in seen_ids:
             combined.append(clause)
             seen_ids.add(clause.id)

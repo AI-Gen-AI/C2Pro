@@ -475,6 +475,53 @@ class TestExtractionServiceIntegration:
         assert result == 0
 
     @pytest.mark.asyncio
+    async def test_extract_wbs_items_preserves_explicit_predecessor_code(self):
+        """TS-IA-COH-SCH-002: parsed schedule dependencies persist as WBS metadata."""
+        from src.documents.adapters.extraction.documents_entity_extraction_service import (
+            DocumentsEntityExtractionService,
+        )
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute = AsyncMock()
+        service = DocumentsEntityExtractionService(
+            stakeholder_use_case_factory=MagicMock(return_value=MagicMock()),
+            wbs_use_case_factory=MagicMock(return_value=mock_use_case),
+            bom_use_case_factory=MagicMock(return_value=MagicMock()),
+            user_id=uuid4(),
+        )
+        document = Document(
+            id=uuid4(),
+            project_id=uuid4(),
+            tenant_id=uuid4(),
+            document_type=DocumentType.SCHEDULE,
+            filename="schedule.xlsx",
+            upload_status=DocumentStatus.PARSED,
+        )
+
+        created = await service._extract_wbs_items(
+            document,
+            {
+                "schedule": [
+                    {
+                        "task": "Structure",
+                        "wbs": "SCH-002",
+                        "start_date": "2026-04-01",
+                        "end_date": "2026-08-01",
+                        "predecessors": "SCH-001",
+                        "status": "delayed",
+                    }
+                ]
+            },
+            document.tenant_id,
+        )
+
+        assert created == 1
+        payload = mock_use_case.execute.await_args.args[0]
+        assert payload.wbs_metadata["predecessor_id"] == "SCH-001"
+        assert payload.wbs_metadata["status"] == "delayed"
+
+    @pytest.mark.asyncio
     async def test_extract_bom_items_no_budget(self):
         """Test BOM extraction returns 0 when no budget data."""
         from src.documents.adapters.extraction.documents_entity_extraction_service import (

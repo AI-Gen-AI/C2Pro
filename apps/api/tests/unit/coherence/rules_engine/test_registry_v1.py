@@ -123,6 +123,39 @@ DETERMINISTIC_CASES = [
         ),
     ),
     (
+        "DET-TIM-GAP",
+        "TIME",
+        Clause(
+            id="time-3",
+            text="Milestone timeline.",
+            data={
+                "milestones": [
+                    {"date": "2026-01-01"},
+                    {"date": "2026-05-15"},
+                ],
+            },
+        ),
+    ),
+    (
+        "DET-TIM-PREDECESSOR",
+        "TIME",
+        Clause(
+            id="time-4",
+            text="Dependent activities.",
+            data={
+                "schedule_items": [
+                    {"id": "foundation", "name": "Foundation", "end_date": "2026-04-15"},
+                    {
+                        "id": "structure",
+                        "name": "Structure",
+                        "predecessor_id": "foundation",
+                        "start_date": "2026-04-01",
+                    },
+                ],
+            },
+        ),
+    ),
+    (
         "DET-TEC-SPEC",
         "TECHNICAL",
         Clause(
@@ -176,15 +209,15 @@ LLM_CASES = [
 ]
 
 
-def test_v1_registry_exposes_exactly_20_evaluators_with_14_det_and_6_llm() -> None:
+def test_v1_registry_exposes_exactly_22_evaluators_with_16_det_and_6_llm() -> None:
     evaluators = registry.list_evaluators(llm_port=FakeLLMRulePort())
 
     deterministic = [e for e in evaluators if getattr(e, "source", "deterministic") == "deterministic"]
     llm = [e for e in evaluators if getattr(e, "source", "deterministic") == "llm"]
 
-    # TASK-COH-BUD-RECON-004 deliberately adds DET-BUD-INTERNAL.
-    assert len(evaluators) == 20
-    assert len(deterministic) == 14
+    # TASK-BCK-064 wires the two existing TIME evaluators into the live registry.
+    assert len(evaluators) == 22
+    assert len(deterministic) == 16
     assert len(llm) == 6
 
 
@@ -195,7 +228,7 @@ def test_v1_registry_has_budget_reconciliation_plus_v1_category_coverage() -> No
         "SCOPE": {"deterministic": 2, "llm": 1},
         # TASK-COH-BUD-RECON-004: BUDGET gains deterministic DET-BUD-INTERNAL.
         "BUDGET": {"deterministic": 4, "llm": 1},
-        "TIME": {"deterministic": 2, "llm": 1},
+        "TIME": {"deterministic": 4, "llm": 1},
         "TECHNICAL": {"deterministic": 2, "llm": 1},
         "LEGAL": {"deterministic": 2, "llm": 1},
         "QUALITY": {"deterministic": 2, "llm": 1},
