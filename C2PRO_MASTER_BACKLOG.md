@@ -308,7 +308,7 @@
 
 | Priority | Task ID        | Depends On          | Description                                                                                                                                     |
 | -------- | -------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| P0       | `TASK-DEV-007` | TASK-DEV-003 merged | Owner GitHub-settings follow-ups: `main` branch protection (require `CI Status` + `gitleaks`), `CODECOV_TOKEN`, Production reviewers, del staging. |
+| P0       | `[x] TASK-DEV-007` | TASK-DEV-003 merged | [DONE — verified already satisfied on main] Owner GitHub-settings follow-ups: `main` branch protection (require `CI Status` + `gitleaks`), `CODECOV_TOKEN`, Production reviewers, del staging. Verification: ci.yml wires codecov token (secrets.CODECOV_TOKEN at ci.yml backend+frontend upload steps), CODECOV_TOKEN secret exists, GitHub Environment 'staging' already deleted (404), no stale staging refs. Owner-only residuals: add required reviewers to Production env; optionally delete retired secrets per runbook; verify Vercel install uses pnpm. Verified 2026-07-28. |
 | P1       | `TASK-DEV-004` | None                | Fix integration suite failures → promote `backend-integration` to required CI gate.                                                             |
 | P1       | `TASK-DEV-005` | None                | Fix i13 fixture Postgres port (5432→5433) → re-enable paused daily cron.                                                                         |
 | P2       | `TASK-DEV-006` | None                | Clean mypy baseline → promote `backend-typecheck` to required CI gate.                                                                           |
@@ -320,6 +320,7 @@
 | Priority | Task ID                               | Depends On               | Description                                                                                                                                                                                            |
 | -------- | ------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | P1       | `EPIC-QA-SWAGGER-MANUAL-VERIFICATION` | Live Swagger environment | Real Swagger endpoint audit across the open `TASK-QA-214..321` operation tasks. Each row remains pending until executed live through Swagger with outcome notes in `backlogs/QA_QUALITY_ASSURANCE.md`. |
+| P2       | `[x] TASK-QA-344`                    | None                     | [DONE via PR #415] Regression guard tests (tests/security/test_regression_guards.py) locking two closed bug-classes: GUARD 1 scans apps/api/src raw SQL INSERT/UPSERT to RLS tables (alerts, clause_embeddings, document_chunks, audit_logs) and fails if tenant_id is omitted (encodes QA-341/QA-342); GUARD 2 AST-asserts cache-key builders include invalidating inputs — coherence_llm_gate._content_hash has detection_logic, core/cache.build_extraction_cache_fingerprint has prompt+model (encodes V3-P1-OBS-09/QA-343). Prevents regression of the tenant-isolation + stale-cache classes. Verified 2026-07-28. |
 
 ### C2Pro v3.0 (EPIC-V3-\*) — Project Intelligence Overlay tickets (ADR-013→021)
 
@@ -569,6 +570,8 @@ FOLLOW-UPS (open):
 ---
 
 ## Change Log
+
+**2026-07-28**: DEV-007 reconciliation — closed DEV-007 (verified already satisfied on main: codecov token wired, staging env deleted, branch protection in place); registered+closed QA-344 regression guard tests (#415, GUARD 1 tenant_id RLS + GUARD 2 cache-key invariants). Verified against main@bd9b05919.
 
 **2026-07-28**: Wave-3 reconciliation — closed V3-P1-OBS-09(#407), V3-P1-HEALTH-13(#408), V3-014-08(#409), V3-015-07(#410), V3-013-12(#412), QA-343(#411); registered+closed QA-342 pgvector tenant scoping (#406). Cross-checked against merged PRs on main.
 
