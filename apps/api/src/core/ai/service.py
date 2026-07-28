@@ -41,7 +41,7 @@ from src.core.ai.prompt_cache import (
     get_prompt_cache_service,
 )
 from src.core.ai.usage_logger import AIUsageLogger, AIUsageLogRecord
-from src.core.cache import get_cache_service
+from src.core.cache import build_extraction_cache_fingerprint, get_cache_service
 from src.core.database import get_session_with_tenant  # noqa: F401
 from src.core.exceptions import AIServiceError
 
@@ -204,27 +204,26 @@ class AIService:
         """
         start_time = time.perf_counter()
 
+        input_token_estimate = self._estimate_tokens(request.prompt)
+        model_config = self.router.select_model(
+            task_type=request.task_type,
+            input_token_estimate=input_token_estimate,
+            budget_remaining_usd=self.budget_remaining_usd,
+            force_tier=request.force_model_tier,
+        )
+        max_tokens = request.max_tokens or model_config.max_tokens
+
         # ===========================================
         # CACHE LAYER 1: Prompt Cache (SHA-256)
         # ===========================================
         # Intenta obtener del caché de prompts idénticos
         if request.use_cache and self.prompt_cache and self.prompt_cache.enabled:
-            # Necesitamos el modelo para el hash, pero aún no lo hemos seleccionado
-            # Usamos una selección preliminar para el hash
-            input_token_estimate = self._estimate_tokens(request.prompt)
-            preliminary_model = self.router.select_model(
-                task_type=request.task_type,
-                input_token_estimate=input_token_estimate,
-                budget_remaining_usd=self.budget_remaining_usd,
-                force_tier=request.force_model_tier,
-            )
-
             cached_response = await self.prompt_cache.get_cached_response(
                 prompt=request.prompt,
                 system_prompt=request.system_prompt,
                 temperature=request.temperature,
                 max_tokens=request.max_tokens,
-                model=preliminary_model.name,
+                model=model_config.name,
             )
 
             if cached_response:
@@ -257,6 +256,14 @@ class AIService:
             if isinstance(request.task_type, TaskType)
             else str(request.task_type)
         )
+        extraction_fingerprint = build_extraction_cache_fingerprint(
+            prompt=request.prompt,
+            system_prompt=request.system_prompt,
+            model=model_config.name,
+            temperature=request.temperature,
+            max_tokens=max_tokens,
+            prompt_version=request.prompt_version,
+        )
         if (
             cache_service
             and request.document_hash
@@ -265,6 +272,7 @@ class AIService:
             cached_payload = await cache_service.get_extraction(
                 request.document_hash,
                 task_value,
+                extraction_fingerprint,
             )
             if cached_payload:
                 execution_time_ms = (time.perf_counter() - start_time) * 1000
@@ -283,17 +291,7 @@ class AIService:
         # NO CACHE - Llamar API
         # ===========================================
 
-        # 1. Select model
-        input_token_estimate = self._estimate_tokens(request.prompt)
-
-        model_config = self.router.select_model(
-            task_type=request.task_type,
-            input_token_estimate=input_token_estimate,
-            budget_remaining_usd=self.budget_remaining_usd,
-            force_tier=request.force_model_tier,
-        )
-
-        # 2. Check budget (pre-flight)
+        # 1. Check budget (pre-flight)
         estimated_cost = self.router.estimate_cost(
             model=model_config,
             input_tokens=input_token_estimate,
@@ -306,9 +304,7 @@ class AIService:
                 f"estimated cost: ${estimated_cost:.4f}"
             )
 
-        # 3. Prepare request
-        max_tokens = request.max_tokens or model_config.max_tokens
-
+        # 2. Prepare request
         messages = [
             {
                 "role": "user",
@@ -316,7 +312,7 @@ class AIService:
             }
         ]
 
-        # 4. Call API
+        # 3. Call API
         logger.info(
             "ai_request_started",
             tenant_id=str(self.tenant_id) if self.tenant_id else None,
@@ -345,10 +341,10 @@ class AIService:
             )
             raise
 
-        # 5. Extract content
+        # 4. Extract content
         content = self._extract_content(response)
 
-        # 6. Calculate actual cost
+        # 5. Calculate actual cost
         actual_cost = self.router.estimate_cost(
             model=model_config,
             input_tokens=response.usage.input_tokens,
@@ -357,7 +353,7 @@ class AIService:
 
         execution_time_ms = (time.perf_counter() - start_time) * 1000
 
-        # 7. Log usage
+        # 6. Log usage
         logger.info(
             "ai_request_completed",
             tenant_id=str(self.tenant_id) if self.tenant_id else None,
@@ -375,7 +371,7 @@ class AIService:
             max_tokens=request.max_tokens,
         )
 
-        # 9. Save to document extraction cache
+        # 7. Save to document extraction cache
         if (
             cache_service
             and request.document_hash
@@ -384,6 +380,7 @@ class AIService:
             await cache_service.set_extraction(
                 request.document_hash,
                 task_value,
+                extraction_fingerprint,
                 {
                     "content": content,
                     "model": model_config.name,
