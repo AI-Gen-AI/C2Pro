@@ -586,18 +586,24 @@ class CacheService:
     # Domain-Specific Methods (Document Extraction)
     # =============================================
 
-    async def get_extraction(self, document_hash: str, task_type: str) -> dict[str, Any] | None:
+    async def get_extraction(
+        self,
+        document_hash: str,
+        task_type: str,
+        extraction_fingerprint: str,
+    ) -> dict[str, Any] | None:
         """
         Get cached document extraction result.
 
         Args:
             document_hash: SHA256 hash of document content
             task_type: Type of extraction task
+            extraction_fingerprint: Hash of the extraction contract
 
         Returns:
             Cached extraction result or None if not found
         """
-        key = build_extraction_cache_key(document_hash, task_type)
+        key = build_extraction_cache_key(document_hash, task_type, extraction_fingerprint)
         payload: dict[str, Any] | None = await self.get_json(key)
         if payload is None:
             record_cache_miss(CACHE_TYPE_EXTRACTION)
@@ -609,6 +615,7 @@ class CacheService:
         self,
         document_hash: str,
         task_type: str,
+        extraction_fingerprint: str,
         payload: dict[str, Any],
         ttl_seconds: int | None = EXTRACTION_TTL_SECONDS,
     ) -> None:
@@ -618,10 +625,11 @@ class CacheService:
         Args:
             document_hash: SHA256 hash of document content
             task_type: Type of extraction task
+            extraction_fingerprint: Hash of the extraction contract
             payload: Extraction result to cache
             ttl_seconds: Time to live (default: 24 hours)
         """
-        key = build_extraction_cache_key(document_hash, task_type)
+        key = build_extraction_cache_key(document_hash, task_type, extraction_fingerprint)
         await self.set_json(key, payload, ttl_seconds)
 
 
@@ -643,18 +651,45 @@ def build_document_hash(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
-def build_extraction_cache_key(document_hash: str, task_type: str) -> str:
+def build_extraction_cache_fingerprint(
+    *,
+    prompt: str,
+    system_prompt: str | None,
+    model: str,
+    temperature: float,
+    max_tokens: int | None,
+    prompt_version: str | None,
+) -> str:
+    """TS-UT-QA-343-EXTRACTION-CACHE-KEY-001: Hash extraction behavior inputs."""
+    contract = {
+        "max_tokens": max_tokens,
+        "model": model,
+        "prompt": prompt,
+        "prompt_version": prompt_version,
+        "system_prompt": system_prompt,
+        "temperature": temperature,
+    }
+    serialized_contract = json.dumps(contract, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(serialized_contract.encode("utf-8")).hexdigest()
+
+
+def build_extraction_cache_key(
+    document_hash: str,
+    task_type: str,
+    extraction_fingerprint: str,
+) -> str:
     """
     Build cache key for document extraction results.
 
     Args:
         document_hash: SHA256 hash of document
         task_type: Type of extraction (e.g., "clauses", "metadata")
+        extraction_fingerprint: Hash of prompt, model, and generation configuration
 
     Returns:
-        Formatted cache key: "extraction:{task_type}:{document_hash}"
+        Formatted cache key: "extraction:{task_type}:{document_hash}:{fingerprint}"
     """
-    return f"extraction:{task_type}:{document_hash}"
+    return f"extraction:{task_type}:{document_hash}:{extraction_fingerprint}"
 
 
 def build_project_cache_key(project_id: str, resource: str) -> str:

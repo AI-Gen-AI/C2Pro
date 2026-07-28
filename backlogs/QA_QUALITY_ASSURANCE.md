@@ -375,3 +375,13 @@ Repair the inherited isolation drift in `apps/api/tests/modules/analysis/adapter
 **Status**: Open · **Priority**: P2 · **Owner**: qa · **Depends on**: —
 
 During TASK-BCK-096 verification, the complete `tests/core/test_tenants.py` file exposed two inherited failures unrelated to the TenantId changes: `tenants_schemas.Tenant` no longer exists, and `TenantService()` now requires a database argument. Diagnose the intended current schema/service contracts, update only the stale fixtures/assertions, retain tenant behavior coverage, and verify the complete file independently. Do not recreate placeholder production APIs solely to satisfy obsolete tests.
+
+### TASK-QA-343: Invalidate stale document-extraction cache entries
+
+**Status**: In progress · **Priority**: P1 · **Owner**: qa · **Depends on**: —
+
+`src/core/cache.py` built extraction cache keys from only `document_hash` and `task_type`, while
+`src/core/ai/service.py` served the resulting payload after prompt, model, or generation settings changed.
+Hash the complete extraction contract (prompt, system prompt, selected model, temperature, token limit, and
+explicit prompt version) and use the same fingerprint for cache reads and writes. Regression tests must prove
+unchanged contracts hit the same key and behavior-changing contracts miss.
