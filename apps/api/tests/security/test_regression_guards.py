@@ -1,4 +1,4 @@
-"""Regression guard tests for RLS/tenant_id and cache-key invariants.
+"""Regression guard tests for RLS/tenant_id, cache-key, and Anthropic invariants.
 
 GUARD 1 — tenant_id: Scans src/ for raw SQL INSERT/UPSERT via text() or
 sql_text(). Every write to an RLS-protected table must include tenant_id
@@ -8,9 +8,13 @@ that omits tenant_id will cause this test to fail.
 GUARD 2 — cache keys: Asserts that the semantic cache-key builders
 coherence_llm_gate._content_hash and core/cache.build_extraction_cache_fingerprint
 still include their invalidating inputs (detection_logic, prompt, model).
-If someone removes these from the hash, stale cached results could be served.
 
-Encoded invariants: QA-341, QA-342, QA-343, V3-P1-OBS-09.
+GUARD 3 — Anthropic instantiation: Locks AsyncAnthropic/Anthropic class
+instantiation to a strict allowlist (core/ai/ proxy objects). Any file
+outside this set that creates an Anthropic client directly bypasses
+budget controls, tenant isolation, and prompt caching.
+
+Encoded invariants: QA-341, QA-342, QA-343, QA-344, V3-P1-OBS-09, V3-P1-OBS-10.
 
 Gate: tests-only, no src modifications. ruff clean + green on CI.
 """
@@ -227,6 +231,52 @@ def test_coherence_cache_key_includes_detection_logic():
         f"detection_logic was removed from _content_hash params: {list(params.keys())}. "
         "This would cause stale cached LLM findings when rule detection logic changes. "
         "Restore detection_logic as a keyword parameter."
+    )
+
+
+# ---------------------------------------------------------------------------
+# GUARD 3 — Anthropic client instantiation locked to core/ai/ wrappers
+# ---------------------------------------------------------------------------
+
+# Only these src-relative files may directly instantiate AsyncAnthropic/Anthropic.
+_ANTHROPIC_ALLOWLIST: frozenset[str] = frozenset({
+    "core/ai/llm_client.py",
+    "core/ai/anthropic_wrapper.py",
+    "analysis/adapters/ai/anthropic_client.py",
+})
+
+
+def test_anthropic_client_instantiation_locked_to_core_ai_wrappers():
+    """GUARD 3: Lock AsyncAnthropic/Anthropic instantiation to allowlist.
+
+    Only the canonical transport files (llm_client.py, anthropic_wrapper.py,
+    anthropic_client.py) may directly instantiate the Anthropic SDK. Any
+    other file that creates an Anthropic client bypasses budget controls,
+    tenant isolation, and prompt caching.
+
+    Invariant: QA-344, V3-P1-OBS-10.
+    """
+    offenders: list[tuple[str, int, str]] = []
+
+    for py_file in sorted(_SRC_ROOT.rglob("*.py")):
+        rel = py_file.relative_to(_SRC_ROOT).as_posix()
+        try:
+            tree = ast.parse(py_file.read_text("utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if isinstance(func, ast.Name) and func.id in ("AsyncAnthropic", "Anthropic") and rel not in _ANTHROPIC_ALLOWLIST:
+                offenders.append((rel, node.lineno, func.id))
+
+    assert not offenders, (
+        "AsyncAnthropic/Anthropic instantiated outside allowlist:\n"
+        + "\n".join(f"  {f}:{line_no}  ({cls})" for f, line_no, cls in offenders)
+        + "\n\nAll Anthropic client creation must go through the allowlisted "
+        f"transport files: {', '.join(sorted(_ANTHROPIC_ALLOWLIST))}. "
+        "Use dependency injection instead of direct SDK instantiation."
     )
 
 
