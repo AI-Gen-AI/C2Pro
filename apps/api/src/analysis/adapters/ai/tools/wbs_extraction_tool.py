@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -44,6 +45,10 @@ class WBSItemOutput(BaseModel):
     budget_allocated: float | None = Field(
         None, description="Allocated budget if mentioned"
     )
+    start_date: date | None = Field(None, description="Planned start date if mentioned")
+    end_date: date | None = Field(None, description="Planned end date if mentioned")
+    predecessor_id: str | None = Field(None, description="Explicit predecessor identifier if mentioned")
+    status: str | None = Field(None, description="Schedule status if mentioned")
 
     @field_validator("item_type")
     @classmethod
@@ -134,7 +139,7 @@ class WBSExtractionTool(BaseTool[WBSExtractionInput, list[WBSItemOutput]]):
     ) -> ProjectState:
         """Inject output into LangGraph state."""
         # Convert WBSItemOutput to dicts for state storage
-        state["extracted_wbs"] = [item.model_dump() for item in result.data]
+        state["extracted_wbs"] = [item.model_dump(mode="json") for item in result.data]
 
         # Update confidence score
         if result.confidence_score:
@@ -166,6 +171,10 @@ Para cada elemento WBS identifica:
   * activity: Actividad específica a realizar
 - confidence: Nivel de confianza (0.0 a 1.0)
 - budget_allocated: Presupuesto asignado si se menciona (opcional)
+- start_date: Fecha de inicio planificada ISO-8601 si se menciona (opcional)
+- end_date: Fecha de fin planificada ISO-8601 si se menciona (opcional)
+- predecessor_id: Identificador de predecesora explicita si se menciona (opcional)
+- status: Estado de cronograma si se menciona (opcional)
 
 IMPORTANTE: Devuelve SOLO un JSON con el formato:
 [
@@ -175,7 +184,11 @@ IMPORTANTE: Devuelve SOLO un JSON con el formato:
     "description": "Diseño completo de la estructura del edificio",
     "item_type": "work_package",
     "confidence": 0.95,
-    "budget_allocated": 50000.0
+    "budget_allocated": 50000.0,
+    "start_date": "2026-01-01",
+    "end_date": "2026-04-15",
+    "predecessor_id": null,
+    "status": "on_track"
   },
   ...
 ]

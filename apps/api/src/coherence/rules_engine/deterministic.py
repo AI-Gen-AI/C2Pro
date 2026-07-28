@@ -386,20 +386,38 @@ class MilestoneGapEvaluator(RuleEvaluator):
         milestones = clause.data.get("milestones") or clause.data.get("schedule_items", [])
         if not isinstance(milestones, list) or len(milestones) < 2:
             return None
-        dates = sorted(filter(None, [
-            _parse_date(m.get("date") or m.get("end_date") or m.get("due_date"))
-            for m in milestones if isinstance(m, dict)
-        ]))
-        if len(dates) < 2:
+        dated_milestones = sorted(
+            [
+                (parsed_date, milestone)
+                for milestone in milestones
+                if isinstance(milestone, dict)
+                if (parsed_date := _parse_date(
+                    milestone.get("date") or milestone.get("end_date") or milestone.get("due_date")
+                )) is not None
+            ],
+            key=lambda item: item[0],
+        )
+        if len(dated_milestones) < 2:
             return None
-        max_gap = max((dates[i+1] - dates[i]).days for i in range(len(dates)-1))
+        prior, following = max(
+            (
+                (dated_milestones[index], dated_milestones[index + 1])
+                for index in range(len(dated_milestones) - 1)
+            ),
+            key=lambda pair: (pair[1][0] - pair[0][0]).days,
+        )
+        max_gap = (following[0] - prior[0]).days
         if max_gap <= self.config.schedule_milestone_gap_max_days:
             return None
         excess = max_gap - self.config.schedule_milestone_gap_max_days
         impact = min(0.7, 0.30 + (excess / 180) * 0.4)
         return _signal(self, clause, impact,
             f"Max gap {max_gap}d between milestones (limit: {self.config.schedule_milestone_gap_max_days}d)",
-            {"max_gap_days": max_gap})
+            {
+                "max_gap_days": max_gap,
+                "milestone_before_id": prior[1].get("wbs_node_id", prior[1].get("id")),
+                "milestone_after_id": following[1].get("wbs_node_id", following[1].get("id")),
+            })
 
 
 class PredecessorOverlapEvaluator(RuleEvaluator):
@@ -428,7 +446,7 @@ class PredecessorOverlapEvaluator(RuleEvaluator):
                 lookup[item["id"]] = item
 
         worst_overlap = 0
-        worst_pair: tuple[Any | None, Any | None] = ("", "")
+        worst_pair: tuple[dict[str, Any] | None, dict[str, Any] | None] = (None, None)
         for item in items:
             if not isinstance(item, dict):
                 continue
@@ -442,14 +460,25 @@ class PredecessorOverlapEvaluator(RuleEvaluator):
                 overlap = (pred_end - item_start).days
                 if overlap > worst_overlap:
                     worst_overlap = overlap
-                    worst_pair = (pred.get("name", pred_id), item.get("name", item.get("id", "")))
+                    worst_pair = (pred, item)
 
         if worst_overlap <= 0:
             return None
         impact = min(0.85, 0.45 + worst_overlap / 60 * 0.4)
+        predecessor, successor = worst_pair
+        if predecessor is None or successor is None:
+            return None
+        predecessor_name = predecessor.get("name", "")
+        successor_name = successor.get("name", "")
         return _signal(self, clause, impact,
-            f"Task '{worst_pair[1]}' starts {worst_overlap}d before predecessor '{worst_pair[0]}' ends",
-            {"overlap_days": worst_overlap, "predecessor": worst_pair[0], "successor": worst_pair[1]})
+            f"Task '{successor_name}' starts {worst_overlap}d before predecessor '{predecessor_name}' ends",
+            {
+                "overlap_days": worst_overlap,
+                "predecessor": predecessor_name,
+                "successor": successor_name,
+                "predecessor_id": predecessor.get("wbs_node_id", predecessor.get("id")),
+                "successor_id": successor.get("wbs_node_id", successor.get("id")),
+            })
 
 
 class ScheduleDurationEvaluator(RuleEvaluator):

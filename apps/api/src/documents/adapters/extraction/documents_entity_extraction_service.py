@@ -122,6 +122,14 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
                 continue
 
             wbs_code = str(task.get("wbs") or f"SCH-{index:03d}")
+            metadata: dict[str, object] = {"source_document_id": str(document.id)}
+            predecessor = task.get("predecessor_id") or task.get("predecessors")
+            if isinstance(predecessor, str) and predecessor.strip():
+                metadata["predecessor_id"] = predecessor.strip()
+            status = task.get("status")
+            if isinstance(status, str) and status.strip():
+                metadata["status"] = status.strip()
+
             payload = WBSItemCreate(
                 project_id=document.project_id,
                 wbs_code=wbs_code,
@@ -137,7 +145,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
                 planned_start=_parse_datetime_value(task.get("start_date")),
                 planned_end=_parse_datetime_value(task.get("end_date")),
                 funded_by_clause_id=None,
-                wbs_metadata={"source_document_id": str(document.id)}
+                wbs_metadata=metadata,
             )
             try:
                 await use_case.execute(payload, _tenant_id)

@@ -24,8 +24,10 @@ from .deterministic import (
     BudgetOverrunEvaluator,
     BudgetSumMismatchEvaluator,
     InspectionFrequencyEvaluator,
+    MilestoneGapEvaluator,
     NoticePeriodEvaluator,
     PenaltyCapEvaluator,
+    PredecessorOverlapEvaluator,
     QualityStandardEvaluator,
     ScheduleDurationEvaluator,
     ScheduleStatusEvaluator,
@@ -46,8 +48,9 @@ logger = structlog.get_logger()
 # TASK-COH-V1-05 fixed the v1 registry at 12 deterministic evaluators.
 # TASK-COH-BUD-RECON-001 deliberately adds DET-BUD-SUM as the 13th
 # deterministic rule for cross-document budget reconciliation.
-# TASK-COH-BUD-RECON-004 adds DET-BUD-INTERNAL as the 14th deterministic
-# rule for budget leaf-sum vs declared-total reconciliation.
+# TASK-COH-BUD-RECON-004 adds DET-BUD-INTERNAL for budget leaf-sum vs
+# declared-total reconciliation. TASK-BCK-064 wires the two existing
+# schedule evaluators into the live registry.
 DETERMINISTIC_EVALUATORS: dict[str, type[RuleEvaluator]] = {
     "DET-SCP-DELIVERABLES": ScopeDeliverablesEvaluator,
     "DET-CRS-SCPBUD": ScopeVsBudgetCoverageEvaluator,
@@ -57,6 +60,8 @@ DETERMINISTIC_EVALUATORS: dict[str, type[RuleEvaluator]] = {
     "DET-BUD-INTERNAL": BudgetInternalConsistencyEvaluator,
     "DET-TIM-STATUS": ScheduleStatusEvaluator,
     "DET-TIM-DURATION": ScheduleDurationEvaluator,
+    "DET-TIM-GAP": MilestoneGapEvaluator,
+    "DET-TIM-PREDECESSOR": PredecessorOverlapEvaluator,
     "DET-TEC-SPEC": SpecReferenceEvaluator,
     "DET-TEC-BOMBUDGET": BomBudgetLinkEvaluator,
     "DET-LEG-PENALTY": PenaltyCapEvaluator,

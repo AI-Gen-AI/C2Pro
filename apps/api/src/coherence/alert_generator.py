@@ -31,6 +31,8 @@ TEMPLATES: dict[str, str] = {
     "DET-BUD-INTERNAL": "La suma de partidas presupuestarias difiere del total declarado del presupuesto ({deviation_pct:.1f}%).",
     "DET-TIM-STATUS": "El cronograma tiene estado de riesgo o retraso.",
     "DET-TIM-DURATION": "La duracion del hito o actividad es incoherente.",
+    "DET-TIM-GAP": "Hay una separacion excesiva entre hitos del cronograma.",
+    "DET-TIM-PREDECESSOR": "Una actividad inicia antes de que finalice su predecesora.",
     "DET-TEC-SPEC": "La clausula tecnica no referencia una especificacion o norma verificable.",
     "DET-TEC-BOMBUDGET": "Hay items de BOM sin partida presupuestaria asociada.",
     "DET-LEG-PENALTY": "La clausula de penalizacion expone responsabilidad no acotada o excesiva.",
@@ -69,6 +71,8 @@ RULE_TITLES: dict[str, str] = {
     "DET-BUD-INTERNAL": "Descuadre interno del presupuesto",
     "DET-TIM-STATUS": "Cronograma en riesgo",
     "DET-TIM-DURATION": "Duracion incoherente",
+    "DET-TIM-GAP": "Brecha excesiva entre hitos",
+    "DET-TIM-PREDECESSOR": "Solapamiento de predecesoras",
     "DET-TEC-SPEC": "Especificacion tecnica incompleta",
     "DET-TEC-BOMBUDGET": "BOM sin presupuesto",
     "DET-LEG-PENALTY": "Penalizacion contractual riesgosa",
@@ -101,6 +105,8 @@ RULE_SEVERITIES: dict[str, AlertSeverity] = {
     "DET-BUD-INTERNAL": AlertSeverity.HIGH,
     "DET-TIM-STATUS": AlertSeverity.HIGH,
     "DET-TIM-DURATION": AlertSeverity.CRITICAL,
+    "DET-TIM-GAP": AlertSeverity.MEDIUM,
+    "DET-TIM-PREDECESSOR": AlertSeverity.HIGH,
     "DET-TEC-SPEC": AlertSeverity.MEDIUM,
     "DET-TEC-BOMBUDGET": AlertSeverity.HIGH,
     "DET-LEG-PENALTY": AlertSeverity.HIGH,
@@ -359,6 +365,8 @@ class AlertGenerator:
             "DET-BUD-SUM": "BUDGET",
             "DET-TIM-STATUS": "SCHEDULE",
             "DET-TIM-DURATION": "SCHEDULE",
+            "DET-TIM-GAP": "SCHEDULE",
+            "DET-TIM-PREDECESSOR": "SCHEDULE",
             "DET-TEC-SPEC": "TECHNICAL",
             "DET-TEC-BOMBUDGET": "TECHNICAL",
             "DET-LEG-PENALTY": "LEGAL",
@@ -407,12 +415,20 @@ class AlertGenerator:
 
     def _affected_entities(self, rule_id: str, evidence: dict[str, Any]) -> dict[str, Any]:
         entities: dict[str, list[str]] = {}
-        if rule_id == "R12":
+        if rule_id in {"R12", "DET-TIM-PREDECESSOR"}:
             ids = []
             if evidence.get("successor_id"):
                 ids.append(str(evidence.get("successor_id")))
             if evidence.get("predecessor_id"):
                 ids.append(str(evidence.get("predecessor_id")))
+            if ids:
+                entities["schedule_item_ids"] = ids
+        if rule_id == "DET-TIM-GAP":
+            ids = []
+            if evidence.get("milestone_before_id"):
+                ids.append(str(evidence["milestone_before_id"]))
+            if evidence.get("milestone_after_id"):
+                ids.append(str(evidence["milestone_after_id"]))
             if ids:
                 entities["schedule_item_ids"] = ids
         if rule_id == "R14" and evidence.get("material"):

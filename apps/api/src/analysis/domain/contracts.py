@@ -97,8 +97,11 @@ class WbsActivity(BaseModel):
     description: str | None = None
     level: int | None = Field(default=None, ge=0)
     parent_code: str | None = None
+    budget_allocated: float | None = None
     start_date: str | None = None
     end_date: str | None = None
+    predecessor_id: str | None = None
+    status: str | None = None
     duration_days: float | None = Field(default=None, ge=0.0)
     percent_complete: float | None = Field(default=None, ge=0.0, le=100.0)
 
