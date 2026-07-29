@@ -7137,9 +7137,9 @@ components:
       - resolution
       title: ResolveAlertRequest
       description: "SECURITY (EPIC-OPS-DOCFLOW Stream C): resolver identity is never\n\
-        accepted from the client \u2014 it is always the authenticated session's\nuser_id.\
-        \ A client-supplied resolved_by here would let any authenticated\nuser forge\
-        \ a resolution as another user, corrupting the audit trail."
+        accepted from the client \u2014 it is always the authenticated session's\n\
+        user_id. A client-supplied resolved_by here would let any authenticated\n\
+        user forge a resolution as another user, corrupting the audit trail."
     ResumeWorkflowRequest:
       properties:
         decision:
