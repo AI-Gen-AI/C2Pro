@@ -4,6 +4,7 @@ from src.config import Settings
 
 
 def _set_required_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "test-anon-key")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
@@ -61,6 +62,20 @@ def test_production_settings_reject_wildcard_cors_origins(
     monkeypatch.setenv("CORS_ORIGINS", '["*"]')
 
     with pytest.raises(ValueError, match="wildcard CORS"):
+        Settings(_env_file=None)
+
+
+def test_production_settings_reject_ai_mock_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TS-UD-OPS-DOCFLOW-B-002: production can never start with fabricated AI responses."""
+    _set_required_settings_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://prod-user:prod-pass@supabase.example.com/app")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("CORS_ORIGINS", '["https://c2pro.io"]')
+    monkeypatch.setenv("C2PRO_AI_MOCK", "1")
+
+    with pytest.raises(ValueError, match="C2PRO_AI_MOCK"):
         Settings(_env_file=None)
 
 
