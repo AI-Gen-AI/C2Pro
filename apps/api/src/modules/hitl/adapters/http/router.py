@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from src.core.auth.dependencies import get_current_user
+from src.core.auth.models import User
 from src.core.observability.monitoring import record_hitl_decision
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
 from src.modules.hitl.adapters.http.dependencies import (
@@ -216,16 +218,20 @@ async def get_review_item(
 )
 async def approve_item(
     item_id: UUID,
-    payload: ApproveRequest,
+    _payload: ApproveRequest,
     _tenant_id: CurrentTenantId,
-    user_id: CurrentUserId,
+    current_user: Annotated[User, Depends(get_current_user)],
     service: HumanInTheLoopService = Depends(get_hitl_service),
 ) -> ReviewItemResponse:
+    # SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is bound to the
+    # authenticated session, never to client-supplied values — otherwise any
+    # authenticated user could forge a review as another user. ApproveRequest
+    # carries no reviewer fields by design.
     try:
         item = await service.approve_item(
             item_id=item_id,
-            reviewer_id=user_id,
-            reviewer_name=payload.reviewer_name,
+            reviewer_id=current_user.id,
+            reviewer_name=current_user.full_name,
         )
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
@@ -237,7 +243,7 @@ async def approve_item(
         decision=item.current_status,
         reviewer=item.approved_by,
     )
-    logger.info("hitl_item_approved", item_id=str(item_id), reviewer=payload.reviewer_name)
+    logger.info("hitl_item_approved", item_id=str(item_id), reviewer=current_user.full_name)
     return ReviewItemResponse(
         item_id=item.item_id,
         item_type=item.item_type,
@@ -261,7 +267,7 @@ async def reject_item(
     item_id: UUID,
     payload: RejectRequest,
     _tenant_id: CurrentTenantId,
-    _user_id: CurrentUserId,
+    current_user: Annotated[User, Depends(get_current_user)],
     service: HumanInTheLoopService = Depends(get_hitl_service),
 ) -> ReviewItemResponse:
     item = await service.review_queue_repo.get_review_item(item_id)
@@ -276,7 +282,10 @@ async def reject_item(
             f"Item {item_id} cannot be rejected from status {item.current_status.value}.",
         )
     item.current_status = ReviewStatus.REJECTED
-    item.approved_by = payload.reviewer_name
+    # SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is bound to the
+    # authenticated session, never to client-supplied values — otherwise any
+    # authenticated user could forge a rejection as another user.
+    item.approved_by = current_user.full_name
     item.approved_at = datetime.now(UTC)
     item.metadata["rejection_reason"] = payload.reason
     await service.review_queue_repo.update_review_item(item)
@@ -288,7 +297,7 @@ async def reject_item(
         decision=item.current_status,
         reviewer=item.approved_by,
     )
-    logger.info("hitl_item_rejected", item_id=str(item_id), reviewer=payload.reviewer_name)
+    logger.info("hitl_item_rejected", item_id=str(item_id), reviewer=current_user.full_name)
     return ReviewItemResponse(
         item_id=item.item_id,
         item_type=item.item_type,

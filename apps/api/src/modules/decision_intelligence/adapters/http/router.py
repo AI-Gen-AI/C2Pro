@@ -36,11 +36,17 @@ router = APIRouter(prefix="/decision-intelligence", tags=["decision-intelligence
 
 
 class ReviewDecisionDTO(BaseModel):
-    """Refers to Suite ID: TS-I13-E2E-REAL-001."""
+    """Refers to Suite ID: TS-I13-E2E-REAL-001.
+
+    SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is NEVER accepted
+    from the client. ``reviewer_id``/``reviewer_name`` are derived server-side
+    from the authenticated session (``Depends(get_current_user)``) at the
+    point this DTO is consumed — a client-supplied identity here would let any
+    authenticated user forge a review as another user, corrupting the HITL
+    audit trail. Do not add reviewer identity fields back to this model.
+    """
 
     item_id: UUID
-    reviewer_id: UUID
-    reviewer_name: str
     action: Literal["approve", "reject"] = "approve"
 
 
@@ -203,12 +209,22 @@ async def execute_decision_intelligence(
             detail="Invalid base64 payload",
         ) from exc
 
+    review_decision: dict[str, Any] | None = None
+    if payload.review_decision is not None:
+        # SECURITY: reviewer identity is bound to the authenticated session,
+        # never to client-supplied values (EPIC-OPS-DOCFLOW Stream C).
+        review_decision = {
+            **payload.review_decision.model_dump(),
+            "reviewer_id": str(current_user.id),
+            "reviewer_name": current_user.full_name,
+        }
+
     try:
         result = await service.execute_full_decision_flow(
             document_bytes=document_bytes,
             tenant_id=current_user.tenant_id,
             project_id=payload.project_id,
-            review_decision=payload.review_decision.model_dump() if payload.review_decision else None,
+            review_decision=review_decision,
             require_sign_off=payload.require_sign_off,
             force_profile=payload.force_profile,
         )
