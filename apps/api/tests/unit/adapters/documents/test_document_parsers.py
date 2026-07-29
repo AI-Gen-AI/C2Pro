@@ -174,17 +174,19 @@ class TestPDFParser:
         ):
             assert parser._ocr_page(page, 0) is None
 
-    def test_tesseract_binary_available_true_when_binary_present(self):
-        """Precondition sanity check: this test environment has a real
-        tesseract binary, so the probe should succeed (matching module-level
-        OCR_AVAILABLE, which was set from this same probe at import time)."""
+    def test_module_level_ocr_available_matches_live_probe(self):
+        """OCR_AVAILABLE (set once at import time) must match what the probe
+        would compute right now — i.e. the bootstrap wiring is correct.
+        Deliberately does not hardcode whether tesseract is actually
+        installed: CI's unit-test runner has the pytesseract *package* but
+        not the tesseract *binary* (only the Docker image installs that),
+        so this must hold true in both environments."""
         from src.documents.adapters.parsers.pdf_file_parser import (
             OCR_AVAILABLE,
             _tesseract_binary_available,
         )
 
-        assert OCR_AVAILABLE is True, "precondition: tesseract binary must be present in this test env"
-        assert _tesseract_binary_available() is True
+        assert OCR_AVAILABLE is _tesseract_binary_available()
 
     def test_tesseract_binary_available_false_and_warns_when_binary_missing(self):
         """EPIC-OPS-DOCFLOW Stream A: pytesseract importing successfully does
