@@ -31,6 +31,40 @@ try:
 except ImportError:
     logger.warning("ocr_not_available", message="pytesseract/Pillow not installed, OCR disabled")
 
+def _tesseract_binary_available() -> bool:
+    """Probe whether the `tesseract` *system* binary is actually runnable.
+
+    `pytesseract` is a thin wrapper around that binary — importing the
+    Python package succeeding does not mean OCR will work. Without this
+    probe, a missing binary is only discovered per-page, deep inside
+    `_ocr_page`'s broad except-and-swallow, and scanned PDFs would silently
+    yield empty text with no operator-visible signal of why. Extracted as
+    its own function (rather than inline at import time) so it stays unit
+    testable without reloading this module — reloading would rebind
+    `PDFParsingError` to a new class object and break `except`/`isinstance`
+    checks in modules that imported the pre-reload class (e.g.
+    composite_file_parser.py).
+    """
+    try:
+        pytesseract.get_tesseract_version()
+        return True
+    except Exception as exc:
+        logger.warning(
+            "ocr_tesseract_binary_missing",
+            message=(
+                "pytesseract is installed but the 'tesseract' system binary "
+                "was not found (or failed to run). OCR is disabled — scanned "
+                "PDFs will yield no text for image-only pages. Install the "
+                "tesseract-ocr system package (see Dockerfile) to fix."
+            ),
+            error=str(exc),
+        )
+        return False
+
+
+if OCR_AVAILABLE:
+    OCR_AVAILABLE = _tesseract_binary_available()
+
 
 class PDFParsingError(Exception):
     """Custom exception for PDF parsing errors."""

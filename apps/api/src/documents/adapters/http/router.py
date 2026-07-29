@@ -5,7 +5,10 @@ Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 """
 from __future__ import annotations
 
+import os
 import pathlib
+import tempfile
+from contextlib import suppress
 from typing import cast
 from uuid import UUID
 
@@ -110,6 +113,12 @@ ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".bc3"}
 STRUCTURED_DOCUMENT_TYPES = {DocumentType.BUDGET, DocumentType.SCHEDULE}
 STRUCTURED_DOCX_ERROR = "budget/schedule require .xlsx/.bc3"
 
+# EPIC-OPS-DOCFLOW Stream A: bound how much of an upload we ever hold in a
+# single chunk. A naive `await file.read()` materializes the entire upload
+# as one contiguous bytes object — for a >100MB construction spec that is a
+# real OOM risk, especially under concurrent uploads.
+_UPLOAD_STREAM_CHUNK_BYTES = 8 * 1024 * 1024  # 8MB
+
 
 def _get_upload_file_size(file: UploadFile) -> int:
     size = getattr(file, "size", None)
@@ -121,6 +130,37 @@ def _get_upload_file_size(file: UploadFile) -> int:
     size = file.file.tell()
     file.file.seek(current_position)
     return size
+
+
+async def _stream_upload_to_tempfile(file: UploadFile, max_bytes: int) -> pathlib.Path:
+    """Stream an upload to a temp file on disk in bounded chunks.
+
+    Never holds more than one ~8MB chunk in memory at a time, and aborts as
+    soon as the running total exceeds `max_bytes` — without ever reading (or
+    writing) more than the cap allows, even for a caller that lies about
+    Content-Length or omits it. Caller owns deleting the returned path.
+    """
+    fd, tmp_name = tempfile.mkstemp(suffix=".upload")
+    total = 0
+    try:
+        with os.fdopen(fd, "wb") as tmp_file:
+            while True:
+                chunk = await file.read(_UPLOAD_STREAM_CHUNK_BYTES)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=f"File size exceeds limit of {settings.max_upload_size_mb}MB.",
+                    )
+                tmp_file.write(chunk)
+    except Exception:
+        with suppress(OSError):
+            os.unlink(tmp_name)
+        raise
+
+    return pathlib.Path(tmp_name)
 
 
 def _validate_upload_extension(
@@ -442,9 +482,10 @@ async def reupload_document_file(
             detail="Filename is required.",
         )
 
-    file_size = _get_upload_file_size(file)
-
-    if file_size > settings.max_upload_size_bytes:
+    # Fast-path reject on a declared size that's already over the cap, before
+    # streaming a single byte to disk.
+    declared_size = _get_upload_file_size(file)
+    if declared_size > settings.max_upload_size_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File size exceeds limit of {settings.max_upload_size_mb}MB.",
@@ -453,8 +494,19 @@ async def reupload_document_file(
     file_extension = pathlib.Path(file.filename).suffix.lower()
     _validate_upload_extension(file_extension)
 
-    # Read file content
-    file_content = await file.read()
+    # EPIC-OPS-DOCFLOW Stream A: stream to disk in bounded chunks rather than
+    # `await file.read()`, which would materialize the whole upload as one
+    # contiguous in-memory bytes object (OOM risk for large construction
+    # specs). The declared-size check above is a fast rejection only — this
+    # streaming loop is the real, enforced cap: it aborts mid-stream the
+    # moment actual bytes received exceed the limit, regardless of what the
+    # client claimed.
+    tmp_path = await _stream_upload_to_tempfile(file, settings.max_upload_size_bytes)
+    try:
+        file_content = tmp_path.read_bytes()
+    finally:
+        with suppress(OSError):
+            tmp_path.unlink()
 
     try:
         document_dto = await reupload_use_case.execute(

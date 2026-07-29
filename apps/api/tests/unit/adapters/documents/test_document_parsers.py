@@ -174,6 +174,42 @@ class TestPDFParser:
         ):
             assert parser._ocr_page(page, 0) is None
 
+    def test_tesseract_binary_available_true_when_binary_present(self):
+        """Precondition sanity check: this test environment has a real
+        tesseract binary, so the probe should succeed (matching module-level
+        OCR_AVAILABLE, which was set from this same probe at import time)."""
+        from src.documents.adapters.parsers.pdf_file_parser import (
+            OCR_AVAILABLE,
+            _tesseract_binary_available,
+        )
+
+        assert OCR_AVAILABLE is True, "precondition: tesseract binary must be present in this test env"
+        assert _tesseract_binary_available() is True
+
+    def test_tesseract_binary_available_false_and_warns_when_binary_missing(self):
+        """EPIC-OPS-DOCFLOW Stream A: pytesseract importing successfully does
+        not mean the tesseract system binary is present. The probe must
+        detect a missing/broken binary and return False with a clear
+        warning, instead of silently discovering it per-page later.
+
+        Calls `_tesseract_binary_available()` directly rather than reloading
+        the module: reloading would rebind PDFParsingError to a new class
+        object, breaking `except PDFParsingError` in composite_file_parser.py
+        for the rest of the test session.
+        """
+        from src.documents.adapters.parsers import pdf_file_parser as pdf_file_parser_module
+
+        with patch.object(
+            pdf_file_parser_module.pytesseract,
+            "get_tesseract_version",
+            side_effect=pdf_file_parser_module.pytesseract.TesseractNotFoundError(),
+        ), patch.object(pdf_file_parser_module.logger, "warning") as mock_warning:
+            result = pdf_file_parser_module._tesseract_binary_available()
+
+        assert result is False
+        warning_events = [c.args[0] for c in mock_warning.call_args_list]
+        assert "ocr_tesseract_binary_missing" in warning_events
+
 
 # ===========================================
 # DOCX PARSER TESTS
