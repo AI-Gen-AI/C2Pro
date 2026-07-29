@@ -237,6 +237,7 @@ class Settings(BaseSettings):
     # Cache
     ai_use_cache: bool = True
     ai_cache_ttl: int = Field(default=3600, ge=0)  # 1 hora
+    ai_mock: bool = Field(default=False, validation_alias="C2PRO_AI_MOCK")
 
     # ===========================================
     # DOCUMENT PROCESSING
@@ -467,6 +468,9 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_security_posture(self) -> Self:
+        if self.environment == "production" and self.ai_mock:
+            raise ValueError("C2PRO_AI_MOCK cannot be enabled in production")
+
         if self.environment == "test":
             if self.supabase_url is None:
                 self.supabase_url = "http://test.supabase.local"

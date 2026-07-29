@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
+from sqlalchemy import text
+
 from src.analysis.factories.orchestrator_factory import AnalysisOrchestratorFactory
 from src.core.database import get_raw_session, init_db
 from src.core.dlq.dlq_service import DLQService
@@ -50,6 +52,12 @@ from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository imp
 from src.stakeholders.application.create_stakeholder_use_case import CreateStakeholderUseCase
 
 logger = logging.getLogger(__name__)
+
+RAG_READINESS_MAX_RETRIES = 3
+
+
+class RagChunksUnavailableError(RuntimeError):
+    """TS-UD-OPS-DOCFLOW-B-001: analysis must not run before RAG evidence commits."""
 
 storage = LocalFileStorageService()
 file_parser = CompositeFileParser(
@@ -328,6 +336,27 @@ async def _push_trigger_failure_to_dlq(
     )
 
 
+async def get_document_rag_chunk_count(
+    *,
+    session: Any,
+    tenant_id: TenantId,
+    document_id: UUID,
+) -> int:
+    """TS-UD-OPS-DOCFLOW-B-001: count committed tenant-scoped RAG chunks."""
+    statement = text(
+        """
+        SELECT COUNT(*)
+        FROM document_chunks
+        WHERE tenant_id = CAST(:tenant_id AS uuid)
+          AND document_id = CAST(:document_id AS uuid)
+        """
+    )
+    params = {"tenant_id": str(tenant_id), "document_id": str(document_id)}
+
+    result = await session.execute(statement, params)
+    return int(result.scalar_one())
+
+
 async def _run_document_analysis(
     *,
     tenant_id: TenantId,
@@ -350,6 +379,16 @@ async def _run_document_analysis(
         )
         if not parsed_text:
             raise ValueError("parsed_text not available")
+
+        chunk_count = await get_document_rag_chunk_count(
+            session=session,
+            tenant_id=tenant_id,
+            document_id=document_id,
+        )
+        if chunk_count == 0:
+            raise RagChunksUnavailableError(
+                "RAG chunks were not committed before document analysis"
+            )
 
         graph_orchestrator = orchestrator or AnalysisOrchestratorFactory.create()
         initial_state = {
@@ -608,6 +647,46 @@ def process_document_analysis_async(self: Any, tenant_id: str, document_id: str)
                 document_id=UUID(document_id),
             )
         )
+    except RagChunksUnavailableError as error:
+        retries = int(getattr(self.request, "retries", 0))
+        if retries < RAG_READINESS_MAX_RETRIES:
+            countdown = 2**retries
+            logger.warning(
+                "document_analysis_rag_chunks_retrying",
+                extra={
+                    "tenant_id": tenant_id,
+                    "document_id": document_id,
+                    "task_id": self.request.id,
+                    "retry": retries + 1,
+                    "countdown_seconds": countdown,
+                },
+            )
+            raise self.retry(
+                exc=error,
+                countdown=countdown,
+                max_retries=RAG_READINESS_MAX_RETRIES,
+            )
+
+        logger.error(
+            "document_analysis_rag_chunks_unavailable",
+            extra={
+                "tenant_id": tenant_id,
+                "document_id": document_id,
+                "task_id": self.request.id,
+            },
+        )
+        asyncio.run(
+            _push_trigger_failure_to_dlq(
+                tenant_id=normalized_tenant_id,
+                document_id=UUID(document_id),
+                error=error,
+            )
+        )
+        return {
+            "status": "routed_to_dlq",
+            "document_id": document_id,
+            "reason": "rag_chunks_unavailable",
+        }
     except Exception as error:
         logger.exception(
             "document_analysis_task_failed",
