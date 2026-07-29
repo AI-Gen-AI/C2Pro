@@ -313,7 +313,9 @@ async def resolve_alert(
         return await resolve_use_case.execute(
             alert_id=alert_id,
             tenant_id=tenant_id,
-            user_id=request.resolved_by or user_id,
+            # SECURITY (EPIC-OPS-DOCFLOW Stream C): resolver identity is bound
+            # to the authenticated session, never to client-supplied values.
+            user_id=user_id,
             resolution=request.resolution,
             root_cause=request.root_cause,
         )

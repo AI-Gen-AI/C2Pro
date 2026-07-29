@@ -89,8 +89,12 @@ class AttachEvidenceRequest(BaseModel):
 
 
 class ResolveAlertRequest(BaseModel):
+    """SECURITY (EPIC-OPS-DOCFLOW Stream C): resolver identity is never
+    accepted from the client — it is always the authenticated session's
+    user_id. A client-supplied resolved_by here would let any authenticated
+    user forge a resolution as another user, corrupting the audit trail."""
+
     resolution: str
-    resolved_by: UUID | None = None  # Optional — router uses CurrentUserId when absent
     root_cause: str | None = None
 
 

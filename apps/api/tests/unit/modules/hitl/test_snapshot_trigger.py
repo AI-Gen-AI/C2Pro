@@ -6,6 +6,7 @@ Test Suite ID: TS-UT-HITL-SNAPSHOT-TRIGGER-001
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -50,9 +51,9 @@ async def test_approval_of_project_review_emits_material_correction_snapshot(mon
 
     await router.approve_item(
         item_id=item.item_id,
-        payload=ApproveRequest(reviewer_name="Reviewer"),
+        _payload=ApproveRequest(),
         _tenant_id=tenant_id,
-        user_id=uuid4(),
+        current_user=SimpleNamespace(id=uuid4(), full_name="Reviewer"),
         service=FakeService(),
     )
 

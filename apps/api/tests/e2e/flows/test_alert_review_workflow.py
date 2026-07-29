@@ -1183,3 +1183,89 @@ async def test_014_alert_state_changes_survive_fresh_session_and_client(
         assert any(item["id"] == alert_id for item in resolved_items)
 
     restarted_app.dependency_overrides.clear()
+
+
+# ===========================================
+# TEST 15: Spoofed resolved_by Is Ignored (EPIC-OPS-DOCFLOW Stream C)
+# ===========================================
+
+
+@pytest_asyncio.fixture
+async def alert_forged_identity(db, alert_tenant: Tenant) -> User:
+    """A second, real user in the same tenant used only as a spoof target —
+    never the authenticated caller in the regression test below."""
+    user = User(
+        id=uuid4(),
+        tenant_id=alert_tenant.id,
+        email="forged_admin@test.com",
+        hashed_password=hash_password("Password123!"),
+        first_name="Forged",
+        last_name="Admin",
+        role=UserRole.ADMIN,
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@pytest.mark.asyncio
+@pytest.mark.e2e
+@pytest.mark.flow
+@pytest.mark.security
+async def test_015_spoofed_resolved_by_is_ignored_records_authenticated_user(
+    client,
+    alert_user: User,
+    alert_forged_identity: User,
+    alert_tenant: Tenant,
+    alert_project,
+    generate_token,
+    test_session_factory,
+):
+    """
+    GIVEN An authenticated user (alert_user) resolves an alert
+    WHEN The request body supplies a different user's id as resolved_by
+    THEN The persisted resolved_by is the AUTHENTICATED user's id, never the
+         client-supplied (forged) identity
+
+    Regression for EPIC-OPS-DOCFLOW Stream C HITL audit-spoofing: an
+    authenticated user must not be able to forge a review/resolution as
+    another user (e.g. an admin/PM), which would corrupt the audit trail.
+    """
+    token = generate_token(
+        user_id=alert_user.id,
+        tenant_id=alert_tenant.id,
+        email=alert_user.email,
+        role="admin",
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    created = await _create_alert(client, headers, alert_project["id"])
+    alert_id = created["id"]
+
+    review_response = await client.post(
+        f"/api/v1/alerts/{alert_id}/review",
+        json={"decision": "approve", "comment": "Confirmed issue"},
+        headers=headers,
+    )
+    assert review_response.status_code == 200
+
+    assert alert_forged_identity.id != alert_user.id
+    resolve_response = await client.post(
+        f"/api/v1/alerts/{alert_id}/resolve",
+        json={
+            "resolution": "Attempted identity spoof",
+            "resolved_by": str(alert_forged_identity.id),
+            "root_cause": "technical_issue",
+        },
+        headers=headers,
+    )
+    assert resolve_response.status_code == 200
+
+    async with test_session_factory() as fresh_session:
+        persisted = await fresh_session.get(Alert, alert_id)
+        assert persisted is not None
+        assert persisted.resolved_by == alert_user.id
+        assert persisted.resolved_by != alert_forged_identity.id

@@ -180,8 +180,6 @@ async def test_i13_real_e2e_reviewer_approval_unlocks_package(
         "document_bytes_b64": "cmV2aWV3LXJlcXVpcmVk",
         "review_decision": {
             "item_id": str(pending_i13_review_item),
-            "reviewer_id": str(uuid4()),
-            "reviewer_name": "I13 Reviewer",
             "action": "approve",
         },
     }
@@ -199,8 +197,51 @@ async def test_i13_real_e2e_reviewer_approval_unlocks_package(
     _skip_if_decision_ports_not_wired(response)
     assert response.status_code == 200
     body = response.json()
-    assert body["approved_by"] == "I13 Reviewer"
+    # Reviewer identity is the authenticated seeded user (first_name="I13",
+    # last_name="E2E" -> full_name "I13 E2E"), never a client-supplied value.
+    assert body["approved_by"] == "I13 E2E"
     assert body["approved_at"] is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.e2e
+@pytest.mark.flow
+async def test_i13_real_e2e_spoofed_reviewer_identity_is_ignored(
+    live_app,
+    seeded_auth_headers,
+    pending_i13_review_item,
+) -> None:
+    """EPIC-OPS-DOCFLOW Stream C: a client-supplied reviewer_id/reviewer_name
+    must never override the authenticated session's identity in the audit
+    trail (HITL audit-spoofing regression)."""
+    headers = seeded_auth_headers
+    spoofed_reviewer_id = str(uuid4())
+    payload = {
+        "project_id": str(uuid4()),
+        "document_bytes_b64": "c3Bvb2ZlZC1yZXZpZXdlcg==",
+        "review_decision": {
+            "item_id": str(pending_i13_review_item),
+            "reviewer_id": spoofed_reviewer_id,
+            "reviewer_name": "Forged Admin Identity",
+            "action": "approve",
+        },
+    }
+
+    async with AsyncClient(
+        transport=ASGITransport(app=live_app, raise_app_exceptions=False),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.post(
+            "/api/v1/decision-intelligence/execute",
+            json=payload,
+            headers=headers,
+        )
+
+    _skip_if_decision_ports_not_wired(response)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["approved_by"] == "I13 E2E"
+    assert body["approved_by"] != "Forged Admin Identity"
 
 
 @pytest.mark.asyncio

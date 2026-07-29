@@ -20,11 +20,18 @@ class RouteForReviewRequest(BaseModel):
 
 
 class ApproveRequest(BaseModel):
-    reviewer_name: str = Field(..., min_length=1)
+    """SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is never
+    accepted from the client — it is derived server-side from the
+    authenticated session (Depends(get_current_user)). A client-supplied
+    reviewer field here would let any authenticated user forge a review as
+    another user, corrupting the HITL audit trail. This body is currently
+    empty by design; do not add a reviewer identity field back."""
 
 
 class RejectRequest(BaseModel):
-    reviewer_name: str = Field(..., min_length=1)
+    """See ApproveRequest docstring: reviewer identity is server-derived,
+    never client-supplied."""
+
     reason: str = Field("", max_length=2000)
 
 
