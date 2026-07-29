@@ -4385,15 +4385,15 @@ components:
       - CORRECTED
       title: ApprovalStatus
     ApproveRequest:
-      properties:
-        reviewer_name:
-          type: string
-          minLength: 1
-          title: Reviewer Name
+      properties: {}
       type: object
-      required:
-      - reviewer_name
       title: ApproveRequest
+      description: "SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is never\n\
+        accepted from the client \u2014 it is derived server-side from the\nauthenticated\
+        \ session (Depends(get_current_user)). A client-supplied\nreviewer field here\
+        \ would let any authenticated user forge a review as\nanother user, corrupting\
+        \ the HITL audit trail. This body is currently\nempty by design; do not add\
+        \ a reviewer identity field back."
     AuthErrorResponse:
       properties:
         detail:
@@ -7084,19 +7084,16 @@ components:
       description: Response completo de registro.
     RejectRequest:
       properties:
-        reviewer_name:
-          type: string
-          minLength: 1
-          title: Reviewer Name
         reason:
           type: string
           maxLength: 2000
           title: Reason
           default: ''
       type: object
-      required:
-      - reviewer_name
       title: RejectRequest
+      description: 'See ApproveRequest docstring: reviewer identity is server-derived,
+
+        never client-supplied.'
     RelationshipExplanationCitationResponse:
       properties:
         clause_id:
@@ -7130,12 +7127,6 @@ components:
         resolution:
           type: string
           title: Resolution
-        resolved_by:
-          anyOf:
-          - type: string
-            format: uuid
-          - type: 'null'
-          title: Resolved By
         root_cause:
           anyOf:
           - type: string
@@ -7145,6 +7136,10 @@ components:
       required:
       - resolution
       title: ResolveAlertRequest
+      description: "SECURITY (EPIC-OPS-DOCFLOW Stream C): resolver identity is never\n\
+        accepted from the client \u2014 it is always the authenticated session's\nuser_id.\
+        \ A client-supplied resolved_by here would let any authenticated\nuser forge\
+        \ a resolution as another user, corrupting the audit trail."
     ResumeWorkflowRequest:
       properties:
         decision:
@@ -7234,13 +7229,6 @@ components:
           type: string
           format: uuid
           title: Item Id
-        reviewer_id:
-          type: string
-          format: uuid
-          title: Reviewer Id
-        reviewer_name:
-          type: string
-          title: Reviewer Name
         action:
           type: string
           enum:
@@ -7251,10 +7239,14 @@ components:
       type: object
       required:
       - item_id
-      - reviewer_id
-      - reviewer_name
       title: ReviewDecisionDTO
-      description: 'Refers to Suite ID: TS-I13-E2E-REAL-001.'
+      description: "Refers to Suite ID: TS-I13-E2E-REAL-001.\n\nSECURITY (EPIC-OPS-DOCFLOW\
+        \ Stream C): reviewer identity is NEVER accepted\nfrom the client. ``reviewer_id``/``reviewer_name``\
+        \ are derived server-side\nfrom the authenticated session (``Depends(get_current_user)``)\
+        \ at the\npoint this DTO is consumed \u2014 a client-supplied identity here\
+        \ would let any\nauthenticated user forge a review as another user, corrupting\
+        \ the HITL\naudit trail. Do not add reviewer identity fields back to this\
+        \ model."
     ReviewItemResponse:
       properties:
         item_id:
