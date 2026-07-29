@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 from pathlib import Path
-from unittest.mock import ANY, AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, Mock, patch
 from uuid import uuid4
 
 import pytest
@@ -31,6 +31,9 @@ def _make_session() -> AsyncMock:
     session = AsyncMock()
     session.__aenter__.return_value = session
     session.__aexit__.return_value = None
+    chunk_count_result = Mock()
+    chunk_count_result.scalar_one.return_value = 1
+    session.execute.return_value = chunk_count_result
     return session
 
 
