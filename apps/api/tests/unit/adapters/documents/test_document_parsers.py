@@ -174,6 +174,44 @@ class TestPDFParser:
         ):
             assert parser._ocr_page(page, 0) is None
 
+    def test_module_level_ocr_available_matches_live_probe(self):
+        """OCR_AVAILABLE (set once at import time) must match what the probe
+        would compute right now — i.e. the bootstrap wiring is correct.
+        Deliberately does not hardcode whether tesseract is actually
+        installed: CI's unit-test runner has the pytesseract *package* but
+        not the tesseract *binary* (only the Docker image installs that),
+        so this must hold true in both environments."""
+        from src.documents.adapters.parsers.pdf_file_parser import (
+            OCR_AVAILABLE,
+            _tesseract_binary_available,
+        )
+
+        assert OCR_AVAILABLE is _tesseract_binary_available()
+
+    def test_tesseract_binary_available_false_and_warns_when_binary_missing(self):
+        """EPIC-OPS-DOCFLOW Stream A: pytesseract importing successfully does
+        not mean the tesseract system binary is present. The probe must
+        detect a missing/broken binary and return False with a clear
+        warning, instead of silently discovering it per-page later.
+
+        Calls `_tesseract_binary_available()` directly rather than reloading
+        the module: reloading would rebind PDFParsingError to a new class
+        object, breaking `except PDFParsingError` in composite_file_parser.py
+        for the rest of the test session.
+        """
+        from src.documents.adapters.parsers import pdf_file_parser as pdf_file_parser_module
+
+        with patch.object(
+            pdf_file_parser_module.pytesseract,
+            "get_tesseract_version",
+            side_effect=pdf_file_parser_module.pytesseract.TesseractNotFoundError(),
+        ), patch.object(pdf_file_parser_module.logger, "warning") as mock_warning:
+            result = pdf_file_parser_module._tesseract_binary_available()
+
+        assert result is False
+        warning_events = [c.args[0] for c in mock_warning.call_args_list]
+        assert "ocr_tesseract_binary_missing" in warning_events
+
 
 # ===========================================
 # DOCX PARSER TESTS
