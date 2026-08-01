@@ -13,7 +13,6 @@ schema creation that runs inside each pytest session.
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncGenerator
 from importlib import import_module
 
@@ -66,14 +65,6 @@ def pytest_configure(config: pytest.Config) -> None:
 @pytest.fixture(scope="session")
 def anyio_backend() -> str:
     return "asyncio"
-
-
-@pytest.fixture(scope="function")
-def event_loop():
-    policy = asyncio.get_event_loop_policy()
-    loop = policy.new_event_loop()
-    yield loop
-    loop.close()
 
 
 # ---------------------------------------------------------------------------
