@@ -406,3 +406,76 @@ class TestRealPresidioThroughAnthropicWrapper:
         assert "Juan Perez" not in sent_content
         assert "Calle Mayor 10" not in sent_content
         assert "Madrid" not in sent_content
+
+
+# ---------------------------------------------------------------------------
+# Tier 2: SEC-003 NER gate liveness (proves active NER, not silent fallback)
+# ---------------------------------------------------------------------------
+
+
+@requires_real_presidio
+class TestPresidioNerGateCIVerification:
+    """SEC-003: proves the Presidio NER layer is genuinely active in this env.
+
+    Skipped when es_core_news_md is absent (local dev without the model).
+    When NOT skipped (CI with the model installed), FAILS if:
+    - PRESIDIO_AVAILABLE is not True (import failure — presidio not installed)
+    - _analyzer_load_failed is True (model load failed — silent regex-only degradation)
+    - _analyzer is None (AnalyzerEngine was never initialised)
+    - A Spanish person name or city name survived un-anonymised (NER did not run)
+
+    Does NOT monkeypatch PRESIDIO_AVAILABLE — the real import state is asserted.
+    """
+
+    def test_ner_gate_active_not_silently_degraded_to_regex_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Fails if the NER path silently fell back to regex-only (the SEC-003 gap)."""
+        # Reset lazy-load state to force a real model-load attempt this test run.
+        # Deliberately do NOT patch PRESIDIO_AVAILABLE so we assert the real value.
+        monkeypatch.setattr(anonymizer_module.PiiAnonymizerService, "_instance", None)
+        monkeypatch.setattr(anonymizer_module.PiiAnonymizerService, "_initialized", False)
+        monkeypatch.setattr(anonymizer_module.PiiAnonymizerService, "_analyzer", None)
+        monkeypatch.setattr(
+            anonymizer_module.PiiAnonymizerService, "_analyzer_load_failed", False
+        )
+
+        # Trigger a real lazy load via the public API.
+        anonymizer = anonymizer_module.PiiAnonymizerService()
+        anonymizer.anonymize_document("trigger load")
+
+        # Gate 1: presidio_analyzer package must be importable (not degraded at import).
+        assert anonymizer_module.PRESIDIO_AVAILABLE is True, (
+            "PRESIDIO_AVAILABLE is False — presidio_analyzer not installed. "
+            "SEC-003: the CI job must install presidio_analyzer before running this test."
+        )
+        # Gate 2: the es_core_news_md model must have loaded successfully.
+        assert anonymizer_module.PiiAnonymizerService._analyzer_load_failed is False, (
+            "_analyzer_load_failed is True — es_core_news_md failed to load. "
+            "SEC-003: NER gate is silently degraded to regex-only in this environment."
+        )
+        assert anonymizer_module.PiiAnonymizerService._analyzer is not None, (
+            "_analyzer is None — AnalyzerEngine was never initialised. "
+            "SEC-003: NER gate is silently inactive."
+        )
+
+        # Gate 3: NER catches entities that regex alone cannot detect.
+        # "Juan Perez" is a Spanish person name — neither _EMAIL_RE nor _SPANISH_ID_RE
+        # can catch it. "Madrid" is a city — same. Both must be tokenised by Presidio.
+        result = anonymizer.anonymize_document(
+            "El contrato es firmado por Juan Perez, domiciliado en Madrid."
+        )
+        assert "Juan Perez" not in result.anonymized_text, (
+            "PERSON 'Juan Perez' was not anonymised — NER layer did not run. "
+            "SEC-003: _apply_presidio is still falling back silently."
+        )
+        assert "Madrid" not in result.anonymized_text, (
+            "LOCATION 'Madrid' was not anonymised — NER layer did not run. "
+            "SEC-003: _apply_presidio is still falling back silently."
+        )
+        assert any(k.startswith("[PERSON_") for k in result.mapping), (
+            "No [PERSON_NNN] token in mapping — PERSON NER detection did not fire."
+        )
+        assert any(k.startswith("[LOCATION_") for k in result.mapping), (
+            "No [LOCATION_NNN] token in mapping — LOCATION NER detection did not fire."
+        )
