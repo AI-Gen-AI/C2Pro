@@ -232,6 +232,61 @@ jobs:
           include-hidden-files: true
           retention-days: 14
 
+  # SEC-003: CI verification that the Presidio NER gate actually runs (not silently
+  # degraded to regex-only). Mirrors Dockerfile:39 by downloading es_core_news_md,
+  # then runs ONLY the presidio test file so the ~100MB model download is isolated
+  # from all other backend lanes. The model is cached by spaCy version (derived from
+  # requirements.txt hash) so subsequent runs restore from cache in seconds.
+  # NOTE: actions/cache uses a tag reference below — pin to a SHA before merging,
+  # following the project convention (see other actions in this file).
+  backend-presidio-ner:
+    name: Backend Presidio NER Gate (SEC-003)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Get Python site-packages path and spaCy version for cache key
+        id: spacy-meta
+        shell: bash
+        run: |
+          echo "site=$(python -c 'import sysconfig; print(sysconfig.get_path(\"purelib\"))')" >> $GITHUB_OUTPUT
+          echo "ver=$(python -c 'import spacy; print(spacy.__version__)')" >> $GITHUB_OUTPUT
+
+      - name: Cache es_core_news_md spaCy model
+        id: spacy-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.spacy-meta.outputs.site }}/es_core_news_md
+          key: spacy-es-core-news-md-${{ runner.os }}-${{ steps.spacy-meta.outputs.ver }}
+          restore-keys: spacy-es-core-news-md-${{ runner.os }}-
+
+      - name: Download es_core_news_md spaCy NER model (mirrors Dockerfile:39)
+        if: steps.spacy-cache.outputs.cache-hit != 'true'
+        run: python -m spacy download es_core_news_md
+
+      - name: Run Presidio NER gate tests (SEC-003)
+        working-directory: apps/api
+        run: |
+          python -m pytest \
+            tests/unit/core/test_privacy_anonymizer_presidio.py \
+            -v --tb=short \
+            --junit-xml=presidio-ner-test-results.xml
+
+      - name: Upload Presidio NER test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: presidio-ner-test-results
+          path: apps/api/presidio-ner-test-results.xml
+          retention-days: 14
+
   backend-security:
     name: Backend Security Suite (multi-tenant isolation)
     runs-on: ubuntu-latest
@@ -916,6 +971,7 @@ jobs:
       - backend-lint
       - backend-typecheck
       - backend-unit
+      - backend-presidio-ner
       - backend-security
       - backend-integration
       - backend-core
@@ -1014,6 +1070,7 @@ jobs:
           RESULT_DETECT: ${{ needs.detect-changes.result }}
           RESULT_BACKEND_LINT: ${{ needs.backend-lint.result }}
           RESULT_BACKEND_UNIT: ${{ needs.backend-unit.result }}
+          RESULT_BACKEND_PRESIDIO_NER: ${{ needs.backend-presidio-ner.result }}
           RESULT_BACKEND_SECURITY: ${{ needs.backend-security.result }}
           RESULT_BACKEND_MIGRATIONS: ${{ needs.backend-migrations.result }}
           RESULT_FRONTEND_QUALITY: ${{ needs.frontend-quality.result }}
@@ -1036,6 +1093,7 @@ jobs:
             "backend-lint:$RESULT_BACKEND_LINT"
             "backend-typecheck:$RESULT_BACKEND_TYPECHECK"
             "backend-unit:$RESULT_BACKEND_UNIT"
+            "backend-presidio-ner:$RESULT_BACKEND_PRESIDIO_NER"
             "backend-security:$RESULT_BACKEND_SECURITY"
             "backend-integration:$RESULT_BACKEND_INTEGRATION"
             "backend-core:$RESULT_BACKEND_CORE"
