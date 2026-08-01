@@ -233,12 +233,10 @@ jobs:
           retention-days: 14
 
   # SEC-003: CI verification that the Presidio NER gate actually runs (not silently
-  # degraded to regex-only). Mirrors Dockerfile:39 by downloading es_core_news_md,
-  # then runs ONLY the presidio test file so the ~100MB model download is isolated
-  # from all other backend lanes. The model is cached by spaCy version (derived from
-  # requirements.txt hash) so subsequent runs restore from cache in seconds.
-  # NOTE: actions/cache uses a tag reference below — pin to a SHA before merging,
-  # following the project convention (see other actions in this file).
+  # degraded to regex-only). Installs es_core_news_md by pinned wheel URL (avoids
+  # the spacy-download version-resolution bug that produces a malformed 404 URL).
+  # Runs ONLY the presidio test file — the ~100MB model download is isolated from
+  # all other backend lanes and cached by model version + OS for subsequent runs.
   backend-presidio-ner:
     name: Backend Presidio NER Gate (SEC-003)
     runs-on: ubuntu-latest
@@ -252,24 +250,22 @@ jobs:
       - name: Setup backend environment
         uses: ./.github/actions/setup-python-backend
 
-      - name: Get Python site-packages path and spaCy version for cache key
+      - name: Get Python site-packages path for model cache
         id: spacy-meta
         shell: bash
         run: |
           echo "site=$(python -c 'import sysconfig; print(sysconfig.get_path(\"purelib\"))')" >> $GITHUB_OUTPUT
-          echo "ver=$(python -c 'import spacy; print(spacy.__version__)')" >> $GITHUB_OUTPUT
 
-      - name: Cache es_core_news_md spaCy model
+      - name: Cache es_core_news_md spaCy model (pinned 3.7.0 for spaCy 3.7.2)
         id: spacy-cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ steps.spacy-meta.outputs.site }}/es_core_news_md
-          key: spacy-es-core-news-md-${{ runner.os }}-${{ steps.spacy-meta.outputs.ver }}
-          restore-keys: spacy-es-core-news-md-${{ runner.os }}-
+          key: spacy-es-core-news-md-3.7.0-${{ runner.os }}
 
-      - name: Download es_core_news_md spaCy NER model (mirrors Dockerfile:39)
+      - name: Install es_core_news_md 3.7.0 wheel (pinned, mirrors Dockerfile:39)
         if: steps.spacy-cache.outputs.cache-hit != 'true'
-        run: python -m spacy download es_core_news_md
+        run: pip install "https://github.com/explosion/spacy-models/releases/download/es_core_news_md-3.7.0/es_core_news_md-3.7.0-py3-none-any.whl"
 
       - name: Run Presidio NER gate tests (SEC-003)
         working-directory: apps/api
