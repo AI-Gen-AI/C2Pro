@@ -309,8 +309,14 @@ def _ensure_auth_users(session: Session, _flush_context, _instances) -> None:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def test_engine():
-    """Create a test database engine with full schema bootstrap."""
+async def test_engine(request):
+    """Create a test database engine with full schema bootstrap.
+
+    Tests marked with ``alembic_schema`` skip the destructive
+    drop_all/create_all bootstrap and reuse the Alembic-migrated schema.
+    The marker is scoped to the requesting test item, so it cannot leak
+    process-wide to co-located tests.
+    """
     from sqlalchemy.exc import OperationalError
 
     database_url = settings.database_url
@@ -347,8 +353,7 @@ async def test_engine():
         _register_test_orm_models()
         _ensure_test_fk_stub_tables()
 
-        import os
-        if os.getenv("C2PRO_USE_ALEMBIC_SCHEMA") == "1":
+        if request.node.get_closest_marker("alembic_schema") is not None:
             yield engine
             await engine.dispose()
             return

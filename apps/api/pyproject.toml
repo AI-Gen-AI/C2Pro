@@ -95,6 +95,7 @@ markers = [
     "contract: Contract tests (API/frontend alignment)",
     "red_phase: RED phase TDD tests",
     "green_phase: GREEN phase TDD tests",
+    "alembic_schema: use the Alembic-migrated schema instead of drop_all/create_all bootstrap",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

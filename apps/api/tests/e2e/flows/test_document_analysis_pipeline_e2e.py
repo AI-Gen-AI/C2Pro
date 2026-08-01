@@ -44,7 +44,11 @@ from tests.conftest import TEST_PASSWORD_HASH
 
 # Ensure mock AI for Anthropic calls (extraction returns deterministic data)
 os.environ["C2PRO_AI_MOCK"] = "1"
-os.environ["C2PRO_USE_ALEMBIC_SCHEMA"] = "1"
+
+# Use the Alembic-migrated schema (skip drop_all/create_all bootstrap).
+# Scoped to this module via pytest marker so the bypass cannot leak
+# process-wide to co-located tests' test_engine.
+pytestmark = pytest.mark.alembic_schema
 
 
 # ===========================================
