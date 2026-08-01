@@ -347,6 +347,12 @@ async def test_engine():
         _register_test_orm_models()
         _ensure_test_fk_stub_tables()
 
+        import os
+        if os.getenv("C2PRO_USE_ALEMBIC_SCHEMA") == "1":
+            yield engine
+            await engine.dispose()
+            return
+
         async def _cleanup_bootstrap(conn) -> None:
             await reset_public_schema(conn)
 
