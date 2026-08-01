@@ -44,6 +44,7 @@ from tests.conftest import TEST_PASSWORD_HASH
 
 # Ensure mock AI for Anthropic calls (extraction returns deterministic data)
 os.environ["C2PRO_AI_MOCK"] = "1"
+os.environ["C2PRO_USE_ALEMBIC_SCHEMA"] = "1"
 
 
 # ===========================================
