@@ -12,6 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.coherence.domain.v2_constants import MIN_EVIDENCE_BY_CATEGORY
+
 
 @dataclass(frozen=True)
 class EvidenceBundle:
@@ -26,15 +28,16 @@ class EvidenceBundle:
 class EvidenceService:
     """Collects evidence for a single category from a project document set.
 
-    Phase 1 implementation is intentionally minimal: it is a Protocol-shaped
-    base class for stub services in tests and for the deterministic adapter
-    used during shadow-mode. The production adapter (Phase 3) will plug in
-    the real document store query.
+    Phase 1 deterministic implementation (ADR-009 §2.2): coverage is computed
+    as min(1.0, count / threshold) using MIN_EVIDENCE_BY_CATEGORY, so the
+    shadow path reports an honest evidence ratio instead of a fixed 1.0
+    placeholder. The production adapter (Phase 3) will replace this with a
+    real document store query.
     """
 
-    def collect(  # noqa: D401 — Protocol-style stub
+    def collect(
         self,
-        category: str,  # noqa: ARG002 - required by the EvidenceService interface
+        category: str,
         project_docs: list[Any],
     ) -> EvidenceBundle:
         if not project_docs:
@@ -46,12 +49,18 @@ class EvidenceService:
                 missing_required=[],
                 references=[],
             )
+        count = len(project_docs)
+        threshold = MIN_EVIDENCE_BY_CATEGORY.get(category, 1)
+        evidence_coverage = min(1.0, count / threshold)
+        missing_required = (
+            [f"need_{threshold - count}_more_documents"] if count < threshold else []
+        )
         return EvidenceBundle(
-            count=len(project_docs),
-            evidence_coverage=1.0,
+            count=count,
+            evidence_coverage=evidence_coverage,
             evidence_freshness=1.0,
             avg_technical_reliability=0.9,
-            missing_required=[],
+            missing_required=missing_required,
             references=[f"doc-{i}" for i, _ in enumerate(project_docs)],
         )
 
