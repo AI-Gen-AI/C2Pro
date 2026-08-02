@@ -689,17 +689,20 @@ async def _run_v2_shadow_on_evaluate(
             ProjectEvidenceInputs,
         )
         from src.coherence.services.v2.shadow_runner import ShadowRunner
+        from src.documents.adapters.persistence.sqlalchemy_document_repository import (
+            SqlAlchemyDocumentRepository,
+        )
 
-        # Tenant-safe document metadata fetch (id + type only — no text, no PII)
-        doc_rows = (
-            await db.execute(
-                select(DocumentORM.id, DocumentORM.document_type)
-                .where(
-                    DocumentORM.project_id == project_id,
-                    DocumentORM.tenant_id == tenant_id,
-                )
-            )
-        ).all()
+        # Fetch domain Document objects via the RLS-safe repository (double-filters
+        # on project_id + tenant_id). limit=200 is a practical ceiling; truncation
+        # risk is low for typical projects but noted here as a known limitation.
+        doc_repo = SqlAlchemyDocumentRepository(session=db)
+        project_docs, _ = await doc_repo.list_for_project(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            skip=0,
+            limit=200,
+        )
 
         orchestrator = CoherenceV2Orchestrator(
             evidence=EvidenceService(),
@@ -710,7 +713,7 @@ async def _run_v2_shadow_on_evaluate(
         v2_payload = await orchestrator.run(
             project_id=project_id,
             evidence_inputs=ProjectEvidenceInputs(
-                project_docs=list(doc_rows),
+                project_docs=project_docs,
                 project_context={},
             ),
         )

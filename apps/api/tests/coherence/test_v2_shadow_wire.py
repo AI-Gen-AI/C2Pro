@@ -6,6 +6,10 @@ POST /evaluate runs the real CoherenceV2Orchestrator — NOT adapt_v1_dashboard 
 and emits a coherence.v1_v2_score_delta event with real bottom-up v2 scores.
 The returned primary result must remain V1 (no cutover).
 
+Doc fetch is performed via SqlAlchemyDocumentRepository.list_for_project (RLS-safe);
+these tests patch the repository, not db.execute, to avoid coupling to internal
+query construction.
+
 Refers to Suite ID: TS-UA-COH-V2-WIRE-001.
 """
 from __future__ import annotations
@@ -24,6 +28,13 @@ from src.coherence.models import (
     EnrichedCoherenceResult,
     SeverityCount,
 )
+
+# Patch path for the repository method — lazy-imported inside the router
+_REPO_LIST_FOR_PROJECT = (
+    "src.documents.adapters.persistence"
+    ".sqlalchemy_document_repository.SqlAlchemyDocumentRepository.list_for_project"
+)
+
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -63,14 +74,15 @@ def _current_user() -> SimpleNamespace:
     return SimpleNamespace(tenant_id=uuid4())
 
 
-def _make_mock_db(doc_rows: list) -> Mock:
-    """DB mock with async execute returning doc_rows, sync add, async commit."""
-    mock_result = Mock()
-    mock_result.all.return_value = doc_rows
+def _simple_db() -> Mock:
+    """Minimal db mock (router still receives it as a parameter)."""
     mock_db = Mock()
-    mock_db.execute = AsyncMock(return_value=mock_result)
     mock_db.commit = AsyncMock()
     return mock_db
+
+
+def _doc(doc_type: str) -> SimpleNamespace:
+    return SimpleNamespace(document_type=doc_type)
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +104,7 @@ async def test_v2_shadow_runs_orchestrator_not_adapter(
     (b) ShadowRunner.emit is called once; delta carries v1 score and v2 status.
     (c) adapt_v1_dashboard is NOT called — shadow uses orchestrator path.
     (d) Returned primary result is still V1 (no cutover).
+    (e) Doc fetch goes through SqlAlchemyDocumentRepository, not raw db.execute.
     """
     from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
@@ -101,7 +114,10 @@ async def test_v2_shadow_runs_orchestrator_not_adapter(
     evidence_calls: list[str] = []
     emit_calls: list = []
 
-    # Spy on EvidenceService.collect — wraps the real implementation
+    # Two docs with typed document_type — contract and schedule
+    mock_docs = [_doc("contract"), _doc("schedule")]
+
+    # Spy on EvidenceService.collect — wraps the real (filtering) implementation
     from src.coherence.services.v2.evidence_service import EvidenceService as _EvidSvc
 
     _real_collect = _EvidSvc.collect
@@ -112,8 +128,6 @@ async def test_v2_shadow_runs_orchestrator_not_adapter(
 
     def _spy_emit(self: object, delta: object, feature_flag_state: object = None) -> None:
         emit_calls.append(delta)
-
-    mock_db = _make_mock_db([("doc-1", "CONTRACT"), ("doc-2", "SCHEDULE")])
 
     with (
         patch(
@@ -133,6 +147,11 @@ async def test_v2_shadow_runs_orchestrator_not_adapter(
         patch(
             "src.coherence.adapters.v1_to_v2.adapt_v1_dashboard",
         ) as mock_adapter,
+        patch(
+            _REPO_LIST_FOR_PROJECT,
+            new_callable=AsyncMock,
+            return_value=(mock_docs, len(mock_docs)),
+        ),
     ):
         request = CoherenceEvaluateRequest(
             project_id=project_id,
@@ -141,11 +160,11 @@ async def test_v2_shadow_runs_orchestrator_not_adapter(
         result = await evaluate_project_coherence(
             payload=request,
             include_diagnostics=False,
-            db=mock_db,
+            db=_simple_db(),
             current_user=_current_user,
         )
 
-    # (a) Orchestrator called collect for every category
+    # (a) Orchestrator called collect for every v2 category
     assert set(evidence_calls) == {
         "SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME",
     }, f"Expected 6 category calls, got: {evidence_calls}"
@@ -178,7 +197,6 @@ async def test_v2_shadow_disabled_when_v2_flag_off(
     emit_calls: list = []
 
     mock_settings = SimpleNamespace(coherence_v2_enabled=False, coherence_v2_shadow_mode=True)
-    mock_db = _make_mock_db([])
 
     def _spy_emit(self: object, delta: object, feature_flag_state: object = None) -> None:
         emit_calls.append(delta)
@@ -199,7 +217,7 @@ async def test_v2_shadow_disabled_when_v2_flag_off(
         result = await evaluate_project_coherence(
             payload=request,
             include_diagnostics=False,
-            db=mock_db,
+            db=_simple_db(),
             current_user=_current_user,
         )
 
@@ -220,7 +238,6 @@ async def test_v2_shadow_skipped_without_project_id(
 
     emit_calls: list = []
     mock_settings = SimpleNamespace(coherence_v2_enabled=True, coherence_v2_shadow_mode=True)
-    mock_db = _make_mock_db([])
 
     def _spy_emit(self: object, delta: object, feature_flag_state: object = None) -> None:
         emit_calls.append(delta)
@@ -242,7 +259,7 @@ async def test_v2_shadow_skipped_without_project_id(
         result = await evaluate_project_coherence(
             payload=request,
             include_diagnostics=False,
-            db=mock_db,
+            db=_simple_db(),
             current_user=_current_user,
         )
 
@@ -263,8 +280,6 @@ async def test_v2_shadow_failure_does_not_break_v1_response(
     project_id = uuid4()
     mock_settings = SimpleNamespace(coherence_v2_enabled=True, coherence_v2_shadow_mode=True)
 
-    mock_db = _make_mock_db([("doc-1", "CONTRACT")])
-
     with (
         patch(
             "src.coherence.router.evaluate_coherence_async",
@@ -272,6 +287,12 @@ async def test_v2_shadow_failure_does_not_break_v1_response(
             return_value=_v1_result,
         ),
         patch("src.config.get_settings", return_value=mock_settings),
+        # Repo returns one doc; orchestrator crashes after that
+        patch(
+            _REPO_LIST_FOR_PROJECT,
+            new_callable=AsyncMock,
+            return_value=([_doc("contract")], 1),
+        ),
         patch(
             "src.coherence.services.v2.orchestrator.CoherenceV2Orchestrator.run",
             new_callable=AsyncMock,
@@ -282,7 +303,7 @@ async def test_v2_shadow_failure_does_not_break_v1_response(
         result = await evaluate_project_coherence(
             payload=request,
             include_diagnostics=False,
-            db=mock_db,
+            db=_simple_db(),
             current_user=_current_user,
         )
 
