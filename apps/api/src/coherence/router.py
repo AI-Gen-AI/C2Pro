@@ -637,12 +637,104 @@ async def evaluate_project_coherence(
         )
         await db.commit()
 
+    # V2 shadow: run real CoherenceV2Orchestrator and emit delta event.
+    # Guard mirrors _maybe_add_v2_dashboard: only fires when both flags are True.
+    # Never raises — failures are caught so the V1 response is unaffected.
+    # TASK-COH-V2-WIRE-ORCHESTRATOR
+    if payload.project_id:
+        from src.config import get_settings  # local import — avoids circular dep
+        _settings = get_settings()
+        if (
+            getattr(_settings, "coherence_v2_enabled", False)
+            and getattr(_settings, "coherence_v2_shadow_mode", True)
+        ):
+            await _run_v2_shadow_on_evaluate(
+                v1_result=enriched_result,
+                project_id=payload.project_id,
+                tenant_id=current_user.tenant_id,
+                db=db,
+            )
+
     # Return diagnostics if requested (Task 7.4)
     if include_diagnostics:
         return enriched_result
 
     # Otherwise return backward-compatible response (Task 7.3)
     return _convert_enriched_to_coherence_result(enriched_result)
+
+
+async def _run_v2_shadow_on_evaluate(
+    v1_result: EnrichedCoherenceResult,
+    project_id: UUID,
+    tenant_id: UUID,
+    db: AsyncSession,
+) -> None:
+    """Run the real CoherenceV2Orchestrator in shadow mode (TASK-COH-V2-WIRE-ORCHESTRATOR).
+
+    Fetches project document metadata (tenant-safe, no text/PII), runs the v2
+    orchestrator, and emits a coherence.v1_v2_score_delta structlog event so the
+    shadow path carries real bottom-up v2 scores instead of the v1-translation
+    from adapt_v1_dashboard.
+
+    ConflictService is still a stub (CONFLICT-DESTUB); conflict will be "none"
+    for all categories until that task lands.
+    """
+    try:
+        from src.coherence.services.v2.aggregator_v2 import GlobalAggregatorV2
+        from src.coherence.services.v2.category_aggregator import CategoryAggregator
+        from src.coherence.services.v2.conflict_service import ConflictService
+        from src.coherence.services.v2.evidence_service import EvidenceService
+        from src.coherence.services.v2.orchestrator import (
+            CoherenceV2Orchestrator,
+            ProjectEvidenceInputs,
+        )
+        from src.coherence.services.v2.shadow_runner import ShadowRunner
+        from src.documents.adapters.persistence.sqlalchemy_document_repository import (
+            SqlAlchemyDocumentRepository,
+        )
+
+        # Fetch domain Document objects via the RLS-safe repository (double-filters
+        # on project_id + tenant_id). limit=200 is a practical ceiling; truncation
+        # risk is low for typical projects but noted here as a known limitation.
+        doc_repo = SqlAlchemyDocumentRepository(session=db)
+        project_docs, _ = await doc_repo.list_for_project(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            skip=0,
+            limit=200,
+        )
+
+        orchestrator = CoherenceV2Orchestrator(
+            evidence=EvidenceService(),
+            conflict=ConflictService(),
+            cat_agg=CategoryAggregator(),
+            global_agg=GlobalAggregatorV2(),
+        )
+        v2_payload = await orchestrator.run(
+            project_id=project_id,
+            evidence_inputs=ProjectEvidenceInputs(
+                project_docs=project_docs,
+                project_context={},
+            ),
+        )
+
+        v1_dict: dict[str, object] = {
+            "coherence_score": v1_result.overall_score,
+            "project_id": str(project_id),
+            "tenant_id": str(tenant_id),
+            "analysis_id": None,
+        }
+        runner = ShadowRunner()
+        delta = runner.compare(v1_dict, v2_payload)
+        runner.emit(
+            delta,
+            feature_flag_state={
+                "coherence_v2_enabled": True,
+                "coherence_v2_shadow_mode": True,
+            },
+        )
+    except Exception:
+        logger.exception("coherence_v2_shadow_evaluate_failed")
 
 
 # Optional diagnostics endpoint (Task 7.4)
