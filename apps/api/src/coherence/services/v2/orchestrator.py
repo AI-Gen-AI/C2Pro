@@ -21,7 +21,7 @@ from src.coherence.application.dtos.coherence_v2_dtos import (
 from src.coherence.domain.v2_constants import MIN_EVIDENCE_BY_CATEGORY
 from src.coherence.services.v2.aggregator_v2 import GlobalAggregatorV2
 from src.coherence.services.v2.category_aggregator import CategoryAggregator
-from src.coherence.services.v2.conflict_service import ConflictService
+from src.coherence.services.v2.conflict_service import ConflictCandidate, ConflictService
 from src.coherence.services.v2.evidence_service import EvidenceService
 
 
@@ -30,6 +30,9 @@ class ProjectEvidenceInputs:
     project_docs: list[Any]
     project_context: dict[str, Any]
     rule_signals_by_category: dict[str, list[tuple[str, float]]] = field(default_factory=dict)
+    conflict_candidates_by_category: dict[str, list[ConflictCandidate]] = field(
+        default_factory=dict
+    )
     applicability: dict[str, tuple[bool, str | None]] = field(default_factory=dict)
     assessment_by_category: dict[str, bool] = field(default_factory=dict)
 
@@ -58,7 +61,8 @@ class CoherenceV2Orchestrator:
             applicable, reason = evidence_inputs.applicability.get(cat, (True, None))
             evidence = self._evidence.collect(cat, evidence_inputs.project_docs)
             signals = evidence_inputs.rule_signals_by_category.get(cat, [])
-            conflict = self._conflict.detect(cat, evidence, signals)
+            candidates = evidence_inputs.conflict_candidates_by_category.get(cat, [])
+            conflict = self._conflict.detect(cat, evidence, candidates)
             categories.append(
                 self._cat_agg.aggregate(
                     category=cat,
