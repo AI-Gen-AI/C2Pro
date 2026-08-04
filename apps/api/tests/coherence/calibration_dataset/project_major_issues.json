@@ -11,10 +11,38 @@
       }
     },
     {
+      "id": "clause-b-maj-002",
+      "text": "The consolidated budget contains a breakdown of costs sum, but contract total specifies a mismatch of total cost.",
+      "data": {
+        "budget_items": [
+          {"name": "Engineering", "amount": 4000000},
+          {"name": "Procurement", "amount": 3000000},
+          {"name": "Construction", "amount": 1000000}
+        ],
+        "total_amount": 6500000
+      }
+    },
+    {
+      "id": "clause-b-maj-003",
+      "text": "Budget contingency is planned for unanticipated financial cost overruns.",
+      "data": {
+        "contingency_percent": 10
+      }
+    },
+    {
       "id": "clause-s-maj-001",
       "text": "Project schedule status: delayed. Revised end date: 2025-11-30.",
       "data": {
         "status": "delayed"
+      }
+    },
+    {
+      "id": "clause-s-maj-002",
+      "text": "The project schedule milestone dates are set to align with key phase durations.",
+      "data": {
+        "milestones": [
+          {"name": "Phase 1 Completion", "date": "2025-06-30"}
+        ]
       }
     },
     {
