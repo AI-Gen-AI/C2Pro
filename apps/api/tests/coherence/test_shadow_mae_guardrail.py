@@ -263,3 +263,28 @@ def test_v2_mae_within_ceiling() -> None:
         f"evidence gate (1 doc vs 3/2 required). "
         f"Do NOT widen MAE_CEILING — register gap in TASK-COH-V2-CONFLICT-DESTUB."
     )
+
+
+@pytest.mark.integration
+def test_major_issues_has_budget_sum_contradiction_candidate() -> None:
+    """Verify that project_major_issues has sufficient BUDGET/TIME evidence and builds a DET-BUD-SUM candidate."""
+    from src.coherence.services.v2.conflict_service import build_conflict_candidates
+
+    clauses = _load(MAJOR_ISSUES)
+    v1_score, v1_signals = _run_v1(clauses, "major_issues")
+
+    # Assert budget sum mismatch rule was evaluated and generated a signal
+    det_bud_sum_signals = [sig for sig in v1_signals if sig.rule_id == "DET-BUD-SUM"]
+    assert len(det_bud_sum_signals) >= 1, "Expected DET-BUD-SUM rule to fire for project_major_issues"
+
+    # Assert a ConflictCandidate is built from these signals
+    candidates = build_conflict_candidates(v1_signals)
+    budget_sum_candidates = [c for c in candidates if c.rule_id == "DET-BUD-SUM"]
+    assert len(budget_sum_candidates) >= 1, "Expected DET-BUD-SUM conflict candidate to be built"
+
+    candidate = budget_sum_candidates[0]
+    assert candidate.category == "BUDGET"
+    assert candidate.compared_values == {"items_sum": 8000000.0, "contract_total": 6500000.0}
+    assert candidate.delta == 1500000.0
+    assert candidate.direction == "exceeds"
+
