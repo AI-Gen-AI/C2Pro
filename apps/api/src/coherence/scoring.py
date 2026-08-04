@@ -888,7 +888,9 @@ def calculate_v2_from_signals(
         CategoryAggregator,
     )
     from src.coherence.services.v2.conflict_service import (  # noqa: PLC0415
-        ConflictReport,
+        ConflictCandidate,
+        ConflictService,
+        build_conflict_candidates,
     )
     from src.coherence.services.v2.evidence_service import EvidenceBundle  # noqa: PLC0415
 
@@ -896,6 +898,7 @@ def calculate_v2_from_signals(
     global_agg = GlobalAggregatorV2()
 
     signals_by_category: dict[str, list[tuple[str, float]]] = {}
+    candidates_by_category: dict[str, list[ConflictCandidate]] = {}
     budget_reconciliation_raw: dict[str, dict[str, Any]] = {}
     for s in signals or []:
         if isinstance(s, tuple):
@@ -916,14 +919,20 @@ def calculate_v2_from_signals(
                 budget_reconciliation_raw.setdefault("BUDGET", {}).update(raw)
         signals_by_category.setdefault(cat, []).append((str(rule_id), float(score)))
 
+    for candidate in build_conflict_candidates(
+        signal for signal in signals or [] if isinstance(signal, FindingSignal)
+    ):
+        candidates_by_category.setdefault(candidate.category, []).append(candidate)
+
     categories = []
+    conflict_service = ConflictService()
     for cat in MIN_EVIDENCE_BY_CATEGORY:
         applicable, reason = applicability_map.get(cat, (True, None))
         bundle = evidence_bundles.get(
             cat,
             EvidenceBundle(0, 0.0, 0.0, 0.0, [], []),
         )
-        conflict = ConflictReport("none", False, [], 1.0)
+        conflict = conflict_service.detect(cat, bundle, candidates_by_category.get(cat, []))
         recon_data = budget_reconciliation_raw.get(cat)
         budget_recon = BudgetReconciliation(**recon_data) if recon_data else None
         categories.append(
