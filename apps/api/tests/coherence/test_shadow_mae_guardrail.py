@@ -6,23 +6,11 @@ coherence_score=88.0) with real v1 and v2 engine execution on all 3 calibration
 projects.  The MAE is computed from the real engines so CI output always shows the
 true divergence — not 0.0.
 
-Structural gap (TASK-COH-V2-REAL-MAE-CALIBRATION / TASK-COH-V2-CONFLICT-DESTUB):
-  The calibration corpus is clause-based; v2 expects project_docs.  A thin doc-type
-  adapter wraps each clause as SimpleNamespace(document_type=<inferred>) via
-  infer_category().  With 1 doc of each type the v2 evidence gate produces:
-
-    Category   threshold  docs  v2 result
-    --------   ---------  ----  ---------
-    LEGAL      1          1     SCORED  (but DET-LEG-REVIEW is unregistered in v1)
-    QUALITY    2          3     SCORED  (no quality signals in fixture)
-    BUDGET     3          1     INSUFFICIENT_EVIDENCE  — v1 signal blocked
-    TIME       2          1     INSUFFICIENT_EVIDENCE  — v1 signal blocked
-    SCOPE      2          0     NOT_APPLICABLE (marked)
-    TECHNICAL  2          0     NOT_APPLICABLE (marked)
-
-  ConflictService is a stub → no hard-conflict multiplier either.
-  Result: v2 scores every calibration project ~100 while v1 scores 90/70.8/58.3.
-  Real aggregate MAE = 26.97 — ceiling xfail until TASK-COH-V2-CONFLICT-DESTUB.
+Calibration evidence now clears the BUDGET/TIME gates and seeds a real
+DET-BUD-SUM conflict in project_major_issues.  Conflict detection correctly
+lowers that project, but excellent/minor remain v2=100, so the real MAE stays
+above the ADR-009 ceiling.  Keep the ceiling test xfailed until a separate
+calibration change closes that residual gap.
 
 Refers to Suite ID: TS-UI-COH-V2-MAE-001.
 """
@@ -94,7 +82,11 @@ def _run_v2(clauses: list, v1_signals: list, project_label: str) -> float | None
     from src.coherence.rules_engine.category_utils import infer_category
     from src.coherence.services.v2.aggregator_v2 import GlobalAggregatorV2
     from src.coherence.services.v2.category_aggregator import CategoryAggregator
-    from src.coherence.services.v2.conflict_service import ConflictService
+    from src.coherence.services.v2.conflict_service import (
+        ConflictCandidate,
+        ConflictService,
+        build_conflict_candidates,
+    )
     from src.coherence.services.v2.evidence_service import EvidenceService
     from src.coherence.services.v2.orchestrator import (
         CoherenceV2Orchestrator,
@@ -115,10 +107,15 @@ def _run_v2(clauses: list, v1_signals: list, project_label: str) -> float | None
         coherence_score = (1.0 - sig.impact_score) * 100.0
         signals_by_cat[sig.category].append((sig.rule_id, coherence_score))
 
+    conflict_candidates_by_category: dict[str, list[ConflictCandidate]] = defaultdict(list)
+    for candidate in build_conflict_candidates(v1_signals):
+        conflict_candidates_by_category[candidate.category].append(candidate)
+
     evidence_inputs = ProjectEvidenceInputs(
         project_docs=project_docs,
         project_context={},
         rule_signals_by_category=dict(signals_by_cat),
+        conflict_candidates_by_category=dict(conflict_candidates_by_category),
         applicability={
             "LEGAL": (True, None),
             "BUDGET": (True, None),
@@ -226,29 +223,35 @@ def test_v2_mae_calibration_real_engines_nonzero() -> None:
     )
 
 
+@pytest.mark.integration
+def test_calibration_v1_scores_remain_unchanged() -> None:
+    """Conflict detection is v2-only and cannot change the v1 calibration baseline."""
+    _mae, v1_scores, _v2_scores, _gaps = _run_calibration_corpus()
+
+    assert v1_scores == [90.0, 70.8, 53.3]
+
+
 # ---------------------------------------------------------------------------
 # Test 2 (xfail): the ADR-009 §21 ceiling gate.
-# Currently fails because ConflictService is stubbed and the evidence gate
-# blocks TIME/BUDGET signals. Remove xfail when TASK-COH-V2-CONFLICT-DESTUB
-# is complete and real MAE drops to ≤ 15.
+# ConflictService is now real; retain xfail only while real MAE is > 15.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
 @pytest.mark.xfail(
     reason=(
-        "v2 uncalibrated: ConflictService stubbed -> v2 scores all calibration projects"
-        " ~100 (blind to incoherence); real MAE=26.97 vs ceiling 15.0."
-        " Unblocked by TASK-COH-V2-CONFLICT-DESTUB."
+        "v2 calibration remains above the ADR-009 MAE ceiling: the real conflict path"
+        " lowers major_issues, but excellent/minor still over-score at 100."
+        " Real MAE=15.12 vs ceiling 15.0; do not widen the ceiling."
     ),
     strict=False,
 )
 def test_v2_mae_within_ceiling() -> None:
     """ADR-009 §21 gate: aggregate MAE across calibration corpus must be <= MAE_CEILING.
 
-    xfail until TASK-COH-V2-CONFLICT-DESTUB: evidence gate blocks BUDGET/TIME signals
-    (1 doc available vs 3/2 required), and ConflictService is a stub, so v2 scores every
-    calibration project ~100 regardless of actual incoherence.  Real MAE = 26.97.
+    xfail while a real calibration run stays above the ADR-009 ceiling. The
+    major-issues conflict is now detected; excellent/minor calibration remains
+    a separate over-scoring gap.
 
     When this test unexpectedly passes (XPASS), remove the xfail decorator — it means
     v2 calibration has converged and the ADR-009 §21 cutover gate is satisfied.
@@ -259,9 +262,7 @@ def test_v2_mae_within_ceiling() -> None:
     assert mae <= MAE_CEILING, (
         f"V2 MAE drift = {mae:.2f} exceeds ceiling {MAE_CEILING}. "
         f"v1={[round(s, 2) for s in v1_scores]}, v2={[round(s, 2) for s in v2_scores]}. "
-        f"BUDGET and TIME signals from v1 cannot reach v2 global score through the "
-        f"evidence gate (1 doc vs 3/2 required). "
-        f"Do NOT widen MAE_CEILING — register gap in TASK-COH-V2-CONFLICT-DESTUB."
+        "Do NOT widen MAE_CEILING; investigate the remaining v2 over-scoring."
     )
 
 
@@ -287,4 +288,16 @@ def test_major_issues_has_budget_sum_contradiction_candidate() -> None:
     assert candidate.compared_values == {"items_sum": 8000000.0, "contract_total": 6500000.0}
     assert candidate.delta == 1500000.0
     assert candidate.direction == "exceeds"
+
+
+@pytest.mark.integration
+def test_major_issues_v2_score_drops_below_pre_destub_baseline() -> None:
+    """A real hard conflict must improve on the 62.42 pre-detection v2 baseline."""
+    clauses = _load(MAJOR_ISSUES)
+    _v1_score, v1_signals = _run_v1(clauses, "major_issues")
+
+    v2_score = _run_v2(clauses, v1_signals, "major_issues")
+
+    assert v2_score is not None
+    assert v2_score < 62.42
 
