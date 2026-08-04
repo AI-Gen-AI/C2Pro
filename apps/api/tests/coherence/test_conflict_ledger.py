@@ -79,6 +79,125 @@ def test_conflict_ledger_excludes_single_clause_risk_states() -> None:
     assert build_conflict_candidates([risk_signal]) == []
 
 
+@pytest.mark.unit
+def test_detect_returns_high_hard_conflict_for_seeded_budget_sum_candidate() -> None:
+    """The seeded 1.5M/8M mismatch is a high-certainty, high-severity conflict."""
+    candidate = ConflictCandidate(
+        rule_id="DET-BUD-SUM",
+        category="BUDGET",
+        source_clause_id="clause-b-maj-002",
+        compared_values={"items_sum": 8_000_000.0, "contract_total": 6_500_000.0},
+        delta=1_500_000.0,
+        direction="exceeds",
+        deterministic_certainty=1.0,
+    )
+
+    report = ConflictService().detect(
+        "BUDGET",
+        EvidenceBundle(3, 1.0, 1.0, 0.9, [], []),
+        [candidate],
+    )
+
+    assert report.severity == "high"
+    assert report.hard_conflict is True
+    assert report.evidence_certainty == 1.0
+    assert report.conflict_set == [
+        {
+            "rule_id": "DET-BUD-SUM",
+            "source_clause_id": "clause-b-maj-002",
+            "compared_values": {"items_sum": 8_000_000.0, "contract_total": 6_500_000.0},
+            "delta": 1_500_000.0,
+            "direction": "exceeds",
+        }
+    ]
+
+
+@pytest.mark.unit
+def test_detect_returns_critical_for_large_high_certainty_mismatch() -> None:
+    """A mismatch beyond the named critical threshold is critical, not merely high."""
+    candidate = ConflictCandidate(
+        rule_id="DET-BUD-SUM",
+        category="BUDGET",
+        source_clause_id="clause-budget-critical",
+        compared_values={"items_sum": 10_000_000.0, "contract_total": 7_000_000.0},
+        delta=3_000_000.0,
+        direction="exceeds",
+        deterministic_certainty=1.0,
+    )
+
+    report = ConflictService().detect(
+        "BUDGET",
+        EvidenceBundle(3, 1.0, 1.0, 0.9, [], []),
+        [candidate],
+    )
+
+    assert report.severity == "critical"
+    assert report.hard_conflict is True
+
+
+@pytest.mark.unit
+def test_detect_requires_high_deterministic_certainty_for_hard_conflicts() -> None:
+    """Only high-certainty deterministic comparisons may trigger a score penalty."""
+    evidence = EvidenceBundle(3, 1.0, 1.0, 0.9, [], [])
+    zero_certainty = ConflictCandidate(
+        rule_id="DET-BUD-SUM",
+        category="BUDGET",
+        source_clause_id="clause-budget-zero-certainty",
+        compared_values={"items_sum": 115.0, "contract_total": 100.0},
+        delta=15.0,
+        direction="exceeds",
+        deterministic_certainty=0.0,
+    )
+    below_certainty = ConflictCandidate(
+        rule_id="DET-BUD-SUM",
+        category="BUDGET",
+        source_clause_id="clause-budget-low-certainty",
+        compared_values={"items_sum": 115.0, "contract_total": 100.0},
+        delta=15.0,
+        direction="exceeds",
+        deterministic_certainty=0.89,
+    )
+    at_certainty = ConflictCandidate(
+        rule_id="DET-BUD-SUM",
+        category="BUDGET",
+        source_clause_id="clause-budget-high-certainty",
+        compared_values={"items_sum": 115.0, "contract_total": 100.0},
+        delta=15.0,
+        direction="exceeds",
+        deterministic_certainty=0.90,
+    )
+    exactly_critical_ratio = ConflictCandidate(
+        rule_id="DET-BUD-SUM",
+        category="BUDGET",
+        source_clause_id="clause-budget-threshold",
+        compared_values={"items_sum": 100.0, "contract_total": 80.0},
+        delta=20.0,
+        direction="exceeds",
+        deterministic_certainty=0.90,
+    )
+
+    for unconfirmed_candidate in (zero_certainty, below_certainty):
+        assert ConflictService().detect(
+            "BUDGET", evidence, [unconfirmed_candidate]
+        ) == ConflictReport("none", False, [], 1.0)
+    assert ConflictService().detect("BUDGET", evidence, [at_certainty]).severity == "high"
+    assert (
+        ConflictService().detect("BUDGET", evidence, [exactly_critical_ratio]).severity == "high"
+    )
+
+
+@pytest.mark.unit
+def test_detect_returns_no_conflict_without_candidates() -> None:
+    """No deterministic contradiction candidate means no hard conflict."""
+    report = ConflictService().detect(
+        "BUDGET",
+        EvidenceBundle(3, 1.0, 1.0, 0.9, [], []),
+        [],
+    )
+
+    assert report == ConflictReport("none", False, [], 1.0)
+
+
 class _CapturingConflictService(ConflictService):
     def __init__(self) -> None:
         self.candidates_by_category: dict[str, list[ConflictCandidate]] = {}
@@ -123,3 +242,33 @@ async def test_orchestrator_forwards_ledger_without_changing_category_score() ->
     assert conflict.candidates_by_category["BUDGET"] == [candidate]
     assert budget.coherence_score == 25.0
     assert budget.status.value == "scored"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_orchestrator_applies_existing_high_conflict_penalty() -> None:
+    """A detected high conflict uses the existing 0.4 category multiplier."""
+    candidate = build_conflict_candidates([_budget_sum_signal()])[0]
+    orchestrator = CoherenceV2Orchestrator(
+        evidence=EvidenceService(),
+        conflict=ConflictService(),
+        cat_agg=CategoryAggregator(),
+        global_agg=GlobalAggregatorV2(),
+    )
+    payload = await orchestrator.run(
+        project_id=uuid4(),
+        evidence_inputs=ProjectEvidenceInputs(
+            project_docs=[
+                type("BudgetDocument", (), {"document_type": "budget", "id": index})()
+                for index in range(3)
+            ],
+            project_context={},
+            rule_signals_by_category={"BUDGET": [("DET-BUD-SUM", 25.0)]},
+            conflict_candidates_by_category={"BUDGET": [candidate]},
+        ),
+    )
+
+    budget = next(category for category in payload.categories if category.category == "BUDGET")
+    assert budget.status.value == "conflicting_evidence"
+    assert budget.coherence_score == 10.0
+    assert budget.detected_conflicts[0]["rule_id"] == "DET-BUD-SUM"

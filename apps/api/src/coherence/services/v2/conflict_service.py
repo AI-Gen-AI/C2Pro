@@ -17,6 +17,14 @@ from src.coherence.services.v2.evidence_service import EvidenceBundle
 
 ConflictSeverity = Literal["none", "low", "medium", "high", "critical"]
 
+# ADR-009 §4.2 distinguishes strong conflicts needing review (high) from
+# critical incoherence validated with high algorithmic certainty (critical).
+# A >20% mismatch is materially beyond ordinary reconciliation tolerance. A
+# 0.90 certainty floor prevents an uncertain candidate from imposing a harsher
+# category penalty than a verified contradiction.
+CRITICAL_MISMATCH_RATIO = 0.20
+HARD_CONFLICT_MINIMUM_DETERMINISTIC_CERTAINTY = 0.90
+
 
 @dataclass(frozen=True)
 class ConflictReport:
@@ -107,7 +115,10 @@ def _candidate_value(raw_data: dict[str, Any], key: str) -> float | None:
 
 
 class ConflictService:
-    """Detects hard cross-document contradictions deterministically."""
+    """Detects hard cross-document contradictions deterministically.
+
+    Refers to Suite ID: TS-UA-COH-V2-CONFLICT-001.
+    """
 
     def detect(  # noqa: D401 — Protocol-style stub
         self,
@@ -115,12 +126,65 @@ class ConflictService:
         evidence: EvidenceBundle,
         candidates: list[ConflictCandidate],
     ) -> ConflictReport:
-        # Phase 1: no deterministic rule emits hard conflicts yet — wired in
-        # Phase 3 once the cross-document ledger lands. Default = no conflict.
-        del category, evidence, candidates
-        return ConflictReport(
-            severity="none", hard_conflict=False, conflict_set=[], evidence_certainty=1.0
+        del evidence
+        category_candidates = [candidate for candidate in candidates if candidate.category == category]
+        confirmed_candidates = [
+            candidate
+            for candidate in category_candidates
+            if _bounded_certainty(candidate.deterministic_certainty)
+            >= HARD_CONFLICT_MINIMUM_DETERMINISTIC_CERTAINTY
+        ]
+        if not confirmed_candidates:
+            return ConflictReport(
+                severity="none", hard_conflict=False, conflict_set=[], evidence_certainty=1.0
+            )
+
+        evidence_certainty = max(
+            _bounded_certainty(candidate.deterministic_certainty)
+            for candidate in confirmed_candidates
         )
+        severity: ConflictSeverity = (
+            "critical"
+            if any(_is_critical(candidate) for candidate in confirmed_candidates)
+            else "high"
+        )
+        return ConflictReport(
+            severity=severity,
+            hard_conflict=True,
+            conflict_set=[_sanitize_candidate(candidate) for candidate in confirmed_candidates],
+            evidence_certainty=evidence_certainty,
+        )
+
+
+def _is_critical(candidate: ConflictCandidate) -> bool:
+    """Return whether a candidate clears the ADR-009 critical evidence threshold."""
+    values = tuple(candidate.compared_values.values())
+    denominator = max((abs(value) for value in values), default=0.0)
+    mismatch_ratio = abs(candidate.delta) / denominator if denominator else 0.0
+    return (
+        mismatch_ratio > CRITICAL_MISMATCH_RATIO
+        and _bounded_certainty(candidate.deterministic_certainty)
+        >= HARD_CONFLICT_MINIMUM_DETERMINISTIC_CERTAINTY
+    )
+
+
+def _bounded_certainty(certainty: float) -> float:
+    """Defensively bound deterministic certainty before it affects a score."""
+    return max(0.0, min(1.0, certainty))
+
+
+def _sanitize_candidate(candidate: ConflictCandidate) -> dict[str, Any]:
+    """Return alert-safe conflict evidence without quotes, summaries, or item labels."""
+    conflict: dict[str, Any] = {
+        "rule_id": candidate.rule_id,
+        "source_clause_id": candidate.source_clause_id,
+        "compared_values": candidate.compared_values,
+        "delta": candidate.delta,
+        "direction": candidate.direction,
+    }
+    if candidate.source_document_id is not None:
+        conflict["source_document_id"] = candidate.source_document_id
+    return conflict
 
 
 __all__ = [
