@@ -46,10 +46,8 @@
     },
     {
       "id": "clause-c-min-001",
-      "text": "Last contract review was on 2024-03-01.",
-      "data": {
-        "last_review_date": "2024-03-01"
-      }
+      "text": "Contract review schedule is to be determined pending project completion.",
+      "data": {}
     }
   ]
 }

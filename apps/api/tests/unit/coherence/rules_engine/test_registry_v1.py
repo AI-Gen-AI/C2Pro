@@ -184,6 +184,12 @@ DETERMINISTIC_CASES = [
         Clause(id="legal-2", text="Notice period.", data={"notice_period_days": 7}),
     ),
     (
+        "DET-LEG-REVIEW",
+        "LEGAL",
+        # Hardcoded stale date (2020-01-01 is always > 365 days ago)
+        Clause(id="legal-3", text="Contract review overdue.", data={"last_review_date": "2020-01-01"}),
+    ),
+    (
         "DET-QUA-STANDARD",
         "QUALITY",
         Clause(
@@ -209,15 +215,15 @@ LLM_CASES = [
 ]
 
 
-def test_v1_registry_exposes_exactly_22_evaluators_with_16_det_and_6_llm() -> None:
+def test_v1_registry_exposes_exactly_23_evaluators_with_17_det_and_6_llm() -> None:
     evaluators = registry.list_evaluators(llm_port=FakeLLMRulePort())
 
     deterministic = [e for e in evaluators if getattr(e, "source", "deterministic") == "deterministic"]
     llm = [e for e in evaluators if getattr(e, "source", "deterministic") == "llm"]
 
-    # TASK-BCK-064 wires the two existing TIME evaluators into the live registry.
-    assert len(evaluators) == 22
-    assert len(deterministic) == 16
+    # TASK-COH-V2-DET-LEG-REVIEW adds ContractReviewOverdueEvaluator as 17th deterministic rule.
+    assert len(evaluators) == 23
+    assert len(deterministic) == 17
     assert len(llm) == 6
 
 
@@ -230,7 +236,8 @@ def test_v1_registry_has_budget_reconciliation_plus_v1_category_coverage() -> No
         "BUDGET": {"deterministic": 4, "llm": 1},
         "TIME": {"deterministic": 4, "llm": 1},
         "TECHNICAL": {"deterministic": 2, "llm": 1},
-        "LEGAL": {"deterministic": 2, "llm": 1},
+        # TASK-COH-V2-DET-LEG-REVIEW adds DET-LEG-REVIEW as 3rd LEGAL deterministic rule.
+        "LEGAL": {"deterministic": 3, "llm": 1},
         "QUALITY": {"deterministic": 2, "llm": 1},
     }
 
@@ -268,6 +275,32 @@ async def test_llm_v1_evaluator_emits_finding_signal(rule_id: str, category: str
     assert signal.source == "llm"
     assert signal.severity == "high"
     assert signal.impact_score == pytest.approx(0.62)
+
+
+def test_det_leg_review_registered_and_fires_on_stale_date() -> None:
+    """DET-LEG-REVIEW (a) appears in list_evaluators and (b) fires a LEGAL signal.
+
+    Uses a date relative to today so the test is never wall-clock-flaky.
+    TASK-COH-V2-DET-LEG-REVIEW.
+    """
+    from datetime import date, timedelta
+
+    evaluators = registry.list_evaluators(llm_port=FakeLLMRulePort())
+    rule_ids = {e.rule_id for e in evaluators}
+    assert "DET-LEG-REVIEW" in rule_ids, "DET-LEG-REVIEW must appear in list_evaluators()"
+
+    stale_date = date.today() - timedelta(days=400)
+    stale_clause = Clause(
+        id="det-leg-review-stale",
+        text=f"Last contract review was on {stale_date}.",
+        data={"last_review_date": str(stale_date)},
+    )
+    evaluator = registry.get_v1_evaluator("DET-LEG-REVIEW")
+    signal = evaluator.evaluate_v3(stale_clause)
+    assert signal is not None, "DET-LEG-REVIEW must fire on a review date 400 days in the past"
+    assert signal.rule_id == "DET-LEG-REVIEW"
+    assert signal.category == "LEGAL"
+    assert signal.impact_score > 0.0
 
 
 def test_registry_rule_ids_have_alert_templates() -> None:
