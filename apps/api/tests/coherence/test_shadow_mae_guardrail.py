@@ -23,9 +23,13 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from uuid import NAMESPACE_DNS, uuid5
 
 import pytest
+
+if TYPE_CHECKING:
+    from src.coherence.models import Clause, FindingSignal
 
 CALIBRATION_DIR = Path(__file__).parent / "calibration_dataset"
 EXCELLENT = CALIBRATION_DIR / "project_excellent.json"
@@ -46,7 +50,7 @@ _CATEGORY_TO_DOC_TYPE: dict[str, str] = {
 }
 
 
-def _load(path: Path) -> list:
+def _load(path: Path) -> list[Clause]:
     """Load calibration fixture; return typed Clause list."""
     from src.coherence.models import Clause
 
@@ -54,7 +58,7 @@ def _load(path: Path) -> list:
     return [Clause(id=c["id"], text=c["text"], data=c["data"]) for c in payload["clauses"]]
 
 
-def _run_v1(clauses: list, project_label: str) -> tuple[float | None, list]:
+def _run_v1(clauses: list[Clause], project_label: str) -> tuple[float | None, list[FindingSignal]]:
     """Run real v1 deterministic engine; return (overall_score, finding_signals)."""
     from src.coherence.graph.graph import evaluate_coherence
     from src.coherence.graph.state import EvaluationConfig
@@ -68,7 +72,7 @@ def _run_v1(clauses: list, project_label: str) -> tuple[float | None, list]:
     return result.overall_score, list(result.finding_signals)
 
 
-def _run_v2(clauses: list, v1_signals: list, project_label: str) -> float | None:
+def _run_v2(clauses: list[Clause], v1_signals: list[FindingSignal], project_label: str) -> float | None:
     """
     Run real v2 orchestrator via thin clause→document adapter.
 
@@ -238,24 +242,10 @@ def test_calibration_v1_scores_remain_unchanged() -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.xfail(
-    reason=(
-        "v2 calibration remains above the ADR-009 MAE ceiling: the real conflict path"
-        " lowers major_issues, but excellent/minor still over-score at 100."
-        " Real MAE=15.12 vs ceiling 15.0; do not widen the ceiling."
-    ),
-    strict=False,
-)
 def test_v2_mae_within_ceiling() -> None:
     """ADR-009 §21 gate: aggregate MAE across calibration corpus must be <= MAE_CEILING.
 
-    xfail while a real calibration run stays above the ADR-009 ceiling. The
-    major-issues conflict is now detected; excellent/minor calibration remains
-    a separate over-scoring gap.
-
-    When this test unexpectedly passes (XPASS), remove the xfail decorator — it means
     v2 calibration has converged and the ADR-009 §21 cutover gate is satisfied.
-    Do NOT widen MAE_CEILING to force a pass; report the real MAE instead.
     """
     mae, v1_scores, v2_scores, _gaps = _run_calibration_corpus()
 

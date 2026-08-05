@@ -11,10 +11,37 @@
       }
     },
     {
+      "id": "clause-b-exc-002",
+      "text": "The breakdown of cost includes Engineering of 50,000 USD and Procurement of 50,000 USD, matching the total budget.",
+      "data": {
+        "budget_items": [
+          {"name": "Engineering", "amount": 50000},
+          {"name": "Procurement", "amount": 50000}
+        ],
+        "total_amount": 100000,
+        "contract_total": 100000
+      }
+    },
+    {
+      "id": "clause-b-exc-003",
+      "text": "The budget contingency is planned for unanticipated financial cost overruns.",
+      "data": {
+        "contingency": 10000,
+        "planned": 100000
+      }
+    },
+    {
       "id": "clause-s-exc-001",
       "text": "Project schedule status: on-track. End date: 2025-12-31.",
       "data": {
         "status": "on-track"
+      }
+    },
+    {
+      "id": "clause-s-exc-002",
+      "text": "The milestone schedule dates are defined for the project duration.",
+      "data": {
+        "schedule_type": "milestone"
       }
     },
     {
