@@ -11,10 +11,37 @@
       }
     },
     {
+      "id": "clause-b-min-002",
+      "text": "The breakdown of cost includes Engineering of 60,000 EUR and Procurement of 60,000 EUR, which sums to the contract total.",
+      "data": {
+        "budget_items": [
+          {"name": "Engineering", "amount": 60000},
+          {"name": "Procurement", "amount": 60000}
+        ],
+        "total_amount": 120000,
+        "contract_total": 120000
+      }
+    },
+    {
+      "id": "clause-b-min-003",
+      "text": "The budget contingency is set at 12,000 EUR, which is adequate for this project scope.",
+      "data": {
+        "contingency": 12000,
+        "planned": 120000
+      }
+    },
+    {
       "id": "clause-s-min-001",
       "text": "Project schedule status: delayed. Revised end date: 2025-11-30.",
       "data": {
         "status": "delayed"
+      }
+    },
+    {
+      "id": "clause-s-min-002",
+      "text": "The milestone schedule dates are defined for the project duration.",
+      "data": {
+        "schedule_type": "milestone"
       }
     },
     {
