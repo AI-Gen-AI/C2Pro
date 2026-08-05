@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
@@ -139,3 +140,30 @@ def test_delta_contains_required_fields() -> None:
         "generated_at",
     }
     assert required_fields.issubset(payload.keys())
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_persist_writes_v2_metrics_to_the_isolated_shadow_orm() -> None:
+    """TS-INT-COH-V2-SHADOW-PERSIST-001: persist only v2-safe metric fields."""
+    from src.coherence.adapters.persistence.models import CoherenceV2ShadowORM
+
+    db = Mock()
+    db.commit = AsyncMock()
+    tenant_id = uuid4()
+    v2 = _v2(score=78.0, active_weight=0.85, completeness=0.75, tri=0.95)
+
+    await ShadowRunner().persist(db=db, tenant_id=tenant_id, v2=v2)
+
+    row = db.add.call_args.args[0]
+    assert isinstance(row, CoherenceV2ShadowORM)
+    assert row.project_id == v2.project_id
+    assert row.tenant_id == tenant_id
+    assert row.coherence_score == 78.0
+    assert row.completeness_score == 0.75
+    assert row.technical_reliability_index == 0.95
+    assert row.active_weight == 0.85
+    assert row.score_version == "coherence-v2"
+    assert row.categories_v2[0]["category"] == "SCOPE"
+    assert "Contract value" not in str(row.categories_v2)
+    db.commit.assert_awaited_once()

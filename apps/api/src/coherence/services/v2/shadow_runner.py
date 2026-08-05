@@ -24,6 +24,7 @@ from typing import Any
 from uuid import UUID
 
 import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.coherence.application.dtos.coherence_v2_dtos import (
     CategoryStatus,
@@ -160,6 +161,39 @@ class ShadowRunner:
             v1_status=delta.v1_status,
             v2_status=delta.v2_status,
         )
+
+    async def persist(
+        self,
+        db: AsyncSession,
+        tenant_id: UUID,
+        v2: CoherenceV2Payload,
+    ) -> None:
+        """Persist a PII-free v2 payload in the dedicated shadow table only.
+
+        The caller supplies the request-bound tenant ID so the insert remains
+        subject to the session's existing ``app.current_tenant`` RLS context.
+
+        Refers to Suite ID: TS-INT-COH-V2-SHADOW-PERSIST-001.
+        """
+        from src.coherence.adapters.persistence.models import CoherenceV2ShadowORM
+
+        db.add(
+            CoherenceV2ShadowORM(
+                project_id=v2.project_id,
+                tenant_id=tenant_id,
+                coherence_score=v2.global_.coherence_score,
+                completeness_score=v2.global_.completeness_score,
+                technical_reliability_index=v2.global_.technical_reliability_index,
+                active_weight=v2.global_.active_weight,
+                score_version=v2.version,
+                status=v2.global_.status,
+                score_reason=v2.global_.score_reason,
+                categories_v2=[
+                    category.model_dump(mode="json", exclude_none=True) for category in v2.categories
+                ],
+            )
+        )
+        await db.commit()
 
 
 __all__ = ["ShadowDelta", "ShadowRunner", "compute_mae"]
