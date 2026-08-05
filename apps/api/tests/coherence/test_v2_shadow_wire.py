@@ -21,6 +21,7 @@ from uuid import uuid4
 
 import pytest
 
+from src.coherence.adapters.persistence.models import CoherenceResultORM, CoherenceV2ShadowORM
 from src.coherence.models import (
     CategoryBreakdown,
     Clause,
@@ -77,7 +78,9 @@ def _current_user() -> SimpleNamespace:
 def _simple_db() -> Mock:
     """Minimal db mock (router still receives it as a parameter)."""
     mock_db = Mock()
+    mock_db.execute = AsyncMock()
     mock_db.commit = AsyncMock()
+    mock_db.rollback = AsyncMock()
     return mock_db
 
 
@@ -157,10 +160,11 @@ async def test_v2_shadow_runs_orchestrator_not_adapter(
             project_id=project_id,
             clauses=_clauses,
         )
+        db = _simple_db()
         result = await evaluate_project_coherence(
             payload=request,
             include_diagnostics=False,
-            db=_simple_db(),
+            db=db,
             current_user=_current_user,
         )
 
@@ -181,6 +185,17 @@ async def test_v2_shadow_runs_orchestrator_not_adapter(
     # (d) Primary returned score is still V1
     assert isinstance(result, CoherenceResult)
     assert result.overall_score == _v1_result.overall_score
+
+    persisted = [call.args[0] for call in db.add.call_args_list]
+    assert len([row for row in persisted if isinstance(row, CoherenceResultORM)]) == 1
+    shadows = [row for row in persisted if isinstance(row, CoherenceV2ShadowORM)]
+    assert len(shadows) == 1
+    assert shadows[0].tenant_id == _current_user.tenant_id
+    assert shadows[0].project_id == project_id
+    assert shadows[0].score_version == "coherence-v2"
+    assert shadows[0].categories_v2
+    db.execute.assert_awaited_once()
+    assert db.execute.await_args.args[1] == {"tenant_id": str(_current_user.tenant_id)}
 
 
 @pytest.mark.unit
@@ -214,14 +229,54 @@ async def test_v2_shadow_disabled_when_v2_flag_off(
         ),
     ):
         request = CoherenceEvaluateRequest(project_id=project_id, clauses=_clauses)
+        db = _simple_db()
         result = await evaluate_project_coherence(
             payload=request,
             include_diagnostics=False,
-            db=_simple_db(),
+            db=db,
             current_user=_current_user,
         )
 
     assert emit_calls == [], "ShadowRunner.emit must NOT fire when coherence_v2_enabled=False"
+    persisted = [call.args[0] for call in db.add.call_args_list]
+    assert not any(isinstance(row, CoherenceV2ShadowORM) for row in persisted)
+    assert len([row for row in persisted if isinstance(row, CoherenceResultORM)]) == 1
+    db.execute.assert_not_awaited()
+    assert isinstance(result, CoherenceResult)
+    assert result.overall_score == _v1_result.overall_score
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_v2_shadow_disabled_when_shadow_mode_flag_off(
+    _clauses: list[Clause],
+    _v1_result: EnrichedCoherenceResult,
+    _current_user: SimpleNamespace,
+) -> None:
+    """With shadow mode disabled, no v2 row may be written despite v2 being enabled."""
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
+
+    project_id = uuid4()
+    db = _simple_db()
+    mock_settings = SimpleNamespace(coherence_v2_enabled=True, coherence_v2_shadow_mode=False)
+
+    with (
+        patch(
+            "src.coherence.router.evaluate_coherence_async",
+            new_callable=AsyncMock,
+            return_value=_v1_result,
+        ),
+        patch("src.config.get_settings", return_value=mock_settings),
+    ):
+        result = await evaluate_project_coherence(
+            payload=CoherenceEvaluateRequest(project_id=project_id, clauses=_clauses),
+            include_diagnostics=False,
+            db=db,
+            current_user=_current_user,
+        )
+
+    persisted = [call.args[0] for call in db.add.call_args_list]
+    assert not any(isinstance(row, CoherenceV2ShadowORM) for row in persisted)
     assert isinstance(result, CoherenceResult)
     assert result.overall_score == _v1_result.overall_score
 
@@ -308,5 +363,49 @@ async def test_v2_shadow_failure_does_not_break_v1_response(
         )
 
     # V1 result must still be returned despite the shadow crash
+    assert isinstance(result, CoherenceResult)
+    assert result.overall_score == _v1_result.overall_score
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_v2_shadow_persist_failure_does_not_break_v1_response(
+    _clauses: list[Clause],
+    _v1_result: EnrichedCoherenceResult,
+    _current_user: SimpleNamespace,
+) -> None:
+    """A persistence failure is rolled back and leaves the primary v1 response intact."""
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
+
+    project_id = uuid4()
+    db = _simple_db()
+    mock_settings = SimpleNamespace(coherence_v2_enabled=True, coherence_v2_shadow_mode=True)
+
+    with (
+        patch(
+            "src.coherence.router.evaluate_coherence_async",
+            new_callable=AsyncMock,
+            return_value=_v1_result,
+        ),
+        patch("src.config.get_settings", return_value=mock_settings),
+        patch(
+            _REPO_LIST_FOR_PROJECT,
+            new_callable=AsyncMock,
+            return_value=([_doc("contract")], 1),
+        ),
+        patch(
+            "src.coherence.services.v2.shadow_runner.ShadowRunner.persist",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("simulated shadow persistence crash"),
+        ),
+    ):
+        result = await evaluate_project_coherence(
+            payload=CoherenceEvaluateRequest(project_id=project_id, clauses=_clauses),
+            include_diagnostics=False,
+            db=db,
+            current_user=_current_user,
+        )
+
+    db.rollback.assert_awaited_once()
     assert isinstance(result, CoherenceResult)
     assert result.overall_score == _v1_result.overall_score

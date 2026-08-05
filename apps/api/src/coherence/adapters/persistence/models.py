@@ -13,7 +13,17 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, ENUM, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -100,6 +110,50 @@ class CoherenceResultORM(Base):
     __table_args__ = (
         Index("ix_coherence_results_project_calculated", "project_id", "calculated_at"),
         Index("ix_coherence_results_tenant", "tenant_id"),
+        {"info": {"rls_policy": "tenant_isolation"}},
+    )
+
+
+class CoherenceV2ShadowORM(Base):
+    """Tenant-isolated v2 shadow output kept outside the v1 live-read table.
+
+    Keeping these records separate prevents ``get_latest_for_project`` from
+    exposing a shadow score through the production v1 read path.
+
+    Refers to Suite ID: TS-INT-COH-V2-SHADOW-PERSIST-001.
+    """
+
+    __tablename__ = "coherence_v2_shadow"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+        server_default=func.gen_random_uuid(),
+    )
+    project_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
+    coherence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    completeness_score: Mapped[float] = mapped_column(Float, nullable=False)
+    technical_reliability_index: Mapped[float] = mapped_column(Float, nullable=False)
+    active_weight: Mapped[float] = mapped_column(Float, nullable=False)
+    score_version: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="coherence-v2", server_default="coherence-v2"
+    )
+    status: Mapped[str] = mapped_column(String(64), nullable=False)
+    score_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    categories_v2: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), index=True
+    )
+
+    __table_args__ = (
+        Index("ix_coherence_v2_shadow_tenant_project_created", "tenant_id", "project_id", "created_at"),
         {"info": {"rls_policy": "tenant_isolation"}},
     )
 

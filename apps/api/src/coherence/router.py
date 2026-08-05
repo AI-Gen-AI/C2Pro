@@ -676,10 +676,18 @@ async def _run_v2_shadow_on_evaluate(
     shadow path carries real bottom-up v2 scores instead of the v1-translation
     from adapt_v1_dashboard.
 
-    ConflictService is still a stub (CONFLICT-DESTUB); conflict will be "none"
-    for all categories until that task lands.
+    Deterministic ConflictService candidates are already carried through the
+    v2 orchestrator; this path does not use LLM inference.
     """
     try:
+        # ``SET LOCAL`` from the primary v1 request is cleared by its explicit
+        # commit above. Re-establish it for the shadow transaction before any
+        # tenant-scoped read or forced-RLS v2 insert. Parameter binding keeps
+        # the UUID out of SQL construction.
+        await db.execute(
+            text("SELECT set_config('app.current_tenant', :tenant_id, true)"),
+            {"tenant_id": str(tenant_id)},
+        )
         from src.coherence.services.v2.aggregator_v2 import GlobalAggregatorV2
         from src.coherence.services.v2.category_aggregator import CategoryAggregator
         from src.coherence.services.v2.conflict_service import (
@@ -741,8 +749,17 @@ async def _run_v2_shadow_on_evaluate(
                 "coherence_v2_shadow_mode": True,
             },
         )
+        await runner.persist(db=db, tenant_id=tenant_id, v2=v2_payload)
     except Exception:
-        logger.exception("coherence_v2_shadow_evaluate_failed")
+        # The v1 write was committed before entering shadow mode.  Roll back
+        # only the failed shadow transaction so the primary response remains
+        # available and this session can complete cleanly.
+        with suppress(Exception):
+            await db.rollback()
+        # Observability failures (including a local console encoder failure)
+        # must not turn a best-effort shadow failure into a v1 API failure.
+        with suppress(Exception):
+            logger.exception("coherence_v2_shadow_evaluate_failed")
 
 
 # Optional diagnostics endpoint (Task 7.4)
