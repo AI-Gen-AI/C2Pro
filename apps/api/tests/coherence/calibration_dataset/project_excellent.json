@@ -46,10 +46,8 @@
     },
     {
       "id": "clause-c-exc-001",
-      "text": "Last contract review was on 2025-11-15.",
-      "data": {
-        "last_review_date": "2025-11-15"
-      }
+      "text": "Contract review procedures are current and up to date.",
+      "data": {}
     }
   ]
 }

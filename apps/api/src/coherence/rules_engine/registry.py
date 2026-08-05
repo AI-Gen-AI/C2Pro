@@ -23,6 +23,7 @@ from .deterministic import (
     BudgetLineItemEvaluator,
     BudgetOverrunEvaluator,
     BudgetSumMismatchEvaluator,
+    ContractReviewOverdueEvaluator,
     InspectionFrequencyEvaluator,
     MilestoneGapEvaluator,
     NoticePeriodEvaluator,
@@ -51,6 +52,9 @@ logger = structlog.get_logger()
 # TASK-COH-BUD-RECON-004 adds DET-BUD-INTERNAL for budget leaf-sum vs
 # declared-total reconciliation. TASK-BCK-064 wires the two existing
 # schedule evaluators into the live registry.
+# TASK-COH-V2-DET-LEG-REVIEW wires ContractReviewOverdueEvaluator as the 17th
+# deterministic rule; fixes the LEGAL signal gap that left review-staleness
+# invisible to both v1 and v2 scoring.
 DETERMINISTIC_EVALUATORS: dict[str, type[RuleEvaluator]] = {
     "DET-SCP-DELIVERABLES": ScopeDeliverablesEvaluator,
     "DET-CRS-SCPBUD": ScopeVsBudgetCoverageEvaluator,
@@ -66,6 +70,7 @@ DETERMINISTIC_EVALUATORS: dict[str, type[RuleEvaluator]] = {
     "DET-TEC-BOMBUDGET": BomBudgetLinkEvaluator,
     "DET-LEG-PENALTY": PenaltyCapEvaluator,
     "DET-LEG-NOTICE": NoticePeriodEvaluator,
+    "DET-LEG-REVIEW": ContractReviewOverdueEvaluator,
     "DET-QUA-STANDARD": QualityStandardEvaluator,
     "DET-QUA-INSPECT": InspectionFrequencyEvaluator,
 }
@@ -249,7 +254,7 @@ def list_evaluators(
     llm_port: Any | None = None,
 ) -> list[RuleEvaluator | LlmRuleEvaluator]:
     """
-    Return the fixed 18-entry Coherence Score v1 evaluator registry.
+    Return the fixed 23-entry Coherence Score v1 evaluator registry (17 deterministic + 6 LLM).
 
     Test Suite ID: TS-UD-COH-RUL-005.
     """

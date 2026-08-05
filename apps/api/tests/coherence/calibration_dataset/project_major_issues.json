@@ -47,10 +47,8 @@
     },
     {
       "id": "clause-c-maj-001",
-      "text": "Last contract review was on 2023-01-01.",
-      "data": {
-        "last_review_date": "2023-01-01"
-      }
+      "text": "Contract review has not been formally documented for this reporting period.",
+      "data": {}
     }
   ]
 }

@@ -530,6 +530,11 @@ class ContractReviewOverdueEvaluator(RuleEvaluator):
     def __init__(self, config: EvaluatorConfig = DEFAULT_CONFIG):
         self.config = config
 
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        if clause.data.get("last_review_date") is not None:
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
+
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
         return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
