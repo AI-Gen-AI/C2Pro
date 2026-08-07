@@ -5,6 +5,7 @@ Contract tests for secure Clerk secret channel endpoint.
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from src.config import settings
 from src.core.frontend_support.router import router
@@ -22,7 +23,7 @@ def test_secret_channel_rejects_invalid_token() -> None:
     original_backend = settings.secret_channel_backend
     original_ref = settings.secret_channel_bundle_ref
     try:
-        settings.secret_channel_token = "token-123"
+        settings.secret_channel_token = SecretStr("token-123")
         settings.secret_channel_backend = "env_json"
         settings.secret_channel_bundle_ref = '{"NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY":"pk_test_new"}'
 
@@ -41,7 +42,7 @@ def test_secret_channel_returns_redacted_bundle() -> None:
     original_backend = settings.secret_channel_backend
     original_ref = settings.secret_channel_bundle_ref
     try:
-        settings.secret_channel_token = "token-123"
+        settings.secret_channel_token = SecretStr("token-123")
         settings.secret_channel_backend = "env_json"
         settings.secret_channel_bundle_ref = (
             '{'
