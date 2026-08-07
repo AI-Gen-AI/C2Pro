@@ -34,16 +34,28 @@ Trademark-critical fix for ADR-009 §1 P1 + §14 violations in the v1 coherence 
 - `docs/api/openapi.yaml` regenerated via `make openapi` to reflect the widened nullable score fields, `score_reason` enum, and v2 categories payload.
 - ADR-009 status note refreshed with a Phase A+B+C revision-history entry; `CLAUDE.md` Active Analysis Pipeline N8 row updated to describe post-fix behaviour.
 
-#### Deferred (tracked in backlog)
+#### Phase F — score_version canonicalization (`TASK-COH-V2-VERSIONING-006`, PR #190)
 
-- `TASK-COH-V2-VERSIONING-006` (Phase F) — canonical `score_version` enum `"coherence-v1" / "coherence-v2"` everywhere (DB, DTOs, telemetry, exports). Alembic backfill of legacy `"v0_flag_based"` and `"v1_exponential_decay"` → `"coherence-v1"`.
-- `TASK-COH-V2-CACHING-007` (Phase G) — `apps/api/src/coherence/cache_keys.py` single SoT for namespaced cache keys (`coherence:v1:*` / `coherence:v2:*`), flag-flip invalidation, one-shot Phase A purge script.
+- Canonical 2-value enum `"coherence-v1"` / `"coherence-v2"` on every surface: ORM (`coherence/adapters/persistence/models.py`), Pydantic DTOs (`models.py`, `application/dtos/coherence_dtos.py`), graph nodes (`graph/nodes.py`, `graph/graph.py`), telemetry, shadow logs (`services/v2/shadow_runner.py`), report/decision exports, frontend contracts (`apps/web/lib/api/contracts.ts`).
+- New module `apps/api/src/coherence/domain/v2_constants.py` exporting `SCORE_VERSION_V1 = "coherence-v1"`, `SCORE_VERSION_V2 = "coherence-v2"`.
+- Alembic migration backfilling `NULL` + `"v0_flag_based"` + `"v1_exponential_decay"` → `"coherence-v1"` (blind, no row inspection).
+- CI contract test that fails if any Pydantic model with `Coherence`/`Dashboard` in name lacks `score_version`.
+
+#### Phase G — cache namespace versioning (`TASK-COH-V2-CACHING-007`, PR #196)
+
+- New module `apps/api/src/coherence/cache_keys.py` as sole producer of namespaced cache keys (`coherence:{version}:{namespace}:{tenant_id}:{project_id}[:{suffix}]`); CI grep ban on ad-hoc `f"coherence:..."` literals outside this module.
+- New `apps/api/src/coherence/cache_invalidation.py` implementing `on_flag_flip`, `on_result_persisted`, and `on_deploy` handlers.
+- One-shot purge script `apps/api/scripts/invalidate_coherence_cache.py` (dry-run + apply modes) for Phase A deploy.
+- Integration test `test_flag_toggle_cache_invalidation.py` proving flag flips never serve cross-version cache entries (2 async Redis tests).
+
+#### Remaining deferred (tracked in backlog)
+
 - `TASK-COH-V2-CUTOVER-004` (Phase D) — make ECOA v2 authoritative behind per-tenant flag stored on `Tenant.settings` JSONB (alerts pattern). Canary 10→50→100% with shadow-MAE ≤ 15 auto-block.
-- Playwright E2E spec for the partial-coverage UI flow — deferred from Phase C because the e2e environment needs separate setup; will land alongside Phase D canary instrumentation.
+- Playwright E2E spec for the partial-coverage UI flow — deferred from Phase C; will land alongside Phase D canary instrumentation.
 
 #### Refs
 
-- ADR-009 — `docs/architecture/decisions/009-coherence-score-v2-evidence-aware.md`
+- ADR-009 — `docs/architecture/decisions/ADR-009-evidence-oriented-coherence-orchestration.md`
 - Spec — `docs/superpowers/specs/2026-05-25-ecoa-v2-hotfix-and-cutover-design.md`
 - Plan — `docs/superpowers/plans/2026-05-25-ecoa-v2-hotfix-and-cutover.md`
 - PR #146 — ECOA v2 Phase 1 (compatibility) + Phase 2 (shadow mode)
