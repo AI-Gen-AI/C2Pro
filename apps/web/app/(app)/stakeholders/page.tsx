@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { env } from "@/config/env";
 import { useProjects } from "@/hooks/useProjects";
 import type { ProjectListItem } from "@/lib/api/contracts";
 import { StakeholderMatrix } from "@/components/stakeholders/StakeholderMatrix";
@@ -14,14 +15,23 @@ import {
 } from "@/components/ui/select";
 
 export default function StakeholdersPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialProjectId = searchParams.get("projectId") ?? "all";
   const [projectId, setProjectId] = useState(initialProjectId);
   const { data: projects } = useProjects(true);
 
   useEffect(() => {
+    if (!env.FEATURE_PHASE2_MODULES) {
+      router.replace("/dashboard");
+    }
+  }, [router]);
+
+  useEffect(() => {
     setProjectId(initialProjectId);
   }, [initialProjectId]);
+
+  if (!env.FEATURE_PHASE2_MODULES) return null;
 
   return (
     <section className="space-y-6">

@@ -1,11 +1,22 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { env } from "@/config/env";
 import {
   useGetRecentAnalysesApiV1ObservabilityAnalysesGet,
   useGetSystemStatusApiV1ObservabilityStatusGet,
 } from "@/lib/api/generated/observability/observability";
 
 export default function ObservabilityPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!env.FEATURE_INTERNAL_DASHBOARDS) {
+      router.replace("/dashboard");
+    }
+  }, [router]);
+
   const {
     data: systemStatus,
     isLoading: systemStatusLoading,
@@ -27,6 +38,8 @@ export default function ObservabilityPage() {
 
   const isLoading = systemStatusLoading || recentAnalysesLoading;
   const error = systemStatusError ?? recentAnalysesError;
+
+  if (!env.FEATURE_INTERNAL_DASHBOARDS) return null;
 
   if (isLoading) {
     return (

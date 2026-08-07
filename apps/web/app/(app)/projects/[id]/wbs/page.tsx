@@ -9,8 +9,9 @@
 
 "use client";
 
-import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { env } from "@/config/env";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -153,8 +154,15 @@ function WBSTreeRow({
 }
 
 export default function ProjectWBSPage() {
+  const router = useRouter();
   const params = useParams();
   const projectId = params.id as string;
+
+  useEffect(() => {
+    if (!env.FEATURE_PHASE2_MODULES) {
+      router.replace(`/projects/${projectId}`);
+    }
+  }, [router, projectId]);
 
   const {
     items,
@@ -182,6 +190,8 @@ export default function ProjectWBSPage() {
   const [newItemName, setNewItemName] = useState("");
   const [newItemCode, setNewItemCode] = useState("");
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  if (!env.FEATURE_PHASE2_MODULES) return null;
 
   const handleEdit = (item: WBSTreeItem) => {
     setSelectedEditItem(item);
