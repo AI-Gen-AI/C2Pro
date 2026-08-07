@@ -14,13 +14,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy import String, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.alerts.adapters.persistence.tenant_repository import SqlAlchemyTenantRepository
 from src.analysis.adapters.persistence.models import Alert as AlertORM
 from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.domain.enums import AnalysisStatus
 from src.coherence.adapters.persistence.models import CoherenceResultORM
+from src.coherence.feature_flags import coherence_v2_enabled_for_tenant
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session
+from src.core.feature_flags.tenant_flags_service import TenantFlagsService
 from src.core.middleware.feature_flags import require_feature
 from src.core.security import security_scheme
 from src.documents.adapters.persistence.models import DocumentORM
@@ -36,6 +39,31 @@ from .schedule_clause_builder import build_schedule_clauses
 
 # Coherence evaluate router — mounted with api_v1_prefix in main.py
 logger = structlog.get_logger()
+
+
+def get_flags_service(db: AsyncSession = Depends(get_session)) -> TenantFlagsService:
+    """FastAPI dependency: per-request TenantFlagsService backed by the request DB session."""
+    from src.config import get_settings  # local import — avoids circular dep
+
+    return TenantFlagsService(
+        tenant_repository=SqlAlchemyTenantRepository(db),
+        settings=get_settings(),
+    )
+
+
+async def _v2_enabled_for(tenant_id: UUID, flags_service: TenantFlagsService | None) -> bool:
+    """Resolve the per-tenant v2 flag, falling back to global settings when DI is unavailable.
+
+    When the endpoint is called directly in tests (outside FastAPI's request cycle),
+    ``flags_service`` is the unresolved ``Depends`` sentinel rather than a real service.
+    The isinstance guard detects that case and falls back to the same global-settings
+    lookup that the code used before TASK-COH-V2-CUTOVER-004.
+    """
+    if not isinstance(flags_service, TenantFlagsService):
+        from src.config import get_settings
+
+        return getattr(get_settings(), "coherence_v2_enabled", False)
+    return await coherence_v2_enabled_for_tenant(tenant_id, flags_service=flags_service)
 
 router = APIRouter(
     prefix="/coherence",
@@ -523,6 +551,7 @@ async def evaluate_project_coherence(
     ),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    flags_service: TenantFlagsService = Depends(get_flags_service),
 ) -> CoherenceResult | EnrichedCoherenceResult:
     """
     Evaluates the coherence of a project based on its context using v0.3 scoring engine.
@@ -645,7 +674,7 @@ async def evaluate_project_coherence(
         from src.config import get_settings  # local import — avoids circular dep
         _settings = get_settings()
         if (
-            getattr(_settings, "coherence_v2_enabled", False)
+            await _v2_enabled_for(current_user.tenant_id, flags_service)
             and getattr(_settings, "coherence_v2_shadow_mode", True)
         ):
             await _run_v2_shadow_on_evaluate(
@@ -819,6 +848,7 @@ async def get_coherence_dashboard(
     project_id: UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
+    flags_service: TenantFlagsService = Depends(get_flags_service),
 ) -> DashboardSummary:
     """
     Get coherence dashboard for project.
@@ -960,21 +990,24 @@ async def get_coherence_dashboard(
         categories_v2=None,
     )
 
-    return _maybe_add_v2_dashboard(summary, project_id, last_updated)
+    v2_enabled = await _v2_enabled_for(tenant_id, flags_service)
+    return _maybe_add_v2_dashboard(summary, project_id, last_updated, v2_enabled=v2_enabled)
 
 
 def _maybe_add_v2_dashboard(
     summary: DashboardSummary,
     project_id: UUID,
     last_updated: datetime,
+    *,
+    v2_enabled: bool,
 ) -> DashboardSummary:
     """Attach additive ECOA v2 dashboard data when enabled; v1 remains fail-closed."""
     try:
-        from src.coherence.adapters.v1_to_v2 import adapt_v1_dashboard
-        from src.coherence.services.v2.shadow_runner import ShadowRunner
-        from src.config import get_settings  # local import to avoid circular deps
-        settings = get_settings()
-        if getattr(settings, "coherence_v2_enabled", False):
+        if v2_enabled:
+            from src.coherence.adapters.v1_to_v2 import adapt_v1_dashboard
+            from src.coherence.services.v2.shadow_runner import ShadowRunner
+            from src.config import get_settings  # local import to avoid circular deps
+            settings = get_settings()
             v2_payload = adapt_v1_dashboard(
                 summary.model_dump(),
                 project_id=project_id,
