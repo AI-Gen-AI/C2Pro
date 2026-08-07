@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { env } from "@/config/env";
 import type { AICostAnalytics, AIQualityDrift, AIVersionPerformance, AIUsageMetric } from "@/lib/api/contracts";
 import { getCostAnalytics, getQualityDrift, getUsageMetrics, getVersionPerformance } from "@/lib/api/services/ai-analytics";
 import { CostDashboard } from "@/components/features/ai-analytics/CostDashboard";
@@ -18,6 +20,7 @@ const EMPTY_VERSIONS: AIVersionPerformance = { timeframe: "30d", window_start: n
 const EMPTY_DRIFT: AIQualityDrift = { timeframe: "30d", window_start: new Date(0).toISOString(), series: [], alerts: [] };
 
 export default function AIAnalyticsPage() {
+  const router = useRouter();
   const [timeframe, setTimeframe] = useState("30d");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +32,13 @@ export default function AIAnalyticsPage() {
   const [usageError, setUsageError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!env.FEATURE_INTERNAL_DASHBOARDS) {
+      router.replace("/dashboard");
+    }
+  }, [router]);
+
+  useEffect(() => {
+    if (!env.FEATURE_INTERNAL_DASHBOARDS) return;
     let active = true;
     setLoading(true);
     setError(null);
@@ -61,6 +71,7 @@ export default function AIAnalyticsPage() {
   }, [timeframe]);
 
   useEffect(() => {
+    if (!env.FEATURE_INTERNAL_DASHBOARDS) return;
     let active = true;
     setUsageLoading(true);
     setUsageError(null);
@@ -83,6 +94,8 @@ export default function AIAnalyticsPage() {
       active = false;
     };
   }, [timeframe]);
+
+  if (!env.FEATURE_INTERNAL_DASHBOARDS) return null;
 
   return (
     <div className="space-y-6">

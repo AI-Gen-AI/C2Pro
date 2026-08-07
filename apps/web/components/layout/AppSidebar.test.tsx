@@ -5,6 +5,25 @@ import { renderWithProviders, screen } from "@/src/tests/test-utils";
 import { useSidebarStore } from "@/stores/sidebar";
 import { AppSidebar } from "./AppSidebar";
 
+const mockEnv = {
+  APP_MODE: "production" as const,
+  API_BASE_URL: "/api",
+  BACKEND_ORIGIN: "",
+  COHERENCE_BASE_URL: "/coherence",
+  IS_DEMO: false,
+  IS_DEV: false,
+  FEATURE_INTERNAL_DASHBOARDS: false,
+  FEATURE_PHASE2_MODULES: false,
+  FEATURE_RACI_GENERATION: false,
+  SENTRY_DSN: undefined,
+};
+
+vi.mock("@/config/env", () => ({
+  get env() {
+    return mockEnv;
+  },
+}));
+
 const pathnameState = { value: "/projects" };
 const organizationState = {
   value: {
@@ -34,6 +53,9 @@ vi.mock("@/lib/api/generated", () => ({}));
 describe("AppSidebar", () => {
   beforeEach(() => {
     useSidebarStore.setState({ isCollapsed: false, width: 240 });
+    mockEnv.FEATURE_INTERNAL_DASHBOARDS = false;
+    mockEnv.FEATURE_PHASE2_MODULES = false;
+    mockEnv.FEATURE_RACI_GENERATION = false;
   });
 
   it("renders primary navigation with active link state", () => {
@@ -134,12 +156,35 @@ describe("AppSidebar", () => {
     expect(screen.queryByText(/^7$/)).not.toBeInTheDocument();
   });
 
-  it("prunes stakeholders, ai-analytics and observability links when feature flags are off", () => {
+  it("prunes stakeholders, ai-analytics, observability and evidence sidebar links when feature flags are off", () => {
     pathnameState.value = "/projects";
+    mockEnv.FEATURE_INTERNAL_DASHBOARDS = false;
+    mockEnv.FEATURE_PHASE2_MODULES = false;
     renderWithProviders(<AppSidebar />);
 
     expect(screen.queryByRole("link", { name: /stakeholders/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /ai-analytics/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /ai.analytics/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /observability/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^evidence$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /projects/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /alerts/i })).toBeInTheDocument();
+  });
+
+  it("shows stakeholders and evidence sidebar links when FEATURE_PHASE2_MODULES is on", () => {
+    pathnameState.value = "/projects";
+    mockEnv.FEATURE_PHASE2_MODULES = true;
+    renderWithProviders(<AppSidebar />);
+
+    expect(screen.getByRole("link", { name: /stakeholders/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^evidence$/i })).toBeInTheDocument();
+  });
+
+  it("shows ai-analytics sidebar link when FEATURE_INTERNAL_DASHBOARDS is on", () => {
+    pathnameState.value = "/projects";
+    mockEnv.FEATURE_INTERNAL_DASHBOARDS = true;
+    renderWithProviders(<AppSidebar />);
+
+    expect(screen.getByRole("link", { name: /ai analytics/i })).toBeInTheDocument();
   });
 });

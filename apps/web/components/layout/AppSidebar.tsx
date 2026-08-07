@@ -57,7 +57,7 @@ export function AppSidebar() {
     if (item.href === '/ai-analytics' || item.href === '/observability') {
       return env.FEATURE_INTERNAL_DASHBOARDS;
     }
-    if (item.href === '/stakeholders') {
+    if (item.href === '/stakeholders' || item.href === '/evidence') {
       return env.FEATURE_PHASE2_MODULES;
     }
     return true;

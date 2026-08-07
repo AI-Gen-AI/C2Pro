@@ -12,6 +12,22 @@ const stakeholderMatrixMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useParams: () => useParamsMock(),
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), prefetch: vi.fn() }),
+}));
+
+vi.mock("@/config/env", () => ({
+  env: {
+    FEATURE_PHASE2_MODULES: true,
+    FEATURE_INTERNAL_DASHBOARDS: false,
+    FEATURE_RACI_GENERATION: false,
+    IS_DEMO: false,
+    IS_DEV: false,
+    APP_MODE: "production",
+    API_BASE_URL: "/api",
+    BACKEND_ORIGIN: "",
+    COHERENCE_BASE_URL: "/coherence",
+    SENTRY_DSN: undefined,
+  },
 }));
 
 vi.mock("@/hooks/useProject", () => ({

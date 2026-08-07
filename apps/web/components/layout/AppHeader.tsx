@@ -106,10 +106,8 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
         )}
       </div>
 
-      {/* Right: Search, Notifications, Avatar */}
+      {/* Right: Notifications, Avatar */}
       <div className="flex items-center gap-4">
-
-
         <ThemeToggle />
 
         {/* Notifications */}
