@@ -17,6 +17,7 @@ from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User, UserRole
 from src.core.frontend_support.router import (
     _get_consent_repository,
+    _get_disclaimer_repository,
 )
 from src.core.frontend_support.router import (
     router as frontend_support_router,
@@ -54,6 +55,31 @@ class _FakeConsentRepository:
         return self._records.get((tenant_id, user_id, version))
 
 
+class _FakeDisclaimerRepository:
+    """In-memory seam for disclaimer acceptance routes (SEC-014)."""
+
+    def __init__(self) -> None:
+        self._records: dict[tuple[UUID, UUID, str, str], object] = {}
+        self.session = SimpleNamespace(commit=self._commit)
+
+    async def _commit(self) -> None:
+        return None
+
+    async def get_acceptance(
+        self, *, tenant_id: UUID, user_id: UUID, project_id: str, version: str
+    ) -> object | None:
+        return self._records.get((tenant_id, user_id, project_id, version))
+
+    async def accept(
+        self, *, tenant_id: UUID, user_id: UUID, project_id: str, version: str
+    ) -> object:
+        key = (tenant_id, user_id, project_id, version)
+        self._records[key] = SimpleNamespace(
+            tenant_id=tenant_id, user_id=user_id, project_id=project_id, version=version
+        )
+        return self._records[key]
+
+
 def _current_user() -> User:
     return User(
         id=uuid4(),
@@ -72,16 +98,18 @@ def _build_client() -> tuple[TestClient, User]:
     app = FastAPI()
     app.include_router(frontend_support_router, prefix="/api/v1")
     consent_repository = _FakeConsentRepository()
+    disclaimer_repository = _FakeDisclaimerRepository()
     user = _current_user()
     app.dependency_overrides[_get_consent_repository] = lambda: consent_repository
+    app.dependency_overrides[_get_disclaimer_repository] = lambda: disclaimer_repository
     app.dependency_overrides[get_current_user] = lambda: user
     return TestClient(app), user
 
 
 def test_cookie_consent_round_trip_contract() -> None:
-    client, _user = _build_client()
-    tenant_id = str(uuid4())
-    user_id = "user_demo"
+    client, user = _build_client()
+    tenant_id = str(user.tenant_id)
+    user_id = str(user.id)
 
     create_response = client.post(
         "/api/v1/compliance/cookies/consent",
@@ -155,13 +183,13 @@ def test_cookie_consent_round_trip_contract() -> None:
 
 
 def test_cookie_consent_persist_error_contract() -> None:
-    client, _user = _build_client()
+    client, user = _build_client()
 
     response = client.post(
         "/api/v1/compliance/cookies/consent",
         json={
-            "tenantId": str(uuid4()),
-            "userId": "user_demo",
+            "tenantId": str(user.tenant_id),
+            "userId": str(user.id),
             "version": "2026-02",
             "forceError": True,
         },

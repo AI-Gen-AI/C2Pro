@@ -20,7 +20,10 @@ from src.config import settings
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session
-from src.core.frontend_support.repository import CookieConsentRepository
+from src.core.frontend_support.repository import (
+    CookieConsentRepository,
+    DisclaimerAcceptanceRepository,
+)
 from src.core.security.secret_channel import (
     AwsSecretsManagerBundleProvider,
     EnvJsonSecretBundleProvider,
@@ -82,12 +85,10 @@ def _get_consent_repository(
     return CookieConsentRepository(session=db)
 
 
-def _accepted_scopes(request: RequestType) -> set[str]:
-    scopes = getattr(request.app.state, "accepted_disclaimer_scopes", None)
-    if scopes is None:
-        scopes = set()
-        request.app.state.accepted_disclaimer_scopes = scopes
-    return scopes
+def _get_disclaimer_repository(
+    db: AsyncSession = Depends(get_session),
+) -> DisclaimerAcceptanceRepository:
+    return DisclaimerAcceptanceRepository(session=db)
 
 
 def _disclaimer_scope(project_id: str, tenant_id: str, user_id: str) -> str:
@@ -128,7 +129,7 @@ def _resolve_secret_channel_bundle() -> dict[str, str]:
             )
         provider = VaultKvBundleProvider(
             url=settings.secret_channel_vault_url,
-            token=settings.secret_channel_vault_token,
+            token=settings.secret_channel_vault_token.get_secret_value(),
         )
     bundle = provider.load_bundle(bundle_ref=bundle_ref)
     redacted = redact_clerk_bundle(bundle)
@@ -140,13 +141,24 @@ def _resolve_secret_channel_bundle() -> dict[str, str]:
     return redacted
 
 
+def _assert_consent_tenant(payload_tenant_id: str, current_user: User) -> None:
+    if payload_tenant_id != str(current_user.tenant_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot write consent for another tenant",
+        )
+
+
 @router.post("/compliance/cookies/consent")
 async def create_cookie_consent(
     payload: CookieConsentCreateRequest,
     _request: RequestType,
     response: Response,
+    current_user: Annotated[User, Depends(get_current_user)],
     repo: CookieConsentRepository = Depends(_get_consent_repository),
 ) -> dict[str, Any]:
+    _assert_consent_tenant(payload.tenantId, current_user)
+
     if payload.forceError:
         response.status_code = 500
         return {
@@ -177,8 +189,10 @@ async def get_cookie_consent(
     tenantId: str,
     userId: str,
     version: str,
+    current_user: Annotated[User, Depends(get_current_user)],
     repo: CookieConsentRepository = Depends(_get_consent_repository),
 ) -> dict[str, Any]:
+    _assert_consent_tenant(tenantId, current_user)
     tenant_uuid = UUID(tenantId)
     record = await repo.get_consent(tenant_uuid, userId, version)
     return {
@@ -192,8 +206,10 @@ async def get_cookie_consent(
 @router.patch("/compliance/cookies/consent")
 async def update_cookie_consent(
     payload: CookieConsentUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
     repo: CookieConsentRepository = Depends(_get_consent_repository),
 ) -> dict[str, Any]:
+    _assert_consent_tenant(payload.tenantId, current_user)
     tenant_uuid = UUID(payload.tenantId)
 
     await repo.upsert_consent(
@@ -213,11 +229,17 @@ async def update_cookie_consent(
 @router.get("/projects/{project_id}/gates/gate-8/disclaimer/status")
 async def get_legal_disclaimer_status(
     project_id: str,
-    request: RequestType,
     current_user: Annotated[User, Depends(get_current_user)],
+    repo: DisclaimerAcceptanceRepository = Depends(_get_disclaimer_repository),
 ) -> dict[str, Any]:
     scope = _disclaimer_scope(project_id, str(current_user.tenant_id), str(current_user.id))
-    accepted = scope in _accepted_scopes(request)
+    record = await repo.get_acceptance(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        project_id=project_id,
+        version=DISCLAIMER_VERSION,
+    )
+    accepted = record is not None
     return {
         "accepted": accepted,
         "version": DISCLAIMER_VERSION,
@@ -230,9 +252,9 @@ async def get_legal_disclaimer_status(
 async def accept_legal_disclaimer(
     project_id: str,
     payload: DisclaimerAcceptRequest,
-    request: RequestType,
     response: Response,
     current_user: Annotated[User, Depends(get_current_user)],
+    repo: DisclaimerAcceptanceRepository = Depends(_get_disclaimer_repository),
 ) -> dict[str, Any]:
     if payload.forceError:
         response.status_code = 500
@@ -241,7 +263,13 @@ async def accept_legal_disclaimer(
             "gateBlocked": True,
         }
 
-    _accepted_scopes(request).add(_disclaimer_scope(project_id, str(current_user.tenant_id), str(current_user.id)))
+    await repo.accept(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        project_id=project_id,
+        version=DISCLAIMER_VERSION,
+    )
+    await repo.session.commit()
     return {
         "accepted": True,
         "gateBlocked": False,
@@ -308,7 +336,9 @@ async def get_clerk_secret_channel_bundle(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Secret channel token not configured",
         )
-    if not x_secret_channel_token or not secrets.compare_digest(x_secret_channel_token, expected_token):
+    if not x_secret_channel_token or not secrets.compare_digest(
+        x_secret_channel_token, expected_token.get_secret_value()
+    ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid secret channel token")
     values = _resolve_secret_channel_bundle()
     return SecretChannelClerkResponse(bundle_version="2026-04-21", values=values)
