@@ -4487,7 +4487,6 @@ components:
             type: string
           type: array
           title: Source Rule Ids
-          default: []
       type: object
       required:
       - items_sum
