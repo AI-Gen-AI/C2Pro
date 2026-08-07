@@ -260,3 +260,39 @@ class TestDocumentReuploadEndpoint:
         )
 
         assert response.status_code in [400, 422]
+
+    @pytest.mark.asyncio
+    async def test_reupload_response_contains_tenant_id(
+        self,
+        client: AsyncClient,
+        test_document,
+        get_auth_headers: Callable,
+        test_user_and_project,
+    ):
+        """
+        Regression test for TASK-DOC-REUPLOAD-005.
+        GIVEN a document exists
+        WHEN re-uploading a different file
+        THEN the 200 response body includes tenant_id, project_id, version, and file_hash.
+        Prevents the 500 caused by DocumentDTO.from_domain missing tenant_id in serialisation.
+        """
+        tenant = test_user_and_project["tenant"]
+        project = test_user_and_project["project"]
+        headers = get_auth_headers(
+            user=test_user_and_project["user"],
+            tenant=tenant,
+        )
+
+        response = await client.patch(
+            f"/api/v1/documents/{test_document.id}/file",
+            files={"file": ("regression.pdf", b"regression test content", "application/pdf")},
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["tenant_id"] == str(tenant.id), "tenant_id must be present in re-upload response"
+        assert data["project_id"] == str(project.id)
+        assert "version" in data
+        assert "file_hash" in data
+        assert data["file_hash"] is not None
