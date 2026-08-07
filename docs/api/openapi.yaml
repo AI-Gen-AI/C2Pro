@@ -2360,6 +2360,8 @@ paths:
       - frontend-support
       summary: Create Cookie Consent
       operationId: create_cookie_consent_api_v1_compliance_cookies_consent_post
+      security:
+      - HTTPBearer: []
       requestBody:
         required: true
         content:
@@ -2387,6 +2389,8 @@ paths:
       - frontend-support
       summary: Get Cookie Consent
       operationId: get_cookie_consent_api_v1_compliance_cookies_consent_get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: tenantId
         in: query
@@ -2427,6 +2431,8 @@ paths:
       - frontend-support
       summary: Update Cookie Consent
       operationId: update_cookie_consent_api_v1_compliance_cookies_consent_patch
+      security:
+      - HTTPBearer: []
       requestBody:
         required: true
         content:

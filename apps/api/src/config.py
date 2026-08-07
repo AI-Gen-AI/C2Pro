@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Literal, Self
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -139,7 +139,7 @@ class Settings(BaseSettings):
         default=None, description="Clerk JWKS URL (auto-constructed if not provided)"
     )
     clerk_issuer: str | None = Field(default=None, description="Clerk JWT issuer for validation")
-    secret_channel_token: str | None = Field(
+    secret_channel_token: SecretStr | None = Field(
         default=None,
         validation_alias="SECRET_CHANNEL_TOKEN",
         description="Shared token required to access secure frontend secret channel",
@@ -164,7 +164,7 @@ class Settings(BaseSettings):
         validation_alias="SECRET_CHANNEL_VAULT_URL",
         description="Vault URL for KV secret channel backend",
     )
-    secret_channel_vault_token: str | None = Field(
+    secret_channel_vault_token: SecretStr | None = Field(
         default=None,
         validation_alias="SECRET_CHANNEL_VAULT_TOKEN",
         description="Vault token used to read KV secrets",

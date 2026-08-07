@@ -58,6 +58,10 @@ class VaultKvBundleProvider:
     def load_bundle(self, *, bundle_ref: str) -> dict[str, Any]:
         import hvac
 
+        if ":" not in bundle_ref:
+            raise ValueError(
+                f"secret_channel_bundle_ref must be in 'mount:path' format, got: {bundle_ref!r}"
+            )
         client = hvac.Client(url=self.url, token=self.token)
         mount_point, secret_path = bundle_ref.split(":", 1)
         response = client.secrets.kv.v2.read_secret_version(path=secret_path, mount_point=mount_point)
