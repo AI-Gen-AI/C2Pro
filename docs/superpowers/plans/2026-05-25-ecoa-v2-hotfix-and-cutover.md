@@ -216,7 +216,7 @@ Auto-block via deploy-pipeline hook reading these metrics; manual sign-off at GA
 | Task | File | Action |
 |---|---|---|
 | Rename ADR | `worktrees/sentry-perf/w5b-benchmarks/docs/architecture/adr/ADR-009-` | `git mv` → `ADR-009-evidence-oriented-coherence-orchestration.md` |
-| Status flip | `docs/architecture/decisions/009-coherence-score-v2-evidence-aware.md` | `Status: Proposed` → `Status: Accepted` with date |
+| Status flip | `docs/architecture/decisions/ADR-009-evidence-oriented-coherence-orchestration.md` | `Status: Proposed` → `Status: Accepted` with date |
 | OpenAPI | `docs/api/openapi.yaml` | regenerate via `make openapi` after Phase A merged |
 | Codemap | `docs/codemaps/coherence.md` (if exists) or update `CLAUDE.md` "Active Analysis Pipeline" | reference new cache_keys module, score_version enum |
 | CHANGELOG | root `CHANGELOG.md` | entries for A/B/C/F/G |

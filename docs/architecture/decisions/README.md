@@ -11,7 +11,7 @@ This section contains the active architecture decision records for the current r
 - [005 Three-layer SC test strategy](./005-three-layer-sc-test-strategy.md)
 - [006 Post-reorganization architecture](./006-post-reorganization-architecture.md)
 - [ADR-004 Circuit breakers](./ADR-004-circuit-breakers.md)
-- [ADR-009 Coherence Score v2 — Evidence-Aware, Explainable, Bottom-Up](./009-coherence-score-v2-evidence-aware.md)
+- [ADR-009 Coherence Score v2 — Evidence-Aware, Explainable, Bottom-Up](./ADR-009-evidence-oriented-coherence-orchestration.md)
 
 > **Reserved (in-flight, not yet filed):** ADR-010 (Evidence Maturity), ADR-011 (Evidence Intelligence), ADR-012 (deferred) are referenced in `CHANGELOG.md` / `CLAUDE.md`. The v3.0 canon starts at ADR-013 to avoid collision.
 

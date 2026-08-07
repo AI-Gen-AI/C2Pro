@@ -4,7 +4,7 @@
 **Date**: 2026-05-25
 **Owner**: Coherence Score™ workstream
 **Trademark scope**: Coherence Score™ is C2Pro's registered differentiator. Any change to authoritative output is trademark-critical.
-**Source ADR**: `docs/architecture/decisions/009-coherence-score-v2-evidence-aware.md` (also present, malformed, at `worktrees/sentry-perf/w5b-benchmarks/docs/architecture/adr/ADR-009-`)
+**Source ADR**: `docs/architecture/decisions/ADR-009-evidence-oriented-coherence-orchestration.md` (also present, malformed, at `worktrees/sentry-perf/w5b-benchmarks/docs/architecture/adr/ADR-009-`)
 **Prior PR**: #146 — ECOA v2 Phase 1 (compatibility) + Phase 2 (shadow mode)
 
 ---
@@ -206,7 +206,7 @@ The per-tenant flag mechanism is **TBD pending Phase D.0 audit** (read-only). Ca
 
 ## 11. References
 
-- ADR-009 — Coherence Score v2 evidence-aware: `docs/architecture/decisions/009-coherence-score-v2-evidence-aware.md`
+- ADR-009 — Coherence Score v2 evidence-aware: `docs/architecture/decisions/ADR-009-evidence-oriented-coherence-orchestration.md`
 - PR #146 — ECOA v2 Phase 1+2 (compatibility + shadow mode)
 - Bug repro: `POST /api/v1/coherence/evaluate/diagnostics` on project with 2 docs, SCOPE-only assessed
 - Suite IDs already in use: `TS-UA-COH-V2-*`, `TS-INT-DB-COH-001`
