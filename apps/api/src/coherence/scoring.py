@@ -900,6 +900,7 @@ def calculate_v2_from_signals(
     signals_by_category: dict[str, list[tuple[str, float]]] = {}
     candidates_by_category: dict[str, list[ConflictCandidate]] = {}
     budget_reconciliation_raw: dict[str, dict[str, Any]] = {}
+    budget_source_rule_ids: list[str] = []
     for s in signals or []:
         if isinstance(s, tuple):
             rule_id, score = s
@@ -908,7 +909,7 @@ def calculate_v2_from_signals(
             rule_id = getattr(s, "rule_id", "unknown")
             score = float(getattr(s, "impact_score", 0.0)) * 100.0
             cat = str(getattr(s, "category", "SCOPE")).upper()
-            # TASK-BCK-093: capture DET-BUD reconciliation raw_data
+            # TASK-BCK-093: capture DET-BUD reconciliation raw_data, currency, source rule ids
             raw = getattr(s, "raw_data", {}) or {}
             if (
                 cat == "BUDGET"
@@ -917,6 +918,8 @@ def calculate_v2_from_signals(
                 and "items_sum" in raw
             ):
                 budget_reconciliation_raw.setdefault("BUDGET", {}).update(raw)
+                if rule_id not in budget_source_rule_ids:
+                    budget_source_rule_ids.append(rule_id)
         signals_by_category.setdefault(cat, []).append((str(rule_id), float(score)))
 
     for candidate in build_conflict_candidates(
@@ -934,6 +937,8 @@ def calculate_v2_from_signals(
         )
         conflict = conflict_service.detect(cat, bundle, candidates_by_category.get(cat, []))
         recon_data = budget_reconciliation_raw.get(cat)
+        if recon_data and cat == "BUDGET":
+            recon_data = {**recon_data, "source_rule_ids": budget_source_rule_ids}
         budget_recon = BudgetReconciliation(**recon_data) if recon_data else None
         categories.append(
             cat_agg.aggregate(
