@@ -50,6 +50,8 @@ class BudgetReconciliation(BaseModel):
     contract_total: float | None = None
     deviation_pct: float
     direction: str
+    currency: str | None = None
+    source_rule_ids: list[str] = Field(default_factory=list)
 
 
 class CategoryV2(BaseModel):

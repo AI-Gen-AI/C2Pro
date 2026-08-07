@@ -4477,6 +4477,17 @@ components:
         direction:
           type: string
           title: Direction
+        currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Currency
+        source_rule_ids:
+          items:
+            type: string
+          type: array
+          title: Source Rule Ids
+          default: []
       type: object
       required:
       - items_sum

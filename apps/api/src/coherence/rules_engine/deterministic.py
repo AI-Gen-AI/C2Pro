@@ -181,10 +181,14 @@ class BudgetSumMismatchEvaluator(RuleEvaluator):
         # Budget items sum > contract = overcommitted; < contract = incomplete coverage
         direction = "exceeds" if items_sum > contract_total else "below"
         impact = min(0.85, 0.35 + dev * 2.0)
+        currency = clause.data.get("currency")
+        raw: dict[str, Any] = {"items_sum": round(items_sum, 2), "contract_total": contract_total,
+             "deviation_pct": round(dev * 100, 2), "direction": direction}
+        if currency:
+            raw["currency"] = currency
         return _signal(self, clause, impact,
             f"Budget items sum {items_sum:,.2f} {direction} contract total {contract_total:,.2f} ({dev*100:.1f}%)",
-            {"items_sum": round(items_sum,2), "contract_total": contract_total,
-             "deviation_pct": round(dev*100, 2), "direction": direction})
+            raw)
 
 
 class BudgetInternalConsistencyEvaluator(RuleEvaluator):
@@ -233,6 +237,15 @@ class BudgetInternalConsistencyEvaluator(RuleEvaluator):
             return None
         direction = "exceeds" if items_sum > stated_total else "below"
         impact = min(0.85, 0.35 + dev * 2.0)
+        currency = clause.data.get("currency")
+        raw: dict[str, Any] = {
+            "items_sum": round(items_sum, 2),
+            "stated_total": stated_total,
+            "deviation_pct": round(dev * 100, 2),
+            "direction": direction,
+        }
+        if currency:
+            raw["currency"] = currency
         return _signal(
             self,
             clause,
@@ -241,12 +254,7 @@ class BudgetInternalConsistencyEvaluator(RuleEvaluator):
                 f"Budget line items sum {items_sum:,.2f} differ from declared total "
                 f"{stated_total:,.2f} ({dev*100:.1f}%)"
             ),
-            {
-                "items_sum": round(items_sum, 2),
-                "stated_total": stated_total,
-                "deviation_pct": round(dev * 100, 2),
-                "direction": direction,
-            },
+            raw,
         )
 
 
