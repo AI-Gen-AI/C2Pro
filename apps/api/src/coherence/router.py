@@ -1029,7 +1029,15 @@ async def _maybe_add_v2_dashboard(
             ).scalar_one_or_none()
 
             if shadow_row is not None:
-                # Real evidence-based v2 data from the shadow orchestrator
+                # Real evidence-based v2 data from the shadow orchestrator.
+                # Cast status str→Literal: the ORM column is str, but values are
+                # always written by CoherenceV2Payload which enforces the Literal.
+                from typing import Literal
+                from typing import cast as _cast
+
+                _GlobalV2Status = Literal[
+                    "scored", "partial", "insufficient_active_weight", "pending_documents"
+                ]
                 v2_payload = CoherenceV2Payload(
                     project_id=project_id,
                     version="coherence-v2",
@@ -1039,7 +1047,7 @@ async def _maybe_add_v2_dashboard(
                             coherence_score=shadow_row.coherence_score,
                             completeness_score=shadow_row.completeness_score,
                             technical_reliability_index=shadow_row.technical_reliability_index,
-                            status=shadow_row.status,
+                            status=_cast(_GlobalV2Status, shadow_row.status),
                             score_reason=shadow_row.score_reason,
                             active_weight=shadow_row.active_weight,
                         )
