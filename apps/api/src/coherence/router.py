@@ -991,40 +991,89 @@ async def get_coherence_dashboard(
     )
 
     v2_enabled = await _v2_enabled_for(tenant_id, flags_service)
-    return _maybe_add_v2_dashboard(summary, project_id, last_updated, v2_enabled=v2_enabled)
+    return await _maybe_add_v2_dashboard(
+        summary, project_id, last_updated, v2_enabled=v2_enabled, db=db
+    )
 
 
-def _maybe_add_v2_dashboard(
+async def _maybe_add_v2_dashboard(
     summary: DashboardSummary,
     project_id: UUID,
     last_updated: datetime,
     *,
     v2_enabled: bool,
+    db: AsyncSession,
 ) -> DashboardSummary:
-    """Attach additive ECOA v2 dashboard data when enabled; v1 remains fail-closed."""
+    """Attach additive ECOA v2 dashboard data when enabled; v1 remains fail-closed.
+
+    Resolution order (when v2_enabled=True):
+    1. Latest row in ``coherence_v2_shadow`` — real orchestrator output.
+    2. ``adapt_v1_dashboard()`` fallback when no shadow row exists yet.
+    """
     try:
         if v2_enabled:
-            from src.coherence.adapters.v1_to_v2 import adapt_v1_dashboard
-            from src.coherence.services.v2.shadow_runner import ShadowRunner
-            from src.config import get_settings  # local import to avoid circular deps
-            settings = get_settings()
-            v2_payload = adapt_v1_dashboard(
-                summary.model_dump(),
-                project_id=project_id,
-                generated_at=last_updated,
+            from src.coherence.adapters.persistence.models import CoherenceV2ShadowORM
+            from src.coherence.application.dtos.coherence_v2_dtos import (
+                CategoryV2,
+                CoherenceV2Payload,
+                GlobalV2,
             )
-            summary = summary.model_copy(update={"categories_v2": v2_payload})
 
-            if getattr(settings, "coherence_v2_shadow_mode", True):
-                runner = ShadowRunner()
-                delta = runner.compare(summary.model_dump(), v2_payload)
-                runner.emit(
-                    delta,
-                    feature_flag_state={
-                        "coherence_v2_enabled": True,
-                        "coherence_v2_shadow_mode": True,
-                    },
+            shadow_row = (
+                await db.execute(
+                    select(CoherenceV2ShadowORM)
+                    .where(CoherenceV2ShadowORM.project_id == project_id)
+                    .order_by(CoherenceV2ShadowORM.created_at.desc())
+                    .limit(1)
                 )
+            ).scalar_one_or_none()
+
+            if shadow_row is not None:
+                # Real evidence-based v2 data from the shadow orchestrator.
+                # Cast status str→Literal: the ORM column is str, but values are
+                # always written by CoherenceV2Payload which enforces the Literal.
+                from typing import Literal
+                from typing import cast as _cast
+
+                _GlobalV2Status = Literal[
+                    "scored", "partial", "insufficient_active_weight", "pending_documents"
+                ]
+                v2_payload = CoherenceV2Payload(
+                    project_id=project_id,
+                    version="coherence-v2",
+                    generated_at=shadow_row.created_at,
+                    **{
+                        "global": GlobalV2(
+                            coherence_score=shadow_row.coherence_score,
+                            completeness_score=shadow_row.completeness_score,
+                            technical_reliability_index=shadow_row.technical_reliability_index,
+                            status=_cast(_GlobalV2Status, shadow_row.status),
+                            score_reason=shadow_row.score_reason,
+                            active_weight=shadow_row.active_weight,
+                        )
+                    },
+                    categories=[CategoryV2(**cat) for cat in shadow_row.categories_v2],
+                )
+                logger.info(
+                    "coherence_v2_dashboard_from_shadow",
+                    project_id=str(project_id),
+                    shadow_id=str(shadow_row.id),
+                    status=shadow_row.status,
+                )
+            else:
+                from src.coherence.adapters.v1_to_v2 import adapt_v1_dashboard
+
+                v2_payload = adapt_v1_dashboard(
+                    summary.model_dump(),
+                    project_id=project_id,
+                    generated_at=last_updated,
+                )
+                logger.debug(
+                    "coherence_v2_dashboard_adapted_from_v1",
+                    project_id=str(project_id),
+                )
+
+            summary = summary.model_copy(update={"categories_v2": v2_payload})
     except (AttributeError, ImportError, RuntimeError, TypeError, ValueError):
         logger.exception("coherence_v2_adapter_failed")
 
