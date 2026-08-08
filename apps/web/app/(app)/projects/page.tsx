@@ -118,6 +118,16 @@ const DEFAULT_SAVE_PRESET_DRAFT: SavePresetDraft = {
 };
 
 
+function matchesProjectFilters(
+  project: ProjectListItem,
+  statusFilter: ProjectStatusFilter,
+  typeFilter: ProjectTypeFilter,
+): boolean {
+  const matchesStatus = statusFilter === "all" || project.status === statusFilter;
+  const matchesType = typeFilter === "all" || project.project_type === typeFilter;
+  return matchesStatus && matchesType;
+}
+
 function sanitizeFilename(value: string): string {
   return value
     .trim()
@@ -262,27 +272,13 @@ export default function ProjectsPage() {
   const projects = useMemo(() => data ?? [], [data]);
   const filteredProjects = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return projectRows.filter((project) => {
-        const matchesStatus =
-          statusFilter === "all" ? true : project.status === statusFilter;
-        const matchesType =
-          typeFilter === "all" ? true : project.project_type === typeFilter;
-
-        return matchesStatus && matchesType;
-      });
-    }
-
     return projectRows.filter((project) => {
-      const matchesStatus =
-        statusFilter === "all" ? true : project.status === statusFilter;
-      const matchesType =
-        typeFilter === "all" ? true : project.project_type === typeFilter;
+      if (!matchesProjectFilters(project, statusFilter, typeFilter)) return false;
+      if (!normalizedQuery) return true;
       const haystack = [project.name, project.description ?? "", project.code ?? ""]
         .join(" ")
         .toLowerCase();
-
-      return matchesStatus && matchesType && haystack.includes(normalizedQuery);
+      return haystack.includes(normalizedQuery);
     });
   }, [projectRows, searchQuery, statusFilter, typeFilter]);
   const inlineEditErrorMessage =
