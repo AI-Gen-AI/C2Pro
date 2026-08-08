@@ -45,6 +45,8 @@ Pillow>=12.3.0  # Image processing for OCR
 # Security
 PyJWT[crypto]>=2.13.0
 bcrypt==5.0.0
+# Pin to avoid PYSEC-2026-3552/3553/3554 (transitive dep from spaCy ≥3.8)
+cryptography>=50.0.0
 
 # Privacy & GDPR Compliance (SEC-002: PII gate NER hardening)
 # spacy on Windows needs a prebuilt wheel or Visual Studio Build Tools to
