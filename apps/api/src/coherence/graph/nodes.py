@@ -461,13 +461,40 @@ async def _run_gate(
     _LLM_CATEGORIES: tuple[str, ...],
     rule_ids: tuple[str, ...],
 ) -> NodeOutput:
-    """Inner loop: dispatch each (clause, rule) to the gate and aggregate."""
+    """Dispatch each (clause, rule) to the gate with bounded concurrency.
+
+    Phase 1 (sync): filter applicable (clause, rule, category) triples.
+    Phase 2 (async): run all triples concurrently, bounded by _GATE_CONCURRENCY.
+    asyncio single-threaded model makes accum mutations safe across concurrent tasks.
+    """
     accum = _GateAccum(coverage=dict.fromkeys(_LLM_CATEGORIES, False))
     tenant_id = (state.config.tenant_id or "").strip() or \
         "00000000-0000-0000-0000-000000000000"
 
+    # Phase 1: synchronous applicability filter — no I/O, no await.
+    applicable: list[tuple[Clause, str, str]] = []
     for clause in state.clauses:
-        await _run_gate_for_clause(clause, rule_ids, gate, tenant_id, accum)
+        clause_category = infer_category(clause)
+        if _is_non_substantive_clause(clause):
+            accum.skipped_non_substantive += 1
+            _log_skipped_non_substantive(clause, clause_category)
+            continue
+        for rule_id in rule_ids:
+            cat = _category_for_rule(rule_id)
+            if cat != clause_category:
+                accum.skipped_not_applicable += 1
+                _log_skipped_not_applicable(clause, rule_id, clause_category, cat)
+            else:
+                applicable.append((clause, rule_id, cat))
+
+    # Phase 2: concurrent LLM dispatch — bounded by _GATE_CONCURRENCY.
+    sem = asyncio.Semaphore(_GATE_CONCURRENCY)
+
+    async def _bounded(clause: Clause, rule_id: str, cat: str) -> None:
+        async with sem:
+            await _evaluate_applicable_gate_rule(clause, rule_id, cat, gate, tenant_id, accum)
+
+    await asyncio.gather(*(_bounded(c, r, cat) for c, r, cat in applicable))
 
     # INFO-level summary so applicability gating is observable in default logs
     # (per-pair skips are DEBUG and suppressed at INFO; TASK-COH-LLM-APPLIC-009).
@@ -493,29 +520,6 @@ async def _run_gate(
         out["alerts"] = [_emit_budget_alert(accum.budget_reset)]
         out["budget_exhausted_reset_date"] = accum.budget_reset
     return out
-
-
-async def _run_gate_for_clause(
-    clause: Clause,
-    rule_ids: tuple[str, ...],
-    gate: CoherenceLlmGatePort,
-    tenant_id: str,
-    accum: _GateAccum,
-) -> None:
-    """Evaluate all applicable LLM rules for one clause."""
-    clause_category = infer_category(clause)
-    if _is_non_substantive_clause(clause):
-        accum.skipped_non_substantive += 1
-        _log_skipped_non_substantive(clause, clause_category)
-        return
-
-    for rule_id in rule_ids:
-        cat = _category_for_rule(rule_id)
-        if cat != clause_category:
-            accum.skipped_not_applicable += 1
-            _log_skipped_not_applicable(clause, rule_id, clause_category, cat)
-            continue
-        await _evaluate_applicable_gate_rule(clause, rule_id, cat, gate, tenant_id, accum)
 
 
 def _log_skipped_non_substantive(clause: Clause, clause_category: str) -> None:
@@ -633,6 +637,8 @@ def _category_for_rule(rule_id: str) -> str:
         return "SCOPE"
     return cat
 
+
+_GATE_CONCURRENCY = 10  # max concurrent LLM calls per evaluation
 
 _OBLIGATION_RE = re.compile(
     r"\b("
