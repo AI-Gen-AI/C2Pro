@@ -41,21 +41,23 @@
   },
   "pnpm": {
     "overrides": {
-      "axios": "1.16.0",
+      "axios": "1.18.1",
       "ajv": "8.18.0",
       "eslint>ajv": "6.12.6",
       "@eslint/eslintrc>ajv": "6.12.6",
-      "brace-expansion": "5.0.6",
-      "fast-uri": "3.1.2",
+      "brace-expansion": "5.0.7",
+      "fast-uri": "3.1.5",
       "flatted": "3.4.2",
       "handlebars": "4.7.9",
       "js-cookie": "3.0.7",
+      "js-yaml": "4.3.1",
       "minimatch": "10.2.4",
       "pdfjs-dist": "5.4.296",
       "picomatch": "4.0.4",
-      "postcss": "8.5.18",
+      "postcss": "8.5.23",
       "rollup": "4.60.0",
-      "undici": "7.28.0",
+      "sharp": "0.35.0",
+      "undici": "7.29.0",
       "yaml": "2.8.3"
     }
   },
