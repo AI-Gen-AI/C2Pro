@@ -593,6 +593,8 @@ FOLLOW-UPS (open):
 
 ## Change Log
 
+**2026-08-08**: SEC/PRIVACY HARDENING (PR #488) — `_apply_presidio()` result-processing loop moved inside the try/except so spaCy 3.8 + presidio 2.2.364 compatibility error no longer escapes the PII gate; local `presidio_mapping` prevents partial state on mid-loop failure; `cryptography>=50.0.0` pinned in requirements.txt to close PYSEC-2026-3552/3553/3554 (transitive dep surfaced by spaCy 3.8).
+
 **2026-08-08**: TASK-BCK-077 CLOSED (PR #486) — `project_graph_tasks` added to Celery `include` list in `celery_app.py`; meta-test `test_celery_include_covers_all_registered_task_modules` guards against future drift.
 
 **2026-08-08**: TASK-COH-BUD-RECON-006 CLOSED (PR #483) — English + INR contract total extraction; `_CONTRACT_LABEL_RE` adds 4 English label patterns; `_detect_contract_currency` routes to "INR" on ₹/Rs./INR/crore/lakh markers; crore/lakh multipliers (×10M/×100K) handle INR-crore notation; 6 tests (1 regression + 5 new). TASK-COH-LLM-USAGE-011 CLOSED (PR #478) — tenant_id propagated to `_call_rule_via_llm` so per-tenant AI spend is recorded. TASK-COH-LLM-PERF-010 CLOSED (PR #481) — `_run_gate` rewritten to two-phase async gather with `_GATE_CONCURRENCY=10`; concurrency probe test confirms `max_in_flight > 1`.
