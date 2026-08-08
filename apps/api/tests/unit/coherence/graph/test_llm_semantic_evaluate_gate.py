@@ -273,6 +273,62 @@ async def test_run_gate_skips_non_substantive_clauses_before_llm_call():
 
 
 @pytest.mark.asyncio
+async def test_run_gate_dispatches_calls_concurrently():
+    """TASK-COH-LLM-PERF-010: gate dispatches applicable (clause, rule) pairs
+    concurrently via asyncio.gather, not one-by-one. Verified by observing more
+    than one in-flight call at a time when coroutines yield to the event loop."""
+    import asyncio as _asyncio
+
+    from src.coherence.graph.nodes import llm_semantic_evaluate_async
+
+    in_flight = 0
+    max_in_flight = 0
+
+    class ConcurrencyProbeGate:
+        async def evaluate_rule(self, tenant_id, rule_id, clause):
+            nonlocal in_flight, max_in_flight
+            in_flight += 1
+            max_in_flight = max(max_in_flight, in_flight)
+            await _asyncio.sleep(0)  # yield so other tasks advance
+            in_flight -= 1
+            return GateDecision(
+                state="evaluated", finding=None, reason=None,
+                reset_date=None, cache_key="k", cost_charged_usd=0.0,
+            )
+
+    # 3 substantive clauses, each in a distinct category → 3 gate calls
+    clauses = [
+        Clause(
+            id="c-scope",
+            text="The contractor shall perform and deliver the scope of work requirements.",
+            data={},
+        ),
+        Clause(
+            id="c-budget",
+            text="The total payment cost price for the contract financial amount.",
+            data={},
+        ),
+        Clause(
+            id="c-legal",
+            text="Contract terms assign liability and penalty; notice and arbitration required.",
+            data={},
+        ),
+    ]
+    state = CoherenceGraphState(
+        project_id="p", clauses=clauses,
+        config=EvaluationConfig(tenant_id="00000000-0000-0000-0000-000000000001"),
+    )
+
+    out = await llm_semantic_evaluate_async(state, gate=ConcurrencyProbeGate())
+
+    assert out["llm_calls_count"] == 3
+    assert max_in_flight > 1, (
+        f"Gate calls appear sequential (max_in_flight={max_in_flight}). "
+        "Expected concurrent dispatch via asyncio.gather."
+    )
+
+
+@pytest.mark.asyncio
 async def test_run_gate_applicability_logs_render_with_stdlib_logger(caplog):
     """TASK-COH-LLM-APPLIC-009-P3: applicability logs render as grep-friendly
     stdlib log messages when INFO/DEBUG logging is enabled."""
