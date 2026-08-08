@@ -5,17 +5,18 @@
 
 ---
 
-## Completed Counts by Category (as of 2026-04-21)
+## Completed Counts by Category (as of 2026-08-08)
 
 | Category | Total | Completed | Source |
 | -------- | ----- | --------- | ------ |
-| AI/ML Intelligence | 78 | 32 | [backlogs/AI_AI_ML_INTELLIGENCE.md](AI_AI_ML_INTELLIGENCE.md) |
-| Backend | 28 | 19 | [backlogs/BCK_BACKEND.md](BCK_BACKEND.md) |
-| DevOps | 2 | 2 | [backlogs/DEV_DEVOPS.md](DEV_DEVOPS.md) |
-| Frontend | 163 | 137 | [backlogs/FRT_FRONTEND.md](FRT_FRONTEND.md) |
-| Infrastructure | 59 | 41 | [backlogs/INF_INFRASTRUCTURE.md](INF_INFRASTRUCTURE.md) |
-| Quality Assurance | 96 | 61 | [backlogs/QA_QUALITY_ASSURANCE.md](QA_QUALITY_ASSURANCE.md) |
+| AI/ML Intelligence | 100 | 93 | [backlogs/AI_AI_ML_INTELLIGENCE.md](AI_AI_ML_INTELLIGENCE.md) |
+| Backend | ~130 | ~111 | [backlogs/BCK_BACKEND.md](BCK_BACKEND.md) |
+| DevOps | 31 | 13 | [backlogs/DEV_DEVOPS.md](DEV_DEVOPS.md) |
+| Frontend | 202 | 201 | [backlogs/FRT_FRONTEND.md](FRT_FRONTEND.md) |
+| Infrastructure | ~20 | ~5 | [backlogs/INF_INFRASTRUCTURE.md](INF_INFRASTRUCTURE.md) |
+| Quality Assurance | ~350 | ~347 | [backlogs/QA_QUALITY_ASSURANCE.md](QA_QUALITY_ASSURANCE.md) |
 | Code Review | 25 | 25 | [backlogs/REV_CODE_REVIEW.md](REV_CODE_REVIEW.md) |
+| Security | 18 | 18 | [backlogs/SEC_SECURITY.md](SEC_SECURITY.md) |
 
 ## Cross-Category Completed Epics
 
@@ -30,10 +31,35 @@
 
 ---
 
-## Verbose Change Log (archived from master, 2026-04-04 → 2026-05-08)
+## Verbose Change Log (archived from master, 2026-04-04 → 2026-08-08)
 
 | Date | Milestone |
 | ---- | --------- |
+| 2026-08-08 | **Backlog cleanup** — All `[x]` rows stripped from all active backlog files. BCK: 19 pending (EPIC-MYPY-STRICT + EPIC-PROC2 only). QA: 3 open (QA-325a/b + QA-343). FRT: 1 open (FRT-041). AI: 7 open (Phase 2 deferred). DEV: 18 pending. INF: ~15 pending. SEC: all 18 done. |
+| 2026-08-07 | **TASK-SEC-012..016 completed** — pgTAP RLS suite for clause_embeddings, auth guard on cookie consent, DisclaimerAcceptanceORM, SecretStr for channel tokens, VaultKv guard (PR #467). |
+| 2026-08-07 | **TASK-FRT-190 + FRT-191 completed** — nav feature flags (FEATURE_PHASE2_MODULES/FEATURE_INTERNAL_DASHBOARDS), single project-creation flow (PR #470). |
+| 2026-08-07 | **TASK-COH-V2-CUTOVER-004 completed** — per-tenant v2 flag + canary 10→50→100% with shadow-MAE auto-block (PRs #462/#464). |
+| 2026-07-19 | **TASK-QA-323 completed** — mypy final zero-error certification (Gemini audit on main@722326f; final baseline 52). |
+| 2026-07-18 | **TASK-QA-322 completed** — mypy per-wave ratchet certification (PR #284; baseline 1406→740). |
+| 2026-07-16 | **TASK-DEV-004 completed** — backend-integration suite fixed (24 → 0 failures, PR #246); promoted to REQUIRED_JOBS (PR #248). |
+| 2026-07-15 | **TASK-DEV-009 completed** — ruff baseline clean (206→0 enforced, UP042 guarded); backend-lint promoted to REQUIRED_JOBS (PR #242). |
+| 2026-07-15 | **TASK-DEV-020 completed** — 268 tracked artifact files purged; .gitignore gaps closed. |
+| 2026-07-15 | **TASK-DEV-027 completed** — full repository health + technical-debt audit; canonical report at `docs/audits/TECH_DEBT_AUDIT_2026-07-15.md`. |
+| 2026-07-14 | **TASK-DEV-010..014 completed** — canonical OpenAPI baseline, Tenacity guard, PostCSS patch, pip-audit repair, js-minor-patch bump. |
+| 2026-07-12 | **TASK-DEV-003 completed** — CI/CD overhaul: ci.yml consolidation, security workflows, release.yml, SHA-pinned actions, 1,495 artifact files purged from index. |
+| 2026-07-12 | **TASK-FRT-188..197 completed** — audit report export, global mutation errors, nav flags, creation flow, CI wedge gates, budget reconciliation, design tokens, onboarding, EN language, component consolidation. |
+| 2026-07-11 | **TASK-COH-V2-VERSIONING-006 + CACHING-007 completed** — canonical score_version enum on all surfaces (PR #190); cache namespace versioning + invalidation handlers (PR #196). |
+| 2026-07-11 | **TASK-FRT-183..187 completed** — dashboard shell, triplet checklist, evaluate/re-run actions, categories_v2 render, HITL scoping/cards. |
+| 2026-07-10 | **TASK-FRT-182 + COH-V2-FRONTEND-003 completed** — landing honesty pass (superseded by LANDING-SYNC); frontend null-safe rendering guard. |
+| 2026-07-09..10 | **TASK-FRT-175..181 completed** — typed upload, hooks crash, coherence SSR auth, fabricated data purge, HITL identity, analysis progress tracker, retry auth. |
+| 2026-07-08..09 | **TASK-FRT-198..202 completed** — c2pro.io landing rebuild (root route, DS v2 tokens, Copy Pack rebuild, waitlist funnel, SEO). |
+| 2026-06-19 | **v3 THIN SPINE complete** — ADR-013→018 v0 ratified; feat/v3-spine (PR #158) merged to main. |
+| 2026-06-05 | **EPIC-QA-SWAGGER-MANUAL-VERIFICATION complete** — all unique Swagger operations verified end-to-end (TASK-QA-240..319). |
+| 2026-05-29 | **TASK-CE-F2-01 completed** — LEGAL pilot extraction adapter with 3-channel classification. |
+| 2026-05-27 | **TASK-OPS-DOCFLOW-019 completed** — Alembic bootstrap repair for CI (`UnsafeNewEnumValueUsageError` fixed). |
+| 2026-05-26 | **TASK-COH-V2-HOTFIX-001 + ADAPTER-002 completed** — v1 scoring §14 active-weight guard; v1→v2 adapter partial-coverage fix. |
+| 2026-05-25 | **TASK-OPS-DOCFLOW-017/018 completed** — schemathesis selector restored; DB-backed alerts contract drift repaired. |
+| 2026-05-17 | **TASK-BCK-052..059 completed** — LangGraph parallel-state fix, checkpoint isolation, coherence tracing, structured extraction layer, AnthropicWrapper, RAG category targeting, DET guards. |
 | 2026-05-08 | **Phase 1 Backlog Cleanup** — All `[x]` tasks stripped from active backlog files; each category now shows pending-only. FRT: Phase 1 complete (FRT-041 blocked on Clerk dashboard access). BCK: fully complete (0 pending). QA: fully complete (QA-204 closed this session with new schemathesis tests + OpenAPI regeneration). REV: fully complete (25/25 done). DEV: fully complete (2/2 done). SEC: all named vulns fixed; 3 untracked items remain (RLS migration, AuditLogORM sync). AI: Phase 2 items pending (AI-010/011/040-043). INF: Phase 2 items pending (INF-008-011, INF-055). PLN: Wave plan complete; Phase 2 plan TBD. Blackboard archived to `blackboard/archive/`. |
 | 2026-05-08 | **TASK-QA-204 completed** — OpenAPI schema regenerated (commit 32b7b9fc); schemathesis contract test `test_observability_admin_router.py` added covering observability, ai_feedback, admin/dlq, frontend-support surfaces. |
 | 2026-05-17 | **TASK-BCK-052 completed** — `/api/v1/analysis/analyze` no longer crashes after parsing when parallel LangGraph enrichment branches run together; the fan-out anchor emits an empty patch, branch nodes emit branch-local patches, and N10 now uses a true multi-source join instead of three independent downstream triggers. |

@@ -28,11 +28,6 @@
 
 | Status | Priority | Task ID | Depends On | Description | Source |
 |--------|----------|---------|------------|-------------|--------|
-| [x] | P1 | `TASK-AI-044` | None | Fix `langsmith_hub.py`: replace `os.environ` mutation with `hub.pull(api_key=..., api_url=...)` kwargs — concurrency hazard resolved | ✅ 2026-05-09 PR#112 |
-| [x] | P1 | `TASK-AI-045` | None | Implement real `create_feedback` in `langsmith_client.py` — calls `NativeLangSmithClient.create_feedback()` | ✅ 2026-05-09 PR#112 |
-| [x] | P1 | `TASK-AI-046` | None | Fix `coherence_tracing.py`: double `end_span` — use `caught_error` var, call only in `finally` | ✅ 2026-05-09 PR#112 |
-| [x] | P1 | `TASK-AI-047` | None | Fix `_run_sync` in `langsmith_decorator.py`: add `token`/`finally: _TRACE_CONTEXT.reset(token)` | ✅ 2026-05-09 PR#112 |
-| [x] | P1 | `TASK-AI-048` | None | Fix `langsmith_adapter.py`: remove broken retry + fix `update_run(run_id, ...)` positional arg | ✅ 2026-05-09 PR#112 |
 | [ ] | P2 | `TASK-AI-010` | `TASK-216` | Add prompt metadata to LangSmith Hub (owner, description, tags) | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
 | [ ] | P2 | `TASK-AI-011` | `TASK-216` | Implement A/B test config in LangSmith Hub for gradual rollout | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
 | [ ] | P2 | `TASK-AI-040` | None | [PHASE 2 DEFERRED] Multi-language prompt templates in English and Spanish | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
