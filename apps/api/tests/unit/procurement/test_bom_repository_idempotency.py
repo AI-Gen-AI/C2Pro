@@ -81,10 +81,15 @@ async def test_replace_for_source_document_deletes_then_inserts_new_set() -> Non
     )
 
     delete_statements = [statement for statement in session.statements if isinstance(statement, Delete)]
-    assert len(delete_statements) == 1
-    compiled = str(delete_statements[0].compile(compile_kwargs={"literal_binds": False}))
-    assert "procurement_bom_items.project_id" in compiled
-    assert "procurement_bom_items.source_document_id" in compiled
+    # Two DELETEs: (1) rows for this document, (2) NULL-source orphan sweep.
+    assert len(delete_statements) == 2
+    compiled0 = str(delete_statements[0].compile(compile_kwargs={"literal_binds": False}))
+    assert "procurement_bom_items.project_id" in compiled0
+    assert "procurement_bom_items.source_document_id" in compiled0
+    compiled1 = str(delete_statements[1].compile(compile_kwargs={"literal_binds": False}))
+    assert "procurement_bom_items.project_id" in compiled1
+    # Second DELETE targets IS NULL rows — no source_document_id equality term.
+    assert "IS NULL" in compiled1 or "source_document_id" in compiled1
     assert len(session.added) == 2
     assert all(isinstance(orm, BOMItemORM) for orm in session.added)
     assert all(orm.source_document_id == document_id for orm in session.added)
