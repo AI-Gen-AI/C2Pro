@@ -30,6 +30,7 @@ celery_app = Celery(
         "src.analysis.adapters.ai.tools",
         "src.core.tasks.ingestion_tasks",
         "src.core.tasks.budget_alerts",
+        "src.core.tasks.project_graph_tasks",
         "src.core.tasks.snapshot_tasks",
         "src.core.tasks.snapshot_retention",
     ],

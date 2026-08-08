@@ -23,6 +23,35 @@ class _RetrySignal(BaseException):
     """Test double for Celery's retry control-flow exception."""
 
 
+_REQUIRED_TASK_MODULES = {
+    "src.core.tasks.ingestion_tasks",
+    "src.core.tasks.budget_alerts",
+    "src.core.tasks.project_graph_tasks",
+    "src.core.tasks.snapshot_tasks",
+    "src.core.tasks.snapshot_retention",
+}
+
+
+def test_celery_include_covers_all_registered_task_modules() -> None:
+    """TASK-BCK-077: every module containing @celery_app.task decorators must be
+    in the `include` list so workers auto-discover them on startup.
+
+    Reads celery_app.py as a meta-test because celery_app is replaced by a
+    _DummyCelery stub in tests (_bootstrap.py) and conf.include is lazy.
+    """
+    from pathlib import Path
+
+    celery_app_source = (
+        Path(__file__).parent.parent.parent
+        / "src" / "core" / "tasks" / "celery_app.py"
+    )
+    content = celery_app_source.read_text(encoding="utf-8")
+    missing = {m for m in _REQUIRED_TASK_MODULES if f'"{m}"' not in content}
+    assert not missing, (
+        f"Celery include list in celery_app.py missing task modules: {missing}"
+    )
+
+
 def test_document_ingestion_uses_document_parsing_default_queue() -> None:
     """TS-OPS-CELERY-QUEUE-001 keeps worker health checks aligned with Celery routing."""
     assert celery_app.conf.task_default_queue == "document_parsing"
