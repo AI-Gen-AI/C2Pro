@@ -2,7 +2,7 @@
 
 **Category**: Quality Assurance (QA)
 **Owner Role**: qa
-**Last Updated**: 2026-07-16
+**Last Updated**: 2026-08-08
 
 **Quick Links**:
 - 🏠 [Master Index](../C2PRO_MASTER_BACKLOG.md)
@@ -11,7 +11,11 @@
 
 ## Status View
 
-**Pending Tasks**: 102 active endpoint checks remain under `EPIC-QA-SWAGGER-MANUAL-VERIFICATION`.
+**Pending Tasks**: 3
+
+- `TASK-QA-325` (coherence dependency-provider isolation — open)
+- `TASK-QA-325` (stale core-tenant placeholder tests — open; duplicate ID, distinct task)
+- `TASK-QA-343` (invalidate stale document-extraction cache entries — in progress)
 
 **Completed QA / Audit Tasks**
 
@@ -29,6 +33,11 @@
 - `TASK-OPS-DOCFLOW-017` (Schemathesis frontend-support selector restored @2026-05-25)
 - `TASK-OPS-DOCFLOW-018` (DB-backed alerts contract drift restored @2026-05-25)
 - `TASK-OPS-DOCFLOW-019` (Real Document Operability GH action repaired + operator-only gate @2026-05-27)
+- `TASK-QA-240`..`TASK-QA-319` (EPIC-QA-SWAGGER-MANUAL-VERIFICATION complete @2026-06-05)
+- `TASK-QA-322` (mypy per-wave ratchet certification ✅ 2026-07-18)
+- `TASK-QA-323` (mypy final zero-error certification ✅ 2026-07-19)
+- `TASK-QA-324` (repair inherited stakeholder tenant fixtures ✅)
+- `TASK-QA-324` (repair golden pytest collection namespace collision ✅ 2026-07-17)
 
 ---
 
@@ -184,135 +193,14 @@ All 14 subtasks (TASK-QA-200..213) complete:
 
 ---
 
----
-
 ## EPIC-QA-SWAGGER-MANUAL-VERIFICATION — Real Swagger Endpoint Audit
 
-**Status**: ACTIVE — started 2026-05-17  
-**Purpose**: Manually verify every unique Swagger operation end-to-end with live evidence, not mock assumptions.  
-**Rules**: mark only after a real Swagger execution; record exact HTTP outcome and a brief note when behavior is surprising.
+**Status**: ✅ COMPLETE @2026-06-05
+**Purpose**: Manually verify every unique Swagger operation end-to-end with live evidence, not mock assumptions.
 
-### Live audit board
+All unique Swagger operations (Auth, Projects, Documents, Analysis, Coherence, Alerts, HITL, WBS, Procurement, Stakeholders, Observability, AI Feedback, Admin/DLQ, Frontend-Support) verified during 2026-05-17→2026-06-05. Key evidence: `TASK-QA-242` (`POST /api/v1/projects/{project_id}/documents/bulk` → 202 `accepted_count=1`, requires `file_data` base64 not `file_format`).
 
-| Status | Task ID | Group | Method | Endpoint | Result / brief note |
-| --- | --- | --- | --- | --- | --- |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | Authentication | `PUT` | `/api/v1/auth/me` |  |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | Authentication | `POST` | `/api/v1/auth/change-password` |  |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | Projects | `DELETE` | `/api/v1/projects/{project_id}` |  |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` |  |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-| [x] | `TASK-QA-242` | Projects | `POST` | `/api/v1/projects/{project_id}/documents/bulk` | 202 accepted_count=1 verified 2026-06-05; requires file_data (base64) not file_format. |
-
-### Execution order
-
-1. Public/health and auth bootstrap.
-2. Core project/document flow.
-3. Coherence, analysis, dashboard, and RAG.
-4. Alerts, HITL, decision intelligence, then remaining admin/support surfaces.
-
-### Defect policy
+### Defect policy (reference)
 
 - A failing endpoint gets a dedicated backend/frontend follow-up task immediately if root cause is product code.
 - An endpoint blocked only by missing test data keeps its QA task open with the exact blocker noted.
@@ -324,7 +212,7 @@ All 14 subtasks (TASK-QA-200..213) complete:
 
 ### TASK-QA-322: mypy per-wave ratchet + regression certification
 
-**Status**: Completed 2026-07-18 · **Priority**: P2 · **Owner**: qa · **Depends on**: TASK-DEV-031 · **Epic**: EPIC-MYPY-STRICT
+**Status**: ✅ Completed 2026-07-18 · **Priority**: P2 · **Owner**: qa · **Depends on**: TASK-DEV-031 · **Epic**: EPIC-MYPY-STRICT
 
 After each EPIC-MYPY-STRICT wave, independently verify the `mypy-baseline.txt` ratchet strictly decreased (no new errors, no suppressed strictness) and run risk-proportionate regression tests for the touched bounded contexts (tenant-isolation tests mandatory for any tenant/security-typed change).
 
@@ -342,19 +230,19 @@ Independent final gate: `mypy src` reports zero errors with the full backend dep
 
 ### TASK-QA-324: repair inherited stakeholder tenant fixtures
 
-**Priority**: P2 · **Owner**: qa · **Depends on**: TASK-BCK-095 · **Epic**: EPIC-MYPY-STRICT
+**Status**: ✅ Done · **Priority**: P2 · **Owner**: qa · **Depends on**: TASK-BCK-095 · **Epic**: EPIC-MYPY-STRICT
 
-Repair the inherited stakeholder application fixtures in `test_extract_stakeholders_use_case.py`, `test_get_raci_matrix_use_case.py`, and `test_upsert_raci_assignment_use_case.py` so every use-case construction supplies the required `tenant_id` contract.
+Repaired the inherited stakeholder application fixtures in `test_extract_stakeholders_use_case.py`, `test_get_raci_matrix_use_case.py`, and `test_upsert_raci_assignment_use_case.py` so every use-case construction supplies the required `tenant_id` contract.
 
-**Scope and acceptance**:
+### TASK-QA-324: Repair golden pytest collection namespace collision
 
-- Test fixtures only; no production behavior or interface changes.
-- Preserve tenant-isolation intent by using explicit, deterministic tenant identifiers.
-- Run the three focused stakeholder application test modules and confirm they pass without weakening assertions or skipping tests.
+**Status**: ✅ Completed 2026-07-17 · **Priority**: P1 · **Owner**: qa · **Depends on**: —
+
+`tests/coherence/golden` was imported as the top-level package `golden` because its parent `tests/coherence` lacked `__init__.py`. That shadowed `src/golden`, so later imports of `golden.evaluators` failed during broad collection. Added the missing parent package boundary with Suite ID `TS-QA-PYTEST-COLLECTION-001`; full `pytest --collect-only -q` and the 651-case `tests/golden` suite complete without collection errors.
 
 ### TASK-QA-325: restore coherence dependency-provider test isolation
 
-**Priority**: P2 · **Owner**: qa · **Depends on**: TASK-BCK-095 · **Epic**: EPIC-MYPY-STRICT
+**Status**: Open · **Priority**: P2 · **Owner**: qa · **Depends on**: TASK-BCK-095 · **Epic**: EPIC-MYPY-STRICT
 
 Repair the inherited isolation drift in `apps/api/tests/modules/analysis/adapters/graph/test_graph_dependencies.py::test_coherence_scorer_uses_dependency_provider`. The fixture expects score 88 from its monkeypatched provider, but the async coherence path bypasses that provider, attempts an uninitialized database connection, and then returns the low-budget fail-closed `None` result.
 
@@ -364,11 +252,6 @@ Repair the inherited isolation drift in `apps/api/tests/modules/analysis/adapter
 - Preserve the assertion that the coherence scorer consumes the dependency provider's score 88; do not weaken, skip, or broadly mock away the contract.
 - Prevent database access in this isolated test and prove the focused test passes independently.
 - If diagnosis proves production dependency wiring is defective, stop the fixture-only change and register/escalate a backend task before modifying production code.
-### TASK-QA-324: Repair golden pytest collection namespace collision
-
-**Status**: Completed 2026-07-17 · **Priority**: P1 · **Owner**: qa · **Depends on**: —
-
-`tests/coherence/golden` was imported as the top-level package `golden` because its parent `tests/coherence` lacked `__init__.py`. That shadowed `src/golden`, so later imports of `golden.evaluators` failed during broad collection. Added the missing parent package boundary with Suite ID `TS-QA-PYTEST-COLLECTION-001`; full `pytest --collect-only -q` and the 651-case `tests/golden` suite complete without collection errors.
 
 ### TASK-QA-325: Repair stale core-tenant placeholder tests
 

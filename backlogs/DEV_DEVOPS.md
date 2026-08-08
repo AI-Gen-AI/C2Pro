@@ -13,26 +13,13 @@
 
 ## Status View
 
-**Pending Tasks**: 18 (`TASK-DEV-005`…`006`, `007` (partial), `008`, `015`, `016`…`026`, `028`…`030`; `004` done 2026-07-16; `009` done 2026-07-15)
+**Pending Tasks**: 18 (`TASK-DEV-005`–`006`, `007` (partial), `008`, `015`, `016`–`019`, `021`–`026`, `028`–`030`)
 
-**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-010` (canonical OpenAPI baseline, below), `TASK-DEV-011` (Tenacity compatibility guard, below), `TASK-DEV-012` (PostCSS patch isolation, below), `TASK-DEV-013` (Python dependency audit repair, below), `TASK-DEV-014` (js-minor-patch group bump, below), and `TASK-DEV-027` (2026-07-15 multi-agent re-audit, below).
+**Completed**: `TASK-DEV-001` (Coherence subgraph standalone execution), `TASK-DEV-002` (Sentry DSN validation guard) — see [COMPLETED.md](COMPLETED.md) — `TASK-DEV-003` (CI/CD overhaul), `TASK-DEV-004` (backend-integration promoted to required gate ✅ 2026-07-16), `TASK-DEV-009` (ruff baseline clean + backend-lint required gate ✅ 2026-07-15), `TASK-DEV-010` (canonical OpenAPI baseline, below), `TASK-DEV-011` (Tenacity compatibility guard, below), `TASK-DEV-012` (PostCSS patch isolation, below), `TASK-DEV-013` (Python dependency audit repair, below), `TASK-DEV-014` (js-minor-patch group bump, below), `TASK-DEV-020` (artifact & junk purge + .gitignore gaps ✅ 2026-07-15), and `TASK-DEV-027` (2026-07-15 multi-agent re-audit, below).
 
 ---
 
 ## Active Tasks
-
-### TASK-DEV-004: Fix backend integration suite → promote `backend-integration` to required gate ✅ 2026-07-16
-
-**Priority**: P1 · **Owner**: backend · **Depends on**: TASK-DEV-003 (done)
-
-The integration suite fails on main (as of 2026-07-12: `14 failed, 74 passed, 3 skipped, 10 errors` — sqlalchemy pool teardown, error code `gkpj`). The old `tests.yml` hid this behind `continue-on-error: true`; the new `ci.yml` runs it as a visible **advisory** job. Fix the suite, then move `backend-integration` from `ADVISORY_JOBS` to `REQUIRED_JOBS` in the `ci-status` gate step of `.github/workflows/ci.yml`.
-
-**Checklist**:
-- [x] `pytest tests/integration/` green locally against `bootstrap_test_infra.py` infra
-- [x] `backend-integration` green in CI on a PR
-- [x] Job moved to `REQUIRED_JOBS`; advisory comment removed from `ci.yml`
-
-**Done 2026-07-16**: 24 failures → 0 (97 passed); root causes were tenant_id fixtures, WBS nested-set (`ck_wbs_nodes_lft_positive`), retired-router test contracts (alerts + langsmith), and tz-naive datetime columns. Fixed in #246; `backend-integration` promoted to REQUIRED_JOBS in ci.yml via #248. An honesty guardrail (risk_extractor honest-empty under mock) was preserved.
 
 ### TASK-DEV-005: Fix i13 real-E2E fixture port → re-enable daily cron
 
@@ -47,14 +34,6 @@ The integration suite fails on main (as of 2026-07-12: `14 failed, 74 passed, 3 
 `ci.yml` now runs `mypy src` (mypy 1.8.0, strict per `apps/api/pyproject.toml`) as an advisory job with the report in the step summary. Burn down the baseline (or adopt a baseline tool / relax strictness deliberately), then remove `continue-on-error: true` and add the job to `REQUIRED_JOBS` in `ci-status`. Expanded 2026-07-16 into a 22-task cross-owned WBS (TASK-DEV-031 Wave 0 + TASK-BCK-095…TASK-BCK-113 Waves 1–7 + TASK-QA-322/323) under EPIC-MYPY-STRICT.
 
 
-
-### TASK-DEV-009: Clean ruff baseline → promote `backend-lint` to required gate ✅ 2026-07-15
-
-**Priority**: P1 · **Owner**: backend · **Depends on**: —
-
-Corrected baseline (ruff==0.15.21, not the old 0.2.1 "~57"): **206 violations**. Cleaned in two steps: **97** via `ruff check --fix` (safe autofixes) + **24** manual fixes with justified inline `# noqa` where deliberate (Alembic F403 star imports, script E402/F401 bootstraps, interface-required ARG002, `contextlib.suppress` for SIM105, E721 identity checks) — landed in **PR #242**. The remaining **88 are all UP042** (`class X(str, Enum)` → `enum.StrEnum`): globally ignored in `apps/api/pyproject.toml` with a documented justification (StrEnum changes `str(member)` semantics; not behavior-preserving) plus a **CI baseline guard** that fails if the count exceeds 88. `backend-lint` renamed `Backend Lint (ruff)` and moved from `ADVISORY_JOBS` → `REQUIRED_JOBS`. `ruff check .` is now clean (0 enforced) and gating. StrEnum migration tracked as **TASK-DEV-030**.
-
-Note: the Husky pre-commit hook is fixed separately in **TASK-DEV-021** (its ruff branch lacks `|| exit 1`).
 
 ### TASK-DEV-030: Enum semantics migration (str+Enum → StrEnum)
 
@@ -110,14 +89,6 @@ No CI job runs `next build`; only Vercel builds at deploy time, so build-only re
 
 Three contradictory configs: ci.yml backend-unit runs `--cov-fail-under=0`; `apps/api/pyproject.toml` says `fail_under = 70`; `codecov.yml` targets 80% (statuses not required); vitest has no thresholds. Measure actuals first, then: enforce 70 in CI for backend (drop the `--cov-fail-under=0` override) and add vitest thresholds at measured actuals as a ratchet. Never lower an existing threshold.
 
-### TASK-DEV-020: Artifact & junk purge + .gitignore gaps ✅ 2026-07-15
-
-**Priority**: P2 · **Owner**: devops · **Depends on**: — · **Source**: audit §3 P2-1 (full file list there; owner-approved 2026-07-14)
-
-**Done 2026-07-15**: 268 tracked files removed in one commit + `.gitignore`/`apps/web/.gitignore` gaps closed (root: `apps/api/.pytest-*.xml`, `.coverage-*.xml`, `coverage*.{json,xml}`, `test-results-*.xml`, `=*`; web: `coverage/`, `test-results/`, `playwright-report/`, `*.log`, `tsconfig.tsbuildinfo`, `wireframe-coverage.json`). **Correction to the list below:** `blackboard.json` is **KEPT** — the usage-check found it runtime-critical (40+ references incl. `core/supervisor.py`), so it was NOT deleted despite being listed as clutter. Also kept: `requirements-sprint1.txt` (read by `setup.py`), `test.py`/`test_document_repository.py` (modified in #242 — defer). Stray modules `models.py`/`sqlalchemy_orm.py`/`sqlalchemy_document_repository.py` verified 0-import before deletion.
-
-234 tracked artifact files: `apps/web/coverage/.tmp/` (232 files, 1.9 MB — `.gitignore` only has root-only `/coverage`), `apps/web/test-results/.last-run.json`, `backups/*.bak`, `apps/api` junk (`=2.0.0`, `=3.2.0`, `docker-compose … up -d` file, pytest/coverage XML/JSON reports, `test_real.pdf`, `test_error_handling_standalone copy.py`), stray pre-src-layout api root modules (usage-check before deleting: `models.py`, `sqlalchemy_orm.py`, `sqlalchemy_document_repository.py`, …), root clutter (Consenso*, `analyze_payload.json`, `blackboard.json`). Add `.gitignore`: `apps/web/coverage/`, `.claude/scheduled_tasks.lock`. Extended 2026-07-15 (verified re-audit deltas): also delete or mark-legacy the divergent minimal `apps/api/docker-compose.test.yml` (root compose is canonical), and expand `apps/web/.gitignore` (currently 5 lines) with coverage/, test-results/, playwright-report/, *.log, tsconfig.tsbuildinfo, wireframe-coverage.json. Refuted during verification: "66+ tracked __pycache__/.pyc files" — `git ls-files` shows ZERO tracked __pycache__ entries (disk-only, already ignored).
-
 ### TASK-DEV-021: Husky pre-commit cannot fail on ruff — fix enforcement
 
 **Priority**: P2 · **Owner**: devops · **Depends on**: TASK-DEV-009 (clean baseline first) · **Source**: audit §3 P2-3
@@ -169,6 +140,30 @@ The canonical root test Compose file maps Redis to host port 6380, while `apps/a
 ---
 
 ## Completed Tasks
+
+### TASK-DEV-004: Fix backend integration suite → promote `backend-integration` to required gate ✅ 2026-07-16
+
+**Priority**: P1 · **Owner**: backend · **Depends on**: TASK-DEV-003
+
+24 failures → 0 (97 passed); root causes were tenant_id fixtures, WBS nested-set (`ck_wbs_nodes_lft_positive`), retired-router test contracts (alerts + langsmith), and tz-naive datetime columns. Fixed in #246; `backend-integration` promoted to REQUIRED_JOBS in ci.yml via #248.
+
+---
+
+### TASK-DEV-009: Clean ruff baseline → promote `backend-lint` to required gate ✅ 2026-07-15
+
+**Priority**: P1 · **Owner**: backend · **Depends on**: —
+
+206 violations cleaned in two steps: 97 via `ruff check --fix` + 24 manual fixes (PR #242). Remaining 88 are UP042 (`class X(str, Enum)`) — globally ignored with justification (StrEnum changes `str(member)` semantics) + CI baseline guard. `backend-lint` promoted to REQUIRED_JOBS. StrEnum migration tracked as TASK-DEV-030.
+
+---
+
+### TASK-DEV-020: Artifact & junk purge + .gitignore gaps ✅ 2026-07-15
+
+**Priority**: P2 · **Owner**: devops · **Source**: audit §3 P2-1
+
+268 tracked files removed in one commit + `.gitignore`/`apps/web/.gitignore` gaps closed. `blackboard.json` intentionally kept (40+ runtime references). DEV-021 (Husky `|| exit 1` fix) remains pending.
+
+---
 
 ### TASK-DEV-027: Full repository health and technical-debt audit ✅ 2026-07-15
 
