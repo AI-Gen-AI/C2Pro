@@ -221,7 +221,7 @@ class CoherenceLlmGate:
         # Step 4: LLM call (via v1 registry per-rule evaluator; Haiku-routed).
         try:
             finding, in_tok, out_tok, actual_cost, latency_ms, model = \
-                await self._call_rule_via_llm(rule_id, clause)
+                await self._call_rule_via_llm(rule_id, clause, tenant_id=tenant_id)
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "coherence_llm_gate.llm_error",
@@ -284,6 +284,8 @@ class CoherenceLlmGate:
         self,
         rule_id: str,
         clause: Clause,
+        *,
+        tenant_id: str | None = None,
     ) -> tuple[FindingSignal | None, int, int, float, float, str]:
         """
         Resolve the per-rule LLM evaluator from the v1 registry, run it for the
@@ -299,11 +301,18 @@ class CoherenceLlmGate:
         Haiku constant — this is acceptable degraded telemetry per the P3
         plan. Cost is the delta of evaluator.total_cost_usd before/after.
         """
+        import contextlib
         import time
+        from uuid import UUID
 
         from src.coherence.rules_engine.registry import get_v1_evaluator
 
-        evaluator = get_v1_evaluator(rule_id, low_budget_mode=False)
+        tenant_uuid: UUID | None = None
+        if tenant_id:
+            with contextlib.suppress(ValueError, AttributeError):
+                tenant_uuid = UUID(tenant_id)
+
+        evaluator = get_v1_evaluator(rule_id, low_budget_mode=False, tenant_id=tenant_uuid)
         cost_before = float(getattr(evaluator, "total_cost_usd", 0.0))
         t0 = time.perf_counter()
         signal = await cast(Any, evaluator).evaluate_v3_async(clause)
