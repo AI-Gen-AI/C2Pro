@@ -287,42 +287,11 @@ export default function RaciPage() {
   const [raciRows, setRaciRows] = useState<RaciRow[]>([]);
   const [autoAssignSummary, setAutoAssignSummary] = useState<string | null>(null);
 
-  if (!env.FEATURE_RACI_GENERATION) {
-    return (
-      <div className="space-y-4">
-        <h1 className="text-2xl font-semibold tracking-tight">RACI Matrix</h1>
-        <div className="rounded-2xl border border-border/70 bg-muted/20 p-6 text-sm text-muted-foreground">
-          RACI generation is not enabled in this environment yet.
-        </div>
-      </div>
-    );
-  }
-
-  const selectedTemplate =
-    RACI_TEMPLATES.find((template) => template.id === selectedTemplateId) ??
-    RACI_TEMPLATES[0];
-
   useEffect(() => {
     setRaciRows((currentRows) =>
       areRaciRowsEqual(currentRows, raciData) ? currentRows : raciData,
     );
   }, [raciData]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24 text-muted-foreground">
-        Loading RACI matrix…
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center py-24 text-destructive">
-        {error.message}
-      </div>
-    );
-  }
 
   const filteredData = raciRows.filter((row) =>
     row.activity.toLowerCase().includes(searchQuery.toLowerCase())
@@ -389,6 +358,37 @@ export default function RaciPage() {
     };
   }, [workloadAnalysis.metrics]);
   const timelineRows = useMemo(() => buildTimelineRows(filteredData), [filteredData]);
+
+  if (!env.FEATURE_RACI_GENERATION) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-semibold tracking-tight">RACI Matrix</h1>
+        <div className="rounded-2xl border border-border/70 bg-muted/20 p-6 text-sm text-muted-foreground">
+          RACI generation is not enabled in this environment yet.
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24 text-muted-foreground">
+        Loading RACI matrix…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-24 text-destructive">
+        {error.message}
+      </div>
+    );
+  }
+
+  const selectedTemplate =
+    RACI_TEMPLATES.find((template) => template.id === selectedTemplateId) ??
+    RACI_TEMPLATES[0];
 
   return (
     <div className="space-y-6">
