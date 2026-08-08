@@ -135,25 +135,78 @@ def _extract_numeric_money(text: str) -> float | None:
     return _parse_money_number(match.group(1) or match.group(2) or "")
 
 
+_CONTRACT_LABEL_RE = re.compile(
+    r"(?:"
+    # Spanish
+    r"presupuesto\s+base(?:\s+de\s+licitaci[oó]n)?|"
+    r"importe\s+(?:del\s+)?contrato|"
+    r"precio\s+(?:del\s+)?contrato|"
+    r"valor\s+(?:estimado\s+)?(?:del\s+)?contrato|"
+    r"importe\s+de\s+adjudicaci[oó]n|"
+    # English
+    r"(?:total\s+)?contract\s+(?:price|value|sum|amount)|"
+    r"lump\s+sum\s+(?:contract\s+)?(?:price|value|amount)?|"
+    r"award(?:ed)?\s+(?:contract\s+)?(?:price|value|sum|amount)"
+    r")",
+    re.IGNORECASE,
+)
+
+_CRORE_LAKH_RE = re.compile(r"\s*(crore|cr\.?|lakh|lakhs?|lac)\b", re.IGNORECASE)
+
+
 def _extract_contract_base_total(text: str) -> float | None:
-    label_pattern = (
-        r"(?:"
-        r"presupuesto\s+base(?:\s+de\s+licitaci[oó]n)?|"
-        r"importe\s+(?:del\s+)?contrato|"
-        r"precio\s+(?:del\s+)?contrato|"
-        r"valor\s+(?:estimado\s+)?(?:del\s+)?contrato|"
-        r"importe\s+de\s+adjudicaci[oó]n"
-        r")"
-    )
-    pattern = re.compile(
-        rf"{label_pattern}[^0-9€]{{0,80}}(?:eur|€)?\s*([0-9][0-9\.,]*)\s*(?:eur|€)?",
-        re.IGNORECASE,
-    )
-    candidates = [_parse_money_number(match.group(1)) for match in pattern.finditer(text)]
-    numeric_candidates = [candidate for candidate in candidates if candidate is not None]
-    if not numeric_candidates:
-        return None
-    return max(numeric_candidates)
+    """Extract contract base total from clause text.
+
+    Handles Spanish + English labels, EUR/₹/Rs./INR currency markers, and INR
+    crore/lakh notation. Returns the largest labeled amount found, or None.
+    """
+    candidates: list[float] = []
+    for label_m in _CONTRACT_LABEL_RE.finditer(text):
+        window_start = label_m.start() + len(label_m.group(0))
+        window = text[window_start:window_start + 250]
+
+        # Prefer INR-prefixed number (₹, Rs., INR); fall back to bare number.
+        raw_num: str | None = None
+        num_end = 0
+        inr_m = re.search(
+            r"(?:₹|Rs\.?\s*|INR\s*)([0-9][0-9,\.]*)", window, re.IGNORECASE
+        )
+        if inr_m:
+            raw_num = inr_m.group(1)
+            num_end = inr_m.end()
+        else:
+            bare_m = re.search(r"[^0-9₹]([0-9][0-9,\.]*)", window)
+            if bare_m:
+                raw_num = bare_m.group(1)
+                num_end = bare_m.end()
+
+        if raw_num is None:
+            continue
+
+        after_num = window[num_end:num_end + 15]
+        crore_m = _CRORE_LAKH_RE.match(after_num)
+        if crore_m:
+            unit = crore_m.group(1).lower().rstrip(".")
+            multiplier = 1e7 if unit.startswith("cr") else 1e5
+            v = _parse_money_number(raw_num)
+            if v is not None:
+                candidates.append(v * multiplier)
+        else:
+            v = _parse_money_number(raw_num)
+            # Sanity: genuine contract totals exceed 10,000
+            if v is not None and v > 10_000:
+                candidates.append(v)
+
+    return max(candidates) if candidates else None
+
+
+def _detect_contract_currency(text: str) -> str:
+    """Return 'INR' if text contains INR markers, else 'EUR'."""
+    if re.search(
+        r"₹|Rs\.?\s*[0-9]|\bINR\b|\brupee\b|\bcrore\b|\blakh\b", text, re.IGNORECASE
+    ):
+        return "INR"
+    return "EUR"
 
 
 def _extract_percentage(text: str) -> float | None:
@@ -237,7 +290,7 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict[str, Any]:
         or _extract_numeric_money(parsed_text)
     )
     if amount is not None:
-        data.setdefault("currency", "EUR")
+        data["currency"] = _detect_contract_currency(f"{text} {parsed_text}")
         data["planned"] = amount
         data["total_amount"] = amount
 
