@@ -53,11 +53,11 @@ Cognitive-complexity code smells (Reliability/Security rating C on new code) sur
 
 Actions only the repo owner can do in GitHub settings — full instructions in `docs/runbooks/ci-cd-setup.md`:
 - [x] Branch protection ruleset on `main`: **DONE** — active ruleset `Protect main` (id 18843913) verified 2026-07-14 via API: requires PR + required checks **`CI Status`** and **`gitleaks`**, non-fast-forward. (Legacy branch-protection API returns 404 because protection is ruleset-based — expected.)
-- [ ] Add `CODECOV_TOKEN` secret (from codecov.io) so backend coverage uploads work (upload is non-fatal meanwhile).
-- [ ] `Production` environment: add Required reviewers (approval gate for `release.yml` publish).
-- [ ] Delete stale `staging` environment.
-- [ ] Optional cleanup: delete now-unused secrets `RAILWAY_TOKEN_PRODUCTION`, `VERCEL_TOKEN`, `PRODUCTION_API_URL`, `SUPABASE_*_PRODUCTION`/staging family.
-- [ ] Verify the Vercel project's install command uses pnpm (dashboard-side; the repo has no `vercel.json`).
+- [x] Add `CODECOV_TOKEN` secret — verified present (set 2026-07-12).
+- [x] `Production` environment: add Required reviewers — `AI-Gen-AI` already set (verified 2026-08-08).
+- [x] Delete stale `staging` environment — already deleted (404 confirmed 2026-08-08).
+- [x] Optional cleanup: delete now-unused secrets — `RAILWAY_TOKEN_PRODUCTION`, `VERCEL_TOKEN`, `PRODUCTION_API_URL`, `SUPABASE_*` not present in repo secrets (verified 2026-08-08).
+- [x] Verify the Vercel project's install command uses pnpm — no `installCommand` override set; Vercel auto-detects pnpm from `pnpm-lock.yaml` (verified 2026-08-08).
 
 ### TASK-DEV-008: Repair corrupted Makefile `help`/`openapi` targets
 
