@@ -120,6 +120,7 @@ class PiiAnonymizerService:
         if analyzer is None:
             return text
 
+        original_text = text
         try:
             results = analyzer.analyze(
                 text=text,
@@ -127,32 +128,38 @@ class PiiAnonymizerService:
                 entities=list(_PRESIDIO_ENTITIES),
                 score_threshold=_PRESIDIO_SCORE_THRESHOLD,
             )
+
+            if not results:
+                return text
+
+            counters: dict[str, int] = {}
+            token_by_value: dict[tuple[str, str], str] = {}
+            replacements: list[tuple[int, int, str]] = []
+            # Accumulate in a local dict; only commit to the caller's mapping on
+            # full success so a mid-loop error never leaves mapping / text in an
+            # inconsistent state.
+            presidio_mapping: dict[str, str] = {}
+
+            for result in sorted(results, key=lambda r: r.start):
+                value = text[result.start : result.end]
+                key = (result.entity_type, value)
+                token = token_by_value.get(key)
+                if token is None:
+                    counters[result.entity_type] = counters.get(result.entity_type, 0) + 1
+                    token = f"[{result.entity_type}_{counters[result.entity_type]:03d}]"
+                    token_by_value[key] = token
+                    presidio_mapping[token] = value
+                replacements.append((result.start, result.end, token))
+
+            # Apply right-to-left so earlier offsets stay valid.
+            for start, end, token in sorted(replacements, key=lambda r: r[0], reverse=True):
+                text = text[:start] + token + text[end:]
+
+            mapping.update(presidio_mapping)
+            return text
         except Exception as exc:  # pragma: no cover - defensive runtime fallback
             logger.warning("presidio_analysis_failed_fallback_to_regex", exc_info=exc)
-            return text
-
-        if not results:
-            return text
-
-        counters: dict[str, int] = {}
-        token_by_value: dict[tuple[str, str], str] = {}
-        replacements: list[tuple[int, int, str]] = []
-
-        for result in sorted(results, key=lambda r: r.start):
-            value = text[result.start : result.end]
-            key = (result.entity_type, value)
-            token = token_by_value.get(key)
-            if token is None:
-                counters[result.entity_type] = counters.get(result.entity_type, 0) + 1
-                token = f"[{result.entity_type}_{counters[result.entity_type]:03d}]"
-                token_by_value[key] = token
-                mapping[token] = value
-            replacements.append((result.start, result.end, token))
-
-        # Apply right-to-left so earlier offsets stay valid.
-        for start, end, token in sorted(replacements, key=lambda r: r[0], reverse=True):
-            text = text[:start] + token + text[end:]
-        return text
+            return original_text
 
     @classmethod
     def _get_analyzer(cls) -> AnalyzerEngine | None:
