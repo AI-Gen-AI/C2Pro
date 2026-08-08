@@ -33,10 +33,11 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # SEC-002: Spanish spaCy NER model for src.core.privacy.anonymizer's Presidio
-# PERSON/LOCATION/PHONE_NUMBER recognizers (GATE 8, AnthropicWrapper). Not
-# pip-installable — spacy download fetches it as its own package into the
-# venv, so it travels with the `COPY --from=builder /opt/venv` below.
-RUN python -m spacy download es_core_news_md
+# PERSON/LOCATION/PHONE_NUMBER recognizers (GATE 8, AnthropicWrapper). Pinned
+# to wheel URL because `spacy download` generates a malformed URL with spacy 3.7.x.
+# Travels with the `COPY --from=builder /opt/venv` below.
+RUN pip install --no-cache-dir \
+    https://github.com/explosion/spacy-models/releases/download/es_core_news_md-3.7.0/es_core_news_md-3.7.0-py3-none-any.whl
 
 # ===========================================
 # Stage 2: Runtime
