@@ -21,11 +21,11 @@ Prior vulnerabilities SEC-009..011 fixed. Completed work in [COMPLETED.md](COMPL
 
 | Status | Priority | Task ID | Description | Source |
 |--------|----------|---------|-------------|--------|
-| [ ] | P1 | `TASK-SEC-012` | Add SQL RLS test `supabase/tests/09_clause_embeddings_rls.sql` — cross-tenant isolation + fail-closed | Audit finding (CRITICAL) |
-| [ ] | P1 | `TASK-SEC-013` | Add auth guard to cookie consent endpoints (`POST/GET/PATCH /compliance/cookies/consent`) — currently unauthenticated | Audit finding (HIGH) |
-| [ ] | P1 | `TASK-SEC-014` | Persist disclaimer acceptance to DB (currently in-process memory — breaks multi-pod) | Audit finding (HIGH) |
-| [ ] | P1 | `TASK-SEC-015` | Use `SecretStr` for `secret_channel_token` + `secret_channel_vault_token` in `config.py` | Audit finding (HIGH) |
-| [ ] | P2 | `TASK-SEC-016` | Guard `VaultKvBundleProvider.load_bundle` against malformed `bundle_ref` (no `:`) — currently raises unhandled `ValueError` | Audit finding (HIGH) |
+| [x] | P1 | `TASK-SEC-012` | Add SQL RLS test `supabase/tests/09_clause_embeddings_rls.sql` — cross-tenant isolation + fail-closed | Audit finding (CRITICAL) | ✅ Done 2026-08-07 (PR #467): pgTAP RLS suite for clause_embeddings cross-tenant isolation. |
+| [x] | P1 | `TASK-SEC-013` | Add auth guard to cookie consent endpoints (`POST/GET/PATCH /compliance/cookies/consent`) — currently unauthenticated | Audit finding (HIGH) | ✅ Done 2026-08-07 (PR #467): Auth guard on cookie consent endpoints. |
+| [x] | P1 | `TASK-SEC-014` | Persist disclaimer acceptance to DB (currently in-process memory — breaks multi-pod) | Audit finding (HIGH) | ✅ Done 2026-08-07 (PR #467): DisclaimerAcceptanceORM + DB-backed table with RLS. |
+| [x] | P1 | `TASK-SEC-015` | Use `SecretStr` for `secret_channel_token` + `secret_channel_vault_token` in `config.py` | Audit finding (HIGH) | ✅ Done 2026-08-07 (PR #467): SecretStr for channel tokens. |
+| [x] | P2 | `TASK-SEC-016` | Guard `VaultKvBundleProvider.load_bundle` against malformed `bundle_ref` (no `:`) — currently raises unhandled `ValueError` | Audit finding (HIGH) | ✅ Done 2026-08-07 (PR #467): ValueError guard on malformed bundle_ref. |
 | [x] | P2 | `TASK-SEC-017` | Add RLS migration: `tenant_id` on `clause_embeddings`, `analysis`, `alert`, `coherence_results` + Alembic migration | ✅ 2026-05-09 PR#112 |
 | [x] | P2 | `TASK-SEC-018` | Fix `SQLAlchemyAuditRepository` — AuditLogORM tagged with `rls_policy` metadata | ✅ 2026-05-09 PR#112 |
 
@@ -41,7 +41,7 @@ Prior vulnerabilities SEC-009..011 fixed. Completed work in [COMPLETED.md](COMPL
 
 ## Architecture Criterion Pending
 
-- `[ ]` All tables have `tenant_id` and RLS enabled (blocked on TASK-SEC-017)
+- `[x]` All tables have `tenant_id` and RLS enabled (✅ 2026-08-07 PR #467)
 
 ---
 
