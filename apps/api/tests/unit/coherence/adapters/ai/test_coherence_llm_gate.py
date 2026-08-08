@@ -101,7 +101,7 @@ async def test_gate_evaluate_rule_returns_gate_decision_type(monkeypatch):
     gate._cost = _OkCost()
     gate._usage = _NoopUsage()
 
-    async def _fake_call(rule_id, clause):
+    async def _fake_call(rule_id, clause, *, tenant_id=None):
         return None, 0, 0, 0.0, 1.0, "claude-3-haiku-20240307"
     monkeypatch.setattr(gate, "_call_rule_via_llm", _fake_call)
 
@@ -445,7 +445,7 @@ async def test_gate_evaluated_path_calls_llm_caches_result_and_charges(monkeypat
 
     # Inject the LLM-call helper directly so the test doesn't touch the real registry.
     # Helper returns (finding, input_tokens, output_tokens, cost, latency_ms, model).
-    async def fake_call_rule(rule_id, clause):
+    async def fake_call_rule(rule_id, clause, *, tenant_id=None):
         return finding, 120, 80, 0.0007, 250.0, "claude-3-haiku-20240307"
 
     gate = g.CoherenceLlmGate()
@@ -495,7 +495,7 @@ async def test_gate_llm_error_does_not_charge_or_cache(monkeypatch):
         def record_usage(self, **kw):
             recorded.append(kw)
 
-    async def boom(rule_id, clause):
+    async def boom(rule_id, clause, *, tenant_id=None):
         raise RuntimeError("upstream LLM 5xx")
 
     gate = g.CoherenceLlmGate()
@@ -537,7 +537,7 @@ async def test_gate_none_finding_recorded_as_failure_not_success(monkeypatch):
         def record_usage(self, **kw):
             recorded.append(kw)
 
-    async def fake_call_returning_none(rule_id, clause):
+    async def fake_call_returning_none(rule_id, clause, *, tenant_id=None):
         return None, 0, 0, 0.0, 12.3, "claude-3-haiku-20240307"
 
     cache = EmptyCache()
@@ -599,7 +599,7 @@ async def test_gate_drops_findings_below_calibrated_thresholds(monkeypatch):
         evidence_summary="weak", quote="q", raw_data={},
     )
 
-    async def fake_call_rule(rule_id, clause):
+    async def fake_call_rule(rule_id, clause, *, tenant_id=None):
         return weak_finding, 10, 5, 0.0001, 20.0, "claude-3-haiku-20240307"
 
     cache = EmptyCache()
@@ -651,4 +651,51 @@ async def test_gate_none_tenant_id_fails_closed_to_budget_exhausted(monkeypatch)
     assert decision.state == "budget_exhausted"
     assert decision.reason == "invalid_tenant_id"
     assert cost_consulted["called"] is False
+
+
+@pytest.mark.asyncio
+async def test_call_rule_via_llm_propagates_tenant_id_to_evaluator(monkeypatch):
+    """Regression for TASK-COH-LLM-USAGE-011: _call_rule_via_llm must forward
+    tenant_id to get_v1_evaluator so LlmRuleEvaluator.tenant_id != None and
+    per-tenant usage / budget tracking is attributed correctly."""
+    from uuid import UUID
+
+    from src.coherence.adapters.ai import coherence_llm_gate as g
+    from src.coherence.models import Clause
+
+    captured: list[dict] = []
+
+    class _StubEvaluator:
+        def __init__(self, tenant_id=None):
+            self.tenant_id = tenant_id
+            self.total_cost_usd = 0.0
+
+        async def evaluate_v3_async(self, clause):
+            captured.append({"tenant_id": self.tenant_id})
+            return None
+
+    def fake_get_v1_evaluator(rule_id, *, low_budget_mode=False, tenant_id=None, **_):
+        return _StubEvaluator(tenant_id=tenant_id)
+
+    monkeypatch.setattr(
+        "src.coherence.adapters.ai.coherence_llm_gate.CoherenceLlmGate._call_rule_via_llm",
+        g.CoherenceLlmGate._call_rule_via_llm,
+    )
+
+    import src.coherence.rules_engine.registry as reg
+    monkeypatch.setattr(reg, "get_v1_evaluator", fake_get_v1_evaluator)
+
+    gate = g.CoherenceLlmGate()
+    tenant_str = "11111111-2222-3333-4444-555555555555"
+    await gate._call_rule_via_llm(
+        "R-SCOPE-CLARITY-01",
+        Clause(id="c1", text="test clause text", data={}),
+        tenant_id=tenant_str,
+    )
+
+    assert len(captured) == 1, "evaluator must have been called"
+    assert captured[0]["tenant_id"] == UUID(tenant_str), (
+        "tenant_id must be propagated as UUID to the evaluator "
+        "(TASK-COH-LLM-USAGE-011 regression)"
+    )
 
