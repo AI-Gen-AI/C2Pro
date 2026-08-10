@@ -21,7 +21,7 @@ redis==5.0.1
 upstash-redis==1.7.0
 
 # Storage
-boto3==1.43.64
+boto3==1.43.66
 python-multipart>=0.0.18
 
 # AI
@@ -35,7 +35,7 @@ langchain-anthropic==1.4.8  # ChatAnthropic adapter used by procurement applicat
 langsmith>=0.9.3,<1.0.0  # LangSmith observability; compatible with langchain-core 1.4.x tracing context
 
 # Document Parsing
-pymupdf==1.28.0  # PDF
+pymupdf==1.28.2  # PDF
 openpyxl==3.1.5   # Excel
 python-docx==1.2.0  # Word
 # pyfiebdc==0.8.1    # BC3/FIEBDC - Not available on PyPI, commented out
@@ -52,9 +52,9 @@ cryptography>=50.0.0
 # spacy on Windows needs a prebuilt wheel or Visual Studio Build Tools to
 # compile from source; both are available as manylinux wheels on Linux
 # (CI/Docker), where this actually installs and runs.
-presidio-analyzer==2.2.354  # Requires spacy
-presidio-anonymizer==2.2.354  # Requires spacy
-spacy==3.7.2
+presidio-analyzer==2.2.364  # Requires spacy
+presidio-anonymizer==2.2.364  # Requires spacy
+spacy==3.8.14
 # The Spanish spaCy model is not pip-installable — it's a separate ~100MB
 # download, provisioned in the Docker image (see apps/api/Dockerfile) via:
 #   python -m spacy download es_core_news_md
