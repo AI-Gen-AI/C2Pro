@@ -7,7 +7,7 @@
 fastapi>=0.140.1
 uvicorn[standard]>=0.51.0
 pydantic>=2.10.0
-pydantic-settings>=2.6.0
+pydantic-settings>=2.15.0
 
 # Database
 sqlalchemy>=2.0.36
