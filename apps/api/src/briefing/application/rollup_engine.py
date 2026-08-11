@@ -52,10 +52,11 @@ class RollupEngine:
                 )
             )
 
-        resolved_tenant = tenant_id or (
-            next(iter(snapshots_by_project.values()), [None])[0]  # type: ignore[index]
-            and next(iter(snapshots_by_project.values()))[0].tenant_id
-        )
+        if tenant_id is not None:
+            resolved_tenant: UUID | None = tenant_id
+        else:
+            first_snaps = next(iter(snapshots_by_project.values()), [])
+            resolved_tenant = first_snaps[0].tenant_id if first_snaps else None
 
         return PortfolioRollup(
             tenant_id=resolved_tenant or UUID(int=0),
