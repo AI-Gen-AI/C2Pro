@@ -479,8 +479,8 @@ Phase 0 (branch, feature*v3*\* flags, hygiene, secret-scan) — ✅ DONE on feat
 | Task ID              | Pri | Depends On     | Goal / Scope                                                                 | Expected files             | Tests           | Done-when                   |
 | -------------------- | --- | -------------- | ---------------------------------------------------------------------------- | -------------------------- | --------------- | --------------------------- |
 | `[x] TASK-V3-021-01` | P3  | 015-04, 018-05 | Snapshot projection layer (read-only; no new source of truth).               | `src/briefing/`            | projection unit | derived from snapshots only |
-| `[ ] TASK-V3-021-02` | P3  | 021-01, 019-02 | Morning Briefing delivery (email/Slack) from snapshot deltas. · Out: UI epic | `briefing/`, `core/tasks/` | briefing golden | digest evidence-backed      |
-| `[ ] TASK-V3-021-03` | P3  | 021-01         | Portfolio R/A/G rollup query over snapshot history.                          | `briefing/`                | rollup unit     | cross-project matrix        |
+| `[x] TASK-V3-021-02` | P3  | 021-01, 019-02 | Morning Briefing delivery (email/Slack) from snapshot deltas. · Out: UI epic | `briefing/`, `core/tasks/` | briefing golden | digest evidence-backed      |
+| `[x] TASK-V3-021-03` | P3  | 021-01         | Portfolio R/A/G rollup query over snapshot history.                          | `briefing/`                | rollup unit     | cross-project matrix        |
 
 #### Phase 1 Extended — Follow-Up Tickets (Change-Impact & Related)
 
@@ -592,6 +592,8 @@ FOLLOW-UPS (open):
 **2026-07-28**: Closed V3-P1-SCOPE-11 via #419 (Health v0 contract_clarity_findings + ADR-022); registered+closed SEC-001 CRITICAL PII bypass fix (#417). Adopted anthropic>=0.120,<1.0.0 via #418 (superseded Dependabot #401; centralized LLM access behind the PII-safe wrapper). Verified against merged PRs on main.
 
 ## Change Log
+
+**2026-08-11**: TASK-V3-021-02 CLOSED (commit 9add4d82) — BriefingDeliveryPort runtime_checkable Protocol; BriefingFormatter pure static (format_text + format_subject); DeliverBriefingUseCase + DeliverBriefingCommand frozen dataclass; 13 unit tests. TASK-V3-021-03 CLOSED (commit 1e9df6dd) — RagStatus StrEnum; ProjectRollupEntry + PortfolioRollup frozen dataclasses (counts_by_rag property); RollupEngine.compute() pure static with >=0.7/>=0.4/<0.4 thresholds, latest-snapshot health per project; 17 unit tests. EPIC-V3-021 (ADR-021 Read Models) fully closed.
 
 **2026-08-11**: TASK-V3-021-01 CLOSED (commit 1fb434c0 on docs/backlog-cleanup-2026-08-08) — ADR-021 snapshot projection layer: HealthDelta + MorningBriefingProjection frozen dataclasses; ProjectionEngine.project() pure static function (chronological sort, union-of-dimensions health deltas, action-item delta, overdue count from latest, trigger events, evidence_refs); SnapshotProjectionUseCase; 20 unit tests RED→GREEN ruff clean.
 
