@@ -95,10 +95,12 @@ class CMReviewQueueService:
         review_queue_repo: IReviewQueueRepository,
         resume_use_case: ResumeWorkflowUseCase,
         audit_repository: Any | None = None,
+        golden_corpus_repository: Any | None = None,
     ) -> None:
         self._repo = review_queue_repo
         self._resume = resume_use_case
         self._audit = audit_repository
+        self._golden = golden_corpus_repository
 
     async def enqueue(
         self,
@@ -238,6 +240,21 @@ class CMReviewQueueService:
                 model_version=model_version,
             )
             await self._audit.add_entry(entry)
+
+        # Golden corpus: CORRECT decisions become candidates for the benchmark suite
+        if self._golden is not None and request.decision == CMDecision.CORRECT:
+            from src.modules.hitl.domain.golden_candidate import GoldenCandidate
+
+            candidate = GoldenCandidate(
+                candidate_id=uuid4(),
+                queue_entry_id=queue_entry_id,
+                action_item_before=action_item_before,
+                action_item_after=action_item_after,
+                correction_reason=request.reason,
+                reviewer_id=reviewer_id,
+                created_at=datetime.now(UTC),
+            )
+            await self._golden.add_candidate(candidate)
 
         return CMDecisionResult(
             queue_entry_id=queue_entry_id,
