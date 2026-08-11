@@ -11,12 +11,16 @@ from uuid import uuid4
 
 import pytest
 
+from src.modules.hitl.adapters.in_memory_routing_policy_repository import (
+    InMemoryRoutingPolicyRepository,
+)
 from src.modules.hitl.application.route_for_graph_review_use_case import (
     GraphReviewCommand,
     GraphReviewResult,
     RouteForGraphReviewUseCase,
 )
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
+from src.modules.hitl.domain.routing_policy import RoutingPolicy
 
 
 def _make_command(**overrides) -> GraphReviewCommand:
@@ -90,9 +94,12 @@ class TestRouteForGraphReviewUseCase:
 
     @pytest.mark.asyncio
     async def test_custom_high_impact_threshold(self):
+        repo = InMemoryRoutingPolicyRepository(
+            default_policy=RoutingPolicy(high_impact_threshold=0.7)
+        )
         use_case = RouteForGraphReviewUseCase(
             hitl_service=self.hitl_service,
-            high_impact_threshold=0.7,
+            policy_repository=repo,
         )
         cmd = _make_command(confidence=0.6)
         result = await use_case.execute(cmd)
