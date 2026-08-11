@@ -478,7 +478,7 @@ Phase 0 (branch, feature*v3*\* flags, hygiene, secret-scan) — ✅ DONE on feat
 
 | Task ID              | Pri | Depends On     | Goal / Scope                                                                 | Expected files             | Tests           | Done-when                   |
 | -------------------- | --- | -------------- | ---------------------------------------------------------------------------- | -------------------------- | --------------- | --------------------------- |
-| `[ ] TASK-V3-021-01` | P3  | 015-04, 018-05 | Snapshot projection layer (read-only; no new source of truth).               | `src/briefing/`            | projection unit | derived from snapshots only |
+| `[x] TASK-V3-021-01` | P3  | 015-04, 018-05 | Snapshot projection layer (read-only; no new source of truth).               | `src/briefing/`            | projection unit | derived from snapshots only |
 | `[ ] TASK-V3-021-02` | P3  | 021-01, 019-02 | Morning Briefing delivery (email/Slack) from snapshot deltas. · Out: UI epic | `briefing/`, `core/tasks/` | briefing golden | digest evidence-backed      |
 | `[ ] TASK-V3-021-03` | P3  | 021-01         | Portfolio R/A/G rollup query over snapshot history.                          | `briefing/`                | rollup unit     | cross-project matrix        |
 
@@ -592,6 +592,8 @@ FOLLOW-UPS (open):
 **2026-07-28**: Closed V3-P1-SCOPE-11 via #419 (Health v0 contract_clarity_findings + ADR-022); registered+closed SEC-001 CRITICAL PII bypass fix (#417). Adopted anthropic>=0.120,<1.0.0 via #418 (superseded Dependabot #401; centralized LLM access behind the PII-safe wrapper). Verified against merged PRs on main.
 
 ## Change Log
+
+**2026-08-11**: TASK-V3-021-01 CLOSED (commit 1fb434c0 on docs/backlog-cleanup-2026-08-08) — ADR-021 snapshot projection layer: HealthDelta + MorningBriefingProjection frozen dataclasses; ProjectionEngine.project() pure static function (chronological sort, union-of-dimensions health deltas, action-item delta, overdue count from latest, trigger events, evidence_refs); SnapshotProjectionUseCase; 20 unit tests RED→GREEN ruff clean.
 
 **2026-08-08**: TASK-BCK-123 CLOSED (PR #494 merged — deleted JwtValidator + AnonymizeDocumentUseCase dead code + CI workflow fix). TASK-DEV-030 CLOSED (zero UP042 violations confirmed, migration already complete). EPIC-TEST-DEBT CLOSED (all 3 sub-tasks done: QA-326/327/328 all REQUIRED CI gates). TASK-DEV-015 CLOSED (PR #497 — fixed Rules of Hooks violation in raci/page.tsx; extracted matchesProjectFilters() in projects/page.tsx; deleted orphan apps/web/e2e/coherence-v1.spec.ts shim).
 
