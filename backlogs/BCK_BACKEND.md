@@ -13,10 +13,10 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 19 across 2 active epics
+**Pending Tasks**: 5 (EPIC-PROC2 only — BUILD-GATE)
 
-- `EPIC-MYPY-STRICT`: `TASK-BCK-095` (in-progress, Wave 1), `TASK-BCK-096` (Wave 2 partial — awaiting Fable integration), `TASK-BCK-097`–`TASK-BCK-113` (Waves 3–7, not started), `TASK-DEV-006` (promotion gate — after BCK-113 + QA-323)
-- `EPIC-PROC2`: `EPIC-PROC2-001`–`EPIC-PROC2-005` — BUILD-GATE deferred (≥1 Contract Manager must use Change-Impact loop weekly)
+- `EPIC-MYPY-STRICT`: ✅ **COMPLETE** — `TASK-BCK-095`–`TASK-BCK-113` all done, zero-error gate certified (TASK-QA-323 ✅ 2026-07-19), `TASK-DEV-006` promotion done.
+- `EPIC-PROC2`: `EPIC-PROC2-001`–`EPIC-PROC2-005` — BUILD-GATE deferred (≥1 Contract Manager must use Change-Impact loop weekly before Phase 2 starts)
 
 **Completed Tasks**: 100+ — see [COMPLETED.md](./COMPLETED.md)
 
@@ -45,28 +45,28 @@ No standalone one-off tasks are pending. All active backend work is tracked in t
 | ID | Owner | Wave | Scope | Depends on | Status |
 |---|---|---|---|---|---|
 | TASK-DEV-031 | DevOps | 0 | CI dep parity + `mypy-baseline.txt` ratchet + trustworthy exit reporting | TASK-DEV-003 | ✅ Done |
-| TASK-BCK-095 | Backend/Security | 1 | High-signal probable defects (RED tests first) | TASK-DEV-031 | 🔄 In Progress |
-| TASK-BCK-096 | Backend | 2 | Shared typing foundations: TenantId boundaries, generic contracts, explicit re-exports, approved stubs | TASK-BCK-095 | 🔄 Partial |
-| TASK-BCK-097 | Backend | 3 | Documents domain ports/DTOs | TASK-BCK-096 | — |
-| TASK-BCK-098 | Backend | 3 | Procurement domain ports/DTOs | TASK-BCK-096 | — |
-| TASK-BCK-099 | Backend | 3 | Analysis domain ports/DTOs | TASK-BCK-097, TASK-BCK-098 | — |
-| TASK-BCK-100 | Backend | 3 | Coherence domain ports/DTOs + typed scoring payloads | TASK-BCK-096 | — |
-| TASK-BCK-101 | Backend | 4 | Documents persistence adapters | TASK-BCK-097 | — |
-| TASK-BCK-102 | Backend | 4 | Procurement SQLAlchemy 2 Mapped modernization + persistence | TASK-BCK-098 | — |
-| TASK-BCK-103 | Backend | 4 | Analysis persistence adapters + port covariance | TASK-BCK-099 | — |
-| TASK-BCK-104 | Backend | 4 | Coherence/embedding persistence + mandatory tenant filtering | TASK-BCK-100 | — |
-| TASK-BCK-105 | Backend | 5 | Documents application services + use cases | TASK-BCK-101 | — |
-| TASK-BCK-106 | Backend | 5 | Procurement application services + use cases | TASK-BCK-102 | — |
-| TASK-BCK-107 | Backend | 5 | Analysis application services + use cases | TASK-BCK-103, TASK-BCK-105, TASK-BCK-106 | — |
-| TASK-BCK-108 | Backend | 5 | Coherence application services + use cases | TASK-BCK-104 | — |
-| TASK-BCK-109 | Backend/Security | 6 | Core auth, tenant, security, middleware typing | TASK-BCK-095, TASK-BCK-096 | — |
-| TASK-BCK-110 | Backend | 6 | Core cache, events, DLQ, task infrastructure | TASK-BCK-096 | — |
-| TASK-BCK-111 | Backend/AI | 6 | Core AI, observability, LangSmith, MCP, external SDK validation | TASK-BCK-096, TASK-BCK-110 | — |
-| TASK-BCK-112 | Backend | 7 | HTTP routers, dependencies, factories, composition edge | TASK-BCK-105…TASK-BCK-111 | — |
-| TASK-BCK-113 | Backend | 7 | Remaining mechanical leaf cleanup + full-tree convergence to zero | TASK-BCK-112 | — |
+| TASK-BCK-095 | Backend/Security | 1 | High-signal probable defects (RED tests first) | TASK-DEV-031 | ✅ Done |
+| TASK-BCK-096 | Backend | 2 | Shared typing foundations: TenantId boundaries, generic contracts, explicit re-exports, approved stubs | TASK-BCK-095 | ✅ Done |
+| TASK-BCK-097 | Backend | 3 | Documents domain ports/DTOs | TASK-BCK-096 | ✅ Done |
+| TASK-BCK-098 | Backend | 3 | Procurement domain ports/DTOs | TASK-BCK-096 | ✅ Done |
+| TASK-BCK-099 | Backend | 3 | Analysis domain ports/DTOs | TASK-BCK-097, TASK-BCK-098 | ✅ Done |
+| TASK-BCK-100 | Backend | 3 | Coherence domain ports/DTOs + typed scoring payloads | TASK-BCK-096 | ✅ Done |
+| TASK-BCK-101 | Backend | 4 | Documents persistence adapters | TASK-BCK-097 | ✅ Done |
+| TASK-BCK-102 | Backend | 4 | Procurement SQLAlchemy 2 Mapped modernization + persistence | TASK-BCK-098 | ✅ Done |
+| TASK-BCK-103 | Backend | 4 | Analysis persistence adapters + port covariance | TASK-BCK-099 | ✅ Done |
+| TASK-BCK-104 | Backend | 4 | Coherence/embedding persistence + mandatory tenant filtering | TASK-BCK-100 | ✅ Done |
+| TASK-BCK-105 | Backend | 5 | Documents application services + use cases | TASK-BCK-101 | ✅ Done |
+| TASK-BCK-106 | Backend | 5 | Procurement application services + use cases | TASK-BCK-102 | ✅ Done |
+| TASK-BCK-107 | Backend | 5 | Analysis application services + use cases | TASK-BCK-103, TASK-BCK-105, TASK-BCK-106 | ✅ Done |
+| TASK-BCK-108 | Backend | 5 | Coherence application services + use cases | TASK-BCK-104 | ✅ Done |
+| TASK-BCK-109 | Backend/Security | 6 | Core auth, tenant, security, middleware typing | TASK-BCK-095, TASK-BCK-096 | ✅ Done |
+| TASK-BCK-110 | Backend | 6 | Core cache, events, DLQ, task infrastructure | TASK-BCK-096 | ✅ Done |
+| TASK-BCK-111 | Backend/AI | 6 | Core AI, observability, LangSmith, MCP, external SDK validation | TASK-BCK-096, TASK-BCK-110 | ✅ Done |
+| TASK-BCK-112 | Backend | 7 | HTTP routers, dependencies, factories, composition edge | TASK-BCK-105…TASK-BCK-111 | ✅ Done |
+| TASK-BCK-113 | Backend | 7 | Remaining mechanical leaf cleanup + full-tree convergence to zero | TASK-BCK-112 | ✅ Done |
 | TASK-QA-322 | QA | — | Per-wave mypy ratchet + risk-proportionate regression certification | TASK-DEV-031 | ✅ Done 2026-07-18 |
 | TASK-QA-323 | QA | — | Independent zero-error / full-suite / live-CI certification | TASK-BCK-113, TASK-QA-322 | ✅ Done 2026-07-19 |
-| TASK-DEV-006 | DevOps | — | Promote `backend-typecheck` to required + close umbrella | TASK-QA-323 | — |
+| TASK-DEV-006 | DevOps | — | Promote `backend-typecheck` to required + close umbrella | TASK-QA-323 | ✅ Done |
 
 ### TASK-BCK-095 execution log
 

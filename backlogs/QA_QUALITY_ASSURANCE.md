@@ -11,11 +11,9 @@
 
 ## Status View
 
-**Pending Tasks**: 3
+**Pending Tasks**: 0
 
-- `TASK-QA-325` (coherence dependency-provider isolation — open)
-- `TASK-QA-325` (stale core-tenant placeholder tests — open; duplicate ID, distinct task)
-- `TASK-QA-343` (invalidate stale document-extraction cache entries — in progress)
+All QA tasks closed as of 2026-08-12. See completed list below.
 
 **Completed QA / Audit Tasks**
 
@@ -38,6 +36,9 @@
 - `TASK-QA-323` (mypy final zero-error certification ✅ 2026-07-19)
 - `TASK-QA-324` (repair inherited stakeholder tenant fixtures ✅)
 - `TASK-QA-324` (repair golden pytest collection namespace collision ✅ 2026-07-17)
+- `TASK-QA-325` (coherence dependency-provider isolation ✅ 2026-08-12 — 4 focused tests green, provider score 88 assertion preserved, DB access blocked in isolation)
+- `TASK-QA-325` (stale core-tenant placeholder tests ✅ 2026-08-12 — 9 tests green, `Tenant` schema + `TenantService` contracts updated to current API)
+- `TASK-QA-343` (invalidate stale extraction cache entries ✅ 2026-08-12 — `build_extraction_cache_fingerprint()` hashes full contract; 3 regression tests green)
 
 ---
 
@@ -242,7 +243,7 @@ Repaired the inherited stakeholder application fixtures in `test_extract_stakeho
 
 ### TASK-QA-325: restore coherence dependency-provider test isolation
 
-**Status**: Open · **Priority**: P2 · **Owner**: qa · **Depends on**: TASK-BCK-095 · **Epic**: EPIC-MYPY-STRICT
+**Status**: ✅ Done 2026-08-12 · **Priority**: P2 · **Owner**: qa · **Depends on**: TASK-BCK-095 · **Epic**: EPIC-MYPY-STRICT
 
 Repair the inherited isolation drift in `apps/api/tests/modules/analysis/adapters/graph/test_graph_dependencies.py::test_coherence_scorer_uses_dependency_provider`. The fixture expects score 88 from its monkeypatched provider, but the async coherence path bypasses that provider, attempts an uninitialized database connection, and then returns the low-budget fail-closed `None` result.
 
@@ -255,13 +256,13 @@ Repair the inherited isolation drift in `apps/api/tests/modules/analysis/adapter
 
 ### TASK-QA-325: Repair stale core-tenant placeholder tests
 
-**Status**: Open · **Priority**: P2 · **Owner**: qa · **Depends on**: —
+**Status**: ✅ Done 2026-08-12 · **Priority**: P2 · **Owner**: qa · **Depends on**: —
 
 During TASK-BCK-096 verification, the complete `tests/core/test_tenants.py` file exposed two inherited failures unrelated to the TenantId changes: `tenants_schemas.Tenant` no longer exists, and `TenantService()` now requires a database argument. Diagnose the intended current schema/service contracts, update only the stale fixtures/assertions, retain tenant behavior coverage, and verify the complete file independently. Do not recreate placeholder production APIs solely to satisfy obsolete tests.
 
 ### TASK-QA-343: Invalidate stale document-extraction cache entries
 
-**Status**: In progress · **Priority**: P1 · **Owner**: qa · **Depends on**: —
+**Status**: ✅ Done 2026-08-12 · **Priority**: P1 · **Owner**: qa · **Depends on**: —
 
 `src/core/cache.py` built extraction cache keys from only `document_hash` and `task_type`, while
 `src/core/ai/service.py` served the resulting payload after prompt, model, or generation settings changed.
