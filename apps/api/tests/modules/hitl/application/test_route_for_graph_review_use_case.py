@@ -1,7 +1,8 @@
 """
 TS-UC-HITL-GRAPH-001 — RouteForGraphReviewUseCase unit tests.
 
-Pure unit tests: no DB, no HTTP, no external services.
+Updated for TASK-V3-020-02: policy_repository replaces the old
+high_impact_threshold constructor param. Behaviour is preserved.
 """
 
 from unittest.mock import AsyncMock
@@ -9,12 +10,23 @@ from uuid import uuid4
 
 import pytest
 
+from src.modules.hitl.adapters.in_memory_routing_policy_repository import (
+    InMemoryRoutingPolicyRepository,
+)
 from src.modules.hitl.application.route_for_graph_review_use_case import (
     GraphReviewCommand,
     GraphReviewResult,
     RouteForGraphReviewUseCase,
 )
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
+from src.modules.hitl.domain.routing_policy import RoutingPolicy
+
+
+def _uc(hitl_service: AsyncMock, high_impact_threshold: float = 0.5) -> RouteForGraphReviewUseCase:
+    repo = InMemoryRoutingPolicyRepository(
+        default_policy=RoutingPolicy(high_impact_threshold=high_impact_threshold)
+    )
+    return RouteForGraphReviewUseCase(hitl_service=hitl_service, policy_repository=repo)
 
 
 class TestRouteForGraphReviewUseCase:
@@ -23,10 +35,7 @@ class TestRouteForGraphReviewUseCase:
         hitl_service = AsyncMock()
         hitl_service.route_for_review.return_value = ReviewStatus.PENDING_REVIEW_REQUIRED
 
-        uc = RouteForGraphReviewUseCase(
-            hitl_service=hitl_service,
-            high_impact_threshold=0.5,
-        )
+        uc = _uc(hitl_service, high_impact_threshold=0.5)
         command = GraphReviewCommand(
             document_id=uuid4(),
             tenant_id=uuid4(),
@@ -60,10 +69,7 @@ class TestRouteForGraphReviewUseCase:
         hitl_service = AsyncMock()
         hitl_service.route_for_review.return_value = ReviewStatus.APPROVED
 
-        uc = RouteForGraphReviewUseCase(
-            hitl_service=hitl_service,
-            high_impact_threshold=0.5,
-        )
+        uc = _uc(hitl_service, high_impact_threshold=0.5)
         command = GraphReviewCommand(
             document_id=uuid4(),
             tenant_id=uuid4(),
@@ -84,10 +90,7 @@ class TestRouteForGraphReviewUseCase:
         hitl_service = AsyncMock()
         hitl_service.route_for_review.return_value = ReviewStatus.APPROVED
 
-        uc = RouteForGraphReviewUseCase(
-            hitl_service=hitl_service,
-            high_impact_threshold=0.5,
-        )
+        uc = _uc(hitl_service, high_impact_threshold=0.5)
         command = GraphReviewCommand(
             document_id=uuid4(),
             tenant_id=uuid4(),
@@ -107,10 +110,7 @@ class TestRouteForGraphReviewUseCase:
         hitl_service = AsyncMock()
         hitl_service.route_for_review.return_value = ReviewStatus.PENDING_REVIEW_REQUIRED
 
-        uc = RouteForGraphReviewUseCase(
-            hitl_service=hitl_service,
-            high_impact_threshold=0.75,
-        )
+        uc = _uc(hitl_service, high_impact_threshold=0.75)
         command = GraphReviewCommand(
             document_id=uuid4(),
             tenant_id=uuid4(),
