@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/*
+ * Load the legacy Tailwind config so the shadcn semantic color tokens
+ * (card, background, muted, border, foreground, primary, …) resolve.
+ * Tailwind v4 does NOT auto-load tailwind.config.ts; without this, every
+ * `bg-card` / `bg-background` / `border-border` utility generates nothing,
+ * which rendered dialogs transparent and washed out text contrast.
+ */
+@config "../tailwind.config.ts";
+
 /* Fonts now loaded via next/font/local in layout.tsx (S1-03) */
 
 @theme {
