@@ -20,6 +20,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from src.config import settings
 from src.core.auth.bootstrap_lookup import (
     BootstrapFallbackBlockedError,
+    BootstrapUserRecord,
     lookup_tenant_by_id,
     lookup_user_by_clerk_user_id,
 )
@@ -307,10 +308,18 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
                     "invalid_clerk_token_missing_user_id",
                 )
 
-            # Look up user's tenant from database using clerk_user_id
-            resolved_tenant_id = await self._get_tenant_for_clerk_user(clerk_user_id)
+            # Resolve the internal user record (internal UUID + tenant) for this Clerk user.
+            # CRITICAL: request.state.user_id must be the internal UUID, never the Clerk
+            # "user_..." string. Downstream persistence writes it into UUID columns
+            # (e.g. documents.created_by); a raw Clerk id fails the INSERT with a uuid
+            # DataError -> 500. Fall back to the Clerk id only for a not-yet-provisioned
+            # user, who has no tenant and is auto-provisioned by get_current_user before
+            # any tenant-scoped write.
+            record = await self._get_clerk_user_record(clerk_user_id)
+            if record is not None:
+                return record.tenant_id, record.user_id, True, None, None
 
-            return resolved_tenant_id, clerk_user_id, bool(resolved_tenant_id), None, None
+            return None, clerk_user_id, False, None, None
         except BootstrapFallbackBlockedError:
             return (
                 None,
@@ -380,6 +389,27 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
                 raise
             logger.warning(
                 "clerk_user_tenant_lookup_failed",
+                clerk_user_id=clerk_user_id,
+                error=str(e),
+            )
+            return None
+
+    async def _get_clerk_user_record(self, clerk_user_id: str) -> BootstrapUserRecord | None:
+        """
+        Resolve the internal user record (internal UUID + tenant_id) for a Clerk user.
+
+        Returns None if the user is not yet provisioned (auto-provisioned later by
+        get_current_user). Used so request.state.user_id carries the internal UUID
+        rather than the Clerk "user_..." string.
+        """
+        try:
+            async with get_raw_session() as session:
+                return await lookup_user_by_clerk_user_id(session, clerk_user_id)
+        except Exception as e:
+            if isinstance(e, BootstrapFallbackBlockedError):
+                raise
+            logger.warning(
+                "clerk_user_record_lookup_failed",
                 clerk_user_id=clerk_user_id,
                 error=str(e),
             )

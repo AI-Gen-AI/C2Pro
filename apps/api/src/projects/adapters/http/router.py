@@ -20,7 +20,7 @@ else:
     RequestType = Request
 
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
@@ -125,6 +125,15 @@ class ProjectQuickViewSummaryResponse(BaseModel):
     updated_at: datetime
 
 
+VALID_PROJECT_TYPES = {
+    # Legacy values (kept for backward compatibility)
+    "construction", "engineering", "industrial", "infrastructure", "other",
+    # Extended values matching the frontend wizard
+    "epc", "civil", "building", "maritime", "chemical",
+    "energy", "municipal", "oil_gas", "mining",
+}
+
+
 class ProjectCreateRequest(BaseModel):
     """Create project payload."""
 
@@ -137,6 +146,15 @@ class ProjectCreateRequest(BaseModel):
     budget_planned: float | None = None
     estimated_budget: float | None = None
     currency: str = "EUR"
+
+    @field_validator("project_type")
+    @classmethod
+    def validate_project_type(cls, v: str) -> str:
+        if v not in VALID_PROJECT_TYPES:
+            raise ValueError(
+                f"Invalid project_type '{v}'. Must be one of: {sorted(VALID_PROJECT_TYPES)}"
+            )
+        return v
 
 
 class ProjectUpdateRequest(BaseModel):
@@ -153,6 +171,15 @@ class ProjectUpdateRequest(BaseModel):
     estimated_budget: float | None = None
     currency: str | None = None
     expected_version: int | None = None
+
+    @field_validator("project_type")
+    @classmethod
+    def validate_project_type(cls, v: str | None) -> str | None:
+        if v is not None and v not in VALID_PROJECT_TYPES:
+            raise ValueError(
+                f"Invalid project_type '{v}'. Must be one of: {sorted(VALID_PROJECT_TYPES)}"
+            )
+        return v
 
 
 def _project_to_response(project_data: ProjectPayload) -> ProjectResponse:
