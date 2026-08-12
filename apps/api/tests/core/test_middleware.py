@@ -442,6 +442,81 @@ class TestTenantIsolationMiddleware:
         assert require_validation is True
         assert error_message is None
 
+    @pytest.mark.asyncio
+    async def test_get_clerk_user_record_returns_none_on_lookup_failure(self):
+        """A lookup failure must degrade to None (no tenant) rather than raise."""
+        middleware = TenantIsolationMiddleware(app=Mock())
+
+        @asynccontextmanager
+        async def _session():
+            yield AsyncMock()
+
+        with (
+            patch("src.core.middleware.tenant_isolation.get_raw_session", _session),
+            patch(
+                "src.core.middleware.tenant_isolation.lookup_user_by_clerk_user_id",
+                new=AsyncMock(side_effect=RuntimeError("db down")),
+            ),
+        ):
+            result = await middleware._get_clerk_user_record("clerk_user_123")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_clerk_user_record_reraises_bootstrap_blocked(self):
+        """BootstrapFallbackBlockedError must propagate (policy), not degrade to None."""
+        from src.core.auth.bootstrap_lookup import BootstrapFallbackBlockedError
+
+        middleware = TenantIsolationMiddleware(app=Mock())
+
+        @asynccontextmanager
+        async def _session():
+            yield AsyncMock()
+
+        with (
+            patch("src.core.middleware.tenant_isolation.get_raw_session", _session),
+            patch(
+                "src.core.middleware.tenant_isolation.lookup_user_by_clerk_user_id",
+                new=AsyncMock(side_effect=BootstrapFallbackBlockedError()),
+            ),
+        ):
+            with pytest.raises(BootstrapFallbackBlockedError):
+                await middleware._get_clerk_user_record("clerk_user_123")
+
+    @pytest.mark.asyncio
+    async def test_extract_auth_context_unprovisioned_clerk_user_keeps_clerk_id(self):
+        """Not-yet-provisioned Clerk user: no tenant, keep clerk id for later provisioning."""
+        middleware = TenantIsolationMiddleware(app=Mock())
+        request = SimpleNamespace(
+            headers={"Authorization": "Bearer clerk.jwt.token"},
+            url=SimpleNamespace(path="/api/v1/projects/x/documents"),
+            query_params={},
+        )
+
+        with (
+            patch(
+                "src.core.middleware.tenant_isolation.is_token_revoked_async",
+                new=AsyncMock(return_value=False),
+            ),
+            patch(
+                "src.core.middleware.tenant_isolation.verify_clerk_token",
+                new=AsyncMock(return_value={"sub": "clerk_user_123"}),
+            ),
+            patch.object(middleware, "_get_clerk_user_record", new=AsyncMock(return_value=None)),
+        ):
+            (
+                tenant_id,
+                user_id,
+                require_validation,
+                error_message,
+                _reason,
+            ) = await middleware._extract_auth_context(request)
+
+        assert tenant_id is None
+        assert user_id == "clerk_user_123"
+        assert require_validation is False
+        assert error_message is None
+
 
 # ===========================================
 # REQUEST LOGGING MIDDLEWARE TESTS
