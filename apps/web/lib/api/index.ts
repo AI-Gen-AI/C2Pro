@@ -201,9 +201,37 @@ export async function getProjectDocuments(
 }
 
 /**
- * Upload a document to a project
- * Note: File uploads go directly to backend to avoid Next.js proxy
- * which sets Content-Type: application/json and breaks multipart uploads
+ * Resolve the base URL for direct-to-backend file uploads.
+ *
+ * Uploads MUST bypass the Next.js/Vercel `/api` proxy: Vercel serverless
+ * functions cap the request body at ~4.5MB, so a normal document (the modal
+ * allows up to 50MB) is rejected with HTTP 413 before it ever reaches the
+ * backend. The backend exposes its absolute URL via `/api/runtime/backend-url`
+ * (TASK-FRT-170); we POST straight there — CORS already allows c2pro.io. If no
+ * absolute URL is configured (e.g. pure local dev without BACKEND_URL), fall
+ * back to the same-origin proxy, where the size limit does not apply locally.
+ */
+async function resolveUploadBaseUrl(): Promise<string> {
+  try {
+    const res = await fetch("/api/runtime/backend-url", { cache: "no-store" });
+    if (res.ok) {
+      const data = (await res.json()) as { apiBaseUrl?: string | null };
+      if (data.apiBaseUrl && /^https?:\/\//i.test(data.apiBaseUrl)) {
+        return data.apiBaseUrl;
+      }
+    }
+  } catch {
+    // Network/parse failure — fall back to the proxy below.
+  }
+  return env.API_BASE_URL;
+}
+
+/**
+ * Upload a document to a project.
+ *
+ * Sent directly to the backend (not the `/api` proxy) so large files are not
+ * capped by Vercel's ~4.5MB serverless request-body limit. See
+ * {@link resolveUploadBaseUrl}.
  */
 export async function uploadDocument(
   projectId: string,
@@ -218,7 +246,6 @@ export async function uploadDocument(
   formData.append("file", file);
   formData.append("document_type", documentType);
 
-  // Import auth store to get token - file uploads go directly to backend
   const { useAuthStore } = await import("@/stores/auth");
   const storeAuth = useAuthStore.getState();
   const token = authOverride?.token ?? storeAuth.token;
@@ -232,8 +259,9 @@ export async function uploadDocument(
     headers["X-Tenant-ID"] = tenantId;
   }
 
+  const uploadBaseUrl = await resolveUploadBaseUrl();
   const response = await fetch(
-    `${env.API_BASE_URL}/projects/${projectId}/documents`,
+    `${uploadBaseUrl}/projects/${projectId}/documents`,
     {
       method: "POST",
       headers,
@@ -243,9 +271,14 @@ export async function uploadDocument(
 
   if (!response.ok) {
     handleAuthErrorStatus(response.status);
+    if (response.status === 413) {
+      throw new Error(
+        "File is too large to upload (413). Please use a smaller file.",
+      );
+    }
     const errorData = await response
       .json()
-      .catch(() => ({ detail: "Upload failed" }));
+      .catch(() => ({ detail: `Upload failed: ${response.status}` }));
     throw new Error(errorData.detail || `Upload failed: ${response.status}`);
   }
 
