@@ -42,14 +42,28 @@ def test_celery_include_covers_all_registered_task_modules() -> None:
     from pathlib import Path
 
     celery_app_source = (
-        Path(__file__).parent.parent.parent
-        / "src" / "core" / "tasks" / "celery_app.py"
+        Path(__file__).parent.parent.parent / "src" / "core" / "tasks" / "celery_app.py"
     )
     content = celery_app_source.read_text(encoding="utf-8")
     missing = {m for m in _REQUIRED_TASK_MODULES if f'"{m}"' not in content}
-    assert not missing, (
-        f"Celery include list in celery_app.py missing task modules: {missing}"
-    )
+    assert not missing, f"Celery include list in celery_app.py missing task modules: {missing}"
+
+
+def test_celery_configures_tls_for_rediss_broker() -> None:
+    """A rediss:// (Upstash) broker requires explicit ssl_cert_reqs, otherwise every
+    .delay() raises at connection time and silently disables all async processing
+    (parsing, coherence, alerts, snapshots).
+
+    Meta-test: celery_app is a _DummyCelery stub in tests, so assert on the source.
+    """
+    from pathlib import Path
+
+    content = (
+        Path(__file__).parent.parent.parent / "src" / "core" / "tasks" / "celery_app.py"
+    ).read_text(encoding="utf-8")
+
+    for token in ("broker_use_ssl", "redis_backend_use_ssl", "ssl_cert_reqs", "rediss://"):
+        assert token in content, f"celery_app.py must configure TLS for rediss:// ({token} missing)"
 
 
 def test_document_ingestion_uses_document_parsing_default_queue() -> None:
@@ -149,9 +163,7 @@ def test_document_analysis_routes_unready_rag_to_dlq_after_final_retry(monkeypat
 
     result = ingestion_tasks.process_document_analysis_async(
         SimpleNamespace(
-            request=SimpleNamespace(
-                id="task-rag-gate", retries=RAG_READINESS_MAX_RETRIES
-            ),
+            request=SimpleNamespace(id="task-rag-gate", retries=RAG_READINESS_MAX_RETRIES),
             retry=retry,
         ),
         tenant_id=tenant_id,

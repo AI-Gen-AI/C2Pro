@@ -9,6 +9,9 @@ This is the entry point for Celery workers.
 Refers to Suite ID: TS-OPS-CELERY-QUEUE-001.
 """
 
+import ssl
+
+import certifi
 from celery import Celery
 
 import src.analysis.adapters.ai.tools  # noqa: F401 - registers @register_tool classes for workers
@@ -21,6 +24,18 @@ from src.config import settings
 # Inside Docker/apps/api: celery -A src.core.tasks.celery_app.celery_app worker --loglevel=info
 #
 # The -P gevent flag is recommended for I/O bound tasks (like API calls).
+
+# TLS Redis (rediss://, e.g. Upstash) requires explicit SSL options, otherwise
+# kombu raises at connection time:
+#   "A rediss:// URL must have parameter ssl_cert_reqs ..."
+# and EVERY .delay() fails — silently disabling all async processing
+# (document parsing, coherence, alerts, snapshots). Verify the server cert
+# against the certifi CA bundle (Upstash uses a valid public cert).
+_redis_url = settings.redis_url or ""
+_uses_tls = _redis_url.startswith("rediss://")
+_redis_ssl_options = (
+    {"ssl_cert_reqs": ssl.CERT_REQUIRED, "ssl_ca_certs": certifi.where()} if _uses_tls else None
+)
 
 celery_app = Celery(
     "c2pro_worker",
@@ -41,6 +56,9 @@ celery_app = Celery(
 celery_app.conf.update(
     # Broker settings
     broker_connection_retry_on_startup=True,
+    # TLS options for rediss:// brokers/backends (None = no SSL for redis://).
+    broker_use_ssl=_redis_ssl_options,
+    redis_backend_use_ssl=_redis_ssl_options,
     # Task settings
     task_default_queue="document_parsing",
     task_default_exchange="document_parsing",
