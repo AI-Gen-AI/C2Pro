@@ -28,20 +28,42 @@ class TestExcelParserSchedule:
         # Create mock workbook
         mock_workbook = MagicMock()
         mock_sheet = MagicMock()
-        mock_sheet.__getitem__ = MagicMock(side_effect=[
-            [MagicMock(value="Task"), MagicMock(value="Start Date"), MagicMock(value="End Date"), MagicMock(value="Duration")],
-            [MagicMock(value="Task 1"), MagicMock(value="2024-01-01"), MagicMock(value="2024-01-31"), MagicMock(value=30)],
-            [MagicMock(value="Task 2"), MagicMock(value="2024-02-01"), MagicMock(value="2024-02-28"), MagicMock(value=27)],
-        ])
-        mock_sheet.iter_rows = MagicMock(return_value=[
-            ["Task 1", "2024-01-01", "2024-01-31", 30],
-            ["Task 2", "2024-02-01", "2024-02-28", 27],
-        ])
+        mock_sheet.__getitem__ = MagicMock(
+            side_effect=[
+                [
+                    MagicMock(value="Task"),
+                    MagicMock(value="Start Date"),
+                    MagicMock(value="End Date"),
+                    MagicMock(value="Duration"),
+                ],
+                [
+                    MagicMock(value="Task 1"),
+                    MagicMock(value="2024-01-01"),
+                    MagicMock(value="2024-01-31"),
+                    MagicMock(value=30),
+                ],
+                [
+                    MagicMock(value="Task 2"),
+                    MagicMock(value="2024-02-01"),
+                    MagicMock(value="2024-02-28"),
+                    MagicMock(value=27),
+                ],
+            ]
+        )
+        mock_sheet.iter_rows = MagicMock(
+            return_value=[
+                ["Task 1", "2024-01-01", "2024-01-31", 30],
+                ["Task 2", "2024-02-01", "2024-02-28", 27],
+            ]
+        )
         mock_workbook.active = mock_sheet
 
-        with patch('src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook', return_value=mock_workbook):
+        with patch(
+            "src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook",
+            return_value=mock_workbook,
+        ):
             # Create temp file path (not actual file)
-            with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+            with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
                 tmp_path = tmp.name
 
             try:
@@ -62,13 +84,18 @@ class TestExcelParserSchedule:
 
         mock_workbook = MagicMock()
         mock_sheet = MagicMock()
-        mock_sheet.__getitem__ = MagicMock(side_effect=[
-            [MagicMock(value="Task"), MagicMock(value="Wrong")],  # Missing Start Date, End Date
-        ])
+        mock_sheet.__getitem__ = MagicMock(
+            side_effect=[
+                [MagicMock(value="Task"), MagicMock(value="Wrong")],  # Missing Start Date, End Date
+            ]
+        )
         mock_workbook.active = mock_sheet
 
-        with patch('src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook', return_value=mock_workbook):
-            with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+        with patch(
+            "src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook",
+            return_value=mock_workbook,
+        ):
+            with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
                 tmp_path = tmp.name
 
             try:
@@ -88,8 +115,11 @@ class TestExcelParserSchedule:
 
         parser = ExcelFileParser()
 
-        with patch('src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook', side_effect=FileNotFoundError("File not found")):
-            with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+        with patch(
+            "src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook",
+            side_effect=FileNotFoundError("File not found"),
+        ):
+            with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
                 tmp_path = tmp.name
 
             try:
@@ -144,16 +174,26 @@ class TestExcelParserBudget:
         mock_workbook = MagicMock()
         mock_sheet = MagicMock()
         # Header row
-        header_cells = [MagicMock(value="Item"), MagicMock(value="Quantity"), MagicMock(value="Unit Price"), MagicMock(value="Total")]
+        header_cells = [
+            MagicMock(value="Item"),
+            MagicMock(value="Quantity"),
+            MagicMock(value="Unit Price"),
+            MagicMock(value="Total"),
+        ]
         mock_sheet.__getitem__ = MagicMock(return_value=header_cells)
-        mock_sheet.iter_rows = MagicMock(return_value=[
-            ["Item 1", 10, 100, 1000],
-            ["Item 2", 5, 200, 1000],
-        ])
+        mock_sheet.iter_rows = MagicMock(
+            return_value=[
+                ["Item 1", 10, 100, 1000],
+                ["Item 2", 5, 200, 1000],
+            ]
+        )
         mock_workbook.active = mock_sheet
 
-        with patch('src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook', return_value=mock_workbook):
-            with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+        with patch(
+            "src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook",
+            return_value=mock_workbook,
+        ):
+            with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
                 tmp_path = tmp.name
 
             try:
@@ -174,13 +214,18 @@ class TestExcelParserBudget:
 
         mock_workbook = MagicMock()
         mock_sheet = MagicMock()
-        mock_sheet.__getitem__ = MagicMock(side_effect=[
-            [MagicMock(value="Item")],  # Missing Quantity, Unit Price, Total
-        ])
+        mock_sheet.__getitem__ = MagicMock(
+            side_effect=[
+                [MagicMock(value="Item")],  # Missing Quantity, Unit Price, Total
+            ]
+        )
         mock_workbook.active = mock_sheet
 
-        with patch('src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook', return_value=mock_workbook):
-            with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+        with patch(
+            "src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook",
+            return_value=mock_workbook,
+        ):
+            with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
                 tmp_path = tmp.name
 
             try:
@@ -200,8 +245,11 @@ class TestExcelParserBudget:
 
         parser = ExcelFileParser()
 
-        with patch('src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook', side_effect=FileNotFoundError("File not found")):
-            with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+        with patch(
+            "src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook",
+            side_effect=FileNotFoundError("File not found"),
+        ):
+            with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
                 tmp_path = tmp.name
 
             try:
@@ -223,17 +271,27 @@ class TestExcelParserEdgeCases:
 
         mock_workbook = MagicMock()
         mock_sheet = MagicMock()
-        header_cells = [MagicMock(value="Task"), MagicMock(value="Start Date"), MagicMock(value="End Date"), MagicMock(value="Duration")]
+        header_cells = [
+            MagicMock(value="Task"),
+            MagicMock(value="Start Date"),
+            MagicMock(value="End Date"),
+            MagicMock(value="Duration"),
+        ]
         mock_sheet.__getitem__ = MagicMock(return_value=header_cells)
-        mock_sheet.iter_rows = MagicMock(return_value=[
-            ["Task 1", "2024-01-01", "2024-01-31", 30],
-            [None, None, None, None],  # Empty row
-            ["Task 2", "2024-02-01", "2024-02-28", 27],
-        ])
+        mock_sheet.iter_rows = MagicMock(
+            return_value=[
+                ["Task 1", "2024-01-01", "2024-01-31", 30],
+                [None, None, None, None],  # Empty row
+                ["Task 2", "2024-02-01", "2024-02-28", 27],
+            ]
+        )
         mock_workbook.active = mock_sheet
 
-        with patch('src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook', return_value=mock_workbook):
-            with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+        with patch(
+            "src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook",
+            return_value=mock_workbook,
+        ):
+            with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
                 tmp_path = tmp.name
 
             try:
@@ -252,17 +310,27 @@ class TestExcelParserEdgeCases:
 
         mock_workbook = MagicMock()
         mock_sheet = MagicMock()
-        header_cells = [MagicMock(value="Item"), MagicMock(value="Quantity"), MagicMock(value="Unit Price"), MagicMock(value="Total")]
+        header_cells = [
+            MagicMock(value="Item"),
+            MagicMock(value="Quantity"),
+            MagicMock(value="Unit Price"),
+            MagicMock(value="Total"),
+        ]
         mock_sheet.__getitem__ = MagicMock(return_value=header_cells)
-        mock_sheet.iter_rows = MagicMock(return_value=[
-            ["Item 1", 10, 100, 1000],
-            [None, None, None, None],  # Empty row
-            ["Item 2", 5, 200, 1000],
-        ])
+        mock_sheet.iter_rows = MagicMock(
+            return_value=[
+                ["Item 1", 10, 100, 1000],
+                [None, None, None, None],  # Empty row
+                ["Item 2", 5, 200, 1000],
+            ]
+        )
         mock_workbook.active = mock_sheet
 
-        with patch('src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook', return_value=mock_workbook):
-            with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+        with patch(
+            "src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook",
+            return_value=mock_workbook,
+        ):
+            with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
                 tmp_path = tmp.name
 
             try:
@@ -271,3 +339,104 @@ class TestExcelParserEdgeCases:
                 assert len(result) == 2
             finally:
                 os.unlink(tmp_path)
+
+
+class TestExcelParserRealWorldHeaders:
+    """TS-UD-DOC-XLS-002: tolerant header matching for real client Excel files.
+
+    Regression for client budgets/schedules whose headers carry currency
+    symbols, unit qualifiers, or combined labels (e.g. ``PRECIO UNIT. (€)``,
+    ``Inicio (Semana)``, ``CAPÍTULO Y PARTIDA``). Exact-equality matching
+    rejected these; normalized token matching accepts them.
+    """
+
+    async def _parse_budget(self, rows: list[list[object]]):
+        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
+
+        workbook = Workbook()
+        sheet = workbook.active
+        for row in rows:
+            sheet.append(row)
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+            tmp_path = tmp.name
+        workbook.save(tmp_path)
+        workbook.close()
+        try:
+            return await ExcelFileParser().parse_budget(Path(tmp_path))
+        finally:
+            os.unlink(tmp_path)
+
+    @pytest.mark.asyncio
+    async def test_budget_accepts_decorated_spanish_headers(self):
+        """Currency/abbreviation-decorated Spanish headers still map to canonicals."""
+        result = await self._parse_budget(
+            [
+                [
+                    "CÓDIGO",
+                    "CAPÍTULO Y PARTIDA",
+                    "UNIDAD",
+                    "CANTIDAD",
+                    "PRECIO UNIT. (€)",
+                    "IMPORTE (€)",
+                ],
+                ["1.1.1", "Bombas sumergibles", "ud", 3, 45000, 135000],
+                ["1.1.2", "Motores eléctricos", "ud", 3, 12000, 36000],
+            ]
+        )
+        assert len(result) == 2
+        assert result[0]["quantity"] == 3.0
+        assert result[0]["unit_price"] == 45000.0
+        assert result[0]["total"] == 135000.0
+
+    @pytest.mark.asyncio
+    async def test_budget_excludes_chapter_subtotal_rows(self):
+        """Hierarchical chapter rows (total only, no qty/price) are not line items."""
+        result = await self._parse_budget(
+            [
+                ["Código", "Partida", "Unidad", "Cantidad", "Precio Unit. (€)", "Importe (€)"],
+                ["1", "MATERIALES", None, None, None, 171000],  # chapter subtotal -> skip
+                ["1.1", "Bombas", "ud", 3, 45000, 135000],
+                ["1.2", "Motores", "ud", 3, 12000, 36000],
+            ]
+        )
+        # Only the two leaf partidas, not the chapter subtotal, are emitted.
+        assert len(result) == 2
+        assert sum(r["total"] for r in result) == 171000.0
+
+    @pytest.mark.asyncio
+    async def test_budget_importe_unitario_maps_to_unit_price_not_total(self):
+        """Specificity: 'Importe unitario' is unit price, 'Importe' is total."""
+        result = await self._parse_budget(
+            [
+                ["Partida", "Cantidad", "Importe unitario", "Importe"],
+                ["Tubería", 10, 420, 4200],
+            ]
+        )
+        assert len(result) == 1
+        assert result[0]["unit_price"] == 420.0
+        assert result[0]["total"] == 4200.0
+
+    @pytest.mark.asyncio
+    async def test_schedule_accepts_decorated_week_headers(self):
+        """Schedule headers like 'Actividad / Tarea' and 'Inicio (Semana)' match."""
+        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(
+            ["Nº", "Actividad / Tarea", "Duración (semanas)", "Inicio (Semana)", "Fin (Semana)"]
+        )
+        sheet.append([1, "Movilización", 2, 1, 2])
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+            tmp_path = tmp.name
+        workbook.save(tmp_path)
+        workbook.close()
+        try:
+            result = await ExcelFileParser().parse_schedule(Path(tmp_path))
+        finally:
+            os.unlink(tmp_path)
+        assert len(result) == 1
+        assert result[0]["task"] == "Movilización"
+        assert result[0]["start_date"] == 1
+        assert result[0]["end_date"] == 2
+        assert result[0]["duration"] == 2
