@@ -25,11 +25,13 @@ OCR_AVAILABLE = False
 try:
     import pytesseract as _pytesseract_imported
     from PIL import Image as _PILImage_imported
+
     pytesseract = _pytesseract_imported
     Image = _PILImage_imported
     OCR_AVAILABLE = True
 except ImportError:
     logger.warning("ocr_not_available", message="pytesseract/Pillow not installed, OCR disabled")
+
 
 def _tesseract_binary_available() -> bool:
     """Probe whether the `tesseract` *system* binary is actually runnable.
@@ -66,8 +68,33 @@ if OCR_AVAILABLE:
     OCR_AVAILABLE = _tesseract_binary_available()
 
 
+# A scanned PDF can carry a NON-EMPTY but corrupt embedded text layer: a broken
+# ToUnicode CMap yields U+FFFD replacement chars, and per-glyph positioning makes
+# PyMuPDF emit mostly single-character tokens (e.g. "P a r t e s c o n t r a t").
+# Such a layer must be re-OCR'd — otherwise every downstream step (clause
+# extraction, coherence) runs on garbage. The previous code only OCR'd pages with
+# NO text at all, so these corrupt-but-present layers slipped straight through.
+_REPLACEMENT_CHAR = "�"
+
+
+def _is_low_quality_text_layer(text: str) -> bool:
+    """Heuristic: True when an extracted text layer looks corrupt and should be OCR'd."""
+    stripped = text.strip()
+    if len(stripped) < 40:
+        # Too little to judge; the empty-page branch already handles the no-text case.
+        return False
+    if text.count(_REPLACEMENT_CHAR) / len(text) > 0.01:
+        return True
+    tokens = stripped.split()
+    if not tokens:
+        return True
+    single_char_tokens = sum(1 for token in tokens if len(token) == 1)
+    return single_char_tokens / len(tokens) > 0.5
+
+
 class PDFParsingError(Exception):
     """Custom exception for PDF parsing errors."""
+
     pass
 
 
@@ -119,16 +146,24 @@ class PDFFileParser:
                 page = document.load_page(page_num)
                 page_text_blocks = self._extract_page_text_blocks(page, page_num)
 
-                # If no text found and OCR is available, try OCR
-                if not page_text_blocks and OCR_AVAILABLE:
+                # OCR fallback fires when the page has NO extractable text, OR when
+                # the extracted text layer is present but corrupt (scanned PDF with a
+                # broken embedded text layer). In the corrupt case OCR replaces the
+                # garbage blocks so downstream steps see real text.
+                page_text = " ".join(block["text"] for block in page_text_blocks)
+                if OCR_AVAILABLE and (
+                    not page_text_blocks or _is_low_quality_text_layer(page_text)
+                ):
                     ocr_text = self._ocr_page(page, page_num)
                     if ocr_text:
-                        page_text_blocks = [{
-                            "text": ocr_text,
-                            "bbox": (0, 0, page.rect.width, page.rect.height),
-                            "page": page_num + 1,
-                            "ocr": True,
-                        }]
+                        page_text_blocks = [
+                            {
+                                "text": ocr_text,
+                                "bbox": (0, 0, page.rect.width, page.rect.height),
+                                "page": page_num + 1,
+                                "ocr": True,
+                            }
+                        ]
                         ocr_pages += 1
 
                 text_blocks.extend(page_text_blocks)
@@ -162,11 +197,13 @@ class PDFFileParser:
                     block_text += " " if not block_text.endswith(" ") else ""
 
                 if block_text.strip():
-                    blocks.append({
-                        "text": block_text.strip(),
-                        "bbox": tuple(block["bbox"]),
-                        "page": page_num + 1,
-                    })
+                    blocks.append(
+                        {
+                            "text": block_text.strip(),
+                            "bbox": tuple(block["bbox"]),
+                            "page": page_num + 1,
+                        }
+                    )
 
         return blocks
 

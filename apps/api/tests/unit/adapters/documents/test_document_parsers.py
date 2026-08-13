@@ -62,13 +62,13 @@ class TestPDFParser:
         parser = PDFFileParser()
 
         # Mock fitz.open
-        with patch('src.documents.adapters.parsers.pdf_file_parser.fitz.open') as mock_fitz:
+        with patch("src.documents.adapters.parsers.pdf_file_parser.fitz.open") as mock_fitz:
             mock_doc = MagicMock()
             mock_page = MagicMock()
             mock_page.get_text.return_value = "Test contract content"
             mock_page.get_textblocks.return_value = [
                 (0, 0, 100, 20, "Test block 1", 0, 0),
-                (0, 25, 100, 45, "Test block 2", 0, 0)
+                (0, 25, 100, 45, "Test block 2", 0, 0),
             ]
             mock_doc.__len__ = MagicMock(return_value=1)
             mock_doc.__getitem__ = MagicMock(return_value=mock_page)
@@ -87,6 +87,7 @@ class TestPDFParser:
         # Test with non-existent file
         with pytest.raises(Exception):
             import asyncio
+
             asyncio.run(parser.extract_text_and_offsets(Path("/nonexistent/file.pdf")))
 
     def test_pdf_parsing_error_class(self):
@@ -139,16 +140,83 @@ class TestPDFParser:
         document.page_count = 1
         document.load_page.return_value = page
 
-        with patch("src.documents.adapters.parsers.pdf_file_parser.fitz.open", return_value=document), patch(
-            "src.documents.adapters.parsers.pdf_file_parser.OCR_AVAILABLE", True
-        ), patch.object(parser, "_extract_page_text_blocks", return_value=[]), patch.object(
-            parser, "_ocr_page", return_value="OCR text"
+        with (
+            patch(
+                "src.documents.adapters.parsers.pdf_file_parser.fitz.open", return_value=document
+            ),
+            patch("src.documents.adapters.parsers.pdf_file_parser.OCR_AVAILABLE", True),
+            patch.object(parser, "_extract_page_text_blocks", return_value=[]),
+            patch.object(parser, "_ocr_page", return_value="OCR text"),
+        ):
+            result = await parser.extract_text_and_offsets(pdf_path)
+
+        assert result == [{"text": "OCR text", "bbox": (0, 0, 200, 300), "page": 1, "ocr": True}]
+
+    @pytest.mark.asyncio
+    async def test_pdf_parser_ocrs_corrupt_text_layer(self, tmp_path):
+        """A scanned PDF with a NON-EMPTY but corrupt text layer must still be OCR'd;
+        the OCR text replaces the garbage blocks (regression: previously only
+        empty-text pages were OCR'd, so corrupt layers poisoned downstream steps)."""
+        from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser
+
+        pdf_path = tmp_path / "corrupt-layer.pdf"
+        pdf_path.write_bytes(b"%PDF-1.4 corrupt layer")
+
+        parser = PDFFileParser()
+        page = MagicMock()
+        page.rect.width = 200
+        page.rect.height = 300
+        document = MagicMock()
+        document.page_count = 1
+        document.load_page.return_value = page
+
+        # Per-glyph spacing => mostly single-character tokens (a corrupt text layer).
+        garbage_blocks = [
+            {
+                "text": "P a r t e s c o n t r a t a n t e s d e l",
+                "bbox": (0, 0, 100, 20),
+                "page": 1,
+            }
+        ]
+
+        with (
+            patch(
+                "src.documents.adapters.parsers.pdf_file_parser.fitz.open", return_value=document
+            ),
+            patch("src.documents.adapters.parsers.pdf_file_parser.OCR_AVAILABLE", True),
+            patch.object(parser, "_extract_page_text_blocks", return_value=garbage_blocks),
+            patch.object(parser, "_ocr_page", return_value="Partes contratantes del contrato"),
         ):
             result = await parser.extract_text_and_offsets(pdf_path)
 
         assert result == [
-            {"text": "OCR text", "bbox": (0, 0, 200, 300), "page": 1, "ocr": True}
+            {
+                "text": "Partes contratantes del contrato",
+                "bbox": (0, 0, 200, 300),
+                "page": 1,
+                "ocr": True,
+            }
         ]
+
+    def test_is_low_quality_text_layer_heuristic(self):
+        """Flags corrupt text layers (replacement chars / per-glyph spacing), not clean text."""
+        from src.documents.adapters.parsers.pdf_file_parser import _is_low_quality_text_layer
+
+        # Per-glyph spacing (mostly single-char tokens).
+        assert _is_low_quality_text_layer(
+            "P a r t e s c o n t r a t a n t e s d e l a A d m i n i s t r a c i o n"
+        )
+        # Replacement characters from a broken ToUnicode CMap.
+        assert _is_low_quality_text_layer(
+            "Administraci�n del contrato de obras p�blicas y dem�s cl�usulas"
+        )
+        # Clean prose is NOT flagged.
+        assert not _is_low_quality_text_layer(
+            "This Agreement is entered into by and between the Consortium and the "
+            "Contractor for the works described herein, including payment obligations."
+        )
+        # Too short to judge -> not flagged (the empty-page branch handles no-text).
+        assert not _is_low_quality_text_layer("short text")
 
     def test_pdf_ocr_page_returns_none_when_ocr_disabled(self):
         """Test OCR helper returns None when OCR is unavailable."""
@@ -168,9 +236,12 @@ class TestPDFParser:
         pix.tobytes.return_value = b"png"
         page.get_pixmap.return_value = pix
 
-        with patch("src.documents.adapters.parsers.pdf_file_parser.OCR_AVAILABLE", True), patch(
-            "src.documents.adapters.parsers.pdf_file_parser.Image.open",
-            side_effect=RuntimeError("ocr boom"),
+        with (
+            patch("src.documents.adapters.parsers.pdf_file_parser.OCR_AVAILABLE", True),
+            patch(
+                "src.documents.adapters.parsers.pdf_file_parser.Image.open",
+                side_effect=RuntimeError("ocr boom"),
+            ),
         ):
             assert parser._ocr_page(page, 0) is None
 
@@ -201,11 +272,14 @@ class TestPDFParser:
         """
         from src.documents.adapters.parsers import pdf_file_parser as pdf_file_parser_module
 
-        with patch.object(
-            pdf_file_parser_module.pytesseract,
-            "get_tesseract_version",
-            side_effect=pdf_file_parser_module.pytesseract.TesseractNotFoundError(),
-        ), patch.object(pdf_file_parser_module.logger, "warning") as mock_warning:
+        with (
+            patch.object(
+                pdf_file_parser_module.pytesseract,
+                "get_tesseract_version",
+                side_effect=pdf_file_parser_module.pytesseract.TesseractNotFoundError(),
+            ),
+            patch.object(pdf_file_parser_module.logger, "warning") as mock_warning,
+        ):
             result = pdf_file_parser_module._tesseract_binary_available()
 
         assert result is False
@@ -324,9 +398,7 @@ A2;Second Item;200.00
         bc3_path.write_text("*")
 
         parser = BC3FileParser()
-        with patch(
-            "src.documents.adapters.parsers.bc3_file_parser.pyfiebdc.Fiebdc"
-        ) as mock_fiebdc:
+        with patch("src.documents.adapters.parsers.bc3_file_parser.pyfiebdc.Fiebdc") as mock_fiebdc:
             mock_fiebdc.return_value.parse.side_effect = InvalidFileException("bad bc3")
             with pytest.raises(BC3ParsingError, match="Invalid BC3 file format"):
                 await parser.parse(bc3_path)
@@ -371,9 +443,9 @@ class TestExcelParser:
         from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
 
         # Create empty Excel file
-        with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
             # Write minimal xlsx content (ZIP with empty workbook)
-            tmp.write(b'PK\x03\x04')  # ZIP header
+            tmp.write(b"PK\x03\x04")  # ZIP header
             tmp_path = tmp.name
 
         with suppress(Exception):
@@ -397,7 +469,12 @@ class TestExcelParser:
         """Test schedule parsing maps rows into normalized dictionaries."""
         from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
 
-        header_cells = [MagicMock(value="Task"), MagicMock(value="Start Date"), MagicMock(value="End Date"), MagicMock(value="Duration")]
+        header_cells = [
+            MagicMock(value="Task"),
+            MagicMock(value="Start Date"),
+            MagicMock(value="End Date"),
+            MagicMock(value="Duration"),
+        ]
         sheet = MagicMock()
         sheet.__getitem__.return_value = header_cells
         sheet.iter_rows.return_value = [
@@ -406,7 +483,10 @@ class TestExcelParser:
         ]
         workbook = MagicMock(active=sheet)
 
-        with patch("src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook", return_value=workbook):
+        with patch(
+            "src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook",
+            return_value=workbook,
+        ):
             parser = ExcelFileParser()
             result = await parser.parse_schedule(Path("schedule.xlsx"))
 
@@ -426,7 +506,12 @@ class TestExcelParser:
         """Test budget parsing maps rows into normalized dictionaries."""
         from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
 
-        header_cells = [MagicMock(value="Item"), MagicMock(value="Quantity"), MagicMock(value="Unit Price"), MagicMock(value="Total")]
+        header_cells = [
+            MagicMock(value="Item"),
+            MagicMock(value="Quantity"),
+            MagicMock(value="Unit Price"),
+            MagicMock(value="Total"),
+        ]
         sheet = MagicMock()
         sheet.__getitem__.return_value = header_cells
         sheet.iter_rows.return_value = [
@@ -435,7 +520,10 @@ class TestExcelParser:
         ]
         workbook = MagicMock(active=sheet)
 
-        with patch("src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook", return_value=workbook):
+        with patch(
+            "src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook",
+            return_value=workbook,
+        ):
             parser = ExcelFileParser()
             result = await parser.parse_budget(Path("budget.xlsx"))
 
@@ -589,7 +677,10 @@ class TestExcelParser:
         sheet.__getitem__.return_value = [MagicMock(value="Task"), MagicMock(value="Start Date")]
         workbook = MagicMock(active=sheet)
 
-        with patch("src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook", return_value=workbook):
+        with patch(
+            "src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook",
+            return_value=workbook,
+        ):
             parser = ExcelFileParser()
             with pytest.raises(ExcelParsingError, match="Missing one or more required headers"):
                 await parser.parse_schedule(Path("schedule.xlsx"))
@@ -652,17 +743,15 @@ class TestCompositeParser:
 
         pdf = PDFFileParser()
         parser = CompositeFileParser(
-            bc3_parser=MagicMock(),
-            excel_parser=MagicMock(),
-            pdf_parser=pdf
+            bc3_parser=MagicMock(), excel_parser=MagicMock(), pdf_parser=pdf
         )
 
         # Create temp PDF
         (tmp_path / "composite.pdf").write_bytes(b"%PDF-1.4 test content")
 
         # Mock the PDF parser
-        with patch.object(pdf, 'extract_text_and_offsets', new_callable=AsyncMock) as mock_extract:
-            mock_extract.return_value = [{"text": "test", "bbox": (0,0,100,20)}]
+        with patch.object(pdf, "extract_text_and_offsets", new_callable=AsyncMock) as mock_extract:
+            mock_extract.return_value = [{"text": "test", "bbox": (0, 0, 100, 20)}]
             # Just test the method exists and is callable
             assert callable(parser.parse_document_file)
 
@@ -671,13 +760,11 @@ class TestCompositeParser:
         from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
 
         parser = CompositeFileParser(
-            bc3_parser=MagicMock(),
-            excel_parser=MagicMock(),
-            pdf_parser=MagicMock()
+            bc3_parser=MagicMock(), excel_parser=MagicMock(), pdf_parser=MagicMock()
         )
 
         # Check it has the required port method
-        assert hasattr(parser, 'parse_document_file')
+        assert hasattr(parser, "parse_document_file")
 
     @pytest.fixture
     def sample_document(self):
