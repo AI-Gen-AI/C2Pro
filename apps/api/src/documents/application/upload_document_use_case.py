@@ -3,12 +3,14 @@ Use Case for uploading a document.
 ADR-015: creates genesis DocumentRevision (rev_no=1) at initial upload.
 Refers to Suite ID: TS-UA-DOC-UC-001.
 """
+
 import hashlib
 import os
 from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID, uuid4
 
+import structlog
 from fastapi import HTTPException, UploadFile, status
 
 from src.config import settings
@@ -22,6 +24,8 @@ from src.projects.ports.project_repository import ProjectRepository
 from src.temporal.domain.document_revision import DocumentRevision
 from src.temporal.domain.project_snapshot import SnapshotTrigger
 from src.temporal.ports.document_revision_repository import IDocumentRevisionRepository
+
+logger = structlog.get_logger()
 
 STRUCTURED_DOCUMENT_TYPES = {DocumentType.BUDGET, DocumentType.SCHEDULE}
 STRUCTURED_DOCX_ERROR = "budget/schedule require .xlsx/.bc3"
@@ -148,12 +152,24 @@ class UploadDocumentUseCase:
                 created_at=now,
             )
             await self.revision_repository.append_revision(genesis)
-            enqueue_project_snapshot(
-                project_id=project_id,
-                tenant_id=scoped_tenant_id,
-                trigger=SnapshotTrigger.REVISION_INGESTED,
-                source_event_id=genesis.revision_id,
-            )
+            # Best-effort: enqueuing the snapshot task hits the Celery broker
+            # synchronously. A broker/Redis outage must NOT fail the upload — the
+            # document and its genesis revision are already persisted. (Mirrors
+            # the resilient _enqueue_document_processing in the HTTP router.)
+            try:
+                enqueue_project_snapshot(
+                    project_id=project_id,
+                    tenant_id=scoped_tenant_id,
+                    trigger=SnapshotTrigger.REVISION_INGESTED,
+                    source_event_id=genesis.revision_id,
+                )
+            except Exception as exc:  # pragma: no cover - infra failure path
+                logger.warning(
+                    "project_snapshot_enqueue_failed",
+                    document_id=str(new_document.id),
+                    project_id=str(project_id),
+                    error=str(exc),
+                )
 
         await self.document_repository.refresh(new_document)
         return new_document
