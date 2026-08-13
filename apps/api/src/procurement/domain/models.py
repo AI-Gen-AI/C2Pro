@@ -93,6 +93,7 @@ class WBSItem:
     actual_start: datetime | None = None
     actual_end: datetime | None = None
     source_clause_id: UUID | None = None
+    source_document_id: UUID | None = None
     version: int = 1
     wbs_metadata: dict[str, object] = field(default_factory=dict)
     children: list[WBSItem] = field(default_factory=list)

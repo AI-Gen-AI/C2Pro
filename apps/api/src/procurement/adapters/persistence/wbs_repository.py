@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import and_, inspect, select
+from sqlalchemy import and_, delete, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -47,6 +47,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             actual_start=orm.actual_start,
             actual_end=orm.actual_end,
             source_clause_id=orm.source_clause_id,
+            source_document_id=orm.source_document_id,
             version=orm.version,
             wbs_metadata=orm.wbs_metadata or {},
             children=[],
@@ -79,6 +80,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             actual_start=wbs_item.actual_start,
             actual_end=wbs_item.actual_end,
             source_clause_id=wbs_item.source_clause_id,
+            source_document_id=wbs_item.source_document_id,
             version=wbs_item.version,
             wbs_metadata=wbs_item.wbs_metadata or {},
         )
@@ -242,6 +244,49 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         await self.session.flush()
 
         return True
+
+    async def replace_for_source_document(
+        self,
+        *,
+        project_id: UUID,
+        source_document_id: UUID,
+        wbs_items: list[WBSItem],
+        tenant_id: UUID,
+    ) -> list[WBSItem]:
+        """Replace all WBS rows produced by one parsed source document.
+
+        Idempotent per source document: deletes the rows previously produced by
+        the same ``source_document_id`` for the project, then inserts the new
+        set. This lets a schedule re-parse replace its own rows instead of
+        colliding on ``uq_procurement_wbs_project_code``.
+
+        Divergence from the BOM equivalent: it does NOT sweep NULL-source rows,
+        because WBS items may be created manually or via AI generation without a
+        source document (TS-UD-PROC-WBS-IDEM-001).
+        """
+        await self._ensure_project_in_tenant(project_id, tenant_id)
+        await self.session.execute(
+            delete(WBSItemORM).where(
+                WBSItemORM.project_id == project_id,
+                WBSItemORM.source_document_id == source_document_id,
+            )
+        )
+
+        orms: list[WBSItemORM] = []
+        for item in wbs_items:
+            if item.project_id != project_id:
+                raise ValueError("WBS item project_id must match replacement project_id")
+            item.source_document_id = source_document_id
+            orms.append(self._domain_to_orm(item))
+
+        self.session.add_all(orms)
+        await self.session.flush()
+
+        created_items: list[WBSItem] = []
+        for orm in orms:
+            await self.session.refresh(orm)
+            created_items.append(self._orm_to_domain(orm))
+        return created_items
 
     async def bulk_create(self, wbs_items: list[WBSItem], tenant_id: UUID) -> list[WBSItem]:
         """Create multiple WBS items at once with tenant isolation (used for AI generation)."""

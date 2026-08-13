@@ -140,3 +140,31 @@ class IWBSRepository(ABC):
             List of created WBS items with IDs
         """
         pass
+
+    @abstractmethod
+    async def replace_for_source_document(
+        self,
+        *,
+        project_id: UUID,
+        source_document_id: UUID,
+        wbs_items: list[WBSItem],
+        tenant_id: TenantId,
+    ) -> list[WBSItem]:
+        """
+        Replace all WBS rows produced by one parsed source document.
+
+        Idempotent per source document: deletes the rows previously produced by
+        ``source_document_id`` for the project, then inserts the new set. Unlike
+        the BOM equivalent this MUST NOT delete NULL-source rows, which may be
+        manually created or AI-generated WBS items.
+
+        Args:
+            project_id: The project the WBS items belong to
+            source_document_id: The parsed schedule document producing these rows
+            wbs_items: The fresh WBS items to persist
+            tenant_id: The tenant ID for isolation
+
+        Returns:
+            List of persisted WBS items
+        """
+        pass
