@@ -3312,8 +3312,6 @@ paths:
       - analysis
       summary: Stream Project Processing
       operationId: stream_project_processing_api_v1_analysis_projects__project_id__process_stream_get
-      security:
-      - HTTPBearer: []
       parameters:
       - name: project_id
         in: path
