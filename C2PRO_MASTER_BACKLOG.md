@@ -1,7 +1,7 @@
 # C2PRO Master Backlog - Index & Overview
 
 **Purpose**: High-level project index. Only **pending** work is tracked here.
-**Last Updated**: 2026-08-12
+**Last Updated**: 2026-08-14
 **Archive**: [`backlogs/COMPLETED.md`](backlogs/COMPLETED.md)
 
 > **Navigation**: Quick Navigation → Pending Manifest → Pending by Category.
@@ -656,6 +656,12 @@ FOLLOW-UPS (open):
 **2026-07-28**: Closed V3-P1-SCOPE-11 via #419 (Health v0 contract_clarity_findings + ADR-022); registered+closed SEC-001 CRITICAL PII bypass fix (#417). Adopted anthropic>=0.120,<1.0.0 via #418 (superseded Dependabot #401; centralized LLM access behind the PII-safe wrapper). Verified against merged PRs on main.
 
 ## Change Log
+
+**2026-08-14**: TASK-COH-BUD-RECF-519 CLOSED (PR #519) — WBS source-document FK cascade + idempotent schedule reparse. Bug 1: schedule-derived WBS rows orphaned on document delete (FK missing, linkage only in metadata JSONB). Bug 2: schedule reparse collision on `uq_procurement_wbs_project_code` (position-based codes). Fix: migration `20260814_0002` adds `procurement_wbs_items.source_document_id` FK→documents(id) ON DELETE CASCADE (+ index, backfilled 23/23 pilot rows); ingestion now idempotent via `replace_for_source_document`. Live verified.
+
+**2026-08-14**: TASK-COH-DET-BUD-LINEITEM-520 CLOSED (PR #520) — Skip DET-BUD-LINEITEM on multi-factor labor/rented rows. False positives: 5 CRITICAL on labor (Soldadores/Montadores/Electricistas/Ayudantes) + period-rented equipment whose totals carry hidden duration/headcount. Added `_is_multi_factor_line()` (time/labor unit, personnel roles ES+EN, duration phrasing; ignores dimension specs); genuine 2-factor material errors still flagged. BUDGET score 74.5→87.3, zero false positives, one legitimate DET-BUD-SUM critical remains. Live verified.
+
+**2026-08-14**: TASK-COH-ALERTS-SURFACE-521 CLOSED (PR #521) — Surface /evaluate alerts in dashboard alert_count. Bug: `/evaluate` persisted alerts into `coherence_results.alerts` (JSON) but dashboard `alert_count` only read `alerts` table + `Analysis.alerts_count` (shows 0 for evaluate-only projects). Fix: fallback (Analysis > CoherenceResult > baseline): select `CoherenceResultORM.alerts` + `len(...)` when no completed Analysis. Dashboard now displays correct alert_count. Live verified: pilot Coherence Score now 81 (6/6 dimensions honest, no missing).
 
 **2026-08-11**: TASK-V3-021-02 CLOSED (commit 9add4d82) — BriefingDeliveryPort runtime_checkable Protocol; BriefingFormatter pure static (format_text + format_subject); DeliverBriefingUseCase + DeliverBriefingCommand frozen dataclass; 13 unit tests. TASK-V3-021-03 CLOSED (commit 1e9df6dd) — RagStatus StrEnum; ProjectRollupEntry + PortfolioRollup frozen dataclasses (counts_by_rag property); RollupEngine.compute() pure static with >=0.7/>=0.4/<0.4 thresholds, latest-snapshot health per project; 17 unit tests. EPIC-V3-021 (ADR-021 Read Models) fully closed.
 
