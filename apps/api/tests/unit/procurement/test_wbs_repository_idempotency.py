@@ -16,38 +16,7 @@ from sqlalchemy.sql.dml import Delete
 from src.procurement.adapters.persistence.models import WBSItemORM
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.domain.models import WBSItem, WBSItemType
-
-
-class _ScalarResult:
-    def __init__(self, value: object) -> None:
-        self._value = value
-
-    def scalar_one_or_none(self) -> object:
-        return self._value
-
-
-class _FakeSession:
-    def __init__(self) -> None:
-        self.statements: list[object] = []
-        self.added: list[object] = []
-        self.flushed = 0
-        self.refreshed: list[object] = []
-
-    async def execute(self, statement: object) -> _ScalarResult:
-        self.statements.append(statement)
-        return _ScalarResult(uuid4())
-
-    def add(self, orm: object) -> None:
-        self.added.append(orm)
-
-    def add_all(self, orms: list[object]) -> None:
-        self.added.extend(orms)
-
-    async def flush(self) -> None:
-        self.flushed += 1
-
-    async def refresh(self, orm: object) -> None:
-        self.refreshed.append(orm)
+from tests.support.idempotency_fakes import FakeSession
 
 
 def _wbs_item(project_id: object, document_id: object, code: str, name: str) -> WBSItem:
@@ -68,7 +37,7 @@ async def test_replace_for_source_document_deletes_then_inserts_new_set() -> Non
     tenant_id = uuid4()
     project_id = uuid4()
     document_id = uuid4()
-    session = _FakeSession()
+    session = FakeSession()
     repository = SQLAlchemyWBSRepository(session)  # type: ignore[arg-type]
 
     created = await repository.replace_for_source_document(
@@ -101,7 +70,7 @@ async def test_create_without_source_document_id_leaves_column_null_and_no_delet
     """TS-UD-PROC-WBS-IDEM-001: manual/legacy WBS rows without a source document are untouched."""
     tenant_id = uuid4()
     project_id = uuid4()
-    session = _FakeSession()
+    session = FakeSession()
     repository = SQLAlchemyWBSRepository(session)  # type: ignore[arg-type]
 
     await repository.create(

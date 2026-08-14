@@ -11,38 +11,7 @@ from sqlalchemy.sql.dml import Delete
 from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
 from src.procurement.adapters.persistence.models import BOMItemORM
 from src.procurement.domain.models import BOMItem
-
-
-class _ScalarResult:
-    def __init__(self, value: object) -> None:
-        self._value = value
-
-    def scalar_one_or_none(self) -> object:
-        return self._value
-
-
-class _FakeSession:
-    def __init__(self) -> None:
-        self.statements: list[object] = []
-        self.added: list[object] = []
-        self.flushed = 0
-        self.refreshed: list[object] = []
-
-    async def execute(self, statement: object) -> _ScalarResult:
-        self.statements.append(statement)
-        return _ScalarResult(uuid4())
-
-    def add(self, orm: object) -> None:
-        self.added.append(orm)
-
-    def add_all(self, orms: list[object]) -> None:
-        self.added.extend(orms)
-
-    async def flush(self) -> None:
-        self.flushed += 1
-
-    async def refresh(self, orm: object) -> None:
-        self.refreshed.append(orm)
+from tests.support.idempotency_fakes import FakeSession
 
 
 @pytest.mark.asyncio
@@ -51,7 +20,7 @@ async def test_replace_for_source_document_deletes_then_inserts_new_set() -> Non
     tenant_id = uuid4()
     project_id = uuid4()
     document_id = uuid4()
-    session = _FakeSession()
+    session = FakeSession()
     repository = SQLAlchemyBOMRepository(session)  # type: ignore[arg-type]
 
     created = await repository.replace_for_source_document(
@@ -101,7 +70,7 @@ async def test_create_without_source_document_id_does_not_delete_legacy_rows() -
     """TS-UD-PROC-BOM-IDEM-001: legacy/manual BOM rows without source_document_id remain tolerated."""
     tenant_id = uuid4()
     project_id = uuid4()
-    session = _FakeSession()
+    session = FakeSession()
     repository = SQLAlchemyBOMRepository(session)  # type: ignore[arg-type]
 
     await repository.create(
