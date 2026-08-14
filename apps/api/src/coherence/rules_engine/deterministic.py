@@ -14,6 +14,7 @@ Location: apps/api/src/coherence/rules_engine/deterministic.py
 from __future__ import annotations
 
 import math
+import re
 from datetime import date, datetime, timedelta
 from typing import Any, TypeGuard
 
@@ -98,8 +99,66 @@ class BudgetContingencyEvaluator(RuleEvaluator):
         return _signal(self, clause, impact, ev, {"contingency_pct": round(pct*100, 2)})
 
 
+# Units that denote a time/labor dimension. A row priced per period carries a
+# hidden duration (and often headcount) factor, so unit_price × quantity is not
+# expected to equal the line total.
+_TIME_LABOR_UNITS = frozenset({
+    "mes", "meses", "month", "months", "mo",
+    "h", "hr", "hora", "horas", "hour", "hours", "hh",
+    "jornada", "jornadas", "dia", "día", "dias", "días", "day", "days",
+    "semana", "semanas", "week", "weeks",
+    "ano", "año", "anio", "anios", "años", "year", "years",
+    "persona-mes", "person-month", "pers/mes", "ud/mes", "u/mes", "h/h",
+})
+
+# Personnel / labor role keywords (ES + EN). Labor is priced headcount × duration
+# × rate, so it is not a 2-factor (quantity × unit_price) line item.
+_LABOR_KEYWORDS = (
+    "soldador", "montador", "electricista", "ayudante", "peon", "peón",
+    "oficial", "operario", "operador", "encargado", "capataz", "cuadrilla",
+    "ingeniero", "tecnico", "técnico", "jefe", "director", "administrativo",
+    "auxiliar", "jornalero", "maquinista", "conductor", "gruista", "gruísta",
+    "mano de obra", "welder", "fitter", "electrician", "laborer", "labourer",
+    "foreman", "engineer", "technician", "supervisor", "operator",
+)
+
+# Explicit duration phrasing in the item name, e.g. "5 uds. x 4 meses" or "/mes".
+# Requires a time word so dimension specs like "3x150 mm²" are NOT matched.
+_DURATION_PATTERN = re.compile(
+    r"\d+\s*(mes|meses|month|months|semana|semanas|week|weeks|"
+    r"jornada|jornadas|hora|horas|hour|hours|dia|día|dias|días|day|days|"
+    r"año|años|anio|anios|year|years)\b"
+    r"|/\s*mes\b|€\s*/\s*mes",
+    re.IGNORECASE,
+)
+
+
+def _is_multi_factor_line(name: str | None, unit: object) -> bool:
+    """True when a budget row is priced by a hidden third factor (duration/headcount).
+
+    Labor and period-rented rows carry an implicit time (and often headcount)
+    dimension, so unit_price × quantity intentionally differs from the line
+    total. Applying the 2-factor arithmetic check to them yields false positives
+    (TASK-COH-BUD-LINEITEM-011). Detection is heuristic and conservative — a unit
+    denoting time, a personnel role in the name, or explicit duration phrasing.
+    """
+    if isinstance(unit, str) and unit.strip().lower() in _TIME_LABOR_UNITS:
+        return True
+    if not name:
+        return False
+    lowered = name.lower()
+    if any(keyword in lowered for keyword in _LABOR_KEYWORDS):
+        return True
+    return bool(_DURATION_PATTERN.search(lowered))
+
+
 class BudgetLineItemEvaluator(RuleEvaluator):
-    """DET-BUD-LINEITEM — Checks unit_price × quantity ≈ line_total."""
+    """DET-BUD-LINEITEM — Checks unit_price × quantity ≈ line_total.
+
+    Skips multi-factor rows (labor / period-rented equipment) — see
+    ``_is_multi_factor_line`` — because their total includes a hidden duration
+    or headcount factor and the 2-factor check would raise false positives.
+    """
     rule_id = "DET-BUD-LINEITEM"
     rule_name = "Line Item Arithmetic Check"
     category = "BUDGET"
@@ -110,9 +169,11 @@ class BudgetLineItemEvaluator(RuleEvaluator):
     def applicability(self, clause: Clause) -> ApplicabilityState:
         up, qty = clause.data.get("unit_price"), clause.data.get("quantity")
         total = clause.data.get("line_total") or clause.data.get("total")
-        if _num(up) and _num(qty) and _num(total):
-            return ApplicabilityState.EVALUATED
-        return ApplicabilityState.SKIPPED_MISSING_INPUTS
+        if not _num(up) or not _num(qty) or not _num(total):
+            return ApplicabilityState.SKIPPED_MISSING_INPUTS
+        if _is_multi_factor_line(clause.text, clause.data.get("unit")):
+            return ApplicabilityState.SKIPPED_MISSING_INPUTS
+        return ApplicabilityState.EVALUATED
 
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
@@ -123,6 +184,8 @@ class BudgetLineItemEvaluator(RuleEvaluator):
         qty = clause.data.get("quantity")
         total = clause.data.get("line_total") or clause.data.get("total")
         if not _num(up) or not _num(qty) or not _num(total) or up <= 0 or qty <= 0:
+            return None
+        if _is_multi_factor_line(clause.text, clause.data.get("unit")):
             return None
         expected = up * qty
         dev = abs(expected - total) / expected
