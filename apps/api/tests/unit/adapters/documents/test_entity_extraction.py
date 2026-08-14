@@ -448,7 +448,7 @@ class TestExtractionServiceIntegration:
         from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_use_case = MagicMock()
-        mock_use_case.execute = AsyncMock(side_effect=Exception("DB error"))
+        mock_use_case.replace_for_source_document = AsyncMock(side_effect=Exception("DB error"))
 
         mock_stakeholder_factory = MagicMock(return_value=MagicMock())
         mock_wbs_factory = MagicMock(return_value=mock_use_case)
@@ -470,7 +470,8 @@ class TestExtractionServiceIntegration:
             upload_status=DocumentStatus.PARSED,
         )
 
-        parsed_payload = {"schedule": []}
+        # Non-empty schedule so persistence runs and the raised error is handled.
+        parsed_payload = {"schedule": [{"task": "Excavation"}]}
 
         result = await service._extract_wbs_items(doc, parsed_payload, uuid4())
 

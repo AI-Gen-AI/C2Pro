@@ -69,3 +69,32 @@ async def test_schedule_extraction_replaces_wbs_rows_once_per_source_document() 
     assert call["tenant_id"] == tenant_id
     assert [item.wbs_code for item in call["wbs_items"]] == ["SCH-001", "SCH-002"]
     assert all(item.source_document_id == document_id for item in call["wbs_items"])
+
+
+@pytest.mark.asyncio
+async def test_schedule_with_only_unnamed_rows_persists_nothing() -> None:
+    """TS-UD-PROC-WBS-IDEM-001: a schedule whose rows lack task names triggers no WBS write."""
+    wbs_use_case = _FakeWBSUseCase()
+    service = DocumentsEntityExtractionService(
+        stakeholder_use_case_factory=lambda: object(),
+        wbs_use_case_factory=lambda: wbs_use_case,
+        bom_use_case_factory=lambda: object(),
+        user_id=uuid4(),
+    )
+    document = Document(
+        id=uuid4(),
+        project_id=uuid4(),
+        tenant_id=uuid4(),
+        document_type=DocumentType.SCHEDULE,
+        filename="schedule.xlsx",
+        upload_status=DocumentStatus.PARSED,
+    )
+
+    summary = await service.extract_entities_from_document(
+        document=document,
+        parsed_payload={"schedule": [{"note": "no task"}, {"note": "also none"}]},
+        tenant_id=document.tenant_id,
+    )
+
+    assert summary["wbs_items"] == 0
+    assert wbs_use_case.calls == []

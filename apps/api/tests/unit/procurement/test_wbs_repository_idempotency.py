@@ -80,3 +80,22 @@ async def test_create_without_source_document_id_leaves_column_null_and_no_delet
 
     assert not any(isinstance(s, Delete) for s in session.statements)
     assert session.added[0].source_document_id is None
+
+
+@pytest.mark.asyncio
+async def test_replace_for_source_document_rejects_cross_project_item() -> None:
+    """TS-UD-PROC-WBS-IDEM-001: a WBS item from another project is rejected before insert."""
+    tenant_id = uuid4()
+    project_id = uuid4()
+    other_project_id = uuid4()
+    document_id = uuid4()
+    session = FakeSession()
+    repository = SQLAlchemyWBSRepository(session)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="project_id"):
+        await repository.replace_for_source_document(
+            project_id=project_id,
+            source_document_id=document_id,
+            wbs_items=[_wbs_item(other_project_id, document_id, "SCH-001", "Mobilization")],
+            tenant_id=tenant_id,
+        )
