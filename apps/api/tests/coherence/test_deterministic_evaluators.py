@@ -19,6 +19,7 @@ from datetime import date, datetime, timedelta
 import pytest
 
 from src.coherence.models import Clause, FindingSignal
+from src.coherence.rules_engine.base import ApplicabilityState
 from src.coherence.rules_engine.config import EvaluatorConfig
 from src.coherence.rules_engine.deterministic import (
     AdvancePaymentEvaluator,
@@ -248,6 +249,60 @@ class TestBudgetLineItemEvaluator:
         signal = evaluator.evaluate_v3(clause)
         assert signal is not None
         assert "deviation_pct" in signal.raw_data
+
+    def test_labor_row_not_flagged_multi_factor(self, evaluator):
+        """A personnel row (headcount x months x rate) is not a 2-factor line — no false positive."""
+        clause = Clause(
+            id="C-lab",
+            text="Soldadores homologados (TIG/MIG - OCA)",
+            data={"unit_price": 2800, "quantity": 66, "line_total": 100800},
+        )
+        # up*qty = 184,800 != 100,800 (a hidden duration factor), but this is labor.
+        assert evaluator.evaluate_v3(clause) is None
+
+    def test_duration_priced_equipment_not_flagged(self, evaluator):
+        """Rented equipment priced per period ('x 4 meses') is multi-factor — no false positive."""
+        clause = Clause(
+            id="C-eq",
+            text="Grupos de soldadura (5 uds. x 4 meses)",
+            data={"unit_price": 450, "quantity": 54, "line_total": 9000},
+        )
+        assert evaluator.evaluate_v3(clause) is None
+
+    def test_time_unit_marks_multi_factor(self, evaluator):
+        """An explicit time unit ('mes') marks a multi-factor row even without a labor name."""
+        clause = Clause(
+            id="C-unit",
+            text="Alquiler de caseta de obra",
+            data={"unit_price": 3800, "quantity": 8, "line_total": 45600, "unit": "mes"},
+        )
+        assert evaluator.evaluate_v3(clause) is None
+
+    def test_material_row_with_real_error_still_flagged(self, evaluator):
+        """A genuine 2-factor material row error is still detected (rule not over-suppressed)."""
+        clause = Clause(
+            id="C-mat",
+            text="Tuberia DN 300 (impulsion)",
+            data={"unit_price": 100, "quantity": 10, "line_total": 2000},
+        )
+        signal = evaluator.evaluate_v3(clause)
+        assert signal is not None
+        assert "deviation_pct" in signal.raw_data
+
+    def test_applicability_skips_multi_factor_labor(self, evaluator):
+        """Multi-factor labor rows are reported as skipped; material rows stay evaluated."""
+        labor = Clause(
+            id="C-lab2",
+            text="Montadores mecanicos (calderia / tuberias)",
+            data={"unit_price": 2500, "quantity": 4.7, "line_total": 70000},
+        )
+        material = Clause(
+            id="C-mat2",
+            text="Valvulas de mariposa con accionamiento",
+            data={"unit_price": 1800, "quantity": 8, "line_total": 14400},
+        )
+        assert evaluator.applicability(labor) == ApplicabilityState.SKIPPED_MISSING_INPUTS
+        assert evaluator.applicability(material) == ApplicabilityState.EVALUATED
 
 
 class TestBudgetSumMismatchEvaluator:

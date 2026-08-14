@@ -27,7 +27,7 @@ async def build_budget_clauses(
 ) -> list[Clause]:
     """Build deterministic BUDGET clauses from tenant-scoped procurement BOM rows."""
     bom_stmt = text("""
-        SELECT b.id, b.item_name, b.quantity, b.unit_price, b.total_price
+        SELECT b.id, b.item_name, b.quantity, b.unit_price, b.total_price, b.unit
         FROM procurement_bom_items b
         JOIN projects p ON b.project_id = p.id
         WHERE b.project_id = CAST(:project_id AS uuid)
@@ -64,6 +64,7 @@ async def build_budget_clauses(
                     "quantity": quantity,
                     "line_total": total_price,
                     "total": total_price,
+                    "unit": row.unit,
                 },
             )
         )
