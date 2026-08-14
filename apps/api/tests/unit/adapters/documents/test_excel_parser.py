@@ -417,6 +417,62 @@ class TestExcelParserRealWorldHeaders:
         assert result[0]["total"] == 4200.0
 
     @pytest.mark.asyncio
+    async def test_budget_extracts_unit_of_measure(self):
+        """The UNIDAD (unit-of-measure) column is captured onto each line item."""
+        result = await self._parse_budget(
+            [
+                ["CÓDIGO", "CAPÍTULO Y PARTIDA", "UNIDAD", "CANTIDAD", "PRECIO UNIT. (€)", "IMPORTE (€)"],
+                ["1.1.1", "Bombas sumergibles", "ud", 3, 45000, 135000],
+                ["2.2.1", "Soldadores homologados", "mes/h", "6 sold x 6m", "2.800,00/mes", 100800],
+            ]
+        )
+        assert len(result) == 2
+        assert result[0]["unit"] == "ud"
+        assert result[1]["unit"] == "mes/h"
+        # quantity/unit_price still parse (a real budget the parser already handled).
+        assert result[0]["quantity"] == 3.0
+
+    @pytest.mark.asyncio
+    async def test_budget_infers_category_from_unit_and_name(self):
+        """Category: time-priced labor -> service, equipment name -> equipment, measured -> material."""
+        result = await self._parse_budget(
+            [
+                ["Partida", "Unidad", "Cantidad", "Precio Unit. (€)", "Importe (€)"],
+                ["Bombas sumergibles centrifugas", "ud", 3, 45000, 135000],
+                ["Tubería DN 300 (impulsión)", "m", 80, 420, 33600],
+                ["Soldadores homologados", "mes/h", 6, 2800, 100800],
+            ]
+        )
+        cats = {r["item"]: r.get("category") for r in result}
+        assert cats["Bombas sumergibles centrifugas"] == "equipment"
+        assert cats["Tubería DN 300 (impulsión)"] == "material"
+        assert cats["Soldadores homologados"] == "service"
+
+    @pytest.mark.asyncio
+    async def test_budget_category_none_for_lump_sum_unit(self):
+        """Lump-sum / overhead units (gl, %) are undecidable -> category None."""
+        result = await self._parse_budget(
+            [
+                ["Partida", "Unidad", "Cantidad", "Precio Unit. (€)", "Importe (€)"],
+                ["Gastos generales de obra", "gl", 1, 50000, 50000],
+            ]
+        )
+        assert result[0]["unit"] == "gl"
+        assert result[0].get("category") is None
+
+    @pytest.mark.asyncio
+    async def test_budget_without_unit_column_still_parses(self):
+        """A budget with no UNIDAD column still parses; unit is None (backward compatible)."""
+        result = await self._parse_budget(
+            [
+                ["Partida", "Cantidad", "Precio Unit. (€)", "Importe (€)"],
+                ["Tubería DN 300", 80, 420, 33600],
+            ]
+        )
+        assert len(result) == 1
+        assert result[0].get("unit") is None
+
+    @pytest.mark.asyncio
     async def test_schedule_accepts_decorated_week_headers(self):
         """Schedule headers like 'Actividad / Tarea' and 'Inicio (Semana)' match."""
         from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser

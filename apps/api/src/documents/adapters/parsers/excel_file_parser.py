@@ -34,6 +34,34 @@ class BudgetRows(list[dict[str, Any]]):
         self.stated_total = stated_total
 
 
+# ---------------------------------------------------------------------------
+# Budget category inference (best-effort). Parallels the multi-factor detection
+# in coherence/rules_engine/deterministic.py, kept local to avoid a documents ->
+# coherence import. Time-priced rows are labor/rental (service); equipment nouns
+# are equipment; measured goods are material.
+# ---------------------------------------------------------------------------
+_TIME_UNIT_TOKENS = frozenset({
+    "mes", "meses", "month", "months", "mo", "h", "hr", "hora", "horas",
+    "hour", "hours", "hh", "jornada", "jornadas", "dia", "dias", "day", "days",
+    "semana", "semanas", "week", "weeks", "ano", "anio", "anios", "year", "years",
+})
+_LABOR_NAME_TOKENS = (
+    "soldador", "montador", "electricista", "ayudante", "peon", "peones",
+    "oficial", "operario", "operador", "encargado", "capataz", "ingeniero",
+    "tecnico", "jefe", "director", "administrativo", "auxiliar", "jornalero",
+    "maquinista", "conductor", "gruista", "mano de obra",
+)
+_EQUIPMENT_NAME_TOKENS = (
+    "bomba", "motor", "variador", "cuadro", "valvula", "grupo", "compresor",
+    "generador", "transformador", "ventilador", "equipo", "maquina",
+    "arrancador", "caldera", "carretilla",
+)
+_MATERIAL_UNIT_TOKENS = frozenset({
+    "ud", "u", "uds", "unidad", "m", "m2", "m3", "ml", "mm", "cm", "km",
+    "kg", "g", "gr", "t", "tn", "l", "lt",
+})
+
+
 class ExcelFileParser:
     """
     Adapter class for parsing Excel files.
@@ -179,12 +207,22 @@ class ExcelFileParser:
                 # has a measured quantity and/or a unit price.
                 if quantity is None and unit_price is None:
                     continue
+                unit_raw = row_data.get("unit")
+                unit_value = (
+                    str(unit_raw).strip()
+                    if unit_raw is not None and str(unit_raw).strip()
+                    else None
+                )
                 budget_data.append(
                     {
                         "item": row_data.get("item"),
                         "quantity": quantity,
                         "unit_price": unit_price,
                         "total": total,
+                        "unit": unit_value,
+                        "category": self._infer_budget_category(
+                            row_data.get("item"), unit_value
+                        ),
                     }
                 )
             return budget_data
@@ -245,7 +283,40 @@ class ExcelFileParser:
                 "subtotal",
                 "coste",
             },
+            # Optional unit-of-measure column (not in `required`). Kept distinct
+            # from `quantity` ("ud"/"uds"/"unidades") and `unit price` ("precio
+            # unitario"); most-specific-alias-wins keeps "PRECIO UNIT." as price.
+            "unit": {
+                "unit",
+                "unidad",
+                "u.m.",
+                "u. m.",
+                "uom",
+                "medida",
+                "unidad de medida",
+            },
         }
+
+    @classmethod
+    def _infer_budget_category(cls, name: Any, unit: str | None) -> str | None:
+        """Best-effort BOM category (a BOMCategory value) from unit + item name.
+
+        Time-priced rows (``mes``, ``mes/h``, ``día``, ``h``) and personnel names
+        are labor/rental -> ``"service"``; equipment nouns -> ``"equipment"``;
+        measured goods -> ``"material"``. Returns ``None`` when undecidable (e.g.
+        ``"gl"`` lump-sum, ``"%"`` overhead). Heuristic; no external dependency.
+        """
+        unit_tokens = set(cls._normalize_header(unit).split()) if unit else set()
+        name_norm = cls._normalize_header(name)
+        if unit_tokens & _TIME_UNIT_TOKENS or any(
+            kw in name_norm for kw in _LABOR_NAME_TOKENS
+        ):
+            return "service"
+        if any(kw in name_norm for kw in _EQUIPMENT_NAME_TOKENS):
+            return "equipment"
+        if unit_tokens & _MATERIAL_UNIT_TOKENS:
+            return "material"
+        return None
 
     @classmethod
     def _find_budget_headers(cls, sheet: Any) -> tuple[int | None, list[str]]:

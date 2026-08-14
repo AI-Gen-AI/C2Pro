@@ -17,7 +17,7 @@ import structlog
 from src.documents.domain.models import Document, DocumentType
 from src.documents.ports.entity_extraction_service import IEntityExtractionService
 from src.procurement.application.dtos import BOMItemCreate, WBSItemCreate
-from src.procurement.domain.models import ProcurementStatus, WBSItemType
+from src.procurement.domain.models import BOMCategory, ProcurementStatus, WBSItemType
 
 # DTOs and Interfaces from other modules
 from src.stakeholders.application.dtos import StakeholderCreateRequest
@@ -187,6 +187,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
                     "code": f"BUD-{index:04d}",
                     "quantity": _parse_decimal(item.get("quantity")),
                     "unit": item.get("unit"),
+                    "category": item.get("category"),
                     "price": _parse_decimal(item.get("unit_price")),
                     "total": _parse_decimal(item.get("total")),
                     "metadata": {"source_document_id": str(document.id)}
@@ -199,6 +200,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
                         "code": unit.get("code"),
                         "quantity": _parse_decimal(unit.get("quantity")),
                         "unit": unit.get("unit"),
+                        "category": unit.get("category"),
                         "price": _parse_decimal(unit.get("price")),
                         "total": _parse_decimal(unit.get("total")),
                         "metadata": {
@@ -223,7 +225,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
                     total_price=item["total"],
                     currency="EUR",
                     description=None,
-                    category=None,
+                    category=_to_bom_category(item.get("category")),
                     supplier=None,
                     lead_time_days=None,
                     incoterm=None,
@@ -250,6 +252,18 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
             logger.debug("bom_extraction_skipped", document_id=str(document.id), error=str(exc))
 
         return count
+
+
+def _to_bom_category(value: object) -> BOMCategory | None:
+    """Map a parsed category string (e.g. "material"/"service") to BOMCategory."""
+    if isinstance(value, BOMCategory):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return BOMCategory(value.strip().lower())
+        except ValueError:
+            return None
+    return None
 
 
 def _extract_emails(text_blocks: list[dict[str, Any]]) -> set[str]:

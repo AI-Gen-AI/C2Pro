@@ -533,6 +533,8 @@ class TestExcelParser:
                 "quantity": 3,
                 "unit_price": 50.0,
                 "total": 150.0,
+                "unit": None,
+                "category": None,
             }
         ]
 
@@ -558,6 +560,8 @@ class TestExcelParser:
                 "quantity": 1234.5,
                 "unit_price": 12.3,
                 "total": 15184.35,
+                "unit": None,
+                "category": None,
             }
         ]
 
@@ -585,6 +589,8 @@ class TestExcelParser:
                 "quantity": 3,
                 "unit_price": 1200.0,
                 "total": 3600.0,
+                "unit": None,
+                "category": None,
             }
         ]
 
@@ -610,6 +616,8 @@ class TestExcelParser:
                 "quantity": 3,
                 "unit_price": 50.0,
                 "total": 150.0,
+                "unit": None,
+                "category": None,
             }
         ]
 
@@ -636,6 +644,8 @@ class TestExcelParser:
                 "quantity": 1,
                 "unit_price": 100.0,
                 "total": 100.0,
+                "unit": None,
+                "category": None,
             }
         ]
         assert result.stated_total == 654_144_805.0
