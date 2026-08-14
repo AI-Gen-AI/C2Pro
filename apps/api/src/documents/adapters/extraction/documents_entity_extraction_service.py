@@ -114,8 +114,8 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
             return 0
 
         use_case = self._wbs_use_case_factory()
-        count = 0
 
+        payloads: list[WBSItemCreate] = []
         for index, task in enumerate(schedule_data, start=1):
             task_name = task.get("task")
             if not task_name:
@@ -130,30 +130,43 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
             if isinstance(status, str) and status.strip():
                 metadata["status"] = status.strip()
 
-            payload = WBSItemCreate(
-                project_id=document.project_id,
-                wbs_code=wbs_code,
-                name=str(task_name),
-                level=_infer_wbs_level(wbs_code),
-                item_type=WBSItemType.ACTIVITY,
-                parent_id=None,
-                description=None,
-                budget_allocated=None,
-                budget_spent=Decimal(0),
-                actual_start=None,
-                actual_end=None,
-                planned_start=_parse_datetime_value(task.get("start_date")),
-                planned_end=_parse_datetime_value(task.get("end_date")),
-                funded_by_clause_id=None,
-                wbs_metadata=metadata,
+            payloads.append(
+                WBSItemCreate(
+                    project_id=document.project_id,
+                    wbs_code=wbs_code,
+                    name=str(task_name),
+                    level=_infer_wbs_level(wbs_code),
+                    item_type=WBSItemType.ACTIVITY,
+                    parent_id=None,
+                    description=None,
+                    budget_allocated=None,
+                    budget_spent=Decimal(0),
+                    actual_start=None,
+                    actual_end=None,
+                    planned_start=_parse_datetime_value(task.get("start_date")),
+                    planned_end=_parse_datetime_value(task.get("end_date")),
+                    funded_by_clause_id=None,
+                    source_document_id=document.id,
+                    wbs_metadata=metadata,
+                )
             )
-            try:
-                await use_case.execute(payload, _tenant_id)
-                count += 1
-            except Exception as exc:
-                logger.debug("wbs_extraction_skipped", code=wbs_code, error=str(exc))
 
-        return count
+        if not payloads:
+            return 0
+
+        # Idempotent per source document: re-parsing the same schedule replaces
+        # its own WBS rows instead of colliding on uq_procurement_wbs_project_code.
+        try:
+            created = await use_case.replace_for_source_document(
+                project_id=document.project_id,
+                source_document_id=document.id,
+                wbs_items=payloads,
+                tenant_id=_tenant_id,
+            )
+            return len(created)
+        except Exception as exc:
+            logger.debug("wbs_extraction_skipped", document_id=str(document.id), error=str(exc))
+            return 0
 
     async def _extract_bom_items(
         self, document: Document, parsed_payload: dict[str, Any], _tenant_id: UUID

@@ -92,6 +92,9 @@ class WBSItemORM(Base):
     actual_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     actual_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     source_clause_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    source_document_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=True
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     wbs_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default={}, nullable=False)
     __mapper_args__ = {"version_id_col": version}

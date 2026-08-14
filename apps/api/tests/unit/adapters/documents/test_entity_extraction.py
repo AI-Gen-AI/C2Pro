@@ -159,7 +159,9 @@ class TestExtractionServiceIntegration:
         from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_wbs_use_case = MagicMock()
-        mock_wbs_use_case.execute = AsyncMock()
+        mock_wbs_use_case.replace_for_source_document = AsyncMock(
+            side_effect=lambda **kwargs: kwargs["wbs_items"]
+        )
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=MagicMock(return_value=MagicMock()),
             wbs_use_case_factory=MagicMock(return_value=mock_wbs_use_case),
@@ -190,7 +192,7 @@ class TestExtractionServiceIntegration:
             tenant_id=doc.tenant_id,
         )
 
-        payload = mock_wbs_use_case.execute.await_args.args[0]
+        payload = mock_wbs_use_case.replace_for_source_document.await_args.kwargs["wbs_items"][0]
         assert payload.level == 2
 
     @pytest.mark.asyncio
@@ -446,7 +448,7 @@ class TestExtractionServiceIntegration:
         from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_use_case = MagicMock()
-        mock_use_case.execute = AsyncMock(side_effect=Exception("DB error"))
+        mock_use_case.replace_for_source_document = AsyncMock(side_effect=Exception("DB error"))
 
         mock_stakeholder_factory = MagicMock(return_value=MagicMock())
         mock_wbs_factory = MagicMock(return_value=mock_use_case)
@@ -468,7 +470,8 @@ class TestExtractionServiceIntegration:
             upload_status=DocumentStatus.PARSED,
         )
 
-        parsed_payload = {"schedule": []}
+        # Non-empty schedule so persistence runs and the raised error is handled.
+        parsed_payload = {"schedule": [{"task": "Excavation"}]}
 
         result = await service._extract_wbs_items(doc, parsed_payload, uuid4())
 
@@ -483,7 +486,9 @@ class TestExtractionServiceIntegration:
         from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_use_case = MagicMock()
-        mock_use_case.execute = AsyncMock()
+        mock_use_case.replace_for_source_document = AsyncMock(
+            side_effect=lambda **kwargs: kwargs["wbs_items"]
+        )
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=MagicMock(return_value=MagicMock()),
             wbs_use_case_factory=MagicMock(return_value=mock_use_case),
@@ -517,7 +522,7 @@ class TestExtractionServiceIntegration:
         )
 
         assert created == 1
-        payload = mock_use_case.execute.await_args.args[0]
+        payload = mock_use_case.replace_for_source_document.await_args.kwargs["wbs_items"][0]
         assert payload.wbs_metadata["predecessor_id"] == "SCH-001"
         assert payload.wbs_metadata["status"] == "delayed"
 
