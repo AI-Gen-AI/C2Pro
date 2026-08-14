@@ -914,6 +914,7 @@ async def get_coherence_dashboard(
         select(
             CoherenceResultORM.global_score,
             CoherenceResultORM.category_scores,
+            CoherenceResultORM.alerts,
             CoherenceResultORM.calculated_at,
             CoherenceResultORM.score_version,
             CoherenceResultORM.score_reason,
@@ -951,8 +952,14 @@ async def get_coherence_dashboard(
     elif project.coherence_score is not None:
         global_score = float(project.coherence_score)
 
+    # alert_count follows the same source priority as the score (see docstring):
+    # a completed Analysis first, then the latest /evaluate CoherenceResult, else
+    # the alerts table count computed above. Without this fallback an evaluate-only
+    # project (no analysis pipeline run) always reported alert_count = 0.
     if latest_analysis and latest_analysis.alerts_count is not None:
         alert_count = latest_analysis.alerts_count
+    elif coherence_result is not None and coherence_result.alerts is not None:
+        alert_count = len(coherence_result.alerts)
 
     # Calculate last_updated timestamp
     candidates = [
