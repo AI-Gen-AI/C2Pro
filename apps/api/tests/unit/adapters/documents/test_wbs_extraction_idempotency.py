@@ -54,6 +54,7 @@ async def test_schedule_extraction_replaces_wbs_rows_once_per_source_document() 
             "schedule": [
                 {"task": "Mobilization"},
                 {"task": "Excavation"},
+                {"description": "row with no task name is skipped"},
             ]
         },
         tenant_id=tenant_id,
