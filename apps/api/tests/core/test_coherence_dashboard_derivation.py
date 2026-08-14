@@ -131,6 +131,59 @@ async def test_dashboard_uses_analysis_updated_at_and_falls_back_to_coherence_re
 
 
 @pytest.mark.asyncio
+async def test_dashboard_alert_count_falls_back_to_coherence_result_alerts(
+    db, test_tenant
+) -> None:
+    """An /evaluate-only project surfaces its CoherenceResult alerts (no Analysis / AlertORM rows)."""
+    project = ProjectORM(
+        id=uuid4(),
+        tenant_id=test_tenant.id,
+        name="Dashboard Evaluate-Only Project",
+        description=None,
+        code="COH-EVAL-ONLY",
+        project_type="construction",
+        status="active",
+        estimated_budget=1000.0,
+        currency="EUR",
+        start_date=None,
+        end_date=None,
+        coherence_score=None,
+        last_analysis_at=None,
+        metadata_json={},
+    )
+    db.add(project)
+    await db.flush()
+
+    coherence_result = CoherenceResultORM(
+        project_id=project.id,
+        tenant_id=test_tenant.id,
+        global_score=70,
+        category_scores={
+            "SCOPE": 70, "BUDGET": 60, "QUALITY": 72,
+            "TECHNICAL": 73, "LEGAL": 74, "TIME": 65,
+        },
+        category_details=[],
+        alerts=[
+            {"rule_id": "DET-BUD-SUM", "severity": "critical", "category": "BUDGET", "message": "m1"},
+            {"rule_id": "DET-BUD-INTERNAL", "severity": "high", "category": "BUDGET", "message": "m2"},
+            {"rule_id": "DET-TIME-OVERLAP", "severity": "medium", "category": "TIME", "message": "m3"},
+        ],
+        is_gaming_detected=False,
+        gaming_violations=[],
+        penalty_points=0,
+        calculated_at=datetime.now(UTC).replace(tzinfo=None),
+    )
+    db.add(coherence_result)
+    await db.commit()
+
+    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
+
+    assert response.coherence_score == 70
+    # No Analysis row and no AlertORM rows — the count must come from the evaluate result.
+    assert response.alert_count == 3
+
+
+@pytest.mark.asyncio
 async def test_dashboard_tolerates_malformed_analysis_breakdown_payloads(
     db, test_tenant
 ) -> None:
