@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from datetime import date, datetime, timedelta
 from typing import Any, TypeGuard
 
@@ -133,6 +134,13 @@ _DURATION_PATTERN = re.compile(
 )
 
 
+def _unit_tokens(unit: str) -> set[str]:
+    """Accent-stripped, lowercased alnum tokens of a unit label (``mes/h`` -> {mes, h})."""
+    norm = unicodedata.normalize("NFKD", unit.lower())
+    norm = "".join(ch for ch in norm if not unicodedata.combining(ch))
+    return {tok for tok in re.split(r"[^a-z0-9]+", norm) if tok}
+
+
 def _is_multi_factor_line(name: str | None, unit: object) -> bool:
     """True when a budget row is priced by a hidden third factor (duration/headcount).
 
@@ -142,7 +150,9 @@ def _is_multi_factor_line(name: str | None, unit: object) -> bool:
     (TASK-COH-BUD-LINEITEM-011). Detection is heuristic and conservative — a unit
     denoting time, a personnel role in the name, or explicit duration phrasing.
     """
-    if isinstance(unit, str) and unit.strip().lower() in _TIME_LABOR_UNITS:
+    if isinstance(unit, str) and _unit_tokens(unit) & _TIME_LABOR_UNITS:
+        # Tokenized so compound units like "mes/h" or "ud/mes" (real parsed
+        # UNIDAD values) match on their time component.
         return True
     if not name:
         return False

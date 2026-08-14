@@ -278,6 +278,15 @@ class TestBudgetLineItemEvaluator:
         )
         assert evaluator.evaluate_v3(clause) is None
 
+    def test_compound_time_unit_marks_multi_factor(self, evaluator):
+        """A compound unit like 'mes/h' (parsed from the real budget) is tokenized and skipped."""
+        clause = Clause(
+            id="C-cu",
+            text="Partida sin denominacion de oficio",
+            data={"unit_price": 2800, "quantity": 66, "line_total": 100800, "unit": "mes/h"},
+        )
+        assert evaluator.evaluate_v3(clause) is None
+
     def test_material_row_with_real_error_still_flagged(self, evaluator):
         """A genuine 2-factor material row error is still detected (rule not over-suppressed)."""
         clause = Clause(
