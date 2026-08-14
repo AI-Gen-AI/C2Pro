@@ -449,6 +449,18 @@ class TestExcelParserRealWorldHeaders:
         assert cats["Soldadores homologados"] == "service"
 
     @pytest.mark.asyncio
+    async def test_budget_category_none_for_lump_sum_unit(self):
+        """Lump-sum / overhead units (gl, %) are undecidable -> category None."""
+        result = await self._parse_budget(
+            [
+                ["Partida", "Unidad", "Cantidad", "Precio Unit. (€)", "Importe (€)"],
+                ["Gastos generales de obra", "gl", 1, 50000, 50000],
+            ]
+        )
+        assert result[0]["unit"] == "gl"
+        assert result[0].get("category") is None
+
+    @pytest.mark.asyncio
     async def test_budget_without_unit_column_still_parses(self):
         """A budget with no UNIDAD column still parses; unit is None (backward compatible)."""
         result = await self._parse_budget(

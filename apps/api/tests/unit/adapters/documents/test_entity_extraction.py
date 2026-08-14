@@ -798,6 +798,22 @@ class TestParseDecimal:
         assert result is None
 
 
+class TestToBomCategory:
+    """Tests for the _to_bom_category string->enum mapping."""
+
+    def test_maps_known_and_unknown_values(self):
+        from src.documents.adapters.extraction.documents_entity_extraction_service import (
+            _to_bom_category,
+        )
+        from src.procurement.domain.models import BOMCategory
+
+        assert _to_bom_category("service") == BOMCategory.SERVICE
+        assert _to_bom_category("MATERIAL") == BOMCategory.MATERIAL
+        assert _to_bom_category(BOMCategory.EQUIPMENT) == BOMCategory.EQUIPMENT
+        assert _to_bom_category("not-a-category") is None
+        assert _to_bom_category(None) is None
+
+
 class TestNormalizeNameFromEmail:
     """Tests for _normalize_name_from_email helper."""
 
