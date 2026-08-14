@@ -50,6 +50,10 @@ async def pg_engine():
         engine = create_async_engine(url, echo=False)
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all, tables=[ProjectORM.__table__])
+            # Minimal FK-target stub for WBSItemORM.source_document_id -> documents.id.
+            # The full DocumentORM table needs the document_type enum + more tables,
+            # which this subset schema deliberately does not build.
+            await conn.execute(text("CREATE TABLE IF NOT EXISTS documents (id uuid PRIMARY KEY)"))
             await conn.run_sync(ProcurementBase.metadata.create_all, tables=[WBSItemORM.__table__])
         database_module._session_factory = async_sessionmaker(
             bind=engine,
@@ -63,6 +67,7 @@ async def pg_engine():
                 async with engine.begin() as conn:
                     await conn.execute(text("DROP TABLE IF EXISTS procurement_bom_items CASCADE"))
                     await conn.execute(text("DROP TABLE IF EXISTS procurement_wbs_items CASCADE"))
+                    await conn.execute(text("DROP TABLE IF EXISTS documents CASCADE"))
                     await conn.run_sync(Base.metadata.drop_all, tables=[ProjectORM.__table__])
             except OperationalError:
                 pass

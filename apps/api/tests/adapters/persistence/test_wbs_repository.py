@@ -13,7 +13,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from docker.errors import DockerException
-from sqlalchemy import Column, Table
+from sqlalchemy import Column, Table, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -67,6 +67,8 @@ async def pg_engine():
         async with engine.begin() as conn:
             _ensure_test_fk_stub_tables()
             await conn.run_sync(Base.metadata.create_all, tables=[ProjectORM.__table__])
+            # Minimal FK-target stub for WBSItemORM.source_document_id -> documents.id.
+            await conn.execute(text("CREATE TABLE IF NOT EXISTS documents (id uuid PRIMARY KEY)"))
             await conn.run_sync(ProcurementBase.metadata.create_all, tables=[WBSItemORM.__table__])
         yield engine
     finally:

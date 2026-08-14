@@ -46,12 +46,15 @@ async def pg_engine():
         engine = create_async_engine(url, echo=False, poolclass=NullPool)
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all, tables=[ProjectORM.__table__])
+            # Minimal FK-target stub for WBSItemORM.source_document_id -> documents.id.
+            await conn.execute(text("CREATE TABLE IF NOT EXISTS documents (id uuid PRIMARY KEY)"))
             await conn.run_sync(ProcurementBase.metadata.create_all, tables=[WBSItemORM.__table__])
         yield engine
     finally:
         if engine is not None:
             async with engine.begin() as conn:
                 await conn.execute(text("DROP TABLE IF EXISTS procurement_wbs_items CASCADE"))
+                await conn.execute(text("DROP TABLE IF EXISTS documents CASCADE"))
                 await conn.run_sync(Base.metadata.drop_all, tables=[ProjectORM.__table__])
             await engine.dispose()
         if container is not None:
