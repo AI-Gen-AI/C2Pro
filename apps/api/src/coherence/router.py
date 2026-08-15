@@ -730,15 +730,25 @@ async def evaluate_project_coherence(
                 score_missing_dimensions=enriched_result.score_missing_dimensions,
             )
         )
-        # Mirror alerts into the alerts table so the alerts UI (which lists the
-        # alerts table, not coherence_results.alerts) surfaces them.
-        await _mirror_coherence_alerts_to_alerts_table(
-            db=db,
-            project_id=payload.project_id,
-            tenant_id=current_user.tenant_id,
-            alerts=enriched_result.alerts,
-        )
         await db.commit()
+        # Best-effort: mirror alerts into the alerts table so the alerts UI (which
+        # lists the alerts table, not coherence_results.alerts) surfaces them. Runs
+        # after the coherence result is committed so a mirroring failure can never
+        # fail the already-persisted evaluation.
+        try:
+            await _mirror_coherence_alerts_to_alerts_table(
+                db=db,
+                project_id=payload.project_id,
+                tenant_id=current_user.tenant_id,
+                alerts=enriched_result.alerts,
+            )
+            await db.commit()
+        except Exception:
+            logger.warning(
+                "coherence_alert_mirror_failed",
+                project_id=str(payload.project_id),
+                exc_info=True,
+            )
 
     # V2 shadow: run real CoherenceV2Orchestrator and emit delta event.
     # Guard mirrors _maybe_add_v2_dashboard: only fires when both flags are True.
