@@ -588,6 +588,48 @@ async def _mirror_coherence_alerts_to_alerts_table(
         )
 
 
+_TECHNICAL_PLIEGO_MARKERS: tuple[str, ...] = (
+    "prescripciones técnicas",
+    "prescripciones tecnicas",
+    "especificaciones técnicas",
+    "especificaciones tecnicas",
+    "pliego técnico",
+    "pliego tecnico",
+)
+
+
+def _technical_specs_referenced(clauses: Sequence[Clause]) -> bool:
+    """True if any clause references a separate technical specifications document."""
+    return any(
+        marker in (clause.text or "").lower()
+        for clause in clauses
+        for marker in _TECHNICAL_PLIEGO_MARKERS
+    )
+
+
+def _annotate_missing_technical_hint(
+    result: EnrichedCoherenceResult, clauses: Sequence[Clause]
+) -> None:
+    """Append an actionable hint to ``score_reason`` when TECHNICAL is withheld for
+    lack of evidence but the documents reference an (unprovided) technical pliego.
+
+    Honest by design: it never invents a technical score — it explains the
+    withholding and tells the user which document to upload.
+    """
+    if "TECHNICAL" not in (result.score_missing_dimensions or []):
+        return
+    if not _technical_specs_referenced(clauses):
+        return
+    hint = (
+        "Technical dimension withheld: the documents reference a technical "
+        "specifications pliego (prescripciones técnicas) that was not provided. "
+        "Upload the Pliego de prescripciones técnicas for a technical coherence score."
+    )
+    result.score_reason = (
+        f"{result.score_reason} {hint}".strip() if result.score_reason else hint
+    )
+
+
 # ---- API Endpoint ----
 @router.post(
     "/evaluate",
@@ -675,6 +717,11 @@ async def evaluate_project_coherence(
         alerts_count=len(enriched_result.alerts),
         overall_score=enriched_result.overall_score,
     )
+
+    # Referenced-but-missing hint: if the technical dimension was withheld for lack
+    # of evidence but the documents reference a technical specifications pliego, tell
+    # the user what to upload — honest and actionable, never a fabricated score.
+    _annotate_missing_technical_hint(enriched_result, clauses)
 
     # Persist result so the dashboard always reflects the latest evaluation
     if payload.project_id and enriched_result.overall_score is not None:
