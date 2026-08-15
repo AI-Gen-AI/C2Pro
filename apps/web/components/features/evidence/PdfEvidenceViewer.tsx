@@ -11,6 +11,7 @@ import { createWatermarkToken } from "@/components/features/evidence/watermark-t
 import { sanitizeWatermarkPayload } from "@/components/features/evidence/watermark-sanitize";
 import { EvidenceWatermarkOverlay } from "@/components/features/evidence/EvidenceWatermarkOverlay";
 import { PDFViewer } from "@/components/evidence/pdf/PDFViewer";
+import { useAuthStore } from "@/stores/auth";
 
 export interface PdfHighlight {
   id: string;
@@ -60,6 +61,14 @@ export function PdfEvidenceViewer({
   const [currentFileUrl, setCurrentFileUrl] = useState(fileUrl);
   const [currentHighlights, setCurrentHighlights] =
     useState<PdfHighlight[]>(highlights);
+
+  // The document download endpoint is authenticated; pdf.js must send the bearer
+  // token or the fetch 401s ("Error loading PDF"). Same token the API client uses.
+  const authToken = useAuthStore((state) => state.token);
+  const pdfHttpHeaders = useMemo(
+    () => (authToken ? { Authorization: `Bearer ${authToken}` } : undefined),
+    [authToken],
+  );
 
   const isDemo = env.APP_MODE === "demo";
 
@@ -179,6 +188,7 @@ export function PdfEvidenceViewer({
         <PDFViewer
           key={currentFileUrl}
           file={currentFileUrl}
+          httpHeaders={pdfHttpHeaders}
           initialPage={statePage}
           activeHighlightId={null}
           highlights={[]}
