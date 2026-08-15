@@ -430,50 +430,70 @@ async def _run_document_analysis(
         parsed_text = (
             document.document_metadata.get("parsed_text") if document.document_metadata else None
         )
-        if not parsed_text:
-            raise ValueError("parsed_text not available")
-
         chunk_count = await get_document_rag_chunk_count(
             session=session,
             tenant_id=tenant_id,
             document_id=document_id,
         )
-        if chunk_count == 0:
-            raise RagChunksUnavailableError(
-                "RAG chunks were not committed before document analysis"
+
+        # The N1-N17 text-analysis graph only applies to free-text documents that
+        # have RAG chunks. Structured documents (schedule/budget) carry no free
+        # text, and text documents whose embeddings are unavailable (e.g. no
+        # OPENAI_API_KEY -> zero chunks) cannot run it either. In both cases the
+        # document is still ANALYZED via the structured extraction (clauses / WBS
+        # / BOM) done during parsing — the graph is a best-effort enrichment, never
+        # a hard gate. This is what previously stranded documents in
+        # parsed_pending_analysis and the DLQ ("parsed_text not available" /
+        # "RAG chunks were not committed").
+        analysis_id: str | None = None
+        if parsed_text and chunk_count > 0:
+            graph_orchestrator = orchestrator or AnalysisOrchestratorFactory.create()
+            initial_state = {
+                "document_text": parsed_text,
+                "project_id": str(document.project_id),
+                "document_id": str(document.id),
+                "doc_type": getattr(document.document_type, "value", "")
+                if document.document_type
+                else "",
+                "tenant_id": str(tenant_id),
+                "messages": [],
+                "extracted_risks": [],
+                "extracted_wbs": [],
+                "confidence_score": 0.0,
+                "critique_notes": "",
+                "human_feedback": "",
+                "retry_count": 0,
+                "human_approval_required": False,
+                "analysis_id": None,
+                "force_full_pipeline": True,
+            }
+            logger.info(
+                "document_analysis_task_started",
+                extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
+            )
+            thread_id = f"document:{document_id}:analysis:{uuid4()}"
+            try:
+                result = await graph_orchestrator.run(initial_state, thread_id=thread_id)
+                analysis_id = result.get("analysis_id")
+            except Exception:
+                logger.exception(
+                    "document_analysis_graph_failed_nonfatal",
+                    extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
+                )
+        else:
+            logger.info(
+                "document_analysis_graph_skipped",
+                extra={
+                    "document_id": str(document_id),
+                    "tenant_id": str(tenant_id),
+                    "reason": "no_parsed_text" if not parsed_text else "no_rag_chunks",
+                },
             )
 
-        graph_orchestrator = orchestrator or AnalysisOrchestratorFactory.create()
-        initial_state = {
-            "document_text": parsed_text,
-            "project_id": str(document.project_id),
-            "document_id": str(document.id),
-            "doc_type": getattr(document.document_type, "value", "")
-            if document.document_type
-            else "",
-            "tenant_id": str(tenant_id),
-            "messages": [],
-            "extracted_risks": [],
-            "extracted_wbs": [],
-            "confidence_score": 0.0,
-            "critique_notes": "",
-            "human_feedback": "",
-            "retry_count": 0,
-            "human_approval_required": False,
-            "analysis_id": None,
-            "force_full_pipeline": True,
-        }
-
-        logger.info(
-            "document_analysis_task_started",
-            extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
-        )
-        thread_id = f"document:{document_id}:analysis:{uuid4()}"
-        result = await graph_orchestrator.run(initial_state, thread_id=thread_id)
-        analysis_id = result.get("analysis_id")
-        if analysis_id:
-            await repo.update_status(tenant_id, document_id, DocumentStatus.ANALYZED)
-            await session.commit()
+        # Parsing + structured extraction already completed upstream, so the
+        # document is analyzed regardless of the optional graph enrichment.
+        await repo.update_status(tenant_id, document_id, DocumentStatus.ANALYZED)
+        await session.commit()
         logger.info(
             "document_analysis_task_finished",
             extra={
@@ -484,7 +504,7 @@ async def _run_document_analysis(
             },
         )
         return {
-            "status": "completed" if analysis_id else "completed_without_persistence",
+            "status": "completed",
             "document_id": str(document_id),
             "analysis_id": analysis_id,
             "persisted": bool(analysis_id),

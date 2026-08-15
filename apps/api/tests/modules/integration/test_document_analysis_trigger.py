@@ -517,3 +517,93 @@ class TestDocumentAnalysisTask:
             thread_id != str(document.project_id)
             for thread_id in orchestrator.thread_ids
         )
+
+    @pytest.mark.asyncio
+    async def test_run_document_analysis_marks_analyzed_without_parsed_text(self):
+        """Structured docs (schedule/budget) have no parsed_text -> ANALYZED, graph skipped."""
+        from src.core.tasks.ingestion_tasks import _run_document_analysis
+
+        document_id = uuid4()
+        tenant_id = uuid4()
+        document = _make_document()
+        document.id = document_id
+        document.tenant_id = tenant_id
+        document.document_type = DocumentType.BUDGET
+        document.upload_status = DocumentStatus.PARSED_PENDING_ANALYSIS
+        document.document_metadata = {}  # no parsed_text (Excel doc)
+
+        class Orchestrator:
+            def __init__(self) -> None:
+                self.called = False
+
+            async def run(self, initial_state: dict, thread_id: str) -> dict:
+                self.called = True
+                return {"analysis_id": "should-not-run"}
+
+        orchestrator = Orchestrator()
+
+        with ExitStack() as stack:
+            stack.enter_context(patch("src.core.tasks.ingestion_tasks.init_db", new=AsyncMock()))
+            stack.enter_context(
+                patch("src.core.tasks.ingestion_tasks.get_raw_session", return_value=_make_session())
+            )
+            mock_repo = stack.enter_context(
+                patch("src.core.tasks.ingestion_tasks.SqlAlchemyDocumentRepository")
+            )
+            inst = mock_repo.return_value
+            inst.get_by_id = AsyncMock(return_value=document)
+            inst.update_status = AsyncMock()
+
+            result = await _run_document_analysis(
+                tenant_id=tenant_id, document_id=document_id, orchestrator=orchestrator
+            )
+
+        assert orchestrator.called is False
+        assert result["persisted"] is False
+        inst.update_status.assert_called_once_with(tenant_id, document_id, DocumentStatus.ANALYZED)
+
+    @pytest.mark.asyncio
+    async def test_run_document_analysis_marks_analyzed_when_no_rag_chunks(self):
+        """Zero RAG chunks (e.g. embeddings unavailable) -> ANALYZED, graph skipped, not stuck/DLQ."""
+        from src.core.tasks.ingestion_tasks import _run_document_analysis
+
+        document_id = uuid4()
+        tenant_id = uuid4()
+        document = _make_document()
+        document.id = document_id
+        document.tenant_id = tenant_id
+        document.upload_status = DocumentStatus.PARSED_PENDING_ANALYSIS
+        document.document_metadata = {"parsed_text": "some contract text"}
+
+        session = _make_session()
+        session.execute.return_value.scalar_one.return_value = 0  # no chunks committed
+
+        class Orchestrator:
+            def __init__(self) -> None:
+                self.called = False
+
+            async def run(self, initial_state: dict, thread_id: str) -> dict:
+                self.called = True
+                return {"analysis_id": "should-not-run"}
+
+        orchestrator = Orchestrator()
+
+        with ExitStack() as stack:
+            stack.enter_context(patch("src.core.tasks.ingestion_tasks.init_db", new=AsyncMock()))
+            stack.enter_context(
+                patch("src.core.tasks.ingestion_tasks.get_raw_session", return_value=session)
+            )
+            mock_repo = stack.enter_context(
+                patch("src.core.tasks.ingestion_tasks.SqlAlchemyDocumentRepository")
+            )
+            inst = mock_repo.return_value
+            inst.get_by_id = AsyncMock(return_value=document)
+            inst.update_status = AsyncMock()
+
+            result = await _run_document_analysis(
+                tenant_id=tenant_id, document_id=document_id, orchestrator=orchestrator
+            )
+
+        assert orchestrator.called is False
+        assert result["persisted"] is False
+        inst.update_status.assert_called_once_with(tenant_id, document_id, DocumentStatus.ANALYZED)
