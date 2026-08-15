@@ -325,6 +325,40 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict[str, Any]:
     return data
 
 
+# A new clause starts at a numbered header ("28.-", "28.1.-", "1.-"), a section
+# keyword (CLÁUSULA / ESTIPULACIÓN / ARTÍCULO / CLAUSE / ARTICLE / SECTION), or an
+# ordinal word (PRIMERA … DÉCIMA). Anchored at line start to avoid mid-sentence
+# matches. Used to split a contract into clause-sized chunks instead of sentences.
+_CLAUSE_BOUNDARY = re.compile(
+    r"(?m)^\s*(?:"
+    r"\d{1,3}(?:\.\d{1,3})*\s*\.\s*[-–]"
+    r"|(?:CL[ÁA]USULA|ESTIPULACI[ÓO]N|ART[ÍI]CULO|CLAUSE|ARTICLE|SECTION)\w*"
+    r"|(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|S[ÉE]PTIMA|OCTAVA|NOVENA|D[ÉE]CIMA)\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _split_contract_into_clauses(parsed_text: str) -> list[str]:
+    """Split a contract into clause-sized segments at clause-boundary markers.
+
+    Keeps each boundary marker with its clause body. Falls back to paragraph
+    blocks when no markers exist, so a contract is never fragmented into
+    per-sentence "clauses" (the old ``re.split`` on ``.!?`` produced hundreds of
+    meaningless one-line fragments).
+    """
+    boundaries = [m.start() for m in _CLAUSE_BOUNDARY.finditer(parsed_text)]
+    if boundaries:
+        cut_points = ([0] if boundaries[0] > 0 else []) + boundaries + [len(parsed_text)]
+        raw = [
+            parsed_text[cut_points[i] : cut_points[i + 1]]
+            for i in range(len(cut_points) - 1)
+        ]
+    else:
+        raw = re.split(r"\n\s*\n+", parsed_text)
+    return [segment.strip() for segment in raw if segment.strip()]
+
+
 def _extract_contract_clauses(
     *,
     document_id: UUID,
@@ -332,15 +366,11 @@ def _extract_contract_clauses(
     tenant_id: TenantId,
     parsed_text: str,
 ) -> list[Clause]:
-    segments = [
-        segment.strip()
-        for segment in re.split(r"(?<=[\.!?])\s+|\n\n+", parsed_text)
-        if segment.strip()
-    ]
     clauses: list[Clause] = []
-    for index, segment in enumerate(segments, start=1):
-        if len(segment) < 20:
+    for index, segment in enumerate(_split_contract_into_clauses(parsed_text), start=1):
+        if len(segment) < 40:
             continue
+        segment = segment[:4000]  # keep a clause clause-sized; guard OCR blobs
         clause_type = _infer_contract_clause_type(segment)
         clauses.append(
             Clause(
