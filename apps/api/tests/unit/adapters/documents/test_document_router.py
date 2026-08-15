@@ -733,6 +733,18 @@ class TestRouterHelperFunctions:
         result = _normalize_document_status_for_polling(DocumentStatus.PARSED)
         assert result.value == "parsed"
 
+    def test_normalize_document_status_analyzed(self):
+        """ANALYZED is a terminal-success state: clients render it as 'Analyzed'.
+
+        Regression guard: it previously fell through to PROCESSING, so the UI
+        showed analyzed documents stuck on 'processing' forever.
+        """
+        from src.documents.adapters.http.router import _normalize_document_status_for_polling
+        from src.documents.domain.models import DocumentStatus
+
+        result = _normalize_document_status_for_polling(DocumentStatus.ANALYZED)
+        assert result.value == "parsed"
+
     def test_normalize_document_status_error(self):
         """Test status normalization for ERROR."""
         from src.documents.adapters.http.router import _normalize_document_status_for_polling
@@ -771,6 +783,14 @@ class TestRouterHelperFunctions:
         from src.documents.domain.models import DocumentStatus
 
         result = _document_status_detail_for_polling(DocumentStatus.PARSED)
+        assert "completed" in result.lower()
+
+    def test_document_status_detail_analyzed(self):
+        """Test status detail for ANALYZED."""
+        from src.documents.adapters.http.router import _document_status_detail_for_polling
+        from src.documents.domain.models import DocumentStatus
+
+        result = _document_status_detail_for_polling(DocumentStatus.ANALYZED)
         assert "completed" in result.lower()
 
     def test_document_status_detail_error(self):

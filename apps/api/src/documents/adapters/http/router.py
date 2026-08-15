@@ -209,6 +209,12 @@ def _normalize_document_status_for_polling(status: DocumentStatus) -> DocumentPo
         return DocumentPollingStatus.PROCESSING
     if status == DocumentStatus.PARSED:
         return DocumentPollingStatus.PARSED
+    if status == DocumentStatus.ANALYZED:
+        # Terminal success. The polling enum has no dedicated "analyzed" member;
+        # clients render PARSED as "Analyzed" and treat it as a ready document.
+        # Without this, an analyzed document fell through to PROCESSING and the UI
+        # showed it stuck on "processing" forever even though analysis finished.
+        return DocumentPollingStatus.PARSED
     if status == DocumentStatus.ERROR:
         return DocumentPollingStatus.ERROR
     return DocumentPollingStatus.PROCESSING
@@ -223,6 +229,8 @@ def _document_status_detail_for_polling(status: DocumentStatus) -> str:
         return (
             "Document parsing and RAG ingestion completed. Analysis must be triggered separately."
         )
+    if status == DocumentStatus.ANALYZED:
+        return "Document analysis completed."
     if status == DocumentStatus.ERROR:
         return "Document processing failed before analysis could start."
     return "Document ingestion is still in progress. Analysis has not started."
