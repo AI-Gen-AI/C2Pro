@@ -128,7 +128,7 @@ def _parse_money_number(raw: str) -> float | None:
 
 def _extract_numeric_money(text: str) -> float | None:
     match = re.search(
-        r"(?:eur|€)\s*([0-9][0-9\.,]*)|([0-9][0-9\.,]*)\s*(?:eur|€)", text, re.IGNORECASE
+        r"(?:eur|€)\s*(\d[\d.,]*)|(\d[\d.,]*)\s*(?:eur|€)", text, re.IGNORECASE
     )
     if not match:
         return None
@@ -151,7 +151,7 @@ _CONTRACT_LABEL_RE = re.compile(
     re.IGNORECASE,
 )
 
-_CRORE_LAKH_RE = re.compile(r"\s*(crore|cr\.?|lakh|lakhs?|lac)\b", re.IGNORECASE)
+_CRORE_LAKH_RE = re.compile(r"\s*(crore|cr\.?|lakhs?|lac)\b", re.IGNORECASE)
 
 
 def _extract_contract_base_total(text: str) -> float | None:
@@ -169,13 +169,13 @@ def _extract_contract_base_total(text: str) -> float | None:
         raw_num: str | None = None
         num_end = 0
         inr_m = re.search(
-            r"(?:₹|Rs\.?\s*|INR\s*)([0-9][0-9,\.]*)", window, re.IGNORECASE
+            r"(?:₹|Rs\.?\s*|INR\s*)(\d[\d,.]*)", window, re.IGNORECASE
         )
         if inr_m:
             raw_num = inr_m.group(1)
             num_end = inr_m.end()
         else:
-            bare_m = re.search(r"[^0-9₹]([0-9][0-9,\.]*)", window)
+            bare_m = re.search(r"[^\d₹](\d[\d,.]*)", window)
             if bare_m:
                 raw_num = bare_m.group(1)
                 num_end = bare_m.end()
@@ -203,14 +203,14 @@ def _extract_contract_base_total(text: str) -> float | None:
 def _detect_contract_currency(text: str) -> str:
     """Return 'INR' if text contains INR markers, else 'EUR'."""
     if re.search(
-        r"₹|Rs\.?\s*[0-9]|\bINR\b|\brupee\b|\bcrore\b|\blakh\b", text, re.IGNORECASE
+        r"₹|Rs\.?\s*\d|\bINR\b|\brupee\b|\bcrore\b|\blakh\b", text, re.IGNORECASE
     ):
         return "INR"
     return "EUR"
 
 
 def _extract_percentage(text: str) -> float | None:
-    match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*%", text)
+    match = re.search(r"(\d+(?:\.\d+)?)\s*%", text)
     if not match:
         return None
     try:
@@ -220,7 +220,7 @@ def _extract_percentage(text: str) -> float | None:
 
 
 def _extract_days(text: str) -> int | None:
-    match = re.search(r"([0-9]+)\s*(?:day|days|días)", text, re.IGNORECASE)
+    match = re.search(r"(\d+)\s*(?:days?|días)", text, re.IGNORECASE)
     if not match:
         return None
     try:
@@ -230,7 +230,7 @@ def _extract_days(text: str) -> int | None:
 
 
 def _extract_months(text: str) -> int | None:
-    match = re.search(r"([0-9]+)\s*(?:month|months|mes|meses)", text, re.IGNORECASE)
+    match = re.search(r"(\d+)\s*(?:months?|mes(?:es)?)", text, re.IGNORECASE)
     if not match:
         return None
     try:
