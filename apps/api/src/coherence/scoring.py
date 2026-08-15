@@ -171,6 +171,37 @@ class HeuristicBaselineProvider:
         return self.HIGH - (self.HIGH - self.LOW) * global_risk
 
 
+# Severity-based score ceilings (ADR-009 follow-up). The evidence-aware model
+# alone let a dimension with a *critical* finding out-score clean dimensions
+# (its context-inflated baseline barely decayed), so the flagged category looked
+# healthiest and the headline hid open criticals. These monotonic caps fix that:
+# a dimension with an open finding cannot exceed the ceiling for its worst
+# severity, and the overall score cannot exceed the ceiling for the worst open
+# finding anywhere. Tunable in one place.
+_SEVERITY_RANK: dict[str, int] = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+_CATEGORY_SEVERITY_CEILING: dict[str, float] = {
+    "critical": 45.0,
+    "high": 65.0,
+    "medium": 80.0,
+    "low": 95.0,
+}
+_OVERALL_SEVERITY_CEILING: dict[str, float] = {
+    "critical": 60.0,
+    "high": 75.0,
+    "medium": 90.0,
+    "low": 100.0,
+}
+
+
+def _worst_severity(severities: list[str]) -> str | None:
+    """Return the highest-ranked severity present, or None if the list is empty."""
+    worst: str | None = None
+    for sev in severities:
+        if sev in _SEVERITY_RANK and (worst is None or _SEVERITY_RANK[sev] > _SEVERITY_RANK[worst]):
+            worst = sev
+    return worst
+
+
 # =============================================================================
 # SCORING SERVICE V0.3
 # =============================================================================
@@ -417,6 +448,19 @@ class ScoringService:
             raw = baseline * math.exp(-self.config.decay_lambda * density)
             category_scores[category] = round(max(self.config.min_score, min(raw, baseline)), 1)
 
+        # Severity cap: a dimension with an open finding cannot out-score clean
+        # dimensions — cap each assessed category at the ceiling for its worst
+        # finding so the flagged category is the worst, not the best.
+        severities_by_cat: dict[str, list[str]] = defaultdict(list)
+        for s in signals:
+            severities_by_cat[s.category].append(s.severity)
+        for category, sevs in severities_by_cat.items():
+            current = category_scores.get(category)
+            worst = _worst_severity(sevs)
+            ceiling = _CATEGORY_SEVERITY_CEILING.get(worst) if worst else None
+            if current is not None and ceiling is not None:
+                category_scores[category] = round(min(current, ceiling), 1)
+
         # §14 — ADR-009: compute active_weight from DEFAULT_CATEGORY_WEIGHTS.
         # Do NOT use mean × coverage_ratio (that was the ADR-009 §1 P1 violation).
         total_weight = sum(DEFAULT_CATEGORY_WEIGHTS.values())
@@ -467,6 +511,14 @@ class ScoringService:
             / assessed_weight_sum,
             1,
         )
+
+        # Overall severity cap: the headline must not read "healthy" while a
+        # critical (or high) finding is open. Cap at the ceiling for the worst
+        # open finding anywhere in the project.
+        worst_overall = _worst_severity([s.severity for s in signals])
+        overall_ceiling = _OVERALL_SEVERITY_CEILING.get(worst_overall) if worst_overall else None
+        if overall_ceiling is not None:
+            global_score = round(min(global_score, overall_ceiling), 1)
 
         # "assessed_clean" only fires when ALL 6 categories are assessed with no findings
         all_assessed = len(assessed) == 6
