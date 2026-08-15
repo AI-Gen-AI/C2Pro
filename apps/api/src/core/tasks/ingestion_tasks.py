@@ -239,6 +239,19 @@ def _extract_months(text: str) -> int | None:
         return None
 
 
+# Terms that mark a coherence category regardless of the inferred clause_type. A
+# clause-sized chunk usually spans several topics, so category coverage is derived
+# from the text, not only from a single dominant type.
+_CLAUSE_KEYWORD_CATEGORIES: dict[str, tuple[str, ...]] = {
+    "SCOPE": ("objeto", "obras", "alcance", "prestaci", "scope", "deliverable", "work"),
+    "TIME": ("plazo", "deadline", "schedule", "milestone", "completion", "duraci", "entrega", "cronograma"),
+    "BUDGET": ("precio", "importe", "presupuesto", "coste", "pago", "payment", "budget", "euros", "€"),
+    "LEGAL": ("penal", "clausula", "cláusula", "ley", "law", "responsab", "garant", "warranty", "obligaci"),
+    "QUALITY": ("calidad", "quality", "inspecci", "inspection", "testing", "ensayo", "norma"),
+    "TECHNICAL": ("tecnic", "técnic", "technical", "especificac", "specification", "material"),
+}
+
+
 def _contract_affected_categories(clause_type: ClauseType, text: str) -> list[str]:
     lowered = text.lower()
     categories: list[str] = []
@@ -265,6 +278,10 @@ def _contract_affected_categories(clause_type: ClauseType, text: str) -> list[st
         categories.extend(["TIME", "SCOPE"])
     else:
         categories.append("LEGAL")
+
+    for category, terms in _CLAUSE_KEYWORD_CATEGORIES.items():
+        if any(term in lowered for term in terms):
+            categories.append(category)
 
     deduped: list[str] = []
     for category in categories:
@@ -331,7 +348,7 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict[str, Any]:
 # matches. Used to split a contract into clause-sized chunks instead of sentences.
 _CLAUSE_BOUNDARY = re.compile(
     r"(?m)^\s*(?:"
-    r"\d{1,3}(?:\.\d{1,3})*\s*\.\s*[-–]"
+    r"\d{1,3}(?:\.\d{1,3}){0,6}\s*\.\s*[-–]"
     r"|(?:CL[ÁA]USULA|ESTIPULACI[ÓO]N|ART[ÍI]CULO|CLAUSE|ARTICLE|SECTION)\w*"
     r"|(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|S[ÉE]PTIMA|OCTAVA|NOVENA|D[ÉE]CIMA)\b"
     r")",
@@ -456,7 +473,7 @@ async def _run_analysis_graph_best_effort(
     "no enrichment", never a stuck document.
     """
     graph_orchestrator = orchestrator or AnalysisOrchestratorFactory.create()
-    initial_state = {
+    initial_state: dict[str, Any] = {
         "document_text": parsed_text,
         "project_id": str(document.project_id),
         "document_id": str(document.id),
@@ -480,13 +497,14 @@ async def _run_analysis_graph_best_effort(
     thread_id = f"document:{document_id}:analysis:{uuid4()}"
     try:
         result = await graph_orchestrator.run(initial_state, thread_id=thread_id)
-        return result.get("analysis_id")
     except Exception:
         logger.exception(
             "document_analysis_graph_failed_nonfatal",
             extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
         )
         return None
+    analysis_id = result.get("analysis_id")
+    return analysis_id if isinstance(analysis_id, str) else None
 
 
 async def _run_document_analysis(
