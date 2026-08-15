@@ -6,18 +6,19 @@ Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 from collections.abc import Sequence
 from contextlib import suppress
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import String, cast, func, select, text
+from sqlalchemy import String, cast, delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.alerts.adapters.persistence.tenant_repository import SqlAlchemyTenantRepository
 from src.analysis.adapters.persistence.models import Alert as AlertORM
 from src.analysis.adapters.persistence.models import Analysis
-from src.analysis.domain.enums import AnalysisStatus
+from src.analysis.domain.enums import AlertSeverity, AlertType, AnalysisStatus
 from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.coherence.feature_flags import coherence_v2_enabled_for_tenant
 from src.core.auth.dependencies import get_current_user
@@ -522,6 +523,71 @@ async def _get_parsed_text_fallback_clauses(
     return fallback_clauses
 
 
+# Map coherence alert severity strings to the alerts-table severity enum.
+_COHERENCE_ALERT_SEVERITY: dict[str, AlertSeverity] = {
+    "critical": AlertSeverity.CRITICAL,
+    "high": AlertSeverity.HIGH,
+    "medium": AlertSeverity.MEDIUM,
+    "low": AlertSeverity.LOW,
+}
+
+
+async def _mirror_coherence_alerts_to_alerts_table(
+    *,
+    db: AsyncSession,
+    project_id: UUID,
+    tenant_id: UUID,
+    alerts: Sequence[Any],
+) -> None:
+    """Mirror ``/evaluate`` coherence alerts into the ``alerts`` table.
+
+    The alerts UI lists rows from the ``alerts`` table (ListAlertsUseCase), but
+    ``/evaluate`` only stored alerts inside ``coherence_results.alerts`` (JSON) —
+    so the dashboard showed a non-zero ``alert_count`` while the alerts page stayed
+    empty. Coherence-sourced rows are ``analysis_id=NULL`` + ``alert_type=COHERENCE``;
+    the prior batch for the project is replaced first so re-evaluating never
+    duplicates. Not committed here — the caller commits with the coherence result.
+    """
+    await db.execute(
+        delete(AlertORM).where(
+            AlertORM.project_id == project_id,
+            AlertORM.tenant_id == tenant_id,
+            AlertORM.analysis_id.is_(None),
+            AlertORM.alert_type == AlertType.COHERENCE,
+        )
+    )
+    for alert in alerts:
+        severity_key = str(getattr(alert.severity, "value", alert.severity)).lower()
+        message = (alert.message or "Coherence issue detected.").strip()
+        evidence = getattr(alert, "evidence", None)
+        db.add(
+            AlertORM(
+                project_id=project_id,
+                tenant_id=tenant_id,
+                analysis_id=None,
+                severity=_COHERENCE_ALERT_SEVERITY.get(severity_key, AlertSeverity.MEDIUM),
+                alert_type=AlertType.COHERENCE,
+                category=getattr(alert, "category", None),
+                rule_id=getattr(alert, "rule_id", None),
+                title=message[:255],
+                message=message,
+                description=message,
+                alert_metadata={
+                    "source": "coherence_evaluate",
+                    "evidence": (
+                        {
+                            "source_clause_id": evidence.source_clause_id,
+                            "claim": evidence.claim,
+                            "quote": evidence.quote,
+                        }
+                        if evidence
+                        else None
+                    ),
+                },
+            )
+        )
+
+
 # ---- API Endpoint ----
 @router.post(
     "/evaluate",
@@ -663,6 +729,14 @@ async def evaluate_project_coherence(
                 score_reason=enriched_result.score_reason,
                 score_missing_dimensions=enriched_result.score_missing_dimensions,
             )
+        )
+        # Mirror alerts into the alerts table so the alerts UI (which lists the
+        # alerts table, not coherence_results.alerts) surfaces them.
+        await _mirror_coherence_alerts_to_alerts_table(
+            db=db,
+            project_id=payload.project_id,
+            tenant_id=current_user.tenant_id,
+            alerts=enriched_result.alerts,
         )
         await db.commit()
 
