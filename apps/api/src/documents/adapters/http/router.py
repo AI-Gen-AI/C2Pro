@@ -207,13 +207,11 @@ def _normalize_document_status_for_polling(status: DocumentStatus) -> DocumentPo
         return DocumentPollingStatus.QUEUED
     if status == DocumentStatus.PARSING:
         return DocumentPollingStatus.PROCESSING
-    if status == DocumentStatus.PARSED:
-        return DocumentPollingStatus.PARSED
-    if status == DocumentStatus.ANALYZED:
-        # Terminal success. The polling enum has no dedicated "analyzed" member;
-        # clients render PARSED as "Analyzed" and treat it as a ready document.
-        # Without this, an analyzed document fell through to PROCESSING and the UI
-        # showed it stuck on "processing" forever even though analysis finished.
+    if status in (DocumentStatus.PARSED, DocumentStatus.ANALYZED):
+        # Both are terminal-success states. The polling enum has no dedicated
+        # "analyzed" member; clients render PARSED as "Analyzed" and treat it as a
+        # ready document. Without ANALYZED here it fell through to PROCESSING and
+        # the UI showed analyzed documents stuck on "processing" forever.
         return DocumentPollingStatus.PARSED
     if status == DocumentStatus.ERROR:
         return DocumentPollingStatus.ERROR
