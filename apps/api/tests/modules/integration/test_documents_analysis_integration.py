@@ -186,21 +186,38 @@ class TestDocumentsAnalysisIntegration:
         with pytest.raises(ValueError):
             await use_case.execute(tenant_id=repo.tenant_id, document_id=uuid4())
 
-    async def test_raises_when_parsed_text_missing(self) -> None:
+    async def test_enqueues_when_parsed_text_missing(self) -> None:
+        """Structured docs (schedule/budget) carry no parsed_text; analysis is still
+        enqueued so the best-effort analysis task can mark the document ANALYZED.
+
+        Gating on parsed_text here stranded structured documents forever in
+        parsed_pending_analysis and flooded the DLQ.
+        """
         document = Document(
             id=uuid4(),
             project_id=uuid4(),
             tenant_id=uuid4(),
-            document_type=DocumentType.CONTRACT,
-            filename="contract.pdf",
+            document_type=DocumentType.SCHEDULE,
+            filename="schedule.xlsx",
             upload_status=DocumentStatus.PARSED,
             document_metadata={},
         )
         repo = _FakeDocumentRepository(document=document, tenant_id=document.tenant_id)
-        use_case = TriggerDocumentAnalysisUseCase(repo, analysis_task=_TaskStub())
+        task = _TaskStub()
+        use_case = TriggerDocumentAnalysisUseCase(repo, analysis_task=task)
 
-        with pytest.raises(ValueError):
-            await use_case.execute(tenant_id=document.tenant_id, document_id=document.id)
+        result = await use_case.execute(tenant_id=document.tenant_id, document_id=document.id)
+
+        assert result["status"] == "queued"
+        assert task.calls == [
+            {
+                "kwargs": {
+                    "tenant_id": str(document.tenant_id),
+                    "document_id": str(document.id),
+                },
+                "queue": "document_parsing",
+            }
+        ]
 
     async def test_raises_when_document_is_not_parsed(self) -> None:
         document = Document(

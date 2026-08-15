@@ -84,10 +84,13 @@ class TriggerDocumentAnalysisUseCase:
         if not document.is_parsed():
             raise ValueError("document must be parsed before analysis")
 
-        parsed_text = document.document_metadata.get("parsed_text") if document.document_metadata else None
-        if not isinstance(parsed_text, str) or not parsed_text:
-            raise ValueError("parsed_text not available")
-
+        # parsed_text availability is intentionally NOT gated here. Structured
+        # documents (schedule/budget) carry no free text, and text documents whose
+        # embeddings are unavailable still complete via structured extraction. The
+        # analysis task (`_run_document_analysis`) is best-effort: it runs the
+        # N1-N17 graph only when parsed_text + RAG chunks exist and otherwise marks
+        # the document ANALYZED. Gating here stranded structured docs in
+        # parsed_pending_analysis and flooded the DLQ ("parsed_text not available").
         task = self._get_analysis_task()
         async_result = task.apply_async(
             kwargs={
