@@ -410,13 +410,62 @@ async def get_document_rag_chunk_count(
     return int(result.scalar_one())
 
 
+async def _run_analysis_graph_best_effort(
+    *,
+    orchestrator: Any,
+    document: Any,
+    parsed_text: str,
+    tenant_id: TenantId,
+    document_id: UUID,
+) -> str | None:
+    """Run the N1-N17 enrichment graph and return its analysis_id, or None.
+
+    Best-effort by design: a graph failure must not block the document from being
+    marked ANALYZED, since its structured extraction already succeeded during
+    parsing. The broad catch is intentional — any orchestrator error degrades to
+    "no enrichment", never a stuck document.
+    """
+    graph_orchestrator = orchestrator or AnalysisOrchestratorFactory.create()
+    initial_state = {
+        "document_text": parsed_text,
+        "project_id": str(document.project_id),
+        "document_id": str(document.id),
+        "doc_type": getattr(document.document_type, "value", "") if document.document_type else "",
+        "tenant_id": str(tenant_id),
+        "messages": [],
+        "extracted_risks": [],
+        "extracted_wbs": [],
+        "confidence_score": 0.0,
+        "critique_notes": "",
+        "human_feedback": "",
+        "retry_count": 0,
+        "human_approval_required": False,
+        "analysis_id": None,
+        "force_full_pipeline": True,
+    }
+    logger.info(
+        "document_analysis_task_started",
+        extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
+    )
+    thread_id = f"document:{document_id}:analysis:{uuid4()}"
+    try:
+        result = await graph_orchestrator.run(initial_state, thread_id=thread_id)
+        return result.get("analysis_id")
+    except Exception:
+        logger.exception(
+            "document_analysis_graph_failed_nonfatal",
+            extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
+        )
+        return None
+
+
 async def _run_document_analysis(
     *,
     tenant_id: TenantId,
     document_id: UUID,
     orchestrator: Any = None,
 ) -> dict[str, Any]:
-    """Run the full analysis graph for a parsed document and persist via N17."""
+    """Analyze a parsed document; the N1-N17 graph is a best-effort enrichment."""
     await init_db()
 
     async with get_raw_session() as session:
@@ -445,42 +494,16 @@ async def _run_document_analysis(
         # a hard gate. This is what previously stranded documents in
         # parsed_pending_analysis and the DLQ ("parsed_text not available" /
         # "RAG chunks were not committed").
-        analysis_id: str | None = None
         if parsed_text and chunk_count > 0:
-            graph_orchestrator = orchestrator or AnalysisOrchestratorFactory.create()
-            initial_state = {
-                "document_text": parsed_text,
-                "project_id": str(document.project_id),
-                "document_id": str(document.id),
-                "doc_type": getattr(document.document_type, "value", "")
-                if document.document_type
-                else "",
-                "tenant_id": str(tenant_id),
-                "messages": [],
-                "extracted_risks": [],
-                "extracted_wbs": [],
-                "confidence_score": 0.0,
-                "critique_notes": "",
-                "human_feedback": "",
-                "retry_count": 0,
-                "human_approval_required": False,
-                "analysis_id": None,
-                "force_full_pipeline": True,
-            }
-            logger.info(
-                "document_analysis_task_started",
-                extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
+            analysis_id = await _run_analysis_graph_best_effort(
+                orchestrator=orchestrator,
+                document=document,
+                parsed_text=parsed_text,
+                tenant_id=tenant_id,
+                document_id=document_id,
             )
-            thread_id = f"document:{document_id}:analysis:{uuid4()}"
-            try:
-                result = await graph_orchestrator.run(initial_state, thread_id=thread_id)
-                analysis_id = result.get("analysis_id")
-            except Exception:
-                logger.exception(
-                    "document_analysis_graph_failed_nonfatal",
-                    extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
-                )
         else:
+            analysis_id = None
             logger.info(
                 "document_analysis_graph_skipped",
                 extra={
