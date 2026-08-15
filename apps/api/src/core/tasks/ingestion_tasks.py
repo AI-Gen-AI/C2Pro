@@ -128,7 +128,7 @@ def _parse_money_number(raw: str) -> float | None:
 
 def _extract_numeric_money(text: str) -> float | None:
     match = re.search(
-        r"(?:eur|€)\s*([0-9][0-9\.,]*)|([0-9][0-9\.,]*)\s*(?:eur|€)", text, re.IGNORECASE
+        r"(?:eur|€)\s*(\d[\d.,]*)|(\d[\d.,]*)\s*(?:eur|€)", text, re.IGNORECASE
     )
     if not match:
         return None
@@ -151,7 +151,7 @@ _CONTRACT_LABEL_RE = re.compile(
     re.IGNORECASE,
 )
 
-_CRORE_LAKH_RE = re.compile(r"\s*(crore|cr\.?|lakh|lakhs?|lac)\b", re.IGNORECASE)
+_CRORE_LAKH_RE = re.compile(r"\s*(crore|cr\.?|lakhs?|lac)\b", re.IGNORECASE)
 
 
 def _extract_contract_base_total(text: str) -> float | None:
@@ -169,13 +169,13 @@ def _extract_contract_base_total(text: str) -> float | None:
         raw_num: str | None = None
         num_end = 0
         inr_m = re.search(
-            r"(?:₹|Rs\.?\s*|INR\s*)([0-9][0-9,\.]*)", window, re.IGNORECASE
+            r"(?:₹|Rs\.?\s*|INR\s*)(\d[\d,.]*)", window, re.IGNORECASE
         )
         if inr_m:
             raw_num = inr_m.group(1)
             num_end = inr_m.end()
         else:
-            bare_m = re.search(r"[^0-9₹]([0-9][0-9,\.]*)", window)
+            bare_m = re.search(r"[^\d₹](\d[\d,.]*)", window)
             if bare_m:
                 raw_num = bare_m.group(1)
                 num_end = bare_m.end()
@@ -203,14 +203,14 @@ def _extract_contract_base_total(text: str) -> float | None:
 def _detect_contract_currency(text: str) -> str:
     """Return 'INR' if text contains INR markers, else 'EUR'."""
     if re.search(
-        r"₹|Rs\.?\s*[0-9]|\bINR\b|\brupee\b|\bcrore\b|\blakh\b", text, re.IGNORECASE
+        r"₹|Rs\.?\s*\d|\bINR\b|\brupee\b|\bcrore\b|\blakh\b", text, re.IGNORECASE
     ):
         return "INR"
     return "EUR"
 
 
 def _extract_percentage(text: str) -> float | None:
-    match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*%", text)
+    match = re.search(r"(\d+(?:\.\d+)?)\s*%", text)
     if not match:
         return None
     try:
@@ -220,7 +220,7 @@ def _extract_percentage(text: str) -> float | None:
 
 
 def _extract_days(text: str) -> int | None:
-    match = re.search(r"([0-9]+)\s*(?:day|days|días)", text, re.IGNORECASE)
+    match = re.search(r"(\d+)\s*(?:days?|días)", text, re.IGNORECASE)
     if not match:
         return None
     try:
@@ -230,13 +230,26 @@ def _extract_days(text: str) -> int | None:
 
 
 def _extract_months(text: str) -> int | None:
-    match = re.search(r"([0-9]+)\s*(?:month|months|mes|meses)", text, re.IGNORECASE)
+    match = re.search(r"(\d+)\s*(?:months?|mes(?:es)?)", text, re.IGNORECASE)
     if not match:
         return None
     try:
         return int(match.group(1))
     except ValueError:
         return None
+
+
+# Terms that mark a coherence category regardless of the inferred clause_type. A
+# clause-sized chunk usually spans several topics, so category coverage is derived
+# from the text, not only from a single dominant type.
+_CLAUSE_KEYWORD_CATEGORIES: dict[str, tuple[str, ...]] = {
+    "SCOPE": ("objeto", "obras", "alcance", "prestaci", "scope", "deliverable", "work"),
+    "TIME": ("plazo", "deadline", "schedule", "milestone", "completion", "duraci", "entrega", "cronograma"),
+    "BUDGET": ("precio", "importe", "presupuesto", "coste", "pago", "payment", "budget", "euros", "€"),
+    "LEGAL": ("penal", "clausula", "cláusula", "ley", "law", "responsab", "garant", "warranty", "obligaci"),
+    "QUALITY": ("calidad", "quality", "inspecci", "inspection", "testing", "ensayo", "norma"),
+    "TECHNICAL": ("tecnic", "técnic", "technical", "especificac", "specification", "material"),
+}
 
 
 def _contract_affected_categories(clause_type: ClauseType, text: str) -> list[str]:
@@ -265,6 +278,10 @@ def _contract_affected_categories(clause_type: ClauseType, text: str) -> list[st
         categories.extend(["TIME", "SCOPE"])
     else:
         categories.append("LEGAL")
+
+    for category, terms in _CLAUSE_KEYWORD_CATEGORIES.items():
+        if any(term in lowered for term in terms):
+            categories.append(category)
 
     deduped: list[str] = []
     for category in categories:
@@ -325,6 +342,40 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict[str, Any]:
     return data
 
 
+# A new clause starts at a numbered header ("28.-", "28.1.-", "1.-"), a section
+# keyword (CLÁUSULA / ESTIPULACIÓN / ARTÍCULO / CLAUSE / ARTICLE / SECTION), or an
+# ordinal word (PRIMERA … DÉCIMA). Anchored at line start to avoid mid-sentence
+# matches. Used to split a contract into clause-sized chunks instead of sentences.
+_CLAUSE_BOUNDARY = re.compile(
+    r"(?m)^\s*(?:"
+    r"\d{1,3}(?:\.\d{1,3}){0,6}\s*\.\s*[-–]"
+    r"|(?:CL[ÁA]USULA|ESTIPULACI[ÓO]N|ART[ÍI]CULO|CLAUSE|ARTICLE|SECTION)\w*"
+    r"|(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|S[ÉE]PTIMA|OCTAVA|NOVENA|D[ÉE]CIMA)\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _split_contract_into_clauses(parsed_text: str) -> list[str]:
+    """Split a contract into clause-sized segments at clause-boundary markers.
+
+    Keeps each boundary marker with its clause body. Falls back to paragraph
+    blocks when no markers exist, so a contract is never fragmented into
+    per-sentence "clauses" (the old ``re.split`` on ``.!?`` produced hundreds of
+    meaningless one-line fragments).
+    """
+    boundaries = [m.start() for m in _CLAUSE_BOUNDARY.finditer(parsed_text)]
+    if boundaries:
+        cut_points = ([0] if boundaries[0] > 0 else []) + boundaries + [len(parsed_text)]
+        raw = [
+            parsed_text[cut_points[i] : cut_points[i + 1]]
+            for i in range(len(cut_points) - 1)
+        ]
+    else:
+        raw = re.split(r"\n\s*\n+", parsed_text)
+    return [segment.strip() for segment in raw if segment.strip()]
+
+
 def _extract_contract_clauses(
     *,
     document_id: UUID,
@@ -332,15 +383,11 @@ def _extract_contract_clauses(
     tenant_id: TenantId,
     parsed_text: str,
 ) -> list[Clause]:
-    segments = [
-        segment.strip()
-        for segment in re.split(r"(?<=[\.!?])\s+|\n\n+", parsed_text)
-        if segment.strip()
-    ]
     clauses: list[Clause] = []
-    for index, segment in enumerate(segments, start=1):
-        if len(segment) < 20:
+    for index, segment in enumerate(_split_contract_into_clauses(parsed_text), start=1):
+        if len(segment) < 40:
             continue
+        segment = segment[:4000]  # keep a clause clause-sized; guard OCR blobs
         clause_type = _infer_contract_clause_type(segment)
         clauses.append(
             Clause(
@@ -410,13 +457,63 @@ async def get_document_rag_chunk_count(
     return int(result.scalar_one())
 
 
+async def _run_analysis_graph_best_effort(
+    *,
+    orchestrator: Any,
+    document: Any,
+    parsed_text: str,
+    tenant_id: TenantId,
+    document_id: UUID,
+) -> str | None:
+    """Run the N1-N17 enrichment graph and return its analysis_id, or None.
+
+    Best-effort by design: a graph failure must not block the document from being
+    marked ANALYZED, since its structured extraction already succeeded during
+    parsing. The broad catch is intentional — any orchestrator error degrades to
+    "no enrichment", never a stuck document.
+    """
+    graph_orchestrator = orchestrator or AnalysisOrchestratorFactory.create()
+    initial_state: dict[str, Any] = {
+        "document_text": parsed_text,
+        "project_id": str(document.project_id),
+        "document_id": str(document.id),
+        "doc_type": getattr(document.document_type, "value", "") if document.document_type else "",
+        "tenant_id": str(tenant_id),
+        "messages": [],
+        "extracted_risks": [],
+        "extracted_wbs": [],
+        "confidence_score": 0.0,
+        "critique_notes": "",
+        "human_feedback": "",
+        "retry_count": 0,
+        "human_approval_required": False,
+        "analysis_id": None,
+        "force_full_pipeline": True,
+    }
+    logger.info(
+        "document_analysis_task_started",
+        extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
+    )
+    thread_id = f"document:{document_id}:analysis:{uuid4()}"
+    try:
+        result = await graph_orchestrator.run(initial_state, thread_id=thread_id)
+    except Exception:
+        logger.exception(
+            "document_analysis_graph_failed_nonfatal",
+            extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
+        )
+        return None
+    analysis_id = result.get("analysis_id")
+    return analysis_id if isinstance(analysis_id, str) else None
+
+
 async def _run_document_analysis(
     *,
     tenant_id: TenantId,
     document_id: UUID,
     orchestrator: Any = None,
 ) -> dict[str, Any]:
-    """Run the full analysis graph for a parsed document and persist via N17."""
+    """Analyze a parsed document; the N1-N17 graph is a best-effort enrichment."""
     await init_db()
 
     async with get_raw_session() as session:
@@ -430,50 +527,44 @@ async def _run_document_analysis(
         parsed_text = (
             document.document_metadata.get("parsed_text") if document.document_metadata else None
         )
-        if not parsed_text:
-            raise ValueError("parsed_text not available")
-
         chunk_count = await get_document_rag_chunk_count(
             session=session,
             tenant_id=tenant_id,
             document_id=document_id,
         )
-        if chunk_count == 0:
-            raise RagChunksUnavailableError(
-                "RAG chunks were not committed before document analysis"
+
+        # The N1-N17 text-analysis graph only applies to free-text documents that
+        # have RAG chunks. Structured documents (schedule/budget) carry no free
+        # text, and text documents whose embeddings are unavailable (e.g. no
+        # OPENAI_API_KEY -> zero chunks) cannot run it either. In both cases the
+        # document is still ANALYZED via the structured extraction (clauses / WBS
+        # / BOM) done during parsing — the graph is a best-effort enrichment, never
+        # a hard gate. This is what previously stranded documents in
+        # parsed_pending_analysis and the DLQ ("parsed_text not available" /
+        # "RAG chunks were not committed").
+        if parsed_text and chunk_count > 0:
+            analysis_id = await _run_analysis_graph_best_effort(
+                orchestrator=orchestrator,
+                document=document,
+                parsed_text=parsed_text,
+                tenant_id=tenant_id,
+                document_id=document_id,
+            )
+        else:
+            analysis_id = None
+            logger.info(
+                "document_analysis_graph_skipped",
+                extra={
+                    "document_id": str(document_id),
+                    "tenant_id": str(tenant_id),
+                    "reason": "no_parsed_text" if not parsed_text else "no_rag_chunks",
+                },
             )
 
-        graph_orchestrator = orchestrator or AnalysisOrchestratorFactory.create()
-        initial_state = {
-            "document_text": parsed_text,
-            "project_id": str(document.project_id),
-            "document_id": str(document.id),
-            "doc_type": getattr(document.document_type, "value", "")
-            if document.document_type
-            else "",
-            "tenant_id": str(tenant_id),
-            "messages": [],
-            "extracted_risks": [],
-            "extracted_wbs": [],
-            "confidence_score": 0.0,
-            "critique_notes": "",
-            "human_feedback": "",
-            "retry_count": 0,
-            "human_approval_required": False,
-            "analysis_id": None,
-            "force_full_pipeline": True,
-        }
-
-        logger.info(
-            "document_analysis_task_started",
-            extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
-        )
-        thread_id = f"document:{document_id}:analysis:{uuid4()}"
-        result = await graph_orchestrator.run(initial_state, thread_id=thread_id)
-        analysis_id = result.get("analysis_id")
-        if analysis_id:
-            await repo.update_status(tenant_id, document_id, DocumentStatus.ANALYZED)
-            await session.commit()
+        # Parsing + structured extraction already completed upstream, so the
+        # document is analyzed regardless of the optional graph enrichment.
+        await repo.update_status(tenant_id, document_id, DocumentStatus.ANALYZED)
+        await session.commit()
         logger.info(
             "document_analysis_task_finished",
             extra={
@@ -484,7 +575,7 @@ async def _run_document_analysis(
             },
         )
         return {
-            "status": "completed" if analysis_id else "completed_without_persistence",
+            "status": "completed",
             "document_id": str(document_id),
             "analysis_id": analysis_id,
             "persisted": bool(analysis_id),
