@@ -2,21 +2,19 @@
 Per-category aggregator: turns evidence + conflicts + rule signals into a
 fully-typed `CategoryV2` (ADR-009 §6, §10, §13).
 
-This module is the single source of truth for the deterministic conflict
-formula:
-
-    adjusted_score = base_score × (1 − (1 − SEVERITY_MULTIPLIERS[severity]) × evidence_certainty)
-
-i.e. detection-certainty scales the PENALTY, not the score: higher certainty ⇒
-stronger penalty ⇒ lower score (ADR-009, 2026-08-16 governing amendment §B/§D).
-Identical to the prior `base × multiplier × certainty` at full certainty; corrected
-(non-inverted) below it. The band a critical may fall into stays governed by
-SEVERITY_MULTIPLIERS as an interim guard pending the unified calibrated model.
+Scoring is delegated to the single canonical model (`coherence.canonical`): a hard
+conflict is placed in its severity band by certainty × materiality — graduated,
+monotonic, never 0 and never the "falsehood" ~8 (ADR-009 2026-08-16 amendment
+§B/§D). Per the binding separation of concerns (§C) the per-category scorer sees
+ONLY this category's evidence; the global critical-risk envelope lives in
+`GlobalAggregatorV2` / `canonical.aggregate_global`.
 
 Refers to Suite ID: TS-UA-COH-V2-CATAGG-001.
 """
 
 from __future__ import annotations
+
+from typing import cast
 
 from src.coherence.application.dtos.coherence_v2_dtos import (
     BudgetReconciliation,
@@ -24,13 +22,55 @@ from src.coherence.application.dtos.coherence_v2_dtos import (
     CategoryV2,
     ScoreExplanation,
 )
-from src.coherence.domain.category_state_machine import CategoryStateMachine
-from src.coherence.domain.v2_constants import (
-    MIN_EVIDENCE_BY_CATEGORY,
-    SEVERITY_MULTIPLIERS,
+from src.coherence.canonical.category import (
+    CategoryScoreInput,
+    ConflictInput,
+    Severity,
+    score_category,
 )
+from src.coherence.domain.category_state_machine import CategoryStateMachine
+from src.coherence.domain.v2_constants import MIN_EVIDENCE_BY_CATEGORY
 from src.coherence.services.v2.conflict_service import ConflictReport
 from src.coherence.services.v2.evidence_service import EvidenceBundle
+
+_CANONICAL_SEVERITIES: frozenset[str] = frozenset({"low", "medium", "high", "critical"})
+
+
+def _to_canonical_severity(severity: str) -> Severity:
+    """Map a ConflictReport severity to the canonical Severity (fallback: high)."""
+    return cast(Severity, severity) if severity in _CANONICAL_SEVERITIES else "high"
+
+
+# Interim (§B, calibratable): a discrepancy whose |delta| reaches this fraction of the
+# compared magnitude is treated as fully material (⇒ band floor). Smaller gaps sit
+# nearer the band ceiling.
+_MATERIALITY_SATURATION_RATIO = 0.5
+
+
+def _materiality_from_conflict(conflict: ConflictReport) -> float | None:
+    """Normalized discrepancy materiality in [0, 1] from the conflict's compared values.
+
+    Larger relative gap ⇒ higher materiality ⇒ nearer the band floor. Returns None
+    when the conflict carries no numeric basis (⇒ the canonical model treats it as
+    fully material). `base` is deliberately NOT consulted (§B/§C).
+    """
+    ratios: list[float] = []
+    for candidate in conflict.conflict_set:
+        if not isinstance(candidate, dict):
+            continue
+        values = candidate.get("compared_values")
+        delta = candidate.get("delta")
+        if not isinstance(values, dict) or not isinstance(delta, int | float):
+            continue
+        denom = max(
+            (abs(float(v)) for v in values.values() if isinstance(v, int | float)),
+            default=0.0,
+        )
+        if denom > 0:
+            ratios.append(abs(float(delta)) / denom)
+    if not ratios:
+        return None
+    return min(1.0, max(ratios) / _MATERIALITY_SATURATION_RATIO)
 
 
 class CategoryAggregator:
@@ -113,36 +153,27 @@ class CategoryAggregator:
             assessment_state = "assessed_with_signals"
 
         if conflict.hard_conflict:
-            # ADR-009 (2026-08-16 GOVERNING amendment §B/§D): graduated penalty in
-            # which detection-certainty scales the PENALTY, not the score. The
-            # `severity_penalty` is the fraction of base removed at full certainty
-            # (retained from SEVERITY_MULTIPLIERS: 1 - multiplier). Lower certainty =>
-            # weaker penalty => higher score. The previous
-            # `base * multiplier * certainty` was inverted (a *more*-certain conflict
-            # scored *higher*). At certainty == 1.0 this is identical to the prior
-            # formula, so full-certainty behaviour is preserved; no new band constant
-            # is introduced here.
-            multiplier = SEVERITY_MULTIPLIERS.get(conflict.severity, 0.4)
-            severity_penalty = 1.0 - multiplier
-            certainty_scaled_penalty = severity_penalty * conflict.evidence_certainty
-            adjusted = base * (1.0 - certainty_scaled_penalty)
+            # Delegate scoring to the single canonical model (§B/§C/§D). A hard
+            # conflict lands in its severity band by certainty × materiality —
+            # graduated, monotonic, never 0. `base` (this category's own rule
+            # signals) is passed in; worst_open is deliberately NOT — that is the
+            # global layer's concern (§C).
+            canonical = score_category(
+                CategoryScoreInput(
+                    base=base,
+                    conflict=ConflictInput(
+                        severity=_to_canonical_severity(conflict.severity),
+                        certainty=conflict.evidence_certainty,
+                        magnitude=_materiality_from_conflict(conflict),
+                        independent_count=max(1, len(conflict.conflict_set)),
+                    ),
+                )
+            )
+            adjusted = canonical.score if canonical.score is not None else base
             explanation = ScoreExplanation(
                 negative_factors=["hard_conflict", f"severity:{conflict.severity}"],
                 dominant_rules=[r for r, _ in rule_signals],
-                score_path=[
-                    {"step": "base", "value": base},
-                    {
-                        "step": "severity_penalty",
-                        "severity": conflict.severity,
-                        "value": severity_penalty,
-                    },
-                    {
-                        "step": "certainty_scaled_penalty",
-                        "certainty": conflict.evidence_certainty,
-                        "value": certainty_scaled_penalty,
-                    },
-                    {"step": "adjusted", "value": adjusted},
-                ],
+                score_path=[{"step": "base", "value": base}, *canonical.penalty_steps],
             )
             return CategoryV2(
                 category=category,
