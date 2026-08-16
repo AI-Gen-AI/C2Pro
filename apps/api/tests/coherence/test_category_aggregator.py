@@ -143,6 +143,34 @@ def test_adjusted_score_formula_for_conflicts(
 
 
 @pytest.mark.unit
+def test_materiality_positions_within_band(aggregator: CategoryAggregator) -> None:
+    """A larger relative discrepancy scores nearer the band floor (materiality-positioned)."""
+
+    def _score(delta: float, denom: float) -> float:
+        conflict = ConflictReport(
+            severity="high",
+            hard_conflict=True,
+            conflict_set=[{"compared_values": {"a": denom, "b": denom - delta}, "delta": delta}],
+            evidence_certainty=1.0,
+        )
+        cat = aggregator.aggregate(
+            category="BUDGET",
+            evidence=_bundle(),
+            conflict=conflict,
+            rule_signals=[("r", 80.0)],
+            applicable=True,
+        )
+        assert cat.coherence_score is not None
+        return cat.coherence_score
+
+    small_gap = _score(delta=5.0, denom=100.0)  # ratio 0.05 → near the ceiling
+    large_gap = _score(delta=60.0, denom=100.0)  # ratio 0.60 → floor
+    assert large_gap < small_gap
+    assert 45.0 <= large_gap <= 65.0  # both stay inside the high band [45, 65]
+    assert 45.0 <= small_gap <= 65.0
+
+
+@pytest.mark.unit
 def test_score_explanation_records_multipliers(aggregator: CategoryAggregator) -> None:
     conflict = ConflictReport(
         severity="medium",

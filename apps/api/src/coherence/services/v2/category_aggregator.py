@@ -41,6 +41,38 @@ def _to_canonical_severity(severity: str) -> Severity:
     return cast(Severity, severity) if severity in _CANONICAL_SEVERITIES else "high"
 
 
+# Interim (§B, calibratable): a discrepancy whose |delta| reaches this fraction of the
+# compared magnitude is treated as fully material (⇒ band floor). Smaller gaps sit
+# nearer the band ceiling.
+_MATERIALITY_SATURATION_RATIO = 0.5
+
+
+def _materiality_from_conflict(conflict: ConflictReport) -> float | None:
+    """Normalized discrepancy materiality in [0, 1] from the conflict's compared values.
+
+    Larger relative gap ⇒ higher materiality ⇒ nearer the band floor. Returns None
+    when the conflict carries no numeric basis (⇒ the canonical model treats it as
+    fully material). `base` is deliberately NOT consulted (§B/§C).
+    """
+    ratios: list[float] = []
+    for candidate in conflict.conflict_set:
+        if not isinstance(candidate, dict):
+            continue
+        values = candidate.get("compared_values")
+        delta = candidate.get("delta")
+        if not isinstance(values, dict) or not isinstance(delta, int | float):
+            continue
+        denom = max(
+            (abs(float(v)) for v in values.values() if isinstance(v, int | float)),
+            default=0.0,
+        )
+        if denom > 0:
+            ratios.append(abs(float(delta)) / denom)
+    if not ratios:
+        return None
+    return min(1.0, max(ratios) / _MATERIALITY_SATURATION_RATIO)
+
+
 class CategoryAggregator:
     def __init__(self, state_machine: CategoryStateMachine | None = None) -> None:
         self._sm = state_machine or CategoryStateMachine()
@@ -132,7 +164,7 @@ class CategoryAggregator:
                     conflict=ConflictInput(
                         severity=_to_canonical_severity(conflict.severity),
                         certainty=conflict.evidence_certainty,
-                        magnitude=None,  # interim: a detected hard conflict is fully material
+                        magnitude=_materiality_from_conflict(conflict),
                         independent_count=max(1, len(conflict.conflict_set)),
                     ),
                 )

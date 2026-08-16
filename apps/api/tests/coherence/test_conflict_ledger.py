@@ -270,5 +270,7 @@ async def test_orchestrator_applies_existing_high_conflict_penalty() -> None:
 
     budget = next(category for category in payload.categories if category.category == "BUDGET")
     assert budget.status.value == "conflicting_evidence"
-    assert budget.coherence_score == 45.0  # canonical high band (was 10.0 under base×mult×certainty)
+    assert budget.coherence_score is not None
+    # canonical high band [45,65], materiality-positioned (was 10.0 under base×mult×certainty)
+    assert 45.0 <= budget.coherence_score <= 65.0
     assert budget.detected_conflicts[0]["rule_id"] == "DET-BUD-SUM"
