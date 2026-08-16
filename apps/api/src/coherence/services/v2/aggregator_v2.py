@@ -18,6 +18,8 @@ from src.coherence.application.dtos.coherence_v2_dtos import (
     CategoryV2,
     GlobalV2,
 )
+from src.coherence.canonical.category import Severity
+from src.coherence.canonical.global_agg import apply_critical_risk_envelope
 from src.coherence.domain.v2_constants import (
     DEFAULT_CATEGORY_WEIGHTS,
     MIN_ACTIVE_WEIGHT,
@@ -33,6 +35,7 @@ class GlobalAggregatorV2:
         self,
         categories: Iterable[CategoryV2],
         weights: dict[str, float] | None = None,
+        worst_open_severity: Severity | None = None,
     ) -> GlobalV2:
         cats = list(categories)
         w = weights or DEFAULT_CATEGORY_WEIGHTS
@@ -85,6 +88,10 @@ class GlobalAggregatorV2:
             )
 
         coherence = self._weighted_coherence(active, w)
+        # §C global critical-risk envelope: an open finding cannot let the headline
+        # read "healthy". Only ever lowers; the per-category scores already reflect
+        # each conflict in its own band.
+        coherence, envelope = apply_critical_risk_envelope(coherence, worst_open_severity)
         status: Literal["scored", "partial"] = (
             "scored" if len(active) == len(applicable) else "partial"
         )
@@ -93,7 +100,9 @@ class GlobalAggregatorV2:
             completeness_score=round(completeness_score, 4),
             technical_reliability_index=round(tri, 4),
             status=status,
-            score_reason="scored_categories_only",
+            score_reason=(
+                f"critical_risk_capped:{envelope}" if envelope else "scored_categories_only"
+            ),
             active_weight=round(active_weight, 4),
         )
 

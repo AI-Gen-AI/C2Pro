@@ -37,6 +37,23 @@ class GlobalScore:
     reason: str | None = None
 
 
+def apply_critical_risk_envelope(
+    score: float, worst_open: Severity | None
+) -> tuple[float, Severity | None]:
+    """Cap a headline so an open finding can't let it read 'healthy' (§C).
+
+    Only ever LOWERS the score. Returns (capped_score, severity_that_capped_or_None).
+    Single source of the envelope logic — reused by `aggregate_global` and by the v2
+    `GlobalAggregatorV2` while the scoring paths converge.
+    """
+    if worst_open is None:
+        return score, None
+    cap = OVERALL_SEVERITY_CEILING.get(worst_open)
+    if cap is not None and score > cap:
+        return cap, worst_open
+    return score, None
+
+
 def aggregate_global(inp: GlobalScoreInput) -> GlobalScore:
     """Combine category scores into the headline and apply the critical-risk envelope."""
     assessed = {
@@ -67,13 +84,7 @@ def aggregate_global(inp: GlobalScoreInput) -> GlobalScore:
         / assessed_weight_sum
     )
 
-    envelope_applied: Severity | None = None
-    score = mean
-    if inp.worst_open_severity is not None:
-        cap = OVERALL_SEVERITY_CEILING.get(inp.worst_open_severity)
-        if cap is not None and mean > cap:
-            score = cap
-            envelope_applied = inp.worst_open_severity
+    score, envelope_applied = apply_critical_risk_envelope(mean, inp.worst_open_severity)
 
     return GlobalScore(
         score=round(score, 2),
@@ -83,4 +94,9 @@ def aggregate_global(inp: GlobalScoreInput) -> GlobalScore:
     )
 
 
-__all__ = ["GlobalScore", "GlobalScoreInput", "aggregate_global"]
+__all__ = [
+    "GlobalScore",
+    "GlobalScoreInput",
+    "aggregate_global",
+    "apply_critical_risk_envelope",
+]
