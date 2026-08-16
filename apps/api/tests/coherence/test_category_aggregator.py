@@ -14,25 +14,8 @@ from src.coherence.application.dtos.coherence_v2_dtos import (
 from src.coherence.domain.category_state_machine import CategoryStateMachine
 from src.coherence.services.v2.category_aggregator import CategoryAggregator
 from src.coherence.services.v2.conflict_service import ConflictReport
-from src.coherence.services.v2.evidence_service import EvidenceBundle
-
-
-def _bundle(count: int = 3, coverage: float = 0.9, tri: float = 0.85,
-            freshness: float = 0.95) -> EvidenceBundle:
-    return EvidenceBundle(
-        count=count,
-        evidence_coverage=coverage,
-        evidence_freshness=freshness,
-        avg_technical_reliability=tri,
-        missing_required=[],
-        references=[f"doc-{i}" for i in range(count)],
-    )
-
-
-def _no_conflict() -> ConflictReport:
-    return ConflictReport(
-        severity="none", hard_conflict=False, conflict_set=[], evidence_certainty=1.0
-    )
+from tests.support.coherence_builders import bundle as _bundle
+from tests.support.coherence_builders import no_conflict as _no_conflict
 
 
 @pytest.fixture
@@ -124,10 +107,14 @@ def test_no_rule_signals_assessed_clean_yields_legitimate_high_score(
 @pytest.mark.parametrize(
     "severity,certainty,base,expected",
     [
-        ("low", 1.0, 80.0, 72.0),       # 80 * 0.9 * 1.0
-        ("medium", 0.9, 80.0, 50.4),    # 80 * 0.7 * 0.9
-        ("high", 1.0, 80.0, 32.0),      # 80 * 0.4 * 1.0
-        ("critical", 1.0, 80.0, 8.0),   # 80 * 0.1 * 1.0
+        # ADR-009 (2026-08-16 §B/§D): certainty scales the PENALTY, not the score.
+        # At certainty == 1.0 this is byte-identical to the prior
+        # `base * multiplier * certainty`; below full certainty the penalty is
+        # milder (higher score), correcting the previous inversion.
+        ("low", 1.0, 80.0, 72.0),       # 80 * (1 - 0.1*1.0)
+        ("medium", 0.9, 80.0, 58.4),    # 80 * (1 - 0.3*0.9)  (was 50.4 under inverted formula)
+        ("high", 1.0, 80.0, 32.0),      # 80 * (1 - 0.6*1.0)
+        ("critical", 1.0, 80.0, 8.0),   # 80 * (1 - 0.9*1.0)
     ],
 )
 def test_adjusted_score_formula_for_conflicts(
@@ -171,7 +158,8 @@ def test_score_explanation_records_multipliers(aggregator: CategoryAggregator) -
     )
     assert cat.score_explanation is not None
     steps = {step["step"] for step in cat.score_explanation.score_path}
-    assert {"base", "severity_multiplier", "evidence_certainty"} <= steps
+    # ADR-009 §D: honest step names — certainty scales the penalty, not the score.
+    assert {"base", "severity_penalty", "certainty_scaled_penalty"} <= steps
 
 
 @pytest.mark.unit
