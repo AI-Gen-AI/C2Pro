@@ -5,7 +5,13 @@ fully-typed `CategoryV2` (ADR-009 §6, §10, §13).
 This module is the single source of truth for the deterministic conflict
 formula:
 
-    adjusted_score = base_score × SEVERITY_MULTIPLIERS[severity] × evidence_certainty
+    adjusted_score = base_score × (1 − (1 − SEVERITY_MULTIPLIERS[severity]) × evidence_certainty)
+
+i.e. detection-certainty scales the PENALTY, not the score: higher certainty ⇒
+stronger penalty ⇒ lower score (ADR-009, 2026-08-16 governing amendment §B/§D).
+Identical to the prior `base × multiplier × certainty` at full certainty; corrected
+(non-inverted) below it. The band a critical may fall into stays governed by
+SEVERITY_MULTIPLIERS as an interim guard pending the unified calibrated model.
 
 Refers to Suite ID: TS-UA-COH-V2-CATAGG-001.
 """
@@ -107,19 +113,34 @@ class CategoryAggregator:
             assessment_state = "assessed_with_signals"
 
         if conflict.hard_conflict:
+            # ADR-009 (2026-08-16 GOVERNING amendment §B/§D): graduated penalty in
+            # which detection-certainty scales the PENALTY, not the score. The
+            # `severity_penalty` is the fraction of base removed at full certainty
+            # (retained from SEVERITY_MULTIPLIERS: 1 - multiplier). Lower certainty =>
+            # weaker penalty => higher score. The previous
+            # `base * multiplier * certainty` was inverted (a *more*-certain conflict
+            # scored *higher*). At certainty == 1.0 this is identical to the prior
+            # formula, so full-certainty behaviour is preserved; no new band constant
+            # is introduced here.
             multiplier = SEVERITY_MULTIPLIERS.get(conflict.severity, 0.4)
-            adjusted = base * multiplier * conflict.evidence_certainty
+            severity_penalty = 1.0 - multiplier
+            certainty_scaled_penalty = severity_penalty * conflict.evidence_certainty
+            adjusted = base * (1.0 - certainty_scaled_penalty)
             explanation = ScoreExplanation(
                 negative_factors=["hard_conflict", f"severity:{conflict.severity}"],
                 dominant_rules=[r for r, _ in rule_signals],
                 score_path=[
                     {"step": "base", "value": base},
                     {
-                        "step": "severity_multiplier",
+                        "step": "severity_penalty",
                         "severity": conflict.severity,
-                        "value": multiplier,
+                        "value": severity_penalty,
                     },
-                    {"step": "evidence_certainty", "value": conflict.evidence_certainty},
+                    {
+                        "step": "certainty_scaled_penalty",
+                        "certainty": conflict.evidence_certainty,
+                        "value": certainty_scaled_penalty,
+                    },
                     {"step": "adjusted", "value": adjusted},
                 ],
             )
