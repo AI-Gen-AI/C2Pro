@@ -107,14 +107,15 @@ def test_no_rule_signals_assessed_clean_yields_legitimate_high_score(
 @pytest.mark.parametrize(
     "severity,certainty,base,expected",
     [
-        # ADR-009 (2026-08-16 §B/§D): certainty scales the PENALTY, not the score.
-        # At certainty == 1.0 this is byte-identical to the prior
-        # `base * multiplier * certainty`; below full certainty the penalty is
-        # milder (higher score), correcting the previous inversion.
-        ("low", 1.0, 80.0, 72.0),       # 80 * (1 - 0.1*1.0)
-        ("medium", 0.9, 80.0, 58.4),    # 80 * (1 - 0.3*0.9)  (was 50.4 under inverted formula)
-        ("high", 1.0, 80.0, 32.0),      # 80 * (1 - 0.6*1.0)
-        ("critical", 1.0, 80.0, 8.0),   # 80 * (1 - 0.9*1.0)
+        # ADR-009 §B/§C/§D: scoring is delegated to the canonical model. A hard
+        # conflict lands in its severity band [floor, ceiling] positioned by
+        # certainty × materiality (magnitude None ⇒ fully material). Bands are
+        # anchored on the #532 interim ceilings, so `base` no longer scales a
+        # conflicted score — it is band-determined.
+        ("low", 1.0, 80.0, 80.0),        # band [80,95], strength 1.0 → 80
+        ("medium", 0.9, 80.0, 66.5),     # band [65,80], strength 0.9 → 80-15*0.9
+        ("high", 1.0, 80.0, 45.0),       # band [45,65], strength 1.0 → 45
+        ("critical", 1.0, 80.0, 25.0),   # band [25,45], strength 1.0 → 25 (VP floor)
     ],
 )
 def test_adjusted_score_formula_for_conflicts(
@@ -158,8 +159,8 @@ def test_score_explanation_records_multipliers(aggregator: CategoryAggregator) -
     )
     assert cat.score_explanation is not None
     steps = {step["step"] for step in cat.score_explanation.score_path}
-    # ADR-009 §D: honest step names — certainty scales the penalty, not the score.
-    assert {"base", "severity_penalty", "certainty_scaled_penalty"} <= steps
+    # Canonical audit trail: base + severity band + certainty-scaled penalty strength.
+    assert {"base", "severity_band", "penalty_strength"} <= steps
 
 
 @pytest.mark.unit
