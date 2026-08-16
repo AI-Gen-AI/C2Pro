@@ -22,25 +22,8 @@ from src.coherence.application.dtos.coherence_v2_dtos import CategoryStatus, Cat
 from src.coherence.domain.category_state_machine import CategoryStateMachine
 from src.coherence.services.v2.category_aggregator import CategoryAggregator
 from src.coherence.services.v2.conflict_service import ConflictReport
-from src.coherence.services.v2.evidence_service import EvidenceBundle
-
-
-def _bundle(count: int = 3, coverage: float = 0.9, tri: float = 0.85,
-            freshness: float = 0.95) -> EvidenceBundle:
-    return EvidenceBundle(
-        count=count,
-        evidence_coverage=coverage,
-        evidence_freshness=freshness,
-        avg_technical_reliability=tri,
-        missing_required=[],
-        references=[f"doc-{i}" for i in range(count)],
-    )
-
-
-def _no_conflict() -> ConflictReport:
-    return ConflictReport(
-        severity="none", hard_conflict=False, conflict_set=[], evidence_certainty=1.0
-    )
+from tests.support.coherence_builders import bundle as _bundle
+from tests.support.coherence_builders import no_conflict as _no_conflict
 
 
 def _conflict(severity: str = "critical", certainty: float = 1.0) -> ConflictReport:
