@@ -22,13 +22,16 @@ from src.coherence.calibration.metrics import (
     pearson_correlation,
 )
 from src.coherence.calibration.report import CalibrationReport, build_report
+from src.coherence.calibration.shadow_compare import ProjectRun, compare_runs
 
 __all__ = [
     "CalibrationReport",
     "ConfusionMatrix",
     "GoldenFinding",
     "GoldenProject",
+    "ProjectRun",
     "build_report",
+    "compare_runs",
     "mean_absolute_error",
     "pearson_correlation",
 ]
