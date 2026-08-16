@@ -15,6 +15,10 @@ wiring is a separate increment.
 """
 from __future__ import annotations
 
+from src.coherence.cross_document.assembly import (
+    assemble_cross_doc_inputs,
+    cross_document_signals,
+)
 from src.coherence.cross_document.comparators import (
     RULE_BOM_VS_BUDGET,
     RULE_CONTRACT_VS_BUDGET,
@@ -35,9 +39,11 @@ __all__ = [
     "RULE_WBS_VS_BUDGET",
     "CrossDocFinding",
     "ProjectCrossDocInputs",
+    "assemble_cross_doc_inputs",
     "bom_vs_budget_total",
     "compare_values",
     "contract_vs_budget_total",
+    "cross_document_signals",
     "run_numeric_comparators",
     "to_finding_signal",
     "wbs_vs_budget_total",

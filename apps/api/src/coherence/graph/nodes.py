@@ -896,13 +896,25 @@ def cross_clause_eval(state: CoherenceGraphState) -> NodeOutput:
     Returns:
         Partial state update with cross_signals
     """
-    if not state.config.include_cross_clause or not state.cross_pairs:
-        logger.info("cross_clause_eval: skipped (no pairs or disabled)")
+    if not state.config.include_cross_clause:
+        logger.info("cross_clause_eval: skipped (disabled)")
         return {"cross_signals": []}
+
+    from src.coherence.cross_document import cross_document_signals  # noqa: PLC0415
 
     signals: list[FindingSignal] = []
     errors: list[str] = []
 
+    # Project-level cross-document comparators (assembled totals; no clause pairs
+    # needed) — ADR-023 Phase 1b. Contract↔Budget / WBS↔Budget / BOM↔Budget.
+    try:
+        signals.extend(cross_document_signals(state.clauses))
+    except (AttributeError, TypeError, ValueError) as e:
+        error_msg = f"Cross-document comparator failed: {e}"
+        logger.warning(error_msg)
+        errors.append(error_msg)
+
+    # Pairwise cross-clause heuristics (need RAG/category pairs).
     for pair in state.cross_pairs:
         try:
             # Heuristic cross-clause checks (no LLM)
