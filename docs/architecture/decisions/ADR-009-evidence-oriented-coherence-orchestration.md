@@ -9,6 +9,8 @@
 
 ## Revision history
 
+- **2026-08-16 — Governing amendment (VP product decision).** Graduated coherence model: a critical/hard conflict must strongly depress a dimension's score but **must NOT force `score = 0`** — C2Pro detects incoherence, not falsehood. `conflicting_evidence` is decoupled from an automatic zero; scoring is graduated/monotonic/calibratable; the detection-certainty term is corrected (higher certainty ⇒ stronger penalty); the global critical-risk guardrail is kept as canonical; the HITL lifecycle (incl. proposed `accepted_variance` / `explained_conflict`) is part of the semantic model; the four coexisting scorers converge to one authoritative path; cutover is gated by a real multi-metric calibration gate + shadow + ADR-017 canary. See the "2026-08-16 Amendment (GOVERNING)" section below — it **supersedes** the §2.4/§3.2/§6 conflict→0 reading. PR #532 ceilings remain an interim guard.
+- **2026-08-16 — Clarifications (pinned, second pass).** (1) The certainty-direction correction (§D) shipped **shadow-only** in PR #535 as `adjusted = base × (1 − (1 − severity_multiplier) × certainty)`; no band constant changed. (2) `critical = 0.1` (≈ 8/100) is **not** the final canonical band — an open critical must land *materially-poor-but-explainable*, never *false/invalid*; the band is set by calibration, not the legacy `0.1`. (3) **Separation of concerns:** `worst_open` / project-global severity lives in the **global aggregation/guardrail layer only**, never inside per-category scoring. (4) **HITL does not relax the raw score:** `accepted_variance` / `explained_conflict` preserve the discrepancy **and its score**; only `false_positive`, data/extraction correction, changed-evidence resolution, or supersession recalculate. Coherence ≠ truth ≠ business acceptance.
 - **2026-05-26 — Phase A+B+C landed.** v1 `_calculate_detailed_with_coverage` no longer applies the forbidden `mean × coverage_ratio` collapse (§1 P1). When `active_weight < MIN_ACTIVE_WEIGHT (0.35)` the engine returns `score=None`, `reason="insufficient_active_weight"` (§14). The v1→v2 shadow adapter no longer echoes v1's collapsed number for partial-coverage inputs. Frontend renders `null` as ADR-009 §18 "Pending evidence" neutral state (no `?? 0`, no red on partial categories). `DashboardSummary.{global_score, coherence_score, sub_scores}` widened to `float | None`. CI guard added to `frontend-ci.yml` banning `?? 0` / `|| 0` on coherence score paths. Tracking: `EPIC-ECOA-V2-HOTFIX-AND-CUTOVER` (`TASK-COH-V2-HOTFIX-001`, `-ADAPTER-002`, `-FRONTEND-003`). Phase D (v2 authoritative behind per-tenant flag) and Phase F (`score_version` canonicalization) remain pending.
 - **2026-05-24** — Phase 1 (DTOs, services, state machine) + Phase 2 (shadow mode) shipped via PR #146 / merge `b6eac7d3`. `coherence_v2_enabled=False`, `coherence_v2_shadow_mode=True`.
 - **2026-05-25** — ADR amended: `ConfidenceIndex` → `Technical Reliability Index (TRI)`; nullable `coherence_score`; `active_weight` global; status enum locked.
@@ -22,6 +24,56 @@
 > 5. Lock the global `status` literal set to `{"scored","partial","insufficient_active_weight","pending_documents"}`.
 >
 > No legacy aliases are kept in new code. v1→v2 adapters MUST emit the new field names.
+
+## 2026-08-16 Amendment — Graduated coherence, conflict ≠ zero, HITL lifecycle, one authoritative path (GOVERNING)
+
+**Status:** Accepted (VP product decision, 2026-08-16). **This amendment SUPERSEDES the §2.4 / §3.2 / §6 reading that a critical/hard conflict deterministically forces `score = 0`.** Where this section conflicts with the 2026-05 body below, this section wins. Implementation MUST conform to this section; do not change flagship scoring behaviour and document it afterwards.
+
+**Governing principle.**
+> C2Pro **detects and quantifies incoherence; it does not equate incoherence with falsehood.** A material conflict must be **visible, traceable, and strongly reflected in the score**, but "critical" is **not** an automatic synonym for zero. Human validation determines the *business meaning* of a discrepancy.
+
+C2Pro distinguishes four things that must never be collapsed: **coherence between evidence** · **factual truth** · **business/commercial validity** · **system/extraction error**. A detected discrepancy proves none of the latter three. (Illustration: contract €1.6M vs budget €1.2M — a genuine 25% material discrepancy that must raise a critical alert and materially depress the BUDGET score, yet the €1.2M may be entirely intentional and real — target margin, scope exclusions, owner-supplied items, approved savings. The engine has found a difference requiring explanation, not proven falsehood.)
+
+### A. `conflicting_evidence` is a STATE, not a score
+- Keep `conflicting_evidence` in the §2.3 state machine. **Decouple it from an automatic numeric zero.** The *state* describes the relationship between available evidence; the *score* describes how coherent the dimension currently appears.
+- `score = 0` (or near-zero) is reserved for **genuinely extreme cases established by the calibrated scoring methodology**, never used as a shortcut for "a critical was detected".
+
+### B. Graduated, monotonic, calibratable score
+A category's coherence score derives from the **canonical model**, as a function of: discrepancy **magnitude/materiality**, **severity**, corrected **detection certainty** (see D), **number of independent conflicts**, **quantity/quality of supporting sources**, and eventual **calibration against expert-reviewed cases** — NOT from a forced constant. Required invariant:
+> More severe / more material / more certain incoherence can **never improve** the score; but severity alone does **not mechanically define** the score.
+
+PR #532's principle is retained: a category with an open critical finding must score **materially worse** than comparable clean categories. The current ceilings (`category critical ≤ 45`, `overall critical ≤ 60`) remain as **named interim production safety guardrails** until the unified model passes tests + shadow + calibration. **45 and 60 are NOT final calibrated thresholds** — Phase 1 makes the mechanism canonical and empirically calibratable.
+
+Equally, the legacy `SEVERITY_MULTIPLIERS` `critical = 0.1` (≈ 8/100 off a clean base) is **NOT** the final canonical band. Although no longer zero, ≈ 8 still reads as a *false / invalid dimension*, which is wrong: a critical mismatch means **material incoherence requiring explanation** — it does not establish that either source is false. The canonical model MUST land an open critical in a **materially-poor-but-explainable band** (clearly failing, not annihilated). The exact band is fixed by **calibration against expert-reviewed cases**, never by the legacy `0.1` multiplier.
+
+### C. Global critical-risk guardrail — KEEP (canonical, not a patch)
+Even with graduated per-category scoring, a weighted mean can produce a deceptively strong headline (e.g. five categories ≈ 95–100, one = 30–40). A project with an **open critical** MUST NOT display a headline Coherence Score that visually reads "healthy". Preserve a **global critical-risk envelope/cap** as part of the canonical methodology, with **calibratable** thresholds.
+
+**Separation of concerns (binding).** Per-category scoring and the global risk-envelope are **distinct layers** and MUST stay separate:
+- A **category score** is a pure function of *that category's own* evidence — `base`, `severity`, corrected `certainty`, discrepancy magnitude, number of independent conflicts. It NEVER takes `worst_open` or any project-global severity as input.
+- The **global aggregation/guardrail layer** owns the critical-risk envelope: it takes the per-category scores + the worst open finding *anywhere* and depresses/caps the headline (interim `overall critical ≤ 60`).
+
+Mixing project-global severity into an individual category's scoring function is forbidden — it conflates the two responsibilities and makes neither independently testable or calibratable.
+
+### D. Corrected detection-certainty semantics
+The v2 formula `adjusted = base × severity_multiplier × evidence_certainty` (`services/v2/category_aggregator.py`, `v2_constants.py` `critical=0.1`) is **inverted**: a *less* certain conflict currently yields a *lower* score (harsher penalty), only partly masked by a 0.90 floor. Correct semantics: **higher detection certainty ⇒ stronger penalty (lower score); lower certainty ⇒ weaker penalty.** Certainty scales the *penalty*, not the score directly. **Shipped (shadow-only) in PR #535:** `adjusted = base × (1 − (1 − severity_multiplier) × certainty)` — byte-identical at full certainty, corrected below it, reusing `SEVERITY_MULTIPLIERS` with **no** new band constant. This corrects only the *direction*; it deliberately does **not** set the final critical band (that is §B calibration) and does **not** touch the live `/evaluate` path.
+
+### E. HITL lifecycle is part of the semantic model — but HITL does NOT rewrite the score
+HITL exists because the engine detects **evidence relationships and risk**, not business truth. The lifecycle MUST distinguish (at minimum): `detected_unexplained` · `confirmed_data_error` (extraction/OCR) · `genuine_inconsistency` (corrective action) · `accepted_variance` / `explained_conflict` (legitimate/intentional or contractually-accepted business variance) · `resolved` · `false_positive`. **Do not silently dismiss an alert after review.** Preserve the original detection, evidence, reviewer, decision, rationale, and **score history**. New states (`accepted_variance`, `explained_conflict`) are **proposed explicitly here**, not invented silently in code.
+
+**Binding rule (pinned 2026-08-16) — accepted/explained variance does NOT relax the raw Coherence Score.** HITL adds *business interpretation*; it does not rewrite the *documentary relationship* the engine measured. Therefore:
+- `accepted_variance` / `explained_conflict` **preserve the detected discrepancy AND its score impact unchanged**, recording only reviewer, rationale, and disposition alongside it. An intentional, accepted variance is still a real incoherence between documents — the score keeps reflecting it.
+- Only these dispositions **remove/replace the invalid finding and trigger recalculation**: `false_positive`; extraction/data correction (`confirmed_data_error`); resolution through **changed evidence** (a document was actually amended); or **supersession** (a newer authoritative document replaces the compared one).
+
+This encodes the fundamental distinction: **Coherence ≠ truth ≠ business acceptance.** *Example:* Contract €1.6M vs Budget €1.2M may be a genuine, intentional target-cost variance. C2Pro detects it, alerts it, and **materially reduces BUDGET coherence** — it neither scores it ~0 nor declares either value wrong. HITL then records whether the variance is accepted, erroneous, actionable, or resolved — **without** editing the coherence number that honestly reports that the documents disagree.
+
+### F. One authoritative scoring path
+Today **four** scoring surfaces coexist: `scoring.py::ScoringService` (exp-baseline + #532 caps, **live** on `/evaluate`), `domain/subscore_calculator.py` (penalty-based), `services/v2/category_aggregator.py` (base×severity×certainty), `domain/category_state_machine.py`. **Phase 1 converges these into ONE canonical semantic** consumed identically by `/coherence/evaluate`, persistence, the dashboard headline, category scores, the audit report/export, ProjectGraph/Tier-2, and alerts. The "v1 headline + v2 supplementary panel" split is **not** an acceptable long-term architecture. Backlog/docs that state v2 is already authoritative MUST be corrected while the user-facing path still runs the older scorer.
+
+### G. Calibration gate + shadow before cutover
+Cutover to the unified model is gated by a **real, multi-metric calibration gate** (not v1↔v2 MAE alone — reproducing a wrong legacy scorer is not a quality criterion): critical-finding **precision / false-positive-rate / recall**, **expert / golden-ground-truth** comparison, **score↔expert correlation**, correct **null / insufficient-evidence** behaviour, distribution/drift checks, with MAE as an *additional* metric. Run the new model in **shadow** (compare findings, states, scores, global, alerts, FP/FN, HITL outcomes vs the current path + expert cases), then use the ADR-017 **canary** path — never a direct flag flip. The anonymized Abengoa corpus feeds this calibration as a separate, parallel track.
+
+*(The §2.4/§3.2/§6 text below is retained for history; the conflict→0 numeric rule there is superseded by A–B above.)*
 
 ## 1. Contexto
 
