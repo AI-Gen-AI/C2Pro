@@ -12,7 +12,10 @@ from src.coherence.application.dtos.coherence_v2_dtos import (
     CategoryV2,
 )
 from src.coherence.domain.category_state_machine import CategoryStateMachine
-from src.coherence.services.v2.category_aggregator import CategoryAggregator
+from src.coherence.services.v2.category_aggregator import (
+    CategoryAggregator,
+    worst_open_severity,
+)
 from src.coherence.services.v2.conflict_service import ConflictReport
 from tests.support.coherence_builders import bundle as _bundle
 from tests.support.coherence_builders import no_conflict as _no_conflict
@@ -168,6 +171,23 @@ def test_materiality_positions_within_band(aggregator: CategoryAggregator) -> No
     assert large_gap < small_gap
     assert 45.0 <= large_gap <= 65.0  # both stay inside the high band [45, 65]
     assert 45.0 <= small_gap <= 65.0
+
+
+@pytest.mark.unit
+def test_worst_open_severity_picks_worst_hard_conflict() -> None:
+    """worst_open_severity returns the worst HARD-conflict severity, else None (§C)."""
+    high = ConflictReport(
+        severity="high", hard_conflict=True, conflict_set=[{"x": 1}], evidence_certainty=1.0
+    )
+    critical = ConflictReport(
+        severity="critical", hard_conflict=True, conflict_set=[{"x": 1}], evidence_certainty=1.0
+    )
+    clean = ConflictReport(
+        severity="none", hard_conflict=False, conflict_set=[], evidence_certainty=1.0
+    )
+    assert worst_open_severity([high, critical, clean]) == "critical"
+    assert worst_open_severity([clean]) is None
+    assert worst_open_severity([]) is None
 
 
 @pytest.mark.unit

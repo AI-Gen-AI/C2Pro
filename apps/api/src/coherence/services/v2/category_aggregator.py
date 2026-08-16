@@ -14,6 +14,7 @@ Refers to Suite ID: TS-UA-COH-V2-CATAGG-001.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import cast
 
 from src.coherence.application.dtos.coherence_v2_dtos import (
@@ -39,6 +40,25 @@ _CANONICAL_SEVERITIES: frozenset[str] = frozenset({"low", "medium", "high", "cri
 def _to_canonical_severity(severity: str) -> Severity:
     """Map a ConflictReport severity to the canonical Severity (fallback: high)."""
     return cast(Severity, severity) if severity in _CANONICAL_SEVERITIES else "high"
+
+
+_SEVERITY_RANK: dict[str, int] = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+
+
+def worst_open_severity(conflicts: Iterable[ConflictReport]) -> Severity | None:
+    """Worst severity among hard conflicts, as a canonical Severity (None if none).
+
+    Fed to the global critical-risk envelope (§C) by the v2 entry points; the
+    per-category scorer never sees it.
+    """
+    worst: str | None = None
+    for conflict in conflicts:
+        if not conflict.hard_conflict:
+            continue
+        rank = _SEVERITY_RANK.get(conflict.severity, 0)
+        if worst is None or rank > _SEVERITY_RANK.get(worst, 0):
+            worst = conflict.severity
+    return _to_canonical_severity(worst) if worst is not None else None
 
 
 # Interim (§B, calibratable): a discrepancy whose |delta| reaches this fraction of the

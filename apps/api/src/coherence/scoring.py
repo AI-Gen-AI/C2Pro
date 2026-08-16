@@ -938,6 +938,7 @@ def calculate_v2_from_signals(
     from src.coherence.services.v2.aggregator_v2 import GlobalAggregatorV2  # noqa: PLC0415
     from src.coherence.services.v2.category_aggregator import (  # noqa: PLC0415
         CategoryAggregator,
+        worst_open_severity,
     )
     from src.coherence.services.v2.conflict_service import (  # noqa: PLC0415
         ConflictCandidate,
@@ -980,6 +981,7 @@ def calculate_v2_from_signals(
         candidates_by_category.setdefault(candidate.category, []).append(candidate)
 
     categories = []
+    conflicts = []
     conflict_service = ConflictService()
     for cat in MIN_EVIDENCE_BY_CATEGORY:
         applicable, reason = applicability_map.get(cat, (True, None))
@@ -988,6 +990,7 @@ def calculate_v2_from_signals(
             EvidenceBundle(0, 0.0, 0.0, 0.0, [], []),
         )
         conflict = conflict_service.detect(cat, bundle, candidates_by_category.get(cat, []))
+        conflicts.append(conflict)
         recon_data = budget_reconciliation_raw.get(cat)
         if recon_data and cat == "BUDGET":
             recon_data = {**recon_data, "source_rule_ids": budget_source_rule_ids}
@@ -1004,7 +1007,9 @@ def calculate_v2_from_signals(
             )
         )
 
-    global_block = global_agg.aggregate(categories)
+    global_block = global_agg.aggregate(
+        categories, worst_open_severity=worst_open_severity(conflicts)
+    )
     # model_validate: "global" is a Python keyword, so it can only be supplied
     # via its alias through a dict — a **{"global": ...} unpack defeats mypy.
     return CoherenceV2Payload.model_validate(

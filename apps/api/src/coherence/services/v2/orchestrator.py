@@ -20,8 +20,15 @@ from src.coherence.application.dtos.coherence_v2_dtos import (
 )
 from src.coherence.domain.v2_constants import MIN_EVIDENCE_BY_CATEGORY
 from src.coherence.services.v2.aggregator_v2 import GlobalAggregatorV2
-from src.coherence.services.v2.category_aggregator import CategoryAggregator
-from src.coherence.services.v2.conflict_service import ConflictCandidate, ConflictService
+from src.coherence.services.v2.category_aggregator import (
+    CategoryAggregator,
+    worst_open_severity,
+)
+from src.coherence.services.v2.conflict_service import (
+    ConflictCandidate,
+    ConflictReport,
+    ConflictService,
+)
 from src.coherence.services.v2.evidence_service import EvidenceService
 
 
@@ -57,12 +64,14 @@ class CoherenceV2Orchestrator:
     ) -> CoherenceV2Payload:
         await asyncio.sleep(0)
         categories: list[CategoryV2] = []
+        conflicts: list[ConflictReport] = []
         for cat in MIN_EVIDENCE_BY_CATEGORY:
             applicable, reason = evidence_inputs.applicability.get(cat, (True, None))
             evidence = self._evidence.collect(cat, evidence_inputs.project_docs)
             signals = evidence_inputs.rule_signals_by_category.get(cat, [])
             candidates = evidence_inputs.conflict_candidates_by_category.get(cat, [])
             conflict = self._conflict.detect(cat, evidence, candidates)
+            conflicts.append(conflict)
             categories.append(
                 self._cat_agg.aggregate(
                     category=cat,
@@ -75,7 +84,9 @@ class CoherenceV2Orchestrator:
                 )
             )
 
-        global_block = self._global_agg.aggregate(categories)
+        global_block = self._global_agg.aggregate(
+            categories, worst_open_severity=worst_open_severity(conflicts)
+        )
         # model_validate: "global" is a Python keyword, only expressible via alias.
         return CoherenceV2Payload.model_validate(
             {
