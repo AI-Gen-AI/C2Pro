@@ -15,7 +15,9 @@ supplied — this module deliberately invents no ground truth.
 """
 from __future__ import annotations
 
+from src.coherence.calibration.gate import EngineRun, evaluate_against_golden
 from src.coherence.calibration.golden import GoldenFinding, GoldenProject
+from src.coherence.calibration.golden_loader import load_golden, parse_golden
 from src.coherence.calibration.metrics import (
     ConfusionMatrix,
     mean_absolute_error,
@@ -27,11 +29,15 @@ from src.coherence.calibration.shadow_compare import ProjectRun, compare_runs
 __all__ = [
     "CalibrationReport",
     "ConfusionMatrix",
+    "EngineRun",
     "GoldenFinding",
     "GoldenProject",
     "ProjectRun",
     "build_report",
     "compare_runs",
+    "evaluate_against_golden",
+    "load_golden",
     "mean_absolute_error",
+    "parse_golden",
     "pearson_correlation",
 ]
