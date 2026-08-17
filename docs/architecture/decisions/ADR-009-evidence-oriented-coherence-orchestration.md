@@ -9,6 +9,7 @@
 
 ## Revision history
 
+- **2026-08-17 — Acceptance gate pinned (VP-approved).** §G made concrete (new **§G.1**) with five must-pass thresholds gating the ADR-017 canary: critical-finding recall ≥ 0.90, FPR ≤ 0.05, score↔expert MAE ≤ 10 (0–100), Pearson r ≥ 0.70, and no-regression vs v1 (canonical ≥ v1 on all). Measured by `coherence/calibration/gate.py` per-category against the **validated** golden only (templated alerts excluded until `evidence_verified`); categories admitted to the canary individually (BUDGET first). Live `/evaluate` unchanged until the gate passes.
 - **2026-08-16 — Governing amendment (VP product decision).** Graduated coherence model: a critical/hard conflict must strongly depress a dimension's score but **must NOT force `score = 0`** — C2Pro detects incoherence, not falsehood. `conflicting_evidence` is decoupled from an automatic zero; scoring is graduated/monotonic/calibratable; the detection-certainty term is corrected (higher certainty ⇒ stronger penalty); the global critical-risk guardrail is kept as canonical; the HITL lifecycle (incl. proposed `accepted_variance` / `explained_conflict`) is part of the semantic model; the four coexisting scorers converge to one authoritative path; cutover is gated by a real multi-metric calibration gate + shadow + ADR-017 canary. See the "2026-08-16 Amendment (GOVERNING)" section below — it **supersedes** the §2.4/§3.2/§6 conflict→0 reading. PR #532 ceilings remain an interim guard.
 - **2026-08-16 — Clarifications (pinned, second pass).** (1) The certainty-direction correction (§D) shipped **shadow-only** in PR #535 as `adjusted = base × (1 − (1 − severity_multiplier) × certainty)`; no band constant changed. (2) `critical = 0.1` (≈ 8/100) is **not** the final canonical band — an open critical must land *materially-poor-but-explainable*, never *false/invalid*; the band is set by calibration, not the legacy `0.1`. (3) **Separation of concerns:** `worst_open` / project-global severity lives in the **global aggregation/guardrail layer only**, never inside per-category scoring. (4) **HITL does not relax the raw score:** `accepted_variance` / `explained_conflict` preserve the discrepancy **and its score**; only `false_positive`, data/extraction correction, changed-evidence resolution, or supersession recalculate. Coherence ≠ truth ≠ business acceptance.
 - **2026-05-26 — Phase A+B+C landed.** v1 `_calculate_detailed_with_coverage` no longer applies the forbidden `mean × coverage_ratio` collapse (§1 P1). When `active_weight < MIN_ACTIVE_WEIGHT (0.35)` the engine returns `score=None`, `reason="insufficient_active_weight"` (§14). The v1→v2 shadow adapter no longer echoes v1's collapsed number for partial-coverage inputs. Frontend renders `null` as ADR-009 §18 "Pending evidence" neutral state (no `?? 0`, no red on partial categories). `DashboardSummary.{global_score, coherence_score, sub_scores}` widened to `float | None`. CI guard added to `frontend-ci.yml` banning `?? 0` / `|| 0` on coherence score paths. Tracking: `EPIC-ECOA-V2-HOTFIX-AND-CUTOVER` (`TASK-COH-V2-HOTFIX-001`, `-ADAPTER-002`, `-FRONTEND-003`). Phase D (v2 authoritative behind per-tenant flag) and Phase F (`score_version` canonicalization) remain pending.
@@ -72,6 +73,35 @@ Today **four** scoring surfaces coexist: `scoring.py::ScoringService` (exp-basel
 
 ### G. Calibration gate + shadow before cutover
 Cutover to the unified model is gated by a **real, multi-metric calibration gate** (not v1↔v2 MAE alone — reproducing a wrong legacy scorer is not a quality criterion): critical-finding **precision / false-positive-rate / recall**, **expert / golden-ground-truth** comparison, **score↔expert correlation**, correct **null / insufficient-evidence** behaviour, distribution/drift checks, with MAE as an *additional* metric. Run the new model in **shadow** (compare findings, states, scores, global, alerts, FP/FN, HITL outcomes vs the current path + expert cases), then use the ADR-017 **canary** path — never a direct flag flip. The anonymized Abengoa corpus feeds this calibration as a separate, parallel track.
+
+### G.1 Acceptance gate — pinned must-pass thresholds (2026-08-17, VP-approved)
+The qualitative gate above is made concrete. Before the canonical model may touch the live
+`/evaluate` path (i.e., before the ADR-017 canary flag flips for any tenant) it MUST clear
+**all** of the following, measured by the calibration harness
+(`coherence/calibration/gate.py::evaluate_against_golden`, per-category) against the
+**validated** golden — never the raw templated corpus:
+
+| # | Criterion | Must-pass | Rationale |
+|---|---|---|---|
+| 1 | Critical-finding **recall** | ≥ 0.90 | Missing a real critical incoherence is the unsafe direction for an incoherence detector. |
+| 2 | **False-positive rate** | ≤ 0.05 | Do not cry wolf; the cross-doc comparators are already tuned to ≈ 0.01. |
+| 3 | Score **MAE** vs expert (0–100) | ≤ 10 | The headline must track expert judgment in level. |
+| 4 | **Pearson r** vs expert | ≥ 0.70 | Directional agreement, not merely level. |
+| 5 | **No regression vs v1** | canonical ≥ v1 on 1–4 | Shadow-compare must show the new path is not worse than the scorer it replaces. |
+
+Preconditions and scope:
+- **Validated golden only.** Ground truth must carry per-alert `evidence_verified` with cited
+  cross-document values (§G validation pass). Templated/generated alerts are excluded from the
+  denominator until verified — a metric computed against generated text is not a gate.
+- **Per-category admission.** A category is admitted to the canary only once criteria 1–4 hold
+  for that category on its verified golden slice. As of 2026-08-17 only **BUDGET** has trusted
+  ground truth (real figures; recall 0.50 pre-validation); TIME/SCOPE/LEGAL/TECHNICAL are not
+  binding until the validation pass verifies them.
+- **Staging (unchanged, no direct flip):** shadow (measure only, zero user impact) → ADR-017
+  canary (flag on for an internal / small cohort, live-monitoring the same metrics 1–5) → GA.
+  Any criterion regressing in canary rolls back to shadow.
+- **Null / insufficient-evidence behaviour** (§B/§18) and distribution/drift checks remain gate
+  conditions alongside 1–5; MAE is reported, but criterion 3 is its binding form.
 
 *(The §2.4/§3.2/§6 text below is retained for history; the conflict→0 numeric rule there is superseded by A–B above.)*
 
