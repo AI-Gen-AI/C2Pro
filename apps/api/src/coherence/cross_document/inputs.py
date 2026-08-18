@@ -22,6 +22,10 @@ class ProjectCrossDocInputs:
     budget_leaf_sum: float | None = None  # sum of budget line items
     wbs_total: float | None = None  # sum of WBS work-package costs
     bom_total: float | None = None  # sum of BOM line costs
+    contingency: float | None = None  # contingency / reserve fund
+    max_risk_exposure: float | None = None  # largest identified risk value (from risk analysis)
+    contract_deadline: str | None = None  # ISO date the contract requires completion by
+    schedule_end: str | None = None  # ISO date the schedule actually ends
     currency: str | None = None  # reserved for a future FX-mismatch guard
 
 

@@ -65,6 +65,9 @@ _CONTRADICTION_VALUE_KEYS: dict[str, tuple[str, str]] = {
     "DET-CRS-CONBUD": ("contract_total", "budget_total"),
     "DET-CRS-WBSBUD": ("wbs_total", "budget_total"),
     "DET-CRS-BOMBUD": ("bom_total", "budget_total"),
+    "DET-CRS-NEGMARGIN": ("budget_total", "contract_total"),
+    "DET-CRS-RISKCONT": ("max_risk_exposure", "contingency"),
+    "DET-CRS-SCHDEAD": ("schedule_end", "contract_deadline"),  # date ordinals (numeric)
 }
 
 

@@ -21,12 +21,18 @@ from src.coherence.cross_document.assembly import (
 )
 from src.coherence.cross_document.comparators import (
     RULE_BOM_VS_BUDGET,
+    RULE_BUDGET_EXCEEDS_CONTRACT,
     RULE_CONTRACT_VS_BUDGET,
+    RULE_RISK_EXCEEDS_CONTINGENCY,
+    RULE_SCHEDULE_OVERRUNS_DEADLINE,
     RULE_WBS_VS_BUDGET,
     bom_vs_budget_total,
+    budget_exceeds_contract,
     compare_values,
     contract_vs_budget_total,
+    risk_exceeds_contingency,
     run_numeric_comparators,
+    schedule_overruns_deadline,
     wbs_vs_budget_total,
 )
 from src.coherence.cross_document.findings import CrossDocFinding
@@ -35,16 +41,22 @@ from src.coherence.cross_document.signal_adapter import to_finding_signal
 
 __all__ = [
     "RULE_BOM_VS_BUDGET",
+    "RULE_BUDGET_EXCEEDS_CONTRACT",
     "RULE_CONTRACT_VS_BUDGET",
+    "RULE_RISK_EXCEEDS_CONTINGENCY",
+    "RULE_SCHEDULE_OVERRUNS_DEADLINE",
     "RULE_WBS_VS_BUDGET",
     "CrossDocFinding",
     "ProjectCrossDocInputs",
     "assemble_cross_doc_inputs",
     "bom_vs_budget_total",
+    "budget_exceeds_contract",
     "compare_values",
     "contract_vs_budget_total",
     "cross_document_signals",
+    "risk_exceeds_contingency",
     "run_numeric_comparators",
+    "schedule_overruns_deadline",
     "to_finding_signal",
     "wbs_vs_budget_total",
 ]

@@ -38,21 +38,22 @@ def test_plain_weighted_mean_without_worst_open() -> None:
 
 
 @pytest.mark.unit
-def test_open_critical_caps_headline_at_60() -> None:
-    """Five/six clean categories must not headline 'healthy' with an open critical."""
+def test_open_critical_caps_headline_at_calibrated_ceiling() -> None:
+    """Five/six clean categories still cap with an open critical — but at the 2026-08-18
+    expert-calibrated ceiling (85), not the over-penalizing interim 60 (ADR-009 §G.1)."""
     out = aggregate_global(
         GlobalScoreInput(_scores(100.0), _weights(), worst_open_severity="critical")
     )
-    assert out.score == pytest.approx(60.0)
+    assert out.score == pytest.approx(85.0)
     assert out.envelope_applied == "critical"
 
 
 @pytest.mark.unit
-def test_open_high_caps_headline_at_75() -> None:
+def test_open_high_caps_headline_at_calibrated_ceiling() -> None:
     out = aggregate_global(
-        GlobalScoreInput(_scores(90.0), _weights(), worst_open_severity="high")
+        GlobalScoreInput(_scores(100.0), _weights(), worst_open_severity="high")
     )
-    assert out.score == pytest.approx(75.0)
+    assert out.score == pytest.approx(90.0)
     assert out.envelope_applied == "high"
 
 

@@ -11,8 +11,11 @@ from src.coherence.cross_document import (
     RULE_CONTRACT_VS_BUDGET,
     CrossDocFinding,
     ProjectCrossDocInputs,
+    budget_exceeds_contract,
     contract_vs_budget_total,
+    risk_exceeds_contingency,
     run_numeric_comparators,
+    schedule_overruns_deadline,
 )
 
 
@@ -65,9 +68,9 @@ def test_both_zero_yields_no_finding() -> None:
 @pytest.mark.unit
 def test_run_numeric_comparators_returns_only_material() -> None:
     inputs = ProjectCrossDocInputs(
-        contract_total=1_600_000.0,  # vs budget 1.2M → 25% (material)
+        contract_total=1_600_000.0,  # vs budget 1.2M → 25% (material, > 18% threshold)
         budget_total=1_200_000.0,
-        wbs_total=1_000_000.0,  # vs budget 1.2M → 16.7% (material)
+        wbs_total=900_000.0,  # vs budget 1.2M → 25% (material, > 18% threshold)
         bom_total=None,  # absent → skipped
     )
     findings = run_numeric_comparators(inputs)
@@ -118,3 +121,66 @@ def test_finding_flows_into_conflict_ledger_as_critical() -> None:
     )
     assert report.hard_conflict is True
     assert report.severity == "critical"  # 25% > CRITICAL_MISMATCH_RATIO (0.20)
+
+
+@pytest.mark.unit
+def test_negative_margin_flags_budget_above_contract() -> None:
+    """MONFORTE-like: budget 18.3M > contract 15.1M — a 17.6% overrun below the symmetric
+    18% threshold, but a budget exceeding the contract is always a negative-margin incoherence."""
+    inputs = ProjectCrossDocInputs(contract_total=15_105_733.99, budget_total=18_324_935.31)
+    finding = budget_exceeds_contract(inputs)
+    assert finding is not None
+    assert finding.rule_id == "DET-CRS-NEGMARGIN"
+    assert finding.category == "BUDGET"
+    assert finding.direction == "exceeds"
+    # The symmetric comparator misses it (17.6% < 18%); the corpus runner catches it.
+    assert contract_vs_budget_total(inputs) is None
+    assert any(f.rule_id == "DET-CRS-NEGMARGIN" for f in run_numeric_comparators(inputs))
+
+
+@pytest.mark.unit
+def test_negative_margin_silent_when_budget_below_contract() -> None:
+    """A budget below the contract is a normal margin, not a negative-margin incoherence."""
+    inputs = ProjectCrossDocInputs(contract_total=1_600_000.0, budget_total=1_200_000.0)
+    assert budget_exceeds_contract(inputs) is None
+
+
+@pytest.mark.unit
+def test_risk_exceeds_contingency_flags_underprovisioned_budget() -> None:
+    """RIYADH-like: a $300M identified risk exceeds a $50M contingency fund."""
+    inputs = ProjectCrossDocInputs(contingency=50_000_000.0, max_risk_exposure=300_000_000.0)
+    finding = risk_exceeds_contingency(inputs)
+    assert finding is not None
+    assert finding.rule_id == "DET-CRS-RISKCONT"
+    assert finding.category == "BUDGET"
+    assert finding.direction == "exceeds"
+    assert any(f.rule_id == "DET-CRS-RISKCONT" for f in run_numeric_comparators(inputs))
+
+
+@pytest.mark.unit
+def test_risk_within_contingency_is_silent() -> None:
+    covered = ProjectCrossDocInputs(contingency=50_000_000.0, max_risk_exposure=40_000_000.0)
+    assert risk_exceeds_contingency(covered) is None
+    # missing either side → silent (no false positive)
+    assert risk_exceeds_contingency(ProjectCrossDocInputs(contingency=50_000_000.0)) is None
+    assert risk_exceeds_contingency(ProjectCrossDocInputs(max_risk_exposure=300.0)) is None
+
+
+@pytest.mark.unit
+def test_schedule_overruns_deadline_flags_time_incoherence() -> None:
+    """Schedule ending after the contract deadline is a TIME incoherence."""
+    inputs = ProjectCrossDocInputs(contract_deadline="2026-07-01", schedule_end="2026-07-15")
+    finding = schedule_overruns_deadline(inputs)
+    assert finding is not None
+    assert finding.rule_id == "DET-CRS-SCHDEAD"
+    assert finding.category == "TIME"
+    assert finding.delta == pytest.approx(14.0)  # 14 days overrun
+    assert any(f.rule_id == "DET-CRS-SCHDEAD" for f in run_numeric_comparators(inputs))
+
+
+@pytest.mark.unit
+def test_schedule_within_deadline_is_silent() -> None:
+    on_time = ProjectCrossDocInputs(contract_deadline="2026-07-15", schedule_end="2026-07-01")
+    assert schedule_overruns_deadline(on_time) is None
+    assert schedule_overruns_deadline(ProjectCrossDocInputs(schedule_end="2026-07-15")) is None
+    assert schedule_overruns_deadline(ProjectCrossDocInputs(contract_deadline="bad")) is None
