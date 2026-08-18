@@ -20,7 +20,10 @@ from src.analysis.adapters.persistence.models import Alert as AlertORM
 from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.domain.enums import AlertSeverity, AlertType, AnalysisStatus
 from src.coherence.adapters.persistence.models import CoherenceResultORM
-from src.coherence.feature_flags import coherence_v2_enabled_for_tenant
+from src.coherence.feature_flags import (
+    coherence_canonical_canary_enabled_for_tenant,
+    coherence_v2_enabled_for_tenant,
+)
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session
@@ -32,7 +35,12 @@ from src.projects.adapters.persistence.models import ProjectORM
 
 # Import v0.3 graph evaluation
 from .budget_clause_builder import build_budget_clauses
-from .domain.v2_constants import SCORE_VERSION_V1
+from .canonical.live_rescore import (
+    CanonicalRescore,
+    canonical_category_name,
+    canonical_rescore,
+)
+from .domain.v2_constants import SCORE_VERSION_V1, SCORE_VERSION_V2
 from .graph.graph import evaluate_coherence_async
 from .graph.state import EvaluationConfig
 from .models import Clause, CoherenceResult, DashboardSummary, EnrichedCoherenceResult
@@ -723,6 +731,15 @@ async def evaluate_project_coherence(
     # the user what to upload — honest and actionable, never a fabricated score.
     _annotate_missing_technical_hint(enriched_result, clauses)
 
+    # ADR-017 canary: for enrolled tenants, re-score the SAME findings through the canonical
+    # scorer (ADR-009 §G.1) — this flips the SCORER only; detection/alerts are unchanged.
+    # Always logs the v1↔canonical delta; substitutes the headline only when the tenant is
+    # enrolled. Default off (no tenant enrolled) ⇒ persistence + response below are
+    # byte-identical to the v1 path.
+    enriched_result = await _maybe_apply_canonical_canary(
+        enriched_result, tenant_id=current_user.tenant_id, flags_service=flags_service
+    )
+
     # Persist result so the dashboard always reflects the latest evaluation
     if payload.project_id and enriched_result.overall_score is not None:
         # Normalize legacy "SCHEDULE"→"TIME" so dashboard sub_scores keys match COHERENCE_CATEGORIES
@@ -821,6 +838,67 @@ async def evaluate_project_coherence(
 
     # Otherwise return backward-compatible response (Task 7.3)
     return _convert_enriched_to_coherence_result(enriched_result)
+
+
+async def _maybe_apply_canonical_canary(
+    result: EnrichedCoherenceResult,
+    *,
+    tenant_id: UUID,
+    flags_service: TenantFlagsService | None,
+) -> EnrichedCoherenceResult:
+    """ADR-017 canary: re-score findings via the canonical scorer for enrolled tenants.
+
+    Always emits the v1↔canonical delta (shadow signal). Substitutes the headline only when
+    the tenant is enrolled AND the canonical scorer yields a score. Never raises — any
+    failure falls back to the untouched v1 result so the canary can't break ``/evaluate``.
+    """
+    if result.overall_score is None or flags_service is None:
+        return result
+    try:
+        enrolled = await coherence_canonical_canary_enabled_for_tenant(
+            tenant_id, flags_service=flags_service
+        )
+        rescore = canonical_rescore(result.category_breakdown)
+    except Exception:
+        logger.warning("coherence_canary_rescore_failed", exc_info=True)
+        return result
+
+    delta = rescore.score - result.overall_score if rescore.score is not None else None
+    logger.info(
+        "coherence_canary_rescore",
+        tenant_id=str(tenant_id),
+        enrolled=enrolled,
+        v1_score=result.overall_score,
+        canonical_score=rescore.score,
+        delta=delta,
+    )
+    if not enrolled or rescore.score is None:
+        return result
+    return _apply_canonical_rescore(result, rescore)
+
+
+def _apply_canonical_rescore(
+    result: EnrichedCoherenceResult, rescore: CanonicalRescore
+) -> EnrichedCoherenceResult:
+    """Return a copy carrying the canonical headline + per-category scores + v2 stamp."""
+    updated_breakdown = [
+        breakdown.model_copy(
+            update={
+                "score": rescore.category_scores.get(
+                    canonical_category_name(str(breakdown.category)), breakdown.score
+                )
+            }
+        )
+        for breakdown in result.category_breakdown
+    ]
+    return result.model_copy(
+        update={
+            "overall_score": rescore.score,
+            "category_breakdown": updated_breakdown,
+            "score_version": SCORE_VERSION_V2,
+            "score_reason": rescore.reason or "canonical_canary",
+        }
+    )
 
 
 async def _run_v2_shadow_on_evaluate(

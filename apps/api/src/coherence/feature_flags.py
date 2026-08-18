@@ -14,6 +14,7 @@ from uuid import UUID
 from src.core.feature_flags.tenant_flags_service import TenantFlagsService
 
 _FLAG_COHERENCE_V2 = "coherence_v2_enabled"
+_FLAG_COHERENCE_CANARY = "coherence_canonical_canary"
 
 
 async def coherence_v2_enabled_for_tenant(
@@ -38,4 +39,21 @@ async def coherence_v2_enabled_for_tenant(
     return await flags_service.is_enabled(tenant_id, _FLAG_COHERENCE_V2)
 
 
-__all__ = ["coherence_v2_enabled_for_tenant"]
+async def coherence_canonical_canary_enabled_for_tenant(
+    tenant_id: UUID,
+    *,
+    flags_service: TenantFlagsService,
+) -> bool:
+    """Return ``True`` when the canonical-scorer canary is active for *tenant_id*.
+
+    The ADR-017 canary flips only the SCORER: a canary tenant keeps v1's findings but
+    receives the expert-calibrated canonical headline. Defaults off (no tenant enrolled)
+    so the live ``/evaluate`` path is unchanged until deliberately enabled per tenant.
+    """
+    return await flags_service.is_enabled(tenant_id, _FLAG_COHERENCE_CANARY)
+
+
+__all__ = [
+    "coherence_canonical_canary_enabled_for_tenant",
+    "coherence_v2_enabled_for_tenant",
+]
