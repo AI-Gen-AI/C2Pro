@@ -56,7 +56,7 @@ def compare_values(
     if left_value is None or right_value is None:
         return None
     denom = max(abs(left_value), abs(right_value))
-    if denom == 0.0:
+    if denom <= 0.0:  # magnitude is non-negative; avoids float == comparison (S1244)
         return None
     delta = float(left_value) - float(right_value)
     ratio = abs(delta) / denom

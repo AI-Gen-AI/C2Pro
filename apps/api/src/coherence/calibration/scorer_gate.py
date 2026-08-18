@@ -124,7 +124,8 @@ _GOLDEN_TO_ALERT_CATEGORY: dict[str, AlertCategory] = {
     "LEGAL": "LEGAL",
     "QUALITY": "QUALITY",
 }
-_GOLDEN_EVIDENCE = Evidence(source_clause_id="golden", claim="golden finding", quote="golden finding")
+_GOLDEN_LABEL = "golden finding"
+_GOLDEN_EVIDENCE = Evidence(source_clause_id="golden", claim=_GOLDEN_LABEL, quote=_GOLDEN_LABEL)
 
 
 def _golden_alerts(project: dict[str, Any]) -> list[Alert]:
@@ -141,7 +142,7 @@ def _golden_alerts(project: dict[str, Any]) -> list[Alert]:
                 rule_id=str(alert.get("rule_id", "GOLDEN")),
                 severity=_severity_of(alert),
                 category=_GOLDEN_TO_ALERT_CATEGORY.get(category, "general"),
-                message="golden finding",
+                message=_GOLDEN_LABEL,
                 evidence=_GOLDEN_EVIDENCE,
             )
         )

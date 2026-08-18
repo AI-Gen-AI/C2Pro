@@ -67,7 +67,7 @@ _EN_MONTHS = {
     "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
 }
 _ISO_DATE_RE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
-_ES_DATE_RE = re.compile(r"\b(\d{1,2})\s+de\s+([A-Za-zñáéíóú]+)\s+de\s+(\d{4})\b", re.IGNORECASE)
+_ES_DATE_RE = re.compile(r"\b(\d{1,2})\s+de\s+([a-zñáéíóú]+)\s+de\s+(\d{4})\b", re.IGNORECASE)
 _EN_DATE_RE = re.compile(r"\b([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})\b")
 
 
