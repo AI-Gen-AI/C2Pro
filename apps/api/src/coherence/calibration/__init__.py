@@ -16,6 +16,12 @@ supplied — this module deliberately invents no ground truth.
 from __future__ import annotations
 
 from src.coherence.calibration.gate import EngineRun, evaluate_against_golden
+from src.coherence.calibration.gemini_adapter import (
+    alert_category,
+    gemini_budget_inputs,
+    gemini_expected_categories,
+    gemini_to_golden_project,
+)
 from src.coherence.calibration.golden import GoldenFinding, GoldenProject
 from src.coherence.calibration.golden_loader import load_golden, parse_golden
 from src.coherence.calibration.metrics import (
@@ -33,9 +39,13 @@ __all__ = [
     "GoldenFinding",
     "GoldenProject",
     "ProjectRun",
+    "alert_category",
     "build_report",
     "compare_runs",
     "evaluate_against_golden",
+    "gemini_budget_inputs",
+    "gemini_expected_categories",
+    "gemini_to_golden_project",
     "load_golden",
     "mean_absolute_error",
     "parse_golden",

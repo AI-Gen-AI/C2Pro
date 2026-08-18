@@ -98,8 +98,11 @@ def test_active_weight_above_min_returns_weighted_score(
 
 
 @pytest.mark.unit
-def test_open_critical_caps_headline_at_60(aggregator: GlobalAggregatorV2) -> None:
-    """§C envelope: an open critical caps the headline at 60 even when the mean is high."""
+def test_open_critical_caps_headline_at_calibrated_ceiling(
+    aggregator: GlobalAggregatorV2,
+) -> None:
+    """§C envelope: an open critical still caps a high mean — at the 2026-08-18
+    expert-calibrated ceiling (85), not the over-penalizing interim 60 (ADR-009 §G.1)."""
     categories = [
         _scored("LEGAL", 100.0),
         _scored("BUDGET", 100.0),
@@ -109,7 +112,7 @@ def test_open_critical_caps_headline_at_60(aggregator: GlobalAggregatorV2) -> No
         _scored("QUALITY", 100.0),
     ]
     g = aggregator.aggregate(categories, worst_open_severity="critical")
-    assert g.coherence_score == pytest.approx(60.0)
+    assert g.coherence_score == pytest.approx(85.0)
     assert g.score_reason == "critical_risk_capped:critical"
 
 
