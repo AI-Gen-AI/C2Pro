@@ -931,12 +931,56 @@ def cross_clause_eval(state: CoherenceGraphState) -> NodeOutput:
             logger.warning(error_msg)
             errors.append(error_msg)
 
+    # LLM contradiction DEPTH pass (ADR-017-style flag, default off; skipped in
+    # low_budget_mode). Semantic contradiction over the SAME clause pairs, beyond the
+    # deterministic floor above. Fail-open — a failure never breaks the evaluation.
+    if (
+        state.config.llm_crosscheck_enabled
+        and not state.config.low_budget_mode
+        and state.cross_pairs
+    ):
+        try:
+            from src.coherence.graph.cross_clause_llm import (  # noqa: PLC0415
+                llm_contradiction_signals,
+            )
+            from src.core.ai.anthropic_wrapper import get_anthropic_wrapper  # noqa: PLC0415
+
+            wrapper = get_anthropic_wrapper()
+            llm_signals = _run_coro_in_sync_node(
+                llm_contradiction_signals(
+                    state.cross_pairs, wrapper=wrapper, max_pairs=state.config.max_cross_pairs
+                )
+            )
+            signals.extend(llm_signals)
+        except Exception as e:  # noqa: BLE001 — depth pass must never break /evaluate
+            error_msg = f"LLM cross-clause pass failed: {e}"
+            logger.warning(error_msg)
+            errors.append(error_msg)
+
     logger.info(f"cross_clause_eval: {len(signals)} cross-clause findings")
 
     return {
         "cross_signals": signals,
         "errors": errors,
     }
+
+
+def _run_coro_in_sync_node(coro: Any) -> list[FindingSignal]:
+    """Run an async coroutine from a sync graph node (mirrors prepare_context, lines ~352).
+
+    The graph runs nodes inside an event loop (ainvoke), so a running loop is offloaded to a
+    worker thread; otherwise the coroutine runs directly.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures  # noqa: PLC0415
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return cast(list[FindingSignal], pool.submit(asyncio.run, coro).result())
+        return cast(list[FindingSignal], loop.run_until_complete(coro))
+    except RuntimeError:
+        return cast(list[FindingSignal], asyncio.run(coro))
 
 
 def _check_cross_clause_heuristic(pair: CrossClausePair) -> FindingSignal | None:
