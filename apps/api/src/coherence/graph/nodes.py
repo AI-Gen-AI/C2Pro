@@ -70,6 +70,11 @@ _CATEGORY_CROSS_CHECK_PAIRS = (
     ("BUDGET", "SCOPE"),
     ("TIME", "TECHNICAL"),
     ("SCOPE", "BUDGET"),
+    # Cross-document contradiction coverage (previously absent): LEGAL was in ZERO
+    # pairs, so legal contradictions were never compared; SCOPE only saw BUDGET.
+    ("LEGAL", "LEGAL"),  # conflicting penalty/liability regimes (general vs particular)
+    ("SCOPE", "SCOPE"),  # contradictory inclusion/exclusion of the same scope item
+    ("LEGAL", "SCOPE"),  # legal terms conflicting with scope obligations
 )
 
 
@@ -943,7 +948,12 @@ def _check_cross_clause_heuristic(pair: CrossClausePair) -> FindingSignal | None
     - Schedule dates conflicting with delivery dates
     - Scope items without budget coverage
     """
-    return _check_budget_scope_mismatch(pair) or _check_schedule_delivery_conflict(pair)
+    return (
+        _check_budget_scope_mismatch(pair)
+        or _check_schedule_delivery_conflict(pair)
+        or _check_legal_conflict(pair)
+        or _check_scope_conflict(pair)
+    )
 
 
 def _check_budget_scope_mismatch(pair: CrossClausePair) -> FindingSignal | None:
@@ -990,6 +1000,101 @@ def _check_budget_scope_mismatch(pair: CrossClausePair) -> FindingSignal | None:
             "scope_estimate": se,
             "variance_pct": round(variance * 100, 2),
         },
+    )
+
+
+def _has_any(text: str, markers: tuple[str, ...]) -> bool:
+    return any(marker in text for marker in markers)
+
+
+# Deterministic cross-clause contradiction floor for LEGAL/SCOPE (ADR-009 — cross-document
+# coherence is the core differentiator). Keyword-antonym conflicts in prose; the LLM depth
+# pass (gated by budget mode) refines beyond these.
+_PENALTY_TOPIC_MARKERS = (
+    "penal", "liquidated damages", "liable", "responsabilidad", "aval", "bond",
+)
+_EXEMPTION_MARKERS = (
+    "exempt", "exento", "waived", "waiver", "sin penali", "no penalt", "no aplica",
+    "not liable", "sin responsabilidad",
+)
+_SCOPE_INCLUDE_MARKERS = (
+    "includes", "incluye", "in scope", "dentro del alcance", "shall provide",
+    "shall supply", "responsible for supplying", "suministrar",
+)
+_SCOPE_EXCLUDE_MARKERS = (
+    "excludes", "excluye", "out of scope", "fuera del alcance", "not included",
+    "no incluye", "supplied by others", "by client", "por el cliente", "excluido",
+)
+
+
+def _check_legal_conflict(pair: CrossClausePair) -> FindingSignal | None:
+    """Conflicting penalty/liability regimes between two LEGAL clauses.
+
+    Both clauses discuss penalties/liability, but one exempts/waives while the other
+    enforces — e.g. "exempt from delay penalties" vs "delay penalties apply" (the AL-Zour
+    pattern), or a general condition vs a particular annex. Order-canonical (a<b) so the
+    (a,b)/(b,a) pair yields a single finding.
+    """
+    clause_a, clause_b = pair.clause_a, pair.clause_b
+    if clause_a.category != "LEGAL" or clause_b.category != "LEGAL":
+        return None
+    if clause_a.clause_id >= clause_b.clause_id:
+        return None
+    text_a, text_b = clause_a.text.lower(), clause_b.text.lower()
+    if not (_has_any(text_a, _PENALTY_TOPIC_MARKERS) and _has_any(text_b, _PENALTY_TOPIC_MARKERS)):
+        return None  # both must be about penalties/liability (shared topic)
+    if _has_any(text_a, _EXEMPTION_MARKERS) == _has_any(text_b, _EXEMPTION_MARKERS):
+        return None  # agree (both exempt or both enforce) — no conflict
+    return FindingSignal(
+        rule_id="CROSS-LEGAL-CONFLICT",
+        clause_id=f"{clause_a.clause_id}|{clause_b.clause_id}",
+        source="deterministic",
+        impact_score=0.7,
+        confidence=0.8,
+        severity="high",
+        category="LEGAL",
+        evidence_summary=(
+            "Conflicting penalty/liability regimes: one clause exempts/waives while the "
+            "other enforces penalties for the same subject."
+        ),
+        quote=f"A: {clause_a.text[:100]}... | B: {clause_b.text[:100]}...",
+        raw_data={"conflict": "penalty_exemption_vs_enforcement"},
+    )
+
+
+def _check_scope_conflict(pair: CrossClausePair) -> FindingSignal | None:
+    """Contradictory inclusion/exclusion of the same scope between two SCOPE clauses.
+
+    One clause marks work in-scope while the other marks it out-of-scope. Order-canonical
+    (a<b) to avoid duplicate findings.
+    """
+    clause_a, clause_b = pair.clause_a, pair.clause_b
+    if clause_a.category != "SCOPE" or clause_b.category != "SCOPE":
+        return None
+    if clause_a.clause_id >= clause_b.clause_id:
+        return None
+    text_a, text_b = clause_a.text.lower(), clause_b.text.lower()
+    a_in, a_out = _has_any(text_a, _SCOPE_INCLUDE_MARKERS), _has_any(text_a, _SCOPE_EXCLUDE_MARKERS)
+    b_in, b_out = _has_any(text_b, _SCOPE_INCLUDE_MARKERS), _has_any(text_b, _SCOPE_EXCLUDE_MARKERS)
+    conflict = (a_in and b_out and not a_out and not b_in) or (
+        a_out and b_in and not a_in and not b_out
+    )
+    if not conflict:
+        return None
+    return FindingSignal(
+        rule_id="CROSS-SCOPE-CONFLICT",
+        clause_id=f"{clause_a.clause_id}|{clause_b.clause_id}",
+        source="deterministic",
+        impact_score=0.6,
+        confidence=0.75,
+        severity="medium",
+        category="SCOPE",
+        evidence_summary=(
+            "Contradictory scope: one clause marks work in-scope while another marks it "
+            "out-of-scope."
+        ),
+        quote=f"A: {clause_a.text[:100]}... | B: {clause_b.text[:100]}...",
+        raw_data={"conflict": "scope_include_vs_exclude"},
     )
 
 
