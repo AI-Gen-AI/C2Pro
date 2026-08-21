@@ -64,3 +64,31 @@ def test_empty_inputs_are_safe() -> None:
     assert project_identity_mismatch("", "contract text") is None
     assert project_identity_mismatch("Project X", "") is None
     assert project_identity_mismatch("Project X", "lowercase only, no proper nouns") is None
+
+
+def _state_with(project_name: str | None):
+    from src.coherence.graph.state import CoherenceGraphState, EvaluationConfig
+    from src.coherence.models import Clause
+
+    clauses = [Clause(id="c1", text="ejecucion de las obras en La Robla-Pola de Lena, Leon", data={})]
+    return CoherenceGraphState(
+        project_id="p1",
+        clauses=clauses,
+        config=EvaluationConfig(project_name=project_name, low_budget_mode=True),
+    )
+
+
+@pytest.mark.unit
+def test_cross_clause_eval_emits_identity_signal_when_project_name_set() -> None:
+    from src.coherence.graph.nodes import cross_clause_eval
+
+    result = cross_clause_eval(_state_with("LAV La Roda-Pobla de Lena"))
+    assert any(s.rule_id == RULE_PROJECT_IDENTITY_MISMATCH for s in result["cross_signals"])
+
+
+@pytest.mark.unit
+def test_cross_clause_eval_no_identity_signal_without_project_name() -> None:
+    from src.coherence.graph.nodes import cross_clause_eval
+
+    result = cross_clause_eval(_state_with(None))
+    assert not any(s.rule_id == RULE_PROJECT_IDENTITY_MISMATCH for s in result["cross_signals"])

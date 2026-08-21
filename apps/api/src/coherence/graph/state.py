@@ -128,6 +128,8 @@ class EvaluationConfig:
     max_cross_pairs: int = 20
     tenant_id: str | None = None
     project_id: str | None = None
+    # Project name/identity — enables the project-identity (LOC-MISMATCH) comparator.
+    project_name: str | None = None
 
 
 # =============================================================================
