@@ -22,6 +22,7 @@ from src.analysis.domain.enums import AlertSeverity, AlertType, AnalysisStatus
 from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.coherence.feature_flags import (
     coherence_canonical_canary_enabled_for_tenant,
+    coherence_llm_crosscheck_enabled_for_tenant,
     coherence_v2_enabled_for_tenant,
 )
 from src.core.auth.dependencies import get_current_user
@@ -705,10 +706,23 @@ async def evaluate_project_coherence(
         include_diagnostics=include_diagnostics,
     )
 
+    # Resolve the LLM cross-clause depth flag per tenant (default off). Adds a bounded LLM
+    # call to detect semantic contradictions between clause pairs; the deterministic floor
+    # is always on regardless. Resolved here so the graph node stays free of the flags service.
+    llm_crosscheck_enabled = False
+    if flags_service is not None:
+        try:
+            llm_crosscheck_enabled = await coherence_llm_crosscheck_enabled_for_tenant(
+                current_user.tenant_id, flags_service=flags_service
+            )
+        except Exception:
+            logger.warning("coherence_llm_crosscheck_flag_resolution_failed", exc_info=True)
+
     # Create evaluation config
     config = EvaluationConfig(
         low_budget_mode=payload.low_budget_mode,
         include_rag_similarity=payload.include_rag_similarity,
+        llm_crosscheck_enabled=llm_crosscheck_enabled,
         tenant_id=str(current_user.tenant_id),
         project_id=str(payload.project_id) if payload.project_id else None,
     )

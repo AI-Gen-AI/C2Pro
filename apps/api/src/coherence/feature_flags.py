@@ -15,6 +15,7 @@ from src.core.feature_flags.tenant_flags_service import TenantFlagsService
 
 _FLAG_COHERENCE_V2 = "coherence_v2_enabled"
 _FLAG_COHERENCE_CANARY = "coherence_canonical_canary"
+_FLAG_COHERENCE_LLM_CROSSCHECK = "coherence_llm_crosscheck"
 
 
 async def coherence_v2_enabled_for_tenant(
@@ -53,7 +54,22 @@ async def coherence_canonical_canary_enabled_for_tenant(
     return await flags_service.is_enabled(tenant_id, _FLAG_COHERENCE_CANARY)
 
 
+async def coherence_llm_crosscheck_enabled_for_tenant(
+    tenant_id: UUID,
+    *,
+    flags_service: TenantFlagsService,
+) -> bool:
+    """Return ``True`` when the LLM cross-clause contradiction depth pass is active.
+
+    Adds a bounded LLM call per evaluation to detect semantic contradictions between clause
+    pairs (beyond the always-on deterministic floor). Defaults off (no tenant enrolled) so
+    the live ``/evaluate`` path incurs no extra LLM cost until deliberately enabled per tenant.
+    """
+    return await flags_service.is_enabled(tenant_id, _FLAG_COHERENCE_LLM_CROSSCHECK)
+
+
 __all__ = [
     "coherence_canonical_canary_enabled_for_tenant",
+    "coherence_llm_crosscheck_enabled_for_tenant",
     "coherence_v2_enabled_for_tenant",
 ]
