@@ -12,7 +12,9 @@
       "execution_period_months": 26,
       "warranty_period_months": 24,
       "retention_return_f1": "50% at Acta de Recepción",
-      "retention_return_f2": "50% at end of warranty"
+      "retention_return_f2": "50% at end of warranty",
+      "contract_duration_months": 26,
+      "forecast_duration_months": 26
     },
     "budget_summary": {
       "contract_model": "Precio Cerrado y Llave en Mano",
@@ -22,7 +24,12 @@
       "main_lots": [
         "Lote-1: Honorarios de proyectos y documentos técnicos",
         "Lote-2: Presupuesto contrata ejecución de las obras"
-      ]
+      ],
+      "contract_total": null,
+      "budget_total": null,
+      "currency": "EUR",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "Normal 15% execution margin."
     }
   },
   "expected_output": {
@@ -31,25 +38,33 @@
         "clause_code": "CL-OBJ-01",
         "type": "scope",
         "text": "Suministro de recursos técnicos y profesionales, materiales, mano de obra, equipos y herramientas necesarias para la ejecución total y entrega del alcance de los trabajos",
-        "metadata": { "scope_type": "Turnkey" }
+        "metadata": {
+          "scope_type": "Turnkey"
+        }
       },
       {
         "clause_code": "CL-PRICE-01",
         "type": "penalty",
         "text": "El Contrato se realizará bajo el principio general de contrato de PRECIO CERRADO Y LLAVE EN MANO",
-        "metadata": { "price_type": "Fixed" }
+        "metadata": {
+          "price_type": "Fixed"
+        }
       },
       {
         "clause_code": "CL-DEADLINE-01",
         "type": "deadline",
         "text": "El plazo total de ejecución será de veintiséis (26) meses desde la fecha de comienzo acordada",
-        "metadata": { "duration_months": 26 }
+        "metadata": {
+          "duration_months": 26
+        }
       },
       {
         "clause_code": "CL-PENALTY-01",
         "type": "penalty",
         "text": "penalizaciones a aplicar por incumplimiento de su propia programación se vean aumentadas a razón de un diez (10%) por ciento de incremento por cada mes",
-        "metadata": { "penalty_rate_pct": 10.0 }
+        "metadata": {
+          "penalty_rate_pct": 10.0
+        }
       }
     ],
     "stakeholders": [
@@ -84,10 +99,32 @@
         "severity": "high",
         "description": "The contractor assumes full risk for the project design as it was 'redactado por sus propios medios', creating high exposure in a fixed-price turnkey contract.",
         "conflicting_elements": [
-          { "source": "contract_text", "identifier": "CL-PRICE-01" },
-          { "source": "contract_text", "identifier": "CL-OBJ-01" }
-        ]
+          {
+            "source": "contract_text",
+            "identifier": "CL-PRICE-01"
+          },
+          {
+            "source": "contract_text",
+            "identifier": "CL-OBJ-01"
+          }
+        ],
+        "category": "LEGAL",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Acuerdo de adjudicación Averroes (Page 3)",
+          "contract_value": "turnkey fixed-price",
+          "other_value": "redactado por sus propios medios"
+        }
       }
-    ]
+    ],
+    "expert_score": 95,
+    "per_category_scores": {
+      "SCOPE": 100,
+      "BUDGET": 100,
+      "TIME": 100,
+      "TECHNICAL": 100,
+      "LEGAL": 70,
+      "QUALITY": 100
+    }
   }
 }

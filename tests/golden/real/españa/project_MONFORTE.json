@@ -10,15 +10,19 @@
     "contract_text": "Proyecto de las instalaciones de linea aerea de contacto, telemando de energia y sistemas asociados para el tramo Monforte del Cid - Murcia de la linea de alta velocidad. El alcance incluye diseno, suministro, montaje, pruebas y puesta en servicio de la catenaria C-350 a 2x25 kV, cables feeder, apoyos, cimentaciones, proteccion y control, bajo cumplimiento de normativa UNE-EN 50119, ETI de energia y estandares ADIF. El contrato exige cumplimiento de la Declaracion de Impacto Ambiental, coordinacion con la Direccion de Seguridad en la Circulacion y ejecucion compatible con trabajos nocturnos y bloqueos de via.",
     "schedule_summary": {
       "start_date": "2014-02-27",
+      "tender_duration_months": 17,
+      "internal_duration_months": 24,
       "duration_months": 24,
       "critical_constraints": [
         "trabajos nocturnos en banda de mantenimiento",
         "coordinacion con seguridad en la circulacion",
         "hitos de suministro condicionados por montaje ferroviario"
-      ]
+      ],
+      "contract_duration_months": 17,
+      "forecast_duration_months": 24
     },
     "budget_summary": {
-      "tender_budget_pem": 26313667.92,
+      "tender_budget_pem": 26316667.92,
       "internal_cost_estimate": 18324935.31,
       "revenue_target": 15105733.99,
       "margin_percent": 5.0,
@@ -31,7 +35,12 @@
           "name": "Coste total estimado",
           "cost": 18324935.31
         }
-      ]
+      ],
+      "contract_total": 15105733.99,
+      "budget_total": 18324935.31,
+      "currency": "EUR",
+      "budget_gap_classification": "incoherence",
+      "budget_gap_reason": "Negative margin where internal cost estimate exceeds contract revenue."
     }
   },
   "expected_output": {
@@ -50,7 +59,11 @@
         "type": "quality",
         "text": "Las instalaciones deben cumplir UNE-EN 50119, la ETI de Energia y las normas ADIF aplicables.",
         "metadata": {
-          "standards": ["UNE-EN 50119", "TSI Energy", "ADIF NAP"]
+          "standards": [
+            "UNE-EN 50119",
+            "TSI Energy",
+            "ADIF NAP"
+          ]
         }
       },
       {
@@ -105,7 +118,14 @@
             "source": "budget_summary",
             "identifier": "revenue_target"
           }
-        ]
+        ],
+        "category": "BUDGET",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Alacat - Cifras de cierre.pdf (Page 1) vs 20140217 Análisis Apertura.pdf",
+          "contract_value": "Revenue target: 15,105,733.99 EUR",
+          "other_value": "Internal cost estimate: 18,324,935.31 EUR"
+        }
       },
       {
         "rule_id": "OPS-MON-01",
@@ -120,8 +140,46 @@
             "source": "schedule_summary",
             "identifier": "critical_constraints"
           }
-        ]
+        ],
+        "category": "SCOPE",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "20140217 Análisis Apertura.pdf (Page 3)",
+          "contract_value": "Night shifts blockades",
+          "other_value": "Traffic security coordination"
+        }
+      },
+      {
+        "rule_id": "SCH-MON-01",
+        "severity": "high",
+        "description": "Schedule mismatch: Tender states 17 months execution period, but internal plan specifies 24 months duration.",
+        "conflicting_elements": [
+          {
+            "source": "schedule_summary",
+            "identifier": "tender_duration_months"
+          },
+          {
+            "source": "schedule_summary",
+            "identifier": "internal_duration_months"
+          }
+        ],
+        "category": "TIME",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "20140217 Análisis Apertura.pdf (Page 2) vs Internal Schedule",
+          "contract_value": "17 months contract period",
+          "other_value": "24 months internal plan"
+        }
       }
-    ]
+    ],
+    "expert_score": 82,
+    "per_category_scores": {
+      "SCOPE": 85,
+      "BUDGET": 40,
+      "TIME": 70,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
   }
 }

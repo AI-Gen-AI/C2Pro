@@ -1,0 +1,48 @@
+{
+  "project_metadata": {
+    "id": "P-MX-01",
+    "name": "LAV México - Querétaro",
+    "type": "Railway System",
+    "complexity": "Complex",
+    "language": "es"
+  },
+  "input_documents": {
+    "contract_text": "CONTRATO PARA EL DESARROLLO DEL TREN DE ALTA VELOCIDAD MÉXICO - QUERÉTARO. Importe total: 50,820,000,000.00 MXN sin IVA.",
+    "risk_analysis_text": "Análisis de riesgos: se reportan discrepancias con el tramo Celaya.",
+    "budget_summary": {
+      "total_value_mxn": 50820000000.0,
+      "budget_total_mxn": 42150000000.0,
+      "contract_total": 50820000000.0,
+      "budget_total": 42150000000.0,
+      "currency": "MXN",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "Normal 15% execution margin."
+    }
+  },
+  "expected_output": {
+    "coherence_alerts": [
+      {
+        "rule_id": "LOC-MISMATCH-01",
+        "severity": "critical",
+        "description": "Location name discrepancy: Celaya folder name vs Querétaro contract location.",
+        "conflicting_elements": [],
+        "category": "SCOPE",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Querétaro Contract (Page 1) vs Folder",
+          "contract_value": "Querétaro",
+          "other_value": "Celaya"
+        }
+      }
+    ],
+    "expert_score": 91,
+    "per_category_scores": {
+      "SCOPE": 50,
+      "BUDGET": 100,
+      "TIME": 100,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
+  }
+}

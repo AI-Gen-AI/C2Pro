@@ -1,0 +1,48 @@
+{
+  "project_metadata": {
+    "id": "P-US-01",
+    "name": "Texas Clean Energy Grid",
+    "type": "Power Grid",
+    "complexity": "Complex",
+    "language": "en"
+  },
+  "input_documents": {
+    "contract_text": "CONTRACT AGREEMENT for Texas Clean Energy Grid. Total price: $245,000,000.00 USD. Execution duration: 36 months.",
+    "risk_analysis_text": "Risk Analysis (AR): logistics constraints extend schedule duration to 48 months.",
+    "budget_summary": {
+      "total_value_usd": 245000000.0,
+      "budget_total_usd": 220000000.0,
+      "contract_total": 245000000.0,
+      "budget_total": 220000000.0,
+      "currency": "USD",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "Normal 15% execution margin."
+    }
+  },
+  "expected_output": {
+    "coherence_alerts": [
+      {
+        "rule_id": "SCH-USA-01",
+        "severity": "critical",
+        "description": "Schedule mismatch: 36 months contract vs 48 months risk assessment.",
+        "conflicting_elements": [],
+        "category": "TIME",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Texas Grid Contract (Page 4) vs Risk Analysis (AR) (Page 2)",
+          "contract_value": "36 months",
+          "other_value": "48 months"
+        }
+      }
+    ],
+    "expert_score": 91,
+    "per_category_scores": {
+      "SCOPE": 100,
+      "BUDGET": 100,
+      "TIME": 50,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
+  }
+}

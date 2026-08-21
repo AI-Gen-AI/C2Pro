@@ -14,7 +14,9 @@
         "first_pump_expected": "2015-07",
         "remaining_pumps_expected": "2015-07",
         "latest_accepted_date": "2015-09-30"
-      }
+      },
+      "contract_duration_months": 8,
+      "forecast_duration_months": 12
     },
     "budget_summary": {
       "tender_value_eur": 2011603.67,
@@ -26,7 +28,12 @@
           "name": "Bombas principales Flowserve",
           "cost": 603506.95
         }
-      ]
+      ],
+      "contract_total": 1609282.94,
+      "budget_total": 1397044.01,
+      "currency": "EUR",
+      "budget_gap_classification": "incoherence",
+      "budget_gap_reason": "Unexplained deviation of 9.42% over procurement target and heavy cost overruns."
     }
   },
   "expected_output": {
@@ -105,7 +112,14 @@
             "source": "contract_text",
             "identifier": "duration_months"
           }
-        ]
+        ],
+        "category": "TIME",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Seguimiento de compras - Mandem.xlsx (Sheet 'Hitos', Cell B12)",
+          "contract_value": "8 months execution period",
+          "other_value": "Latest accepted date 2015-09-30 (November 2015 updates)"
+        }
       },
       {
         "rule_id": "FIN-MAN-01",
@@ -120,7 +134,14 @@
             "source": "budget_summary",
             "identifier": "flowserve_contract_eur"
           }
-        ]
+        ],
+        "category": "BUDGET",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Seguimiento de compras - Mandem.xlsx (Sheet 'Presupuesto', Cell D45)",
+          "contract_value": "Target procurement budget: 1,397,044.01 EUR",
+          "other_value": "Cost deviation: +9.42% aggregate overruns"
+        }
       },
       {
         "rule_id": "RISK-MAN-01",
@@ -135,8 +156,24 @@
             "source": "contract_text",
             "identifier": "adr_bond_dependency"
           }
-        ]
+        ],
+        "category": "SCOPE",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Expediente de compras - Mandem.xlsx (Page 4)",
+          "contract_value": "Standard supply bounds",
+          "other_value": "Flowserve supply bond dependencies and escrow requirements"
+        }
       }
-    ]
+    ],
+    "expert_score": 85,
+    "per_category_scores": {
+      "SCOPE": 85,
+      "BUDGET": 80,
+      "TIME": 50,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
   }
 }

@@ -29,7 +29,12 @@
           "name": "Paquete inversor y almacenamiento Jema",
           "cost": 456685.0
         }
-      ]
+      ],
+      "contract_total": 1235761.18,
+      "budget_total": 1050397.0,
+      "currency": "EUR",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "La cancelacion del proyecto se comunica despues de haberse firmado el contrato con Jema y emitido la adjudicacion a Atersa, generando riesgo de costes hundidos y reclamaciones de cancelacion."
     }
   },
   "expected_output": {
@@ -112,7 +117,14 @@
             "source": "contract_text",
             "identifier": "project_cancellation_notice"
           }
-        ]
+        ],
+        "category": "BUDGET",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Informe Sanlucar Smart Solar.pdf (Page 3)",
+          "contract_value": "Jema contract signed & Atersa awarded",
+          "other_value": "Late project cancellation notice leading to exposure"
+        }
       },
       {
         "rule_id": "SCH-SSP-01",
@@ -127,8 +139,24 @@
             "source": "budget_summary",
             "identifier": "modules_total_eur"
           }
-        ]
+        ],
+        "category": "TIME",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Sanlucar - Planificación.xlsx (Sheet 'Plazos', Cell E12)",
+          "contract_value": "January 2015 completion deadline",
+          "other_value": "Compressed concurrent component deliveries"
+        }
       }
-    ]
+    ],
+    "expert_score": 89,
+    "per_category_scores": {
+      "SCOPE": 100,
+      "BUDGET": 50,
+      "TIME": 85,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
   }
 }

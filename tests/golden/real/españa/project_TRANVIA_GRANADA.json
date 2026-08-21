@@ -29,7 +29,12 @@
           "name": "Rectificadores",
           "cost": 613500.0
         }
-      ]
+      ],
+      "contract_total": 864644.33,
+      "budget_total": 734947.6799999999,
+      "currency": "EUR",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "Normal 15% execution margin."
     }
   },
   "expected_output": {
@@ -47,7 +52,10 @@
         "type": "quality",
         "text": "El suministro e instalacion de analizadores debe incluir firmware, software, puertos de comunicacion RS232/RS485 y fibra, con soporte Modbus RTU y TCP/IP.",
         "metadata": {
-          "protocols": ["Modbus RTU", "Modbus TCP/IP"]
+          "protocols": [
+            "Modbus RTU",
+            "Modbus TCP/IP"
+          ]
         }
       },
       {
@@ -107,7 +115,14 @@
             "source": "contract_text",
             "identifier": "corporate_payment_policy"
           }
-        ]
+        ],
+        "category": "SCOPE",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Tranvía Granada - Plan de Compras.xlsx (Sheet 'Pagos', Cell D22)",
+          "contract_value": "Corporate payment term (180 days / PPB)",
+          "other_value": "Supplier payment terms mismatch"
+        }
       },
       {
         "rule_id": "PROC-GRA-01",
@@ -122,7 +137,14 @@
             "source": "contract_text",
             "identifier": "missing_procurement_approval"
           }
-        ]
+        ],
+        "category": "SCOPE",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Tranvía Granada - Audit de compras.pdf (Page 1)",
+          "contract_value": "Corporate procurement guidelines",
+          "other_value": "Order emitted without department approval signature"
+        }
       },
       {
         "rule_id": "RISK-GRA-01",
@@ -137,8 +159,24 @@
             "source": "contract_text",
             "identifier": "new_supplier_risk"
           }
-        ]
+        ],
+        "category": "SCOPE",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Tranvía Granada - Comparativo Rectificadores.xlsx (Cell G12)",
+          "contract_value": "No formal ADR risk record",
+          "other_value": "Incorporation of new supplier risk contingency"
+        }
       }
-    ]
+    ],
+    "expert_score": 91,
+    "per_category_scores": {
+      "SCOPE": 50,
+      "BUDGET": 100,
+      "TIME": 100,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
   }
 }
