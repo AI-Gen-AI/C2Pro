@@ -919,6 +919,23 @@ def cross_clause_eval(state: CoherenceGraphState) -> NodeOutput:
         logger.warning(error_msg)
         errors.append(error_msg)
 
+    # Project-identity (LOC-MISMATCH) comparator: project name vs document text — a
+    # metadata-vs-document check the clause-pair machinery can't reach. Needs the project name.
+    if state.config.project_name:
+        try:
+            from src.coherence.cross_document.identity import (  # noqa: PLC0415
+                project_identity_mismatch,
+            )
+
+            document_text = " ".join(clause.text for clause in state.clauses)
+            identity_signal = project_identity_mismatch(state.config.project_name, document_text)
+            if identity_signal is not None:
+                signals.append(identity_signal)
+        except (AttributeError, TypeError, ValueError) as e:
+            error_msg = f"Project-identity comparator failed: {e}"
+            logger.warning(error_msg)
+            errors.append(error_msg)
+
     # Pairwise cross-clause heuristics (need RAG/category pairs).
     for pair in state.cross_pairs:
         try:

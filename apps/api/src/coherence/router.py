@@ -718,6 +718,15 @@ async def evaluate_project_coherence(
         except Exception:
             logger.warning("coherence_llm_crosscheck_flag_resolution_failed", exc_info=True)
 
+    # Load the project name for the project-identity (LOC-MISMATCH) comparator. Best-effort +
+    # RLS-scoped (the session carries the tenant), so it only resolves the caller's own project.
+    project_name: str | None = None
+    if payload.project_id:
+        with suppress(Exception):
+            project_name = await db.scalar(
+                select(ProjectORM.name).where(ProjectORM.id == payload.project_id)
+            )
+
     # Create evaluation config
     config = EvaluationConfig(
         low_budget_mode=payload.low_budget_mode,
@@ -725,6 +734,7 @@ async def evaluate_project_coherence(
         llm_crosscheck_enabled=llm_crosscheck_enabled,
         tenant_id=str(current_user.tenant_id),
         project_id=str(payload.project_id) if payload.project_id else None,
+        project_name=project_name,
     )
 
     # Evaluate using LangGraph subgraph
