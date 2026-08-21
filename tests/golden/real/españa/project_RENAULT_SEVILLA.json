@@ -29,7 +29,12 @@
           "name": "Alquiler temporal Eldu",
           "cost": 6290.0
         }
-      ]
+      ],
+      "contract_total": 285828.12,
+      "budget_total": 242953.9,
+      "currency": "EUR",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "El expediente documenta pagos anticipados sin aval suficiente y un contexto de tension financiera del proveedor, elevando el riesgo comercial y de cumplimiento."
     }
   },
   "expected_output": {
@@ -108,7 +113,14 @@
             "source": "contract_text",
             "identifier": "supplier_minimum_lead_time"
           }
-        ]
+        ],
+        "category": "TIME",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Hitos Renault Sevilla.xlsx (Cell C15)",
+          "contract_value": "Inabensa delivery target",
+          "other_value": "Supplier minimum lead time mismatch"
+        }
       },
       {
         "rule_id": "RISK-REN-01",
@@ -123,7 +135,14 @@
             "source": "contract_text",
             "identifier": "supplier_distress"
           }
-        ]
+        ],
+        "category": "BUDGET",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Renault Sevilla - Seguimiento Financiero.pdf (Page 1)",
+          "contract_value": "Corporate advance payment terms",
+          "other_value": "Supplier financial distress without security bond"
+        }
       },
       {
         "rule_id": "TEC-REN-01",
@@ -138,8 +157,24 @@
             "source": "contract_text",
             "identifier": "protection_selectivity_issue"
           }
-        ]
+        ],
+        "category": "TECHNICAL",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Informe Técnico Renault T1.pdf (Page 2)",
+          "contract_value": "Transformer repair scope",
+          "other_value": "Protection selectivity issues in general substation layout"
+        }
       }
-    ]
+    ],
+    "expert_score": 80,
+    "per_category_scores": {
+      "SCOPE": 100,
+      "BUDGET": 50,
+      "TIME": 50,
+      "TECHNICAL": 85,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
   }
 }

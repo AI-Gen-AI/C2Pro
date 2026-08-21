@@ -1,0 +1,48 @@
+{
+  "project_metadata": {
+    "id": "P-SA-01",
+    "name": "Riyadh Metro Line 3",
+    "type": "Metro System",
+    "complexity": "Complex",
+    "language": "en"
+  },
+  "input_documents": {
+    "contract_text": "CONTRACT AGREEMENT for Riyadh Metro Line 3. Price: $1,250,000,000.00 USD. Contingency fund is $50,000,000.00 USD.",
+    "risk_analysis_text": "Risk Analysis (AR) identifies civil tunneling cost overrun of $300,000,000.00, which exceeds the contingency fund.",
+    "budget_summary": {
+      "total_value_usd": 1250000000.0,
+      "contingency_usd": 50000000.0,
+      "contract_total": 1250000000.0,
+      "budget_total": 1200000000.0,
+      "currency": "USD",
+      "budget_gap_classification": "incoherence",
+      "budget_gap_reason": "Tunneling cost overruns exceed contract contingency fund."
+    }
+  },
+  "expected_output": {
+    "coherence_alerts": [
+      {
+        "rule_id": "BUD-SAU-01",
+        "severity": "critical",
+        "description": "Tunneling risk of $300,000,000 exceeds contingency of $50,000,000.",
+        "conflicting_elements": [],
+        "category": "BUDGET",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Riyadh Metro Contract vs Risk Analysis (AR)",
+          "contract_value": "$50,000,000",
+          "other_value": "$300,000,000"
+        }
+      }
+    ],
+    "expert_score": 91,
+    "per_category_scores": {
+      "SCOPE": 100,
+      "BUDGET": 50,
+      "TIME": 100,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
+  }
+}

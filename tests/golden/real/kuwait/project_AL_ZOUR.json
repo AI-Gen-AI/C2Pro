@@ -1,0 +1,48 @@
+{
+  "project_metadata": {
+    "id": "P-KW-01",
+    "name": "Al-Zour Refinery Expansion",
+    "type": "Refinery",
+    "complexity": "Complex",
+    "language": "en"
+  },
+  "input_documents": {
+    "contract_text": "CONTRACT AGREEMENT for Al-Zour Refinery Expansion. Total: 580,000,000.00 KWD. Contract claims to be exempt from delays.",
+    "risk_analysis_text": "Municipal Risk Analysis (AR) indicates delay penalties of 100,000 KWD/day apply legally.",
+    "budget_summary": {
+      "total_value_kwd": 580000000.0,
+      "budget_total_kwd": 530000000.0,
+      "contract_total": 580000000.0,
+      "budget_total": 530000000.0,
+      "currency": "KWD",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "Normal 15% execution margin."
+    }
+  },
+  "expected_output": {
+    "coherence_alerts": [
+      {
+        "rule_id": "LEG-KWT-01",
+        "severity": "critical",
+        "description": "Contract claims to be exempt, but risk is 100,000 KWD/day penalty.",
+        "conflicting_elements": [],
+        "category": "LEGAL",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Al-Zour Contract vs Risk Analysis (AR)",
+          "contract_value": "Exempt from delay claims",
+          "other_value": "100,000 KWD/day municipal penalty"
+        }
+      }
+    ],
+    "expert_score": 91,
+    "per_category_scores": {
+      "SCOPE": 100,
+      "BUDGET": 100,
+      "TIME": 100,
+      "TECHNICAL": 100,
+      "LEGAL": 50,
+      "QUALITY": 100
+    }
+  }
+}
