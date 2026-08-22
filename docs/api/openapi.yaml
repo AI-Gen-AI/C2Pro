@@ -2528,6 +2528,17 @@ paths:
       tags:
       - frontend-support
       summary: Start Sample Project
+      description: 'Create (or idempotently reuse) a REAL seeded sample project for
+        the tenant (ADR-024).
+
+
+        The previous stub returned a non-UUID id (``proj_sample_001``) that 422''d
+        every downstream
+
+        call, breaking the new-user flow. This creates a real project so onboarding
+        lands on
+
+        working endpoints; a genuine UUID + route is returned.'
       operationId: start_sample_project_api_v1_onboarding_sample_project_start_post
       responses:
         '200':
