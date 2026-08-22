@@ -1,10 +1,21 @@
 # ADR-018: Project Health Engine
 
-**Status:** Accepted — P1 (Core) · C2Pro v3.0 canon
+**Status:** Accepted — **PROMOTED 2026-08-22 to P0-NOW (the primary product surface)** · build-gate lifted · C2Pro v3.0 canon
 **Date:** 2026-06-07
 **Deciders:** Jesús Camacho (VP Engineering)
 **Basis:** Multi-model arbitration — DeepSeek / Codex / Claude / Gemini v3.0 ADR blueprints + Architecture Challenger verdict.
 **Related:** ADR-009 (honest nulls — reused); ADR-014 (entities), ADR-015 (snapshots/trends), ADR-017 (coherence input). Hosts INV-1 honest-null discipline.
+
+## 2026-08-22 Amendment — PROMOTED to P0-now; this is the product surface (GOVERNING)
+
+**Status:** Accepted (VP product decision, 2026-08-22). A new user uploaded one real contract and hit only 422s + a wall of un-actionable "Pending Review 65%" clauses — because we built the *Coherence Score* (the dimension this ADR explicitly demotes) and left **this** engine — the Health Vector, the actual "is my project on track?" surface — as an un-wired v0 scaffold. Corrections, effective now:
+
+1. **Build-gate lifted.** The prior gate ("no Health wiring until a Contract Manager uses Change-Impact weekly") is void — it starved the surface that *creates* the first user. Health v0 (Contract / Risk / Documentation / Governance) is wired **now**.
+2. **Single-document first (see ADR-024).** The Health Vector must produce value from **one** uploaded document: dimensions populate from what that document supports; every unsupported dimension returns **honest-null `missing_data`** — surfaced as *"missing: upload the schedule / budget / technical pliego."* This gap-alerting is the onboarding product, not a footnote.
+3. **Coherence Score is one input here (ADR-009 demoted).** It feeds the **Contract** dimension's `coherence_subscore`; it is not the headline. The `coherence_subscore = None` hard-coding noted in ADR-022 is the concrete gap to close.
+4. **`missing_data` / `insufficient_evidence` is the primary signal, not an edge case.** For a single-doc project most dimensions are legitimately Unknown; saying so honestly + telling the user what to upload IS the value.
+
+The v0 dimension design below is unchanged and correct — it is now the top build priority, wired live and driven by single-document intake.
 
 ## Context
 

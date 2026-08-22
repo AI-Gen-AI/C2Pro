@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import secrets
 from typing import TYPE_CHECKING, Annotated, Any, TypeAlias
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
@@ -31,6 +32,7 @@ from src.core.security.secret_channel import (
     VaultKvBundleProvider,
     redact_clerk_bundle,
 )
+from src.projects.adapters.persistence.models import ProjectORM
 
 # FastAPI re-evaluates route annotations at registration, so a literal
 # Request[Any] raises at import — mypy-only generic, concrete class at runtime.
@@ -277,15 +279,56 @@ async def accept_legal_disclaimer(
     }
 
 
+_SAMPLE_PROJECT_CODE = "SAMPLE-ONB"
+
+
 @router.post("/onboarding/sample-project/start")
 async def start_sample_project(
-    _current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
+    """Create (or idempotently reuse) a REAL seeded sample project for the tenant (ADR-024).
+
+    The previous stub returned a non-UUID id (``proj_sample_001``) that 422'd every downstream
+    call, breaking the new-user flow. This creates a real project so onboarding lands on
+    working endpoints; a genuine UUID + route is returned.
+    """
+    existing = await db.scalar(
+        select(ProjectORM).where(
+            ProjectORM.tenant_id == current_user.tenant_id,
+            ProjectORM.code == _SAMPLE_PROJECT_CODE,
+        )
+    )
+    if existing is not None:
+        pid = str(existing.id)
+        return {
+            "projectId": pid,
+            "route": f"/dashboard/projects/{pid}",
+            "reused": True,
+            "duplicateCreated": False,
+        }
+
+    project = ProjectORM(
+        id=uuid4(),
+        tenant_id=current_user.tenant_id,
+        name="Proyecto de ejemplo",
+        code=_SAMPLE_PROJECT_CODE,
+        description=(
+            "Proyecto de ejemplo para explorar C2Pro. Sube un documento (p. ej. un contrato) "
+            "para ver el análisis por categorías y qué información falta por aportar."
+        ),
+        project_type="construction",
+        status="draft",
+    )
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+    pid = str(project.id)
     return {
-        "projectId": "proj_sample_001",
-        "route": "/dashboard/projects/proj_sample_001",
-        "reused": True,
-        "duplicateCreated": False,
+        "projectId": pid,
+        "route": f"/dashboard/projects/{pid}",
+        "reused": False,
+        "duplicateCreated": True,
     }
 
 
