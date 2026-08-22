@@ -106,12 +106,19 @@ export const handleAuthErrorStatus = (status: number | undefined) => {
   }
 };
 
-function normalizeGeneratedApiUrl(url: AxiosRequestConfig["url"]): AxiosRequestConfig["url"] {
+export function normalizeGeneratedApiUrl(
+  url: AxiosRequestConfig["url"],
+): AxiosRequestConfig["url"] {
   if (typeof url !== "string") {
     return url;
   }
 
-  const normalizedUrl = url.replace(/^\/?api\/v1(?=\/|$)/, "");
+  // apiClient.baseURL ("/api") is the SINGLE authoritative owner of the API prefix. Generated
+  // clients emit either "/api/v1/..." or the coherence-scoped "/api/coherence/..."; strip a
+  // leading "/api" (optionally followed by "/v1") so the prefix is applied exactly once. The
+  // previous regex matched only "/api/v1", so "/api/coherence/..." was left intact and doubled
+  // to "/api/api/coherence/...".
+  const normalizedUrl = url.replace(/^\/?api(?:\/v1)?(?=\/|$)/, "");
   return normalizedUrl.length > 0 ? normalizedUrl : "/";
 }
 
