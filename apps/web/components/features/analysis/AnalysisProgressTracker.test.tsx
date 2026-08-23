@@ -94,4 +94,26 @@ describe("AnalysisProgressTracker", () => {
     expect(screen.getByText(/currently: extracting & cross-checking/i)).toBeInTheDocument();
     expect(screen.getByText("35%")).toBeInTheDocument();
   });
+
+  it("settles into a completed state and stops the finalizing spinner on the complete event", () => {
+    const { container } = render(<AnalysisProgressTracker projectId="proj-123" />);
+    const source = MockEventSource.instances[0]!;
+
+    // Finalizing can legitimately be RUNNING while progress is already 100 (pre-complete).
+    act(() => {
+      source.emit("stage", { stage: 16, name: "Final Assembly", progress: 100 });
+    });
+    expect(screen.getByText(/currently: finalizing/i)).toBeInTheDocument();
+    expect(screen.getByText("In Progress")).toBeInTheDocument(); // progress=100 alone is NOT completion
+    expect(container.querySelector(".animate-spin")).not.toBeNull(); // finalizing spinner is running
+
+    // The complete event flips the whole tracker to COMPLETED.
+    act(() => {
+      source.emit("complete", { result: "ok" });
+    });
+
+    expect(screen.queryByText(/currently: finalizing/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Completed").length).toBeGreaterThan(0);
+    expect(container.querySelector(".animate-spin")).toBeNull(); // spinner stopped
+  });
 });

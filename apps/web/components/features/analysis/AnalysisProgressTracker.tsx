@@ -182,10 +182,18 @@ export function AnalysisProgressTracker({
   const [nodes, setNodes] = useState<AnalysisNode[]>(NODES);
   const [currentStage, setCurrentStage] = useState<ProgressStage | null>(null);
   const [overallProgress, setOverallProgress] = useState(0);
+  const [isComplete, setIsComplete] = useState(false);
   const [error, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
+
+    // Re-initialise per (re)connect so a new analysis never inherits a prior run's state.
+    setNodes(NODES);
+    setCurrentStage(null);
+    setOverallProgress(0);
+    setIsComplete(false);
+    setLocalError(null);
 
     const { token } = useAuthStore.getState();
     const eventSource = new EventSource(
@@ -215,6 +223,8 @@ export function AnalysisProgressTracker({
         const data = JSON.parse(event.data);
         setOverallProgress(100);
         setCurrentStage(USER_FACING_STAGES[USER_FACING_STAGES.length - 1]);
+        setIsComplete(true);
+        setNodes((prev) => prev.map((node) => ({ ...node, status: "completed" })));
         if (onComplete) onComplete(data);
         eventSource.close();
       } catch (e) {
@@ -258,7 +268,7 @@ export function AnalysisProgressTracker({
         >
           {error
             ? "Failed"
-            : overallProgress === 100
+            : isComplete
               ? "Completed"
               : "In Progress"}
         </Badge>
@@ -269,9 +279,11 @@ export function AnalysisProgressTracker({
           <span>
             {error
               ? error
-              : currentStage
-                ? `Currently: ${currentStage.name}`
-                : "Starting..."}
+              : isComplete
+                ? "Completed"
+                : currentStage
+                  ? `Currently: ${currentStage.name}`
+                  : "Starting..."}
           </span>
           <span>{Math.round(overallProgress)}%</span>
         </div>
@@ -280,7 +292,7 @@ export function AnalysisProgressTracker({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {USER_FACING_STAGES.map((stage) => {
-          const status = statusForStage(stage, currentStage);
+          const status = isComplete ? "completed" : statusForStage(stage, currentStage);
 
           return (
             <div
