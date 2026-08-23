@@ -21,7 +21,7 @@ else:
 
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import case, func, select
+from sqlalchemy import String, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -229,11 +229,18 @@ def _project_orm_to_dict(project: ProjectORM) -> ProjectPayload:
 
 
 def _severity_rank_expression() -> ColumnElement[int]:
+    # PRODUCTION DATA SHAPE: the `alerts.severity` column is `character varying`, NOT the native
+    # `alertseverity` enum type that the ORM maps it as. Comparing the column against enum-typed
+    # literals makes Postgres look for a `varchar = alertseverity` operator that does not exist
+    # (asyncpg UndefinedFunctionError -> HTTP 500 at query-plan time, even for projects with zero
+    # alerts). Compare the column AS TEXT against the enum *values* so the operator always resolves
+    # as `varchar = varchar` — correct whether the column is varchar (prod) or the enum (ORM/tests).
+    severity_text = cast(Alert.severity, String)
     return case(
-        (Alert.severity == AlertSeverity.CRITICAL, 0),
-        (Alert.severity == AlertSeverity.HIGH, 1),
-        (Alert.severity == AlertSeverity.MEDIUM, 2),
-        (Alert.severity == AlertSeverity.LOW, 3),
+        (severity_text == AlertSeverity.CRITICAL.value, 0),
+        (severity_text == AlertSeverity.HIGH.value, 1),
+        (severity_text == AlertSeverity.MEDIUM.value, 2),
+        (severity_text == AlertSeverity.LOW.value, 3),
         else_=4,
     )
 
