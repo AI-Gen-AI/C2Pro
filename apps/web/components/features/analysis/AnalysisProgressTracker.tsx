@@ -168,6 +168,23 @@ function statusForStage(stage: ProgressStage, currentStage: ProgressStage | null
   return stage.range[1] < currentStage.range[0] ? "completed" : "pending";
 }
 
+function statusBadgeLabel(hasError: boolean, isComplete: boolean): string {
+  if (hasError) return "Failed";
+  if (isComplete) return "Completed";
+  return "In Progress";
+}
+
+function progressHeadline(
+  error: string | null,
+  isComplete: boolean,
+  currentStage: ProgressStage | null,
+): string {
+  if (error) return error;
+  if (isComplete) return "Completed";
+  if (currentStage) return `Currently: ${currentStage.name}`;
+  return "Starting...";
+}
+
 interface AnalysisProgressTrackerProps {
   projectId: string;
   onComplete?: (result: unknown) => void;
@@ -266,24 +283,14 @@ export function AnalysisProgressTracker({
           variant={error ? "destructive" : "outline"}
           className="px-3 py-1"
         >
-          {error
-            ? "Failed"
-            : isComplete
-              ? "Completed"
-              : "In Progress"}
+          {statusBadgeLabel(Boolean(error), isComplete)}
         </Badge>
       </div>
 
       <div className="space-y-2">
         <div className="flex justify-between text-sm font-medium">
           <span>
-            {error
-              ? error
-              : isComplete
-                ? "Completed"
-                : currentStage
-                  ? `Currently: ${currentStage.name}`
-                  : "Starting..."}
+            {progressHeadline(error, isComplete, currentStage)}
           </span>
           <span>{Math.round(overallProgress)}%</span>
         </div>
