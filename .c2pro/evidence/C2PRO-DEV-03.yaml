@@ -63,3 +63,8 @@ references:
     immutable: false
     sha256: null
     summary: Claude non-inference preflight passed local health checks: authenticated first-party subscription session, Claude Code doctor returned rc=0 with no installation issues, no custom Anthropic base URL or model environment override was present, and no Claude settings model override was found. Sensitive account identifiers are intentionally excluded.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_CLAUDE_MODEL_SELECTOR_DISCOVERY
+    immutable: false
+    sha256: null
+    summary: Claude Code 2.1.237 confirms --model accepts aliases including sonnet and full model names. Governance decision: sonnet may be frozen only as a requested alias because it resolves to the provider-recommended latest Sonnet and can change over time; exact served model identity must be captured from post-invocation result evidence rather than invented before the first live call.
