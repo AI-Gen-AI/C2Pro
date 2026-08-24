@@ -1,0 +1,201 @@
+schema: c2pro-dev-00-governance-context-audit-v1
+status: READY_FOR_DONE_ON_MERGE
+audit_date: 2026-08-24
+repository: AI-Gen-AI/C2Pro
+base_sha: 792de19a647fce1c1cd0c0064162db99f9a2d991
+parent_plan: docs/architecture/development/c2pro-vps-development-control-plan-v1.md
+human_audit: docs/architecture/development/c2pro-dev-00-governance-context-audit-v1.md
+scope: governance_and_context_readonly_audit
+product_behavior_change: false
+runtime_change: false
+credential_change: false
+legacy_deletion: false
+
+verdict:
+  current_control_fit_for_vps_unchanged: false
+  preserve_useful_knowledge: true
+  replace_hot_control_model: true
+  next_task: C2PRO-DEV-01
+  next_task_name: Minimal YAML Control Model
+
+principles_confirmed:
+  role_identity_independent_from_model: true
+  work_identity_stable_across_worker_handoff: true
+  claude_codex_principals: true
+  material_self_approval_forbidden: true
+  gemini_antigravity_opencode_initially_subordinate: true
+  orchestrator_is_role: true
+  af_dev_is_execution_boundary: true
+  mr_dev_is_development_route_authority: true
+  git_pr_ci_are_primary_execution_history: true
+  historical_detail_is_cold_by_default: true
+  owner_micro_approval_default: false
+  multi_llm_default: independent_review_then_synthesis
+  open_ended_debate_default: false
+
+findings:
+  F1:
+    surface: C2PRO_MASTER_BACKLOG.md
+    severity: high
+    issue: pending_only_claim_but_historical_completed_detail_present
+    disposition: RECONCILE_AND_SHRINK
+  F2:
+    surface: blackboard.json
+    severity: high
+    issue: persistent_completed_task_history_in_ephemeral_state
+    disposition: DEPRECATE_AS_PERMANENT_CANONICAL_STATE
+  F3:
+    surface: core/supervisor.py
+    severity: critical
+    issue: legacy_backlog_blackboard_coupling_and_direct_cli_repo_root_execution
+    disposition: REPLACE
+  F4:
+    surface: [core/models.yaml, core/session_config.json]
+    severity: high
+    issue: role_model_worker_provider_route_concepts_mixed
+    disposition: REWRITE_OR_REPLACE
+  F5:
+    surface: vendor_specific_instruction_planes
+    severity: high
+    issue: fragmented_and_asymmetric_project_authority
+    examples: [agents.md, CLAUDE.md, .claude/rules, .github/agents, .gemini/settings.json, .codex]
+    disposition: THIN_VENDOR_ADAPTERS_ONLY
+  F6:
+    surface: roles
+    severity: medium
+    issue: useful_domain_constraints_but_stale_execution_protocol_and_internal_conflicts
+    disposition: KEEP_CONCEPT_REWRITE_COMPACT
+  F7:
+    surface: agent_taxonomies
+    severity: medium
+    issue: overlapping_nonidentical_role_definitions
+    disposition: ONE_CANONICAL_ROLE_REGISTRY
+  F8:
+    surface: schemas
+    severity: medium
+    issue: useful_structured_validation_but_over_specialized_to_legacy_blackboard
+    disposition: KEEP_PRINCIPLE_RECONCILE_SCHEMAS
+  F9:
+    surface: [skills, agent_skills]
+    severity: medium
+    issue: duplicated_skill_discovery_and_provider_compatibility_trees
+    disposition: RECONCILE_TO_ONE_CANONICAL_SKILL_REGISTRY
+  F10:
+    surface: CHANGELOG.md
+    severity: medium
+    issue: engineering_journal_detail_in_release_changelog
+    disposition: KEEP_AND_SHRINK
+  F11:
+    surface: CLAUDE.md
+    severity: medium
+    issue: references_missing_llms_txt
+    disposition: REMOVE_STALE_REFERENCE_DURING_REWRITE
+
+known_context_footprint_bytes:
+  backlogs_md: 114604
+  roles_md: 33822
+  github_agents_md: 11583
+  claude_rules_md: 20094
+  schemas: 67084
+  subtotal: 247187
+  excludes:
+    - C2PRO_MASTER_BACKLOG.md
+    - blackboard.json
+    - agents.md
+    - CLAUDE.md
+    - CHANGELOG.md
+    - skill_contents
+    - architecture_docs
+    - source_code
+  interpretation: naive_global_loading_is_unacceptable
+
+classification:
+  agents.md: REWRITE
+  CLAUDE.md: REWRITE
+  .claude/rules: RECONCILE
+  .github/agents: ARCHIVE_OR_ADAPTER
+  roles: KEEP_CONCEPT_REWRITE
+  core/supervisor.py: REPLACE
+  core/models.yaml: REWRITE
+  core/session_config.json: REPLACE
+  blackboard.json: DEPRECATE
+  C2PRO_MASTER_BACKLOG.md: RECONCILE_AND_SHRINK
+  backlogs: COLD_REFERENCE
+  schemas: KEEP_PRINCIPLE_REWRITE
+  skills: RECONCILE
+  agent_skills: RECONCILE
+  .gemini/settings.json: KEEP_AS_TOOL_ADAPTER
+  .codex: KEEP_AS_TOOL_ADAPTER_SLOT
+  CHANGELOG.md: KEEP_AND_SHRINK
+  git_pr_ci: KEEP_PRIMARY_HISTORY
+  adrs_architecture_docs: KEEP_COLD_ON_DEMAND
+
+context_temperature:
+  hot:
+    - effective_campaign_authority
+    - work_envelope
+    - role_profile
+    - task_scoped_invariants
+    - acceptance_and_required_tests
+    - handoff_if_any
+    - allowed_and_forbidden_boundaries
+  warm:
+    - relevant_adr
+    - module_design
+    - open_dependency
+    - relevant_prior_evidence
+    - specific_skill
+    - test_contract
+  cold:
+    - completed_backlogs
+    - old_blackboards
+    - closed_pr_narratives
+    - old_ci_output
+    - historical_changelog_detail
+    - superseded_plans
+
+future_work_identity:
+  required_fields:
+    - work_id
+    - role
+    - base_sha
+    - scope
+    - out_of_scope
+    - acceptance_criteria
+    - required_tests
+    - allowed_tools
+    - forbidden_paths
+    - review_policy
+  worker_assignment_separate: true
+  handoff_preserves_work_id: true
+  chain_of_thought_required_for_handoff: false
+
+c2pro_dev_01_packages:
+  - id: C2PRO-DEV-01-A
+    name: Canonical control directory skeleton
+  - id: C2PRO-DEV-01-B
+    name: Minimal current.yaml
+  - id: C2PRO-DEV-01-C
+    name: Open-only work-queue.yaml
+  - id: C2PRO-DEV-01-D
+    name: Work envelope schema
+  - id: C2PRO-DEV-01-E
+    name: Worker handoff schema
+  - id: C2PRO-DEV-01-F
+    name: Evidence reference schema
+  - id: C2PRO-DEV-01-G
+    name: Legacy compatibility and no-loss rule
+  - id: C2PRO-DEV-01-H
+    name: Context budget instrumentation
+
+acceptance:
+  audit_surfaces: PASS
+  duplication_staleness_identified: PASS
+  classification_complete: PASS
+  hot_warm_cold_defined: PASS
+  role_not_model_identity_preserved: PASS
+  principal_model_preserved: PASS
+  multi_llm_policy_defined: PASS
+  owner_escalation_boundary_defined: PASS
+  dev_01_input_defined: PASS
+  product_runtime_change: NONE
