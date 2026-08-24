@@ -1,5 +1,5 @@
 schema: c2pro-dev-03-principal-worker-readiness-v1
-status: DEV_03A_VERSION_PROVENANCE_RECORDED
+status: DEV_03A_COMPLETE_BLOCKED_PENDING_MR_DEV_01C
 date: '2026-08-24'
 repository: AI-Gen-AI/C2Pro
 baseline_main: 0400c05e8af1458aaa14bc47a8378d9cdd560284
@@ -12,6 +12,7 @@ cross_project_dependency:
   af_dev_01_status: DONE
   mr_dev_01b_status: DONE
   mr_dev_01c_status: NEXT
+  mr_dev_01c_remote_implementation_pr_observed: false
   live_development_provider_invocation_authorized: false
   rule: c2pro_must_not_bypass_ai_gen_mr_dev_authority
 
@@ -42,14 +43,18 @@ principal_workers:
     npx_path: /home/aigen-claude/.local/bin/npx
     config_dir: /home/aigen-claude/.claude
     config_dir_mode: '775'
-    auth_state: UNKNOWN_PENDING_NON_SECRET_STATUS_PROBE
+    auth_state: AUTHENTICATED
+    auth_method: claude.ai
+    api_provider: firstParty
+    subscription_type: pro
+    sensitive_identity_fields_recorded: false
     local_version_help_probe: PASS
     live_provider_probe: BLOCKED_BY_MR_DEV_01C
-    af_dev_read_only_job: PENDING
-    af_dev_write_commit_job: PENDING
-    canonical_main_denial: PENDING
-    runtime_secret_denial: PENDING
-    timeout_resource_enforcement: PENDING
+    af_dev_read_only_job: BLOCKED_BY_MR_DEV_01C
+    af_dev_write_commit_job: BLOCKED_BY_MR_DEV_01C
+    canonical_main_denial: PENDING_03B
+    runtime_secret_denial: PENDING_03B
+    timeout_resource_enforcement: PENDING_03B
   codex:
     class: PRINCIPAL
     executable: codex
@@ -74,14 +79,16 @@ principal_workers:
     npx_path: NOT_REQUIRED_BY_CURRENT_STANDALONE_BINARY
     config_dir: /home/aigen-codex/.codex
     config_dir_mode: '700'
-    auth_state: UNKNOWN_PENDING_NON_SECRET_STATUS_PROBE
+    auth_state: AUTHENTICATED
+    auth_method: ChatGPT
+    sensitive_identity_fields_recorded: false
     local_version_help_probe: PASS
     live_provider_probe: BLOCKED_BY_MR_DEV_01C
-    af_dev_read_only_job: PENDING
-    af_dev_write_commit_job: PENDING
-    canonical_main_denial: PENDING
-    runtime_secret_denial: PENDING
-    timeout_resource_enforcement: PENDING
+    af_dev_read_only_job: BLOCKED_BY_MR_DEV_01C
+    af_dev_write_commit_job: BLOCKED_BY_MR_DEV_01C
+    canonical_main_denial: PENDING_03B
+    runtime_secret_denial: PENDING_03B
+    timeout_resource_enforcement: PENDING_03B
 
 host_readiness:
   observed_at: '2026-08-24T10:58:57+00:00'
@@ -122,29 +129,33 @@ identity_inventory:
     installation_shape: per_identity_standalone_native_binary
   isolation_observation: dedicated_principal_identities_exist_without_shared_supplementary_aigen_group
   installation_decision: KEEP_EXISTING_INSTALLATIONS_NO_REINSTALL
-  update_decision: DEFER_UNTIL_AUTH_AND_ROUTE_QUALIFICATION_REQUIREMENT
+  update_decision: DEFER_UNTIL_ROUTE_QUALIFICATION_REQUIRES_CHANGE
 
 qualification_gates:
   DEV_03A1_HOST_BASELINE: PASS
   DEV_03A2_BINARY_INVENTORY: PASS_BINARIES_FOUND_IN_DEDICATED_IDENTITIES
   DEV_03A3_EXECUTION_IDENTITIES: PASS
-  DEV_03A4_AUTH_SESSION_STATE: IN_PROGRESS
+  DEV_03A4_AUTH_SESSION_STATE: PASS_BOTH_PRINCIPALS_AUTHENTICATED
   DEV_03A5_INSTALL_UPDATE_DECISION: PASS_KEEP_EXISTING_NO_REINSTALL
+  DEV_03A: PASS
   DEV_03B1_LIVE_NONINTERACTIVE_SMOKE: BLOCKED_BY_MR_DEV_01C
-  DEV_03B2_AF_DEV_READ_ONLY: PENDING
-  DEV_03B3_AF_DEV_WRITE_COMMIT: PENDING
-  DEV_03B4_NEGATIVE_BOUNDARIES: PENDING
-  DEV_03B5_RESOURCE_TIMEOUT: PENDING
-  DEV_03B6_RECIPROCAL_HANDOFF: PENDING
+  DEV_03B2_AF_DEV_READ_ONLY: BLOCKED_BY_MR_DEV_01C
+  DEV_03B3_AF_DEV_WRITE_COMMIT: BLOCKED_BY_MR_DEV_01C
+  DEV_03B4_NEGATIVE_BOUNDARIES: PENDING_AFTER_03B2
+  DEV_03B5_RESOURCE_TIMEOUT: PENDING_AFTER_03B2
+  DEV_03B6_RECIPROCAL_HANDOFF: PENDING_AFTER_BOTH_PRINCIPALS_LIVE_QUALIFIED
 
 secret_handling:
   raw_credentials_in_git: false
   raw_session_payload_in_git: false
   raw_environment_dump_forbidden: true
   normalized_auth_state_only: true
+  email_recorded: false
+  org_id_recorded: false
+  org_name_recorded: false
 
 next_action:
-  gate: DEV_03A4_AUTH_STATUS
-  mode: READ_ONLY_LOCAL_AUTH_COMMAND_DISCOVERY_AND_STATUS
+  gate: AI_GEN_MR_DEV_01C
+  mode: CROSS_PROJECT_AUTHORITY_GATE
   owner_micro_approval_required: false
-  expected_output: typed_auth_state_without_secret_material_or_model_invocation
+  expected_output: explicit_live_development_route_invocation_authority_before_c2pro_dev_03b
