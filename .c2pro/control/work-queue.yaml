@@ -1,0 +1,23 @@
+schema: c2pro-work-queue-v1
+schema_version: 1
+queue_policy:
+  open_only: true
+  completed_items_forbidden: true
+  historical_source: git_pr_ci_evidence
+items:
+  - work_id: C2PRO-DEV-01
+    status: in_progress
+    role: implementation_lead
+    work_ref: .c2pro/work/C2PRO-DEV-01.yaml
+    priority: P0
+    depends_on:
+      - C2PRO-DEV-00
+    review_policy: independent_principal
+  - work_id: C2PRO-DEV-02
+    status: ready
+    role: orchestrator
+    work_ref: null
+    priority: P0
+    depends_on:
+      - C2PRO-DEV-01
+    review_policy: independent_principal

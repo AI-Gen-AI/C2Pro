@@ -1,0 +1,19 @@
+schema: c2pro-routing-v1
+schema_version: 1
+status: transition_placeholder
+canonical_authority_phase: C2PRO-DEV-02
+principles:
+  role_identity_is_not_worker_identity: true
+  worker_identity_is_not_model_identity: true
+  material_self_approval_forbidden: true
+principal_workers:
+  - claude_code
+  - codex
+subordinate_workers:
+  - gemini_cli
+  - antigravity
+  - opencode
+assignments: []
+notes:
+  - This file intentionally does not freeze role-to-worker mappings during DEV-01.
+  - Exact eligibility ceilings, route qualification and authority are defined in C2PRO-DEV-02 and later AF-DEV/MR-DEV integration phases.

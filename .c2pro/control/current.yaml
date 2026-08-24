@@ -1,0 +1,34 @@
+schema: c2pro-current-v1
+schema_version: 1
+repository: AI-Gen-AI/C2Pro
+control_status: transition
+canonical_plan:
+  id: C2PRO-VPS-DEV-CONTROL-V1
+  path: docs/architecture/development/c2pro-vps-development-control-plan-v1.md
+baseline:
+  main_sha: a03d4d09f0a32b0d3e5d54f0f3c68f398b06fa0b
+active_campaign: null
+active_work:
+  - C2PRO-DEV-01
+next_eligible_work: C2PRO-DEV-02
+authority:
+  direct_main_mutation: false
+  production_runtime: false
+  secrets_or_credentials: false
+  destructive_data_action: false
+  architecture_change_outside_plan: false
+merge_policy:
+  initial_mode: human_merge
+history:
+  primary: [git, github_pr, ci, evidence_refs]
+  completed_work_in_hot_state: false
+legacy:
+  compatibility_policy: .c2pro/control/legacy-compatibility.yaml
+  blackboard_canonical: false
+  markdown_backlogs_canonical: false
+context_budget:
+  bootstrap_hot_max_bytes: 16384
+  bootstrap_hot_paths:
+    - .c2pro/control/current.yaml
+    - .c2pro/control/work-queue.yaml
+    - .c2pro/work/C2PRO-DEV-01.yaml
