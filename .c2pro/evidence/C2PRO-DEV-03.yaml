@@ -43,3 +43,8 @@ references:
     immutable: false
     sha256: null
     summary: Remote authority check found no published MR-DEV-01C implementation/activation PR; AI-Gen main still records MR-DEV-01C as NEXT with live Development provider invocation closed. DEV-03B remains blocked until that gate explicitly opens.
+  - kind: dependency
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_LOCAL_INSPECTION
+    immutable: false
+    sha256: null
+    summary: AI-Gen local worktree feat/mr-dev-01c-direct-route-baseline-v1 is cleanly based on main 357029a with uncommitted MR-DEV-01C authorization/control changes. Local control marks MR-DEV-01C IN_PROGRESS, owner-authorized bounded direct-route qualification and one-shot live baseline conditionally authorized, max live provider invocations 1, selected_route_id null, and activation CLOSED_PENDING_EXACT_ROUTE_PREFLIGHT. No live provider invocation authority is inferred until that exact-route preflight closes.
