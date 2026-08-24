@@ -103,3 +103,13 @@ references:
     immutable: false
     sha256: null
     summary: Pre-arm provenance snapshot passed with 28/28 MR-DEV-01C tests and git diff hygiene. Repository HEAD and origin/main both remained 357029a580e360de4e92046bd7aa295b54d9c113; authorization, exact-route freeze, live seam and qualification-test artifacts were SHA-256 captured, the seam compiled successfully, and live invocation remained unarmed. These hashes are an intermediate snapshot only because provenance hardening will intentionally change the seam before final arming.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_PREARM_PROVENANCE_HARDENING
+    immutable: false
+    sha256: null
+    summary: Provenance hardening passed 34/34 MR-DEV-01C tests, py_compile and diff hygiene. The one-shot seam now fail-closes on mutation of owner authorization, exact-route freeze, pre-arm decision or Claude binary, and on non-canonical/symlinked or incorrectly permissioned session inputs. Updated live seam SHA-256 is 2ed95b7f50052f1f8254201034e0b5ffd7f16e5e1cfb6f1bf6a57417147d2758; invocation remains unarmed.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_CLEAN_CLAUDE_WORKSPACE
+    immutable: false
+    sha256: null
+    summary: Dedicated Claude qualification workspace materialized at exact base 357029a580e360de4e92046bd7aa295b54d9c113 under the pre-existing canonical /srv/aigen/dev/claude/workspace root. Final verification passed: owner/group aigen-claude, mode 0700, no special directory bits, clean Git status, no remotes, no persistent safe.directory trust, sparse materialization exposes ai-gen-agent-os while unrelated 2SB top-level areas remain absent. Live Bubblewrap scope will be further minimized to ai-gen-agent-os only; no lease is armed and no provider inference has occurred.
