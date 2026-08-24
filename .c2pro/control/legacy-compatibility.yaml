@@ -1,0 +1,28 @@
+schema: c2pro-legacy-compatibility-v1
+schema_version: 1
+transition_mode: dual_read_single_write_new_control
+canonical_write_target: .c2pro
+legacy_sources:
+  blackboard.json:
+    mode: read_only_cold_reference
+    canonical: false
+    delete_before_reconciliation: false
+  C2PRO_MASTER_BACKLOG.md:
+    mode: read_only_reconciliation_source
+    canonical: false
+    delete_before_open_work_reconciliation: false
+  backlogs/*.md:
+    mode: read_only_reconciliation_source
+    canonical: false
+    delete_before_open_work_reconciliation: false
+no_loss_rules:
+  - open legacy work must not be dropped until mapped, closed with evidence, or explicitly dispositioned
+  - completed legacy history remains recoverable from Git history even after later archive cleanup
+  - new C2PRO development-control work is written to .c2pro, not blackboard.json
+  - new detailed execution evidence belongs in Git, PR, CI or evidence references, not Markdown backlog narratives
+  - migration must not infer completion from conversational claims alone
+reconciliation_required_before_retirement:
+  - enumerate legacy open work
+  - map retained work to stable work IDs or explicit dispositions
+  - verify evidence/provenance references
+  - owner-approved retirement or archival change
