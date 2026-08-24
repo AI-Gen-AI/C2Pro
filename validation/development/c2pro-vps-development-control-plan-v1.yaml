@@ -1,0 +1,349 @@
+schema: c2pro-vps-development-control-plan-v1
+status: OWNER_APPROVED_IMPLEMENTATION_PLAN
+approved_at: 2026-08-24
+repository: AI-Gen-AI/C2Pro
+approved_baseline_main: be9603be6b40da135123aee6e1489365378e163e
+human_plan_ref: docs/architecture/development/c2pro-vps-development-control-plan-v1.md
+
+objective:
+  primary: migrate_c2pro_development_execution_from_pc_to_vps
+  operating_goal: bounded_high_level_owner_commands_with_escalation_only_interruption
+  reuse_ai_gen_execution_plane: true
+  duplicate_af_dev_or_mr_dev: false
+
+canonical_principles:
+  role_identity_independent_from_model: true
+  work_identity_fields: [work_id, role, base_sha, scope, acceptance_criteria]
+  principal_workers: [claude_code, codex]
+  subordinate_workers: [gemini_cli, antigravity, opencode]
+  material_work_self_approval_forbidden: true
+  orchestrator_is_role_not_model: true
+  direct_worker_write_to_canonical_checkout_forbidden: true
+  direct_worker_mutation_of_main_forbidden: true
+  product_runtime_authority_from_repo_access_forbidden: true
+  historical_execution_detail_in_hot_context_forbidden: true
+  git_pr_ci_as_primary_history: true
+  multi_llm_default_mode: independent_review_then_synthesis
+  open_ended_model_debate_default: false
+  owner_micro_approval_default: false
+
+legacy_control_surfaces:
+  agents_md: AUDIT
+  claude_md: AUDIT
+  roles_dir: AUDIT
+  core_supervisor_py: REWRITE_OR_REPLACE
+  core_models_yaml: RECONCILE
+  core_session_config_json: RECONCILE
+  blackboard_json: DEPRECATE_AS_PERMANENT_CANONICAL_STATE
+  c2pro_master_backlog_md: RECONCILE_AND_SHRINK
+  category_backlogs: MOVE_TOWARD_COLD_REFERENCE
+  schemas: REUSE_WHERE_VALUABLE
+  skills_and_registry: AUDIT
+  changelog_md: REDUCE_TO_RELEASE_PRODUCT_CHANGES
+
+context_model:
+  hot:
+    include:
+      - current_state
+      - active_work_envelope
+      - immediate_dependencies
+      - applicable_architecture_constraints
+      - required_tests
+      - evidence_requirements
+      - current_handoff_if_any
+    exclude:
+      - completed_task_narratives
+      - full_historical_test_logs
+      - merged_pr_details_already_in_git
+      - old_debates
+      - duplicated_changelog_history
+  cold:
+    stores: [git_history, github_prs, ci_artifacts, archived_tasks, evidence_artifacts]
+
+role_authority:
+  orchestrator:
+    purpose: workflow_and_authority_coordination
+    preferred_worker: claude_code
+    fallback_workers: [codex]
+    may:
+      - validate_campaign_authority
+      - create_work_envelope
+      - select_worker
+      - switch_worker
+      - create_handoff
+      - request_tests
+      - request_reviews
+      - synthesize_findings
+      - authorize_in_scope_remediation
+      - mark_pr_approved_when_gates_pass
+    may_not:
+      - infer_production_authority
+      - broaden_scope_silently
+      - override_forbidden_paths
+      - self_approve_material_work_when_same_worker_implemented
+  implementation_lead:
+    eligible_principals: [claude_code, codex]
+  independent_reviewer:
+    eligible_principals: [claude_code, codex]
+    invariant: reviewer_worker_must_differ_from_material_implementation_worker
+  subordinate_specialist:
+    eligible_workers: [gemini_cli, antigravity, opencode]
+    promotion_requires_principal_gate: true
+
+worker_semantics:
+  claude_code:
+    class: PRINCIPAL
+    initial_roles: [orchestrator, implementation_lead, reviewer, architecture, security, ai]
+  codex:
+    class: PRINCIPAL
+    initial_roles: [orchestrator_fallback, implementation_lead, reviewer, backend, infra, devops, qa_remediation]
+  gemini_cli:
+    class: SUBORDINATE
+    initial_roles: [qa, frontend, challenger, broad_context_review]
+  antigravity:
+    class: SUBORDINATE
+    independent_surface_from_gemini_cli: true
+    initial_roles: [workspace_analysis, challenger, bounded_specialist]
+  opencode:
+    class: SUBORDINATE_HARNESS
+    model_provider_identity_separate_from_harness: true
+    initial_roles: [bounded_specialist, challenger, alternate_implementation]
+
+review_policy:
+  TRIVIAL:
+    independent_principal_review: policy_optional
+    challenger: false
+  NORMAL:
+    independent_principal_review: required
+    challenger: false
+  MATERIAL:
+    independent_principal_review: required
+    challenger: optional
+  ARCHITECTURE_SECURITY_HIGH_BLAST_RADIUS:
+    independent_principal_review: required
+    challenger: required
+    orchestrator_synthesis: required
+  material_disagreement:
+    directed_adjudication_round_max: 1
+    unresolved_after_round: ESCALATE_OWNER
+
+handoff_policy:
+  triggers:
+    - token_limit
+    - quota_exhausted
+    - provider_failure
+    - session_failure
+    - orchestrator_reassignment
+  invariant_fields_preserved: [work_id, role, base_sha, scope, out_of_scope, acceptance_criteria]
+  minimum_fields:
+    - current_head
+    - current_worker
+    - handoff_reason
+    - completed
+    - remaining
+    - files_changed
+    - required_tests_remaining
+    - known_findings
+    - forbidden_scope_reminder
+    - next_worker
+
+campaign_authority:
+  model: bounded_campaign_authorization
+  routine_actions_do_not_require_owner_reapproval:
+    - create_isolated_branch
+    - modify_scoped_code
+    - run_tests
+    - retry_within_limits
+    - switch_eligible_worker
+    - request_review
+    - remediate_in_scope_findings
+    - open_pr
+    - mark_pr_approved_when_all_gates_pass
+  owner_escalation_conditions:
+    - unapproved_architecture_change
+    - scope_expansion
+    - production_or_deployment_authority
+    - secret_or_credential_change
+    - destructive_or_consequential_data_migration
+    - spend_outside_authorized_profile
+    - unresolved_material_reviewer_conflict
+    - material_security_policy_decision
+    - acceptance_criteria_impossible
+    - product_decision_not_derivable_from_authority
+
+pr_policy:
+  initial_merge_mode: HUMAN_MERGE_AFTER_ORCHESTRATOR_APPROVAL
+  orchestrator_pr_approval_requires:
+    - implementation_principal_differs_from_review_principal_for_material_work
+    - required_ci_green
+    - required_tests_pass
+    - zero_blocking_findings
+    - no_scope_deviation
+    - forbidden_paths_untouched
+    - campaign_authority_valid
+  future_mode_candidate: DETERMINISTIC_BOUNDED_AUTO_MERGE
+  future_auto_merge_requires_separate_qualification: true
+
+work_packages:
+  - id: C2PRO-DEV-00
+    title: Governance and context audit
+    status: NEXT
+    risk: LOW
+    product_behavior_change: false
+    tasks:
+      - inventory_current_agent_governance_surfaces
+      - identify_duplicate_sources_of_truth
+      - estimate_routine_context_token_cost
+      - extract_required_product_safety_rules
+      - identify_history_process_content_for_cold_storage
+      - produce_keep_rewrite_deprecate_archive_matrix
+      - propose_compact_control_migration_map
+    exit_gate: compact_control_design_and_migration_map_ready
+
+  - id: C2PRO-DEV-01
+    title: Minimal YAML control model
+    status: BLOCKED_BY_C2PRO_DEV_00
+    tasks:
+      - define_current_state_schema
+      - define_work_queue_schema
+      - define_work_envelope_schema
+      - define_handoff_schema
+      - define_evidence_reference_schema
+      - ensure_completed_history_absent_from_hot_state
+      - add_validation_tests
+      - define_legacy_blackboard_backlog_deprecation_path
+    exit_gate: deterministic_validation_and_context_size_target_met
+
+  - id: C2PRO-DEV-02
+    title: Role model and authority hierarchy
+    status: BLOCKED_BY_C2PRO_DEV_01
+    tasks:
+      - define_orchestrator_role
+      - define_implementation_role
+      - define_independent_reviewer_role
+      - define_qa_security_specialist_roles
+      - define_principal_subordinate_authority_ceilings
+      - define_no_self_approval
+      - define_worker_fallback_handoff
+      - define_risk_and_review_classes
+    exit_gate: same_work_can_move_between_principals_without_identity_change
+
+  - id: C2PRO-DEV-03
+    title: Claude and Codex principal worker readiness
+    status: READY_PARALLEL_AFTER_AUDIT_START
+    tasks:
+      - inventory_vps_installation_auth_session_state
+      - install_or_update_only_if_required
+      - bind_execution_surfaces_and_identities
+      - qualify_non_interactive_invocation
+      - qualify_isolated_read_only_job
+      - qualify_bounded_write_commit_job
+      - prove_canonical_main_denial
+      - prove_runtime_and_secret_denial
+      - prove_timeout_resource_limits
+      - freeze_qualification_evidence
+    exit_gate: both_principal_workers_qualified
+
+  - id: C2PRO-DEV-04
+    title: Development Orchestrator role
+    status: BLOCKED_BY_C2PRO_DEV_02_AND_03
+    tasks:
+      - define_state_machine
+      - accept_campaign_or_work_request
+      - create_validated_work_envelope
+      - assign_principal
+      - support_worker_handoff
+      - launch_tests_and_reviews
+      - synthesize_findings
+      - remediate_within_authority
+      - escalate_outside_authority
+      - emit_compact_final_status
+    exit_gate: synthetic_campaign_without_owner_micro_approval
+
+  - id: C2PRO-DEV-05
+    title: AF-DEV integration
+    status: BLOCKED_BY_C2PRO_DEV_04
+    tasks:
+      - remove_raw_cli_execution_from_canonical_checkout_path
+      - translate_c2pro_work_to_af_dev_job
+      - create_isolated_clone_branch
+      - bind_worker_sandbox_policy
+      - collect_normalized_evidence
+      - return_completion_or_handoff
+    exit_gate: no_worker_direct_write_to_canonical_checkout
+
+  - id: C2PRO-DEV-06
+    title: MR-DEV direct Claude and Codex routes
+    status: BLOCKED_BY_C2PRO_DEV_05_AND_AI_GEN_MR_DEV_AUTHORITY
+    tasks:
+      - exact_route_surface_records
+      - qualification_evidence
+      - entitlement_validation_without_secret_disclosure
+      - kill_switch_test
+      - provider_and_token_failure_typing
+      - budget_usage_boundaries
+      - principal_to_principal_fallback_proof
+    exit_gate: claude_and_codex_end_to_end_through_af_dev_mr_dev
+
+  - id: C2PRO-DEV-07
+    title: First real C2Pro workload
+    status: BLOCKED_BY_C2PRO_DEV_06
+    exit_gate: real_isolated_implementation_tests_evidence_pr
+
+  - id: C2PRO-DEV-08
+    title: Principal cross-review
+    status: BLOCKED_BY_C2PRO_DEV_07
+    exit_gate: reciprocal_independent_review_pass
+
+  - id: C2PRO-DEV-09
+    title: PR approval gate
+    status: BLOCKED_BY_C2PRO_DEV_08
+    exit_gate: machine_verifiable_pr_approved_state
+
+  - id: C2PRO-DEV-10
+    title: Subordinate worker qualification
+    status: BLOCKED_BY_C2PRO_DEV_09
+    workers: [gemini_cli, antigravity, opencode]
+    exit_gate: subordinate_contribution_under_principal_promotion_gate
+
+  - id: C2PRO-DEV-11
+    title: Selective multi-LLM challenger policy
+    status: BLOCKED_BY_C2PRO_DEV_10
+    exit_gate: bounded_challenger_value_demonstrated
+
+  - id: C2PRO-DEV-12
+    title: Bounded autonomous campaign execution
+    status: BLOCKED_BY_C2PRO_DEV_11
+    exit_gate: real_campaign_completed_with_escalation_only_owner_interaction
+
+execution_order:
+  control_track: [C2PRO-DEV-00, C2PRO-DEV-01, C2PRO-DEV-02, C2PRO-DEV-04]
+  worker_track: [C2PRO-DEV-03]
+  convergence: [C2PRO-DEV-05, C2PRO-DEV-06, C2PRO-DEV-07, C2PRO-DEV-08, C2PRO-DEV-09, C2PRO-DEV-10, C2PRO-DEV-11, C2PRO-DEV-12]
+
+next_action:
+  id: C2PRO-DEV-00
+  mode: READ_ONLY_AUDIT
+  product_behavior_change: false
+  owner_micro_approval_required_during_audit: false
+  outputs:
+    - authoritative_inventory
+    - context_token_cost_diagnosis
+    - keep_rewrite_deprecate_archive_matrix
+    - proposed_compact_yaml_schemas
+    - migration_dependencies
+    - exact_next_implementation_slice
+
+success_definition:
+  - owner_can_issue_bounded_high_level_objective
+  - principal_worker_selected_automatically
+  - work_survives_worker_quota_or_provider_failure
+  - subordinate_workers_contribute_under_principal_gate
+  - all_execution_occurs_in_isolated_af_dev_workspace
+  - independent_review_required_for_material_work
+  - in_scope_findings_remediated_without_micro_approval
+  - compact_evidence_generated
+  - pr_can_reach_machine_verifiable_approved_state
+  - owner_only_escalated_for_material_authority_product_security_decisions
+  - product_runtime_separation_preserved
+  - direct_agent_main_mutation_forbidden
