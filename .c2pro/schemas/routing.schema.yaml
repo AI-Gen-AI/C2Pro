@@ -1,0 +1,52 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: c2pro-routing-v2
+type: object
+additionalProperties: false
+required:
+  - schema
+  - schema_version
+  - status
+  - authority_phase
+  - principles
+  - worker_classes
+  - workers
+  - routing_preferences
+  - principal_gate
+  - handoff
+  - qualification
+properties:
+  schema: {const: c2pro-routing-v2}
+  schema_version: {const: 2}
+  status: {const: canonical_role_authority}
+  authority_phase: {const: C2PRO-DEV-02}
+  principles: {type: object}
+  worker_classes:
+    type: object
+    additionalProperties: false
+    required: [principal, subordinate]
+    properties:
+      principal:
+        type: array
+        const: [claude_code, codex]
+      subordinate:
+        type: array
+        const: [gemini_cli, antigravity, opencode]
+  workers: {type: object}
+  routing_preferences: {type: object}
+  principal_gate:
+    type: object
+    additionalProperties: false
+    required:
+      - eligible_workers
+      - material_reviewer_must_differ_from_implementation_worker
+      - subordinate_promotion_requires_principal_gate
+      - same_worker_dual_role_does_not_satisfy_independence
+    properties:
+      eligible_workers:
+        type: array
+        const: [claude_code, codex]
+      material_reviewer_must_differ_from_implementation_worker: {const: true}
+      subordinate_promotion_requires_principal_gate: {const: true}
+      same_worker_dual_role_does_not_satisfy_independence: {const: true}
+  handoff: {type: object}
+  qualification: {type: object}
