@@ -1,0 +1,25 @@
+schema: c2pro-dev-01-minimal-yaml-control-model-v1
+status: READY_FOR_PR_CI
+date: 2026-08-24
+repository: AI-Gen-AI/C2Pro
+base_sha: a03d4d09f0a32b0d3e5d54f0f3c68f398b06fa0b
+parent_plan: docs/architecture/development/c2pro-vps-development-control-plan-v1.md
+input_audit: validation/development/c2pro-dev-00-governance-context-audit-v1.yaml
+runtime_activation: false
+legacy_deletion: false
+packages:
+  C2PRO-DEV-01-A: IMPLEMENTED
+  C2PRO-DEV-01-B: IMPLEMENTED
+  C2PRO-DEV-01-C: IMPLEMENTED
+  C2PRO-DEV-01-D: IMPLEMENTED
+  C2PRO-DEV-01-E: IMPLEMENTED
+  C2PRO-DEV-01-F: IMPLEMENTED
+  C2PRO-DEV-01-G: IMPLEMENTED
+  C2PRO-DEV-01-H: IMPLEMENTED
+exit_gate:
+  deterministic_schema_validation: PENDING_CI
+  bootstrap_context_budget: PENDING_CI
+  legacy_no_loss_transition: PENDING_CI
+  required_ci: PENDING
+  merged_to_main: false
+next_task: C2PRO-DEV-02

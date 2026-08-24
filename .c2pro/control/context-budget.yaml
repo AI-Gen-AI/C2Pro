@@ -1,0 +1,18 @@
+schema: c2pro-context-budget-v1
+budget_version: 1
+units: bytes_utf8
+limits:
+  bootstrap_hot_state_max: 8192
+  single_work_envelope_max: 12288
+  single_handoff_max: 8192
+  single_evidence_reference_max: 8192
+  default_work_packet_max: 24576
+default_hot_files:
+  - .c2pro/control/current.yaml
+  - .c2pro/control/work-queue.yaml
+rules:
+  - completed_history_is_cold
+  - raw_ci_logs_are_never_hot_context
+  - architecture_documents_are_referenced_not_copied
+  - provider_conversation_transcripts_are_not_handoff_payloads
+  - context_budget_failure_blocks_control_validation

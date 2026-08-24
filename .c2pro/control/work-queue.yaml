@@ -1,0 +1,6 @@
+schema: c2pro-work-queue-v1
+queue_version: 1
+authority_status: bootstrap_non_authoritative_for_legacy_open_work
+open_work: []
+completed_work_retained: false
+history_source: git_pr_ci
