@@ -1,0 +1,24 @@
+schema: c2pro-legacy-compatibility-v1
+transition_status: dual_read_no_destructive_cutover
+new_control_runtime_authoritative: false
+legacy_open_work_authoritative_until_reconciled: true
+legacy_sources:
+  - path: C2PRO_MASTER_BACKLOG.md
+    disposition: reconcile_and_shrink
+  - path: backlogs/
+    disposition: cold_reference
+  - path: blackboard.json
+    disposition: deprecate_as_permanent_state
+  - path: core/supervisor.py
+    disposition: replace_before_vps_execution
+no_loss_rules:
+  - do_not_delete_or_bulk_rewrite_legacy_sources_during_c2pro_dev_01
+  - require_explicit_crosswalk_before_retiring_any_legacy_open_work
+  - preserve_git_pr_ci_as_primary_completed_execution_history
+  - do_not_claim_new_queue_authority_until_open_work_reconciliation_is_complete
+  - do_not_activate_af_dev_or_mr_dev_runtime_from_repository_yaml_alone
+cutover_gates:
+  - legacy_open_work_reconciled
+  - c2pro_dev_02_role_authority_defined
+  - c2pro_dev_03_principal_workers_qualified
+  - c2pro_dev_04_orchestrator_boundary_implemented

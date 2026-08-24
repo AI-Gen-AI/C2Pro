@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "c2pro-legacy-compatibility-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "transition_status", "new_control_runtime_authoritative", "legacy_open_work_authoritative_until_reconciled", "legacy_sources", "no_loss_rules", "cutover_gates"],
+  "properties": {
+    "schema": {"const": "c2pro-legacy-compatibility-v1"},
+    "transition_status": {"const": "dual_read_no_destructive_cutover"},
+    "new_control_runtime_authoritative": {"type": "boolean"},
+    "legacy_open_work_authoritative_until_reconciled": {"type": "boolean"},
+    "legacy_sources": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"type": "object", "additionalProperties": false, "required": ["path", "disposition"], "properties": {"path": {"type": "string", "minLength": 1, "maxLength": 320}, "disposition": {"type": "string", "minLength": 1, "maxLength": 128}}}},
+    "no_loss_rules": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 256}},
+    "cutover_gates": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 256}}
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "c2pro-work-queue-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "queue_version",
+    "authority_status",
+    "open_work",
+    "completed_work_retained",
+    "history_source"
+  ],
+  "properties": {
+    "schema": {
+      "const": "c2pro-work-queue-v1"
+    },
+    "queue_version": {
+      "const": 1
+    },
+    "authority_status": {
+      "enum": [
+        "bootstrap_non_authoritative_for_legacy_open_work",
+        "authoritative"
+      ]
+    },
+    "open_work": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "work_id",
+          "role",
+          "status",
+          "priority",
+          "risk_class",
+          "work_ref",
+          "base_sha"
+        ],
+        "properties": {
+          "work_id": {
+            "type": "string",
+            "pattern": "^C2P-[A-Z0-9-]+$",
+            "maxLength": 128
+          },
+          "role": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "in_progress",
+              "blocked",
+              "review",
+              "ready_for_pr"
+            ]
+          },
+          "priority": {
+            "enum": [
+              "P0",
+              "P1",
+              "P2",
+              "P3"
+            ]
+          },
+          "risk_class": {
+            "enum": [
+              "trivial",
+              "normal",
+              "material",
+              "high"
+            ]
+          },
+          "work_ref": {
+            "type": "string",
+            "pattern": "^\\.c2pro/work/[^/]+\\.yaml$",
+            "maxLength": 256
+          },
+          "base_sha": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          }
+        }
+      }
+    },
+    "completed_work_retained": {
+      "const": false
+    },
+    "history_source": {
+      "const": "git_pr_ci"
+    }
+  }
+}

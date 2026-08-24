@@ -1,0 +1,16 @@
+schema: c2pro-current-v1
+state_version: 1
+repository: AI-Gen-AI/C2Pro
+control_status: bootstrap_no_runtime_activation
+active_campaign_id: null
+active_work_ids: []
+queue_ref: .c2pro/control/work-queue.yaml
+context_budget_ref: .c2pro/control/context-budget.yaml
+legacy_compatibility_ref: .c2pro/control/legacy-compatibility.yaml
+authority:
+  parent_plan: docs/architecture/development/c2pro-vps-development-control-plan-v1.md
+  execution_boundary: AI-Gen AF-DEV-01
+  route_authority: AI-Gen MR-DEV-01
+history:
+  primary_source: git_pr_ci
+  completed_work_retained_in_hot_state: false

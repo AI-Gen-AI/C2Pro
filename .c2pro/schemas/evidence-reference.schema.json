@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "c2pro-evidence-reference-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "work_id", "head_sha", "references"],
+  "properties": {
+    "schema": {"const": "c2pro-evidence-reference-v1"},
+    "work_id": {"type": "string", "pattern": "^C2P-[A-Z0-9-]+$", "maxLength": 128},
+    "head_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "references": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "ref", "status"],
+        "properties": {
+          "type": {"enum": ["commit", "pull_request", "ci_run", "ci_artifact", "test_report", "review"]},
+          "ref": {"type": "string", "minLength": 1, "maxLength": 500},
+          "status": {"enum": ["PASS", "FAIL", "PENDING", "INFO"]},
+          "summary": {"type": "string", "maxLength": 500}
+        }
+      }
+    }
+  }
+}
