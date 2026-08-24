@@ -68,6 +68,11 @@ references:
     immutable: false
     sha256: null
     summary: Owner approved role-and-risk-based Claude model profiles: Opus as default Orchestrator and material Claude review profile; Sonnet as normal implementation profile; Haiku for low-risk mechanical work only; Fable as exceptional long-horizon/escalation tier. File extension alone never selects a weaker model; governance, architecture and security documentation remains high-risk. Claude/Codex remain the two PRINCIPAL workers, material independent review must cross principal workers, and qualification of one Claude model profile never implicitly qualifies the other Claude profiles. Canonical machine-readable implementation is deferred to C2PRO-DEV-04 to avoid inflating the DEV-03 hot context.
+  - kind: decision
+    locator: owner_decision:2026-08-24:C2PRO_CODEX_MODEL_PROFILE_POLICY_V1
+    immutable: false
+    sha256: null
+    summary: Owner approved equivalent governed model profiling for Codex while preserving provider-specific semantics: Sol for principal independent review, architecture/security and highest-complexity work; Terra for normal implementation and routine review; Luna for low-risk mechanical/high-volume work. Reasoning effort is a separate routing dimension and model-profile qualification is independent; no Codex profile inherits qualification from another. Claude Opus remains the default Orchestrator; Codex Sol is the principal cross-provider reviewer/challenger. Canonical machine-readable implementation is deferred to C2PRO-DEV-04.
   - kind: audit
     locator: owner_terminal_capture:2026-08-24T17:08:42Z:MR_DEV_01C_CLAUDE_SERVICE_PREFLIGHT
     immutable: false
@@ -88,3 +93,8 @@ references:
     immutable: false
     sha256: null
     summary: Minimal Bubblewrap preflight under aigen-claude passed without model inference: claude auth status remained authenticated first-party, HTTPS/TLS to the Claude status endpoint returned 200, and .gitconfig, .npm, .cache, Claude backups/projects/sessions remained hidden. Only the Claude executable plus minimal read-only auth/state inputs were exposed; no prompt/provider inference was executed.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_ONE_SHOT_LIVE_EXECUTION_SEAM
+    immutable: false
+    sha256: null
+    summary: Additive MR-DEV-01C one-shot seam passed 28/28 tests and diff hygiene. Lease consumption is durable before subprocess spawn, workspace is required pristine/read-only, fallback/metered API/runtime/deploy authority remain false, and spawn/timeout failure cannot create an automatic retry. Final pre-arm review identified remaining provenance hardening: evidence artifact hashes must be verified against files, executed Claude binary hash must equal frozen provenance, and live session inputs must be canonical owner/mode constrained before any real lease is armed.
