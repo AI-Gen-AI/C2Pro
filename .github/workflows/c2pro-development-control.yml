@@ -41,4 +41,4 @@ jobs:
         run: python scripts/development/validate_c2pro_control.py
 
       - name: Run regression tests
-        run: python -m pytest -q tests/development/test_c2pro_control_plane.py
+        run: python -m pytest -q --confcutdir=tests/development tests/development/test_c2pro_control_plane.py
