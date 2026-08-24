@@ -83,3 +83,8 @@ references:
     immutable: false
     sha256: null
     summary: Non-operational route-authority qualification passed 20/20 MR-DEV-01C tests. The frozen Claude/Sonnet fixture passed all 16 hard gates only in fixture mode while remaining non-live; deliberate ineligible route, unregistered worker, budget violation and kill-switch probes were denied at G05, G02, G12 and G14 respectively. git diff --check passed.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_MINIMAL_LIVE_SANDBOX_PREFLIGHT
+    immutable: false
+    sha256: null
+    summary: Minimal Bubblewrap preflight under aigen-claude passed without model inference: claude auth status remained authenticated first-party, HTTPS/TLS to the Claude status endpoint returned 200, and .gitconfig, .npm, .cache, Claude backups/projects/sessions remained hidden. Only the Claude executable plus minimal read-only auth/state inputs were exposed; no prompt/provider inference was executed.
