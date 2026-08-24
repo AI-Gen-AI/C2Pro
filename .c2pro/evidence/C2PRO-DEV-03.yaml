@@ -63,8 +63,8 @@ references:
     immutable: false
     sha256: null
     summary: Claude non-inference preflight passed local health checks: authenticated first-party subscription session, Claude Code doctor returned rc=0 with no installation issues, no custom Anthropic base URL or model environment override was present, and no Claude settings model override was found. Sensitive account identifiers are intentionally excluded.
-  - kind: audit
-    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_CLAUDE_MODEL_SELECTOR_DISCOVERY
+  - kind: decision
+    locator: owner_decision:2026-08-24:C2PRO_CLAUDE_MODEL_PROFILE_POLICY_V1
     immutable: false
     sha256: null
-    summary: Claude Code 2.1.237 confirms --model accepts aliases including sonnet and full model names. Governance decision: sonnet may be frozen only as a requested alias because it resolves to the provider-recommended latest Sonnet and can change over time; exact served model identity must be captured from post-invocation result evidence rather than invented before the first live call.
+    summary: Owner approved role-and-risk-based Claude model profiles: Opus as default Orchestrator and material Claude review profile; Sonnet as normal implementation profile; Haiku for low-risk mechanical work only; Fable as exceptional long-horizon/escalation tier. File extension alone never selects a weaker model; governance, architecture and security documentation remains high-risk. Claude/Codex remain the two PRINCIPAL workers, material independent review must cross principal workers, and qualification of one Claude model profile never implicitly qualifies the other Claude profiles. Canonical machine-readable implementation is deferred to C2PRO-DEV-04 to avoid inflating the DEV-03 hot context.
