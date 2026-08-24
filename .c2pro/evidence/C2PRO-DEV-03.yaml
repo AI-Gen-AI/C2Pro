@@ -33,3 +33,13 @@ references:
     immutable: false
     sha256: null
     summary: Provenance probe: Claude Code 2.1.237 resolves to the per-identity @anthropic-ai/claude-code native ELF binary with Node v24.19.0/npm 11.17.0; Codex CLI 0.148.0 resolves to its per-identity standalone static-pie binary. Exact binary hashes are normalized in the DEV-03 readiness record. Existing installations retained; no reinstall/update performed.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:C2PRO_DEV_03A4_AUTH_STATUS
+    immutable: false
+    sha256: null
+    summary: Non-secret auth status probe: Claude Code reports logged in through claude.ai/firstParty with Pro subscription; Codex reports logged in using ChatGPT. Email, organization identifiers and credential/session payloads are intentionally not recorded.
+  - kind: dependency
+    locator: AI-Gen-AI/2SB:MR-DEV-01C
+    immutable: false
+    sha256: null
+    summary: Remote authority check found no published MR-DEV-01C implementation/activation PR; AI-Gen main still records MR-DEV-01C as NEXT with live Development provider invocation closed. DEV-03B remains blocked until that gate explicitly opens.
