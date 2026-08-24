@@ -1,0 +1,74 @@
+schema: c2pro-dev-01-minimal-yaml-control-v1
+status: AWAITING_CI_AND_REVIEW
+date: 2026-08-24
+repository: AI-Gen-AI/C2Pro
+base_sha: a03d4d09f0a32b0d3e5d54f0f3c68f398b06fa0b
+branch: feat/c2pro-dev-01-minimal-yaml-control-v2
+parent_plan: docs/architecture/development/c2pro-vps-development-control-plan-v1.md
+audit_input: validation/development/c2pro-dev-00-governance-context-audit-v1.yaml
+human_report: docs/architecture/development/c2pro-dev-01-minimal-yaml-control-v1.md
+
+implementation:
+  canonical_namespace: .c2pro
+  current_state: .c2pro/control/current.yaml
+  open_queue: .c2pro/control/work-queue.yaml
+  routing_transition: .c2pro/control/routing.yaml
+  legacy_compatibility: .c2pro/control/legacy-compatibility.yaml
+  active_work: .c2pro/work/C2PRO-DEV-01.yaml
+  evidence_refs: .c2pro/evidence/C2PRO-DEV-01.yaml
+  validator: scripts/development/validate_c2pro_control.py
+  tests: tests/development/test_c2pro_control_plane.py
+  ci_workflow: .github/workflows/c2pro-development-control.yml
+
+contracts:
+  current_state: .c2pro/schemas/current.schema.yaml
+  work_queue: .c2pro/schemas/work-queue.schema.yaml
+  work_envelope: .c2pro/schemas/work-envelope.schema.yaml
+  handoff: .c2pro/schemas/handoff.schema.yaml
+  evidence_reference: .c2pro/schemas/evidence-reference.schema.yaml
+
+context_budget:
+  max_bytes: 16384
+  measured_bytes: 3395
+  utilization_percent: 20.7
+  paths:
+    .c2pro/control/current.yaml: 1002
+    .c2pro/control/work-queue.yaml: 559
+    .c2pro/work/C2PRO-DEV-01.yaml: 1834
+  result: PASS
+
+policy_assertions:
+  completed_history_in_hot_state: false
+  queue_open_only: true
+  work_identity_model_independent: true
+  selected_worker_required_to_be_fixed: false
+  exact_base_sha_required: true
+  human_merge_initially: true
+  direct_main_mutation_authorized: false
+  production_runtime_authorized: false
+  secrets_authorized: false
+  destructive_data_action_authorized: false
+  legacy_deletion_in_dev_01: false
+  new_control_write_target: .c2pro
+
+legacy_transition:
+  mode: dual_read_single_write_new_control
+  no_loss_reconciliation_required: true
+  blackboard_canonical: false
+  markdown_backlogs_canonical: false
+
+validation:
+  deterministic_validator_defined: PASS
+  negative_regressions_defined: PASS
+  dedicated_ci_gate_defined: PASS
+  local_runtime_execution_from_github_connector: NOT_AVAILABLE
+  ci_result: PENDING
+  independent_principal_review: PENDING
+
+exit_gate:
+  implementation_complete: true
+  context_target_met: true
+  deterministic_parse_and_policy_gate: DEFINED_AWAITING_CI
+  review_gate: PENDING
+  human_merge_gate: PENDING
+  next_task_after_merge: C2PRO-DEV-02
