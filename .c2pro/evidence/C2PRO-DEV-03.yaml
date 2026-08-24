@@ -28,3 +28,8 @@ references:
     immutable: false
     sha256: null
     summary: Dedicated-identity inspection: aigen-claude has private node/npm/npx and claude under ~/.local/bin plus ~/.claude state; aigen-codex has private codex under ~/.local/bin plus ~/.codex state and no Node runtime in PATH; both homes are mode 700 and principals have no observed shared supplementary aigen group.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:C2PRO_DEV_03A4_A5_1
+    immutable: false
+    sha256: null
+    summary: Provenance probe: Claude Code 2.1.237 resolves to the per-identity @anthropic-ai/claude-code native ELF binary with Node v24.19.0/npm 11.17.0; Codex CLI 0.148.0 resolves to its per-identity standalone static-pie binary. Exact binary hashes are normalized in the DEV-03 readiness record. Existing installations retained; no reinstall/update performed.
