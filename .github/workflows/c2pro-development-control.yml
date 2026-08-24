@@ -1,0 +1,44 @@
+name: C2Pro Development Control
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".c2pro/**"
+      - "scripts/development/**"
+      - "tests/development/**"
+      - ".github/workflows/c2pro-development-control.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".c2pro/**"
+      - "scripts/development/**"
+      - "tests/development/**"
+      - ".github/workflows/c2pro-development-control.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-control:
+    name: Validate minimal YAML control
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Install minimal validation dependencies
+        run: pip install "pyyaml==6.0.3" "pytest>=9.0.3"
+
+      - name: Validate control and context budget
+        run: python scripts/development/validate_c2pro_control.py
+
+      - name: Run regression tests
+        run: python -m pytest -q tests/development/test_c2pro_control_plane.py
