@@ -98,3 +98,8 @@ references:
     immutable: false
     sha256: null
     summary: Additive MR-DEV-01C one-shot seam passed 28/28 tests and diff hygiene. Lease consumption is durable before subprocess spawn, workspace is required pristine/read-only, fallback/metered API/runtime/deploy authority remain false, and spawn/timeout failure cannot create an automatic retry. Final pre-arm review identified remaining provenance hardening: evidence artifact hashes must be verified against files, executed Claude binary hash must equal frozen provenance, and live session inputs must be canonical owner/mode constrained before any real lease is armed.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_PREARM_PROVENANCE_SNAPSHOT
+    immutable: false
+    sha256: null
+    summary: Pre-arm provenance snapshot passed with 28/28 MR-DEV-01C tests and git diff hygiene. Repository HEAD and origin/main both remained 357029a580e360de4e92046bd7aa295b54d9c113; authorization, exact-route freeze, live seam and qualification-test artifacts were SHA-256 captured, the seam compiled successfully, and live invocation remained unarmed. These hashes are an intermediate snapshot only because provenance hardening will intentionally change the seam before final arming.
