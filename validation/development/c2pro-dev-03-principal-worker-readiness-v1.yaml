@@ -1,5 +1,5 @@
 schema: c2pro-dev-03-principal-worker-readiness-v1
-status: DEV_03A_IDENTITY_AND_AUTH_INSPECTION_NEXT
+status: DEV_03A_IDENTITY_INVENTORY_RECORDED
 date: '2026-08-24'
 repository: AI-Gen-AI/C2Pro
 baseline_main: 0400c05e8af1458aaa14bc47a8378d9cdd560284
@@ -19,15 +19,24 @@ principal_workers:
   claude_code:
     class: PRINCIPAL
     executable: claude
-    discovered_from_operator_path: false
-    version: NOT_AVAILABLE
-    binary_path: NOT_FOUND
-    binary_owner: NOT_APPLICABLE
+    discovered: true
+    version: PENDING_LOCAL_PROBE
+    binary_path: /home/aigen-claude/.local/bin/claude
+    binary_owner: aigen-claude
     execution_identity: aigen-claude
     execution_identity_uid: 1006
+    execution_identity_gid: 1006
     execution_identity_home: /home/aigen-claude
-    auth_state: UNKNOWN_PENDING_NON_SECRET_INSPECTION
-    local_version_help_probe: NOT_AVAILABLE_UNTIL_BINARY_PRESENT
+    home_mode: '700'
+    node_path: /home/aigen-claude/.local/bin/node
+    npm_path: /home/aigen-claude/.local/bin/npm
+    npx_path: /home/aigen-claude/.local/bin/npx
+    config_dir: /home/aigen-claude/.claude
+    config_dir_mode: '775'
+    config_regular_files: 2
+    config_subdirs: 3
+    auth_state: UNKNOWN_PENDING_NON_SECRET_PROBE
+    local_version_help_probe: PENDING
     live_provider_probe: BLOCKED_BY_MR_DEV_01C
     af_dev_read_only_job: PENDING
     af_dev_write_commit_job: PENDING
@@ -37,15 +46,24 @@ principal_workers:
   codex:
     class: PRINCIPAL
     executable: codex
-    discovered_from_operator_path: false
-    version: NOT_AVAILABLE
-    binary_path: NOT_FOUND
-    binary_owner: NOT_APPLICABLE
+    discovered: true
+    version: PENDING_LOCAL_PROBE
+    binary_path: /home/aigen-codex/.local/bin/codex
+    binary_owner: aigen-codex
     execution_identity: aigen-codex
     execution_identity_uid: 1005
+    execution_identity_gid: 1005
     execution_identity_home: /home/aigen-codex
-    auth_state: UNKNOWN_PENDING_NON_SECRET_INSPECTION
-    local_version_help_probe: NOT_AVAILABLE_UNTIL_BINARY_PRESENT
+    home_mode: '700'
+    node_path: NOT_FOUND
+    npm_path: NOT_FOUND
+    npx_path: NOT_FOUND
+    config_dir: /home/aigen-codex/.codex
+    config_dir_mode: '700'
+    config_regular_files: 12
+    config_subdirs: 7
+    auth_state: UNKNOWN_PENDING_NON_SECRET_PROBE
+    local_version_help_probe: PENDING
     live_provider_probe: BLOCKED_BY_MR_DEV_01C
     af_dev_read_only_job: PENDING
     af_dev_write_commit_job: PENDING
@@ -71,35 +89,32 @@ host_readiness:
   bubblewrap: /usr/bin/bwrap
   timeout: /usr/bin/timeout
   prlimit: /usr/bin/prlimit
-  node: NOT_FOUND_FROM_OPERATOR_PATH
-  npm: NOT_FOUND_FROM_OPERATOR_PATH
+  node_operator_path: NOT_FOUND
+  npm_operator_path: NOT_FOUND
   python3: /usr/bin/python3
   tmux: /usr/bin/tmux
-  tmux_session: aigen
-  observed_working_directory: /srv/aigen/dev/worktrees/mr-dev-01c-direct-route-baseline
-  working_directory_safety_note: do_not_install_or_qualify_from_mr_dev_01c_worktree
+  c2pro_operator_session: c2pro
+  c2pro_operator_working_directory: /home/aigenadmin
+  resource_readiness: PASS
 
-execution_identities:
-  claude:
-    user: aigen-claude
-    uid: 1006
-    gid: 1006
-    home: /home/aigen-claude
-    shell: /bin/bash
-  codex:
-    user: aigen-codex
-    uid: 1005
-    gid: 1005
-    home: /home/aigen-codex
-    shell: /bin/bash
-  shared_aigen_group_membership_observed_for_principals: false
+identity_inventory:
+  aigen_claude:
+    supplementary_groups: []
+    home_writable_as_identity: true
+    dedicated_cli_present: true
+  aigen_codex:
+    supplementary_groups: []
+    home_writable_as_identity: true
+    dedicated_cli_present: true
+  isolation_observation: dedicated_principal_identities_exist_without_shared_supplementary_aigen_group
+  installation_decision: DO_NOT_REINSTALL_BEFORE_VERSION_PROVENANCE_AND_AUTH_STATE_RECONCILIATION
 
 qualification_gates:
   DEV_03A1_HOST_BASELINE: PASS
-  DEV_03A2_BINARY_INVENTORY: PASS_NOT_INSTALLED_FROM_OPERATOR_PATH
-  DEV_03A3_EXECUTION_IDENTITIES: PASS_IDENTITIES_EXIST_FURTHER_INSPECTION_REQUIRED
-  DEV_03A4_AUTH_SESSION_STATE: NEXT
-  DEV_03A5_INSTALL_UPDATE_DECISION: BLOCKED_BY_A3_A4_DETAIL
+  DEV_03A2_BINARY_INVENTORY: PASS_BINARIES_FOUND_IN_DEDICATED_IDENTITIES
+  DEV_03A3_EXECUTION_IDENTITIES: PASS
+  DEV_03A4_AUTH_SESSION_STATE: IN_PROGRESS
+  DEV_03A5_INSTALL_UPDATE_DECISION: PENDING_VERSION_PROVENANCE_PROBE
   DEV_03B1_LIVE_NONINTERACTIVE_SMOKE: BLOCKED_BY_MR_DEV_01C
   DEV_03B2_AF_DEV_READ_ONLY: PENDING
   DEV_03B3_AF_DEV_WRITE_COMMIT: PENDING
@@ -114,7 +129,7 @@ secret_handling:
   normalized_auth_state_only: true
 
 next_action:
-  gate: DEV_03A3_A4
-  mode: READ_ONLY_EXECUTION_IDENTITY_AND_AUTH_METADATA_INSPECTION
+  gate: DEV_03A4_A5
+  mode: READ_ONLY_LOCAL_VERSION_PROVENANCE_AND_NON_SECRET_AUTH_METADATA
   owner_micro_approval_required: false
-  expected_output: normalized_identity_path_runtime_and_auth_metadata_without_secret_contents
+  expected_output: exact_versions_binary_provenance_and_typed_auth_state_without_secret_material
