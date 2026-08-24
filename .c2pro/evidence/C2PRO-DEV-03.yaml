@@ -68,3 +68,18 @@ references:
     immutable: false
     sha256: null
     summary: Owner approved role-and-risk-based Claude model profiles: Opus as default Orchestrator and material Claude review profile; Sonnet as normal implementation profile; Haiku for low-risk mechanical work only; Fable as exceptional long-horizon/escalation tier. File extension alone never selects a weaker model; governance, architecture and security documentation remains high-risk. Claude/Codex remain the two PRINCIPAL workers, material independent review must cross principal workers, and qualification of one Claude model profile never implicitly qualifies the other Claude profiles. Canonical machine-readable implementation is deferred to C2PRO-DEV-04 to avoid inflating the DEV-03 hot context.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24T17:08:42Z:MR_DEV_01C_CLAUDE_SERVICE_PREFLIGHT
+    immutable: false
+    sha256: null
+    summary: Fresh external service preflight returned HTTP 200 and All Systems Operational; claude.ai, Claude API and Claude Code components were operational. No provider invocation occurred.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_EXACT_ROUTE_FREEZE
+    immutable: false
+    sha256: null
+    summary: Exact-route freeze selected CLAUDE_CODE/aigen-claude, DIRECT Anthropic first-party surface, frozen selector alias sonnet, no fallback, read-only analysis, no incremental spend authority and max one live provider invocation. Freeze validation passed 8/8 tests and git diff --check; live invocation remained closed.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_NEGATIVE_GATE_QUALIFICATION
+    immutable: false
+    sha256: null
+    summary: Non-operational route-authority qualification passed 20/20 MR-DEV-01C tests. The frozen Claude/Sonnet fixture passed all 16 hard gates only in fixture mode while remaining non-live; deliberate ineligible route, unregistered worker, budget violation and kill-switch probes were denied at G05, G02, G12 and G14 respectively. git diff --check passed.
