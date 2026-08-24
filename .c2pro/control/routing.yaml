@@ -1,19 +1,97 @@
-schema: c2pro-routing-v1
-schema_version: 1
-status: transition_placeholder
-canonical_authority_phase: C2PRO-DEV-02
+schema: c2pro-routing-v2
+schema_version: 2
+status: canonical_role_authority
+authority_phase: C2PRO-DEV-02
 principles:
   role_identity_is_not_worker_identity: true
   worker_identity_is_not_model_identity: true
+  harness_identity_is_not_model_identity: true
   material_self_approval_forbidden: true
-principal_workers:
-  - claude_code
-  - codex
-subordinate_workers:
-  - gemini_cli
-  - antigravity
-  - opencode
-assignments: []
-notes:
-  - This file intentionally does not freeze role-to-worker mappings during DEV-01.
-  - Exact eligibility ceilings, route qualification and authority are defined in C2PRO-DEV-02 and later AF-DEV/MR-DEV integration phases.
+  worker_handoff_preserves_work_identity: true
+worker_classes:
+  principal:
+    - claude_code
+    - codex
+  subordinate:
+    - gemini_cli
+    - antigravity
+    - opencode
+workers:
+  claude_code:
+    class: principal
+    surface_kind: cli
+    principal_gate_eligible: true
+    eligible_roles:
+      - orchestrator
+      - implementation_lead
+      - independent_reviewer
+      - qa
+      - security
+      - specialist
+  codex:
+    class: principal
+    surface_kind: cli
+    principal_gate_eligible: true
+    eligible_roles:
+      - orchestrator
+      - implementation_lead
+      - independent_reviewer
+      - qa
+      - security
+      - specialist
+  gemini_cli:
+    class: subordinate
+    surface_kind: cli
+    principal_gate_eligible: false
+    eligible_roles:
+      - qa
+      - specialist
+  antigravity:
+    class: subordinate
+    surface_kind: independent_cli_surface
+    principal_gate_eligible: false
+    eligible_roles:
+      - qa
+      - security
+      - specialist
+  opencode:
+    class: subordinate
+    surface_kind: harness
+    principal_gate_eligible: false
+    eligible_roles:
+      - qa
+      - specialist
+routing_preferences:
+  orchestrator: [claude_code, codex]
+  implementation_lead: [claude_code, codex]
+  independent_reviewer: [claude_code, codex]
+  qa: [gemini_cli, codex, claude_code, antigravity, opencode]
+  security: [claude_code, codex, antigravity]
+  specialist: [gemini_cli, antigravity, opencode, claude_code, codex]
+principal_gate:
+  eligible_workers: [claude_code, codex]
+  material_reviewer_must_differ_from_implementation_worker: true
+  subordinate_promotion_requires_principal_gate: true
+  same_worker_dual_role_does_not_satisfy_independence: true
+handoff:
+  triggers:
+    - token_limit
+    - quota_exhausted
+    - provider_failure
+    - session_failure
+    - orchestrator_reassignment
+  preserve_fields:
+    - work_id
+    - role
+    - base_sha
+    - scope
+    - out_of_scope
+    - acceptance_criteria
+  preferred_principal_fallback:
+    claude_code: codex
+    codex: claude_code
+  replacement_worker_may_not_broaden_scope: true
+qualification:
+  routing_eligibility_does_not_equal_vps_route_qualification: true
+  principal_vps_readiness_phase: C2PRO-DEV-03
+  subordinate_vps_readiness_phase: C2PRO-DEV-10

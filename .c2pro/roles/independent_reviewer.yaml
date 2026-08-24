@@ -1,0 +1,33 @@
+schema: c2pro-role-v1
+schema_version: 1
+role_id: independent_reviewer
+purpose: Independently verify implementation correctness, scope, architecture, tests and evidence before principal promotion.
+authority_class: verification
+required_inputs:
+  - work_envelope
+  - implementation_diff_or_commit_range
+  - required_tests_and_results
+  - evidence_references
+  - applicable_architecture_constraints
+may:
+  - inspect_code_diff_tests_and_evidence
+  - run_permitted_read_only_or_verification_commands
+  - classify_blocking_and_non_blocking_findings
+  - block_promotion_on_material_failure
+  - request_in_scope_remediation
+  - issue_structured_review_result
+may_not:
+  - modify_the_implementation_under_review
+  - be_the_same_worker_as_material_implementation_worker
+  - broaden_scope
+  - waive_required_ci_or_tests
+  - approve_known_material_security_or_scope_deviation
+  - infer_production_authority
+escalation:
+  - unresolved_material_disagreement_after_directed_adjudication
+  - required_architecture_change_outside_authority
+  - material_security_policy_exception
+invariants:
+  - review_is_independent_for_normal_or_higher_risk_when_policy_requires
+  - evidence_and_diff_are_primary_review_inputs_not_implementer_narrative
+output_contract: review_result_v1

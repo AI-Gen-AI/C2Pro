@@ -1,0 +1,36 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: c2pro-review-result-v1
+type: object
+additionalProperties: false
+required:
+  - schema
+  - schema_version
+  - work_id
+  - role
+  - worker_id
+  - verdict
+  - blocking
+  - non_blocking
+  - architecture_drift
+  - security_concern
+  - scope_deviation
+  - recommended_action
+properties:
+  schema: {const: c2pro-review-result-v1}
+  schema_version: {const: 1}
+  work_id: {type: string, pattern: '^C2PRO-DEV-[0-9]{2}$'}
+  role: {enum: [independent_reviewer, qa, security, specialist]}
+  worker_id: {type: string, minLength: 1}
+  verdict: {enum: [PASS, PASS_WITH_FINDINGS, BLOCK]}
+  blocking:
+    type: array
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  non_blocking:
+    type: array
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  architecture_drift: {type: boolean}
+  security_concern: {type: boolean}
+  scope_deviation: {type: boolean}
+  recommended_action: {enum: [approve, remediate, escalate]}

@@ -1,0 +1,47 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: c2pro-role-v1
+type: object
+additionalProperties: false
+required:
+  - schema
+  - schema_version
+  - role_id
+  - purpose
+  - authority_class
+  - required_inputs
+  - may
+  - may_not
+  - escalation
+  - output_contract
+properties:
+  schema: {const: c2pro-role-v1}
+  schema_version: {const: 1}
+  role_id:
+    enum: [orchestrator, implementation_lead, independent_reviewer, qa, security, specialist]
+  purpose: {type: string, minLength: 1}
+  authority_class:
+    enum: [control, implementation, verification, advisory]
+  required_inputs:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  may:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  may_not:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  escalation:
+    type: array
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  invariants:
+    type: array
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  output_contract: {type: string, minLength: 1}

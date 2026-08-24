@@ -1,0 +1,94 @@
+schema: c2pro-dev-02-role-authority-result-v1
+status: READY_FOR_CI
+date: 2026-08-24
+repository: AI-Gen-AI/C2Pro
+base_sha: 3fa846d60cecd14239ddb0a953be5e34bede463d
+work_id: C2PRO-DEV-02
+human_report: docs/architecture/development/c2pro-dev-02-role-authority-v1.md
+
+role_model:
+  canonical_roles:
+    - orchestrator
+    - implementation_lead
+    - independent_reviewer
+    - qa
+    - security
+    - specialist
+  model_neutral: true
+  worker_neutral: true
+  provider_neutral: true
+
+worker_authority:
+  principal: [claude_code, codex]
+  subordinate: [gemini_cli, antigravity, opencode]
+  principal_gate_eligible: [claude_code, codex]
+  subordinate_can_self_promote: false
+  opencode_is_harness: true
+  antigravity_independent_from_gemini_cli: true
+  routing_eligibility_implies_vps_qualification: false
+
+independence:
+  material_self_approval_forbidden: true
+  same_worker_dual_role_counts_as_independent: false
+  implementation_and_principal_review_worker_must_differ_for_material_work: true
+
+handoff:
+  work_identity_fields:
+    - work_id
+    - role
+    - base_sha
+    - scope
+    - out_of_scope
+    - acceptance_criteria
+  claude_fallback: codex
+  codex_fallback: claude_code
+  replacement_worker_may_broaden_scope: false
+  deterministic_identity_proof_added: true
+
+review_policy:
+  trivial: {principal: optional, challenger: false, synthesis: false}
+  normal: {principal: required, challenger: false, synthesis: false}
+  material: {principal: required, challenger: optional, synthesis: false}
+  architecture: {principal: required, challenger: required, synthesis: true}
+  security: {principal: required, challenger: required, synthesis: true}
+  high_blast_radius: {principal: required, challenger: required, synthesis: true}
+  open_ended_debate_default: false
+  directed_adjudication_round_max: 1
+  unresolved_material_disagreement: escalate_owner
+
+context_budget:
+  ceiling_bytes: 16384
+  measured_bootstrap_hot_bytes: 9737
+  utilization_percent: 59.4
+  includes:
+    - .c2pro/control/current.yaml
+    - .c2pro/control/work-queue.yaml
+    - .c2pro/control/routing.yaml
+    - .c2pro/control/review-policy.yaml
+    - .c2pro/roles/orchestrator.yaml
+    - .c2pro/work/C2PRO-DEV-02.yaml
+  historical_completed_work_hot: false
+
+scope_safety:
+  product_runtime_change: false
+  production_authority_change: false
+  secret_or_credential_change: false
+  main_direct_mutation_authorized: false
+  automated_merge_enabled: false
+  legacy_files_deleted: false
+
+validation:
+  deterministic_validator_extended: true
+  negative_regression_tests_added: true
+  ci_status: pending
+
+exit_gate:
+  same_work_moves_between_principals_without_identity_change: IMPLEMENTED
+  focused_ci: PENDING
+  standard_ci: PENDING
+  owner_merge: PENDING
+
+next:
+  id: C2PRO-DEV-03
+  title: Claude and Codex principal worker readiness
+  execution_surface: VPS
