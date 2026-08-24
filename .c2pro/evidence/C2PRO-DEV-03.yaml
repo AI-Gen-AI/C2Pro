@@ -48,3 +48,18 @@ references:
     immutable: false
     sha256: null
     summary: AI-Gen local worktree feat/mr-dev-01c-direct-route-baseline-v1 is cleanly based on main 357029a with uncommitted MR-DEV-01C authorization/control changes. Local control marks MR-DEV-01C IN_PROGRESS, owner-authorized bounded direct-route qualification and one-shot live baseline conditionally authorized, max live provider invocations 1, selected_route_id null, and activation CLOSED_PENDING_EXACT_ROUTE_PREFLIGHT. No live provider invocation authority is inferred until that exact-route preflight closes.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_AUTH_VALIDATION
+    immutable: false
+    sha256: null
+    summary: Canonical unittest validation of the local MR-DEV-01C owner-qualification contract passed 7/7 tests and git diff --check passed. The contract authorizes one bounded read-only direct-route baseline only after exact-route preflight; provider invocation remains closed before that machine transition.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_PREFLIGHT_MATRIX
+    immutable: false
+    sha256: null
+    summary: Deterministic candidate matrix kept both routes fail-closed. Codex is blocked by PARTIAL qualification plus unresolved cost semantics; Claude is blocked by stale/degraded availability evidence plus unresolved cost semantics. No route was selected or activated.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_CLAUDE_NONINFERENCE_PREFLIGHT
+    immutable: false
+    sha256: null
+    summary: Claude non-inference preflight passed local health checks: authenticated first-party subscription session, Claude Code doctor returned rc=0 with no installation issues, no custom Anthropic base URL or model environment override was present, and no Claude settings model override was found. Sensitive account identifiers are intentionally excluded.
