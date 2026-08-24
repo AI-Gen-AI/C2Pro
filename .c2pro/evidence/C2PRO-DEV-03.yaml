@@ -12,9 +12,14 @@ references:
     locator: validation/development/c2pro-dev-03-principal-worker-readiness-v1.yaml
     immutable: false
     sha256: null
-    summary: Machine-readable readiness state; pending VPS evidence.
+    summary: Machine-readable readiness state updated from normalized VPS evidence.
   - kind: audit
     locator: AI-Gen-AI/2SB@357029a580e360de4e92046bd7aa295b54d9c113:ai-gen-agent-os/docs/sdd/af-dev-01-governed-development-worker-execution-plane-v1.md
     immutable: true
     sha256: null
     summary: AI-Gen AF-DEV execution-plane dependency and authority boundary.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24T10:58:57+00:00:C2PRO_DEV_03A1_A2
+    immutable: false
+    sha256: null
+    summary: Owner-executed non-secret host inventory: Ubuntu 24.04; 23 GiB RAM; 348 GiB free; git/bwrap/timeout/prlimit/python3/tmux present; node/npm/claude/codex absent from operator PATH; dedicated aigen-claude and aigen-codex identities exist.
