@@ -6,11 +6,11 @@ canonical_plan:
   id: C2PRO-VPS-DEV-CONTROL-V1
   path: docs/architecture/development/c2pro-vps-development-control-plan-v1.md
 baseline:
-  main_sha: a03d4d09f0a32b0d3e5d54f0f3c68f398b06fa0b
+  main_sha: 3fa846d60cecd14239ddb0a953be5e34bede463d
 active_campaign: null
 active_work:
-  - C2PRO-DEV-01
-next_eligible_work: C2PRO-DEV-02
+  - C2PRO-DEV-02
+next_eligible_work: C2PRO-DEV-03
 authority:
   direct_main_mutation: false
   production_runtime: false
@@ -31,4 +31,7 @@ context_budget:
   bootstrap_hot_paths:
     - .c2pro/control/current.yaml
     - .c2pro/control/work-queue.yaml
-    - .c2pro/work/C2PRO-DEV-01.yaml
+    - .c2pro/control/routing.yaml
+    - .c2pro/control/review-policy.yaml
+    - .c2pro/roles/orchestrator.yaml
+    - .c2pro/work/C2PRO-DEV-02.yaml
