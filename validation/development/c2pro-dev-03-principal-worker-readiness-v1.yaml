@@ -1,5 +1,5 @@
 schema: c2pro-dev-03-principal-worker-readiness-v1
-status: DEV_03A_IDENTITY_INVENTORY_RECORDED
+status: DEV_03A_VERSION_PROVENANCE_RECORDED
 date: '2026-08-24'
 repository: AI-Gen-AI/C2Pro
 baseline_main: 0400c05e8af1458aaa14bc47a8378d9cdd560284
@@ -20,23 +20,30 @@ principal_workers:
     class: PRINCIPAL
     executable: claude
     discovered: true
-    version: PENDING_LOCAL_PROBE
+    version: 2.1.237
+    version_label: Claude_Code
     binary_path: /home/aigen-claude/.local/bin/claude
+    resolved_path: /home/aigen-claude/.local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe
     binary_owner: aigen-claude
+    binary_group: aigen-claude
+    binary_mode: '755'
+    binary_size_bytes: 334715184
+    binary_sha256: 73975167f0108693cf6fd6614994781657ebb8456ebef5d247458734abfb3916
+    binary_type: ELF_64_x86_64_dynamic
     execution_identity: aigen-claude
     execution_identity_uid: 1006
     execution_identity_gid: 1006
     execution_identity_home: /home/aigen-claude
     home_mode: '700'
     node_path: /home/aigen-claude/.local/bin/node
+    node_version: v24.19.0
     npm_path: /home/aigen-claude/.local/bin/npm
+    npm_version: 11.17.0
     npx_path: /home/aigen-claude/.local/bin/npx
     config_dir: /home/aigen-claude/.claude
     config_dir_mode: '775'
-    config_regular_files: 2
-    config_subdirs: 3
-    auth_state: UNKNOWN_PENDING_NON_SECRET_PROBE
-    local_version_help_probe: PENDING
+    auth_state: UNKNOWN_PENDING_NON_SECRET_STATUS_PROBE
+    local_version_help_probe: PASS
     live_provider_probe: BLOCKED_BY_MR_DEV_01C
     af_dev_read_only_job: PENDING
     af_dev_write_commit_job: PENDING
@@ -47,23 +54,28 @@ principal_workers:
     class: PRINCIPAL
     executable: codex
     discovered: true
-    version: PENDING_LOCAL_PROBE
+    version: 0.148.0
+    version_label: codex-cli
     binary_path: /home/aigen-codex/.local/bin/codex
+    resolved_path: /home/aigen-codex/.codex/packages/standalone/releases/0.148.0-x86_64-unknown-linux-musl/bin/codex
     binary_owner: aigen-codex
+    binary_group: aigen-codex
+    binary_mode: '755'
+    binary_size_bytes: 251271488
+    binary_sha256: ac2cfed85fb647d61e0150b8548102b330e4799d9d81ad5d354de701edf6b074
+    binary_type: ELF_64_x86_64_static_pie
     execution_identity: aigen-codex
     execution_identity_uid: 1005
     execution_identity_gid: 1005
     execution_identity_home: /home/aigen-codex
     home_mode: '700'
-    node_path: NOT_FOUND
-    npm_path: NOT_FOUND
-    npx_path: NOT_FOUND
+    node_path: NOT_REQUIRED_BY_CURRENT_STANDALONE_BINARY
+    npm_path: NOT_REQUIRED_BY_CURRENT_STANDALONE_BINARY
+    npx_path: NOT_REQUIRED_BY_CURRENT_STANDALONE_BINARY
     config_dir: /home/aigen-codex/.codex
     config_dir_mode: '700'
-    config_regular_files: 12
-    config_subdirs: 7
-    auth_state: UNKNOWN_PENDING_NON_SECRET_PROBE
-    local_version_help_probe: PENDING
+    auth_state: UNKNOWN_PENDING_NON_SECRET_STATUS_PROBE
+    local_version_help_probe: PASS
     live_provider_probe: BLOCKED_BY_MR_DEV_01C
     af_dev_read_only_job: PENDING
     af_dev_write_commit_job: PENDING
@@ -102,19 +114,22 @@ identity_inventory:
     supplementary_groups: []
     home_writable_as_identity: true
     dedicated_cli_present: true
+    installation_shape: per_identity_local_node_module_with_native_claude_binary
   aigen_codex:
     supplementary_groups: []
     home_writable_as_identity: true
     dedicated_cli_present: true
+    installation_shape: per_identity_standalone_native_binary
   isolation_observation: dedicated_principal_identities_exist_without_shared_supplementary_aigen_group
-  installation_decision: DO_NOT_REINSTALL_BEFORE_VERSION_PROVENANCE_AND_AUTH_STATE_RECONCILIATION
+  installation_decision: KEEP_EXISTING_INSTALLATIONS_NO_REINSTALL
+  update_decision: DEFER_UNTIL_AUTH_AND_ROUTE_QUALIFICATION_REQUIREMENT
 
 qualification_gates:
   DEV_03A1_HOST_BASELINE: PASS
   DEV_03A2_BINARY_INVENTORY: PASS_BINARIES_FOUND_IN_DEDICATED_IDENTITIES
   DEV_03A3_EXECUTION_IDENTITIES: PASS
   DEV_03A4_AUTH_SESSION_STATE: IN_PROGRESS
-  DEV_03A5_INSTALL_UPDATE_DECISION: PENDING_VERSION_PROVENANCE_PROBE
+  DEV_03A5_INSTALL_UPDATE_DECISION: PASS_KEEP_EXISTING_NO_REINSTALL
   DEV_03B1_LIVE_NONINTERACTIVE_SMOKE: BLOCKED_BY_MR_DEV_01C
   DEV_03B2_AF_DEV_READ_ONLY: PENDING
   DEV_03B3_AF_DEV_WRITE_COMMIT: PENDING
@@ -129,7 +144,7 @@ secret_handling:
   normalized_auth_state_only: true
 
 next_action:
-  gate: DEV_03A4_A5
-  mode: READ_ONLY_LOCAL_VERSION_PROVENANCE_AND_NON_SECRET_AUTH_METADATA
+  gate: DEV_03A4_AUTH_STATUS
+  mode: READ_ONLY_LOCAL_AUTH_COMMAND_DISCOVERY_AND_STATUS
   owner_micro_approval_required: false
-  expected_output: exact_versions_binary_provenance_and_typed_auth_state_without_secret_material
+  expected_output: typed_auth_state_without_secret_material_or_model_invocation
