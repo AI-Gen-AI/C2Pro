@@ -10,11 +10,11 @@ legacy_sources:
   C2PRO_MASTER_BACKLOG.md:
     mode: read_only_reconciliation_source
     canonical: false
-    delete_before_open_work_reconciliation: false
+    delete_before_reconciliation: false
   backlogs/*.md:
     mode: read_only_reconciliation_source
     canonical: false
-    delete_before_open_work_reconciliation: false
+    delete_before_reconciliation: false
 no_loss_rules:
   - open legacy work must not be dropped until mapped, closed with evidence, or explicitly dispositioned
   - completed legacy history remains recoverable from Git history even after later archive cleanup
