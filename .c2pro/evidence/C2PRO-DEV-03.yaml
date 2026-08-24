@@ -1,0 +1,20 @@
+schema: c2pro-evidence-reference-v1
+schema_version: 1
+work_id: C2PRO-DEV-03
+status: collecting
+references:
+  - kind: audit
+    locator: docs/architecture/development/c2pro-dev-03-principal-worker-readiness-runbook-v1.md
+    immutable: false
+    sha256: null
+    summary: DEV-03 qualification runbook and gated sequence.
+  - kind: audit
+    locator: validation/development/c2pro-dev-03-principal-worker-readiness-v1.yaml
+    immutable: false
+    sha256: null
+    summary: Machine-readable readiness state; pending VPS evidence.
+  - kind: audit
+    locator: AI-Gen-AI/2SB@357029a580e360de4e92046bd7aa295b54d9c113:ai-gen-agent-os/docs/sdd/af-dev-01-governed-development-worker-execution-plane-v1.md
+    immutable: true
+    sha256: null
+    summary: AI-Gen AF-DEV execution-plane dependency and authority boundary.
