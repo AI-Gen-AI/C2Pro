@@ -1,0 +1,79 @@
+schema: c2pro-work-envelope-v1
+schema_version: 1
+work_id: C2PRO-DEV-03
+campaign_id: null
+role: orchestrator
+base_sha: 0400c05e8af1458aaa14bc47a8378d9cdd560284
+branch: feat/c2pro-dev-03-principal-worker-readiness-v1
+risk_class: material
+scope:
+  - inventory VPS host readiness for Claude Code and Codex without exposing secrets
+  - inventory execution identities binary locations versions ownership and permissions
+  - determine authentication/session state without printing credential material
+  - install or update principal CLI binaries only if required and without broadening authority
+  - bind Claude Code and Codex to distinct principal-worker records and execution identities
+  - prove non-provider local CLI discovery and version/help invocation
+  - prepare isolated read-only and bounded write qualification jobs through AF-DEV
+  - prove canonical main runtime secret and cross-workspace denial before principal readiness can pass
+  - prove timeout and resource-limit enforcement
+  - record compact immutable evidence references and principal-to-principal handoff readiness
+out_of_scope:
+  - production or Product Runtime mutation
+  - direct worker mutation or merge of canonical main
+  - printing storing or committing raw credentials tokens cookies or session secrets
+  - silent credential rotation or provider account changes
+  - live Claude or Codex provider invocation before AI-Gen MR-DEV-01C authority exists
+  - Gemini CLI Antigravity or OpenCode qualification
+  - automated merge to main
+allowed_tools:
+  - github_repository_read
+  - github_branch_write
+  - vps_read_only_inventory
+  - bounded_package_install_if_required
+  - local_cli_version_help
+  - af_dev_qualification_harness
+  - focused_python_tests
+forbidden_paths:
+  - production_runtime/**
+  - secrets/**
+  - personal/**
+  - knowledge/**
+acceptance_criteria:
+  - Claude Code and Codex installation state is evidenced rather than assumed
+  - execution identities are explicit and cannot write canonical Development or Product Runtime
+  - authentication state is recorded only as boolean or typed status without credential material
+  - both principal CLIs can be invoked non-interactively once MR-DEV authority permits provider invocation
+  - each principal can complete an isolated read-only job
+  - each principal can complete a bounded isolated write and commit job
+  - direct canonical main mutation is denied
+  - Product Runtime and secrets are denied
+  - timeout and resource limits are enforced
+  - readiness evidence is sufficient to hand the same WORK between Claude Code and Codex without changing task identity
+  - no provider invocation occurs while AI-Gen MR-DEV-01C remains unauthorized
+required_tests:
+  - C2PRO-DEV-03A host inventory and boundary precheck
+  - AF-DEV isolated read-only qualification for Claude Code
+  - AF-DEV isolated read-only qualification for Codex
+  - AF-DEV bounded write commit qualification for Claude Code
+  - AF-DEV bounded write commit qualification for Codex
+  - canonical main denial test
+  - Product Runtime and secrets denial test
+  - timeout resource-limit test
+  - principal handoff continuity test
+evidence_required:
+  - vps_host_inventory
+  - binary_version_and_provenance
+  - execution_identity_boundary
+  - auth_state_without_secret_material
+  - af_dev_job_results
+  - negative_boundary_results
+  - timeout_resource_results
+  - handoff_result
+  - github_pr_ci_result
+review_policy: independent_principal
+worker_selection:
+  preferred: null
+  eligible_principals: [claude_code, codex]
+  eligible_subordinates: []
+  selected: null
+timeout_resource_policy: reuse_ai_gen_af_dev_01_qualified_policy
