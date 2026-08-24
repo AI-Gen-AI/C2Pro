@@ -1,5 +1,5 @@
 schema: c2pro-dev-03-principal-worker-readiness-v1
-status: DEV_03A_HOST_INVENTORY_PENDING
+status: DEV_03A_IDENTITY_AND_AUTH_INSPECTION_NEXT
 date: '2026-08-24'
 repository: AI-Gen-AI/C2Pro
 baseline_main: 0400c05e8af1458aaa14bc47a8378d9cdd560284
@@ -19,13 +19,15 @@ principal_workers:
   claude_code:
     class: PRINCIPAL
     executable: claude
-    discovered: UNKNOWN
-    version: UNKNOWN
-    binary_path: UNKNOWN
-    binary_owner: UNKNOWN
-    execution_identity: UNKNOWN
-    auth_state: UNKNOWN
-    local_version_help_probe: PENDING
+    discovered_from_operator_path: false
+    version: NOT_AVAILABLE
+    binary_path: NOT_FOUND
+    binary_owner: NOT_APPLICABLE
+    execution_identity: aigen-claude
+    execution_identity_uid: 1006
+    execution_identity_home: /home/aigen-claude
+    auth_state: UNKNOWN_PENDING_NON_SECRET_INSPECTION
+    local_version_help_probe: NOT_AVAILABLE_UNTIL_BINARY_PRESENT
     live_provider_probe: BLOCKED_BY_MR_DEV_01C
     af_dev_read_only_job: PENDING
     af_dev_write_commit_job: PENDING
@@ -35,13 +37,15 @@ principal_workers:
   codex:
     class: PRINCIPAL
     executable: codex
-    discovered: UNKNOWN
-    version: UNKNOWN
-    binary_path: UNKNOWN
-    binary_owner: UNKNOWN
-    execution_identity: UNKNOWN
-    auth_state: UNKNOWN
-    local_version_help_probe: PENDING
+    discovered_from_operator_path: false
+    version: NOT_AVAILABLE
+    binary_path: NOT_FOUND
+    binary_owner: NOT_APPLICABLE
+    execution_identity: aigen-codex
+    execution_identity_uid: 1005
+    execution_identity_home: /home/aigen-codex
+    auth_state: UNKNOWN_PENDING_NON_SECRET_INSPECTION
+    local_version_help_probe: NOT_AVAILABLE_UNTIL_BINARY_PRESENT
     live_provider_probe: BLOCKED_BY_MR_DEV_01C
     af_dev_read_only_job: PENDING
     af_dev_write_commit_job: PENDING
@@ -50,26 +54,52 @@ principal_workers:
     timeout_resource_enforcement: PENDING
 
 host_readiness:
-  operator_identity: UNKNOWN
-  hostname: UNKNOWN
-  os: UNKNOWN
-  kernel: UNKNOWN
-  git: UNKNOWN
-  bubblewrap: UNKNOWN
-  timeout: UNKNOWN
-  prlimit: UNKNOWN
-  node: UNKNOWN
-  npm: UNKNOWN
-  python3: UNKNOWN
-  tmux: UNKNOWN
-  resource_baseline: UNKNOWN
+  observed_at: '2026-08-24T10:58:57+00:00'
+  evidence_source: owner_executed_terminal_capture
+  operator_identity: aigenadmin
+  operator_uid: 1001
+  hostname: vmi3226522
+  os: ubuntu_24.04
+  kernel: Linux_6.8.0-137-generic_x86_64
+  memory_total: 23Gi
+  memory_available: 22Gi
+  swap_total: 8Gi
+  root_filesystem_size: 387G
+  root_filesystem_available: 348G
+  root_filesystem_use_percent: 11
+  git: /usr/bin/git
+  bubblewrap: /usr/bin/bwrap
+  timeout: /usr/bin/timeout
+  prlimit: /usr/bin/prlimit
+  node: NOT_FOUND_FROM_OPERATOR_PATH
+  npm: NOT_FOUND_FROM_OPERATOR_PATH
+  python3: /usr/bin/python3
+  tmux: /usr/bin/tmux
+  tmux_session: aigen
+  observed_working_directory: /srv/aigen/dev/worktrees/mr-dev-01c-direct-route-baseline
+  working_directory_safety_note: do_not_install_or_qualify_from_mr_dev_01c_worktree
+
+execution_identities:
+  claude:
+    user: aigen-claude
+    uid: 1006
+    gid: 1006
+    home: /home/aigen-claude
+    shell: /bin/bash
+  codex:
+    user: aigen-codex
+    uid: 1005
+    gid: 1005
+    home: /home/aigen-codex
+    shell: /bin/bash
+  shared_aigen_group_membership_observed_for_principals: false
 
 qualification_gates:
-  DEV_03A1_HOST_BASELINE: PENDING
-  DEV_03A2_BINARY_INVENTORY: PENDING
-  DEV_03A3_EXECUTION_IDENTITIES: PENDING
-  DEV_03A4_AUTH_SESSION_STATE: PENDING
-  DEV_03A5_INSTALL_UPDATE_DECISION: PENDING
+  DEV_03A1_HOST_BASELINE: PASS
+  DEV_03A2_BINARY_INVENTORY: PASS_NOT_INSTALLED_FROM_OPERATOR_PATH
+  DEV_03A3_EXECUTION_IDENTITIES: PASS_IDENTITIES_EXIST_FURTHER_INSPECTION_REQUIRED
+  DEV_03A4_AUTH_SESSION_STATE: NEXT
+  DEV_03A5_INSTALL_UPDATE_DECISION: BLOCKED_BY_A3_A4_DETAIL
   DEV_03B1_LIVE_NONINTERACTIVE_SMOKE: BLOCKED_BY_MR_DEV_01C
   DEV_03B2_AF_DEV_READ_ONLY: PENDING
   DEV_03B3_AF_DEV_WRITE_COMMIT: PENDING
@@ -84,7 +114,7 @@ secret_handling:
   normalized_auth_state_only: true
 
 next_action:
-  gate: DEV_03A1_A2
-  mode: READ_ONLY_VPS_INVENTORY
+  gate: DEV_03A3_A4
+  mode: READ_ONLY_EXECUTION_IDENTITY_AND_AUTH_METADATA_INSPECTION
   owner_micro_approval_required: false
-  expected_output: normalized_non_secret_host_and_binary_inventory
+  expected_output: normalized_identity_path_runtime_and_auth_metadata_without_secret_contents
