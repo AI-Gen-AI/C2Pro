@@ -1,0 +1,90 @@
+schema: c2pro-dev-03-principal-worker-readiness-v1
+status: DEV_03A_HOST_INVENTORY_PENDING
+date: '2026-08-24'
+repository: AI-Gen-AI/C2Pro
+baseline_main: 0400c05e8af1458aaa14bc47a8378d9cdd560284
+work_ref: .c2pro/work/C2PRO-DEV-03.yaml
+runbook_ref: docs/architecture/development/c2pro-dev-03-principal-worker-readiness-runbook-v1.md
+
+cross_project_dependency:
+  ai_gen_repository: AI-Gen-AI/2SB
+  observed_main: 357029a580e360de4e92046bd7aa295b54d9c113
+  af_dev_01_status: DONE
+  mr_dev_01b_status: DONE
+  mr_dev_01c_status: NEXT
+  live_development_provider_invocation_authorized: false
+  rule: c2pro_must_not_bypass_ai_gen_mr_dev_authority
+
+principal_workers:
+  claude_code:
+    class: PRINCIPAL
+    executable: claude
+    discovered: UNKNOWN
+    version: UNKNOWN
+    binary_path: UNKNOWN
+    binary_owner: UNKNOWN
+    execution_identity: UNKNOWN
+    auth_state: UNKNOWN
+    local_version_help_probe: PENDING
+    live_provider_probe: BLOCKED_BY_MR_DEV_01C
+    af_dev_read_only_job: PENDING
+    af_dev_write_commit_job: PENDING
+    canonical_main_denial: PENDING
+    runtime_secret_denial: PENDING
+    timeout_resource_enforcement: PENDING
+  codex:
+    class: PRINCIPAL
+    executable: codex
+    discovered: UNKNOWN
+    version: UNKNOWN
+    binary_path: UNKNOWN
+    binary_owner: UNKNOWN
+    execution_identity: UNKNOWN
+    auth_state: UNKNOWN
+    local_version_help_probe: PENDING
+    live_provider_probe: BLOCKED_BY_MR_DEV_01C
+    af_dev_read_only_job: PENDING
+    af_dev_write_commit_job: PENDING
+    canonical_main_denial: PENDING
+    runtime_secret_denial: PENDING
+    timeout_resource_enforcement: PENDING
+
+host_readiness:
+  operator_identity: UNKNOWN
+  hostname: UNKNOWN
+  os: UNKNOWN
+  kernel: UNKNOWN
+  git: UNKNOWN
+  bubblewrap: UNKNOWN
+  timeout: UNKNOWN
+  prlimit: UNKNOWN
+  node: UNKNOWN
+  npm: UNKNOWN
+  python3: UNKNOWN
+  tmux: UNKNOWN
+  resource_baseline: UNKNOWN
+
+qualification_gates:
+  DEV_03A1_HOST_BASELINE: PENDING
+  DEV_03A2_BINARY_INVENTORY: PENDING
+  DEV_03A3_EXECUTION_IDENTITIES: PENDING
+  DEV_03A4_AUTH_SESSION_STATE: PENDING
+  DEV_03A5_INSTALL_UPDATE_DECISION: PENDING
+  DEV_03B1_LIVE_NONINTERACTIVE_SMOKE: BLOCKED_BY_MR_DEV_01C
+  DEV_03B2_AF_DEV_READ_ONLY: PENDING
+  DEV_03B3_AF_DEV_WRITE_COMMIT: PENDING
+  DEV_03B4_NEGATIVE_BOUNDARIES: PENDING
+  DEV_03B5_RESOURCE_TIMEOUT: PENDING
+  DEV_03B6_RECIPROCAL_HANDOFF: PENDING
+
+secret_handling:
+  raw_credentials_in_git: false
+  raw_session_payload_in_git: false
+  raw_environment_dump_forbidden: true
+  normalized_auth_state_only: true
+
+next_action:
+  gate: DEV_03A1_A2
+  mode: READ_ONLY_VPS_INVENTORY
+  owner_micro_approval_required: false
+  expected_output: normalized_non_secret_host_and_binary_inventory
