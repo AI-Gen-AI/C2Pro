@@ -23,3 +23,8 @@ references:
     immutable: false
     sha256: null
     summary: Owner-executed non-secret host inventory: Ubuntu 24.04; 23 GiB RAM; 348 GiB free; git/bwrap/timeout/prlimit/python3/tmux present; node/npm/claude/codex absent from operator PATH; dedicated aigen-claude and aigen-codex identities exist.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:C2PRO_DEV_03A3_A4
+    immutable: false
+    sha256: null
+    summary: Dedicated-identity inspection: aigen-claude has private node/npm/npx and claude under ~/.local/bin plus ~/.claude state; aigen-codex has private codex under ~/.local/bin plus ~/.codex state and no Node runtime in PATH; both homes are mode 700 and principals have no observed shared supplementary aigen group.
