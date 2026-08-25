@@ -31,12 +31,20 @@ def resolve_broker_url(settings: RedisSettings) -> str | None:
 
 
 def resolve_result_backend_url(settings: RedisSettings) -> str | None:
-    """Celery result backend URL: explicit ``CELERY_RESULT_BACKEND_URL`` else ``REDIS_URL``.
+    """Celery result backend URL: explicit ``CELERY_RESULT_BACKEND_URL``, else the
+    broker URL, else ``REDIS_URL``.
 
-    Kept configured (not disabled): ``CeleryJobQueue.get_status`` reads
-    ``AsyncResult(job_id).state`` from the result backend.
+    Falling back to the broker *before* ``REDIS_URL`` means a single explicit
+    ``CELERY_BROKER_URL`` colocates the broker and the result backend on the same
+    dedicated Redis. Without it, setting only ``CELERY_BROKER_URL`` in production
+    would move task dispatch to the dedicated Redis while result-state polling
+    (``CeleryJobQueue.get_status`` -> ``AsyncResult.state``) stayed on the possibly
+    exhausted application Redis — a partially restored async system. Two explicit
+    URLs still allow a deliberate broker/backend split.
+
+    The backend is never disabled: ``get_status`` depends on it.
     """
-    return settings.celery_result_backend_url or settings.redis_url
+    return settings.celery_result_backend_url or settings.celery_broker_url or settings.redis_url
 
 
 def redis_ssl_options(url: str | None) -> dict[str, object] | None:

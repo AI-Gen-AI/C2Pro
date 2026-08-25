@@ -55,9 +55,36 @@ def test_falls_back_to_redis_url_when_celery_urls_unset(monkeypatch) -> None:
 
 
 def test_partial_config_backend_falls_back_broker_explicit(monkeypatch) -> None:
+    """Only CELERY_BROKER_URL set: broker AND backend colocate on the dedicated
+    broker Redis (backend falls back to the broker, not the application Redis), so
+    result-state polling is never stranded on the exhausted application Redis."""
     settings = _settings(monkeypatch, CELERY_BROKER_URL=_CELERY_BROKER, REDIS_URL=_APP_REDIS)
     assert resolve_broker_url(settings) == _CELERY_BROKER
-    assert resolve_result_backend_url(settings) == _APP_REDIS
+    assert resolve_result_backend_url(settings) == _CELERY_BROKER
+
+
+def test_only_result_backend_url_leaves_broker_on_redis_url(monkeypatch) -> None:
+    """Only CELERY_RESULT_BACKEND_URL set: broker stays on REDIS_URL, backend explicit."""
+    settings = _settings(
+        monkeypatch, CELERY_RESULT_BACKEND_URL=_CELERY_BACKEND, REDIS_URL=_APP_REDIS
+    )
+    assert resolve_broker_url(settings) == _APP_REDIS
+    assert resolve_result_backend_url(settings) == _CELERY_BACKEND
+
+
+def test_mixed_redis_and_rediss_tls_is_independent(monkeypatch) -> None:
+    """A plaintext redis:// broker and a rediss:// backend derive TLS independently."""
+    settings = _settings(
+        monkeypatch,
+        CELERY_BROKER_URL=_CELERY_BROKER,  # redis:// -> no SSL
+        CELERY_RESULT_BACKEND_URL=_APP_REDIS,  # rediss:// -> verified SSL
+        REDIS_URL=_APP_REDIS,
+    )
+    assert redis_ssl_options(resolve_broker_url(settings)) is None
+    assert redis_ssl_options(resolve_result_backend_url(settings)) == {
+        "ssl_cert_reqs": ssl.CERT_REQUIRED,
+        "ssl_ca_certs": certifi.where(),
+    }
 
 
 def test_plaintext_redis_uses_no_ssl() -> None:
