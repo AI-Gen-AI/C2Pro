@@ -178,6 +178,20 @@ class Settings(BaseSettings):
         default=None, description="Redis connection URL (redis:// or rediss://)"
     )
 
+    # Celery may use a dedicated Redis (broker + result backend) separate from the
+    # application Redis above. Prefer these explicit URLs; both fall back to
+    # redis_url when unset so dev/test/CI keep working with a single Redis.
+    celery_broker_url: str | None = Field(
+        default=None,
+        validation_alias="CELERY_BROKER_URL",
+        description="Celery broker URL; falls back to redis_url when unset.",
+    )
+    celery_result_backend_url: str | None = Field(
+        default=None,
+        validation_alias="CELERY_RESULT_BACKEND_URL",
+        description="Celery result backend URL; falls back to redis_url when unset.",
+    )
+
     cache_ttl_default: int = Field(default=300, ge=0, description="TTL por defecto en segundos")
     cache_ttl_ai_response: int = Field(default=3600, ge=0, description="TTL para respuestas AI")
 
