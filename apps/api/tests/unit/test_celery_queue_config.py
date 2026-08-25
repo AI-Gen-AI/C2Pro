@@ -55,15 +55,18 @@ def test_celery_configures_tls_for_rediss_broker() -> None:
     (parsing, coherence, alerts, snapshots).
 
     Meta-test: celery_app is a _DummyCelery stub in tests, so assert on the source.
+    celery_app.py wires broker_use_ssl/redis_backend_use_ssl; redis_urls.py derives
+    the per-URL ssl_cert_reqs options for rediss:// URLs.
     """
     from pathlib import Path
 
-    content = (
-        Path(__file__).parent.parent.parent / "src" / "core" / "tasks" / "celery_app.py"
+    tasks_dir = Path(__file__).parent.parent.parent / "src" / "core" / "tasks"
+    content = (tasks_dir / "celery_app.py").read_text(encoding="utf-8") + (
+        tasks_dir / "redis_urls.py"
     ).read_text(encoding="utf-8")
 
     for token in ("broker_use_ssl", "redis_backend_use_ssl", "ssl_cert_reqs", "rediss://"):
-        assert token in content, f"celery_app.py must configure TLS for rediss:// ({token} missing)"
+        assert token in content, f"Celery must configure TLS for rediss:// ({token} missing)"
 
 
 def test_document_ingestion_uses_document_parsing_default_queue() -> None:
