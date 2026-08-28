@@ -1,5 +1,17 @@
 # C2PRO Master Backlog - Index & Overview
 
+> ## ⚠️ LEGACY / COLD REFERENCE — NOT THE CURRENT PRODUCT SOURCE OF TRUTH
+> This backlog is retained as **historical reference only**. The canonical product-programme
+> source of truth is now the **product-control plane**:
+> - Machine: [`validation/product/c2pro-master-product-control-v1.yaml`](validation/product/c2pro-master-product-control-v1.yaml)
+> - Human: [`docs/product/00-c2pro-master-product-control-v1.md`](docs/product/00-c2pro-master-product-control-v1.md)
+>
+> The **"Phase 1 Completion Certificate"** below (and its *"Phase 1 COMPLETE / functional for end users /
+> all 18 ADRs / zero unimplemented"* claims) describes the **Reliability & Operability Baseline (P0a)**,
+> **not** product completion. Product value — single-document Health decomposition → per-category findings →
+> gap alerts → Health Vector → user-visible report — is **not yet delivered** (the P0b vertical epic). See the
+> product control for the honest, four-field **ADR realization matrix** (design ≠ realization ≠ deployment ≠ prod-validation).
+
 **Purpose**: High-level project index. Only **pending** work is tracked here.
 **Last Updated**: 2026-08-16 (EPIC-COH-AGENTIC roadmap added)
 **Archive**: [`backlogs/COMPLETED.md`](backlogs/COMPLETED.md)

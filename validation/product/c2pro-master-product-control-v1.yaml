@@ -1,0 +1,393 @@
+schema: c2pro-product-control-v1
+schema_version: 3
+repository: AI-Gen-AI/C2Pro
+generated: "2026-08-27"
+control_status: reconciliation   # read-only programme snapshot; grants NO execution authority
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CONTROL INTEGRITY (J + review fix 1/2)
+#   This YAML is the MACHINE source of truth. The Markdown companion
+#   (docs/product/00-c2pro-master-product-control-v1.md) carries an explicitly
+#   delimited CANONICAL-CONTROL block that is GENERATED from this YAML
+#   (validation/product/check_control_parity.py --emit). The checker PARSES this
+#   YAML, validates every ADR/WBS row against the per-field status enums, extracts
+#   the exact critical values, and compares them value-by-value to the MD block.
+#   A contradictory MD value FAILS the check. Edit YAML first, then re-emit the block.
+# ══════════════════════════════════════════════════════════════════════════════
+parity:
+  human_projection: docs/product/00-c2pro-master-product-control-v1.md
+  checker: validation/product/check_control_parity.py
+  md_block_markers: ["<!-- CANONICAL-CONTROL:START", "<!-- CANONICAL-CONTROL:END"]
+  compared_exactly:
+    - production_position.reconciled_against_main_sha
+    - production_position.deployed_runtime_sha
+    - production_position.reliability_operability_baseline
+    - production_position.product_value_delivered
+    - north_star.current_product_wedge_id
+    - coherence_runtime_reconciliation.global_authoritative_cutover
+    - legacy_coverage.unmapped_open_legacy_items
+    - "product_wbs[*].id + realization_status + work_status (all 8)"
+    - "adr(ADR-018,ADR-024).{realization_status,deployment_status,prod_validation_status}"
+    - p0b_vertical_contract.done_definition (sha256-16 digest)
+    - p0b_vertical_contract.invariant_ids
+
+# ── Per-field status enums (fix 2): every ADR/WBS status MUST be one of these ──
+# No free-form compound machine-state values. v1/v2 are structural subtracks, not
+# a compound string. The human Markdown may summarize; this YAML stays deterministic.
+status_enums:
+  design_status:          [Accepted, Proposed, Implemented, Deferred]
+  realization_status:     [DESIGNED, SCAFFOLDED, WIRED, DEPLOYED, PARTIAL]
+  deployment_status:      [NONE, PARTIAL, DEPLOYED, BLOCKED, SHADOW_INERT]
+  prod_validation_status: [NONE, PARTIAL, NOT_VALIDATED, PROD_VALIDATED]
+  work_status:            [ACTIVE, PLANNED, DEFERRED, BLOCKED, CLOSED, WONT_DO]   # work lifecycle, INDEPENDENT of realization (DEPLOYED != CLOSED)
+
+# ── Plane separation ──────────────────────────────────────────────────────────
+development_execution_authority:
+  plane: .c2pro/
+  canonical_dev_plan: docs/architecture/development/c2pro-dev-01-minimal-yaml-control-v1.md
+  gates: {direct_main_mutation: false, production_runtime: false, merge: human_merge}
+  note: >
+    Product realization advances only through .c2pro work-envelopes + review-policy
+    (human merge, no direct main/prod mutation). This product plane is the target/state
+    ledger those envelopes are measured against.
+
+# ── Production position (J): three SEPARATE facts — never infer one from another ─
+production_position:
+  reconciled_against_main_sha: 9c48f4f94d0a5719561916b956f8a78b2129a250   # repo state THIS reconciliation was performed against (baseline); NOT a claim of continuously-current main — current main SHA is Git-derived runtime info, not canonical programme state, and will drift the moment #572 merges
+  deployed_runtime_sha: UNVERIFIED    # DO NOT infer from main. Confirm via Railway deploy log
+                                      # (service c2pro-api / production). Expected == main tip ONLY
+                                      # if Railway rebuilt after the #570 merge — not assumed here.
+  observed_production_evidence:
+    - "kuwait2 doc c510de21: enqueue → worker → SUCCESS on dedicated Railway Redis (P0-OPS CLOSED)"
+    - "coherence_results: 15/15 rows score_version='coherence-v1' (2026-08-07 .. 2026-08-16); ZERO v2"
+    - "coherence_v2_shadow: 1 row, last 2026-08-07 — v2 orchestrator shadow inert in observed data"
+    - "alerts.severity = public.alertseverity enum (schema conformance #567 applied+validated)"
+    - "circuit_breaker_registered service=anthropic_llm (ADR-004) in prod logs"
+  reliability_operability_baseline: CLOSED   # P0a — onboarding + async + schema
+  product_value_delivered: false             # honest: reliability != product value
+  NOT_delivered_to_user:
+    - "Per-category (6) Health decomposition from ONE document"
+    - "Per-category {state, findings, missing_data}"
+    - "Actionable gap alerts ('upload the cronograma / pliego técnico / BoQ')"
+    - "User-visible Health Vector / score / findings / time / reporting"
+
+# ── North Star (B): the FULL product, then the current wedge ──────────────────
+north_star:
+  full_product: >
+    C2Pro is CONTINUOUS, EVIDENCE-BACKED PROJECT & PROCUREMENT INTELLIGENCE for
+    construction/infrastructure contracts: Health + relational Coherence + Change/Time
+    intelligence + Risk + Alerts/Actions/HITL + Project Controls (schedule/cost/
+    deliverables/WBS/BOM) + Procurement workflows (RfQ/BoQ/RACI/comms) + Executive
+    intelligence (PMO reporting / Morning Briefing / portfolio). Every surface is
+    evidence-backed and honest: Unknown renders null — never a fabricated zero/green
+    (INV-1, ADR-018). Coherence is one RELATIONAL input (Contract subscore), available
+    only with >=2 reconcilable documents — never the whole product, never a single-doc headline.
+  current_product_wedge_id: P0b-single-document-health-activation   # stable id for parity compare
+  current_product_wedge: >
+    P0b — Single-document Health activation (ADR-024 -> ADR-018): value from document #1
+    (per-category coverage + intrinsic findings + missing_data + gap alerts + Health Vector).
+    The wedge is the entry point to the full North Star above, NOT its definition.
+
+# ── Realization vocabulary (design status != realization) ─────────────────────
+status_vocabulary:
+  DESIGNED:        "ADR/spec accepted; no production code path"
+  SCAFFOLDED:      "code/module exists; not wired end-to-end"
+  WIRED:           "wired in the running app; not production-validated for user value"
+  DEPLOYED:        "running in production"
+  PROD_VALIDATED:  "production evidence of the user-visible value it exists to deliver"
+  NOT_VALIDATED:   "wired/deployed but NO production evidence of user value yet"
+  SHADOW_INERT:    "a shadow/secondary track exists but produces nothing in observed prod data"
+  BLOCKED:         "blocked on a dependency or gate (e.g. flag-gated off)"
+  PARTIAL:         "some but not all of the field's criterion is met (see subtracks)"
+  NONE:            "not applicable / nothing in production"
+
+# ── Stale claims corrected (E): history preserved; CURRENT state corrected ────
+corrected_current_claims:
+  - claim: "Phase 1 COMPLETE / product functional for end users"
+    where: "CANONICAL C2PRO_MASTER_BACKLOG.md lines 11-13 (main) — NOT only worktrees/archive"
+    truth: "P0a reliability/operability baseline CLOSED; product value (Health/findings/alerts/reporting) NOT delivered. Legacy master now carries a COLD-REFERENCE banner (E) pointing here."
+  - claim: "All 18 ADRs ratified / zero unimplemented decisions"
+    where: "CANONICAL C2PRO_MASTER_BACKLOG.md lines 15-17 (main)"
+    truth: "ADRs are ACCEPTED as design, not realized (see adr_realization). The '18-ADR audit' predates ADR-023/024 (added 2026-08-22) and conflates 3 ADR namespaces (see adr_namespaces). Primary-surface ADR-018 is WIRED-not-validated; ADR-024 DESIGNED."
+  - claim: "No open code work required for end users"
+    where: "Phase 1 Completion Certificate framing (main)"
+    truth: "Single-document activation (ADR-024 -> ADR-018) IS the open code work; P0b is a vertical product epic, not done. Plus Coherence v2 cutover, Change-Impact wedge, Alerts/HITL, Procurement, Reporting."
+
+# ── ADR namespaces (F): THREE overlapping numberings exist — disambiguated ────
+adr_namespaces:
+  v3_canon:      "docs/architecture/decisions/ADR-004,009,013..024 — C2Pro v3.0 spine (Time/Change/Health/Evidence/Action)"
+  foundational:  "docs/architecture/decisions/001..006 — platform decisions (modular-monolith, supabase, ai-arch, frontend-rules, test-strategy, post-reorg)"
+  coherence_era: "docs/architecture/adr/ADR-001..003 — coherence dead-code/versioning/alert-ledger (older; superseded by v3-canon ADR-009)"
+  collisions:
+    - "ADR-004 is BOTH decisions/004-frontend-layer-rules AND decisions/ADR-004-circuit-breakers"
+    - "ADR-001..003 mean different things in decisions/foundational vs adr/coherence-era vs the backlog's own 'Phase 1' audit"
+  defect_ref: D8
+
+# ── ADR realization matrix (F + fix 2): FOUR pure-enum status fields; NO compound ─
+# Each row: {adr, ns, priority, design_status, realization_status, deployment_status,
+#            prod_validation_status, (optional subtracks), design_note, evidence, gap}
+adr_realization:
+  # foundational platform decisions (decisions/001..006)
+  - {adr: "001-modular-monolith", ns: foundational, priority: P0, design_status: Accepted, realization_status: DEPLOYED, deployment_status: DEPLOYED, prod_validation_status: PROD_VALIDATED, evidence: "20+ bounded-context domains, hexagonal ports/adapters", gap: none}
+  - {adr: "002-supabase-mvp", ns: foundational, priority: P0, design_status: Accepted, realization_status: DEPLOYED, deployment_status: DEPLOYED, prod_validation_status: PROD_VALIDATED, evidence: "Supabase PG17 RLS multi-tenant live (tcxedmnvebazcsaridge)", gap: none}
+  - {adr: "003-ai-architecture", ns: foundational, priority: P0, design_status: Accepted, realization_status: DEPLOYED, deployment_status: DEPLOYED, prod_validation_status: PROD_VALIDATED, evidence: "core/ai LLM client/router/prompt-cache/usage; Claude calls in prod", gap: none}
+  - {adr: "004-frontend-layer-rules", ns: foundational, priority: P1, design_status: Accepted, realization_status: DEPLOYED, deployment_status: DEPLOYED, prod_validation_status: PROD_VALIDATED, evidence: "Next.js server/client boundaries; TanStack Query single client-state", gap: "NUMBER COLLIDES with ADR-004 circuit-breakers"}
+  - {adr: "005-three-layer-test-strategy", ns: foundational, priority: P1, design_status: Accepted, realization_status: DEPLOYED, deployment_status: NONE, prod_validation_status: PROD_VALIDATED, evidence: "CI runs unit(Vitest/pytest)+integration(MSW)+E2E(Playwright)", gap: none}
+  - {adr: "006-post-reorg-architecture", ns: foundational, priority: P1, design_status: Accepted, realization_status: DEPLOYED, deployment_status: DEPLOYED, prod_validation_status: PROD_VALIDATED, evidence: "monorepo apps/api+apps/web; demo/prod separation gates", gap: none}
+  # coherence-era (adr/ADR-001..003)
+  - {adr: "ADR-001-coherence-deadcode", ns: coherence_era, priority: P2, design_status: Accepted, realization_status: DEPLOYED, deployment_status: DEPLOYED, prod_validation_status: PROD_VALIDATED, evidence: "dead coherence code deleted; applied", gap: "historical; superseded by ADR-009"}
+  - {adr: "ADR-002-coherence-score-versioning", ns: coherence_era, priority: P0, design_status: Accepted, realization_status: DEPLOYED, deployment_status: DEPLOYED, prod_validation_status: PROD_VALIDATED, evidence: "score_version enum live; 15/15 prod rows = 'coherence-v1'", gap: none}
+  - {adr: "ADR-003-coherence-alert-ledger", ns: coherence_era, priority: P1, design_status: Accepted, realization_status: DEPLOYED, deployment_status: DEPLOYED, prod_validation_status: PROD_VALIDATED, evidence: "coherence_results.alerts + alerts-table mirror live", gap: none}
+  # v3-canon (decisions/ADR-*)
+  - {adr: "ADR-004-circuit-breakers", ns: v3_canon, priority: P0, design_status: Implemented, realization_status: DEPLOYED, deployment_status: DEPLOYED, prod_validation_status: PROD_VALIDATED, evidence: "core/resilience + llm_client; 'circuit_breaker_registered service=anthropic_llm' in prod", gap: "NUMBER COLLIDES with 004-frontend-layer-rules"}
+  - adr: "ADR-009-coherence"
+    ns: v3_canon
+    priority: P1
+    design_status: Accepted
+    design_note: "v2-locked; DEMOTED 2026-08-22 to the relational Contract subscore (not the primary surface)"
+    realization_status: PARTIAL          # v1 realized; v2 not — see subtracks (no compound string)
+    deployment_status: PARTIAL           # v1 deployed; v2 shadow-inert
+    prod_validation_status: PARTIAL      # v1 validated; v2 none
+    subtracks:
+      v1: {realization_status: DEPLOYED, deployment_status: DEPLOYED, prod_validation_status: PROD_VALIDATED, evidence: "15/15 prod rows coherence-v1"}
+      v2: {realization_status: SCAFFOLDED, deployment_status: SHADOW_INERT, prod_validation_status: NONE, evidence: "coherence_v2_shadow=1 row (2026-08-07); 0 v2 headlines persisted"}
+    evidence: "v1 /evaluate live; see coherence_runtime_reconciliation"
+    gap: "v2 global authoritative cutover NOT demonstrated"
+  - {adr: "ADR-013-typed-graph", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: WIRED, deployment_status: DEPLOYED, prod_validation_status: PARTIAL, evidence: "v3 thin-spine complete 2026-06-19; NodeResult/NodeStatus", gap: "residual 017-06"}
+  - {adr: "ADR-014-project-state", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: DEPLOYED, deployment_status: DEPLOYED, prod_validation_status: PROD_VALIDATED, evidence: "project_states/revisions tables + RLS live", gap: "014-08 residual"}
+  - {adr: "ADR-015-temporal", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: SCAFFOLDED, deployment_status: PARTIAL, prod_validation_status: NONE, evidence: "snapshot tables + snapshot_tasks exist", gap: "periodic capture INERT — Celery Beat not running (P1-OPS)"}
+  - {adr: "ADR-016-change-impact", ns: v3_canon, priority: P1, design_status: Accepted, design_note: "P0->P1 (the wedge)", realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE, evidence: "change_intelligence domain present; L1/L2 diff", gap: "L3 stub; not wired end-to-end"}
+  - {adr: "ADR-017-projectgraph", ns: v3_canon, priority: P1, design_status: Accepted, realization_status: SCAFFOLDED, deployment_status: BLOCKED, prod_validation_status: NONE, evidence: "project_graph + is_project_graph_enabled per-tenant flag", gap: "flag-gated OFF; Tier-2 MAE guard stubbed"}
+  - {adr: "ADR-018-health-engine", ns: v3_canon, priority: P0, design_status: Accepted, design_note: "PROMOTED 2026-08-22 to P0-NOW — the PRIMARY product surface", realization_status: WIRED, deployment_status: DEPLOYED, prod_validation_status: NOT_VALIDATED, evidence: "health/: assemble_health_vector + scorers + GET health router; honest-null _insufficient_data_vector", gap: "NOT surfaced to user; coherence_subscore=None; single-doc activation (ADR-024) absent"}
+  - {adr: "ADR-019-alerts-actions", ns: v3_canon, priority: P2, design_status: Accepted, design_note: "ungated 2026-08-11", realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE, evidence: "action_review domain partial", gap: "build-gated behind Change-Impact weekly use"}
+  - {adr: "ADR-020-hitl", ns: v3_canon, priority: P2, design_status: Accepted, design_note: "ungated 2026-08-11", realization_status: SCAFFOLDED, deployment_status: PARTIAL, prod_validation_status: NONE, evidence: "modules/hitl + cm_review_queue; spoofing fixed", gap: "build-gated; not in single-doc flow"}
+  - {adr: "ADR-021-briefing", ns: v3_canon, priority: P3, design_status: Deferred, realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE, evidence: "briefing/projection.py exists", gap: "deferred"}
+  - {adr: "ADR-022-contract-clarity", ns: v3_canon, priority: P2, design_status: Accepted, design_note: "extends 018", realization_status: WIRED, deployment_status: DEPLOYED, prod_validation_status: NOT_VALIDATED, evidence: "health/application/contract_clarity_findings.py (#419)", gap: "not surfaced via single-doc activation"}
+  - {adr: "ADR-023-agentic-coherence", ns: v3_canon, priority: P1, design_status: Proposed, realization_status: DESIGNED, deployment_status: NONE, prod_validation_status: NONE, evidence: "ADR-023 + Faithfulness Audit; EPIC-COH-AGENTIC roadmap 2026-08-16", gap: "not built (real single authoritative scorer / specialists)"}
+  - {adr: "ADR-024-single-doc-activation", ns: v3_canon, priority: P0b, design_status: Accepted, design_note: "VP 2026-08-22", realization_status: DESIGNED, deployment_status: NONE, prod_validation_status: NONE, evidence: "ADR-024; enum + Health infra reusable", gap: "NO category_coverage/gap-alert module — this is P0b"}
+
+# ── Coherence runtime reconciliation (G + fix 3): observed HISTORY vs routing CAPABILITY ─
+coherence_runtime_reconciliation:
+  status: COMPLETE                              # bounded READ-ONLY prod reconciliation 2026-08-27
+  method: "SELECT-only on prod (tcxedmnvebazcsaridge): coherence_results, coherence_v2_shadow, tenants.settings.feature_flags; + code path apps/api/src/coherence/router.py evaluate_project_coherence"
+  global_authoritative_cutover: "NO"            # <-- parity-compared canonical field (quoted: YAML 1.1 coerces bare NO->false)
+  observed_persisted_history: "15/15 V1"        # coherence_results, 2026-08-07 .. 2026-08-16
+  observed_v2_persisted_headlines: 0
+  canonical_canary: ENABLED_FOR_1_TENANT        # ADR-017 scorer-substitution: a ROUTING capability
+  v2_enabled_tenants: 6                          # coherence_v2_enabled flag (shadow path)
+  v2_orchestrator_shadow: INERT_IN_OBSERVED_DATA  # coherence_v2_shadow = 1 historical row (2026-08-07)
+  legacy_global_v2_authoritative_claim: "NOT SUPPORTED BY CURRENT PROD EVIDENCE"
+  distinction: >
+    Observed persisted HISTORY (15/15 v1) is separate from routing CAPABILITY. The current code
+    has a canonical-canary path (ADR-017) with 1 tenant enrolled that CAN substitute the in-response
+    headline, and a v2 shadow path (6 tenants flag-enabled) that is inert in observed data. Do NOT
+    claim v1 is the only scorer that can persist a headline; claim only that global authoritative v2
+    cutover has NOT been demonstrated and the legacy 'v2 authoritative' narrative is unsupported.
+  evidence:
+    persisted_score_version: "coherence_results 15/15 = 'coherence-v1' (first 2026-08-07, last 2026-08-16)"
+    v2_shadow_table: "coherence_v2_shadow: 1 row, last 2026-08-07"
+    tenant_flag_enrollment: "of 26 tenants: coherence_v2_enabled=6, coherence_canonical_canary=1, coherence_llm_crosscheck=1"
+    global_shadow_setting: "COHERENCE_V2_SHADOW_MODE default True (config.py:389); shadow guard needs per-tenant v2 flag AND global setting (router.py:848-851)"
+    projectgraph_flag: "is_project_graph_enabled(tenant) per-tenant, default off (ADR-017 flag-gated OFF)"
+    scorer_path: "router.py:741 evaluate_coherence_async (v1); canonical-canary (763) + v2 shadow (841) default OFF per tenant"
+
+# ── Capability planes (8; minimum set) ────────────────────────────────────────
+capability_planes:
+  - {id: ACT-HEALTH,          name: "Activation / Health (single-document)", adrs: [ADR-018, ADR-024, ADR-022]}
+  - {id: COHERENCE-XDOC,      name: "Relational Coherence / cross-document",  adrs: [ADR-009, ADR-017, ADR-023]}
+  - {id: TEMPORAL-CHANGE,     name: "Temporal / Change-Impact",               adrs: [ADR-015, ADR-016]}
+  - {id: ALERTS-ACTIONS-HITL, name: "Alerts / Actions / HITL",               adrs: [ADR-019, ADR-020]}
+  - {id: PROJECT-CONTROLS,    name: "Schedule / Cost / Deliverables / WBS / BOM", adrs: [ADR-018]}
+  - {id: PROCUREMENT,         name: "Procurement workflows (RfQ/BoQ/RACI/comms)", adrs: []}
+  - {id: EXEC-REPORTING,      name: "Executive / Reporting / Briefing",       adrs: [ADR-021]}
+  - {id: OPS-TRUST,           name: "Ops / Trust (RLS, PII, resilience, infra)", adrs: [ADR-004]}
+
+# ── Product WBS (C + fix 2): L2 epic per plane; realization_status = single enum ─
+product_wbs:
+  - id: PWBS-ACT-HEALTH
+    plane: ACT-HEALTH
+    level: L2
+    name: "P0b — Single-document Health activation (VERTICAL epic; decomposed to L4)"
+    priority: P0b
+    deps: []
+    adrs: [ADR-024, ADR-018, ADR-022]
+    user_value: "Value from document #1: per-category coverage + intrinsic findings + missing_data + gap alerts + Health Vector"
+    realization_status: DESIGNED
+    work_status: ACTIVE
+    exit_gate: "P0b-L4-5 PROD_VALIDATED (see p0b_vertical_contract.done_definition)"
+    evidence_for_done: "upload one doc in prod -> UI shows per-category {state,findings,missing_data} + gap alerts + Health Vector; Unknown=Insufficient-evidence, never 0%"
+    children: [P0b-L4-1, P0b-L4-2, P0b-L4-3, P0b-L4-4, P0b-L4-5]
+  - id: PWBS-COHERENCE-XDOC
+    plane: COHERENCE-XDOC
+    level: L2
+    name: "Relational Coherence cutover + cross-document (>=2 docs)"
+    priority: P1
+    deps: [PWBS-ACT-HEALTH]
+    adrs: [ADR-009, ADR-017, ADR-023]
+    user_value: "Contract-schedule-budget agreement; cross-doc contradiction findings feeding the Contract subscore"
+    realization_status: PARTIAL
+    work_status: PLANNED
+    subtracks: {v1: DEPLOYED, v2: SHADOW_INERT}
+    exit_gate: "v2 authoritative cutover behind MAE guard + canary, or explicit decision to keep v1; ProjectGraph Tier-2 enabled; cross-doc contradiction recall validated"
+    evidence_for_done: "prod evaluations persist v2 (or v1-by-decision) with cross-doc findings on a >=2-doc project; MAE guard green"
+  - id: PWBS-TEMPORAL-CHANGE
+    plane: TEMPORAL-CHANGE
+    level: L2
+    name: "Temporal snapshots + Semantic-diff Change-Impact (the wedge)"
+    priority: P1
+    deps: [PWBS-ACT-HEALTH]
+    adrs: [ADR-015, ADR-016]
+    user_value: "Revision lineage, trends, and an evidence-gated Change-Impact Report when a document changes"
+    realization_status: SCAFFOLDED
+    work_status: PLANNED
+    exit_gate: "periodic snapshot capture running (fix Celery Beat, P1-OPS); L3 change-impact wired; Change-Impact Report rendered"
+    evidence_for_done: "prod: a document revision produces a persisted snapshot + a Change-Impact Report a user can read"
+  - id: PWBS-ALERTS-ACTIONS-HITL
+    plane: ALERTS-ACTIONS-HITL
+    level: L2
+    name: "Alert correlation + Action lifecycle + HITL review loop"
+    priority: P2
+    deps: [PWBS-TEMPORAL-CHANGE, PWBS-ACT-HEALTH]
+    adrs: [ADR-019, ADR-020]
+    user_value: "Correlated action items + Contract-Manager approval gates + active-learning loop"
+    realization_status: SCAFFOLDED
+    work_status: DEFERRED
+    exit_gate: "ADR-019/020 build-gate lifted (>=1 CM uses Change-Impact loop weekly); action queue + HITL in the live flow"
+    evidence_for_done: "prod: correlated ActionItem enters a CM HITL queue and is approved/rejected with audit trail"
+  - id: PWBS-PROJECT-CONTROLS
+    plane: PROJECT-CONTROLS
+    level: L2
+    name: "Health-v1 project controls (Schedule / Cost / Deliverables / WBS / BOM)"
+    priority: P2
+    deps: [PWBS-ACT-HEALTH]
+    adrs: [ADR-018]
+    user_value: "Schedule/cost/deliverable health dimensions beyond activation coverage"
+    realization_status: PARTIAL
+    work_status: PLANNED
+    note: "WBS/BOM parse exist"
+    exit_gate: "Health v1 dimensions surfaced with honest nulls on the project surface"
+    evidence_for_done: "prod: project controls dimensions render evidence-backed or honest-null"
+  - id: PWBS-PROCUREMENT
+    plane: PROCUREMENT
+    level: L2
+    name: "Procurement suite (RfQ / BoQ / RACI / stakeholder comms) — EPIC-PROC2"
+    priority: P2
+    deps: [PWBS-PROJECT-CONTROLS]
+    adrs: []
+    user_value: "Plan -> WBS -> RfQ -> BoQ -> stakeholder comms procurement workflows"
+    realization_status: PARTIAL
+    work_status: PLANNED
+    note: "Plan/WBS/BoM exist-gated; RfQ/BoQ/comms MISSING"
+    exit_gate: "EPIC-PROC2 5 tasks delivered; build-gate (>=1 CM Change-Impact weekly) lifted"
+    evidence_for_done: "prod: a procurement workflow (RfQ or BoQ) is generated and used"
+  - id: PWBS-EXEC-REPORTING
+    plane: EXEC-REPORTING
+    level: L2
+    name: "Executive/PMO reporting + Morning Briefing + portfolio projections"
+    priority: P3
+    deps: [PWBS-ALERTS-ACTIONS-HITL]
+    adrs: [ADR-021]
+    user_value: "PMO reporting, Morning Briefing, portfolio rollup for executives"
+    realization_status: SCAFFOLDED
+    work_status: DEFERRED
+    exit_gate: "ADR-021 read-model + briefing projection surfaced (separate UI PRD)"
+    evidence_for_done: "prod: an executive reads a Morning Briefing / portfolio projection"
+  - id: PWBS-OPS-TRUST
+    plane: OPS-TRUST
+    level: L2
+    name: "Ops / Trust baseline (RLS, PII, resilience, infra) — P0a + residuals"
+    priority: P0
+    deps: []
+    adrs: [ADR-004]
+    user_value: "Multi-tenant isolation, PII anonymization, circuit breakers, dedicated Celery Redis"
+    realization_status: DEPLOYED
+    work_status: ACTIVE
+    exit_gate: "P0a CLOSED; residual P1-OPS (Celery Beat) closed"
+    evidence_for_done: "prod: baseline live (done); Beat scheduler running for temporal capture"
+
+# ── P0b vertical contract (define ALL slices + exit gates BEFORE slice 1) ──────
+p0b_vertical_contract:
+  invariant_ids: [INV-1, INV-UX, INV-COH]     # <-- parity-compared
+  done_definition: >
+    Production evidence: upload ONE document -> six-category decomposition ->
+    per-category {state, findings, missing_data} -> actionable gap alerts ->
+    Health Vector -> persisted + read via API -> user-visible UI/report.
+    Unknown => null (never fabricated zero/green). Contract/Documentation produce
+    evidence-backed values when the source supports them; unsupported dimensions
+    explain exactly what is missing. Coherence unavailable as a headline until >=2 docs.
+  invariants:
+    - "INV-1 honest-null: no category PRESENT/green without supporting evidence"
+    - "INV-UX (I): backend null -> UI renders 'Unknown / Insufficient evidence' and NEVER 0%; 0 is valid ONLY when an evidence-backed scorer genuinely returns zero"
+    - "INV-COH: coherence_subscore stays NULL while <2 reconcilable documents exist; relational Coherence is never a single-doc headline"
+    - "Reuse CoherenceCategory (SCOPE/BUDGET/TIME/TECHNICAL/LEGAL/QUALITY) + HealthNullReason.INSUFFICIENT_EVIDENCE"
+  slices:
+    - {id: P0b-L4-1, name: "category_coverage domain (pure)", scope: "compute_category_coverage() + gap_alerts(); PRESENT|INSUFFICIENT_EVIDENCE; per-category action map", files_new: ["apps/api/src/health/domain/category_coverage.py", "apps/api/tests/unit/health/test_category_coverage.py"], exit_gate: "RED->GREEN unit: covered=PRESENT; absent=INSUFFICIENT_EVIDENCE + correct gap alert; all-present=0 gaps; empty=6 gaps; INV-1; ruff+mypy-ratchet green", status: proposed}
+    - {id: P0b-L4-2, name: "wire single-doc intake -> classification -> coverage", scope: "one document's classified clauses -> per-category {state, findings(ADR-022 + intrinsic), missing_data}", exit_gate: "integration: real doc -> coverage object with findings + missing_data; contract-only => TECHNICAL/BUDGET/TIME insufficient", status: planned}
+    - {id: P0b-L4-3, name: "assemble Health Vector from coverage + persist (Contract/Documentation ONLY)", scope: "feed Contract + Documentation HealthSignals from single-doc coverage; snapshot persist. Does NOT populate coherence_subscore (stays NULL for 1 doc). Coherence becomes a Contract input only once >=2 reconcilable documents exist (eligibility-gated).", exit_gate: "HealthVector persisted with honest-null dims; coherence_subscore=NULL asserted for single-doc; no fabricated composite", status: planned}
+    - {id: P0b-L4-4, name: "read API", scope: "GET project health returns per-category decomposition + gap alerts + Health Vector", exit_gate: "authenticated GET returns decomposition+gaps+vector; Unknown=null in payload (never 0)", status: planned}
+    - {id: P0b-L4-5, name: "user-visible UI/report", scope: "per-category view + gap alerts on document/health surface; null renders 'Unknown / Insufficient evidence'", exit_gate: "PROD: upload one doc -> UI shows per-category state/findings/missing_data + actionable gap alerts + Health Vector; Unknown!=0%; Coherence absent until >=2 docs", status: planned}
+  p0b_exit_gate: "P0b-L4-5 PROD_VALIDATED with the done_definition evidence."
+
+# ── Phase roadmap (visible; sequence preserved) ───────────────────────────────
+phase_roadmap:
+  - {phase: "P0a", name: "Reliability & Operability Baseline", status: CLOSED, evidence: "onboarding real, async on dedicated Redis, schema conformance, /summary 200"}
+  - {phase: "P0b", name: "Single-document Health activation", status: "AUTHORIZED (in planning)", plane: ACT-HEALTH, adrs: [ADR-024, ADR-018, ADR-022]}
+  - {phase: "P1",  name: "Relational Coherence cutover + Temporal + Change-Impact wedge", status: PLANNED, planes: [COHERENCE-XDOC, TEMPORAL-CHANGE], adrs: [ADR-009, ADR-017, ADR-023, ADR-015, ADR-016]}
+  - {phase: "P2",  name: "Alerts/Actions/HITL + Health-v1 project controls", status: PLANNED, planes: [ALERTS-ACTIONS-HITL, PROJECT-CONTROLS], adrs: [ADR-019, ADR-020]}
+  - {phase: "P2-PROC", name: "Procurement suite (RfQ/BoQ/RACI/comms)", status: PLANNED, plane: PROCUREMENT, notes: "EPIC-PROC2; RfQ/BoQ/comms MISSING"}
+  - {phase: "P3",  name: "Executive/PMO reporting + Morning Briefing + portfolio", status: DEFERRED, plane: EXEC-REPORTING, adrs: [ADR-021]}
+
+# ── Zero-loss legacy mapping (D): every OPEN legacy item -> a home ─────────────
+legacy_coverage:
+  sources: ["C2PRO_MASTER_BACKLOG.md", "backlogs/BCK_*.md (category backlogs)"]
+  method: "Open items = 'Open Items (all intentionally gated or deferred)' table + Change-Log reopened epics + Tier-5 v3 deferred epics + gated externals. Completed [x] rows are archived history, not open."
+  unmapped_open_legacy_items: 0
+  mappings:
+    - {legacy: "EPIC-PROC2 (5 tasks, BUILD-GATE)", maps_to: PWBS-PROCUREMENT, disposition: "P2 product; build-gated"}
+    - {legacy: "EPIC-AI Phase 2 tasks", maps_to: PWBS-COHERENCE-XDOC, disposition: "DEFERRED (awaiting Phase 1 adoption); AI/ML enrichment of coherence/extraction"}
+    - {legacy: "TASK-FRT-041", maps_to: "WONT-DO", disposition: "WONT-DO (Clerk free-tier limitation)"}
+    - {legacy: "EPIC-COH-AGENTIC (ADR-023, 2026-08-16)", maps_to: PWBS-COHERENCE-XDOC, disposition: "P1/P2 product; realizes ADR-023 (real authoritative scorer/specialists)"}
+    - {legacy: "EPIC-ECOA-V2-HOTFIX-AND-CUTOVER (reopened 2026-08-01)", maps_to: PWBS-COHERENCE-XDOC, disposition: "OPEN — v2 shadow built; AUTHORITATIVE cutover not done (prod recon: 0/15 v2). Cutover decision belongs to P1."}
+    - {legacy: "EPIC-V3-019-020 (ADR-019/020, ungated 2026-08-11)", maps_to: PWBS-ALERTS-ACTIONS-HITL, disposition: "P2 product; build-gated on Change-Impact weekly use"}
+    - {legacy: "EPIC-V3-021 (ADR-021)", maps_to: PWBS-EXEC-REPORTING, disposition: "P3 DEFERRED"}
+    - {legacy: "TASK-V3-013-07/08/09 residuals (INV-1 / consolidated findings)", maps_to: "DEV/OPS", disposition: "DEV residual — absorbed into thin-spine-complete; verify closed under ADR-013"}
+    - {legacy: "P1-OPS Celery Beat deployment gap", maps_to: PWBS-OPS-TRUST, disposition: "OPS residual — blocks ADR-015 temporal capture (PWBS-TEMPORAL-CHANGE)"}
+    - {legacy: "TASK-DOC-REUPLOAD-005", maps_to: PWBS-OPS-TRUST, disposition: "OPS/reliability — reupload PATCH 500 (tenant_id in DocumentDTO); pilot residual"}
+    - {legacy: "TASK-COH-BUD-RECON-006", maps_to: PWBS-COHERENCE-XDOC, disposition: "P1 product — contract 628M cross-check (English/INR) deferred"}
+    - {legacy: "Dependabot / mypy-ratchet / SonarCloud residuals (DEV-*)", maps_to: "DEV/OPS", disposition: "DEV hygiene — non-product"}
+
+# ── Master defects ────────────────────────────────────────────────────────────
+master_defects:
+  - "D1: Product value gap — reliability proven, but no user-visible Health/findings/alerts/score/time/reporting from one document (ADR-024/018 core DESIGNED-not-delivered)."
+  - "D2: ADR-018 Health engine WIRED but NOT PROD_VALIDATED for users (coherence_subscore=None; single-doc activation absent)."
+  - "D3: ADR-024 single-document activation DESIGNED, unbuilt (the P0b epic)."
+  - "D4: ADR-009 v2 global authoritative cutover NOT demonstrated (prod recon: 0/15 v2 headlines, shadow 1 row); ADR-017 flag-off; ADR-016 change-impact L3 stub."
+  - "D5: Temporal (ADR-015) snapshots inert — P1-OPS Celery Beat gap (beat_schedule configured, no beat process)."
+  - "D6: Stale 'Phase 1 COMPLETE / all-ADRs / no-open-work' claims live in the CANONICAL C2PRO_MASTER_BACKLOG.md (main), not only worktrees — corrected via cold-reference banner (E)."
+  - "D7: No product-programme control plane existed prior to these files (only .c2pro dev-execution + legacy markdown backlog)."
+  - "D8: ADR numbering is ambiguous across THREE namespaces (v3-canon / foundational / coherence-era) with a real ADR-004 collision (see adr_namespaces)."
+
+# ── Risks ─────────────────────────────────────────────────────────────────────
+risks:
+  - "R1: Treating reliability as completion — sets false expectations; corrected by this reconciliation."
+  - "R2: Coherence/calibration revival as headline — violates ADR-024 demotion; keep as >=2-doc relational input."
+  - "R3: Scope creep in P0b — enforce the vertical slice boundaries + exit gates above."
+  - "R4: Honest-null erosion — INV-1 + INV-UX must hold across all slices (no fabricated green; null!=0%)."
+  - "R5: Dual control drift — this product plane must not become a competing execution plane; execution stays in .c2pro."
+  - "R6: MD/YAML divergence — mitigated by parity.checker (value-exact + enum-validated)."
+
+# ── PR disposition ────────────────────────────────────────────────────────────
+pr_disposition:
+  "571":
+    action: HOLD_then_amend
+    reason: "#571 records P0a as product-closure-adjacent. Re-scope to 'P0a Reliability & Operability Baseline CLOSED' (NOT 'product baseline complete') + register P0b as a vertical product epic against PWBS-ACT-HEALTH. Do not merge until re-scoped by Reconciler after #572 is approved."
+  "572":
+    action: REBUILT_clean
+    reason: "Rebased onto origin/main; ONLY documentation/control changes (2 control files + parity checker + parity tests + legacy cold-reference banner). The 6 Celery files (already in main via #569) are gone."
+
+# ── Next authorized action ────────────────────────────────────────────────────
+next_authorized_action:
+  - "MASTER review of this reconciliation + the two control files (PR #572, clean)."
+  - "On approval: Reconciler amends #571 to 'Reliability & Operability Baseline CLOSED' + registers P0b vertical epic (PWBS-ACT-HEALTH)."
+  - "Then (governed dev, .c2pro envelope): implement P0b-L4-1 (category_coverage) RED-first."
+  - "No product code / runtime / production mutation performed in this reconciliation (read-only prod SELECTs only)."
