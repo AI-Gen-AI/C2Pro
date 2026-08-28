@@ -8,6 +8,8 @@ Coherence is OUT OF SCOPE for a single document (no coherence_subscore here).
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -21,7 +23,7 @@ from src.health.domain.category_coverage import (
 )
 from src.health.domain.health_vector import HealthNullReason
 
-ALL_CATEGORIES = tuple(CoherenceCategory)
+ALL_CATEGORIES: tuple[CoherenceCategory, ...] = tuple(CoherenceCategory)
 
 
 def _for(coverage: tuple[CategoryCoverage, ...], category: CoherenceCategory) -> CategoryCoverage:
@@ -58,6 +60,25 @@ def test_absent_category_is_insufficient_evidence_with_actionable_gap() -> None:
     assert "TECHNICAL" in technical_gap.action  # actionable + names the category
 
 
+def test_missing_data_is_factual_not_an_instruction() -> None:
+    # ADR-024 {missing_data} facet: a factual "not detected" statement, not an action.
+    coverage = compute_category_coverage({})
+    time_cov = _for(coverage, CoherenceCategory.TIME)
+    assert time_cov.missing_data == ("project schedule / cronograma not detected",)
+    assert "Upload" not in time_cov.missing_data[0]
+
+
+def test_gap_action_and_missing_data_are_distinct_semantic_fields() -> None:
+    coverage = compute_category_coverage({})
+    time_cov = _for(coverage, CoherenceCategory.TIME)
+    time_gap = next(g for g in gap_alerts(coverage) if g.category is CoherenceCategory.TIME)
+    # gap alert = actionable instruction
+    assert time_gap.action == "Upload the project schedule (cronograma) to assess TIME."
+    assert time_gap.action.startswith("Upload")
+    # the two fields carry different semantics and must not be the same string
+    assert time_cov.missing_data[0] != time_gap.action
+
+
 def test_all_present_yields_zero_gaps() -> None:
     coverage = compute_category_coverage(dict.fromkeys(ALL_CATEGORIES, 1))
     assert all(c.state is CategoryCoverageState.PRESENT for c in coverage)
@@ -80,12 +101,36 @@ def test_partial_coverage_gaps_are_exactly_the_absent_categories() -> None:
     assert len(gaps) == 3
 
 
-def test_zero_or_negative_count_is_insufficient_never_present() -> None:
-    coverage = compute_category_coverage({CoherenceCategory.BUDGET: 0, CoherenceCategory.SCOPE: -4})
-    for category in (CoherenceCategory.BUDGET, CoherenceCategory.SCOPE):
-        item = _for(coverage, category)
-        assert item.state is CategoryCoverageState.INSUFFICIENT_EVIDENCE
-        assert item.evidence_count == 0
+def test_zero_count_is_insufficient_evidence() -> None:
+    coverage = compute_category_coverage({CoherenceCategory.BUDGET: 0})
+    budget = _for(coverage, CoherenceCategory.BUDGET)
+    assert budget.state is CategoryCoverageState.INSUFFICIENT_EVIDENCE
+    assert budget.evidence_count == 0
+
+
+def test_negative_count_is_rejected_not_insufficient() -> None:
+    # Invalid input is a programming/domain error, NOT an honest-null product state.
+    with pytest.raises(ValueError):
+        compute_category_coverage({CoherenceCategory.SCOPE: -4})
+
+
+def test_bool_value_is_rejected() -> None:
+    bad: dict[CoherenceCategory, Any] = {CoherenceCategory.SCOPE: True}
+    with pytest.raises(TypeError):
+        compute_category_coverage(bad)
+
+
+def test_non_integer_value_is_rejected() -> None:
+    bad_values: list[Any] = [1.5, "3", None]
+    for value in bad_values:
+        with pytest.raises(TypeError):
+            compute_category_coverage({CoherenceCategory.SCOPE: value})
+
+
+def test_unknown_non_category_key_is_rejected() -> None:
+    bad: dict[Any, Any] = {"SCOPE": 1}  # a bare string is not a CoherenceCategory
+    with pytest.raises(TypeError):
+        compute_category_coverage(bad)
 
 
 def test_inv1_present_without_evidence_is_rejected() -> None:

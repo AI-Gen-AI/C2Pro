@@ -40,8 +40,23 @@ _CATEGORY_GAP_ACTION: dict[CoherenceCategory, str] = {
     CoherenceCategory.QUALITY: "Upload the quality plan / acceptance criteria to assess QUALITY.",
 }
 
+# Factual "not detected" statement per category — the ``missing_data`` facet of ADR-024's
+# {state, findings, missing_data}. Deliberately DISTINCT from the actionable gap alert
+# (``_CATEGORY_GAP_ACTION``): ``missing_data`` states what is absent; the gap says what to do.
+_CATEGORY_MISSING_DATA: dict[CoherenceCategory, str] = {
+    CoherenceCategory.SCOPE: "contract scope / statement of work not detected",
+    CoherenceCategory.BUDGET: "budget / bill of quantities (BoQ) not detected",
+    CoherenceCategory.TIME: "project schedule / cronograma not detected",
+    CoherenceCategory.TECHNICAL: "technical specifications / pliego técnico not detected",
+    CoherenceCategory.LEGAL: "legal terms and conditions not detected",
+    CoherenceCategory.QUALITY: "quality plan / acceptance criteria not detected",
+}
+
 # Evidence extracted from one document: number of supporting units per category.
-# A missing key or a non-positive count means "no evidence" for that category.
+# Contract: keys MUST be CoherenceCategory and values MUST be non-bool ints >= 0.
+# Malformed input is a programming/domain error and is REJECTED — never silently
+# coerced into an honest-null user state (INSUFFICIENT_EVIDENCE is a valid product
+# state; an invalid key/type/negative count is not).
 EvidenceByCategory = Mapping[CoherenceCategory, int]
 
 
@@ -98,16 +113,36 @@ class CategoryGapAlert(BaseModel):
     action: str = Field(min_length=1)
 
 
+def _validate_evidence_input(evidence_by_category: EvidenceByCategory) -> None:
+    """Reject malformed input up front.
+
+    Invalid input is a programming/domain error — it must NOT be coerced into an
+    honest-null user state. ``int > 0`` => PRESENT, ``int 0`` => INSUFFICIENT_EVIDENCE;
+    a negative count, a bool/non-int value, or a non-``CoherenceCategory`` key are all
+    rejected.
+    """
+    for key, value in evidence_by_category.items():
+        if not isinstance(key, CoherenceCategory):
+            raise TypeError(f"evidence key must be a CoherenceCategory, got {key!r}")
+        # bool is a subclass of int — reject it explicitly (True/False is not a count).
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TypeError(f"evidence count for {key.value} must be a non-bool int, got {value!r}")
+        if value < 0:
+            raise ValueError(f"evidence count for {key.value} must be >= 0, got {value}")
+
+
 def compute_category_coverage(evidence_by_category: EvidenceByCategory) -> tuple[CategoryCoverage, ...]:
     """Compute honest coverage for all six canonical categories from one document.
 
-    A category is ``PRESENT`` only when backed by >= 1 evidence unit; otherwise it
-    is ``INSUFFICIENT_EVIDENCE`` (never a fabricated zero/green). Always returns
-    exactly one entry per :class:`CoherenceCategory`.
+    A category is ``PRESENT`` only when backed by >= 1 evidence unit; a count of ``0``
+    (or an absent key) is ``INSUFFICIENT_EVIDENCE`` (never a fabricated zero/green).
+    Malformed input is rejected via :func:`_validate_evidence_input` rather than coerced.
+    Always returns exactly one entry per :class:`CoherenceCategory`.
     """
+    _validate_evidence_input(evidence_by_category)
     coverage: list[CategoryCoverage] = []
     for category in CoherenceCategory:
-        count = int(evidence_by_category.get(category, 0))
+        count = evidence_by_category.get(category, 0)
         if count > 0:
             coverage.append(
                 CategoryCoverage(
@@ -122,7 +157,7 @@ def compute_category_coverage(evidence_by_category: EvidenceByCategory) -> tuple
                     category=category,
                     state=CategoryCoverageState.INSUFFICIENT_EVIDENCE,
                     evidence_count=0,
-                    missing_data=(_CATEGORY_GAP_ACTION[category],),
+                    missing_data=(_CATEGORY_MISSING_DATA[category],),
                     null_reason=HealthNullReason.INSUFFICIENT_EVIDENCE,
                 )
             )
