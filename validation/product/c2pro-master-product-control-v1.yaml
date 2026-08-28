@@ -19,14 +19,14 @@ parity:
   checker: validation/product/check_control_parity.py
   md_block_markers: ["<!-- CANONICAL-CONTROL:START", "<!-- CANONICAL-CONTROL:END"]
   compared_exactly:
-    - production_position.repository_main_sha
+    - production_position.reconciled_against_main_sha
     - production_position.deployed_runtime_sha
     - production_position.reliability_operability_baseline
     - production_position.product_value_delivered
     - north_star.current_product_wedge_id
     - coherence_runtime_reconciliation.global_authoritative_cutover
     - legacy_coverage.unmapped_open_legacy_items
-    - "product_wbs[*].id + realization_status (all 8)"
+    - "product_wbs[*].id + realization_status + work_status (all 8)"
     - "adr(ADR-018,ADR-024).{realization_status,deployment_status,prod_validation_status}"
     - p0b_vertical_contract.done_definition (sha256-16 digest)
     - p0b_vertical_contract.invariant_ids
@@ -39,6 +39,7 @@ status_enums:
   realization_status:     [DESIGNED, SCAFFOLDED, WIRED, DEPLOYED, PARTIAL]
   deployment_status:      [NONE, PARTIAL, DEPLOYED, BLOCKED, SHADOW_INERT]
   prod_validation_status: [NONE, PARTIAL, NOT_VALIDATED, PROD_VALIDATED]
+  work_status:            [ACTIVE, PLANNED, DEFERRED, BLOCKED, CLOSED, WONT_DO]   # work lifecycle, INDEPENDENT of realization (DEPLOYED != CLOSED)
 
 # ── Plane separation ──────────────────────────────────────────────────────────
 development_execution_authority:
@@ -52,7 +53,7 @@ development_execution_authority:
 
 # ── Production position (J): three SEPARATE facts — never infer one from another ─
 production_position:
-  repository_main_sha: 9c48f4f94d0a5719561916b956f8a78b2129a250   # git: main tip after #570 merge
+  reconciled_against_main_sha: 9c48f4f94d0a5719561916b956f8a78b2129a250   # repo state THIS reconciliation was performed against (baseline); NOT a claim of continuously-current main — current main SHA is Git-derived runtime info, not canonical programme state, and will drift the moment #572 merges
   deployed_runtime_sha: UNVERIFIED    # DO NOT infer from main. Confirm via Railway deploy log
                                       # (service c2pro-api / production). Expected == main tip ONLY
                                       # if Railway rebuilt after the #570 merge — not assumed here.
@@ -212,6 +213,7 @@ product_wbs:
     adrs: [ADR-024, ADR-018, ADR-022]
     user_value: "Value from document #1: per-category coverage + intrinsic findings + missing_data + gap alerts + Health Vector"
     realization_status: DESIGNED
+    work_status: ACTIVE
     exit_gate: "P0b-L4-5 PROD_VALIDATED (see p0b_vertical_contract.done_definition)"
     evidence_for_done: "upload one doc in prod -> UI shows per-category {state,findings,missing_data} + gap alerts + Health Vector; Unknown=Insufficient-evidence, never 0%"
     children: [P0b-L4-1, P0b-L4-2, P0b-L4-3, P0b-L4-4, P0b-L4-5]
@@ -224,6 +226,7 @@ product_wbs:
     adrs: [ADR-009, ADR-017, ADR-023]
     user_value: "Contract-schedule-budget agreement; cross-doc contradiction findings feeding the Contract subscore"
     realization_status: PARTIAL
+    work_status: PLANNED
     subtracks: {v1: DEPLOYED, v2: SHADOW_INERT}
     exit_gate: "v2 authoritative cutover behind MAE guard + canary, or explicit decision to keep v1; ProjectGraph Tier-2 enabled; cross-doc contradiction recall validated"
     evidence_for_done: "prod evaluations persist v2 (or v1-by-decision) with cross-doc findings on a >=2-doc project; MAE guard green"
@@ -236,6 +239,7 @@ product_wbs:
     adrs: [ADR-015, ADR-016]
     user_value: "Revision lineage, trends, and an evidence-gated Change-Impact Report when a document changes"
     realization_status: SCAFFOLDED
+    work_status: PLANNED
     exit_gate: "periodic snapshot capture running (fix Celery Beat, P1-OPS); L3 change-impact wired; Change-Impact Report rendered"
     evidence_for_done: "prod: a document revision produces a persisted snapshot + a Change-Impact Report a user can read"
   - id: PWBS-ALERTS-ACTIONS-HITL
@@ -247,7 +251,7 @@ product_wbs:
     adrs: [ADR-019, ADR-020]
     user_value: "Correlated action items + Contract-Manager approval gates + active-learning loop"
     realization_status: SCAFFOLDED
-    phase_state: DEFERRED
+    work_status: DEFERRED
     exit_gate: "ADR-019/020 build-gate lifted (>=1 CM uses Change-Impact loop weekly); action queue + HITL in the live flow"
     evidence_for_done: "prod: correlated ActionItem enters a CM HITL queue and is approved/rejected with audit trail"
   - id: PWBS-PROJECT-CONTROLS
@@ -259,6 +263,7 @@ product_wbs:
     adrs: [ADR-018]
     user_value: "Schedule/cost/deliverable health dimensions beyond activation coverage"
     realization_status: PARTIAL
+    work_status: PLANNED
     note: "WBS/BOM parse exist"
     exit_gate: "Health v1 dimensions surfaced with honest nulls on the project surface"
     evidence_for_done: "prod: project controls dimensions render evidence-backed or honest-null"
@@ -271,6 +276,7 @@ product_wbs:
     adrs: []
     user_value: "Plan -> WBS -> RfQ -> BoQ -> stakeholder comms procurement workflows"
     realization_status: PARTIAL
+    work_status: PLANNED
     note: "Plan/WBS/BoM exist-gated; RfQ/BoQ/comms MISSING"
     exit_gate: "EPIC-PROC2 5 tasks delivered; build-gate (>=1 CM Change-Impact weekly) lifted"
     evidence_for_done: "prod: a procurement workflow (RfQ or BoQ) is generated and used"
@@ -283,7 +289,7 @@ product_wbs:
     adrs: [ADR-021]
     user_value: "PMO reporting, Morning Briefing, portfolio rollup for executives"
     realization_status: SCAFFOLDED
-    phase_state: DEFERRED
+    work_status: DEFERRED
     exit_gate: "ADR-021 read-model + briefing projection surfaced (separate UI PRD)"
     evidence_for_done: "prod: an executive reads a Morning Briefing / portfolio projection"
   - id: PWBS-OPS-TRUST
@@ -295,6 +301,7 @@ product_wbs:
     adrs: [ADR-004]
     user_value: "Multi-tenant isolation, PII anonymization, circuit breakers, dedicated Celery Redis"
     realization_status: DEPLOYED
+    work_status: ACTIVE
     exit_gate: "P0a CLOSED; residual P1-OPS (Celery Beat) closed"
     evidence_for_done: "prod: baseline live (done); Beat scheduler running for temporal capture"
 

@@ -79,6 +79,7 @@ def validate_enums(doc: dict) -> list[str]:
     real = set(enums["realization_status"])
     dep = set(enums["deployment_status"])
     prod = set(enums["prod_validation_status"])
+    work = set(enums["work_status"])
     union_rd = real | dep
 
     def _chk(where: str, field: str, value: object, allowed: set[str]) -> None:
@@ -102,6 +103,7 @@ def validate_enums(doc: dict) -> list[str]:
     for row in doc["product_wbs"]:
         wid = row.get("id", "?")
         _chk(f"wbs[{wid}]", "realization_status", row.get("realization_status"), real)
+        _chk(f"wbs[{wid}]", "work_status", row.get("work_status"), work)
         for tk, tv in (row.get("subtracks") or {}).items():
             _chk(f"wbs[{wid}].subtrack[{tk}]", "value", tv, union_rd)
     return problems
@@ -117,7 +119,7 @@ def extract_canonical(doc: dict) -> dict[str, str]:
     a018, a024 = _adr_row(doc, "ADR-018"), _adr_row(doc, "ADR-024")
 
     canon: dict[str, str] = {
-        "repository_main_sha": _s(pp["repository_main_sha"]),
+        "reconciled_against_main_sha": _s(pp["reconciled_against_main_sha"]),
         "deployed_runtime_sha": _s(pp["deployed_runtime_sha"]),
         "reliability_operability_baseline": _s(pp["reliability_operability_baseline"]),
         "product_value_delivered": _s(pp["product_value_delivered"]),
@@ -134,7 +136,9 @@ def extract_canonical(doc: dict) -> dict[str, str]:
         "p0b.invariant_ids": ",".join(_s(x) for x in p0b["invariant_ids"]),
     }
     for wid in _WBS_IDS:
-        canon[f"wbs.{wid}"] = _s(_wbs_row(doc, wid)["realization_status"])
+        row = _wbs_row(doc, wid)
+        canon[f"wbs.{wid}.realization"] = _s(row["realization_status"])
+        canon[f"wbs.{wid}.work_status"] = _s(row["work_status"])
     return canon
 
 

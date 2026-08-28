@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
 **Status:** Reconciliation snapshot (read-only) · **Date:** 2026-08-27
-**repository_main_sha:** `9c48f4f94d0a5719561916b956f8a78b2129a250` · **deployed_runtime_sha:** `UNVERIFIED` (do not infer from main — confirm via Railway deploy log)
+**reconciled_against_main_sha:** `9c48f4f94d0a5719561916b956f8a78b2129a250` (repo baseline this reconciliation ran against — **not** a live "current main" claim) · **deployed_runtime_sha:** `UNVERIFIED` (confirm via Railway deploy log)
 **Machine-readable source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This is the **PRODUCT** control plane — *what C2Pro is and how far each capability is realized*.
@@ -17,7 +17,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-repository_main_sha=9c48f4f94d0a5719561916b956f8a78b2129a250
+reconciled_against_main_sha=9c48f4f94d0a5719561916b956f8a78b2129a250
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
@@ -32,14 +32,22 @@ adr.ADR-024.deployment=NONE
 adr.ADR-024.prod_validation=NONE
 p0b.done_digest=9ae6adf0a63af690
 p0b.invariant_ids=INV-1,INV-UX,INV-COH
-wbs.PWBS-ACT-HEALTH=DESIGNED
-wbs.PWBS-COHERENCE-XDOC=PARTIAL
-wbs.PWBS-TEMPORAL-CHANGE=SCAFFOLDED
-wbs.PWBS-ALERTS-ACTIONS-HITL=SCAFFOLDED
-wbs.PWBS-PROJECT-CONTROLS=PARTIAL
-wbs.PWBS-PROCUREMENT=PARTIAL
-wbs.PWBS-EXEC-REPORTING=SCAFFOLDED
-wbs.PWBS-OPS-TRUST=DEPLOYED
+wbs.PWBS-ACT-HEALTH.realization=DESIGNED
+wbs.PWBS-ACT-HEALTH.work_status=ACTIVE
+wbs.PWBS-COHERENCE-XDOC.realization=PARTIAL
+wbs.PWBS-COHERENCE-XDOC.work_status=PLANNED
+wbs.PWBS-TEMPORAL-CHANGE.realization=SCAFFOLDED
+wbs.PWBS-TEMPORAL-CHANGE.work_status=PLANNED
+wbs.PWBS-ALERTS-ACTIONS-HITL.realization=SCAFFOLDED
+wbs.PWBS-ALERTS-ACTIONS-HITL.work_status=DEFERRED
+wbs.PWBS-PROJECT-CONTROLS.realization=PARTIAL
+wbs.PWBS-PROJECT-CONTROLS.work_status=PLANNED
+wbs.PWBS-PROCUREMENT.realization=PARTIAL
+wbs.PWBS-PROCUREMENT.work_status=PLANNED
+wbs.PWBS-EXEC-REPORTING.realization=SCAFFOLDED
+wbs.PWBS-EXEC-REPORTING.work_status=DEFERRED
+wbs.PWBS-OPS-TRUST.realization=DEPLOYED
+wbs.PWBS-OPS-TRUST.work_status=ACTIVE
 ```
 <!-- CANONICAL-CONTROL:END -->
 
@@ -51,7 +59,7 @@ wbs.PWBS-OPS-TRUST=DEPLOYED
 
 ## 2. Current production position (honest — three separate facts)
 
-- **`repository_main_sha`** = `9c48f4f9` (main tip after #570).
+- **`reconciled_against_main_sha`** = `9c48f4f9` — the repo baseline this reconciliation was performed against; **not** a live "current main" value (that is Git-derived and drifts the moment #572 merges).
 - **`deployed_runtime_sha`** = **UNVERIFIED** — do **not** infer from main; confirm via the Railway deploy log (service `c2pro-api`/production). Equal to main **only** if Railway rebuilt after the #570 merge.
 - **`observed_production_evidence`** (read-only, independent of any SHA): kuwait2 doc `c510de21` enqueue→worker→**SUCCESS** on the dedicated Railway Redis; `coherence_results` **15/15 rows `coherence-v1`** (0 v2); `coherence_v2_shadow` **1 row** (2026-08-07); `alerts.severity` = `public.alertseverity` (#567); ADR-004 circuit breakers in prod logs.
 
@@ -127,18 +135,18 @@ Supporting facts: global `COHERENCE_V2_SHADOW_MODE` default `True`, but the shad
 
 ## 6. Product WBS (L2 epic per plane; realization = single enum; P0b→L4)
 
-| WBS ID | Plane | Pri | Realization | Exit gate (evidence-for-DONE) |
-|---|---|---|---|---|
-| **PWBS-ACT-HEALTH** | ACT-HEALTH | P0b | **DESIGNED** | P0b-L4-5 PROD_VALIDATED (§7) |
-| PWBS-COHERENCE-XDOC | COHERENCE-XDOC | P1 | **PARTIAL** *(v1 DEPLOYED / v2 SHADOW_INERT)* | v2 cutover (MAE+canary) or explicit v1-keep; cross-doc findings on ≥2-doc project |
-| PWBS-TEMPORAL-CHANGE | TEMPORAL-CHANGE | P1 | **SCAFFOLDED** | snapshot capture running (Beat) + Change-Impact Report |
-| PWBS-ALERTS-ACTIONS-HITL | ALERTS-ACTIONS-HITL | P2 | **SCAFFOLDED** *(phase: DEFERRED)* | build-gate lifted; ActionItem→CM HITL queue in prod |
-| PWBS-PROJECT-CONTROLS | PROJECT-CONTROLS | P2 | **PARTIAL** | Health-v1 dims surfaced honest-null |
-| PWBS-PROCUREMENT | PROCUREMENT | P2 | **PARTIAL** | EPIC-PROC2 5 tasks; RfQ/BoQ used in prod |
-| PWBS-EXEC-REPORTING | EXEC-REPORTING | P3 | **SCAFFOLDED** *(phase: DEFERRED)* | Morning Briefing / portfolio read in prod |
-| PWBS-OPS-TRUST | OPS-TRUST | P0 | **DEPLOYED** | P0a CLOSED; P1-OPS Beat closed |
+| WBS ID | Plane | Pri | Realization | Work | Exit gate (evidence-for-DONE) |
+|---|---|---|---|---|---|
+| **PWBS-ACT-HEALTH** | ACT-HEALTH | P0b | **DESIGNED** | **ACTIVE** | P0b-L4-5 PROD_VALIDATED (§7) |
+| PWBS-COHERENCE-XDOC | COHERENCE-XDOC | P1 | **PARTIAL** *(v1 DEPLOYED / v2 SHADOW_INERT)* | PLANNED | v2 cutover (MAE+canary) or explicit v1-keep; cross-doc findings on ≥2-doc project |
+| PWBS-TEMPORAL-CHANGE | TEMPORAL-CHANGE | P1 | **SCAFFOLDED** | PLANNED | snapshot capture running (Beat) + Change-Impact Report |
+| PWBS-ALERTS-ACTIONS-HITL | ALERTS-ACTIONS-HITL | P2 | **SCAFFOLDED** | DEFERRED | build-gate lifted; ActionItem→CM HITL queue in prod |
+| PWBS-PROJECT-CONTROLS | PROJECT-CONTROLS | P2 | **PARTIAL** | PLANNED | Health-v1 dims surfaced honest-null |
+| PWBS-PROCUREMENT | PROCUREMENT | P2 | **PARTIAL** | PLANNED | EPIC-PROC2 5 tasks; RfQ/BoQ used in prod |
+| PWBS-EXEC-REPORTING | EXEC-REPORTING | P3 | **SCAFFOLDED** | DEFERRED | Morning Briefing / portfolio read in prod |
+| PWBS-OPS-TRUST | OPS-TRUST | P0 | **DEPLOYED** | **ACTIVE** | P0a CLOSED; P1-OPS Beat closed |
 
-> Progressive elaboration: only **PWBS-ACT-HEALTH (P0b)** is decomposed to L4 now. Later epics keep **stable L2 IDs + deps + priority + ADRs + user value + realization + exit gate**; they are **not** prematurely decomposed to tasks.
+> **Work ≠ Realization** (`work_status` is a separate enum; **DEPLOYED ≠ CLOSED**): e.g. **PWBS-OPS-TRUST** is technically **DEPLOYED** yet `work_status`=**ACTIVE** because the P1-OPS Celery Beat gap is still open. Progressive elaboration: only **PWBS-ACT-HEALTH (P0b)** is decomposed to L4 now. Later epics keep **stable L2 IDs + deps + priority + ADRs + user value + realization + exit gate**; they are **not** prematurely decomposed to tasks.
 
 ## 7. P0b vertical contract (all slices + exit gates defined before slice 1)
 

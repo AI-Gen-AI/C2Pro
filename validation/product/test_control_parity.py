@@ -50,10 +50,24 @@ def test_md_missing_key_detected() -> None:
     assert any("MD missing" in p and "adr.ADR-024.realization" in p for p in problems), problems
 
 
-def test_wbs_status_contradiction_detected() -> None:
-    mutated = _MD_TEXT.replace("wbs.PWBS-OPS-TRUST=DEPLOYED", "wbs.PWBS-OPS-TRUST=NONE")
+def test_wbs_realization_contradiction_detected() -> None:
+    mutated = _MD_TEXT.replace("wbs.PWBS-OPS-TRUST.realization=DEPLOYED", "wbs.PWBS-OPS-TRUST.realization=NONE")
     problems = _compare_with_mutated_md(mutated)
-    assert any("VALUE DRIFT" in p and "wbs.PWBS-OPS-TRUST" in p for p in problems), problems
+    assert any("VALUE DRIFT" in p and "wbs.PWBS-OPS-TRUST.realization" in p for p in problems), problems
+
+
+def test_wbs_work_status_contradiction_detected() -> None:
+    # DEPLOYED != CLOSED: flipping OPS-TRUST work_status must be caught independently of realization.
+    mutated = _MD_TEXT.replace("wbs.PWBS-OPS-TRUST.work_status=ACTIVE", "wbs.PWBS-OPS-TRUST.work_status=CLOSED")
+    problems = _compare_with_mutated_md(mutated)
+    assert any("VALUE DRIFT" in p and "wbs.PWBS-OPS-TRUST.work_status" in p for p in problems), problems
+
+
+def test_invalid_work_status_enum_detected() -> None:
+    doc = c.load_yaml()
+    doc["product_wbs"][0]["work_status"] = "NOT_A_WORK_STATUS"
+    problems = c.validate_enums(doc)
+    assert any("NOT_A_WORK_STATUS" in p for p in problems), problems
 
 
 def test_coherence_cutover_contradiction_detected() -> None:
