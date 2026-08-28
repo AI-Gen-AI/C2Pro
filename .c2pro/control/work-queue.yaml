@@ -30,3 +30,15 @@ items:
       - C2PRO-DEV-02
       - C2PRO-DEV-03
     review_policy: independent_principal
+  # DEV-DEBT (registered 2026-08-28, surfaced by P0b-L4-1/L4-2): extend the work-envelope
+  # schema/tooling so canonical PRODUCT slices (e.g. PWBS-ACT-HEALTH P0b-L4-*) get machine-
+  # validated .c2pro envelopes without abusing the control-plane C2PRO-DEV-xx namespace
+  # (work_id is currently pinned to ^C2PRO-DEV-[0-9]{2}$). Non-blocking; product envelopes are
+  # meanwhile recorded transparently in their PR bodies.
+  - work_id: C2PRO-DEV-05
+    status: ready
+    role: orchestrator
+    work_ref: null
+    priority: P2
+    depends_on: []
+    review_policy: independent_principal
