@@ -13,7 +13,10 @@ from src.health.domain.health_vector import (
     HealthVector,
     band_for_score,
 )
-from src.health.domain.single_document_coverage import SingleDocumentCoverage
+from src.health.domain.single_document_coverage import (
+    EvidenceGranularity,
+    SingleDocumentCoverage,
+)
 
 _TREND_EPSILON = 0.01
 
@@ -26,6 +29,7 @@ def assemble_health_vector(
     prior_composite: float | None,
     contract_clarity_findings: list[ContractClarityFinding] | None = None,
     single_document_coverage: SingleDocumentCoverage | None = None,
+    single_document_evidence_granularity: EvidenceGranularity | None = None,
 ) -> HealthVector:
     """Assemble a project HealthVector from already honest-null dimension signals.
 
@@ -36,7 +40,9 @@ def assemble_health_vector(
     to ``composite_score``.
 
     ``single_document_coverage=None`` is preserved as ``None`` (UNAVAILABLE), never
-    coerced into an empty assessment.
+    coerced into an empty assessment. ``single_document_evidence_granularity`` (P0b-R1)
+    qualifies those evidence ids and must accompany any coverage that is present — the
+    :class:`HealthVector` contract rejects one without the other.
     """
 
     scored = [signal for signal in signals if signal.score is not None]
@@ -64,6 +70,7 @@ def assemble_health_vector(
         composite_trend=trend,
         contract_clarity_findings=contract_clarity_findings or [],
         single_document_coverage=single_document_coverage,
+        single_document_evidence_granularity=single_document_evidence_granularity,
         computed_at=datetime.now(UTC).replace(tzinfo=None),
     )
 

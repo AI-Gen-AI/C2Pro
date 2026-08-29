@@ -498,7 +498,10 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         )
 
         single_document_assessment = build_document_assessment_artifact(
-            clauses, result.finding_signals, granularity=evidence.granularity
+            clauses,
+            result.finding_signals,
+            granularity=evidence.granularity,
+            degradation_reason=evidence.degradation_reason,
         )
 
         quality_note = derivation.quality_note

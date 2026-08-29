@@ -33,7 +33,7 @@ from typing import Any
 
 from src.coherence.models import Clause as CoherenceClause
 from src.documents.domain.models import Clause as PersistedClause
-from src.health.domain.analysis_assessment import EvidenceGranularity
+from src.health.domain.single_document_coverage import EvidenceGranularity
 
 # Only contracts are segmented and persisted by ingestion today; every other document type
 # keeps the pre-R1 whole-document path unchanged.

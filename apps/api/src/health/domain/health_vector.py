@@ -16,7 +16,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from src.evidence.domain.runtime_trust import EvidenceRef
 from src.health.domain.contract_clarity import ContractClarityFinding
 from src.health.domain.null_reason import HealthNullReason
-from src.health.domain.single_document_coverage import SingleDocumentCoverage
+from src.health.domain.single_document_coverage import (
+    EvidenceGranularity,
+    SingleDocumentCoverage,
+)
 
 _FROZEN_CONTRACT = ConfigDict(extra="forbid", frozen=True)
 
@@ -119,9 +122,33 @@ class HealthVector(BaseModel):
     # ``None`` means the assessment is UNAVAILABLE / NOT EVALUATED for this snapshot
     # (legacy analysis, or no assessment ever produced) — it never means "empty".
     single_document_coverage: SingleDocumentCoverage | None = None
+    # P0b-R1: what the coverage's ``evidence_clause_ids`` identify — persisted
+    # ``documents.clauses`` UUIDs, or one synthetic document-level marker. Carried
+    # explicitly so no consumer has to infer it from the shape of an id.
+    single_document_evidence_granularity: EvidenceGranularity | None = None
+
+    @model_validator(mode="after")
+    def _enforce_granularity_pairing(self) -> HealthVector:
+        """Coverage and its granularity travel together, or neither is present.
+
+        Coverage with no granularity would leave every evidence id unqualified;
+        granularity with no coverage would qualify nothing. Both states are
+        meaningless, so both are rejected rather than silently tolerated.
+        """
+        if self.single_document_coverage is None:
+            if self.single_document_evidence_granularity is not None:
+                raise ValueError(
+                    "single_document_evidence_granularity requires single_document_coverage"
+                )
+        elif self.single_document_evidence_granularity is None:
+            raise ValueError(
+                "single_document_coverage requires single_document_evidence_granularity"
+            )
+        return self
 
 
 __all__ = [
+    "EvidenceGranularity",
     "HealthBand",
     "HealthDimension",
     "HealthNullReason",

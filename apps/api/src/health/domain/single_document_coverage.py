@@ -18,6 +18,8 @@ Invariants (unchanged from L4-2):
 
 from __future__ import annotations
 
+from enum import StrEnum
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.coherence.domain.category_weights import CoherenceCategory
@@ -29,6 +31,22 @@ _FROZEN_CONTRACT = ConfigDict(extra="forbid", frozen=True)
 # The cross-dimensional label carried by FindingSignal.category alongside the six canonical
 # categories. Preserved separately; never mapped onto a canonical category.
 CROSS_CATEGORY = "CROSS"
+
+
+class EvidenceGranularity(StrEnum):
+    """What the ``evidence_clause_ids`` in a coverage actually identify (P0b-R1).
+
+    This qualifies every coverage that carries evidence ids, so it lives beside the
+    coverage contract rather than in the persistence artifact alone: "six categories
+    evidenced by six distinct clauses" and "six categories evidenced by one
+    whole-document blob" are different product claims, and a reader must be able to
+    tell them apart **without** inspecting the shape of an id.
+    """
+
+    #: Persisted ``documents.clauses`` UUIDs — one id per real, addressable clause.
+    CLAUSE = "clause"
+    #: A single synthetic document-level identifier — the whole document as one blob.
+    DOCUMENT = "document"
 
 
 class CategoryAssessment(BaseModel):
@@ -104,4 +122,9 @@ class SingleDocumentCoverage(BaseModel):
         return self
 
 
-__all__ = ["CROSS_CATEGORY", "CategoryAssessment", "SingleDocumentCoverage"]
+__all__ = [
+    "CROSS_CATEGORY",
+    "CategoryAssessment",
+    "EvidenceGranularity",
+    "SingleDocumentCoverage",
+]
