@@ -31,6 +31,10 @@ class PersistAnalysisCommand:
     extracted_wbs: list[dict[str, Any]]
     coherence_score: int | float | None
     coherence_breakdown: dict[str, Any]
+    # ADR-024 / P0b L4-3: versioned single-document assessment fragment produced at N8.
+    # ``None`` => not evaluated for this analysis; the key is then simply absent from
+    # result_json, which readers must treat as UNAVAILABLE (never "evaluated, empty").
+    single_document_assessment: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -81,6 +85,9 @@ class PersistAnalysisUseCase:
             result_json={
                 "risks": command.extracted_risks,
                 "wbs": command.extracted_wbs,
+                # Additive: existing keys are preserved; the assessment key is written
+                # only when the assessment actually ran.
+                **(command.single_document_assessment or {}),
             },
         )
         await self._analysis_repo.add_analysis(analysis)

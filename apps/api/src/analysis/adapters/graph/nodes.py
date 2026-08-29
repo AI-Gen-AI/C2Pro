@@ -586,6 +586,7 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
                     extracted_wbs=state.get("extracted_wbs", []),
                     coherence_score=state.get("coherence_score", 0),
                     coherence_breakdown=state.get("coherence_breakdown", {}),
+                    single_document_assessment=state.get("single_document_assessment"),
                 )
             )
     # N17 persists best-effort and reports persistence failures as NodeResult.

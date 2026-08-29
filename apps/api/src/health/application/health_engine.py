@@ -13,6 +13,7 @@ from src.health.domain.health_vector import (
     HealthVector,
     band_for_score,
 )
+from src.health.domain.single_document_coverage import SingleDocumentCoverage
 
 _TREND_EPSILON = 0.01
 
@@ -24,13 +25,18 @@ def assemble_health_vector(
     signals: list[HealthSignal],
     prior_composite: float | None,
     contract_clarity_findings: list[ContractClarityFinding] | None = None,
+    single_document_coverage: SingleDocumentCoverage | None = None,
 ) -> HealthVector:
     """Assemble a project HealthVector from already honest-null dimension signals.
 
-    ``contract_clarity_findings`` (ADR-022 / V3-P1-SCOPE-11) is passed through
-    verbatim and is NEVER included in the weighted rollup below — it has no
-    score/confidence to weigh. Only ``signals`` (HealthSignal dimensions)
-    contribute to ``composite_score``.
+    ``contract_clarity_findings`` (ADR-022 / V3-P1-SCOPE-11) and
+    ``single_document_coverage`` (ADR-024 / P0b L4-3) are passed through verbatim and
+    are NEVER included in the weighted rollup below — neither carries a
+    score/confidence to weigh. Only ``signals`` (HealthSignal dimensions) contribute
+    to ``composite_score``.
+
+    ``single_document_coverage=None`` is preserved as ``None`` (UNAVAILABLE), never
+    coerced into an empty assessment.
     """
 
     scored = [signal for signal in signals if signal.score is not None]
@@ -57,6 +63,7 @@ def assemble_health_vector(
         composite_band=composite_band,
         composite_trend=trend,
         contract_clarity_findings=contract_clarity_findings or [],
+        single_document_coverage=single_document_coverage,
         computed_at=datetime.now(UTC).replace(tzinfo=None),
     )
 

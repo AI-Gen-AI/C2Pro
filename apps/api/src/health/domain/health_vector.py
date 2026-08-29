@@ -15,6 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.evidence.domain.runtime_trust import EvidenceRef
 from src.health.domain.contract_clarity import ContractClarityFinding
+from src.health.domain.null_reason import HealthNullReason
+from src.health.domain.single_document_coverage import SingleDocumentCoverage
 
 _FROZEN_CONTRACT = ConfigDict(extra="forbid", frozen=True)
 
@@ -42,12 +44,6 @@ class HealthTrend(StrEnum):
     DOWN = "down"
     FLAT = "flat"
     UNKNOWN = "unknown"
-
-
-class HealthNullReason(StrEnum):
-    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
-    NOT_APPLICABLE = "not_applicable"
-    BUDGET_EXHAUSTED = "budget_exhausted"
 
 
 def band_for_score(score: float | None) -> HealthBand:
@@ -116,6 +112,13 @@ class HealthVector(BaseModel):
     # ADR-022 (V3-P1-SCOPE-11): findings-only, never rolled into a dimension
     # score or composite_score. See health.domain.contract_clarity.
     contract_clarity_findings: list[ContractClarityFinding] = Field(default_factory=list)
+    # ADR-024 (P0b L4-3): the single-document product surface — six category
+    # assessments, findings, factual missing_data, actionable gaps and preserved
+    # CROSS findings. Same discipline as contract_clarity_findings: carried here but
+    # NEVER rolled into a dimension score or composite_score.
+    # ``None`` means the assessment is UNAVAILABLE / NOT EVALUATED for this snapshot
+    # (legacy analysis, or no assessment ever produced) — it never means "empty".
+    single_document_coverage: SingleDocumentCoverage | None = None
 
 
 __all__ = [

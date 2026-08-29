@@ -13,6 +13,7 @@ from uuid import UUID
 
 from sqlalchemy import select, text
 
+from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
 from src.core.database import get_raw_session, init_db
 from src.core.tasks.celery_app import celery_app
 from src.core.tenants.types import TenantId, require_tenant_id
@@ -20,6 +21,9 @@ from src.project_state.adapters.persistence.project_state_repository import (
     SqlAlchemyProjectStateRepository,
 )
 from src.projects.adapters.persistence.models import ProjectORM
+from src.temporal.adapters.persistence.project_event_repository import (
+    SqlAlchemyProjectEventRepository,
+)
 from src.temporal.adapters.persistence.project_snapshot_repository import (
     SqlAlchemyProjectSnapshotRepository,
 )
@@ -63,6 +67,10 @@ async def _write_project_snapshot_async(
             snapshot = await SnapshotWriter(
                 project_state_repository=SqlAlchemyProjectStateRepository(session),
                 snapshot_repository=SqlAlchemyProjectSnapshotRepository(session),
+                # ADR-024 / P0b L4-3 lineage: source_event_id -> graph.completed
+                # {analysis_id} -> analyses.result_json -> persisted assessment.
+                event_repository=SqlAlchemyProjectEventRepository(session),
+                analysis_repository=SqlAlchemyAnalysisRepository(session, tenant_id=tenant_id),
             ).write_snapshot(
                 project_id=project_id,
                 tenant_id=tenant_id,

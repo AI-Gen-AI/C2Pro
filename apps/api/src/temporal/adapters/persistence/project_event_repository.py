@@ -56,6 +56,15 @@ class SqlAlchemyProjectEventRepository(IProjectEventRepository):
         await self._session.flush()
         return event
 
+    async def get(self, event_id: UUID, tenant_id: UUID) -> ProjectEvent | None:
+        stmt = select(ProjectEventORM).where(
+            ProjectEventORM.event_id == event_id,
+            ProjectEventORM.tenant_id == tenant_id,
+        )
+        result = await self._session.execute(stmt)
+        orm = result.scalars().first()
+        return self._to_domain(orm) if orm is not None else None
+
     async def list_for_project(
         self,
         project_id: UUID,

@@ -18,6 +18,11 @@ class IProjectEventRepository(ABC):
         ...
 
     @abstractmethod
+    async def get(self, event_id: UUID, tenant_id: UUID) -> ProjectEvent | None:
+        """Exact tenant-scoped lookup of one event (snapshot lineage resolution)."""
+        ...
+
+    @abstractmethod
     async def list_for_project(
         self,
         project_id: UUID,
