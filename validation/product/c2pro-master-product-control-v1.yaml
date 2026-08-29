@@ -1,5 +1,5 @@
 schema: c2pro-product-control-v1
-schema_version: 4
+schema_version: 5
 repository: AI-Gen-AI/C2Pro
 generated: "2026-08-29"
 control_status: reconciliation   # read-only programme snapshot; grants NO execution authority
@@ -42,6 +42,7 @@ status_enums:
   work_status:            [ACTIVE, PLANNED, DEFERRED, BLOCKED, CLOSED, WONT_DO]   # work lifecycle, INDEPENDENT of realization (DEPLOYED != CLOSED)
   slice_status:           [NOT_STARTED, ACTIVE, PARTIAL, DONE, BLOCKED, DEFERRED] # L4 implementation-slice lifecycle. DONE = the slice met its code/merge exit gate; it does NOT mean the vertical is PROD_VALIDATED (that stays the WBS exit gate).
   residual_status:        [PLANNED, ACTIVE, BLOCKED, DEFERRED, RESOLVED]          # residual lifecycle (a residual is registered work, not an implementation slice, so PLANNED is its entry state).
+  residual_blocking:      [BLOCKING, NON_BLOCKING]                                # schema v5: does this residual CURRENTLY gate a slice? BLOCKING requires 'blocks' naming a slice that is itself BLOCKED; NON_BLOCKING must omit 'blocks' entirely. Before v5 'blocks' was mandatory, so real-but-non-blocking work could only be registered by claiming a blocker it does not have.
 
 # ── Plane separation ──────────────────────────────────────────────────────────
 development_execution_authority:
@@ -55,7 +56,7 @@ development_execution_authority:
 
 # ── Production position (J): three SEPARATE facts — never infer one from another ─
 production_position:
-  reconciled_against_main_sha: 85caa0ccd0739127b279c93a9c6e979f0e340d21   # repo state THIS reconciliation was performed against (baseline: main after #576 P0b-L4-3 and #577); NOT a claim of continuously-current main — current main SHA is Git-derived runtime info, not canonical programme state, and drifts on every merge
+  reconciled_against_main_sha: 6d3a19e41f169d974e9a0d4ea73d1aec7c0bc4cc   # repo state THIS reconciliation was performed against (baseline: main after #579 P0b-R1 evidence granularity); NOT a claim of continuously-current main — current main SHA is Git-derived runtime info, not canonical programme state, and drifts on every merge
   deployed_runtime_sha: UNVERIFIED    # DO NOT infer from main. Confirm via Railway deploy log
                                       # (service c2pro-api / production). Expected == main tip ONLY
                                       # if Railway rebuilt after the #570 merge — not assumed here.
@@ -326,30 +327,60 @@ p0b_vertical_contract:
     - {id: P0b-L4-1, name: "category_coverage domain (pure)", scope: "compute_category_coverage() + gap_alerts(); PRESENT|INSUFFICIENT_EVIDENCE; per-category action map", files_new: ["apps/api/src/health/domain/category_coverage.py", "apps/api/tests/unit/health/test_category_coverage.py"], exit_gate: "RED->GREEN unit: covered=PRESENT; absent=INSUFFICIENT_EVIDENCE + correct gap alert; all-present=0 gaps; empty=6 gaps; INV-1; ruff+mypy-ratchet green", slice_status: DONE}
     - {id: P0b-L4-2, name: "wire single-doc intake -> classification -> coverage", scope: "one document's classified clauses -> per-category {state, findings(ADR-022 + intrinsic), missing_data}; CROSS findings preserved separately (never attributed to a canonical category); CategoryAssessment invariants enforced", exit_gate: "integration: real doc -> coverage object with findings + missing_data; contract-only => TECHNICAL/BUDGET/TIME insufficient", slice_status: DONE}
     - {id: P0b-L4-3, name: "persist the single-document assessment from the real analysis into the Health Vector", scope: "N8 (coherence_scorer) computes SingleDocumentCoverage ONCE from canonical Clause[] + FindingSignal[] - the earliest point where both coexist, strictly before N17. The versioned artifact is stored in analyses.result_json; graph.completed carries analysis_id LINEAGE ONLY; SnapshotWriter resolves that lineage and persists HealthVector.single_document_coverage as a NON-ROLLUP product/evidence surface (ADR-022 contract_clarity_findings precedent). NO new Contract/Documentation numeric formula - the existing dimension scorers and composite behaviour are untouched. coherence_subscore stays NULL. Honest-null lineage precedence enforced: a GRAPH_COMPLETED analysis is authoritative (valid assessment else None, never a stale carry-forward); only a no-new-analysis trigger carries the last valid assessment forward.", exit_gate: "assessment persisted + read back without re-running CategoryRouter; six assessments + missing_data + gaps + CROSS survive round-trip; legacy/unknown-version/malformed lineage => None (never empty-known); coherence_subscore=NULL; composite scoring unchanged; replay idempotent", slice_status: DONE}
-    - {id: P0b-L4-4, name: "read API", scope: "GET project health returns per-category decomposition + gap alerts + Health Vector. PARTIAL: GET /api/v1/projects/{project_id}/health already returns HealthVector, so single_document_coverage is ALREADY exposed through the existing response contract (and the generated OpenAPI); dedicated API acceptance + consumer validation remain pending.", exit_gate: "authenticated GET returns decomposition+gaps+vector; Unknown=null in payload (never 0)", slice_status: PARTIAL}
-    - {id: P0b-L4-5, name: "user-visible UI/report", scope: "per-category view + gap alerts on document/health surface; null renders 'Unknown / Insufficient evidence'", exit_gate: "PROD: upload one doc -> UI shows per-category state/findings/missing_data + actionable gap alerts + Health Vector; Unknown!=0%; Coherence absent until >=2 docs", slice_status: BLOCKED}
+    - {id: P0b-L4-4, name: "read API", scope: "GET project health returns per-category decomposition + gap alerts + Health Vector. PARTIAL: GET /api/v1/projects/{project_id}/health already returns HealthVector, so single_document_coverage AND (after #579) single_document_evidence_granularity are exposed through the existing response contract and the generated OpenAPI; dedicated API acceptance + consumer validation remain pending. NEXT AUTHORIZED PRODUCT ACTION now that P0b-R1 is RESOLVED.", exit_gate: "authenticated GET proves the real single-document product payload: six-category decomposition; findings; factual missing_data; actionable gaps; single_document_evidence_granularity; honest null (Unknown is null, never 0); tenant isolation; and NO stale carry-forward when an authoritative analysis failed or is unavailable", slice_status: PARTIAL}
+    - {id: P0b-L4-5, name: "user-visible UI/report", scope: "per-category view + gap alerts on document/health surface; null renders 'Unknown / Insufficient evidence'", blocked_by: "P0b-L4-4 dedicated API acceptance / consumer validation. NOT P0b-R1 (RESOLVED by #579) and NOT P0b-R2 (NON_BLOCKING, outside the P0b exit gate). Do not release L4-5 until MASTER reviews the L4-4 result.", exit_gate: "PROD: upload one doc -> UI shows per-category state/findings/missing_data + actionable gap alerts + Health Vector; Unknown!=0%; Coherence absent until >=2 docs", slice_status: BLOCKED}
   residuals:
     - id: P0b-R1-EVIDENCE-GRANULARITY
       name: "per-clause evidence granularity"
-      status: PLANNED
+      status: RESOLVED
       priority: P0
-      blocks: P0b-L4-5
+      blocking: NON_BLOCKING
+      resolved_by: "PR #579 (squash) — merge SHA 6d3a19e41f169d974e9a0d4ea73d1aec7c0bc4cc; authorized head 6aec63b51957c3ec42056f80fc80391d1c136410; merged 2026-08-29"
+      historical_truth: >
+        REGISTERED 2026-08-29 as the P0b pre-UI gate: it DID block P0b-L4-5 while
+        _build_coherence_clauses() emitted ONE whole-document canonical Clause, so evidence was
+        document-level/coarse, per-category evidence_count was effectively 0/1, and real CROSS
+        generation could not occur (_build_category_cross_pairs returns [] for a single clause)
+        even though the CROSS transport was implemented correctly and tested. That blocking
+        relationship was true when recorded and is preserved here, not rewritten.
+      resolution_evidence: >
+        RESOLVED by #579 via path O1 — reuse the already-persisted documents.clauses rows at N8
+        through a Documents read port; no new parser, no second segmentation pipeline, no
+        migration. Canonical evidence identity is the persisted clauses.id UUID PK
+        (clause_code stays metadata), deterministic ordering, replay-stable. Measured on the
+        pinned canonical EPC fixture with the real splitter and the real prior-free
+        CategoryRouter, no threshold/lexicon change: 7 clauses, 7 distinct UUIDs, 5 distinct
+        evidence clause ids (was 1 synthetic marker), 8 cross-clause pairs form where 0 could
+        before. Category breadth is unchanged at 5/6 — R1 bought traceability, not coverage.
+        HealthVector now also persists/exposes single_document_evidence_granularity, so a
+        consumer never has to infer granularity from the shape of an id.
+      no_longer_blocks: "P0b-L4-5 — the granularity gate is closed; L4-5 remains BLOCKED for a different reason (see that slice)."
+    - id: P0b-R2-CROSS-DATA-CONTRACT
+      name: "CROSS evaluator data-key contract"
+      status: PLANNED
+      priority: P1
+      blocking: NON_BLOCKING
       production_truth: >
-        _build_coherence_clauses() currently emits ONE whole-document canonical Clause, so
-        evidence is document-level/coarse, per-category evidence_count is effectively 0/1, and
-        real CROSS generation cannot occur (_build_category_cross_pairs returns [] for a single
-        clause) even though the CROSS transport is implemented correctly and tested.
+        R1 now creates distinct persisted clause evidence, so CROSS pairs are structurally
+        possible (8 pairs measured on the canonical fixture where 0 could form before). The
+        pairs still do not produce findings: ingestion writes metadata keys such as
+        total_amount / planned, while the CROSS evaluators read total / estimated_cost. The
+        two vocabularies are misaligned, so _check_budget_scope_mismatch cannot fire.
       required_resolution: >
-        Audit and REUSE the existing clause/section extraction and persistence; adapt the
-        existing evidence into multiple stable coherence.models.Clause records; preserve stable
-        evidence IDs / lineage. No parallel parser, no second segmentation pipeline.
-      must_close_before: "P0b-L4-5 / user-facing product validation"
+        Agree ONE truthful data contract between ingestion clause metadata and the CROSS
+        evaluators and align both sides to it. No key alias, shim or fabricated value is
+        authorized — a mapping that invents a key the ingester never wrote would manufacture
+        evidence, which INV-1 forbids.
+      not_in_exit_gate: >
+        NON_BLOCKING: the canonical P0b done_definition does not require functional CROSS
+        evaluators for the P0b exit gate. R2 is real future work, not a P0b gate, and MUST NOT
+        be cited as the blocker for P0b-L4-5.
   p0b_exit_gate: "P0b-L4-5 PROD_VALIDATED with the done_definition evidence."
 
 # ── Phase roadmap (visible; sequence preserved) ───────────────────────────────
 phase_roadmap:
   - {phase: "P0a", name: "Reliability & Operability Baseline", status: CLOSED, evidence: "onboarding real, async on dedicated Redis, schema conformance, /summary 200"}
-  - {phase: "P0b", name: "Single-document Health activation", status: "ACTIVE / PARTIAL", plane: ACT-HEALTH, adrs: [ADR-024, ADR-018, ADR-022], notes: "L4-1/L4-2/L4-3 DONE (backend assessment path merged); L4-4 PARTIAL; L4-5 BLOCKED behind P0b-R1-EVIDENCE-GRANULARITY. Not user/prod validated."}
+  - {phase: "P0b", name: "Single-document Health activation", status: "ACTIVE / PARTIAL", plane: ACT-HEALTH, adrs: [ADR-024, ADR-018, ADR-022], notes: "L4-1/L4-2/L4-3 DONE (backend assessment path merged); P0b-R1-EVIDENCE-GRANULARITY RESOLVED by #579 (6d3a19e4); L4-4 PARTIAL and the next authorized product action; L4-5 BLOCKED behind L4-4 API acceptance, no longer behind R1. P0b-R2-CROSS-DATA-CONTRACT registered PLANNED/NON_BLOCKING, outside the exit gate. Not user/prod validated."}
   - {phase: "P1",  name: "Relational Coherence cutover + Temporal + Change-Impact wedge", status: PLANNED, planes: [COHERENCE-XDOC, TEMPORAL-CHANGE], adrs: [ADR-009, ADR-017, ADR-023, ADR-015, ADR-016]}
   - {phase: "P2",  name: "Alerts/Actions/HITL + Health-v1 project controls", status: PLANNED, planes: [ALERTS-ACTIONS-HITL, PROJECT-CONTROLS], adrs: [ADR-019, ADR-020]}
   - {phase: "P2-PROC", name: "Procurement suite (RfQ/BoQ/RACI/comms)", status: PLANNED, plane: PROCUREMENT, notes: "EPIC-PROC2; RfQ/BoQ/comms MISSING"}

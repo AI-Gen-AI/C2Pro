@@ -103,6 +103,7 @@ def validate_enums(doc: dict) -> list[str]:
     p0b = doc.get("p0b_vertical_contract") or {}
     slice_allowed = set(enums["slice_status"])
     residual_allowed = set(enums["residual_status"])
+    blocking_allowed = set(enums["residual_blocking"])
     slice_ids = {_s(sl.get("id")) for sl in (p0b.get("slices") or [])}
 
     for sl in p0b.get("slices") or []:
@@ -119,18 +120,33 @@ def validate_enums(doc: dict) -> list[str]:
     for res in residuals or []:
         rid = res.get("id", "?")
         _chk(f"p0b.residual[{rid}]", "status", res.get("status"), residual_allowed)
+
+        # schema v5: a residual declares whether it currently blocks a slice. Before v5
+        # every residual was forced to name a blocked slice, so a real-but-non-blocking
+        # residual could only be registered by claiming a blocker it does not have.
+        blocking = _s(res.get("blocking", ""))
+        _chk(f"p0b.residual[{rid}]", "blocking", res.get("blocking"), blocking_allowed)
+
+        has_blocks_key = "blocks" in res
         blocks = _s(res.get("blocks", ""))
-        if not blocks:
-            problems.append(f"p0b.residual[{rid}]: missing 'blocks'")
-        elif blocks not in slice_ids:
-            problems.append(f"p0b.residual[{rid}]: 'blocks'='{blocks}' is not a known P0b slice id")
-        else:
-            blocked = next(sl for sl in p0b["slices"] if _s(sl.get("id")) == blocks)
-            if _s(blocked.get("slice_status")) != "BLOCKED":
-                problems.append(
-                    f"p0b.residual[{rid}]: blocks '{blocks}' but that slice is "
-                    f"'{blocked.get('slice_status')}', not BLOCKED"
-                )
+        if blocking == "BLOCKING":
+            if not blocks:
+                problems.append(f"p0b.residual[{rid}]: BLOCKING residual is missing 'blocks'")
+            elif blocks not in slice_ids:
+                problems.append(f"p0b.residual[{rid}]: 'blocks'='{blocks}' is not a known P0b slice id")
+            else:
+                blocked = next(sl for sl in p0b["slices"] if _s(sl.get("id")) == blocks)
+                if _s(blocked.get("slice_status")) != "BLOCKED":
+                    problems.append(
+                        f"p0b.residual[{rid}]: blocks '{blocks}' but that slice is "
+                        f"'{blocked.get('slice_status')}', not BLOCKED"
+                    )
+        elif blocking == "NON_BLOCKING" and has_blocks_key:
+            # Absent, not null/empty: a present-but-blank 'blocks' still reads as an
+            # edge to a reviewer scanning the YAML, so the key itself must be gone.
+            problems.append(
+                f"p0b.residual[{rid}]: NON_BLOCKING residual must omit 'blocks' entirely"
+            )
 
     for row in doc["product_wbs"]:
         wid = row.get("id", "?")
@@ -173,7 +189,11 @@ def extract_canonical(doc: dict) -> dict[str, str]:
     for res in p0b["residuals"]:
         rid = _s(res["id"])
         canon[f"p0b.residual.{rid}.status"] = _s(res["status"])
-        canon[f"p0b.residual.{rid}.blocks"] = _s(res["blocks"])
+        # `.blocking` is emitted for every residual; `.blocks` only exists for a
+        # BLOCKING one, so a NON_BLOCKING residual has no blocker line to contradict.
+        canon[f"p0b.residual.{rid}.blocking"] = _s(res["blocking"])
+        if _s(res["blocking"]) == "BLOCKING":
+            canon[f"p0b.residual.{rid}.blocks"] = _s(res["blocks"])
     for wid in _WBS_IDS:
         row = _wbs_row(doc, wid)
         canon[f"wbs.{wid}.realization"] = _s(row["realization_status"])
