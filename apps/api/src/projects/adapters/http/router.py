@@ -23,7 +23,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import String, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import ColumnElement
 
 from src.analysis.adapters.persistence.models import Alert
@@ -243,32 +242,6 @@ def _severity_rank_expression() -> ColumnElement[int]:
         (severity_text == AlertSeverity.MEDIUM.value, 2),
         (severity_text == AlertSeverity.LOW.value, 3),
         else_=4,
-    )
-
-
-def _open_alert_status_predicate() -> ColumnElement[bool]:
-    # Same production drift as _severity_rank_expression: `alerts.status` is declared in the
-    # migration as the native `alertstatus` enum but production has it as `character varying`.
-    # An enum-typed comparison makes Postgres look for a `varchar = alertstatus` operator that
-    # does not exist (asyncpg UndefinedFunctionError -> HTTP 500 at query-plan time, even for
-    # projects with zero alerts). Compare the column AS TEXT against the enum *value* so the
-    # operator always resolves as `varchar = varchar`.
-    return cast(Alert.status, String) == AlertStatus.OPEN.value
-
-
-def _open_alerts_query(project_id: UUID) -> Select[tuple[Alert]]:
-    """The quick-view open-alerts query, ranked by severity then recency.
-
-    Both enum-mapped columns (`severity`, `status`) are compared AS TEXT — see the drift notes
-    above. Kept as one builder so the drift cannot be reintroduced on only one of them.
-    """
-    return (
-        select(Alert)
-        .where(
-            Alert.project_id == project_id,
-            _open_alert_status_predicate(),
-        )
-        .order_by(_severity_rank_expression(), Alert.created_at.desc())
     )
 
 
@@ -539,7 +512,14 @@ async def get_project_summary(
                 detail="Project not found",
             )
 
-        alerts_result = await session.execute(_open_alerts_query(project_id))
+        alerts_result = await session.execute(
+            select(Alert)
+            .where(
+                Alert.project_id == project_id,
+                Alert.status == AlertStatus.OPEN,
+            )
+            .order_by(_severity_rank_expression(), Alert.created_at.desc())
+        )
         alerts = list(alerts_result.scalars().all())
 
     return _build_project_quick_view_summary(project=project, alerts=alerts)
