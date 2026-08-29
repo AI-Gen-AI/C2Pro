@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
@@ -38,8 +38,14 @@ from src.health.domain.single_document_coverage import (
     EvidenceGranularity,
     SingleDocumentCoverage,
 )
-from src.temporal.domain.project_event import ProjectEvent
 from src.temporal.domain.project_snapshot import ProjectSnapshot, SnapshotTrigger
+from tests.support.health_lineage_fakes import (
+    FakeAnalysisRepo,
+    FakeEventRepo,
+    FakeSnapshotRepo,
+    graph_completed_event,
+    make_writer,
+)
 
 
 def _stub(mapping: dict[str, set[CanonicalCategory]]):
@@ -54,72 +60,6 @@ def _coverage(clause_id: str = "c1") -> SingleDocumentCoverage:
         [Clause(id=clause_id, text="budget text")],
         [],
         qualifier=_stub({"budget text": {CanonicalCategory.BUDGET}}),
-    )
-
-
-class _FakeSnapshotRepo:
-    def __init__(self, existing: list[ProjectSnapshot] | None = None) -> None:
-        self.snapshots: list[ProjectSnapshot] = list(existing or [])
-
-    async def append_snapshot(self, snapshot: ProjectSnapshot) -> ProjectSnapshot:
-        self.snapshots.append(snapshot)
-        return snapshot
-
-    async def latest(self, project_id: UUID, tenant_id: UUID) -> ProjectSnapshot | None:
-        relevant = [s for s in self.snapshots if s.project_id == project_id]
-        return max(relevant, key=lambda s: s.captured_at) if relevant else None
-
-    async def list_since(self, project_id: UUID, tenant_id: UUID, since: datetime):
-        return [s for s in self.snapshots if s.project_id == project_id and s.captured_at >= since]
-
-
-class _FakeProjectStateRepo:
-    async def get(self, project_id: UUID, tenant_id: UUID):
-        return None
-
-
-class _FakeEventRepo:
-    def __init__(self, events: list[ProjectEvent] | None = None) -> None:
-        self.events = list(events or [])
-
-    async def get(self, event_id: UUID, tenant_id: UUID) -> ProjectEvent | None:
-        for event in self.events:
-            if event.event_id == event_id and event.tenant_id == tenant_id:
-                return event
-        return None
-
-
-class _FakeAnalysisRepo:
-    def __init__(self, by_id: dict[UUID, dict[str, Any] | None] | None = None) -> None:
-        self.by_id = dict(by_id or {})
-
-    async def get_result_json(self, analysis_id: UUID, tenant_id: UUID) -> dict[str, Any] | None:
-        return self.by_id.get(analysis_id)
-
-
-def _graph_completed_event(project_id: UUID, tenant_id: UUID, analysis_id: UUID) -> ProjectEvent:
-    now = datetime.now(UTC).replace(tzinfo=None)
-    return ProjectEvent(
-        event_id=uuid4(),
-        project_id=project_id,
-        tenant_id=tenant_id,
-        event_type="graph.completed",
-        payload={"analysis_id": str(analysis_id), "document_id": "doc-1"},
-        actor="analysis_graph",
-        occurred_at=now,
-        created_at=now,
-    )
-
-
-def _writer(snapshot_repo, event_repo=None, analysis_repo=None, clock=None):
-    from src.temporal.application.snapshot_writer import SnapshotWriter
-
-    return SnapshotWriter(
-        project_state_repository=_FakeProjectStateRepo(),
-        snapshot_repository=snapshot_repo,
-        event_repository=event_repo,
-        analysis_repository=analysis_repo,
-        clock=clock,
     )
 
 
@@ -232,10 +172,10 @@ class TestSnapshotWriterCarriesGranularity:
         self, granularity: EvidenceGranularity, reason: str | None = None
     ) -> ProjectSnapshot:
         project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
-        event = _graph_completed_event(project_id, tenant_id, analysis_id)
+        event = graph_completed_event(project_id, tenant_id, analysis_id)
         artifact = encode_single_document_assessment(_coverage(), [], granularity, reason)
-        return await _writer(
-            _FakeSnapshotRepo(), _FakeEventRepo([event]), _FakeAnalysisRepo({analysis_id: artifact})
+        return await make_writer(
+            FakeSnapshotRepo(), FakeEventRepo([event]), FakeAnalysisRepo({analysis_id: artifact})
         ).write_snapshot(
             project_id=project_id,
             tenant_id=tenant_id,
@@ -259,12 +199,12 @@ class TestSnapshotWriterCarriesGranularity:
     async def test_unavailable_assessment_leaves_both_none(self) -> None:
         """GRAPH_COMPLETED authoritative semantics unchanged: no assessment ⇒ both None."""
         project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
-        event = _graph_completed_event(project_id, tenant_id, analysis_id)
+        event = graph_completed_event(project_id, tenant_id, analysis_id)
 
-        snapshot = await _writer(
-            _FakeSnapshotRepo(),
-            _FakeEventRepo([event]),
-            _FakeAnalysisRepo({analysis_id: {"risks": [], "wbs": []}}),
+        snapshot = await make_writer(
+            FakeSnapshotRepo(),
+            FakeEventRepo([event]),
+            FakeAnalysisRepo({analysis_id: {"risks": [], "wbs": []}}),
         ).write_snapshot(
             project_id=project_id,
             tenant_id=tenant_id,
@@ -277,15 +217,15 @@ class TestSnapshotWriterCarriesGranularity:
 
     async def test_scheduled_carry_forward_preserves_both(self) -> None:
         project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
-        event = _graph_completed_event(project_id, tenant_id, analysis_id)
-        repo = _FakeSnapshotRepo()
+        event = graph_completed_event(project_id, tenant_id, analysis_id)
+        repo = FakeSnapshotRepo()
         coverage = _coverage()
         base = datetime.now(UTC).replace(tzinfo=None)
 
-        await _writer(
+        await make_writer(
             repo,
-            _FakeEventRepo([event]),
-            _FakeAnalysisRepo(
+            FakeEventRepo([event]),
+            FakeAnalysisRepo(
                 {analysis_id: encode_single_document_assessment(
                     coverage, [], EvidenceGranularity.CLAUSE
                 )}
@@ -298,7 +238,7 @@ class TestSnapshotWriterCarriesGranularity:
             source_event_id=event.event_id,
         )
 
-        scheduled = await _writer(repo, clock=lambda: base + timedelta(days=1)).write_snapshot(
+        scheduled = await make_writer(repo, clock=lambda: base + timedelta(days=1)).write_snapshot(
             project_id=project_id, tenant_id=tenant_id, trigger=SnapshotTrigger.SCHEDULED
         )
 
