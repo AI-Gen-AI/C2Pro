@@ -457,10 +457,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         # clause. Attributing them to whichever clause happens to sort first would
         # fabricate provenance, so the bridge keeps the document-level identifier even
         # when the evidence itself is clause-granular.
-        clause_id = whole_document_clause_id(
-            str(state.get("doc_type") or state.get("document_category") or "contract"),
-            str(state.get("document_id") or "document"),
-        )
+        clause_id = whole_document_clause_id(*_document_identity(state))
         bridge_result = build_risk_signals(extracted_risks, clause_id=clause_id)
         logger.info(
             "node_coherence_scorer_bridge",
@@ -555,6 +552,16 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
     }
 
 
+def _document_identity(state: ProjectState) -> tuple[str, str]:
+    """The document's type and id as the graph knows them — derived in exactly one place.
+
+    N8 needs both for the evidence lookup and for the document-level identifier the risk
+    bridge stamps on its signals; deriving them twice invites the two to drift apart.
+    """
+    doc_type = state.get("doc_type") or state.get("document_category") or CONTRACT_DOC_TYPE
+    return str(doc_type), str(state.get("document_id") or "document")
+
+
 def _legacy_whole_document_evidence(
     state: ProjectState,
     *,
@@ -583,8 +590,7 @@ async def _resolve_clause_evidence(state: ProjectState) -> ClauseEvidence:
     contract whose clauses are missing or unreadable must degrade honestly rather than
     present a synthetic id as if it were persisted clause evidence.
     """
-    document_id = str(state.get("document_id") or "document")
-    doc_type = str(state.get("doc_type") or state.get("document_category") or "contract")
+    doc_type, document_id = _document_identity(state)
 
     if doc_type.lower() != CONTRACT_DOC_TYPE:
         return _legacy_whole_document_evidence(
