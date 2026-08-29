@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
 **Status:** Reconciliation snapshot (read-only) · **Date:** 2026-08-27
-**reconciled_against_main_sha:** `9c48f4f94d0a5719561916b956f8a78b2129a250` (repo baseline this reconciliation ran against — **not** a live "current main" claim) · **deployed_runtime_sha:** `UNVERIFIED` (confirm via Railway deploy log)
+**reconciled_against_main_sha:** `85caa0ccd0739127b279c93a9c6e979f0e340d21` (repo baseline this reconciliation ran against — main after #576 P0b-L4-3 and #577 — **not** a live "current main" claim) · **deployed_runtime_sha:** `UNVERIFIED` (confirm via Railway deploy log)
 **Machine-readable source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This is the **PRODUCT** control plane — *what C2Pro is and how far each capability is realized*.
@@ -17,7 +17,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=9c48f4f94d0a5719561916b956f8a78b2129a250
+reconciled_against_main_sha=85caa0ccd0739127b279c93a9c6e979f0e340d21
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
@@ -27,7 +27,7 @@ legacy_coverage.unmapped_open_legacy_items=0
 adr.ADR-018.realization=WIRED
 adr.ADR-018.deployment=DEPLOYED
 adr.ADR-018.prod_validation=NOT_VALIDATED
-adr.ADR-024.realization=DESIGNED
+adr.ADR-024.realization=WIRED
 adr.ADR-024.deployment=NONE
 adr.ADR-024.prod_validation=NONE
 p0b.done_digest=9ae6adf0a63af690
@@ -67,7 +67,7 @@ wbs.PWBS-OPS-TRUST.work_status=ACTIVE
 
 ## 2. Current production position (honest — three separate facts)
 
-- **`reconciled_against_main_sha`** = `9c48f4f9` — the repo baseline this reconciliation was performed against; **not** a live "current main" value (that is Git-derived and drifts the moment #572 merges).
+- **`reconciled_against_main_sha`** = `85caa0cc` — the repo baseline this reconciliation was performed against (main after #576 / #577); **not** a live "current main" value (that is Git-derived and drifts on every merge).
 - **`deployed_runtime_sha`** = **UNVERIFIED** — do **not** infer from main; confirm via the Railway deploy log (service `c2pro-api`/production). Equal to main **only** if Railway rebuilt after the #570 merge.
 - **`observed_production_evidence`** (read-only, independent of any SHA): kuwait2 doc `c510de21` enqueue→worker→**SUCCESS** on the dedicated Railway Redis; `coherence_results` **15/15 rows `coherence-v1`** (0 v2); `coherence_v2_shadow` **1 row** (2026-08-07); `alerts.severity` = `public.alertseverity` (#567); ADR-004 circuit breakers in prod logs.
 
@@ -122,7 +122,7 @@ Per-field enums (YAML `status_enums`): **design** ∈ {Accepted, Proposed, Imple
 | ADR-021 briefing (v3) | Deferred | SCAFFOLDED | NONE | NONE | deferred |
 | ADR-022 contract-clarity (v3) | Accepted | WIRED | DEPLOYED | NOT_VALIDATED | not surfaced via activation |
 | ADR-023 agentic (v3) | **Proposed** | DESIGNED | NONE | NONE | not built |
-| **ADR-024 single-doc-activation (v3)** | Accepted *(VP 2026-08-22)* | **DESIGNED** | NONE | NONE | **no `category_coverage`/gap-alert — this is P0b** |
+| **ADR-024 single-doc-activation (v3)** | Accepted *(VP 2026-08-22)* | **WIRED** | NONE | NONE | L4-1…L4-3 merged (domain → real single-doc assessment → N8 → `analyses.result_json` → lineage → `HealthVector.single_document_coverage`); L4-4 exposure **PARTIAL**. Open: **per-clause evidence granularity** + dedicated API acceptance + **L4-5 UI/prod validation** |
 
 ## 4b. Coherence runtime reconciliation (proven, read-only — observed history vs routing capability)
 

@@ -11,6 +11,7 @@ Runnable two ways:
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -45,7 +46,11 @@ def test_md_value_contradiction_detected() -> None:
 
 
 def test_md_missing_key_detected() -> None:
-    mutated = _MD_TEXT.replace("adr.ADR-024.realization=DESIGNED\n", "")
+    # Value-agnostic: drop the whole `adr.ADR-024.realization=<anything>` line so this test
+    # cannot rot when the row's status legitimately changes (it was pinned to DESIGNED and
+    # silently became a no-op when ADR-024 moved to WIRED).
+    mutated = re.sub(r"^adr\.ADR-024\.realization=.*\n", "", _MD_TEXT, flags=re.MULTILINE)
+    assert mutated != _MD_TEXT, "the canonical key must exist before we can test its removal"
     problems = _compare_with_mutated_md(mutated)
     assert any("MD missing" in p and "adr.ADR-024.realization" in p for p in problems), problems
 
