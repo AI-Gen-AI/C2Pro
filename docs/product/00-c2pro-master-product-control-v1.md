@@ -124,7 +124,7 @@ Per-field enums (YAML `status_enums`): **design** ∈ {Accepted, Proposed, Imple
 | ADR-021 briefing (v3) | Deferred | SCAFFOLDED | NONE | NONE | deferred |
 | ADR-022 contract-clarity (v3) | Accepted | WIRED | DEPLOYED | NOT_VALIDATED | not surfaced via activation |
 | ADR-023 agentic (v3) | **Proposed** | DESIGNED | NONE | NONE | not built |
-| **ADR-024 single-doc-activation (v3)** | Accepted *(VP 2026-08-22)* | **WIRED** | NONE | NONE | L4-1…L4-3 merged (domain → real single-doc assessment → N8 → `analyses.result_json` → lineage → `HealthVector.single_document_coverage`); L4-4 exposure **PARTIAL**. Open: **per-clause evidence granularity** + dedicated API acceptance + **L4-5 UI/prod validation** |
+| **ADR-024 single-doc-activation (v3)** | Accepted *(VP 2026-08-22)* | **WIRED** | NONE | NONE | L4-1…L4-3 merged (domain → real single-doc assessment → N8 → `analyses.result_json` → lineage → `HealthVector.single_document_coverage`); **P0b-R1 per-clause evidence granularity RESOLVED (#579)** — N8 scores persisted `documents.clauses` with UUID evidence identity, and `HealthVector` also exposes `single_document_evidence_granularity`; L4-4 exposure **PARTIAL**. Open: **dedicated L4-4 API acceptance** + **L4-5 UI/prod validation** |
 
 ## 4b. Coherence runtime reconciliation (proven, read-only — observed history vs routing capability)
 
