@@ -151,16 +151,149 @@ def test_md_slice_status_contradiction_detected() -> None:
     assert any("VALUE DRIFT" in p and "p0b.slice.P0b-L4-3.status" in p for p in problems), problems
 
 
-def test_residual_is_registered_and_parity_checked() -> None:
-    """Positive: the granularity residual, its status and its blocking edge are canonical."""
+def _residual(doc: dict, rid: str) -> dict:
+    return next(r for r in doc["p0b_vertical_contract"]["residuals"] if r["id"] == rid)
+
+
+def _make_blocking(res: dict, blocks: str = "P0b-L4-5") -> dict:
+    """Turn a residual into a BLOCKING one so the BLOCKING rules can be exercised."""
+    res["blocking"] = "BLOCKING"
+    res["blocks"] = blocks
+    return res
+
+
+def test_residuals_are_registered_and_parity_checked() -> None:
+    """Positive: both residuals, their statuses and their blocking mode are canonical."""
     canon = c.extract_canonical(c.load_yaml())
     md = c.parse_md_block(_MD_TEXT)
-    rid = "P0b-R1-EVIDENCE-GRANULARITY"
-    assert canon["p0b.residual_ids"] == rid
-    assert canon[f"p0b.residual.{rid}.status"] == "PLANNED"
-    assert canon[f"p0b.residual.{rid}.blocks"] == "P0b-L4-5"
-    for key in ("p0b.residual_ids", f"p0b.residual.{rid}.status", f"p0b.residual.{rid}.blocks"):
+    r1, r2 = "P0b-R1-EVIDENCE-GRANULARITY", "P0b-R2-CROSS-DATA-CONTRACT"
+
+    assert canon["p0b.residual_ids"] == f"{r1},{r2}"
+    assert canon[f"p0b.residual.{r1}.status"] == "RESOLVED"
+    assert canon[f"p0b.residual.{r1}.blocking"] == "NON_BLOCKING"
+    assert canon[f"p0b.residual.{r2}.status"] == "PLANNED"
+    assert canon[f"p0b.residual.{r2}.blocking"] == "NON_BLOCKING"
+
+    for key in (
+        "p0b.residual_ids",
+        f"p0b.residual.{r1}.status",
+        f"p0b.residual.{r1}.blocking",
+        f"p0b.residual.{r2}.status",
+        f"p0b.residual.{r2}.blocking",
+    ):
         assert md[key] == canon[key], f"MD/YAML drift on {key}"
+
+
+def test_non_blocking_residual_emits_no_blocks_key() -> None:
+    """Positive: a NON_BLOCKING residual has no blocker line to contradict."""
+    canon = c.extract_canonical(c.load_yaml())
+    for rid in ("P0b-R1-EVIDENCE-GRANULARITY", "P0b-R2-CROSS-DATA-CONTRACT"):
+        assert f"p0b.residual.{rid}.blocks" not in canon
+    assert "p0b.residual.P0b-R2-CROSS-DATA-CONTRACT.blocks" not in _MD_TEXT
+
+
+def test_blocking_residual_emits_the_blocks_key() -> None:
+    """Positive: a BLOCKING residual still publishes which slice it gates."""
+    doc = c.load_yaml()
+    _make_blocking(_residual(doc, "P0b-R2-CROSS-DATA-CONTRACT"))
+    canon = c.extract_canonical(doc)
+    assert canon["p0b.residual.P0b-R2-CROSS-DATA-CONTRACT.blocking"] == "BLOCKING"
+    assert canon["p0b.residual.P0b-R2-CROSS-DATA-CONTRACT.blocks"] == "P0b-L4-5"
+
+
+def test_r2_is_registered_as_planned_and_non_blocking() -> None:
+    """Positive: R2 exists as real future work that is NOT a P0b exit gate."""
+    res = _residual(c.load_yaml(), "P0b-R2-CROSS-DATA-CONTRACT")
+    assert res["status"] == "PLANNED"
+    assert res["priority"] == "P1"
+    assert res["blocking"] == "NON_BLOCKING"
+    assert "blocks" not in res
+
+
+def test_r1_records_its_resolution_without_erasing_history() -> None:
+    """Positive: R1 is RESOLVED, evidences the merge, and keeps the dated blocking truth."""
+    res = _residual(c.load_yaml(), "P0b-R1-EVIDENCE-GRANULARITY")
+    assert res["status"] == "RESOLVED"
+    assert res["blocking"] == "NON_BLOCKING"
+    assert "6d3a19e41f169d974e9a0d4ea73d1aec7c0bc4cc" in res["resolved_by"]
+    # Historical truth preserved, not rewritten.
+    assert "DID block P0b-L4-5" in res["historical_truth"]
+
+
+def test_l4_5_blocker_is_l4_4_not_a_residual() -> None:
+    """Positive: L4-5 stays BLOCKED, but on L4-4 acceptance — not R1 and not R2."""
+    doc = c.load_yaml()
+    slice_45 = next(
+        sl for sl in doc["p0b_vertical_contract"]["slices"] if sl["id"] == "P0b-L4-5"
+    )
+    assert slice_45["slice_status"] == "BLOCKED"
+    assert "P0b-L4-4" in slice_45["blocked_by"]
+    assert "NOT P0b-R1" in slice_45["blocked_by"]
+    assert "NOT P0b-R2" in slice_45["blocked_by"]
+
+
+def test_resolved_residual_is_not_the_current_blocker_and_l4_4_is_next() -> None:
+    """ANTI-DRIFT: once R1 is RESOLVED, control truth must stop gating on it.
+
+    Deliberately structured-field only — no prose parsing. Two things must hold
+    together, because a stale narrative can otherwise keep citing a closed residual
+    as the live blocker long after its status flipped:
+
+      1. no RESOLVED residual still carries a blocking edge, and nothing at all
+         currently blocks P0b-L4-5 via the residual registry;
+      2. the current next authorized product action is P0b-L4-4.
+    """
+    doc = c.load_yaml()
+    p0b = doc["p0b_vertical_contract"]
+    r1 = _residual(doc, "P0b-R1-EVIDENCE-GRANULARITY")
+
+    assert r1["status"] == "RESOLVED", "fixture drifted: this test guards the RESOLVED state"
+
+    # 1 — a RESOLVED residual cannot be anyone's current blocker.
+    for res in p0b["residuals"]:
+        if res["status"] == "RESOLVED":
+            assert res["blocking"] == "NON_BLOCKING", res["id"]
+            assert "blocks" not in res, res["id"]
+    assert not [
+        res["id"] for res in p0b["residuals"] if res.get("blocks") == "P0b-L4-5"
+    ], "P0b-L4-5 is still gated by a residual"
+
+    # 2 — the next authorized action is L4-4, and it is real work (not DONE).
+    assert p0b["next_slice"] == "P0b-L4-4"
+    nxt = next(sl for sl in p0b["slices"] if sl["id"] == p0b["next_slice"])
+    assert nxt["slice_status"] == "PARTIAL"
+
+
+def test_next_slice_is_parity_checked() -> None:
+    """The next authorized action is a canonical value, so MD cannot disagree."""
+    canon = c.extract_canonical(c.load_yaml())
+    md = c.parse_md_block(_MD_TEXT)
+    assert canon["p0b.next_slice"] == "P0b-L4-4"
+    assert md["p0b.next_slice"] == canon["p0b.next_slice"]
+
+
+def test_missing_next_slice_detected() -> None:
+    """Negative: control truth must always name what comes next."""
+    doc = c.load_yaml()
+    del doc["p0b_vertical_contract"]["next_slice"]
+    problems = c.validate_enums(doc)
+    assert any("missing 'next_slice'" in p for p in problems), problems
+
+
+def test_unknown_next_slice_detected() -> None:
+    """Negative: next_slice must name a real slice."""
+    doc = c.load_yaml()
+    doc["p0b_vertical_contract"]["next_slice"] = "P0b-L4-9"
+    problems = c.validate_enums(doc)
+    assert any("not a known P0b slice id" in p for p in problems), problems
+
+
+def test_done_next_slice_detected() -> None:
+    """Negative: a finished slice cannot be the next authorized action."""
+    doc = c.load_yaml()
+    doc["p0b_vertical_contract"]["next_slice"] = "P0b-L4-1"
+    problems = c.validate_enums(doc)
+    assert any("already DONE" in p for p in problems), problems
 
 
 def test_missing_residual_detected() -> None:
@@ -179,9 +312,50 @@ def test_invalid_residual_status_detected() -> None:
     assert any("MAYBE_LATER" in p for p in problems), problems
 
 
-def test_residual_blocking_contradiction_detected() -> None:
-    """Negative: a residual whose blocked slice is not BLOCKED must FAIL."""
+def test_missing_blocking_field_detected() -> None:
+    """Negative: a residual with no 'blocking' must FAIL — the mode is never assumed."""
     doc = c.load_yaml()
+    del _residual(doc, "P0b-R2-CROSS-DATA-CONTRACT")["blocking"]
+    problems = c.validate_enums(doc)
+    assert any("missing 'blocking'" in p for p in problems), problems
+
+
+def test_invalid_blocking_value_detected() -> None:
+    """Negative: a 'blocking' value outside residual_blocking must FAIL."""
+    doc = c.load_yaml()
+    _residual(doc, "P0b-R2-CROSS-DATA-CONTRACT")["blocking"] = "SORT_OF"
+    problems = c.validate_enums(doc)
+    assert any("SORT_OF" in p for p in problems), problems
+
+
+def test_non_blocking_residual_with_blocks_detected() -> None:
+    """Negative: NON_BLOCKING + 'blocks' is a contradiction and must FAIL."""
+    doc = c.load_yaml()
+    _residual(doc, "P0b-R2-CROSS-DATA-CONTRACT")["blocks"] = "P0b-L4-5"
+    problems = c.validate_enums(doc)
+    assert any("must omit 'blocks'" in p for p in problems), problems
+
+
+def test_non_blocking_residual_with_null_blocks_detected() -> None:
+    """Negative: absent means absent — a null/empty 'blocks' still reads as an edge."""
+    doc = c.load_yaml()
+    _residual(doc, "P0b-R2-CROSS-DATA-CONTRACT")["blocks"] = None
+    problems = c.validate_enums(doc)
+    assert any("must omit 'blocks'" in p for p in problems), problems
+
+
+def test_blocking_residual_without_blocks_detected() -> None:
+    """Negative: BLOCKING with no 'blocks' must FAIL — it must name what it gates."""
+    doc = c.load_yaml()
+    _residual(doc, "P0b-R2-CROSS-DATA-CONTRACT")["blocking"] = "BLOCKING"
+    problems = c.validate_enums(doc)
+    assert any("BLOCKING residual is missing 'blocks'" in p for p in problems), problems
+
+
+def test_residual_blocking_contradiction_detected() -> None:
+    """Negative: a BLOCKING residual whose target slice is not BLOCKED must FAIL."""
+    doc = c.load_yaml()
+    _make_blocking(_residual(doc, "P0b-R2-CROSS-DATA-CONTRACT"))
     for sl in doc["p0b_vertical_contract"]["slices"]:
         if sl["id"] == "P0b-L4-5":
             sl["slice_status"] = "NOT_STARTED"
@@ -190,11 +364,21 @@ def test_residual_blocking_contradiction_detected() -> None:
 
 
 def test_residual_blocking_unknown_slice_detected() -> None:
-    """Negative: a residual blocking a slice id that does not exist must FAIL."""
+    """Negative: a BLOCKING residual naming a slice id that does not exist must FAIL."""
     doc = c.load_yaml()
-    doc["p0b_vertical_contract"]["residuals"][0]["blocks"] = "P0b-L4-9"
+    _make_blocking(_residual(doc, "P0b-R2-CROSS-DATA-CONTRACT"), blocks="P0b-L4-9")
     problems = c.validate_enums(doc)
     assert any("not a known P0b slice id" in p for p in problems), problems
+
+
+def test_md_blocking_contradiction_detected() -> None:
+    """Negative: an MD '.blocking' that disagrees with the YAML must FAIL."""
+    key = "p0b.residual.P0b-R2-CROSS-DATA-CONTRACT.blocking"
+    broken = _MD_TEXT.replace(f"{key}=NON_BLOCKING", f"{key}=BLOCKING")
+    assert broken != _MD_TEXT, "fixture did not mutate — the canonical key moved"
+    canon = c.extract_canonical(c.load_yaml())
+    md = c.parse_md_block(broken)
+    assert md[key] != canon[key]
 
 def _all_tests() -> list:
     return [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
