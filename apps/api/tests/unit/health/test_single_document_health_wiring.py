@@ -36,8 +36,14 @@ from src.health.domain.single_document_coverage import (
     CategoryAssessment,
     SingleDocumentCoverage,
 )
-from src.temporal.domain.project_event import ProjectEvent
 from src.temporal.domain.project_snapshot import ProjectSnapshot, SnapshotTrigger
+from tests.support.health_lineage_fakes import (
+    FakeAnalysisRepo,
+    FakeEventRepo,
+    FakeSnapshotRepo,
+    graph_completed_event,
+    make_writer,
+)
 
 # =====================================================================================
 # Fixtures / fakes
@@ -65,76 +71,6 @@ def _coverage(findings: list[FindingSignal] | None = None) -> SingleDocumentCove
         [Clause(id="c1", text="budget text")],
         findings or [],
         qualifier=_stub({"budget text": {CanonicalCategory.BUDGET}}),
-    )
-
-
-class _FakeSnapshotRepo:
-    def __init__(self, existing: list[ProjectSnapshot] | None = None) -> None:
-        self.snapshots: list[ProjectSnapshot] = list(existing or [])
-        self.appended: list[ProjectSnapshot] = []
-
-    async def append_snapshot(self, snapshot: ProjectSnapshot) -> ProjectSnapshot:
-        self.snapshots.append(snapshot)
-        self.appended.append(snapshot)
-        return snapshot
-
-    async def latest(self, project_id: UUID, tenant_id: UUID) -> ProjectSnapshot | None:
-        relevant = [s for s in self.snapshots if s.project_id == project_id]
-        return max(relevant, key=lambda s: s.captured_at) if relevant else None
-
-    async def list_since(self, project_id: UUID, tenant_id: UUID, since: datetime):
-        return [s for s in self.snapshots if s.project_id == project_id and s.captured_at >= since]
-
-
-class _FakeProjectStateRepo:
-    async def get(self, project_id: UUID, tenant_id: UUID):
-        return None
-
-
-class _FakeEventRepo:
-    def __init__(self, events: list[ProjectEvent] | None = None) -> None:
-        self.events = list(events or [])
-
-    async def get(self, event_id: UUID, tenant_id: UUID) -> ProjectEvent | None:
-        for event in self.events:
-            if event.event_id == event_id and event.tenant_id == tenant_id:
-                return event
-        return None
-
-
-class _FakeAnalysisRepo:
-    def __init__(self, by_id: dict[UUID, dict[str, Any] | None] | None = None) -> None:
-        self.by_id = dict(by_id or {})
-        self.requested: list[UUID] = []
-
-    async def get_result_json(self, analysis_id: UUID, tenant_id: UUID) -> dict[str, Any] | None:
-        self.requested.append(analysis_id)
-        return self.by_id.get(analysis_id)
-
-
-def _graph_completed_event(project_id: UUID, tenant_id: UUID, analysis_id: UUID) -> ProjectEvent:
-    now = datetime.now(UTC).replace(tzinfo=None)
-    return ProjectEvent(
-        event_id=uuid4(),
-        project_id=project_id,
-        tenant_id=tenant_id,
-        event_type="graph.completed",
-        payload={"analysis_id": str(analysis_id), "document_id": "doc-1"},
-        actor="analysis_graph",
-        occurred_at=now,
-        created_at=now,
-    )
-
-
-def _writer(snapshot_repo, event_repo=None, analysis_repo=None, clock=None):
-    from src.temporal.application.snapshot_writer import SnapshotWriter
-
-    return SnapshotWriter(
-        project_state_repository=_FakeProjectStateRepo(),
-        snapshot_repository=snapshot_repo,
-        event_repository=event_repo,
-        analysis_repository=analysis_repo,
-        clock=clock,
     )
 
 
@@ -200,11 +136,11 @@ def test_artifact_preserves_existing_risks_and_wbs_keys() -> None:
 @pytest.mark.asyncio
 async def test_graph_completed_lineage_resolves_exact_analysis_id() -> None:
     project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
-    event = _graph_completed_event(project_id, tenant_id, analysis_id)
-    analysis_repo = _FakeAnalysisRepo({analysis_id: encode_single_document_assessment(_coverage(), [])})
+    event = graph_completed_event(project_id, tenant_id, analysis_id)
+    analysis_repo = FakeAnalysisRepo({analysis_id: encode_single_document_assessment(_coverage(), [])})
 
-    snapshot = await _writer(
-        _FakeSnapshotRepo(), _FakeEventRepo([event]), analysis_repo
+    snapshot = await make_writer(
+        FakeSnapshotRepo(), FakeEventRepo([event]), analysis_repo
     ).write_snapshot(
         project_id=project_id,
         tenant_id=tenant_id,
@@ -233,13 +169,13 @@ async def test_snapshot_write_does_not_rerun_the_category_router(
     monkeypatch.setattr(router_module.CategoryRouter, "from_registry", _explode)
 
     project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
-    event = _graph_completed_event(project_id, tenant_id, analysis_id)
+    event = graph_completed_event(project_id, tenant_id, analysis_id)
     coverage = _coverage()
 
-    snapshot = await _writer(
-        _FakeSnapshotRepo(),
-        _FakeEventRepo([event]),
-        _FakeAnalysisRepo({analysis_id: encode_single_document_assessment(coverage, [])}),
+    snapshot = await make_writer(
+        FakeSnapshotRepo(),
+        FakeEventRepo([event]),
+        FakeAnalysisRepo({analysis_id: encode_single_document_assessment(coverage, [])}),
     ).write_snapshot(
         project_id=project_id,
         tenant_id=tenant_id,
@@ -259,13 +195,13 @@ async def test_snapshot_write_does_not_rerun_the_category_router(
 @pytest.mark.asyncio
 async def test_six_assessments_missing_data_and_gaps_survive_round_trip() -> None:
     project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
-    event = _graph_completed_event(project_id, tenant_id, analysis_id)
+    event = graph_completed_event(project_id, tenant_id, analysis_id)
     coverage = _coverage()
 
-    snapshot = await _writer(
-        _FakeSnapshotRepo(),
-        _FakeEventRepo([event]),
-        _FakeAnalysisRepo({analysis_id: encode_single_document_assessment(coverage, [])}),
+    snapshot = await make_writer(
+        FakeSnapshotRepo(),
+        FakeEventRepo([event]),
+        FakeAnalysisRepo({analysis_id: encode_single_document_assessment(coverage, [])}),
     ).write_snapshot(
         project_id=project_id,
         tenant_id=tenant_id,
@@ -295,14 +231,14 @@ async def test_six_assessments_missing_data_and_gaps_survive_round_trip() -> Non
 @pytest.mark.asyncio
 async def test_cross_findings_survive_round_trip_without_false_attribution() -> None:
     project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
-    event = _graph_completed_event(project_id, tenant_id, analysis_id)
+    event = graph_completed_event(project_id, tenant_id, analysis_id)
     findings = [_budget_finding(), _cross("CROSS-SCHEDULE-DELIVERY", "t3|q7")]
     coverage = _coverage(findings)
 
-    snapshot = await _writer(
-        _FakeSnapshotRepo(),
-        _FakeEventRepo([event]),
-        _FakeAnalysisRepo({analysis_id: encode_single_document_assessment(coverage, findings)}),
+    snapshot = await make_writer(
+        FakeSnapshotRepo(),
+        FakeEventRepo([event]),
+        FakeAnalysisRepo({analysis_id: encode_single_document_assessment(coverage, findings)}),
     ).write_snapshot(
         project_id=project_id,
         tenant_id=tenant_id,
@@ -340,12 +276,12 @@ def test_evaluated_empty_findings_is_distinguishable_from_legacy_unavailable() -
 @pytest.mark.asyncio
 async def test_legacy_analysis_yields_none_never_empty_known() -> None:
     project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
-    event = _graph_completed_event(project_id, tenant_id, analysis_id)
+    event = graph_completed_event(project_id, tenant_id, analysis_id)
 
-    snapshot = await _writer(
-        _FakeSnapshotRepo(),
-        _FakeEventRepo([event]),
-        _FakeAnalysisRepo({analysis_id: {"risks": [], "wbs": []}}),
+    snapshot = await make_writer(
+        FakeSnapshotRepo(),
+        FakeEventRepo([event]),
+        FakeAnalysisRepo({analysis_id: {"risks": [], "wbs": []}}),
     ).write_snapshot(
         project_id=project_id,
         tenant_id=tenant_id,
@@ -364,12 +300,12 @@ async def test_legacy_analysis_yields_none_never_empty_known() -> None:
 @pytest.mark.asyncio
 async def test_coherence_subscore_remains_null_for_single_document() -> None:
     project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
-    event = _graph_completed_event(project_id, tenant_id, analysis_id)
+    event = graph_completed_event(project_id, tenant_id, analysis_id)
 
-    snapshot = await _writer(
-        _FakeSnapshotRepo(),
-        _FakeEventRepo([event]),
-        _FakeAnalysisRepo({analysis_id: encode_single_document_assessment(_coverage(), [])}),
+    snapshot = await make_writer(
+        FakeSnapshotRepo(),
+        FakeEventRepo([event]),
+        FakeAnalysisRepo({analysis_id: encode_single_document_assessment(_coverage(), [])}),
     ).write_snapshot(
         project_id=project_id,
         tenant_id=tenant_id,
@@ -385,19 +321,19 @@ async def test_coherence_subscore_remains_null_for_single_document() -> None:
 @pytest.mark.asyncio
 async def test_document_health_surface_does_not_alter_composite_scoring() -> None:
     project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
-    event = _graph_completed_event(project_id, tenant_id, analysis_id)
+    event = graph_completed_event(project_id, tenant_id, analysis_id)
 
-    with_coverage = await _writer(
-        _FakeSnapshotRepo(),
-        _FakeEventRepo([event]),
-        _FakeAnalysisRepo({analysis_id: encode_single_document_assessment(_coverage(), [_budget_finding()])}),
+    with_coverage = await make_writer(
+        FakeSnapshotRepo(),
+        FakeEventRepo([event]),
+        FakeAnalysisRepo({analysis_id: encode_single_document_assessment(_coverage(), [_budget_finding()])}),
     ).write_snapshot(
         project_id=project_id,
         tenant_id=tenant_id,
         trigger=SnapshotTrigger.GRAPH_COMPLETED,
         source_event_id=event.event_id,
     )
-    without = await _writer(_FakeSnapshotRepo()).write_snapshot(
+    without = await make_writer(FakeSnapshotRepo()).write_snapshot(
         project_id=project_id,
         tenant_id=tenant_id,
         trigger=SnapshotTrigger.GRAPH_COMPLETED,
@@ -417,12 +353,12 @@ async def test_document_health_surface_does_not_alter_composite_scoring() -> Non
 @pytest.mark.asyncio
 async def test_replay_of_same_source_event_id_is_idempotent() -> None:
     project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
-    event = _graph_completed_event(project_id, tenant_id, analysis_id)
-    repo = _FakeSnapshotRepo()
-    writer = _writer(
+    event = graph_completed_event(project_id, tenant_id, analysis_id)
+    repo = FakeSnapshotRepo()
+    writer = make_writer(
         repo,
-        _FakeEventRepo([event]),
-        _FakeAnalysisRepo({analysis_id: encode_single_document_assessment(_coverage(), [])}),
+        FakeEventRepo([event]),
+        FakeAnalysisRepo({analysis_id: encode_single_document_assessment(_coverage(), [])}),
     )
 
     first = await writer.write_snapshot(
@@ -450,15 +386,15 @@ async def test_replay_of_same_source_event_id_is_idempotent() -> None:
 @pytest.mark.asyncio
 async def test_scheduled_snapshot_carries_forward_last_known_assessment() -> None:
     project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
-    event = _graph_completed_event(project_id, tenant_id, analysis_id)
-    repo = _FakeSnapshotRepo()
+    event = graph_completed_event(project_id, tenant_id, analysis_id)
+    repo = FakeSnapshotRepo()
     coverage = _coverage()
 
     base = datetime.now(UTC).replace(tzinfo=None)
-    graph_writer = _writer(
+    graph_writer = make_writer(
         repo,
-        _FakeEventRepo([event]),
-        _FakeAnalysisRepo({analysis_id: encode_single_document_assessment(coverage, [])}),
+        FakeEventRepo([event]),
+        FakeAnalysisRepo({analysis_id: encode_single_document_assessment(coverage, [])}),
         clock=lambda: base,
     )
     await graph_writer.write_snapshot(
@@ -470,7 +406,7 @@ async def test_scheduled_snapshot_carries_forward_last_known_assessment() -> Non
 
     # A later SCHEDULED run has no new analysis — absence of a new analysis is NOT
     # evidence the previous assessment ceased to exist.
-    scheduled = await _writer(repo, clock=lambda: base + timedelta(days=1)).write_snapshot(
+    scheduled = await make_writer(repo, clock=lambda: base + timedelta(days=1)).write_snapshot(
         project_id=project_id,
         tenant_id=tenant_id,
         trigger=SnapshotTrigger.SCHEDULED,
@@ -483,7 +419,7 @@ async def test_scheduled_snapshot_carries_forward_last_known_assessment() -> Non
 @pytest.mark.asyncio
 async def test_scheduled_snapshot_stays_none_when_nothing_was_ever_assessed() -> None:
     project_id, tenant_id = uuid4(), uuid4()
-    snapshot = await _writer(_FakeSnapshotRepo()).write_snapshot(
+    snapshot = await make_writer(FakeSnapshotRepo()).write_snapshot(
         project_id=project_id, tenant_id=tenant_id, trigger=SnapshotTrigger.SCHEDULED
     )
     assert snapshot.health_vector["single_document_coverage"] is None
@@ -524,28 +460,28 @@ async def _snapshot_after_prior(
     """Seed a project with a known assessment, then take a second snapshot."""
     project_id, tenant_id = uuid4(), uuid4()
     first_analysis, next_analysis = uuid4(), uuid4()
-    first_event = _graph_completed_event(project_id, tenant_id, first_analysis)
-    next_event = _graph_completed_event(project_id, tenant_id, next_analysis)
+    first_event = graph_completed_event(project_id, tenant_id, first_analysis)
+    next_event = graph_completed_event(project_id, tenant_id, next_analysis)
     if payload_override is not None:
         next_event = next_event.model_copy(update={"payload": payload_override})
 
-    repo = _FakeSnapshotRepo()
+    repo = FakeSnapshotRepo()
     base = datetime.now(UTC).replace(tzinfo=None)
     analyses: dict[UUID, dict[str, Any] | None] = {
         first_analysis: encode_single_document_assessment(_coverage(), [])
     }
     if new_result_json is not None:
         analyses[next_analysis] = new_result_json
-    analysis_repo = _FakeAnalysisRepo(analyses)
-    events = _FakeEventRepo([first_event] + ([next_event] if include_event else []))
+    analysis_repo = FakeAnalysisRepo(analyses)
+    events = FakeEventRepo([first_event] + ([next_event] if include_event else []))
 
-    await _writer(repo, events, analysis_repo, clock=lambda: base).write_snapshot(
+    await make_writer(repo, events, analysis_repo, clock=lambda: base).write_snapshot(
         project_id=project_id,
         tenant_id=tenant_id,
         trigger=SnapshotTrigger.GRAPH_COMPLETED,
         source_event_id=first_event.event_id,
     )
-    return await _writer(
+    return await make_writer(
         repo, events, analysis_repo, clock=lambda: base + timedelta(days=1)
     ).write_snapshot(
         project_id=project_id,
@@ -621,7 +557,7 @@ async def test_prior_assessment_plus_scheduled_carries_forward() -> None:
 @pytest.mark.asyncio
 async def test_no_prior_plus_scheduled_yields_none() -> None:
     """(5) Nothing was ever assessed => None; nothing is fabricated."""
-    snapshot = await _writer(_FakeSnapshotRepo()).write_snapshot(
+    snapshot = await make_writer(FakeSnapshotRepo()).write_snapshot(
         project_id=uuid4(), tenant_id=uuid4(), trigger=SnapshotTrigger.SCHEDULED
     )
     assert snapshot.health_vector["single_document_coverage"] is None
@@ -633,12 +569,12 @@ async def test_lineage_resolution_reports_which_no_coverage_state_applies() -> N
     from src.temporal.application.snapshot_writer import AssessmentLineage
 
     project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
-    event = _graph_completed_event(project_id, tenant_id, analysis_id)
+    event = graph_completed_event(project_id, tenant_id, analysis_id)
     coverage = _coverage()
-    writer = _writer(
-        _FakeSnapshotRepo(),
-        _FakeEventRepo([event]),
-        _FakeAnalysisRepo({analysis_id: encode_single_document_assessment(coverage, [])}),
+    writer = make_writer(
+        FakeSnapshotRepo(),
+        FakeEventRepo([event]),
+        FakeAnalysisRepo({analysis_id: encode_single_document_assessment(coverage, [])}),
     )
 
     resolved = await writer._resolve_single_document_coverage(
@@ -650,10 +586,10 @@ async def test_lineage_resolution_reports_which_no_coverage_state_applies() -> N
     assert resolved.lineage is AssessmentLineage.RESOLVED
     assert resolved.coverage == coverage
 
-    legacy_writer = _writer(
-        _FakeSnapshotRepo(),
-        _FakeEventRepo([event]),
-        _FakeAnalysisRepo({analysis_id: {"risks": []}}),
+    legacy_writer = make_writer(
+        FakeSnapshotRepo(),
+        FakeEventRepo([event]),
+        FakeAnalysisRepo({analysis_id: {"risks": []}}),
     )
     unavailable = await legacy_writer._resolve_single_document_coverage(
         tenant_id=tenant_id,

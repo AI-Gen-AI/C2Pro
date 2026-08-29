@@ -6037,6 +6037,27 @@ components:
       - quote
       title: Evidence
       description: Represents the specific evidence supporting an alert.
+    EvidenceGranularity:
+      type: string
+      enum:
+      - clause
+      - document
+      title: EvidenceGranularity
+      description: 'What the ``evidence_clause_ids`` in a coverage actually identify
+        (P0b-R1).
+
+
+        This qualifies every coverage that carries evidence ids, so it lives beside
+        the
+
+        coverage contract rather than in the persistence artifact alone: "six categories
+
+        evidenced by six distinct clauses" and "six categories evidenced by one
+
+        whole-document blob" are different product claims, and a reader must be able
+        to
+
+        tell them apart **without** inspecting the shape of an id.'
     EvidenceHistoryEventResponse:
       properties:
         id:
@@ -6442,6 +6463,10 @@ components:
         single_document_coverage:
           anyOf:
           - $ref: '#/components/schemas/SingleDocumentCoverage'
+          - type: 'null'
+        single_document_evidence_granularity:
+          anyOf:
+          - $ref: '#/components/schemas/EvidenceGranularity'
           - type: 'null'
       additionalProperties: false
       type: object

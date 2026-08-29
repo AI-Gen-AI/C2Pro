@@ -70,9 +70,9 @@ async def test_n8_node_feeds_canonical_clauses_and_findings_to_the_builder_once(
     seen: list[tuple[list[Clause], list[FindingSignal]]] = []
     real_builder = doc_assessment.build_document_assessment_artifact
 
-    def recording_builder(clauses, finding_signals):  # noqa: ANN001, ANN202
+    def recording_builder(clauses, finding_signals, *args, **kwargs):  # noqa: ANN001, ANN202
         seen.append((list(clauses), list(finding_signals)))
-        return real_builder(clauses, finding_signals)
+        return real_builder(clauses, finding_signals, *args, **kwargs)
 
     monkeypatch.setattr(doc_assessment, "build_document_assessment_artifact", recording_builder)
 

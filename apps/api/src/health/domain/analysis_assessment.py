@@ -17,6 +17,15 @@ nothing" are different product claims (INV-1).
 
 Serialization is canonical JSON mode; decoding is strict (validation errors surface
 rather than degrading into a fabricated empty result).
+
+The artifact also records **evidence granularity** (P0b-R1): whether the
+``evidence_clause_ids`` it carries are persisted ``documents.clauses`` UUIDs or a single
+synthetic document-level identifier. A reader must be able to tell the two apart, because
+"six categories evidenced by six distinct clauses" and "six categories evidenced by one
+whole-document blob" are different product claims — and never by inspecting the shape of
+an id. When granularity is ``DOCUMENT`` for a contract, ``degradation_reason`` records
+*why*, so "the clause store was unreachable" is never silently indistinguishable from
+"this document was never segmented".
 """
 
 from __future__ import annotations
@@ -24,10 +33,13 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.coherence.models import FindingSignal
-from src.health.domain.single_document_coverage import SingleDocumentCoverage
+from src.health.domain.single_document_coverage import (
+    EvidenceGranularity,
+    SingleDocumentCoverage,
+)
 
 _FROZEN_CONTRACT = ConfigDict(extra="forbid", frozen=True)
 
@@ -45,13 +57,33 @@ class SingleDocumentAssessment(BaseModel):
     model_config = _FROZEN_CONTRACT
 
     version: int = Field(default=SINGLE_DOCUMENT_ASSESSMENT_VERSION, ge=1)
+    # Additive and backward compatible, so the version stays 1: every artifact written
+    # before R1 was whole-document, which is exactly this default. Bumping the version
+    # instead would strand those artifacts as "not evaluated" and lose real data.
+    evidence_granularity: EvidenceGranularity = EvidenceGranularity.DOCUMENT
+    # Why the evidence is document-level. Set only when a document that *could* have
+    # carried clause-granular evidence did not — an unreadable clause store reads very
+    # differently from a document type that is never segmented, and both read
+    # differently from a contract that simply has no clauses yet.
+    degradation_reason: str | None = None
     finding_signals: tuple[FindingSignal, ...] = ()
     coverage: SingleDocumentCoverage
+
+    @model_validator(mode="after")
+    def _enforce_reason_scope(self) -> SingleDocumentAssessment:
+        if (
+            self.evidence_granularity is EvidenceGranularity.CLAUSE
+            and self.degradation_reason is not None
+        ):
+            raise ValueError("clause-granular evidence did not degrade; it carries no reason")
+        return self
 
 
 def encode_single_document_assessment(
     coverage: SingleDocumentCoverage,
     finding_signals: Sequence[FindingSignal],
+    granularity: EvidenceGranularity = EvidenceGranularity.DOCUMENT,
+    degradation_reason: str | None = None,
 ) -> dict[str, Any]:
     """Build the additive ``result_json`` fragment for one analysis.
 
@@ -60,6 +92,8 @@ def encode_single_document_assessment(
     """
     artifact = SingleDocumentAssessment(
         version=SINGLE_DOCUMENT_ASSESSMENT_VERSION,
+        evidence_granularity=granularity,
+        degradation_reason=degradation_reason,
         finding_signals=tuple(finding_signals),
         coverage=coverage,
     )
@@ -90,6 +124,7 @@ def decode_single_document_assessment(
 __all__ = [
     "SINGLE_DOCUMENT_ASSESSMENT_KEY",
     "SINGLE_DOCUMENT_ASSESSMENT_VERSION",
+    "EvidenceGranularity",
     "SingleDocumentAssessment",
     "decode_single_document_assessment",
     "encode_single_document_assessment",
