@@ -57,6 +57,12 @@ class ProjectState(TypedDict):
     coherence_missing_dimensions: list[str]
     coherence_breakdown: CoherenceBreakdown
 
+    # ── N8b: Single-document assessment (ADR-024 / P0b L4-3) ──
+    # Versioned artifact produced ONCE at N8 (where canonical Clause[] + FindingSignal[]
+    # coexist) and persisted verbatim by N17 into analyses.result_json.
+    # None => the assessment did not run for this document (honest unavailable).
+    single_document_assessment: dict[str, Any] | None
+
     # ── N9: Budget Parser (extended) ──
     bom_items: list[BomEntry]
 

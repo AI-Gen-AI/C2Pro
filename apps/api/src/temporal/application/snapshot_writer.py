@@ -9,15 +9,19 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from src.analysis.ports.analysis_repository import IAnalysisRepository
 from src.core.tenants.types import TenantId
 from src.health.application.contract_scorer import score_contract_dimension
 from src.health.application.documentation_scorer import score_documentation_dimension
 from src.health.application.governance_scorer import score_governance_dimension
 from src.health.application.health_engine import assemble_health_vector
 from src.health.application.risk_scorer import score_risk_dimension
+from src.health.domain.analysis_assessment import decode_single_document_assessment
+from src.health.domain.single_document_coverage import SingleDocumentCoverage
 from src.project_state.domain.aggregate import ProjectState
 from src.project_state.ports.project_state_repository import ProjectStateRepository
 from src.temporal.domain.project_snapshot import ProjectSnapshot, SnapshotTrigger
+from src.temporal.ports.project_event_repository import IProjectEventRepository
 from src.temporal.ports.project_snapshot_repository import IProjectSnapshotRepository
 
 _SNAPSHOT_EPOCH = datetime(1970, 1, 1)
@@ -34,10 +38,16 @@ class SnapshotWriter:
         self,
         project_state_repository: ProjectStateRepository,
         snapshot_repository: IProjectSnapshotRepository,
+        event_repository: IProjectEventRepository | None = None,
+        analysis_repository: IAnalysisRepository | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._project_state_repository = project_state_repository
         self._snapshot_repository = snapshot_repository
+        # Optional lineage readers (ADR-024 / P0b L4-3). Absent => the single-document
+        # assessment is simply unavailable; the snapshot is still written honestly.
+        self._event_repository = event_repository
+        self._analysis_repository = analysis_repository
         self._clock = clock or _utcnow
 
     async def write_snapshot(
@@ -62,6 +72,11 @@ class SnapshotWriter:
         counts = self._counts(state)
         totals = self._totals(state)
         prior_snapshot = await self._snapshot_repository.latest(project_id, tenant_id)
+        single_document_coverage = await self._resolve_single_document_coverage(
+            tenant_id=tenant_id,
+            source_event_id=source_event_id,
+            prior_snapshot=prior_snapshot,
+        )
         health_vector = assemble_health_vector(
             project_id,
             tenant_id,
@@ -79,6 +94,7 @@ class SnapshotWriter:
                 score_governance_dimension(None),
             ],
             prior_composite=self._prior_composite(prior_snapshot),
+            single_document_coverage=single_document_coverage,
         )
         snapshot = ProjectSnapshot(
             snapshot_id=uuid4(),
@@ -94,6 +110,61 @@ class SnapshotWriter:
             created_at=now,
         )
         return await self._snapshot_repository.append_snapshot(snapshot)
+
+    async def _resolve_single_document_coverage(
+        self,
+        *,
+        tenant_id: TenantId,
+        source_event_id: UUID | None,
+        prior_snapshot: ProjectSnapshot | None,
+    ) -> SingleDocumentCoverage | None:
+        """Resolve the persisted single-document assessment for this snapshot.
+
+        Lineage (ADR-024 / P0b L4-3): ``source_event_id`` -> the ``graph.completed``
+        event's ``analysis_id`` -> that analysis' ``result_json`` -> the versioned
+        assessment. The assessment is READ, never recomputed: the ``CategoryRouter``
+        already ran once at analysis time (N8).
+
+        When this snapshot has no new analysis of its own (a ``SCHEDULED`` run, or a
+        legacy analysis without the artifact), the most recent known assessment is
+        carried forward. The absence of a new analysis is NOT evidence that the
+        previous assessment ceased to exist.
+        """
+        coverage = await self._coverage_from_lineage(tenant_id, source_event_id)
+        if coverage is not None:
+            return coverage
+        return self._carry_forward_coverage(prior_snapshot)
+
+    async def _coverage_from_lineage(
+        self, tenant_id: TenantId, source_event_id: UUID | None
+    ) -> SingleDocumentCoverage | None:
+        if source_event_id is None or self._event_repository is None or self._analysis_repository is None:
+            return None
+        event = await self._event_repository.get(source_event_id, tenant_id)
+        if event is None:
+            return None
+        raw_analysis_id = event.payload.get("analysis_id")
+        if not isinstance(raw_analysis_id, str):
+            return None
+        try:
+            analysis_id = UUID(raw_analysis_id)
+        except ValueError:
+            return None
+        result_json = await self._analysis_repository.get_result_json(analysis_id, tenant_id)
+        assessment = decode_single_document_assessment(result_json)
+        return assessment.coverage if assessment is not None else None
+
+    @staticmethod
+    def _carry_forward_coverage(
+        snapshot: ProjectSnapshot | None,
+    ) -> SingleDocumentCoverage | None:
+        """Carry the last known assessment forward; never fabricate one."""
+        if snapshot is None:
+            return None
+        stored = snapshot.health_vector.get("single_document_coverage")
+        if not isinstance(stored, dict):
+            return None
+        return SingleDocumentCoverage.model_validate(stored)
 
     async def _find_existing_snapshot(
         self,

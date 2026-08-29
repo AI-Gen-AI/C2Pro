@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -28,6 +28,17 @@ class SqlAlchemyAnalysisRepository(IAnalysisRepository):
         if self.tenant_id is None:
             return True
         return project_tenant == self.tenant_id
+
+    async def get_result_json(
+        self, analysis_id: UUID, tenant_id: UUID
+    ) -> dict[str, Any] | None:
+        """Exact tenant-scoped read of one analysis' ``result_json`` (snapshot lineage)."""
+        stmt = select(Analysis.result_json).where(
+            Analysis.id == analysis_id,
+            Analysis.tenant_id == tenant_id,
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().first()
 
     async def add_analysis(
         self, analysis: AnalysisWrite, tenant_id: UUID | None = None

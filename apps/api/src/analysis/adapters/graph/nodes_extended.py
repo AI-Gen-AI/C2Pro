@@ -467,6 +467,18 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
             item.category: item.score
             for item in result.category_breakdown
         }
+        # ADR-024 / P0b L4-3 — the ONE production invocation of the L4-2 mapping.
+        # N8 is the earliest point where the canonical coherence.models.Clause[] and
+        # FindingSignal[] (deterministic + llm + cross) coexist. The result is persisted
+        # by N17; no downstream consumer re-runs the CategoryRouter.
+        from src.health.application.document_assessment import (
+            build_document_assessment_artifact,
+        )
+
+        single_document_assessment = build_document_assessment_artifact(
+            clauses, result.finding_signals
+        )
+
         quality_note = derivation.quality_note
         reason = result.score_reason
         result_missing_dimensions = result.score_missing_dimensions or missing_dimensions
@@ -494,6 +506,8 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         reason = "node_failed"
         result_missing_dimensions = ["schedule", "budget"]
         bridge_marker = " bridge[error]"
+        # The assessment did not run — stay honestly unavailable, never an empty result.
+        single_document_assessment = None
 
     risk_count = len(state.get("extracted_risks", []))
     wbs_count = len(state.get("extracted_wbs", []))
@@ -502,6 +516,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         "coherence_score": score,
         "coherence_score_version": score_version,
         "coherence_breakdown": breakdown,
+        "single_document_assessment": single_document_assessment,
         "coherence_reason": reason,
         "coherence_missing_dimensions": result_missing_dimensions,
         "node_results": [node_result],

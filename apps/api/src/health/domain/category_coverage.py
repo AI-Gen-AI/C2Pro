@@ -25,7 +25,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.coherence.domain.category_weights import CoherenceCategory
-from src.health.domain.health_vector import HealthNullReason
+from src.health.domain.null_reason import HealthNullReason
 
 _FROZEN_CONTRACT = ConfigDict(extra="forbid", frozen=True)
 
