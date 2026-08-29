@@ -17,11 +17,18 @@ nothing" are different product claims (INV-1).
 
 Serialization is canonical JSON mode; decoding is strict (validation errors surface
 rather than degrading into a fabricated empty result).
+
+The artifact also records **evidence granularity** (P0b-R1): whether the
+``evidence_clause_ids`` it carries are persisted ``documents.clauses`` UUIDs or a single
+synthetic document-level identifier. A reader must be able to tell the two apart, because
+"six categories evidenced by six distinct clauses" and "six categories evidenced by one
+whole-document blob" are different product claims.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -39,12 +46,25 @@ SINGLE_DOCUMENT_ASSESSMENT_KEY = "single_document_assessment"
 SINGLE_DOCUMENT_ASSESSMENT_VERSION = 1
 
 
+class EvidenceGranularity(StrEnum):
+    """What the artifact's ``evidence_clause_ids`` actually identify."""
+
+    #: Persisted ``documents.clauses`` UUIDs — one id per real, addressable clause.
+    CLAUSE = "clause"
+    #: A single synthetic document-level identifier — the whole document as one blob.
+    DOCUMENT = "document"
+
+
 class SingleDocumentAssessment(BaseModel):
     """The versioned artifact: the findings that were evaluated + the coverage they produced."""
 
     model_config = _FROZEN_CONTRACT
 
     version: int = Field(default=SINGLE_DOCUMENT_ASSESSMENT_VERSION, ge=1)
+    # Additive and backward compatible, so the version stays 1: every artifact written
+    # before R1 was whole-document, which is exactly this default. Bumping the version
+    # instead would strand those artifacts as "not evaluated" and lose real data.
+    evidence_granularity: EvidenceGranularity = EvidenceGranularity.DOCUMENT
     finding_signals: tuple[FindingSignal, ...] = ()
     coverage: SingleDocumentCoverage
 
@@ -52,6 +72,7 @@ class SingleDocumentAssessment(BaseModel):
 def encode_single_document_assessment(
     coverage: SingleDocumentCoverage,
     finding_signals: Sequence[FindingSignal],
+    granularity: EvidenceGranularity = EvidenceGranularity.DOCUMENT,
 ) -> dict[str, Any]:
     """Build the additive ``result_json`` fragment for one analysis.
 
@@ -60,6 +81,7 @@ def encode_single_document_assessment(
     """
     artifact = SingleDocumentAssessment(
         version=SINGLE_DOCUMENT_ASSESSMENT_VERSION,
+        evidence_granularity=granularity,
         finding_signals=tuple(finding_signals),
         coverage=coverage,
     )
@@ -90,6 +112,7 @@ def decode_single_document_assessment(
 __all__ = [
     "SINGLE_DOCUMENT_ASSESSMENT_KEY",
     "SINGLE_DOCUMENT_ASSESSMENT_VERSION",
+    "EvidenceGranularity",
     "SingleDocumentAssessment",
     "decode_single_document_assessment",
     "encode_single_document_assessment",
