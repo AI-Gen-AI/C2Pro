@@ -42,9 +42,11 @@ class MockEventSource {
   close() {}
 
   emit(type: string, data: unknown) {
-    const event = new MessageEvent("message", {
-      data: JSON.stringify(data),
-    });
+    this.emitRaw(type, JSON.stringify(data));
+  }
+
+  emitRaw(type: string, data: string) {
+    const event = new MessageEvent("message", { data });
     for (const listener of this.listeners.get(type) ?? []) {
       listener(event);
     }
@@ -115,5 +117,28 @@ describe("AnalysisProgressTracker", () => {
     expect(screen.queryByText(/currently: finalizing/i)).not.toBeInTheDocument();
     expect(screen.getAllByText("Completed").length).toBeGreaterThan(0);
     expect(container.querySelector(".animate-spin")).toBeNull(); // spinner stopped
+  });
+
+  it("still reaches COMPLETED when the complete payload cannot be parsed", () => {
+    // Residual to #556: `JSON.parse(event.data)` was the FIRST statement inside the complete
+    // handler's try, so a malformed/empty payload threw before any setter ran. isComplete
+    // stayed false and the tracker was left asserting "Currently: Finalizing" at 100% with a
+    // live spinner even though the analysis had finished. The terminal state must not depend
+    // on the payload parsing.
+    const onComplete = vi.fn();
+    const { container } = render(
+      <AnalysisProgressTracker projectId="proj-123" onComplete={onComplete} />,
+    );
+    const source = MockEventSource.instances[0]!;
+
+    act(() => {
+      source.emit("stage", { stage: 17, name: "Persistence", progress: 100 });
+      source.emitRaw("complete", "not-json{");
+    });
+
+    expect(screen.queryByText(/currently: finalizing/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Completed").length).toBeGreaterThan(0);
+    expect(container.querySelector(".animate-spin")).toBeNull();
+    expect(onComplete).toHaveBeenCalledWith(null);
   });
 });

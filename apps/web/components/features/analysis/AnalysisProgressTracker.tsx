@@ -236,17 +236,26 @@ export function AnalysisProgressTracker({
     });
 
     eventSource.addEventListener("complete", (event) => {
+      // The terminal state must NEVER depend on the payload parsing. `JSON.parse` used to be
+      // the first statement inside this try, so a malformed/empty `complete` payload threw
+      // before ANY setter ran: isComplete stayed false and the UI was left asserting
+      // "Currently: Finalizing" at 100% with a live spinner, even though the analysis had
+      // finished. A `stage` event for step 16-17 already puts the UI at Finalizing/100 while
+      // still RUNNING (which is correct during final assembly), so `complete` is the only
+      // signal that flips the run to COMPLETED — it has to be unconditional.
+      let data: unknown = null;
       try {
-        const data = JSON.parse(event.data);
-        setOverallProgress(100);
-        setCurrentStage(USER_FACING_STAGES[USER_FACING_STAGES.length - 1]);
-        setIsComplete(true);
-        setNodes((prev) => prev.map((node) => ({ ...node, status: "completed" })));
-        if (onComplete) onComplete(data);
-        eventSource.close();
+        data = JSON.parse(event.data);
       } catch (e) {
         console.error("Error parsing completion data", e);
       }
+
+      setOverallProgress(100);
+      setCurrentStage(USER_FACING_STAGES[USER_FACING_STAGES.length - 1]);
+      setIsComplete(true);
+      setNodes((prev) => prev.map((node) => ({ ...node, status: "completed" })));
+      if (onComplete) onComplete(data);
+      eventSource.close();
     });
 
     eventSource.onerror = () => {
