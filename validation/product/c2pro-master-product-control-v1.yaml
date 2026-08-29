@@ -114,7 +114,7 @@ corrected_current_claims:
     truth: "ADRs are ACCEPTED as design, not realized (see adr_realization). The '18-ADR audit' predates ADR-023/024 (added 2026-08-22) and conflates 3 ADR namespaces (see adr_namespaces). Primary-surface ADR-018 is WIRED-not-validated; ADR-024 is now WIRED (L4-1..L4-3 merged) but NOT deployed/validated."
   - claim: "No open code work required for end users"
     where: "Phase 1 Completion Certificate framing (main)"
-    truth: "Single-document activation (ADR-024 -> ADR-018) is PARTIALLY built: the backend assessment path is merged (L4-1..L4-3), while per-clause evidence granularity, L4-4 API acceptance and L4-5 UI/prod validation remain open. P0b is a vertical product epic, not done. Plus Coherence v2 cutover, Change-Impact wedge, Alerts/HITL, Procurement, Reporting."
+    truth: "Single-document activation (ADR-024 -> ADR-018) is PARTIALLY built: the backend assessment path is merged (L4-1..L4-3) and per-clause evidence granularity is RESOLVED (P0b-R1, #579). Still open: L4-4 authenticated API acceptance / consumer validation, and L4-5 UI/prod validation. P0b is a vertical product epic and is NOT complete. Plus Coherence v2 cutover, Change-Impact wedge, Alerts/HITL, Procurement, Reporting."
 
 # ── ADR namespaces (F): THREE overlapping numberings exist — disambiguated ────
 adr_namespaces:
@@ -311,6 +311,7 @@ product_wbs:
 # ── P0b vertical contract (define ALL slices + exit gates BEFORE slice 1) ──────
 p0b_vertical_contract:
   invariant_ids: [INV-1, INV-UX, INV-COH]     # <-- parity-compared
+  next_slice: P0b-L4-4                        # <-- parity-compared. THE current next authorized product action, as a machine field rather than prose, so "what is next" cannot drift silently in narrative text. Must name a real slice that is not DONE.
   done_definition: >
     Production evidence: upload ONE document -> six-category decomposition ->
     per-category {state, findings, missing_data} -> actionable gap alerts ->
@@ -409,7 +410,7 @@ legacy_coverage:
 master_defects:
   - "D1: Product value gap — the backend single-document assessment path is now merged (P0b L4-1..L4-3), but NOTHING is user-visible or prod-validated yet: no Health/findings/gap-alert surface reaches the user from one document (L4-4 acceptance incomplete, L4-5 BLOCKED)."
   - "D2: ADR-018 Health engine WIRED but still NOT PROD_VALIDATED for users. HealthVector now carries single_document_coverage as a non-rollup surface; coherence_subscore stays NULL by design for one document (INV-COH), and composite scoring is deliberately unchanged."
-  - "D3: ADR-024 single-document activation is WIRED, not complete: evidence is document-level because _build_coherence_clauses() emits one whole-document Clause (P0b-R1-EVIDENCE-GRANULARITY, blocks L4-5), dedicated API acceptance is pending, and L4-5 UI/prod validation has not started."
+  - "D3: ADR-024 single-document activation is WIRED, not complete: P0b-R1 evidence granularity is RESOLVED (#579 - N8 now scores persisted documents.clauses with UUID evidence identity); L4-4 authenticated API acceptance / consumer validation remains pending; L4-5 UI/prod validation has not started; P0b-R2-CROSS-DATA-CONTRACT is registered P1 / NON_BLOCKING and sits OUTSIDE the P0b exit gate."
   - "D4: ADR-009 v2 global authoritative cutover NOT demonstrated (prod recon: 0/15 v2 headlines, shadow 1 row); ADR-017 flag-off; ADR-016 change-impact L3 stub."
   - "D5: Temporal (ADR-015) snapshots inert — P1-OPS Celery Beat gap (beat_schedule configured, no beat process)."
   - "D6: Stale 'Phase 1 COMPLETE / all-ADRs / no-open-work' claims live in the CANONICAL C2PRO_MASTER_BACKLOG.md (main), not only worktrees — corrected via cold-reference banner (E)."
@@ -436,7 +437,8 @@ pr_disposition:
 
 # ── Next authorized action ────────────────────────────────────────────────────
 next_authorized_action:
-  - "Bounded READ-ONLY architecture audit for P0b-R1-EVIDENCE-GRANULARITY (identify every existing clause/section/chunk segmentation source; what is persisted vs transient; whether an existing extracted-clause representation can be adapted into coherence.models.Clause[]; preserve stable clause IDs / evidence lineage; no parallel parser)."
-  - "Do NOT start P0b-L4-5 (UI) until P0b-R1-EVIDENCE-GRANULARITY is resolved or explicitly re-gated by MASTER."
-  - "Do NOT implement the granularity residual until the audit returns the smallest correct reuse path for MASTER review."
-  - "No product code / runtime / production mutation performed in this reconciliation (read-only prod SELECTs only)."
+  - "P0b-L4-4 - authenticated API acceptance / consumer validation. The slice is PARTIAL: GET /api/v1/projects/{project_id}/health already returns HealthVector (single_document_coverage + single_document_evidence_granularity), so the work is the bounded ACCEPTANCE, not new exposure."
+  - "Run the bounded L4-4 acceptance work: prove the authenticated GET returns the real single-document product payload - six-category decomposition, findings, factual missing_data, actionable gaps, single_document_evidence_granularity, honest null (Unknown = null, NEVER 0), tenant isolation, and NO stale carry-forward when an authoritative analysis failed or is unavailable."
+  - "Do NOT start P0b-L4-5 (UI) until MASTER reviews the L4-4 result."
+  - "P0b-R2-CROSS-DATA-CONTRACT is NON_BLOCKING and outside the P0b exit gate: it must NOT delay or gate L4-4."
+  - "No production mutation without a separate explicit gate. None was performed in this reconciliation (read-only prod SELECTs only)."

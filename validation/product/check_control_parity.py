@@ -178,6 +178,19 @@ def validate_enums(doc: dict) -> list[str]:
                 f"p0b.slice[{sid}]: legacy free-form 'status' present; use validated 'slice_status'"
             )
 
+    next_slice = _s(p0b.get("next_slice", ""))
+    if not next_slice:
+        problems.append("p0b_vertical_contract: missing 'next_slice' (the current next authorized product action)")
+    elif next_slice not in slice_ids:
+        problems.append(f"p0b_vertical_contract: 'next_slice'='{next_slice}' is not a known P0b slice id")
+    else:
+        nxt = next(sl for sl in p0b["slices"] if _s(sl.get("id")) == next_slice)
+        if _s(nxt.get("slice_status")) == "DONE":
+            problems.append(
+                f"p0b_vertical_contract: 'next_slice'='{next_slice}' is already DONE; "
+                "the next authorized action cannot be a finished slice"
+            )
+
     problems.extend(_validate_residuals(p0b, residual_allowed, blocking_allowed, slice_ids))
 
     for row in doc["product_wbs"]:
@@ -214,6 +227,7 @@ def extract_canonical(doc: dict) -> dict[str, str]:
         "adr.ADR-024.prod_validation": _s(a024["prod_validation_status"]),
         "p0b.done_digest": hashlib.sha256(_norm(p0b["done_definition"]).encode()).hexdigest()[:16],
         "p0b.invariant_ids": ",".join(_s(x) for x in p0b["invariant_ids"]),
+        "p0b.next_slice": _s(p0b["next_slice"]),
     }
     for sl in p0b["slices"]:
         canon[f"p0b.slice.{_s(sl['id'])}.status"] = _s(sl["slice_status"])

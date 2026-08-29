@@ -32,6 +32,7 @@ adr.ADR-024.deployment=NONE
 adr.ADR-024.prod_validation=NONE
 p0b.done_digest=9ae6adf0a63af690
 p0b.invariant_ids=INV-1,INV-UX,INV-COH
+p0b.next_slice=P0b-L4-4
 p0b.slice.P0b-L4-1.status=DONE
 p0b.slice.P0b-L4-2.status=DONE
 p0b.slice.P0b-L4-3.status=DONE
@@ -83,7 +84,7 @@ wbs.PWBS-OPS-TRUST.work_status=ACTIVE
 |---|---|---|
 | "Phase 1 COMPLETE / functional for end users" | **Canonical** `C2PRO_MASTER_BACKLOG.md` lines 11–13 (main) | P0a reliability baseline CLOSED; product value NOT delivered. Legacy master now carries a **cold-reference banner** pointing here. |
 | "All 18 ADRs / zero unimplemented" | Canonical backlog lines 15–17 (main) | ADRs are **accepted design**, not realized (§4). The "18-ADR audit" predates ADR-023/024 and conflates 3 ADR namespaces (§4a). |
-| "No open code work for end users" | Phase 1 Completion Certificate | Single-document activation **is** the open work — P0b vertical epic — plus v2 cutover, Change-Impact wedge, Alerts/HITL, Procurement, Reporting. |
+| "No open code work for end users" | Phase 1 Completion Certificate | Single-document activation **is** the open work — P0b vertical epic. Backend assessment path merged (L4-1…L4-3) and **P0b-R1 evidence granularity RESOLVED (#579)**; **L4-4 API acceptance** and **L4-5 UI/prod validation** remain open, so **P0b is not complete**. Plus v2 cutover, Change-Impact wedge, Alerts/HITL, Procurement, Reporting. |
 
 > **Correction (E):** an earlier draft claimed these strings survive only in non-canonical worktrees/archive. That was **false** — they are in the canonical backlog on `main`. They are preserved as history and now flagged by a banner.
 
@@ -208,7 +209,7 @@ Every OPEN legacy item maps to a Product WBS ID, DEV/OPS, or DEFERRED/WONT-DO:
 
 ## 9. Master defects
 
-D1 product-value gap · D2 ADR-018 WIRED-not-validated · D3 ADR-024 unbuilt · D4 coherence v2 global cutover not demonstrated (0/15) / 017 flag-off / 016 L3 stub · D5 temporal snapshots inert (Beat) · D6 stale claims in the **canonical** backlog (banner added) · D7 no product-programme control plane (these files) · D8 ADR numbering ambiguous across three namespaces (ADR-004 collision).
+D1 product-value gap · D2 ADR-018 WIRED-not-validated · D3 ADR-024 WIRED-not-complete (**R1 RESOLVED #579**; L4-4 acceptance pending; L4-5 not started; R2 P1/NON_BLOCKING outside the exit gate) · D4 coherence v2 global cutover not demonstrated (0/15) / 017 flag-off / 016 L3 stub · D5 temporal snapshots inert (Beat) · D6 stale claims in the **canonical** backlog (banner added) · D7 no product-programme control plane (these files) · D8 ADR numbering ambiguous across three namespaces (ADR-004 collision).
 
 ## 10. Risks
 
@@ -225,6 +226,12 @@ R1 reliability-as-completion · R2 coherence/calibration revival as headline · 
 - **#572** — REBUILT clean: rebased onto `origin/main`; **only** documentation/control changes (2 control files + parity checker + parity tests + legacy banner). The 6 Celery files (already in main via #569) are gone.
 - **#571** — **HOLD → amend**: re-scope to "P0a Reliability & Operability Baseline CLOSED" (not "product baseline complete") + register the **P0b vertical epic** (PWBS-ACT-HEALTH). Do not merge until re-scoped after #572 approval.
 
-**Next:** (1) **MASTER review** of #572 + this reconciliation; (2) on approval, Reconciler amends #571; (3) then, under `.c2pro` governed dev, implement **P0b-L4-1** (`category_coverage`) RED-first.
+**Next authorized action (`p0b.next_slice`): `P0b-L4-4` — authenticated API acceptance / consumer validation.**
+
+- **L4-4 is PARTIAL.** `GET /api/v1/projects/{project_id}/health` already returns `HealthVector` (`single_document_coverage` + `single_document_evidence_granularity`), so the work is the bounded **acceptance**, not new exposure.
+- **Run the bounded L4-4 acceptance work**: prove the authenticated GET returns the real single-document payload — six-category decomposition, findings, factual `missing_data`, actionable gaps, `single_document_evidence_granularity`, honest null (`Unknown` = null, **never 0**), tenant isolation, and **no stale carry-forward** when an authoritative analysis failed or is unavailable.
+- **Do NOT start P0b-L4-5** (UI) until **MASTER reviews the L4-4 result**.
+- **P0b-R2-CROSS-DATA-CONTRACT is NON_BLOCKING** and outside the P0b exit gate: it must **not** delay or gate L4-4.
+- **No production mutation without a separate explicit gate.**
 
 *No product code, runtime, or production mutation was performed in this reconciliation (read-only prod SELECTs only).*

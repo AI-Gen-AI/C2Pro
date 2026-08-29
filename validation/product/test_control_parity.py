@@ -232,6 +232,70 @@ def test_l4_5_blocker_is_l4_4_not_a_residual() -> None:
     assert "NOT P0b-R2" in slice_45["blocked_by"]
 
 
+def test_resolved_residual_is_not_the_current_blocker_and_l4_4_is_next() -> None:
+    """ANTI-DRIFT: once R1 is RESOLVED, control truth must stop gating on it.
+
+    Deliberately structured-field only — no prose parsing. Two things must hold
+    together, because a stale narrative can otherwise keep citing a closed residual
+    as the live blocker long after its status flipped:
+
+      1. no RESOLVED residual still carries a blocking edge, and nothing at all
+         currently blocks P0b-L4-5 via the residual registry;
+      2. the current next authorized product action is P0b-L4-4.
+    """
+    doc = c.load_yaml()
+    p0b = doc["p0b_vertical_contract"]
+    r1 = _residual(doc, "P0b-R1-EVIDENCE-GRANULARITY")
+
+    assert r1["status"] == "RESOLVED", "fixture drifted: this test guards the RESOLVED state"
+
+    # 1 — a RESOLVED residual cannot be anyone's current blocker.
+    for res in p0b["residuals"]:
+        if res["status"] == "RESOLVED":
+            assert res["blocking"] == "NON_BLOCKING", res["id"]
+            assert "blocks" not in res, res["id"]
+    assert not [
+        res["id"] for res in p0b["residuals"] if res.get("blocks") == "P0b-L4-5"
+    ], "P0b-L4-5 is still gated by a residual"
+
+    # 2 — the next authorized action is L4-4, and it is real work (not DONE).
+    assert p0b["next_slice"] == "P0b-L4-4"
+    nxt = next(sl for sl in p0b["slices"] if sl["id"] == p0b["next_slice"])
+    assert nxt["slice_status"] == "PARTIAL"
+
+
+def test_next_slice_is_parity_checked() -> None:
+    """The next authorized action is a canonical value, so MD cannot disagree."""
+    canon = c.extract_canonical(c.load_yaml())
+    md = c.parse_md_block(_MD_TEXT)
+    assert canon["p0b.next_slice"] == "P0b-L4-4"
+    assert md["p0b.next_slice"] == canon["p0b.next_slice"]
+
+
+def test_missing_next_slice_detected() -> None:
+    """Negative: control truth must always name what comes next."""
+    doc = c.load_yaml()
+    del doc["p0b_vertical_contract"]["next_slice"]
+    problems = c.validate_enums(doc)
+    assert any("missing 'next_slice'" in p for p in problems), problems
+
+
+def test_unknown_next_slice_detected() -> None:
+    """Negative: next_slice must name a real slice."""
+    doc = c.load_yaml()
+    doc["p0b_vertical_contract"]["next_slice"] = "P0b-L4-9"
+    problems = c.validate_enums(doc)
+    assert any("not a known P0b slice id" in p for p in problems), problems
+
+
+def test_done_next_slice_detected() -> None:
+    """Negative: a finished slice cannot be the next authorized action."""
+    doc = c.load_yaml()
+    doc["p0b_vertical_contract"]["next_slice"] = "P0b-L4-1"
+    problems = c.validate_enums(doc)
+    assert any("already DONE" in p for p in problems), problems
+
+
 def test_missing_residual_detected() -> None:
     """Negative: dropping the residual registry must FAIL (open residuals stay explicit)."""
     doc = c.load_yaml()
