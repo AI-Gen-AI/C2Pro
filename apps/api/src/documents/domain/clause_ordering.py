@@ -25,7 +25,7 @@ offset is silently treated as ``0``.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 
 from src.documents.domain.models import Clause
 
@@ -47,9 +47,4 @@ def order_clause_evidence(clauses: Iterable[Clause]) -> tuple[Clause, ...]:
     return tuple(sorted(clauses, key=_sort_key))
 
 
-def is_deterministically_ordered(clauses: Sequence[Clause]) -> bool:
-    """True when ``clauses`` is already in the canonical order."""
-    return list(clauses) == list(order_clause_evidence(clauses))
-
-
-__all__ = ["is_deterministically_ordered", "order_clause_evidence"]
+__all__ = ["order_clause_evidence"]

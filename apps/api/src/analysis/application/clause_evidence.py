@@ -55,10 +55,6 @@ class ClauseEvidence:
     granularity: EvidenceGranularity
     degradation_reason: str | None = None
 
-    @property
-    def is_granular(self) -> bool:
-        return self.granularity is EvidenceGranularity.CLAUSE
-
 
 def to_coherence_clauses(
     persisted: Sequence[PersistedClause],
