@@ -72,6 +72,70 @@ def _wbs_row(doc: dict, wid: str) -> dict:
 
 
 # ── (fix 2) enum validation ───────────────────────────────────────────────────
+def _validate_residuals(
+    p0b: dict,
+    residual_allowed: set[str],
+    blocking_allowed: set[str],
+    slice_ids: set[str],
+) -> list[str]:
+    """Validate the P0b residual registry, including the schema-v5 blocking model.
+
+    A residual declares whether it CURRENTLY gates a slice. Before v5 every residual was
+    forced to name a blocked slice, so real-but-non-blocking work could only be registered
+    by claiming a blocker it does not have.
+
+    - BLOCKING     => 'blocks' is required, must name a real slice, and that slice must
+                      itself be BLOCKED.
+    - NON_BLOCKING => 'blocks' must be ABSENT. Not null, not empty: a present-but-blank
+                      key still reads as an edge to a reviewer scanning the YAML.
+    """
+    problems: list[str] = []
+    residuals = p0b.get("residuals")
+    if not residuals:
+        problems.append("p0b_vertical_contract: no 'residuals' registered (open residuals must be explicit)")
+        return problems
+
+    for res in residuals:
+        rid = res.get("id", "?")
+        where = f"p0b.residual[{rid}]"
+        if res.get("status") is None:
+            problems.append(f"{where}: missing 'status'")
+        elif _s(res.get("status")) not in residual_allowed:
+            problems.append(
+                f"{where}: 'status'='{res.get('status')}' not in {sorted(residual_allowed)}"
+            )
+
+        blocking = _s(res.get("blocking", ""))
+        if res.get("blocking") is None:
+            problems.append(f"{where}: missing 'blocking'")
+        elif blocking not in blocking_allowed:
+            problems.append(
+                f"{where}: 'blocking'='{res.get('blocking')}' not in {sorted(blocking_allowed)}"
+            )
+
+        if blocking == "BLOCKING":
+            problems.extend(_validate_blocking_edge(where, res, p0b, slice_ids))
+        elif blocking == "NON_BLOCKING" and "blocks" in res:
+            problems.append(f"{where}: NON_BLOCKING residual must omit 'blocks' entirely")
+    return problems
+
+
+def _validate_blocking_edge(where: str, res: dict, p0b: dict, slice_ids: set[str]) -> list[str]:
+    """A BLOCKING residual must name a real slice that is itself currently BLOCKED."""
+    blocks = _s(res.get("blocks", ""))
+    if not blocks:
+        return [f"{where}: BLOCKING residual is missing 'blocks'"]
+    if blocks not in slice_ids:
+        return [f"{where}: 'blocks'='{blocks}' is not a known P0b slice id"]
+    blocked = next(sl for sl in p0b["slices"] if _s(sl.get("id")) == blocks)
+    if _s(blocked.get("slice_status")) != "BLOCKED":
+        return [
+            f"{where}: blocks '{blocks}' but that slice is "
+            f"'{blocked.get('slice_status')}', not BLOCKED"
+        ]
+    return []
+
+
 def validate_enums(doc: dict) -> list[str]:
     problems: list[str] = []
     enums = doc["status_enums"]
@@ -114,39 +178,7 @@ def validate_enums(doc: dict) -> list[str]:
                 f"p0b.slice[{sid}]: legacy free-form 'status' present; use validated 'slice_status'"
             )
 
-    residuals = p0b.get("residuals")
-    if not residuals:
-        problems.append("p0b_vertical_contract: no 'residuals' registered (open residuals must be explicit)")
-    for res in residuals or []:
-        rid = res.get("id", "?")
-        _chk(f"p0b.residual[{rid}]", "status", res.get("status"), residual_allowed)
-
-        # schema v5: a residual declares whether it currently blocks a slice. Before v5
-        # every residual was forced to name a blocked slice, so a real-but-non-blocking
-        # residual could only be registered by claiming a blocker it does not have.
-        blocking = _s(res.get("blocking", ""))
-        _chk(f"p0b.residual[{rid}]", "blocking", res.get("blocking"), blocking_allowed)
-
-        has_blocks_key = "blocks" in res
-        blocks = _s(res.get("blocks", ""))
-        if blocking == "BLOCKING":
-            if not blocks:
-                problems.append(f"p0b.residual[{rid}]: BLOCKING residual is missing 'blocks'")
-            elif blocks not in slice_ids:
-                problems.append(f"p0b.residual[{rid}]: 'blocks'='{blocks}' is not a known P0b slice id")
-            else:
-                blocked = next(sl for sl in p0b["slices"] if _s(sl.get("id")) == blocks)
-                if _s(blocked.get("slice_status")) != "BLOCKED":
-                    problems.append(
-                        f"p0b.residual[{rid}]: blocks '{blocks}' but that slice is "
-                        f"'{blocked.get('slice_status')}', not BLOCKED"
-                    )
-        elif blocking == "NON_BLOCKING" and has_blocks_key:
-            # Absent, not null/empty: a present-but-blank 'blocks' still reads as an
-            # edge to a reviewer scanning the YAML, so the key itself must be gone.
-            problems.append(
-                f"p0b.residual[{rid}]: NON_BLOCKING residual must omit 'blocks' entirely"
-            )
+    problems.extend(_validate_residuals(p0b, residual_allowed, blocking_allowed, slice_ids))
 
     for row in doc["product_wbs"]:
         wid = row.get("id", "?")
