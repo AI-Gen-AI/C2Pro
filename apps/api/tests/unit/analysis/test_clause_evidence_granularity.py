@@ -525,6 +525,24 @@ class TestN8ClauseEvidence:
         assert update["coherence_reason"] != "node_failed"
 
     @pytest.mark.asyncio
+    async def test_contract_without_tenant_identity_never_queries_the_clause_store(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No tenant id means no RLS scope — degrade rather than read unscoped."""
+        from src.analysis.adapters.graph.nodes_extended import coherence_scorer_node
+
+        calls = _stub_loader(monkeypatch, [_persisted()])
+
+        update = await coherence_scorer_node(
+            _state(tenant_id=None, document_text=SIX_CATEGORY_CLAUSE_TEXTS["SCOPE"])
+        )
+        decoded = decode_single_document_assessment(update["single_document_assessment"])
+
+        assert calls == []
+        assert decoded is not None
+        assert decoded.evidence_granularity == "document"
+
+    @pytest.mark.asyncio
     async def test_risk_bridge_signals_keep_a_document_level_clause_id(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
