@@ -250,6 +250,60 @@ class TestSnapshotWriterCarriesGranularity:
         # passing does not change what its evidence ids identify.
         assert scheduled.health_vector["single_document_evidence_granularity"] == "clause"
 
+    async def _scheduled_after_stored(self, health_vector_overrides: dict[str, Any]):
+        """Seed a prior snapshot's stored health_vector, then take a SCHEDULED snapshot."""
+        project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
+        event = graph_completed_event(project_id, tenant_id, analysis_id)
+        repo = FakeSnapshotRepo()
+        base = datetime.now(UTC).replace(tzinfo=None)
+
+        await make_writer(
+            repo,
+            FakeEventRepo([event]),
+            FakeAnalysisRepo(
+                {analysis_id: encode_single_document_assessment(
+                    _coverage(), [], EvidenceGranularity.CLAUSE
+                )}
+            ),
+            clock=lambda: base,
+        ).write_snapshot(
+            project_id=project_id,
+            tenant_id=tenant_id,
+            trigger=SnapshotTrigger.GRAPH_COMPLETED,
+            source_event_id=event.event_id,
+        )
+
+        # Rewrite the STORED vector as a legacy or hand-edited row could be.
+        # ProjectSnapshot is frozen, so this replaces it rather than mutating in place.
+        stored = repo.snapshots[-1]
+        repo.snapshots[-1] = stored.model_copy(
+            update={"health_vector": {**stored.health_vector, **health_vector_overrides}}
+        )
+
+        return await make_writer(
+            repo, clock=lambda: base + timedelta(days=1)
+        ).write_snapshot(
+            project_id=project_id, tenant_id=tenant_id, trigger=SnapshotTrigger.SCHEDULED
+        )
+
+    async def test_stored_coverage_without_granularity_is_not_carried_forward(self) -> None:
+        """Rather than guess a qualifier for unqualified evidence ids, drop it whole."""
+        scheduled = await self._scheduled_after_stored(
+            {"single_document_evidence_granularity": None}
+        )
+
+        assert scheduled.health_vector["single_document_coverage"] is None
+        assert scheduled.health_vector["single_document_evidence_granularity"] is None
+
+    async def test_stored_unrecognised_granularity_is_not_carried_forward(self) -> None:
+        """A value from a future/unknown vocabulary is honest-unknown, not coerced."""
+        scheduled = await self._scheduled_after_stored(
+            {"single_document_evidence_granularity": "paragraph"}
+        )
+
+        assert scheduled.health_vector["single_document_coverage"] is None
+        assert scheduled.health_vector["single_document_evidence_granularity"] is None
+
     async def test_resolved_assessment_pairs_coverage_and_granularity(self) -> None:
         from src.temporal.application.snapshot_writer import (
             AssessmentLineage,
