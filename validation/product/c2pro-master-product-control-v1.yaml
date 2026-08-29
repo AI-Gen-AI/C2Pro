@@ -1,5 +1,5 @@
 schema: c2pro-product-control-v1
-schema_version: 3
+schema_version: 4
 repository: AI-Gen-AI/C2Pro
 generated: "2026-08-27"
 control_status: reconciliation   # read-only programme snapshot; grants NO execution authority
@@ -40,6 +40,8 @@ status_enums:
   deployment_status:      [NONE, PARTIAL, DEPLOYED, BLOCKED, SHADOW_INERT]
   prod_validation_status: [NONE, PARTIAL, NOT_VALIDATED, PROD_VALIDATED]
   work_status:            [ACTIVE, PLANNED, DEFERRED, BLOCKED, CLOSED, WONT_DO]   # work lifecycle, INDEPENDENT of realization (DEPLOYED != CLOSED)
+  slice_status:           [NOT_STARTED, ACTIVE, PARTIAL, DONE, BLOCKED, DEFERRED] # L4 implementation-slice lifecycle. DONE = the slice met its code/merge exit gate; it does NOT mean the vertical is PROD_VALIDATED (that stays the WBS exit gate).
+  residual_status:        [PLANNED, ACTIVE, BLOCKED, DEFERRED, RESOLVED]          # residual lifecycle (a residual is registered work, not an implementation slice, so PLANNED is its entry state).
 
 # ── Plane separation ──────────────────────────────────────────────────────────
 development_execution_authority:
@@ -212,7 +214,7 @@ product_wbs:
     deps: []
     adrs: [ADR-024, ADR-018, ADR-022]
     user_value: "Value from document #1: per-category coverage + intrinsic findings + missing_data + gap alerts + Health Vector"
-    realization_status: DESIGNED
+    realization_status: PARTIAL
     work_status: ACTIVE
     exit_gate: "P0b-L4-5 PROD_VALIDATED (see p0b_vertical_contract.done_definition)"
     evidence_for_done: "upload one doc in prod -> UI shows per-category {state,findings,missing_data} + gap alerts + Health Vector; Unknown=Insufficient-evidence, never 0%"
@@ -321,11 +323,27 @@ p0b_vertical_contract:
     - "INV-COH: coherence_subscore stays NULL while <2 reconcilable documents exist; relational Coherence is never a single-doc headline"
     - "Reuse CoherenceCategory (SCOPE/BUDGET/TIME/TECHNICAL/LEGAL/QUALITY) + HealthNullReason.INSUFFICIENT_EVIDENCE"
   slices:
-    - {id: P0b-L4-1, name: "category_coverage domain (pure)", scope: "compute_category_coverage() + gap_alerts(); PRESENT|INSUFFICIENT_EVIDENCE; per-category action map", files_new: ["apps/api/src/health/domain/category_coverage.py", "apps/api/tests/unit/health/test_category_coverage.py"], exit_gate: "RED->GREEN unit: covered=PRESENT; absent=INSUFFICIENT_EVIDENCE + correct gap alert; all-present=0 gaps; empty=6 gaps; INV-1; ruff+mypy-ratchet green", status: proposed}
-    - {id: P0b-L4-2, name: "wire single-doc intake -> classification -> coverage", scope: "one document's classified clauses -> per-category {state, findings(ADR-022 + intrinsic), missing_data}", exit_gate: "integration: real doc -> coverage object with findings + missing_data; contract-only => TECHNICAL/BUDGET/TIME insufficient", status: planned}
-    - {id: P0b-L4-3, name: "assemble Health Vector from coverage + persist (Contract/Documentation ONLY)", scope: "feed Contract + Documentation HealthSignals from single-doc coverage; snapshot persist. Does NOT populate coherence_subscore (stays NULL for 1 doc). Coherence becomes a Contract input only once >=2 reconcilable documents exist (eligibility-gated).", exit_gate: "HealthVector persisted with honest-null dims; coherence_subscore=NULL asserted for single-doc; no fabricated composite", status: planned}
-    - {id: P0b-L4-4, name: "read API", scope: "GET project health returns per-category decomposition + gap alerts + Health Vector", exit_gate: "authenticated GET returns decomposition+gaps+vector; Unknown=null in payload (never 0)", status: planned}
-    - {id: P0b-L4-5, name: "user-visible UI/report", scope: "per-category view + gap alerts on document/health surface; null renders 'Unknown / Insufficient evidence'", exit_gate: "PROD: upload one doc -> UI shows per-category state/findings/missing_data + actionable gap alerts + Health Vector; Unknown!=0%; Coherence absent until >=2 docs", status: planned}
+    - {id: P0b-L4-1, name: "category_coverage domain (pure)", scope: "compute_category_coverage() + gap_alerts(); PRESENT|INSUFFICIENT_EVIDENCE; per-category action map", files_new: ["apps/api/src/health/domain/category_coverage.py", "apps/api/tests/unit/health/test_category_coverage.py"], exit_gate: "RED->GREEN unit: covered=PRESENT; absent=INSUFFICIENT_EVIDENCE + correct gap alert; all-present=0 gaps; empty=6 gaps; INV-1; ruff+mypy-ratchet green", slice_status: DONE}
+    - {id: P0b-L4-2, name: "wire single-doc intake -> classification -> coverage", scope: "one document's classified clauses -> per-category {state, findings(ADR-022 + intrinsic), missing_data}; CROSS findings preserved separately (never attributed to a canonical category); CategoryAssessment invariants enforced", exit_gate: "integration: real doc -> coverage object with findings + missing_data; contract-only => TECHNICAL/BUDGET/TIME insufficient", slice_status: DONE}
+    - {id: P0b-L4-3, name: "persist the single-document assessment from the real analysis into the Health Vector", scope: "N8 (coherence_scorer) computes SingleDocumentCoverage ONCE from canonical Clause[] + FindingSignal[] - the earliest point where both coexist, strictly before N17. The versioned artifact is stored in analyses.result_json; graph.completed carries analysis_id LINEAGE ONLY; SnapshotWriter resolves that lineage and persists HealthVector.single_document_coverage as a NON-ROLLUP product/evidence surface (ADR-022 contract_clarity_findings precedent). NO new Contract/Documentation numeric formula - the existing dimension scorers and composite behaviour are untouched. coherence_subscore stays NULL. Honest-null lineage precedence enforced: a GRAPH_COMPLETED analysis is authoritative (valid assessment else None, never a stale carry-forward); only a no-new-analysis trigger carries the last valid assessment forward.", exit_gate: "assessment persisted + read back without re-running CategoryRouter; six assessments + missing_data + gaps + CROSS survive round-trip; legacy/unknown-version/malformed lineage => None (never empty-known); coherence_subscore=NULL; composite scoring unchanged; replay idempotent", slice_status: DONE}
+    - {id: P0b-L4-4, name: "read API", scope: "GET project health returns per-category decomposition + gap alerts + Health Vector. PARTIAL: GET /api/v1/projects/{project_id}/health already returns HealthVector, so single_document_coverage is ALREADY exposed through the existing response contract (and the generated OpenAPI); dedicated API acceptance + consumer validation remain pending.", exit_gate: "authenticated GET returns decomposition+gaps+vector; Unknown=null in payload (never 0)", slice_status: PARTIAL}
+    - {id: P0b-L4-5, name: "user-visible UI/report", scope: "per-category view + gap alerts on document/health surface; null renders 'Unknown / Insufficient evidence'", exit_gate: "PROD: upload one doc -> UI shows per-category state/findings/missing_data + actionable gap alerts + Health Vector; Unknown!=0%; Coherence absent until >=2 docs", slice_status: BLOCKED}
+  residuals:
+    - id: P0b-R1-EVIDENCE-GRANULARITY
+      name: "per-clause evidence granularity"
+      status: PLANNED
+      priority: P0
+      blocks: P0b-L4-5
+      production_truth: >
+        _build_coherence_clauses() currently emits ONE whole-document canonical Clause, so
+        evidence is document-level/coarse, per-category evidence_count is effectively 0/1, and
+        real CROSS generation cannot occur (_build_category_cross_pairs returns [] for a single
+        clause) even though the CROSS transport is implemented correctly and tested.
+      required_resolution: >
+        Audit and REUSE the existing clause/section extraction and persistence; adapt the
+        existing evidence into multiple stable coherence.models.Clause records; preserve stable
+        evidence IDs / lineage. No parallel parser, no second segmentation pipeline.
+      must_close_before: "P0b-L4-5 / user-facing product validation"
   p0b_exit_gate: "P0b-L4-5 PROD_VALIDATED with the done_definition evidence."
 
 # ── Phase roadmap (visible; sequence preserved) ───────────────────────────────
@@ -387,7 +405,7 @@ pr_disposition:
 
 # ── Next authorized action ────────────────────────────────────────────────────
 next_authorized_action:
-  - "MASTER review of this reconciliation + the two control files (PR #572, clean)."
-  - "On approval: Reconciler amends #571 to 'Reliability & Operability Baseline CLOSED' + registers P0b vertical epic (PWBS-ACT-HEALTH)."
-  - "Then (governed dev, .c2pro envelope): implement P0b-L4-1 (category_coverage) RED-first."
+  - "Bounded READ-ONLY architecture audit for P0b-R1-EVIDENCE-GRANULARITY (identify every existing clause/section/chunk segmentation source; what is persisted vs transient; whether an existing extracted-clause representation can be adapted into coherence.models.Clause[]; preserve stable clause IDs / evidence lineage; no parallel parser)."
+  - "Do NOT start P0b-L4-5 (UI) until P0b-R1-EVIDENCE-GRANULARITY is resolved or explicitly re-gated by MASTER."
+  - "Do NOT implement the granularity residual until the audit returns the smallest correct reuse path for MASTER review."
   - "No product code / runtime / production mutation performed in this reconciliation (read-only prod SELECTs only)."
