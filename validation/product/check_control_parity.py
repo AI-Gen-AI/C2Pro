@@ -100,6 +100,38 @@ def validate_enums(doc: dict) -> list[str]:
                     if f in tv:
                         _chk(f"adr[{adr}].subtrack[{tk}]", f, tv[f], allowed)
 
+    p0b = doc.get("p0b_vertical_contract") or {}
+    slice_allowed = set(enums["slice_status"])
+    residual_allowed = set(enums["residual_status"])
+    slice_ids = {_s(sl.get("id")) for sl in (p0b.get("slices") or [])}
+
+    for sl in p0b.get("slices") or []:
+        sid = sl.get("id", "?")
+        _chk(f"p0b.slice[{sid}]", "slice_status", sl.get("slice_status"), slice_allowed)
+        if "status" in sl:
+            problems.append(
+                f"p0b.slice[{sid}]: legacy free-form 'status' present; use validated 'slice_status'"
+            )
+
+    residuals = p0b.get("residuals")
+    if not residuals:
+        problems.append("p0b_vertical_contract: no 'residuals' registered (open residuals must be explicit)")
+    for res in residuals or []:
+        rid = res.get("id", "?")
+        _chk(f"p0b.residual[{rid}]", "status", res.get("status"), residual_allowed)
+        blocks = _s(res.get("blocks", ""))
+        if not blocks:
+            problems.append(f"p0b.residual[{rid}]: missing 'blocks'")
+        elif blocks not in slice_ids:
+            problems.append(f"p0b.residual[{rid}]: 'blocks'='{blocks}' is not a known P0b slice id")
+        else:
+            blocked = next(sl for sl in p0b["slices"] if _s(sl.get("id")) == blocks)
+            if _s(blocked.get("slice_status")) != "BLOCKED":
+                problems.append(
+                    f"p0b.residual[{rid}]: blocks '{blocks}' but that slice is "
+                    f"'{blocked.get('slice_status')}', not BLOCKED"
+                )
+
     for row in doc["product_wbs"]:
         wid = row.get("id", "?")
         _chk(f"wbs[{wid}]", "realization_status", row.get("realization_status"), real)
@@ -135,6 +167,13 @@ def extract_canonical(doc: dict) -> dict[str, str]:
         "p0b.done_digest": hashlib.sha256(_norm(p0b["done_definition"]).encode()).hexdigest()[:16],
         "p0b.invariant_ids": ",".join(_s(x) for x in p0b["invariant_ids"]),
     }
+    for sl in p0b["slices"]:
+        canon[f"p0b.slice.{_s(sl['id'])}.status"] = _s(sl["slice_status"])
+    canon["p0b.residual_ids"] = ",".join(_s(r["id"]) for r in p0b["residuals"])
+    for res in p0b["residuals"]:
+        rid = _s(res["id"])
+        canon[f"p0b.residual.{rid}.status"] = _s(res["status"])
+        canon[f"p0b.residual.{rid}.blocks"] = _s(res["blocks"])
     for wid in _WBS_IDS:
         row = _wbs_row(doc, wid)
         canon[f"wbs.{wid}.realization"] = _s(row["realization_status"])

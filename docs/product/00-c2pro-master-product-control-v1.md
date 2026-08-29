@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
 **Status:** Reconciliation snapshot (read-only) · **Date:** 2026-08-27
-**reconciled_against_main_sha:** `9c48f4f94d0a5719561916b956f8a78b2129a250` (repo baseline this reconciliation ran against — **not** a live "current main" claim) · **deployed_runtime_sha:** `UNVERIFIED` (confirm via Railway deploy log)
+**reconciled_against_main_sha:** `85caa0ccd0739127b279c93a9c6e979f0e340d21` (repo baseline this reconciliation ran against — main after #576 P0b-L4-3 and #577 — **not** a live "current main" claim) · **deployed_runtime_sha:** `UNVERIFIED` (confirm via Railway deploy log)
 **Machine-readable source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This is the **PRODUCT** control plane — *what C2Pro is and how far each capability is realized*.
@@ -17,7 +17,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=9c48f4f94d0a5719561916b956f8a78b2129a250
+reconciled_against_main_sha=85caa0ccd0739127b279c93a9c6e979f0e340d21
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
@@ -27,12 +27,20 @@ legacy_coverage.unmapped_open_legacy_items=0
 adr.ADR-018.realization=WIRED
 adr.ADR-018.deployment=DEPLOYED
 adr.ADR-018.prod_validation=NOT_VALIDATED
-adr.ADR-024.realization=DESIGNED
+adr.ADR-024.realization=WIRED
 adr.ADR-024.deployment=NONE
 adr.ADR-024.prod_validation=NONE
 p0b.done_digest=9ae6adf0a63af690
 p0b.invariant_ids=INV-1,INV-UX,INV-COH
-wbs.PWBS-ACT-HEALTH.realization=DESIGNED
+p0b.slice.P0b-L4-1.status=DONE
+p0b.slice.P0b-L4-2.status=DONE
+p0b.slice.P0b-L4-3.status=DONE
+p0b.slice.P0b-L4-4.status=PARTIAL
+p0b.slice.P0b-L4-5.status=BLOCKED
+p0b.residual_ids=P0b-R1-EVIDENCE-GRANULARITY
+p0b.residual.P0b-R1-EVIDENCE-GRANULARITY.status=PLANNED
+p0b.residual.P0b-R1-EVIDENCE-GRANULARITY.blocks=P0b-L4-5
+wbs.PWBS-ACT-HEALTH.realization=PARTIAL
 wbs.PWBS-ACT-HEALTH.work_status=ACTIVE
 wbs.PWBS-COHERENCE-XDOC.realization=PARTIAL
 wbs.PWBS-COHERENCE-XDOC.work_status=PLANNED
@@ -59,7 +67,7 @@ wbs.PWBS-OPS-TRUST.work_status=ACTIVE
 
 ## 2. Current production position (honest — three separate facts)
 
-- **`reconciled_against_main_sha`** = `9c48f4f9` — the repo baseline this reconciliation was performed against; **not** a live "current main" value (that is Git-derived and drifts the moment #572 merges).
+- **`reconciled_against_main_sha`** = `85caa0cc` — the repo baseline this reconciliation was performed against (main after #576 / #577); **not** a live "current main" value (that is Git-derived and drifts on every merge).
 - **`deployed_runtime_sha`** = **UNVERIFIED** — do **not** infer from main; confirm via the Railway deploy log (service `c2pro-api`/production). Equal to main **only** if Railway rebuilt after the #570 merge.
 - **`observed_production_evidence`** (read-only, independent of any SHA): kuwait2 doc `c510de21` enqueue→worker→**SUCCESS** on the dedicated Railway Redis; `coherence_results` **15/15 rows `coherence-v1`** (0 v2); `coherence_v2_shadow` **1 row** (2026-08-07); `alerts.severity` = `public.alertseverity` (#567); ADR-004 circuit breakers in prod logs.
 
@@ -114,7 +122,7 @@ Per-field enums (YAML `status_enums`): **design** ∈ {Accepted, Proposed, Imple
 | ADR-021 briefing (v3) | Deferred | SCAFFOLDED | NONE | NONE | deferred |
 | ADR-022 contract-clarity (v3) | Accepted | WIRED | DEPLOYED | NOT_VALIDATED | not surfaced via activation |
 | ADR-023 agentic (v3) | **Proposed** | DESIGNED | NONE | NONE | not built |
-| **ADR-024 single-doc-activation (v3)** | Accepted *(VP 2026-08-22)* | **DESIGNED** | NONE | NONE | **no `category_coverage`/gap-alert — this is P0b** |
+| **ADR-024 single-doc-activation (v3)** | Accepted *(VP 2026-08-22)* | **WIRED** | NONE | NONE | L4-1…L4-3 merged (domain → real single-doc assessment → N8 → `analyses.result_json` → lineage → `HealthVector.single_document_coverage`); L4-4 exposure **PARTIAL**. Open: **per-clause evidence granularity** + dedicated API acceptance + **L4-5 UI/prod validation** |
 
 ## 4b. Coherence runtime reconciliation (proven, read-only — observed history vs routing capability)
 
@@ -137,7 +145,7 @@ Supporting facts: global `COHERENCE_V2_SHADOW_MODE` default `True`, but the shad
 
 | WBS ID | Plane | Pri | Realization | Work | Exit gate (evidence-for-DONE) |
 |---|---|---|---|---|---|
-| **PWBS-ACT-HEALTH** | ACT-HEALTH | P0b | **DESIGNED** | **ACTIVE** | P0b-L4-5 PROD_VALIDATED (§7) |
+| **PWBS-ACT-HEALTH** | ACT-HEALTH | P0b | **PARTIAL** | **ACTIVE** | P0b-L4-5 PROD_VALIDATED (§7) |
 | PWBS-COHERENCE-XDOC | COHERENCE-XDOC | P1 | **PARTIAL** *(v1 DEPLOYED / v2 SHADOW_INERT)* | PLANNED | v2 cutover (MAE+canary) or explicit v1-keep; cross-doc findings on ≥2-doc project |
 | PWBS-TEMPORAL-CHANGE | TEMPORAL-CHANGE | P1 | **SCAFFOLDED** | PLANNED | snapshot capture running (Beat) + Change-Impact Report |
 | PWBS-ALERTS-ACTIONS-HITL | ALERTS-ACTIONS-HITL | P2 | **SCAFFOLDED** | DEFERRED | build-gate lifted; ActionItem→CM HITL queue in prod |
@@ -154,15 +162,23 @@ Supporting facts: global `COHERENCE_V2_SHADOW_MODE` default `True`, but the shad
 
 **Invariants (`p0b.invariant_ids: INV-1,INV-UX,INV-COH`):** INV-1 honest-null · **INV-UX**: backend null → UI **"Unknown / Insufficient evidence"**, **never 0%** (0 only when an evidence-backed scorer genuinely returns zero) · **INV-COH**: `coherence_subscore` stays **NULL** while <2 reconcilable docs.
 
-| Slice | Scope | Exit gate |
-|---|---|---|
-| **L4-1** category_coverage (pure domain) | `compute_category_coverage()` + `gap_alerts()`; PRESENT \| INSUFFICIENT_EVIDENCE | RED→GREEN unit: covered=PRESENT; absent=INSUFFICIENT_EVIDENCE + gap alert; all-present=0 gaps; empty=6 gaps; INV-1; ruff+mypy green |
-| L4-2 wire intake→classification→coverage | one doc's clauses → per-category `{state, findings(022+intrinsic), missing_data}` | integration: real doc → coverage; contract-only ⇒ TECHNICAL/BUDGET/TIME insufficient |
-| **L4-3** Health Vector + persist (**Contract/Documentation only**) | feed Contract + Documentation HealthSignals from single-doc coverage; snapshot persist. **Does NOT populate `coherence_subscore`** — it stays **NULL** for one document. Coherence becomes a Contract input **only once ≥2 reconcilable docs exist** (eligibility-gated). | HealthVector persisted w/ honest-null dims; **`coherence_subscore=NULL` asserted for single-doc**; no fabricated composite |
-| L4-4 read API | GET project health → decomposition + gap alerts + Health Vector | authenticated GET returns decomposition+gaps+vector; Unknown=null (never 0) |
-| L4-5 UI/report | per-category view + gap alerts; null → "Unknown / Insufficient evidence" | **PROD**: upload one doc → UI shows per-category state/findings/missing_data + gap alerts + Health Vector; Unknown≠0%; Coherence absent until ≥2 docs |
+| Slice | Status | Scope | Exit gate |
+|---|---|---|---|
+| **L4-1** category_coverage (pure domain) | **DONE** | `compute_category_coverage()` + `gap_alerts()`; PRESENT \| INSUFFICIENT_EVIDENCE | RED→GREEN unit: covered=PRESENT; absent=INSUFFICIENT_EVIDENCE + gap alert; all-present=0 gaps; empty=6 gaps; INV-1; ruff+mypy green |
+| **L4-2** wire intake→classification→coverage | **DONE** | one doc's clauses → per-category `{state, findings(022+intrinsic), missing_data}`; **CROSS findings preserved separately**, never attributed to a canonical category | integration: real doc → coverage; contract-only ⇒ TECHNICAL/BUDGET/TIME insufficient |
+| **L4-3** persist the single-document assessment into the Health Vector | **DONE** | **N8** computes `SingleDocumentCoverage` **once** from canonical `Clause[]` + `FindingSignal[]`; versioned artifact in `analyses.result_json`; `graph.completed` carries **`analysis_id` lineage only**; SnapshotWriter persists **`HealthVector.single_document_coverage`** as a **non-rollup** product/evidence surface. **No new Contract/Documentation numeric formula**; `coherence_subscore` stays **NULL**; honest-null lineage precedence enforced. | assessment persisted + read back **without re-running CategoryRouter**; six assessments + missing_data + gaps + CROSS survive round-trip; legacy/unknown-version/malformed lineage ⇒ `None` (never empty-known); composite scoring unchanged; replay idempotent |
+| **L4-4** read API | **PARTIAL** | `GET /api/v1/projects/{project_id}/health` already returns `HealthVector`, so `single_document_coverage` is **already exposed** through the existing response contract and generated OpenAPI; **dedicated API acceptance + consumer validation remain pending**. | authenticated GET returns decomposition+gaps+vector; Unknown=null (never 0) |
+| **L4-5** UI/report | **BLOCKED** | per-category view + gap alerts; null → "Unknown / Insufficient evidence" | **PROD**: upload one doc → UI shows per-category state/findings/missing_data + gap alerts + Health Vector; Unknown≠0%; Coherence absent until ≥2 docs |
 
-> **Correction (H):** L4-3 does **not** "close `coherence_subscore=None`". With one document, relational Coherence **must remain null**; L4-3 wires only Contract/Documentation evidence. Real coherence becomes a conditional Contract input **after** the ≥2-document eligibility is met.
+**Open residuals (`p0b.residual_ids`)**
+
+| Residual | Status | Priority | Blocks | Production truth | Required resolution |
+|---|---|---|---|---|---|
+| **P0b-R1-EVIDENCE-GRANULARITY** — per-clause evidence granularity | **PLANNED** | **P0** | **P0b-L4-5** | `_build_coherence_clauses()` emits **one whole-document canonical `Clause`**, so evidence is document-level/coarse, per-category `evidence_count` is effectively 0/1, and **real CROSS generation cannot occur** (`_build_category_cross_pairs` returns `[]` for a single clause) even though the CROSS transport is implemented and tested. | **Audit and reuse** existing clause/section extraction + persistence; adapt existing evidence into **multiple stable `coherence.models.Clause` records**; preserve stable evidence IDs / lineage. **No parallel parser.** |
+
+> `slice_status` **DONE** means the slice met its **code/merge exit gate** — it does **not** mean P0b is PROD_VALIDATED. The vertical's DONE still requires **L4-5 production evidence** (`p0b_exit_gate`).
+
+> **Correction (H), as implemented:** L4-3 does **not** "close `coherence_subscore=None`" — with one document relational Coherence **must remain null**. As built, L4-3 also does **not** feed Contract/Documentation numerically: that mapping was **deliberately deferred** (no formula from the six ADR-024 categories onto the seven ADR-018 dimensions), and the assessment is carried as a **non-rollup** surface instead. Real coherence becomes a conditional Contract input **after** the ≥2-document eligibility is met.
 
 **Reuse (not rebuild):** `CoherenceCategory` (SCOPE/BUDGET/TIME/TECHNICAL/LEGAL/QUALITY), `HealthNullReason.INSUFFICIENT_EVIDENCE`, `assemble_health_vector`, ADR-022 findings, the clause classifier, RAG/extraction.
 
