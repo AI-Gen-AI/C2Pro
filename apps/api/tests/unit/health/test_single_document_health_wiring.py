@@ -505,34 +505,39 @@ def test_health_vector_carries_the_domain_owned_coverage_contract() -> None:
 
 
 # =====================================================================================
-# 7 x 12 interaction — "unavailable" must not erase a previously known assessment
+# HONEST-NULL LINEAGE PRECEDENCE — the two "no coverage" states are NOT the same
+#
+#   GRAPH_COMPLETED  => the new analysis is authoritative. Valid assessment, else None.
+#                       NEVER a prior assessment: a fresh analysis that produced nothing
+#                       must not make an older assessment appear current.
+#   SCHEDULED        => no new analysis, so the last valid assessment still stands.
 # =====================================================================================
 
 
-@pytest.mark.asyncio
-async def test_legacy_analysis_does_not_erase_a_previously_known_assessment() -> None:
-    """A newer analysis that carries no assessment is UNKNOWN, not "assessment gone".
-
-    Requirement 7 (legacy => None) governs what the *analysis* contributes; requirement 12
-    (never erase) governs what the *snapshot* reports. Resolution: an analysis without the
-    versioned artifact contributes nothing, so the snapshot keeps the most recent known
-    assessment rather than fabricating either an empty result or a regression to unknown.
-    """
+async def _snapshot_after_prior(
+    *,
+    trigger: SnapshotTrigger,
+    new_result_json: dict[str, Any] | None,
+    include_event: bool = True,
+    payload_override: dict[str, Any] | None = None,
+) -> ProjectSnapshot:
+    """Seed a project with a known assessment, then take a second snapshot."""
     project_id, tenant_id = uuid4(), uuid4()
-    first_analysis, legacy_analysis = uuid4(), uuid4()
+    first_analysis, next_analysis = uuid4(), uuid4()
     first_event = _graph_completed_event(project_id, tenant_id, first_analysis)
-    legacy_event = _graph_completed_event(project_id, tenant_id, legacy_analysis)
-    repo = _FakeSnapshotRepo()
-    coverage = _coverage()
-    base = datetime.now(UTC).replace(tzinfo=None)
+    next_event = _graph_completed_event(project_id, tenant_id, next_analysis)
+    if payload_override is not None:
+        next_event = next_event.model_copy(update={"payload": payload_override})
 
-    analysis_repo = _FakeAnalysisRepo(
-        {
-            first_analysis: encode_single_document_assessment(coverage, []),
-            legacy_analysis: {"risks": [], "wbs": []},  # predates L4-3
-        }
-    )
-    events = _FakeEventRepo([first_event, legacy_event])
+    repo = _FakeSnapshotRepo()
+    base = datetime.now(UTC).replace(tzinfo=None)
+    analyses: dict[UUID, dict[str, Any] | None] = {
+        first_analysis: encode_single_document_assessment(_coverage(), [])
+    }
+    if new_result_json is not None:
+        analyses[next_analysis] = new_result_json
+    analysis_repo = _FakeAnalysisRepo(analyses)
+    events = _FakeEventRepo([first_event] + ([next_event] if include_event else []))
 
     await _writer(repo, events, analysis_repo, clock=lambda: base).write_snapshot(
         project_id=project_id,
@@ -540,17 +545,132 @@ async def test_legacy_analysis_does_not_erase_a_previously_known_assessment() ->
         trigger=SnapshotTrigger.GRAPH_COMPLETED,
         source_event_id=first_event.event_id,
     )
-    second = await _writer(
-        repo, events, analysis_repo, clock=lambda: base + timedelta(hours=1)
+    return await _writer(
+        repo, events, analysis_repo, clock=lambda: base + timedelta(days=1)
     ).write_snapshot(
         project_id=project_id,
         tenant_id=tenant_id,
-        trigger=SnapshotTrigger.GRAPH_COMPLETED,
-        source_event_id=legacy_event.event_id,
+        trigger=trigger,
+        source_event_id=next_event.event_id if trigger is SnapshotTrigger.GRAPH_COMPLETED else None,
     )
 
-    carried = SingleDocumentCoverage.model_validate(second.health_vector["single_document_coverage"])
-    assert carried == coverage
+
+@pytest.mark.asyncio
+async def test_prior_assessment_plus_legacy_graph_completed_yields_none() -> None:
+    """(1) A new analysis without the artifact is UNKNOWN — it must not resurrect the prior."""
+    snapshot = await _snapshot_after_prior(
+        trigger=SnapshotTrigger.GRAPH_COMPLETED,
+        new_result_json={"risks": [], "wbs": []},
+    )
+    assert snapshot.health_vector["single_document_coverage"] is None
+
+
+@pytest.mark.asyncio
+async def test_prior_assessment_plus_unknown_artifact_version_yields_none() -> None:
+    """(2) An artifact this build cannot read is UNKNOWN, never the prior assessment."""
+    snapshot = await _snapshot_after_prior(
+        trigger=SnapshotTrigger.GRAPH_COMPLETED,
+        new_result_json={
+            SINGLE_DOCUMENT_ASSESSMENT_KEY: {"version": SINGLE_DOCUMENT_ASSESSMENT_VERSION + 99}
+        },
+    )
+    assert snapshot.health_vector["single_document_coverage"] is None
+
+
+@pytest.mark.asyncio
+async def test_prior_assessment_plus_missing_lineage_event_yields_none() -> None:
+    """(3a) A GRAPH_COMPLETED whose event cannot be resolved is honestly unavailable."""
+    snapshot = await _snapshot_after_prior(
+        trigger=SnapshotTrigger.GRAPH_COMPLETED,
+        new_result_json={"risks": [], "wbs": []},
+        include_event=False,
+    )
+    assert snapshot.health_vector["single_document_coverage"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    [{}, {"analysis_id": "not-a-uuid"}, {"analysis_id": 42}, {"document_id": "doc-1"}],
+    ids=["empty", "non-uuid", "non-string", "no-analysis-id"],
+)
+async def test_prior_assessment_plus_malformed_lineage_payload_yields_none(
+    payload: dict[str, Any],
+) -> None:
+    """(3b) A malformed graph.completed payload is honestly unavailable, never the prior."""
+    snapshot = await _snapshot_after_prior(
+        trigger=SnapshotTrigger.GRAPH_COMPLETED,
+        new_result_json={"risks": [], "wbs": []},
+        payload_override=payload,
+    )
+    assert snapshot.health_vector["single_document_coverage"] is None
+
+
+@pytest.mark.asyncio
+async def test_prior_assessment_plus_scheduled_carries_forward() -> None:
+    """(4) No new analysis => the last valid assessment still stands."""
+    snapshot = await _snapshot_after_prior(
+        trigger=SnapshotTrigger.SCHEDULED, new_result_json=None
+    )
+    carried = SingleDocumentCoverage.model_validate(
+        snapshot.health_vector["single_document_coverage"]
+    )
+    assert carried == _coverage()
+
+
+@pytest.mark.asyncio
+async def test_no_prior_plus_scheduled_yields_none() -> None:
+    """(5) Nothing was ever assessed => None; nothing is fabricated."""
+    snapshot = await _writer(_FakeSnapshotRepo()).write_snapshot(
+        project_id=uuid4(), tenant_id=uuid4(), trigger=SnapshotTrigger.SCHEDULED
+    )
+    assert snapshot.health_vector["single_document_coverage"] is None
+
+
+@pytest.mark.asyncio
+async def test_lineage_resolution_reports_which_no_coverage_state_applies() -> None:
+    """The resolution is tri-state, not an ambiguous ``coverage | None``."""
+    from src.temporal.application.snapshot_writer import AssessmentLineage
+
+    project_id, tenant_id, analysis_id = uuid4(), uuid4(), uuid4()
+    event = _graph_completed_event(project_id, tenant_id, analysis_id)
+    coverage = _coverage()
+    writer = _writer(
+        _FakeSnapshotRepo(),
+        _FakeEventRepo([event]),
+        _FakeAnalysisRepo({analysis_id: encode_single_document_assessment(coverage, [])}),
+    )
+
+    resolved = await writer._resolve_single_document_coverage(
+        tenant_id=tenant_id,
+        trigger=SnapshotTrigger.GRAPH_COMPLETED,
+        source_event_id=event.event_id,
+        prior_snapshot=None,
+    )
+    assert resolved.lineage is AssessmentLineage.RESOLVED
+    assert resolved.coverage == coverage
+
+    legacy_writer = _writer(
+        _FakeSnapshotRepo(),
+        _FakeEventRepo([event]),
+        _FakeAnalysisRepo({analysis_id: {"risks": []}}),
+    )
+    unavailable = await legacy_writer._resolve_single_document_coverage(
+        tenant_id=tenant_id,
+        trigger=SnapshotTrigger.GRAPH_COMPLETED,
+        source_event_id=event.event_id,
+        prior_snapshot=None,
+    )
+    assert unavailable.lineage is AssessmentLineage.UNAVAILABLE
+    assert unavailable.coverage is None
+
+    no_analysis = await legacy_writer._resolve_single_document_coverage(
+        tenant_id=tenant_id,
+        trigger=SnapshotTrigger.SCHEDULED,
+        source_event_id=None,
+        prior_snapshot=None,
+    )
+    assert no_analysis.lineage is AssessmentLineage.NO_NEW_ANALYSIS
 
 
 def test_unavailable_and_evaluated_empty_never_collapse() -> None:

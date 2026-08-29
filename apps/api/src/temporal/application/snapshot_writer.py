@@ -6,7 +6,9 @@ TS-UT-TSW-001
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from uuid import UUID, uuid4
 
 from src.analysis.ports.analysis_repository import IAnalysisRepository
@@ -25,6 +27,38 @@ from src.temporal.ports.project_event_repository import IProjectEventRepository
 from src.temporal.ports.project_snapshot_repository import IProjectSnapshotRepository
 
 _SNAPSHOT_EPOCH = datetime(1970, 1, 1)
+
+# Triggers whose snapshot is produced BY a new analysis. For these the new analysis is
+# authoritative: its assessment, or honest unavailable — never a prior one.
+_ANALYSIS_AUTHORITATIVE_TRIGGERS = frozenset({SnapshotTrigger.GRAPH_COMPLETED})
+
+
+class AssessmentLineage(StrEnum):
+    """Why a snapshot does or does not carry a single-document assessment.
+
+    ``coverage=None`` alone is ambiguous — it can mean "a new analysis ran and produced
+    no usable assessment" or "no new analysis exists". Those are different product
+    claims, so the resolution reports which one applies.
+    """
+
+    RESOLVED = "resolved"
+    """A new analysis produced a valid versioned assessment."""
+
+    UNAVAILABLE = "unavailable"
+    """A new analysis exists but carries no usable assessment (legacy artifact, unknown
+    version, or missing/malformed lineage). Honest unknown — NOT a prior assessment."""
+
+    NO_NEW_ANALYSIS = "no_new_analysis"
+    """This snapshot was not produced by an analysis (e.g. SCHEDULED), so the most recent
+    valid assessment still stands and is carried forward."""
+
+
+@dataclass(frozen=True)
+class ResolvedAssessment:
+    """Outcome of single-document assessment lineage resolution."""
+
+    lineage: AssessmentLineage
+    coverage: SingleDocumentCoverage | None = None
 
 
 def _utcnow() -> datetime:
@@ -72,8 +106,9 @@ class SnapshotWriter:
         counts = self._counts(state)
         totals = self._totals(state)
         prior_snapshot = await self._snapshot_repository.latest(project_id, tenant_id)
-        single_document_coverage = await self._resolve_single_document_coverage(
+        resolved_assessment = await self._resolve_single_document_coverage(
             tenant_id=tenant_id,
+            trigger=trigger,
             source_event_id=source_event_id,
             prior_snapshot=prior_snapshot,
         )
@@ -94,7 +129,7 @@ class SnapshotWriter:
                 score_governance_dimension(None),
             ],
             prior_composite=self._prior_composite(prior_snapshot),
-            single_document_coverage=single_document_coverage,
+            single_document_coverage=resolved_assessment.coverage,
         )
         snapshot = ProjectSnapshot(
             snapshot_id=uuid4(),
@@ -115,25 +150,36 @@ class SnapshotWriter:
         self,
         *,
         tenant_id: TenantId,
+        trigger: SnapshotTrigger,
         source_event_id: UUID | None,
         prior_snapshot: ProjectSnapshot | None,
-    ) -> SingleDocumentCoverage | None:
-        """Resolve the persisted single-document assessment for this snapshot.
+    ) -> ResolvedAssessment:
+        """Resolve the single-document assessment, distinguishing the two "no coverage" states.
 
-        Lineage (ADR-024 / P0b L4-3): ``source_event_id`` -> the ``graph.completed``
-        event's ``analysis_id`` -> that analysis' ``result_json`` -> the versioned
-        assessment. The assessment is READ, never recomputed: the ``CategoryRouter``
-        already ran once at analysis time (N8).
+        A snapshot produced BY an analysis (``GRAPH_COMPLETED``) takes that analysis as
+        authoritative. Lineage (ADR-024 / P0b L4-3): ``source_event_id`` -> the
+        ``graph.completed`` event's ``analysis_id`` -> that analysis' ``result_json`` ->
+        the versioned assessment. The assessment is READ, never recomputed — the
+        ``CategoryRouter`` already ran once at analysis time (N8).
 
-        When this snapshot has no new analysis of its own (a ``SCHEDULED`` run, or a
-        legacy analysis without the artifact), the most recent known assessment is
-        carried forward. The absence of a new analysis is NOT evidence that the
-        previous assessment ceased to exist.
+        If that analysis carries no usable assessment (legacy artifact, unknown version,
+        missing or malformed lineage) the result is ``UNAVAILABLE`` with no coverage. It
+        deliberately does NOT fall back to a prior assessment: a fresh analysis that
+        produced nothing must never make an older assessment appear current.
+
+        A snapshot NOT produced by an analysis (e.g. ``SCHEDULED``) carries the most recent
+        valid assessment forward — no new analysis is not evidence that the previous
+        assessment ceased to exist. With no prior assessment the coverage stays ``None``.
         """
-        coverage = await self._coverage_from_lineage(tenant_id, source_event_id)
-        if coverage is not None:
-            return coverage
-        return self._carry_forward_coverage(prior_snapshot)
+        if trigger in _ANALYSIS_AUTHORITATIVE_TRIGGERS:
+            coverage = await self._coverage_from_lineage(tenant_id, source_event_id)
+            if coverage is None:
+                return ResolvedAssessment(AssessmentLineage.UNAVAILABLE)
+            return ResolvedAssessment(AssessmentLineage.RESOLVED, coverage)
+        return ResolvedAssessment(
+            AssessmentLineage.NO_NEW_ANALYSIS,
+            self._carry_forward_coverage(prior_snapshot),
+        )
 
     async def _coverage_from_lineage(
         self, tenant_id: TenantId, source_event_id: UUID | None
