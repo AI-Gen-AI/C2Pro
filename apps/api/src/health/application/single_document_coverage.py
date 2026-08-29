@@ -24,15 +24,9 @@ Qualifying-evidence contract (owned by this mapping layer, made explicit):
 - ``evidence_count`` for a category is the number of *distinct* qualifying clauses; the
   category is ``PRESENT`` iff that count is >= 1, else ``INSUFFICIENT_EVIDENCE``.
 
-CROSS findings (producer audit, established):
-``CROSS-BUDGET-SCOPE`` pairs a BUDGET clause with a SCOPE clause and ``CROSS-SCHEDULE-DELIVERY``
-pairs a TIME clause with a TECHNICAL clause (``src/coherence/graph/nodes.py``). Pairing is by
-similarity / category match with no document boundary, so both are *cross-dimensional* and
-CAN occur inside a single document. They are therefore preserved — never discarded — in
-:attr:`SingleDocumentCoverage.cross_findings`, and deliberately NOT attributed to any of the
-six canonical categories: a CROSS finding spans two dimensions and carries a composite
-``clause_id`` (``"<clause_a>|<clause_b>"``), so assigning it to one category would fabricate
-evidence (INV-1). L4-3 persists them.
+CROSS findings are preserved, never discarded, and never attributed to a canonical
+category — see :mod:`src.health.domain.single_document_coverage` for the producer audit
+and the full rationale.
 
 Single-document scope: relational Coherence is OUT OF SCOPE — no ``coherence_subscore`` and
 no numeric Health score are produced here.
@@ -94,9 +88,7 @@ def _partition_findings(
 ) -> tuple[dict[CoherenceCategory, tuple[FindingSignal, ...]], tuple[FindingSignal, ...]]:
     """Split findings into per-canonical-category buckets and the preserved CROSS bucket.
 
-    A ``CROSS`` finding is cross-dimensional (composite ``clause_id``) and has no single
-    canonical home, so it is preserved separately instead of being dropped or force-fitted
-    onto one category. An unrecognised label raises rather than silently losing a finding.
+    An unrecognised label raises rather than silently losing a finding.
     """
     grouped: dict[CoherenceCategory, list[FindingSignal]] = {category: [] for category in CoherenceCategory}
     cross: list[FindingSignal] = []

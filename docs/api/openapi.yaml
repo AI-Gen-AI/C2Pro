@@ -4672,6 +4672,56 @@ components:
       - items
       title: BulkWBSRequest
       description: Bulk WBS creation request.
+    CategoryAssessment:
+      properties:
+        category:
+          $ref: '#/components/schemas/CoherenceCategory'
+        state:
+          $ref: '#/components/schemas/CategoryCoverageState'
+        evidence_count:
+          type: integer
+          minimum: 0.0
+          title: Evidence Count
+          default: 0
+        evidence_clause_ids:
+          items:
+            type: string
+          type: array
+          title: Evidence Clause Ids
+          default: []
+        findings:
+          items:
+            $ref: '#/components/schemas/FindingSignal'
+          type: array
+          title: Findings
+          default: []
+        missing_data:
+          items:
+            type: string
+          type: array
+          title: Missing Data
+          default: []
+        gap:
+          anyOf:
+          - $ref: '#/components/schemas/CategoryGapAlert'
+          - type: 'null'
+      additionalProperties: false
+      type: object
+      required:
+      - category
+      - state
+      title: CategoryAssessment
+      description: 'Per-category single-document assessment: state + evidence + findings
+        + gap.
+
+
+        ``PRESENT`` carries qualifying evidence and no gap; ``INSUFFICIENT_EVIDENCE``
+        carries
+
+        no evidence, factual ``missing_data`` and an actionable ``gap``. ``findings``
+        are
+
+        independent of coverage state (an issue can exist regardless of coverage).'
     CategoryBreakdown:
       properties:
         category:
@@ -4727,6 +4777,28 @@ components:
       - impact_percentage
       title: CategoryBreakdown
       description: Represents the coherence score breakdown for a specific category.
+    CategoryCoverageState:
+      type: string
+      enum:
+      - present
+      - insufficient_evidence
+      title: CategoryCoverageState
+      description: Whether a category is evidence-backed or lacks sufficient evidence.
+    CategoryGapAlert:
+      properties:
+        category:
+          $ref: '#/components/schemas/CoherenceCategory'
+        action:
+          type: string
+          minLength: 1
+          title: Action
+      additionalProperties: false
+      type: object
+      required:
+      - category
+      - action
+      title: CategoryGapAlert
+      description: An actionable gap alert for a category that lacks sufficient evidence.
     CategoryStatus:
       type: string
       enum:
@@ -4835,6 +4907,17 @@ components:
       - text
       title: Clause
       description: Represents a specific clause or segment of a document.
+    CoherenceCategory:
+      type: string
+      enum:
+      - SCOPE
+      - BUDGET
+      - QUALITY
+      - TECHNICAL
+      - LEGAL
+      - TIME
+      title: CoherenceCategory
+      description: Canonical coherence categories used by score calculators.
     CoherenceEvaluateRequest:
       properties:
         project_id:
@@ -6356,6 +6439,10 @@ components:
             $ref: '#/components/schemas/ContractClarityFinding'
           type: array
           title: Contract Clarity Findings
+        single_document_coverage:
+          anyOf:
+          - $ref: '#/components/schemas/SingleDocumentCoverage'
+          - type: 'null'
       additionalProperties: false
       type: object
       required:
@@ -7449,6 +7536,33 @@ components:
 
 
         TASK-504: Strict 5-level severity taxonomy (Critical, High, Medium, Low, Info).'
+    SingleDocumentCoverage:
+      properties:
+        assessments:
+          items:
+            $ref: '#/components/schemas/CategoryAssessment'
+          type: array
+          title: Assessments
+        cross_findings:
+          items:
+            $ref: '#/components/schemas/FindingSignal'
+          type: array
+          title: Cross Findings
+          default: []
+      additionalProperties: false
+      type: object
+      required:
+      - assessments
+      title: SingleDocumentCoverage
+      description: "Single-document coverage: the six category assessments + preserved\
+        \ CROSS findings.\n\n``cross_findings`` holds the ``FindingSignal`` entries\
+        \ tagged ``CROSS``. They are\ncross-dimensional and CAN be produced from one\
+        \ document (``CROSS-BUDGET-SCOPE`` pairs\na BUDGET clause with a SCOPE clause;\
+        \ ``CROSS-SCHEDULE-DELIVERY`` pairs a TIME clause\nwith a TECHNICAL clause),\
+        \ so they are preserved verbatim rather than discarded, and are\nNOT attributed\
+        \ to any canonical category \u2014 a CROSS finding spans two dimensions and\n\
+        carries a composite ``clause_id``, so single-category attribution would fabricate\n\
+        evidence (INV-1)."
     StakeholderCreateRequest:
       properties:
         name:
