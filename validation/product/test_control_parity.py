@@ -115,8 +115,8 @@ def test_p0b_slice_statuses_are_canonical_and_parity_checked() -> None:
         "P0b-L4-1": "DONE",
         "P0b-L4-2": "DONE",
         "P0b-L4-3": "DONE",
-        "P0b-L4-4": "PARTIAL",
-        "P0b-L4-5": "BLOCKED",
+        "P0b-L4-4": "DONE",
+        "P0b-L4-5": "ACTIVE",
     }
     canon = c.extract_canonical(c.load_yaml())
     md = c.parse_md_block(_MD_TEXT)
@@ -220,19 +220,27 @@ def test_r1_records_its_resolution_without_erasing_history() -> None:
     assert "DID block P0b-L4-5" in res["historical_truth"]
 
 
-def test_l4_5_blocker_is_l4_4_not_a_residual() -> None:
-    """Positive: L4-5 stays BLOCKED, but on L4-4 acceptance — not R1 and not R2."""
+def test_l4_5_is_active_and_carries_no_blocker_field() -> None:
+    """L4-5 is ACTIVE now that L4-4 is DONE, and it carries NO blocker field at all.
+
+    Same structural principle as schema v5's residual_blocking: something that is not
+    blocked must not carry a blocker line, because a blocker line that outlives its
+    blocker is exactly how control prose drifts. L4-5 was BLOCKED on L4-4 acceptance;
+    that gate closed with #581, so the field is gone rather than left to rot.
+    """
     doc = c.load_yaml()
     slice_45 = next(
         sl for sl in doc["p0b_vertical_contract"]["slices"] if sl["id"] == "P0b-L4-5"
     )
-    assert slice_45["slice_status"] == "BLOCKED"
-    assert "P0b-L4-4" in slice_45["blocked_by"]
-    assert "NOT P0b-R1" in slice_45["blocked_by"]
-    assert "NOT P0b-R2" in slice_45["blocked_by"]
+    slice_44 = next(
+        sl for sl in doc["p0b_vertical_contract"]["slices"] if sl["id"] == "P0b-L4-4"
+    )
+    assert slice_44["slice_status"] == "DONE", "L4-5 is only ACTIVE because L4-4 closed"
+    assert slice_45["slice_status"] == "ACTIVE"
+    assert "blocked_by" not in slice_45, "an unblocked slice must not carry a blocker field"
 
 
-def test_resolved_residual_is_not_the_current_blocker_and_l4_4_is_next() -> None:
+def test_resolved_residual_is_not_the_current_blocker_and_l4_5_is_next() -> None:
     """ANTI-DRIFT: once R1 is RESOLVED, control truth must stop gating on it.
 
     Deliberately structured-field only — no prose parsing. Two things must hold
@@ -241,7 +249,7 @@ def test_resolved_residual_is_not_the_current_blocker_and_l4_4_is_next() -> None
 
       1. no RESOLVED residual still carries a blocking edge, and nothing at all
          currently blocks P0b-L4-5 via the residual registry;
-      2. the current next authorized product action is P0b-L4-4.
+      2. the current next authorized product action is P0b-L4-5.
     """
     doc = c.load_yaml()
     p0b = doc["p0b_vertical_contract"]
@@ -258,17 +266,17 @@ def test_resolved_residual_is_not_the_current_blocker_and_l4_4_is_next() -> None
         res["id"] for res in p0b["residuals"] if res.get("blocks") == "P0b-L4-5"
     ], "P0b-L4-5 is still gated by a residual"
 
-    # 2 — the next authorized action is L4-4, and it is real work (not DONE).
-    assert p0b["next_slice"] == "P0b-L4-4"
+    # 2 — the next authorized action is L4-5, and it is real work (not DONE).
+    assert p0b["next_slice"] == "P0b-L4-5"
     nxt = next(sl for sl in p0b["slices"] if sl["id"] == p0b["next_slice"])
-    assert nxt["slice_status"] == "PARTIAL"
+    assert nxt["slice_status"] == "ACTIVE"
 
 
 def test_next_slice_is_parity_checked() -> None:
     """The next authorized action is a canonical value, so MD cannot disagree."""
     canon = c.extract_canonical(c.load_yaml())
     md = c.parse_md_block(_MD_TEXT)
-    assert canon["p0b.next_slice"] == "P0b-L4-4"
+    assert canon["p0b.next_slice"] == "P0b-L4-5"
     assert md["p0b.next_slice"] == canon["p0b.next_slice"]
 
 
