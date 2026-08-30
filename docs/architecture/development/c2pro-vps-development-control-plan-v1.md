@@ -690,6 +690,50 @@ Tasks:
 
 **Exit gate:** one real campaign completes with owner interaction limited to authorization and genuinely material escalations.
 
+### C2PRO-DEV-13 — Fix unreliable local web full-test runner
+
+**Registered:** 2026-08-30, surfaced by P0b-L4-4 (#581). **Priority:** P1 development-trust debt.
+
+**Id note:** requested by MASTER as `C2PRO-DEV-06`. That id is already bound to *MR-DEV direct
+Claude/Codex routes* above, and is a node in the section 13 execution-order graph, so reusing it
+would give one id two meanings. Registered as the next free id; the requested label is recorded
+here and in `.c2pro/control/work-queue.yaml` so the intent stays traceable.
+
+**Defect:** `apps/web/scripts/vitest-run-all.mjs` spawns vitest with `shell: true` and an
+unquoted glob:
+
+```js
+["...", "run", "--exclude", "src/tests/integration/**", "--config", "vitest.config.mts"]
+```
+
+The shell expands `src/tests/integration/**` to 15 paths. `--exclude` consumes the first; the
+remaining 14 become **positional test-name filters**.
+
+**Consequence:**
+
+1. local `pnpm test:all` can silently execute only a subset — measured at 49 of 279 files
+   (253 of 970 tests) — while still exiting 0;
+2. CI executes the broader/correct set, because there the exclude misses entirely;
+3. the defect caused a **false local GREEN** during #581: three frontend tests that CI correctly
+   failed were never run locally.
+
+**Goal:** make the local full-test command execute exactly what CI executes, and fail loudly if
+it cannot.
+
+Tasks:
+
+1. quote or stop shell-expanding the exclude glob (`shell: false`, or pass args without a shell);
+2. assert the two runs' collected file counts match CI's, so silent under-collection cannot recur;
+3. confirm `pnpm test:all` and the CI invocation agree on file/test counts;
+4. check the sibling scripts (`test`, `test:coverage`) for the same unquoted-arg pattern.
+
+**Exit gate:** `pnpm test:all` collects and runs the same set as CI (currently 279 files /
+970 tests), and an injected under-collection fails the command instead of passing.
+
+**Interim rule (until resolved):** P0b-L4-5 local validation must use explicit/quoted Vitest
+commands matching CI and must **not** cite `pnpm test:all` alone as proof. Non-blocking for
+L4-5 because CI remains authoritative. Do not fix this inside the L4-5 product PR.
+
 ---
 
 ## 13. Execution order
