@@ -17,7 +17,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=6d3a19e41f169d974e9a0d4ea73d1aec7c0bc4cc
+reconciled_against_main_sha=33e9a257fc7b5a39bdf04f20dd3919acaff42c3f
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
@@ -32,12 +32,12 @@ adr.ADR-024.deployment=NONE
 adr.ADR-024.prod_validation=NONE
 p0b.done_digest=9ae6adf0a63af690
 p0b.invariant_ids=INV-1,INV-UX,INV-COH
-p0b.next_slice=P0b-L4-4
+p0b.next_slice=P0b-L4-5
 p0b.slice.P0b-L4-1.status=DONE
 p0b.slice.P0b-L4-2.status=DONE
 p0b.slice.P0b-L4-3.status=DONE
-p0b.slice.P0b-L4-4.status=PARTIAL
-p0b.slice.P0b-L4-5.status=BLOCKED
+p0b.slice.P0b-L4-4.status=DONE
+p0b.slice.P0b-L4-5.status=ACTIVE
 p0b.residual_ids=P0b-R1-EVIDENCE-GRANULARITY,P0b-R2-CROSS-DATA-CONTRACT
 p0b.residual.P0b-R1-EVIDENCE-GRANULARITY.status=RESOLVED
 p0b.residual.P0b-R1-EVIDENCE-GRANULARITY.blocking=NON_BLOCKING
