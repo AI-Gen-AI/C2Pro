@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -19,6 +20,7 @@ from src.health.adapters.http.router import (
     router,
 )
 from src.health.domain.health_vector import HealthBand, HealthDimension
+from src.projects.adapters.persistence.project_repository import SQLAlchemyProjectRepository
 from src.temporal.domain.project_snapshot import ProjectSnapshot, SnapshotTrigger
 
 
@@ -207,3 +209,39 @@ async def test_project_health_normalizes_tenant_once_at_http_boundary(monkeypatc
     projects.exists_by_id.assert_awaited_once_with(project_id, normalized_tenant_id)
     repository.latest.assert_awaited_once_with(project_id, normalized_tenant_id)
     assert result.tenant_id == normalized_tenant_id
+
+
+@pytest.mark.asyncio
+async def test_project_repository_provider_binds_session_to_authenticated_tenant(
+    monkeypatch,
+) -> None:
+    """The ownership gate is only sound if its session is opened for the CALLER's tenant.
+
+    ``get_session_with_tenant`` is what sets the RLS tenant context, so a provider that
+    opened the session for anything other than the authenticated user's tenant would let
+    the gate read another tenant's projects. Pin the binding, not just the return type.
+    """
+    from src.health.adapters.http import router as health_router
+
+    tenant_id = uuid4()
+    session = object()
+    opened_for: list[object] = []
+
+    @asynccontextmanager
+    async def _fake_session(requested_tenant_id):
+        opened_for.append(requested_tenant_id)
+        yield session
+
+    monkeypatch.setattr(health_router, "get_session_with_tenant", _fake_session)
+
+    provided = [
+        repo
+        async for repo in health_router.get_project_repository(
+            current_user=SimpleNamespace(tenant_id=tenant_id)
+        )
+    ]
+
+    assert opened_for == [tenant_id]
+    assert len(provided) == 1
+    assert isinstance(provided[0], SQLAlchemyProjectRepository)
+    assert provided[0].session is session
