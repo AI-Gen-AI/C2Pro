@@ -507,6 +507,37 @@ async def _run_analysis_graph_best_effort(
     return analysis_id if isinstance(analysis_id, str) else None
 
 
+def decide_document_status(
+    *,
+    requires_text_analysis: bool,
+    rag_chunk_count: int,
+    graph_analysis_id: str | None,
+) -> DocumentStatus:
+    """Decide whether a document may be called ANALYZED.
+
+    ANALYZED has to mean the analysis this document actually needed completed.
+    Previously it was set unconditionally, so a contract whose N1-N17 graph never
+    ran was indistinguishable from one fully analysed -- the shape observed in
+    production, where a contract reached ANALYZED with zero RAG chunks, zero
+    analyses and zero snapshots.
+
+    Structured documents (schedule/budget) carry no free text, so no graph is
+    required and zero chunks is their correct terminal outcome. Only free-text
+    documents that genuinely needed the graph can be held back.
+
+    PARSED_PENDING_ANALYSIS is reused rather than adding a new enum value: it
+    already means "ingestion complete, analysis not yet started", it already
+    satisfies ``Document.is_parsed()``, and ``_run_document_analysis`` accepts
+    parsed documents -- so the degraded state is retryable by construction
+    instead of being a dead end.
+    """
+    if not requires_text_analysis:
+        return DocumentStatus.ANALYZED
+    if rag_chunk_count > 0 and graph_analysis_id:
+        return DocumentStatus.ANALYZED
+    return DocumentStatus.PARSED_PENDING_ANALYSIS
+
+
 async def _run_document_analysis(
     *,
     tenant_id: TenantId,
@@ -561,10 +592,17 @@ async def _run_document_analysis(
                 },
             )
 
-        # Parsing + structured extraction already completed upstream, so the
-        # document is analyzed regardless of the optional graph enrichment.
-        await repo.update_status(tenant_id, document_id, DocumentStatus.ANALYZED)
+        # Structured extraction completing is not the same claim as the analysis
+        # completing. A free-text contract whose graph never ran stays in a
+        # retryable state instead of advertising success it does not have.
+        status = decide_document_status(
+            requires_text_analysis=bool(parsed_text),
+            rag_chunk_count=chunk_count,
+            graph_analysis_id=analysis_id,
+        )
+        await repo.update_status(tenant_id, document_id, status)
         await session.commit()
+        completed = status is DocumentStatus.ANALYZED
         logger.info(
             "document_analysis_task_finished",
             extra={
@@ -572,13 +610,25 @@ async def _run_document_analysis(
                 "tenant_id": str(tenant_id),
                 "analysis_id": analysis_id,
                 "persisted": bool(analysis_id),
+                "document_status": status.value,
+                "rag_chunk_count": chunk_count,
             },
         )
+        if not completed:
+            logger.warning(
+                "document_analysis_incomplete",
+                extra={
+                    "document_id": str(document_id),
+                    "tenant_id": str(tenant_id),
+                    "reason": "no_rag_chunks" if chunk_count == 0 else "graph_did_not_persist",
+                },
+            )
         return {
-            "status": "completed",
+            "status": "completed" if completed else "incomplete",
             "document_id": str(document_id),
             "analysis_id": analysis_id,
             "persisted": bool(analysis_id),
+            "document_status": status.value,
         }
 
 
@@ -638,7 +688,7 @@ async def _process(document_id: UUID) -> dict[str, Any]:
                 tenant_id=tenant_id,
             )
 
-            await rag_ingestion.ingest_document_chunks(
+            rag_result = await rag_ingestion.ingest_document_chunks(
                 document=document,
                 parsed_payload=parsed_payload,
                 tenant_id=tenant_id,
@@ -651,6 +701,10 @@ async def _process(document_id: UUID) -> dict[str, Any]:
             ).strip()
             contract_clause_count = 0
             metadata = dict(document.document_metadata or {})
+            # Enum value only -- provider messages can carry credentials and
+            # never belong in document metadata. Recorded so an operator (or a
+            # retry) can tell "nothing to embed" from "provider misconfigured".
+            metadata["rag_ingestion_outcome"] = rag_result.outcome.value
             if parsed_text:
                 metadata["parsed_text"] = parsed_text
                 if document.document_type == DocumentType.CONTRACT:
