@@ -6,11 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AnalysisProgressTracker } from "@/components/features/analysis/AnalysisProgressTracker";
+import {
+  SingleDocumentHealth,
+  coherenceSubscoreIsIncorporated,
+} from "@/components/features/health/SingleDocumentHealth";
 import { deriveTripletChecklist } from "@/components/features/documents/TripletChecklist";
 import { useProjectCoherenceActions } from "@/hooks/useProjectCoherenceActions";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
 import { useListProjectAlertsApiV1AlertsProjectsProjectIdGet } from "@/lib/api/generated/alerts/alerts";
 import { useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet } from "@/lib/api/generated/coherence-dashboard/coherence-dashboard";
+import { useGetProjectHealthApiV1ProjectsProjectIdHealthGet } from "@/lib/api/generated/project-health/project-health";
 import type { AlertResponse } from "@/lib/api/generated/models";
 
 type DashboardExtras = {
@@ -62,6 +67,25 @@ export default function AnalysisPage() {
     isLoading: dashboardLoading,
     error: dashboardError,
   } = useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet(id);
+  // INV-COH: a Coherence number may be shown ONLY on positive evidence that a subscore
+  // was actually incorporated. Absence of that evidence — for ANY reason — is not
+  // permission to show one, so loading and error suppress the readouts too rather than
+  // falling through to the legacy dashboard number.
+  const {
+    data: healthVector,
+    isLoading: healthLoading,
+    isError: healthErrored,
+  } = useGetProjectHealthApiV1ProjectsProjectIdHealthGet(id);
+  const showCoherence = coherenceSubscoreIsIncorporated(healthVector);
+  // Why it is suppressed. Only a LOADED vector lacking the evidence licenses the
+  // "needs a second document" claim; loading or an error means we simply do not know,
+  // and inferring "single document" from a failed request would fabricate a finding.
+  const coherenceSuppressionReason: "loading" | "unverified" | "single_document" =
+    healthLoading
+      ? "loading"
+      : !healthErrored && healthVector != null
+        ? "single_document"
+        : "unverified";
   const {
     data: alertsResponse,
     isLoading: alertsLoading,
@@ -112,12 +136,16 @@ export default function AnalysisPage() {
   const formattedScoreVersion = scoreVersion?.replaceAll("_", " ");
 
   const statCards = [
-    {
-      label: "Coherence Score",
-      value: String(coherenceScore),
-      icon: Gauge,
-      tone: "text-primary",
-    },
+    ...(showCoherence
+      ? [
+          {
+            label: "Coherence Score",
+            value: String(coherenceScore),
+            icon: Gauge,
+            tone: "text-primary",
+          },
+        ]
+      : []),
     {
       label: "Open Alerts",
       value: String(openAlerts.length),
@@ -175,6 +203,8 @@ export default function AnalysisPage() {
 
       <AnalysisProgressTracker projectId={id} />
 
+      <SingleDocumentHealth projectId={id} />
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {statCards.map((stat) => {
           const Icon = stat.icon;
@@ -207,12 +237,29 @@ export default function AnalysisPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
-              <span>Current coherence</span>
-              <span className="font-mono font-semibold text-foreground">
-                {coherenceScore}
-              </span>
-            </div>
+            {showCoherence ? (
+              <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                <span>Current coherence</span>
+                <span
+                  data-testid="analysis-coherence-score"
+                  className="font-mono font-semibold text-foreground"
+                >
+                  {coherenceScore}
+                </span>
+              </div>
+            ) : (
+              <p
+                data-testid="analysis-coherence-unavailable"
+                data-reason={coherenceSuppressionReason}
+                className="rounded-md border bg-muted/30 px-3 py-2 text-xs"
+              >
+                {coherenceSuppressionReason === "loading"
+                  ? "Checking whether Coherence is available for this project…"
+                  : coherenceSuppressionReason === "unverified"
+                    ? "Coherence availability could not be verified."
+                    : "Coherence compares documents against each other, so it needs at least two reconcilable documents. Upload a schedule or budget to assess alignment."}
+              </p>
+            )}
             <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
               <span>Open remediation items</span>
               <span className="font-mono font-semibold text-foreground">
