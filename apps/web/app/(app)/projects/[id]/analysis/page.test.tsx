@@ -66,7 +66,11 @@ describe("Project analysis page real-data boundary", () => {
     useProjectDocumentsMock.mockReset();
     rerunAnalysisMock.mockReset();
     projectHealthMock.mockReset();
-    projectHealthMock.mockReturnValue({ data: undefined });
+    projectHealthMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: false,
+    });
     useProjectDocumentsMock.mockReturnValue({
       documents: [],
       loading: false,
@@ -119,6 +123,33 @@ describe("Project analysis page real-data boundary", () => {
   });
 
   it("renders backend-backed analysis metrics instead of the placeholder card", () => {
+    // The Coherence metric now renders only on positive Health evidence that a subscore
+    // was incorporated (INV-COH), so this multi-document case must supply it.
+    projectHealthMock.mockReturnValue({
+      data: {
+        project_id: "proj-real-7",
+        tenant_id: "tenant-1",
+        dimensions: [
+          {
+            dimension: "contract",
+            band: "unknown",
+            confidence: 0.5,
+            score: null,
+            evidence: [
+              {
+                ref_id: "project-coherence-subscore",
+                source: "project_coherence",
+                tier: "weak",
+                locator: "overall_score",
+              },
+            ],
+            missing_data: [],
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
     getDashboardMock.mockReturnValue({
       data: {
         coherence_score: 84,
@@ -289,7 +320,11 @@ describe("P0b-L4-5 — Health surface placement and Coherence suppression", () =
 
   it("mounts the single-document Health surface for this project", () => {
     baseMocks();
-    projectHealthMock.mockReturnValue({ data: vectorWithCoherence(false) });
+    projectHealthMock.mockReturnValue({
+      data: vectorWithCoherence(false),
+      isLoading: false,
+      isError: false,
+    });
 
     renderWithProviders(<AnalysisPage />);
 
@@ -298,43 +333,78 @@ describe("P0b-L4-5 — Health surface placement and Coherence suppression", () =
     );
   });
 
-  it("suppresses the Coherence readouts while no coherence subscore was incorporated", () => {
-    // INV-COH: one document cannot produce a relational score. The page must not show
-    // the dashboard's number, and must not substitute zero for it. "No subscore" is read
-    // from the contract as ABSENCE of the project-coherence-subscore evidence ref.
-    baseMocks();
-    projectHealthMock.mockReturnValue({ data: vectorWithCoherence(false) });
-
-    renderWithProviders(<AnalysisPage />);
-
+  function expectNoCoherenceNumber() {
+    // Neither readout may show a number, and neither may substitute zero.
     expect(screen.queryByTestId("analysis-coherence-score")).not.toBeInTheDocument();
     expect(screen.queryByText("Coherence Score")).not.toBeInTheDocument();
     const note = screen.getByTestId("analysis-coherence-unavailable");
-    expect(note).toHaveTextContent(/at least\s+two/i);
     expect(note.textContent).not.toMatch(/\b0\b/);
+    expect(note.textContent).not.toMatch(/\b62\b/);
+    return note;
+  }
+
+  it("1 — while Health is loading, shows no Coherence number", () => {
+    // Not-yet-known is not permission to show the legacy dashboard number.
+    baseMocks();
+    projectHealthMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    });
+
+    renderWithProviders(<AnalysisPage />);
+
+    expect(expectNoCoherenceNumber()).toHaveAttribute("data-reason", "loading");
   });
 
-  it("keeps the existing Coherence readouts once a subscore exists", () => {
-    // The suppression is scoped to the undefined case only; multi-document behaviour
-    // is untouched.
+  it("2 — when the Health request errors, shows no Coherence number", () => {
+    // And does NOT infer "single document" from a failed request: that would turn an
+    // infrastructure failure into a product finding.
     baseMocks();
-    projectHealthMock.mockReturnValue({ data: vectorWithCoherence(true) });
+    projectHealthMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: { response: { status: 500 } },
+    });
+
+    renderWithProviders(<AnalysisPage />);
+
+    const note = expectNoCoherenceNumber();
+    expect(note).toHaveAttribute("data-reason", "unverified");
+    expect(note).not.toHaveTextContent(/at least\s+two/i);
+  });
+
+  it("3 — loaded with no subscore evidence, explains the >=2 document requirement", () => {
+    // Only a LOADED vector lacking the evidence licenses the single-document claim.
+    baseMocks();
+    projectHealthMock.mockReturnValue({
+      data: vectorWithCoherence(false),
+      isLoading: false,
+      isError: false,
+    });
+
+    renderWithProviders(<AnalysisPage />);
+
+    const note = expectNoCoherenceNumber();
+    expect(note).toHaveAttribute("data-reason", "single_document");
+    expect(note).toHaveTextContent(/at least\s+two/i);
+  });
+
+  it("4 — with positive subscore evidence, renders the Coherence readouts unchanged", () => {
+    baseMocks();
+    projectHealthMock.mockReturnValue({
+      data: vectorWithCoherence(true),
+      isLoading: false,
+      isError: false,
+    });
 
     renderWithProviders(<AnalysisPage />);
 
     expect(screen.getByTestId("analysis-coherence-score")).toHaveTextContent("62");
+    expect(screen.getByText("Coherence Score")).toBeInTheDocument();
     expect(
       screen.queryByTestId("analysis-coherence-unavailable"),
     ).not.toBeInTheDocument();
-  });
-
-  it("keeps the existing readouts when the Health vector has not loaded", () => {
-    // Absence of the vector is not evidence that coherence is undefined.
-    baseMocks();
-    projectHealthMock.mockReturnValue({ data: undefined });
-
-    renderWithProviders(<AnalysisPage />);
-
-    expect(screen.getByTestId("analysis-coherence-score")).toBeInTheDocument();
   });
 });

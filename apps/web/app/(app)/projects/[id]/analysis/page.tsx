@@ -67,14 +67,25 @@ export default function AnalysisPage() {
     isLoading: dashboardLoading,
     error: dashboardError,
   } = useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet(id);
-  // INV-COH: relational Coherence needs >=2 reconcilable documents. The Health contract
-  // is the authority on whether a subscore was incorporated at all, so the Coherence
-  // readouts here follow it rather than showing a number the domain says is undefined.
-  // Absence of the vector is NOT evidence either way, so the readouts stay until it loads.
-  const { data: healthVector } =
-    useGetProjectHealthApiV1ProjectsProjectIdHealthGet(id);
-  const coherenceIsUndefinedForOneDocument =
-    healthVector != null && !coherenceSubscoreIsIncorporated(healthVector);
+  // INV-COH: a Coherence number may be shown ONLY on positive evidence that a subscore
+  // was actually incorporated. Absence of that evidence — for ANY reason — is not
+  // permission to show one, so loading and error suppress the readouts too rather than
+  // falling through to the legacy dashboard number.
+  const {
+    data: healthVector,
+    isLoading: healthLoading,
+    isError: healthErrored,
+  } = useGetProjectHealthApiV1ProjectsProjectIdHealthGet(id);
+  const showCoherence = coherenceSubscoreIsIncorporated(healthVector);
+  // Why it is suppressed. Only a LOADED vector lacking the evidence licenses the
+  // "needs a second document" claim; loading or an error means we simply do not know,
+  // and inferring "single document" from a failed request would fabricate a finding.
+  const coherenceSuppressionReason: "loading" | "unverified" | "single_document" =
+    healthLoading
+      ? "loading"
+      : !healthErrored && healthVector != null
+        ? "single_document"
+        : "unverified";
   const {
     data: alertsResponse,
     isLoading: alertsLoading,
@@ -125,16 +136,16 @@ export default function AnalysisPage() {
   const formattedScoreVersion = scoreVersion?.replaceAll("_", " ");
 
   const statCards = [
-    ...(coherenceIsUndefinedForOneDocument
-      ? []
-      : [
+    ...(showCoherence
+      ? [
           {
             label: "Coherence Score",
             value: String(coherenceScore),
             icon: Gauge,
             tone: "text-primary",
           },
-        ]),
+        ]
+      : []),
     {
       label: "Open Alerts",
       value: String(openAlerts.length),
@@ -226,16 +237,7 @@ export default function AnalysisPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            {coherenceIsUndefinedForOneDocument ? (
-              <p
-                data-testid="analysis-coherence-unavailable"
-                className="rounded-md border bg-muted/30 px-3 py-2 text-xs"
-              >
-                Coherence compares documents against each other, so it needs at least
-                two reconcilable documents. Upload a schedule or budget to assess
-                alignment.
-              </p>
-            ) : (
+            {showCoherence ? (
               <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
                 <span>Current coherence</span>
                 <span
@@ -245,6 +247,18 @@ export default function AnalysisPage() {
                   {coherenceScore}
                 </span>
               </div>
+            ) : (
+              <p
+                data-testid="analysis-coherence-unavailable"
+                data-reason={coherenceSuppressionReason}
+                className="rounded-md border bg-muted/30 px-3 py-2 text-xs"
+              >
+                {coherenceSuppressionReason === "loading"
+                  ? "Checking whether Coherence is available for this project…"
+                  : coherenceSuppressionReason === "unverified"
+                    ? "Coherence availability could not be verified."
+                    : "Coherence compares documents against each other, so it needs at least two reconcilable documents. Upload a schedule or budget to assess alignment."}
+              </p>
             )}
             <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
               <span>Open remediation items</span>
