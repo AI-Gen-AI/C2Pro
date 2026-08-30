@@ -375,7 +375,7 @@ describe("P0b-L4-5 — Health surface placement and Coherence suppression", () =
     expect(note).not.toHaveTextContent(/at least\s+two/i);
   });
 
-  it("3 — loaded with no subscore evidence, explains the >=2 document requirement", () => {
+  it("3 — loaded with no subscore evidence, explains it as insufficient evidence", () => {
     // Only a LOADED vector lacking the evidence licenses the single-document claim.
     baseMocks();
     projectHealthMock.mockReturnValue({
@@ -387,8 +387,10 @@ describe("P0b-L4-5 — Health surface placement and Coherence suppression", () =
     renderWithProviders(<AnalysisPage />);
 
     const note = expectNoCoherenceNumber();
-    expect(note).toHaveAttribute("data-reason", "single_document");
-    expect(note).toHaveTextContent(/at least\s+two/i);
+    expect(note).toHaveAttribute("data-reason", "insufficient_evidence");
+    expect(note).toHaveTextContent(/reconcilable evidence/i);
+    // Document count is not the eligibility predicate.
+    expect(note).not.toHaveTextContent(/at least\s+two|second document/i);
   });
 
   it("4 — with positive subscore evidence, renders the Coherence readouts unchanged", () => {

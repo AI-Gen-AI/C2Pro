@@ -387,14 +387,27 @@ describe("7 — CROSS findings", () => {
 // ── 8 — coherence_subscore null suppresses the single-doc Coherence score ─────
 
 describe("8 — Coherence suppression for one document", () => {
-  it("shows no Coherence score and explains the >=2 document requirement", () => {
+  it("shows no Coherence score and explains it in terms of evidence, not file count", () => {
     healthQueryMock.mockReturnValue(resolved(vector()));
 
     renderHealth();
 
     expect(screen.queryByTestId("health-coherence-score")).not.toBeInTheDocument();
     expect(screen.getByTestId("health-coherence-note")).toHaveTextContent(
-      /two|second|2 /i,
+      /reconcilable evidence/i,
+    );
+  });
+
+  it("never claims Coherence needs a second document", () => {
+    // Document count is not the eligibility predicate: the backend already
+    // evaluates cross-clause consistency on clause pairs, so one rich contract
+    // can qualify and two unrelated files can fail to.
+    healthQueryMock.mockReturnValue(resolved(vector()));
+
+    renderHealth();
+
+    expect(screen.getByTestId("health-coherence-note")).not.toHaveTextContent(
+      /at least two|two reconcilable documents|second document/i,
     );
   });
 

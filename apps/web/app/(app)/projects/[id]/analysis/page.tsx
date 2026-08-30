@@ -80,11 +80,14 @@ export default function AnalysisPage() {
   // Why it is suppressed. Only a LOADED vector lacking the evidence licenses the
   // "needs a second document" claim; loading or an error means we simply do not know,
   // and inferring "single document" from a failed request would fabricate a finding.
-  const coherenceSuppressionReason: "loading" | "unverified" | "single_document" =
+  // "insufficient_evidence", not "single_document": eligibility is a property of
+  // the evidence, not the file count. One document can carry several reconcilable
+  // claims; two unrelated documents can carry none.
+  const coherenceSuppressionReason: "loading" | "unverified" | "insufficient_evidence" =
     healthLoading
       ? "loading"
       : !healthErrored && healthVector != null
-        ? "single_document"
+        ? "insufficient_evidence"
         : "unverified";
   const {
     data: alertsResponse,
@@ -257,7 +260,7 @@ export default function AnalysisPage() {
                   ? "Checking whether Coherence is available for this project…"
                   : coherenceSuppressionReason === "unverified"
                     ? "Coherence availability could not be verified."
-                    : "Coherence compares documents against each other, so it needs at least two reconcilable documents. Upload a schedule or budget to assess alignment."}
+                    : "Coherence becomes available when there is enough reconcilable evidence to evaluate consistency. This analysis has not produced enough yet."}
               </p>
             )}
             <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
