@@ -476,11 +476,12 @@ describe("EvidencePage highlight mapping", () => {
           comment: "",
         },
       });
+      // Resolver identity is always the authenticated session's user_id
+      // (EPIC-OPS-DOCFLOW Stream C); the client must never supply resolved_by.
       expect(resolveAlertMutateAsyncMock).toHaveBeenCalledWith({
         alertId: "alert-1",
         data: {
           resolution: "Resolved from evidence viewer",
-          resolved_by: "jane@acme.com",
           root_cause: "other",
         },
       });

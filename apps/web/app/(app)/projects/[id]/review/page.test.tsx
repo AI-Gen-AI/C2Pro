@@ -189,9 +189,11 @@ describe('ReviewPage', () => {
 
     await userEvent.click(screen.getByText('Confirm Approve'));
     await waitFor(() => {
+      // Reviewer identity is server-derived from the authenticated session
+      // (EPIC-OPS-DOCFLOW Stream C); the client must never supply it.
       expect(mockApproveMutate).toHaveBeenCalledWith({
         itemId: 'item-1',
-        data: { reviewer_name: 'jane@acme.com' },
+        data: {},
       });
     });
   });
@@ -229,10 +231,10 @@ describe('ReviewPage', () => {
     await userEvent.click(confirmBtn);
 
     await waitFor(() => {
+      // Reason only — reviewer identity is server-derived, never client-supplied.
       expect(mockRejectMutate).toHaveBeenCalledWith({
         itemId: 'item-1',
         data: {
-          reviewer_name: 'jane@acme.com',
           reason: 'Insufficient evidence',
         },
       });
