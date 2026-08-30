@@ -38,8 +38,13 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * SECURITY (EPIC-OPS-DOCFLOW Stream C): resolver identity is never
+ * accepted from the client — it is always the authenticated session's
+ * user_id. A client-supplied resolved_by here would let any authenticated
+ * user forge a resolution as another user, corrupting the audit trail.
+ */
 export interface ResolveAlertRequest {
   resolution: string;
-  resolved_by?: string | null;
   root_cause?: string | null;
 }

@@ -38,4 +38,13 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type HealthCheckApiV1ProjectsHealthGet200 = { [key: string]: string };
+export type ContractClarityFindingSeverity =
+  (typeof ContractClarityFindingSeverity)[keyof typeof ContractClarityFindingSeverity];
+
+export const ContractClarityFindingSeverity = {
+  critical: "critical",
+  high: "high",
+  medium: "medium",
+  low: "low",
+  info: "info",
+} as const;

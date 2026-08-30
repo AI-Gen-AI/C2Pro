@@ -13,7 +13,11 @@ from httpx import ASGITransport, AsyncClient
 
 from src.core.auth.dependencies import get_current_user
 from src.core.tenants.types import TenantId
-from src.health.adapters.http.router import get_snapshot_repository, router
+from src.health.adapters.http.router import (
+    get_project_repository,
+    get_snapshot_repository,
+    router,
+)
 from src.health.domain.health_vector import HealthBand, HealthDimension
 from src.temporal.domain.project_snapshot import ProjectSnapshot, SnapshotTrigger
 
@@ -77,7 +81,19 @@ def _snapshot(project_id: UUID, tenant_id: UUID, composite_score: float) -> Proj
     )
 
 
-def _app(repo: _SnapshotRepo, tenant_id: UUID) -> FastAPI:
+class _ProjectRepo:
+    """Ownership gate double: does this tenant own this project?"""
+
+    def __init__(self, owned: bool = True) -> None:
+        self.owned = owned
+
+    async def exists_by_id(self, project_id: UUID, tenant_id: UUID) -> bool:
+        return self.owned
+
+
+def _app(
+    repo: _SnapshotRepo, tenant_id: UUID, *, project_owned: bool = True
+) -> FastAPI:
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
 
@@ -87,8 +103,12 @@ def _app(repo: _SnapshotRepo, tenant_id: UUID) -> FastAPI:
     async def _repo() -> _SnapshotRepo:
         return repo
 
+    async def _projects() -> _ProjectRepo:
+        return _ProjectRepo(project_owned)
+
     app.dependency_overrides[get_current_user] = _current_user
     app.dependency_overrides[get_snapshot_repository] = _repo
+    app.dependency_overrides[get_project_repository] = _projects
     return app
 
 
@@ -111,20 +131,22 @@ async def test_project_health_returns_latest_snapshot_vector() -> None:
 
 @pytest.mark.asyncio
 async def test_project_health_is_tenant_scoped() -> None:
+    """A project this tenant does not own is 404 — never a 200 empty vector."""
     project_id = uuid4()
     tenant_id = uuid4()
     other_tenant_id = uuid4()
-    app = _app(_SnapshotRepo(_snapshot(project_id, other_tenant_id, 88)), tenant_id)
+    app = _app(
+        _SnapshotRepo(_snapshot(project_id, other_tenant_id, 88)),
+        tenant_id,
+        project_owned=False,
+    )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(f"/api/v1/projects/{project_id}/health")
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["tenant_id"] == str(tenant_id)
-    assert body["composite_score"] is None
-    assert body["composite_band"] == HealthBand.UNKNOWN.value
-    assert body["composite_trend"] == "unknown"
+    assert response.status_code == 404
+    assert str(other_tenant_id) not in response.text
+    assert "composite_score" not in response.text
 
 
 @pytest.mark.asyncio
@@ -170,14 +192,18 @@ async def test_project_health_normalizes_tenant_once_at_http_boundary(monkeypatc
     normalized_tenant_id = TenantId(uuid4())
     normalize = Mock(return_value=normalized_tenant_id)
     repository = SimpleNamespace(latest=AsyncMock(return_value=None))
+    projects = SimpleNamespace(exists_by_id=AsyncMock(return_value=True))
     monkeypatch.setattr(health_router, "require_tenant_id", normalize, raising=False)
 
     result = await health_router.get_project_health(
         project_id=project_id,
         current_user=SimpleNamespace(tenant_id=raw_tenant_id),
         repository=repository,
+        projects=projects,
     )
 
     normalize.assert_called_once_with(raw_tenant_id)
+    # The ownership gate is checked with the SAME normalized tenant as the data read.
+    projects.exists_by_id.assert_awaited_once_with(project_id, normalized_tenant_id)
     repository.latest.assert_awaited_once_with(project_id, normalized_tenant_id)
     assert result.tenant_id == normalized_tenant_id

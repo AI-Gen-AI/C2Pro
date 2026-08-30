@@ -37,5 +37,25 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { CategoryCoverageState } from "./categoryCoverageState";
+import type { CategoryGapAlert } from "./categoryGapAlert";
+import type { CoherenceCategory } from "./coherenceCategory";
+import type { FindingSignal } from "./findingSignal";
 
-export type HealthCheckApiV1ProjectsHealthGet200 = { [key: string]: string };
+/**
+ * Per-category single-document assessment: state + evidence + findings + gap.
+ *
+ * ``PRESENT`` carries qualifying evidence and no gap; ``INSUFFICIENT_EVIDENCE`` carries
+ * no evidence, factual ``missing_data`` and an actionable ``gap``. ``findings`` are
+ * independent of coverage state (an issue can exist regardless of coverage).
+ */
+export interface CategoryAssessment {
+  category: CoherenceCategory;
+  state: CategoryCoverageState;
+  /** @minimum 0 */
+  evidence_count?: number;
+  evidence_clause_ids?: string[];
+  findings?: FindingSignal[];
+  missing_data?: string[];
+  gap?: CategoryGapAlert | null;
+}

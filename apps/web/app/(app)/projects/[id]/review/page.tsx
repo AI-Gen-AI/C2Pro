@@ -126,7 +126,7 @@ export default function ReviewPage() {
     try {
       await approveMutation.mutateAsync({
         itemId: modal.item.item_id,
-        data: { reviewer_name: reviewerName },
+        data: {},
       });
       closeModal();
       refetch();
@@ -144,7 +144,6 @@ export default function ReviewPage() {
       await rejectMutation.mutateAsync({
         itemId: modal.item.item_id,
         data: {
-          reviewer_name: reviewerName,
           reason: rejectReason.trim(),
         },
       });

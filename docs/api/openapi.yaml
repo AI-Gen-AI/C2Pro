@@ -1007,8 +1007,13 @@ paths:
       tags:
       - project-health
       summary: Get latest project health vector
-      description: Return latest tenant-scoped project HealthVector or honest insufficient
-        data.
+      description: "Return latest tenant-scoped project HealthVector or honest insufficient\
+        \ data.\n\nA project the caller cannot see is a 404, exactly as ``GET /projects/{project_id}``\n\
+        and its siblings behave: \"not found\" covers both \"does not exist\" and\
+        \ \"belongs to\nanother tenant\", so the response never reveals which. Returning\
+        \ 200 with an empty\nvector would make an authorization failure indistinguishable\
+        \ from a real project\nthat simply has no snapshot yet \u2014 and \"no data\"\
+        \ is a legitimate answer only for a\nproject the caller actually owns."
       operationId: get_project_health_api_v1_projects__project_id__health_get
       security:
       - HTTPBearer: []
@@ -1027,6 +1032,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthVector'
+        '404':
+          description: Project not found, or it belongs to another tenant. The two
+            are deliberately indistinguishable so the response cannot be used to probe
+            which project ids exist.
         '422':
           description: Validation Error
           content:

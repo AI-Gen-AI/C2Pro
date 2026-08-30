@@ -47,4 +47,6 @@ export interface BudgetReconciliation {
   contract_total?: number | null;
   deviation_pct: number;
   direction: string;
+  currency?: string | null;
+  source_rule_ids?: string[];
 }

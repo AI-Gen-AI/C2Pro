@@ -51,6 +51,14 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  CircuitBreakerStatusApiV1HealthCircuitBreakersGet200,
+  CircuitBreakerStatusHealthCircuitBreakersGet200,
+  GenericHealthCheckApiV1HealthGet200,
+  GenericHealthCheckHealthGet200,
+  LivenessCheckApiV1HealthLiveGet200,
+  LivenessCheckHealthLiveGet200,
+  ReadinessCheckApiV1HealthReadyGet200,
+  ReadinessCheckHealthReadyGet200,
   WorkerHealthCheckApiV1HealthWorkerGet200,
   WorkerHealthCheckHealthWorkerGet200,
 } from "../models";
@@ -76,160 +84,11 @@ const withQueryKey = <T extends object, K>(
 };
 
 /**
- * Checks that a Celery worker is online and consuming the document_parsing queue.
- * @summary Celery Worker Health
- */
-export const workerHealthCheckApiV1HealthWorkerGet = (signal?: AbortSignal) => {
-  return orvalApiClient<WorkerHealthCheckApiV1HealthWorkerGet200>({
-    url: `/api/v1/health/worker`,
-    method: "GET",
-    signal,
-  });
-};
-
-export const getWorkerHealthCheckApiV1HealthWorkerGetQueryKey = () => {
-  return [`/api/v1/health/worker`] as const;
-};
-
-export const getWorkerHealthCheckApiV1HealthWorkerGetQueryOptions = <
-  TData = Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
-  TError = unknown,
->(options?: {
-  query?: Partial<
-    UseQueryOptions<
-      Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
-      TError,
-      TData
-    >
-  >;
-}) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getWorkerHealthCheckApiV1HealthWorkerGetQueryKey();
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>
-  > = ({ signal }) => workerHealthCheckApiV1HealthWorkerGet(signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
-    TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-};
-
-export type WorkerHealthCheckApiV1HealthWorkerGetQueryResult = NonNullable<
-  Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>
->;
-export type WorkerHealthCheckApiV1HealthWorkerGetQueryError = unknown;
-
-export function useWorkerHealthCheckApiV1HealthWorkerGet<
-  TData = Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
-  TError = unknown,
->(
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
-          TError,
-          Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useWorkerHealthCheckApiV1HealthWorkerGet<
-  TData = Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
-  TError = unknown,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
-          TError,
-          Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useWorkerHealthCheckApiV1HealthWorkerGet<
-  TData = Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
-  TError = unknown,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-/**
- * @summary Celery Worker Health
- */
-
-export function useWorkerHealthCheckApiV1HealthWorkerGet<
-  TData = Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
-  TError = unknown,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getWorkerHealthCheckApiV1HealthWorkerGetQueryOptions(options);
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-/**
  * Checks if the application process is running. This should not have external dependencies.
  * @summary Liveness Probe
  */
 export const livenessCheckHealthLiveGet = (signal?: AbortSignal) => {
-  return orvalApiClient<unknown>({
+  return orvalApiClient<LivenessCheckHealthLiveGet200>({
     url: `/health/live`,
     method: "GET",
     signal,
@@ -376,7 +235,7 @@ export function useLivenessCheckHealthLiveGet<
  * @summary Readiness Probe
  */
 export const readinessCheckHealthReadyGet = (signal?: AbortSignal) => {
-  return orvalApiClient<unknown>({
+  return orvalApiClient<ReadinessCheckHealthReadyGet200>({
     url: `/health/ready`,
     method: "GET",
     signal,
@@ -525,7 +384,7 @@ export function useReadinessCheckHealthReadyGet<
 export const circuitBreakerStatusHealthCircuitBreakersGet = (
   signal?: AbortSignal,
 ) => {
-  return orvalApiClient<unknown>({
+  return orvalApiClient<CircuitBreakerStatusHealthCircuitBreakersGet200>({
     url: `/health/circuit-breakers`,
     method: "GET",
     signal,
@@ -701,7 +560,11 @@ export function useCircuitBreakerStatusHealthCircuitBreakersGet<
  * @summary Generic Health Check
  */
 export const genericHealthCheckHealthGet = (signal?: AbortSignal) => {
-  return orvalApiClient<unknown>({ url: `/health`, method: "GET", signal });
+  return orvalApiClient<GenericHealthCheckHealthGet200>({
+    url: `/health`,
+    method: "GET",
+    signal,
+  });
 };
 
 export const getGenericHealthCheckHealthGetQueryKey = () => {
@@ -991,7 +854,7 @@ export function useWorkerHealthCheckHealthWorkerGet<
  * @summary Liveness Probe
  */
 export const livenessCheckApiV1HealthLiveGet = (signal?: AbortSignal) => {
-  return orvalApiClient<unknown>({
+  return orvalApiClient<LivenessCheckApiV1HealthLiveGet200>({
     url: `/api/v1/health/live`,
     method: "GET",
     signal,
@@ -1138,7 +1001,7 @@ export function useLivenessCheckApiV1HealthLiveGet<
  * @summary Readiness Probe
  */
 export const readinessCheckApiV1HealthReadyGet = (signal?: AbortSignal) => {
-  return orvalApiClient<unknown>({
+  return orvalApiClient<ReadinessCheckApiV1HealthReadyGet200>({
     url: `/api/v1/health/ready`,
     method: "GET",
     signal,
@@ -1288,7 +1151,7 @@ export function useReadinessCheckApiV1HealthReadyGet<
 export const circuitBreakerStatusApiV1HealthCircuitBreakersGet = (
   signal?: AbortSignal,
 ) => {
-  return orvalApiClient<unknown>({
+  return orvalApiClient<CircuitBreakerStatusApiV1HealthCircuitBreakersGet200>({
     url: `/api/v1/health/circuit-breakers`,
     method: "GET",
     signal,
@@ -1476,7 +1339,7 @@ export function useCircuitBreakerStatusApiV1HealthCircuitBreakersGet<
  * @summary Generic Health Check
  */
 export const genericHealthCheckApiV1HealthGet = (signal?: AbortSignal) => {
-  return orvalApiClient<unknown>({
+  return orvalApiClient<GenericHealthCheckApiV1HealthGet200>({
     url: `/api/v1/health`,
     method: "GET",
     signal,
@@ -1609,6 +1472,155 @@ export function useGenericHealthCheckApiV1HealthGet<
   queryKey: DataTag<QueryKey, TData, TError>;
 } {
   const queryOptions = getGenericHealthCheckApiV1HealthGetQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * Checks that a Celery worker is online and consuming the document_parsing queue.
+ * @summary Celery Worker Health
+ */
+export const workerHealthCheckApiV1HealthWorkerGet = (signal?: AbortSignal) => {
+  return orvalApiClient<WorkerHealthCheckApiV1HealthWorkerGet200>({
+    url: `/api/v1/health/worker`,
+    method: "GET",
+    signal,
+  });
+};
+
+export const getWorkerHealthCheckApiV1HealthWorkerGetQueryKey = () => {
+  return [`/api/v1/health/worker`] as const;
+};
+
+export const getWorkerHealthCheckApiV1HealthWorkerGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
+      TError,
+      TData
+    >
+  >;
+}) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getWorkerHealthCheckApiV1HealthWorkerGetQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>
+  > = ({ signal }) => workerHealthCheckApiV1HealthWorkerGet(signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type WorkerHealthCheckApiV1HealthWorkerGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>
+>;
+export type WorkerHealthCheckApiV1HealthWorkerGetQueryError = unknown;
+
+export function useWorkerHealthCheckApiV1HealthWorkerGet<
+  TData = Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
+          TError,
+          Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useWorkerHealthCheckApiV1HealthWorkerGet<
+  TData = Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
+          TError,
+          Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useWorkerHealthCheckApiV1HealthWorkerGet<
+  TData = Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Celery Worker Health
+ */
+
+export function useWorkerHealthCheckApiV1HealthWorkerGet<
+  TData = Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof workerHealthCheckApiV1HealthWorkerGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getWorkerHealthCheckApiV1HealthWorkerGetQueryOptions(options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<
     TData,
