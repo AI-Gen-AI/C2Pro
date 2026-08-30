@@ -929,6 +929,146 @@ jobs:
           fi
           docker compose -f docker-compose.test.yml down -v
 
+  # ──────────────── P0b canonical acceptance gate (required) ─────────────
+  # Guards the seam that failed silently in production: a real contract reached
+  # upload_status=analyzed with 25 clauses, ZERO RAG chunks, zero analyses, zero
+  # project_events and zero project_snapshots -- while every existing check was
+  # green, including frontend-e2e-smoke.
+  #
+  # It has NO `RUN_FULL_E2E` guard on purpose. The smoke lane above green-skips
+  # when that variable is unset, which is exactly how a completely broken
+  # pipeline coexisted with a green CI. Here, absent prerequisites FAIL: a gate
+  # that could not run has not passed.
+  p0b-acceptance:
+    name: P0b Acceptance Journey
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      ENVIRONMENT: test
+      # Deterministic inference at the provider boundary ONLY. RAG chunking,
+      # chunk persistence, the graph, DB, Redis and the browser stay real.
+      C2PRO_AI_MOCK: "1"
+      C2PRO_EMBEDDINGS_MOCK: "1"
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:8000/api/v1
+      NEXT_PUBLIC_BACKEND_URL: http://127.0.0.1:8000
+      BACKEND_URL: http://127.0.0.1:8000
+      PLAYWRIGHT_BASE_URL: http://localhost:3100
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Fail, never skip. This step is the whole point of the lane.
+      - name: Verify gate prerequisites
+        run: |
+          set -euo pipefail
+          missing=0
+          if [ -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" ]; then
+            echo "::error::NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is not configured."
+            missing=1
+          fi
+          if [ -z "${CLERK_SECRET_KEY:-}" ]; then
+            echo "::error::CLERK_SECRET_KEY is not configured."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::P0b acceptance cannot run without Clerk test credentials."
+            echo "::error::This is a CI CONFIGURATION DEFECT, reported as a failure rather"
+            echo "::error::than a green skip: an un-runnable gate has not been satisfied."
+            exit 1
+          fi
+
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Bootstrap infrastructure (PostgreSQL + Redis)
+        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
+
+      # The async seam that failed in production. Not mocked away.
+      - name: Start Celery worker (document_parsing)
+        working-directory: apps/api
+        run: |
+          python -m celery -A src.core.tasks.celery_app worker \
+            --loglevel=info --queues=document_parsing --concurrency=2 \
+            > "$RUNNER_TEMP/c2pro-p0b-worker.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-p0b-worker.pid"
+          sleep 10
+          if ! kill -0 "$(cat "$RUNNER_TEMP/c2pro-p0b-worker.pid")"; then
+            cat "$RUNNER_TEMP/c2pro-p0b-worker.log"
+            echo "::error::Celery worker failed to start; the P0b async seam cannot be exercised."
+            exit 1
+          fi
+
+      - name: Start backend API
+        working-directory: apps/api
+        run: |
+          python -m uvicorn src.main:app --host 127.0.0.1 --port 8000 \
+            > "$RUNNER_TEMP/c2pro-p0b-api.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-p0b-api.pid"
+          for _ in {1..45}; do
+            if curl --fail --silent http://127.0.0.1:8000/health/live > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/c2pro-p0b-api.log"
+          exit 1
+
+      - name: Setup web environment
+        uses: ./.github/actions/setup-node-web
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: P0b single-document Health journey
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright test src/tests/e2e/p0b-single-document-health.spec.ts --project=chromium
+
+      # Browser-only assertions would have passed in production. This proves the
+      # chain underneath actually ran.
+      - name: Verify P0b persistence chain
+        working-directory: apps/api
+        run: python scripts/verify_p0b_journey.py --project-id-file ../web/playwright/.p0b/project-id.txt
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: p0b-playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 14
+
+      - name: Upload P0b service logs on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: p0b-service-logs
+          path: |
+            ${{ runner.temp }}/c2pro-p0b-api.log
+            ${{ runner.temp }}/c2pro-p0b-worker.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Cleanup
+        if: always()
+        run: |
+          for name in worker api; do
+            if [ -f "$RUNNER_TEMP/c2pro-p0b-$name.pid" ]; then
+              kill "$(cat "$RUNNER_TEMP/c2pro-p0b-$name.pid")" || true
+            fi
+          done
+          docker compose -f docker-compose.test.yml down -v || true
+
   # TASK-DEV-018: previously only Vercel ran `next build` at deploy time — a
   # production build break was never caught in CI, only at deploy. Advisory
   # for now; promote to REQUIRED_JOBS once it has run green for a while.
@@ -977,6 +1117,7 @@ jobs:
       - frontend-quality
       - frontend-test
       - frontend-e2e-smoke
+      - p0b-acceptance
       - frontend-build
     if: always()
     permissions:
@@ -1078,6 +1219,7 @@ jobs:
           RESULT_BACKEND_MODULES: ${{ needs.backend-modules.result }}
           RESULT_BACKEND_COVERAGE: ${{ needs.backend-coverage.result }}
           RESULT_FRONTEND_BUILD: ${{ needs.frontend-build.result }}
+          RESULT_P0B_ACCEPTANCE: ${{ needs.p0b-acceptance.result }}
         run: |
           set -euo pipefail
 
@@ -1100,6 +1242,7 @@ jobs:
             "frontend-test:$RESULT_FRONTEND_TEST"
             "frontend-e2e-smoke:$RESULT_FRONTEND_E2E"
             "frontend-build:$RESULT_FRONTEND_BUILD"
+            "p0b-acceptance:$RESULT_P0B_ACCEPTANCE"
           )
           ADVISORY_JOBS=()
 
