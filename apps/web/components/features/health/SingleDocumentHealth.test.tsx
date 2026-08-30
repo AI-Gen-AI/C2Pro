@@ -196,6 +196,65 @@ describe("3 — INSUFFICIENT category", () => {
   });
 });
 
+// ── 2b — findings render per category, independent of coverage state ─────────
+
+describe("2b — per-category findings", () => {
+  it("renders a category's own findings, for PRESENT and INSUFFICIENT alike", () => {
+    // findings are independent of coverage state: an issue can exist whether or not
+    // the category is evidenced, so both cases must surface them.
+    const withFindings: SingleDocumentCoverage = {
+      assessments: [
+        {
+          ...present(CoherenceCategory.BUDGET, BUDGET_CLAUSE),
+          findings: [
+            {
+              rule_id: "BUDGET-UNPRICED-SCOPE",
+              clause_id: BUDGET_CLAUSE,
+              impact_score: 0.6,
+              evidence_summary: "Budget omits a priced line for the stated scope.",
+            },
+          ],
+        },
+        {
+          ...insufficient(CoherenceCategory.TIME, "Upload the project schedule to assess TIME.", ["project schedule"]),
+          findings: [
+            {
+              rule_id: "TIME-NO-MILESTONES",
+              clause_id: LEGAL_CLAUSE,
+              impact_score: 0.4,
+            },
+          ],
+        },
+      ],
+    };
+    healthQueryMock.mockReturnValue(
+      resolved(vector({ single_document_coverage: withFindings })),
+    );
+
+    renderHealth();
+
+    const budget = screen.getByTestId(`health-category-${CoherenceCategory.BUDGET}`);
+    expect(within(budget).getByTestId("health-findings")).toHaveTextContent(
+      "Budget omits a priced line for the stated scope.",
+    );
+
+    // A finding with no summary still shows something identifiable, never a blank row.
+    const time = screen.getByTestId(`health-category-${CoherenceCategory.TIME}`);
+    expect(within(time).getByTestId("health-findings")).toHaveTextContent(
+      "TIME-NO-MILESTONES",
+    );
+  });
+
+  it("omits the findings list for a category with no findings", () => {
+    healthQueryMock.mockReturnValue(resolved(vector()));
+
+    renderHealth();
+
+    const budget = screen.getByTestId(`health-category-${CoherenceCategory.BUDGET}`);
+    expect(within(budget).queryByTestId("health-findings")).not.toBeInTheDocument();
+  });
+});
+
 // ── 4 — unknown never renders as 0% ───────────────────────────────────────────
 
 describe("4 — honest null", () => {
@@ -295,6 +354,7 @@ describe("7 — CROSS findings", () => {
               {
                 rule_id: "CROSS-BUDGET-SCOPE",
                 clause_id: `${BUDGET_CLAUSE}|${LEGAL_CLAUSE}`,
+                impact_score: 0.7,
                 evidence_summary: "Budget line has no matching scope item.",
               },
             ],
