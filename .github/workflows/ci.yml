@@ -955,14 +955,24 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       CELERY_BROKER_URL: redis://localhost:6379/0
       ENVIRONMENT: test
+      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
+      AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
       # Deterministic inference at the provider boundary ONLY. RAG chunking,
       # chunk persistence, the graph, DB, Redis and the browser stay real.
       C2PRO_AI_MOCK: "1"
       C2PRO_EMBEDDINGS_MOCK: "1"
-      NEXT_PUBLIC_API_URL: http://127.0.0.1:8000/api/v1
-      NEXT_PUBLIC_BACKEND_URL: http://127.0.0.1:8000
-      BACKEND_URL: http://127.0.0.1:8000
+      # Browser calls must go through the Next.js proxy so the Clerk bearer token
+      # reaches the local backend without a cross-origin preflight.
+      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+      BACKEND_URL: http://localhost:8000
       PLAYWRIGHT_BASE_URL: http://localhost:3100
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1011,11 +1021,11 @@ jobs:
       - name: Start backend API
         working-directory: apps/api
         run: |
-          python -m uvicorn src.main:app --host 127.0.0.1 --port 8000 \
+          python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 \
             > "$RUNNER_TEMP/c2pro-p0b-api.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/c2pro-p0b-api.pid"
           for _ in {1..45}; do
-            if curl --fail --silent http://127.0.0.1:8000/health/live > /dev/null; then exit 0; fi
+            if curl --fail --silent http://localhost:8000/health/live > /dev/null; then exit 0; fi
             sleep 2
           done
           cat "$RUNNER_TEMP/c2pro-p0b-api.log"
