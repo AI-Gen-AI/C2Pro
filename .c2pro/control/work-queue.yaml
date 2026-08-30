@@ -42,3 +42,25 @@ items:
     priority: P2
     depends_on: []
     review_policy: independent_principal
+  # DEV-DEBT (registered 2026-08-30, surfaced by P0b-L4-4 / #581): the local web full-test
+  # runner is unreliable. apps/web/scripts/vitest-run-all.mjs spawns vitest with shell:true
+  # and an UNQUOTED 'src/tests/integration/**'. The shell expands it to 15 paths; --exclude
+  # consumes the first and the remaining 14 become POSITIONAL test-name filters. Locally that
+  # silently reduced `pnpm test:all` to 49 of 279 files (253 of 970 tests) while still exiting
+  # 0; in CI the exclude misses entirely and the full set runs. Same defect, opposite symptom.
+  # CONSEQUENCE: it produced a FALSE LOCAL GREEN during #581 - three frontend tests that CI
+  # correctly failed were never executed locally.
+  # ID NOTE: MASTER requested this as "C2PRO-DEV-06". That id is already bound to
+  # "MR-DEV direct Claude/Codex routes" (development-control-plan section 12, and a node in the
+  # section 13 execution-order graph), so reusing it would give one id two meanings. Registered
+  # as the next free id instead; the requested label is recorded here so the intent is traceable.
+  # NON-BLOCKING for P0b-L4-5 because CI remains authoritative. Until this is resolved, L4-5
+  # local validation MUST use explicit/quoted Vitest commands matching CI and MUST NOT cite
+  # `pnpm test:all` alone as proof. Do NOT fix it inside the L4-5 product PR.
+  - work_id: C2PRO-DEV-13
+    status: ready
+    role: orchestrator
+    work_ref: null
+    priority: P1
+    depends_on: []
+    review_policy: independent_principal
