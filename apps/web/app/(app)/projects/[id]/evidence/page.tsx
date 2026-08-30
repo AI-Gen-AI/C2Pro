@@ -380,7 +380,6 @@ export default function EvidencePage() {
       alertId,
       data: {
         resolution: "Resolved from evidence viewer",
-        resolved_by: reviewerName,
         root_cause: "other",
       },
     });

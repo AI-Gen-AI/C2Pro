@@ -37,5 +37,18 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { ContractClarityFindingSeverity } from "./contractClarityFindingSeverity";
 
-export type HealthCheckApiV1ProjectsHealthGet200 = { [key: string]: string };
+/**
+ * One clause-level clarity finding.
+ *
+ * Severity only — deliberately carries no score/confidence/weight field so
+ * it cannot be aggregated into a Health dimension or the Coherence Score.
+ */
+export interface ContractClarityFinding {
+  rule_id: string;
+  clause_id: string;
+  severity: ContractClarityFindingSeverity;
+  summary: string;
+  quote?: string | null;
+}

@@ -37,5 +37,21 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { CategoryAssessment } from "./categoryAssessment";
+import type { FindingSignal } from "./findingSignal";
 
-export type HealthCheckApiV1ProjectsHealthGet200 = { [key: string]: string };
+/**
+ * Single-document coverage: the six category assessments + preserved CROSS findings.
+ *
+ * ``cross_findings`` holds the ``FindingSignal`` entries tagged ``CROSS``. They are
+ * cross-dimensional and CAN be produced from one document (``CROSS-BUDGET-SCOPE`` pairs
+ * a BUDGET clause with a SCOPE clause; ``CROSS-SCHEDULE-DELIVERY`` pairs a TIME clause
+ * with a TECHNICAL clause), so they are preserved verbatim rather than discarded, and are
+ * NOT attributed to any canonical category — a CROSS finding spans two dimensions and
+ * carries a composite ``clause_id``, so single-category attribution would fabricate
+ * evidence (INV-1).
+ */
+export interface SingleDocumentCoverage {
+  assessments: CategoryAssessment[];
+  cross_findings?: FindingSignal[];
+}

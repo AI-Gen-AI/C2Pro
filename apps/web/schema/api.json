@@ -17,28 +17,12 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/health/worker": {
-      "get": {
-        "tags": ["Health", "Public"],
-        "summary": "Celery Worker Health",
-        "description": "Checks that a Celery worker is online and consuming the document_parsing queue.",
-        "operationId": "worker_health_check_api_v1_health_worker_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
                 "schema": {
-                  "additionalProperties": true,
+                  "additionalProperties": {
+                    "type": "string"
+                  },
                   "type": "object",
-                  "title": "Response Worker Health Check Api V1 Health Worker Get"
+                  "title": "Response Root  Get"
                 }
               }
             }
@@ -57,7 +41,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Liveness Check Health Live Get"
+                }
               }
             }
           }
@@ -75,7 +65,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Readiness Check Health Ready Get"
+                }
               }
             }
           }
@@ -93,7 +87,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Circuit Breaker Status Health Circuit Breakers Get"
+                }
               }
             }
           }
@@ -111,7 +109,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Generic Health Check Health Get"
+                }
               }
             }
           }
@@ -151,7 +155,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Liveness Check Api V1 Health Live Get"
+                }
               }
             }
           }
@@ -169,7 +179,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Readiness Check Api V1 Health Ready Get"
+                }
               }
             }
           }
@@ -187,7 +201,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Circuit Breaker Status Api V1 Health Circuit Breakers Get"
+                }
               }
             }
           }
@@ -205,7 +223,35 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Generic Health Check Api V1 Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/worker": {
+      "get": {
+        "tags": ["Health", "Public"],
+        "summary": "Celery Worker Health",
+        "description": "Checks that a Celery worker is online and consuming the document_parsing queue.",
+        "operationId": "worker_health_check_api_v1_health_worker_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Worker Health Check Api V1 Health Worker Get"
+                }
               }
             }
           }
@@ -576,7 +622,9 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
+                  "additionalProperties": {
+                    "type": "string"
+                  },
                   "type": "object",
                   "title": "Response Health Check Api V1 Projects Health Get"
                 }
@@ -1368,7 +1416,7 @@
       "get": {
         "tags": ["project-health"],
         "summary": "Get latest project health vector",
-        "description": "Return latest tenant-scoped project HealthVector or honest insufficient data.",
+        "description": "Return latest tenant-scoped project HealthVector or honest insufficient data.\n\nA project the caller cannot see is a 404, exactly as ``GET /projects/{project_id}``\nand its siblings behave: \"not found\" covers both \"does not exist\" and \"belongs to\nanother tenant\", so the response never reveals which. Returning 200 with an empty\nvector would make an authorization failure indistinguishable from a real project\nthat simply has no snapshot yet \u2014 and \"no data\" is a legitimate answer only for a\nproject the caller actually owns.",
         "operationId": "get_project_health_api_v1_projects__project_id__health_get",
         "security": [
           {
@@ -1397,6 +1445,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Project not found, or it belongs to another tenant. The two are deliberately indistinguishable so the response cannot be used to probe which project ids exist."
           },
           "422": {
             "description": "Validation Error",
@@ -3326,9 +3377,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "parameters": [
@@ -3400,9 +3448,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "parameters": [
@@ -3446,6 +3491,11 @@
         "tags": ["frontend-support"],
         "summary": "Create Cookie Consent",
         "operationId": "create_cookie_consent_api_v1_compliance_cookies_consent_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -3485,6 +3535,11 @@
         "tags": ["frontend-support"],
         "summary": "Get Cookie Consent",
         "operationId": "get_cookie_consent_api_v1_compliance_cookies_consent_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "tenantId",
@@ -3543,6 +3598,11 @@
         "tags": ["frontend-support"],
         "summary": "Update Cookie Consent",
         "operationId": "update_cookie_consent_api_v1_compliance_cookies_consent_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -3687,6 +3747,7 @@
       "post": {
         "tags": ["frontend-support"],
         "summary": "Start Sample Project",
+        "description": "Create (or idempotently reuse) a REAL seeded sample project for the tenant (ADR-024).\n\nThe previous stub returned a non-UUID id (``proj_sample_001``) that 422'd every downstream\ncall, breaking the new-user flow. This creates a real project so onboarding lands on\nworking endpoints; a genuine UUID + route is returned.",
         "operationId": "start_sample_project_api_v1_onboarding_sample_project_start_post",
         "responses": {
           "200": {
@@ -4054,8 +4115,13 @@
             "required": false,
             "schema": {
               "anyOf": [
-                { "type": "string", "format": "uuid" },
-                { "type": "null" }
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
               ],
               "description": "Filter by project",
               "title": "Project Id"
@@ -4864,11 +4930,6 @@
         "tags": ["analysis"],
         "summary": "Stream Project Processing",
         "operationId": "stream_project_processing_api_v1_analysis_projects__project_id__process_stream_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "project_id",
@@ -5113,9 +5174,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "parameters": [
@@ -5213,9 +5271,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ]
       }
@@ -5227,9 +5282,6 @@
         "description": "Returns coherence dashboard data for a project.\n    Derived from the latest Analysis or CoherenceResult records.",
         "operationId": "get_coherence_dashboard_api_v1_coherence_dashboard__project_id__get",
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -5277,9 +5329,6 @@
         "description": "Returns coherence dashboard data for a project.\n    Derived from the latest Analysis or CoherenceResult records.",
         "operationId": "get_coherence_dashboard_api_coherence_dashboard__project_id__get",
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -6408,16 +6457,10 @@
         "title": "ApprovalStatus"
       },
       "ApproveRequest": {
-        "properties": {
-          "reviewer_name": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Reviewer Name"
-          }
-        },
+        "properties": {},
         "type": "object",
-        "required": ["reviewer_name"],
-        "title": "ApproveRequest"
+        "title": "ApproveRequest",
+        "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is never\naccepted from the client \u2014 it is derived server-side from the\nauthenticated session (Depends(get_current_user)). A client-supplied\nreviewer field here would let any authenticated user forge a review as\nanother user, corrupting the HITL audit trail. This body is currently\nempty by design; do not add a reviewer identity field back."
       },
       "AuthErrorResponse": {
         "properties": {
@@ -6450,7 +6493,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -6465,7 +6508,7 @@
           },
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -6490,6 +6533,66 @@
         "required": ["amount"],
         "title": "BudgetInput",
         "description": "Budget input model."
+      },
+      "BudgetReconciliation": {
+        "properties": {
+          "items_sum": {
+            "type": "number",
+            "title": "Items Sum"
+          },
+          "stated_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stated Total"
+          },
+          "contract_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Total"
+          },
+          "deviation_pct": {
+            "type": "number",
+            "title": "Deviation Pct"
+          },
+          "direction": {
+            "type": "string",
+            "title": "Direction"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "source_rule_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Rule Ids"
+          }
+        },
+        "type": "object",
+        "required": ["items_sum", "deviation_pct", "direction"],
+        "title": "BudgetReconciliation",
+        "description": "TASK-BCK-093: Typed reconciliation fields from DET-BUD FindingSignal.raw_data."
       },
       "BulkDocumentItem": {
         "properties": {
@@ -6739,6 +6842,61 @@
         "title": "BulkWBSRequest",
         "description": "Bulk WBS creation request."
       },
+      "CategoryAssessment": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/CoherenceCategory"
+          },
+          "state": {
+            "$ref": "#/components/schemas/CategoryCoverageState"
+          },
+          "evidence_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Evidence Count",
+            "default": 0
+          },
+          "evidence_clause_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Clause Ids",
+            "default": []
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/FindingSignal"
+            },
+            "type": "array",
+            "title": "Findings",
+            "default": []
+          },
+          "missing_data": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Data",
+            "default": []
+          },
+          "gap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoryGapAlert"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["category", "state"],
+        "title": "CategoryAssessment",
+        "description": "Per-category single-document assessment: state + evidence + findings + gap.\n\n``PRESENT`` carries qualifying evidence and no gap; ``INSUFFICIENT_EVIDENCE`` carries\nno evidence, factual ``missing_data`` and an actionable ``gap``. ``findings`` are\nindependent of coverage state (an issue can exist regardless of coverage)."
+      },
       "CategoryBreakdown": {
         "properties": {
           "category": {
@@ -6810,6 +6968,29 @@
         "title": "CategoryBreakdown",
         "description": "Represents the coherence score breakdown for a specific category."
       },
+      "CategoryCoverageState": {
+        "type": "string",
+        "enum": ["present", "insufficient_evidence"],
+        "title": "CategoryCoverageState",
+        "description": "Whether a category is evidence-backed or lacks sufficient evidence."
+      },
+      "CategoryGapAlert": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/CoherenceCategory"
+          },
+          "action": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Action"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["category", "action"],
+        "title": "CategoryGapAlert",
+        "description": "An actionable gap alert for a category that lacks sufficient evidence."
+      },
       "CategoryStatus": {
         "type": "string",
         "enum": [
@@ -6821,48 +7002,6 @@
           "processing_error"
         ],
         "title": "CategoryStatus"
-      },
-      "BudgetReconciliation": {
-        "properties": {
-          "items_sum": {
-            "type": "number",
-            "title": "Items Sum"
-          },
-          "stated_total": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stated Total"
-          },
-          "contract_total": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Contract Total"
-          },
-          "deviation_pct": {
-            "type": "number",
-            "title": "Deviation Pct"
-          },
-          "direction": {
-            "type": "string",
-            "title": "Direction"
-          }
-        },
-        "type": "object",
-        "required": ["items_sum", "deviation_pct", "direction"],
-        "title": "BudgetReconciliation",
-        "description": "TASK-BCK-093: Typed reconciliation fields from DET-BUD FindingSignal.raw_data."
       },
       "CategoryV2": {
         "properties": {
@@ -7012,6 +7151,12 @@
         "required": ["id", "text"],
         "title": "Clause",
         "description": "Represents a specific clause or segment of a document."
+      },
+      "CoherenceCategory": {
+        "type": "string",
+        "enum": ["SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME"],
+        "title": "CoherenceCategory",
+        "description": "Canonical coherence categories used by score calculators."
       },
       "CoherenceEvaluateRequest": {
         "properties": {
@@ -7207,6 +7352,43 @@
         },
         "type": "object",
         "title": "ConsentCategories"
+      },
+      "ContractClarityFinding": {
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "title": "Rule Id"
+          },
+          "clause_id": {
+            "type": "string",
+            "title": "Clause Id"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low", "info"],
+            "title": "Severity"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["rule_id", "clause_id", "severity", "summary"],
+        "title": "ContractClarityFinding",
+        "description": "One clause-level clarity finding.\n\nSeverity only \u2014 deliberately carries no score/confidence/weight field so\nit cannot be aggregated into a Health dimension or the Coherence Score."
       },
       "CookieConsentCreateRequest": {
         "properties": {
@@ -8569,6 +8751,12 @@
         "title": "Evidence",
         "description": "Represents the specific evidence supporting an alert."
       },
+      "EvidenceGranularity": {
+        "type": "string",
+        "enum": ["clause", "document"],
+        "title": "EvidenceGranularity",
+        "description": "What the ``evidence_clause_ids`` in a coverage actually identify (P0b-R1).\n\nThis qualifies every coverage that carries evidence ids, so it lives beside the\ncoverage contract rather than in the persistence artifact alone: \"six categories\nevidenced by six distinct clauses\" and \"six categories evidenced by one\nwhole-document blob\" are different product claims, and a reader must be able to\ntell them apart **without** inspecting the shape of an id."
+      },
       "EvidenceHistoryEventResponse": {
         "properties": {
           "id": {
@@ -9053,6 +9241,33 @@
             "type": "string",
             "format": "date-time",
             "title": "Computed At"
+          },
+          "contract_clarity_findings": {
+            "items": {
+              "$ref": "#/components/schemas/ContractClarityFinding"
+            },
+            "type": "array",
+            "title": "Contract Clarity Findings"
+          },
+          "single_document_coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SingleDocumentCoverage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "single_document_evidence_granularity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceGranularity"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -10185,11 +10400,6 @@
       },
       "RejectRequest": {
         "properties": {
-          "reviewer_name": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Reviewer Name"
-          },
           "reason": {
             "type": "string",
             "maxLength": 2000,
@@ -10198,8 +10408,8 @@
           }
         },
         "type": "object",
-        "required": ["reviewer_name"],
-        "title": "RejectRequest"
+        "title": "RejectRequest",
+        "description": "See ApproveRequest docstring: reviewer identity is server-derived,\nnever client-supplied."
       },
       "RelationshipExplanationCitationResponse": {
         "properties": {
@@ -10243,18 +10453,6 @@
             "type": "string",
             "title": "Resolution"
           },
-          "resolved_by": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Resolved By"
-          },
           "root_cause": {
             "anyOf": [
               {
@@ -10269,7 +10467,8 @@
         },
         "type": "object",
         "required": ["resolution"],
-        "title": "ResolveAlertRequest"
+        "title": "ResolveAlertRequest",
+        "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): resolver identity is never\naccepted from the client \u2014 it is always the authenticated session's\nuser_id. A client-supplied resolved_by here would let any authenticated\nuser forge a resolution as another user, corrupting the audit trail."
       },
       "ResumeWorkflowRequest": {
         "properties": {
@@ -10346,15 +10545,6 @@
             "format": "uuid",
             "title": "Item Id"
           },
-          "reviewer_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Reviewer Id"
-          },
-          "reviewer_name": {
-            "type": "string",
-            "title": "Reviewer Name"
-          },
           "action": {
             "type": "string",
             "enum": ["approve", "reject"],
@@ -10363,9 +10553,9 @@
           }
         },
         "type": "object",
-        "required": ["item_id", "reviewer_id", "reviewer_name"],
+        "required": ["item_id"],
         "title": "ReviewDecisionDTO",
-        "description": "Refers to Suite ID: TS-I13-E2E-REAL-001."
+        "description": "Refers to Suite ID: TS-I13-E2E-REAL-001.\n\nSECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is NEVER accepted\nfrom the client. ``reviewer_id``/``reviewer_name`` are derived server-side\nfrom the authenticated session (``Depends(get_current_user)``) at the\npoint this DTO is consumed \u2014 a client-supplied identity here would let any\nauthenticated user forge a review as another user, corrupting the HITL\naudit trail. Do not add reviewer identity fields back to this model."
       },
       "ReviewItemResponse": {
         "properties": {
@@ -10591,6 +10781,30 @@
         "type": "object",
         "title": "SeverityCount",
         "description": "Represents the count of alerts by severity level.\n\nTASK-504: Strict 5-level severity taxonomy (Critical, High, Medium, Low, Info)."
+      },
+      "SingleDocumentCoverage": {
+        "properties": {
+          "assessments": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryAssessment"
+            },
+            "type": "array",
+            "title": "Assessments"
+          },
+          "cross_findings": {
+            "items": {
+              "$ref": "#/components/schemas/FindingSignal"
+            },
+            "type": "array",
+            "title": "Cross Findings",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["assessments"],
+        "title": "SingleDocumentCoverage",
+        "description": "Single-document coverage: the six category assessments + preserved CROSS findings.\n\n``cross_findings`` holds the ``FindingSignal`` entries tagged ``CROSS``. They are\ncross-dimensional and CAN be produced from one document (``CROSS-BUDGET-SCOPE`` pairs\na BUDGET clause with a SCOPE clause; ``CROSS-SCHEDULE-DELIVERY`` pairs a TIME clause\nwith a TECHNICAL clause), so they are preserved verbatim rather than discarded, and are\nNOT attributed to any canonical category \u2014 a CROSS finding spans two dimensions and\ncarries a composite ``clause_id``, so single-category attribution would fabricate\nevidence (INV-1)."
       },
       "StakeholderCreateRequest": {
         "properties": {
@@ -11538,6 +11752,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",

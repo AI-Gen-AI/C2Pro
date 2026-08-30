@@ -38,4 +38,19 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type HealthCheckApiV1ProjectsHealthGet200 = { [key: string]: string };
+/**
+ * What the ``evidence_clause_ids`` in a coverage actually identify (P0b-R1).
+ *
+ * This qualifies every coverage that carries evidence ids, so it lives beside the
+ * coverage contract rather than in the persistence artifact alone: "six categories
+ * evidenced by six distinct clauses" and "six categories evidenced by one
+ * whole-document blob" are different product claims, and a reader must be able to
+ * tell them apart **without** inspecting the shape of an id.
+ */
+export type EvidenceGranularity =
+  (typeof EvidenceGranularity)[keyof typeof EvidenceGranularity];
+
+export const EvidenceGranularity = {
+  clause: "clause",
+  document: "document",
+} as const;

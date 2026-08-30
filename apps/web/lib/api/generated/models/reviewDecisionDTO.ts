@@ -41,10 +41,15 @@ import type { ReviewDecisionDTOAction } from "./reviewDecisionDTOAction";
 
 /**
  * Refers to Suite ID: TS-I13-E2E-REAL-001.
+ *
+ * SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is NEVER accepted
+ * from the client. ``reviewer_id``/``reviewer_name`` are derived server-side
+ * from the authenticated session (``Depends(get_current_user)``) at the
+ * point this DTO is consumed — a client-supplied identity here would let any
+ * authenticated user forge a review as another user, corrupting the HITL
+ * audit trail. Do not add reviewer identity fields back to this model.
  */
 export interface ReviewDecisionDTO {
   item_id: string;
-  reviewer_id: string;
-  reviewer_name: string;
   action?: ReviewDecisionDTOAction;
 }

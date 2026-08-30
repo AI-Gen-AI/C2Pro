@@ -38,4 +38,17 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type HealthCheckApiV1ProjectsHealthGet200 = { [key: string]: string };
+/**
+ * Canonical coherence categories used by score calculators.
+ */
+export type CoherenceCategory =
+  (typeof CoherenceCategory)[keyof typeof CoherenceCategory];
+
+export const CoherenceCategory = {
+  SCOPE: "SCOPE",
+  BUDGET: "BUDGET",
+  QUALITY: "QUALITY",
+  TECHNICAL: "TECHNICAL",
+  LEGAL: "LEGAL",
+  TIME: "TIME",
+} as const;

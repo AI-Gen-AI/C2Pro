@@ -38,4 +38,13 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type HealthCheckApiV1ProjectsHealthGet200 = { [key: string]: string };
+/**
+ * Whether a category is evidence-backed or lacks sufficient evidence.
+ */
+export type CategoryCoverageState =
+  (typeof CategoryCoverageState)[keyof typeof CategoryCoverageState];
+
+export const CategoryCoverageState = {
+  present: "present",
+  insufficient_evidence: "insufficient_evidence",
+} as const;

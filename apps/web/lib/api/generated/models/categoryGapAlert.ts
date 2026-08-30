@@ -37,5 +37,13 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { CoherenceCategory } from "./coherenceCategory";
 
-export type HealthCheckApiV1ProjectsHealthGet200 = { [key: string]: string };
+/**
+ * An actionable gap alert for a category that lacks sufficient evidence.
+ */
+export interface CategoryGapAlert {
+  category: CoherenceCategory;
+  /** @minLength 1 */
+  action: string;
+}
