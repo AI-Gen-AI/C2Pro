@@ -6,11 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AnalysisProgressTracker } from "@/components/features/analysis/AnalysisProgressTracker";
+import {
+  SingleDocumentHealth,
+  coherenceSubscoreIsIncorporated,
+} from "@/components/features/health/SingleDocumentHealth";
 import { deriveTripletChecklist } from "@/components/features/documents/TripletChecklist";
 import { useProjectCoherenceActions } from "@/hooks/useProjectCoherenceActions";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
 import { useListProjectAlertsApiV1AlertsProjectsProjectIdGet } from "@/lib/api/generated/alerts/alerts";
 import { useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet } from "@/lib/api/generated/coherence-dashboard/coherence-dashboard";
+import { useGetProjectHealthApiV1ProjectsProjectIdHealthGet } from "@/lib/api/generated/project-health/project-health";
 import type { AlertResponse } from "@/lib/api/generated/models";
 
 type DashboardExtras = {
@@ -62,6 +67,14 @@ export default function AnalysisPage() {
     isLoading: dashboardLoading,
     error: dashboardError,
   } = useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet(id);
+  // INV-COH: relational Coherence needs >=2 reconcilable documents. The Health contract
+  // is the authority on whether a subscore was incorporated at all, so the Coherence
+  // readouts here follow it rather than showing a number the domain says is undefined.
+  // Absence of the vector is NOT evidence either way, so the readouts stay until it loads.
+  const { data: healthVector } =
+    useGetProjectHealthApiV1ProjectsProjectIdHealthGet(id);
+  const coherenceIsUndefinedForOneDocument =
+    healthVector != null && !coherenceSubscoreIsIncorporated(healthVector);
   const {
     data: alertsResponse,
     isLoading: alertsLoading,
@@ -112,12 +125,16 @@ export default function AnalysisPage() {
   const formattedScoreVersion = scoreVersion?.replaceAll("_", " ");
 
   const statCards = [
-    {
-      label: "Coherence Score",
-      value: String(coherenceScore),
-      icon: Gauge,
-      tone: "text-primary",
-    },
+    ...(coherenceIsUndefinedForOneDocument
+      ? []
+      : [
+          {
+            label: "Coherence Score",
+            value: String(coherenceScore),
+            icon: Gauge,
+            tone: "text-primary",
+          },
+        ]),
     {
       label: "Open Alerts",
       value: String(openAlerts.length),
@@ -175,6 +192,8 @@ export default function AnalysisPage() {
 
       <AnalysisProgressTracker projectId={id} />
 
+      <SingleDocumentHealth projectId={id} />
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {statCards.map((stat) => {
           const Icon = stat.icon;
@@ -207,12 +226,26 @@ export default function AnalysisPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
-              <span>Current coherence</span>
-              <span className="font-mono font-semibold text-foreground">
-                {coherenceScore}
-              </span>
-            </div>
+            {coherenceIsUndefinedForOneDocument ? (
+              <p
+                data-testid="analysis-coherence-unavailable"
+                className="rounded-md border bg-muted/30 px-3 py-2 text-xs"
+              >
+                Coherence compares documents against each other, so it needs at least
+                two reconcilable documents. Upload a schedule or budget to assess
+                alignment.
+              </p>
+            ) : (
+              <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                <span>Current coherence</span>
+                <span
+                  data-testid="analysis-coherence-score"
+                  className="font-mono font-semibold text-foreground"
+                >
+                  {coherenceScore}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
               <span>Open remediation items</span>
               <span className="font-mono font-semibold text-foreground">

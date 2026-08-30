@@ -10,6 +10,7 @@ const getDashboardMock = vi.fn();
 const listProjectAlertsMock = vi.fn();
 const useProjectDocumentsMock = vi.fn();
 const rerunAnalysisMock = vi.fn();
+const projectHealthMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "proj-real-7" }),
@@ -23,6 +24,22 @@ vi.mock("@/lib/api/generated/coherence-dashboard/coherence-dashboard", () => ({
 vi.mock("@/lib/api/generated/alerts/alerts", () => ({
   useListProjectAlertsApiV1AlertsProjectsProjectIdGet: (...args: unknown[]) =>
     listProjectAlertsMock(...args),
+}));
+
+vi.mock("@/lib/api/generated/project-health/project-health", () => ({
+  useGetProjectHealthApiV1ProjectsProjectIdHealthGet: (...args: unknown[]) =>
+    projectHealthMock(...args),
+}));
+
+// Stub only the presentational component; keep the real coherence helper so this page
+// test exercises the actual contract logic rather than a convenient double.
+vi.mock("@/components/features/health/SingleDocumentHealth", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/components/features/health/SingleDocumentHealth")
+  >()),
+  SingleDocumentHealth: ({ projectId }: { projectId: string }) => (
+    <div data-testid="single-document-health">health for {projectId}</div>
+  ),
 }));
 
 vi.mock("@/components/features/analysis/AnalysisProgressTracker", () => ({
@@ -48,6 +65,8 @@ describe("Project analysis page real-data boundary", () => {
   beforeEach(() => {
     useProjectDocumentsMock.mockReset();
     rerunAnalysisMock.mockReset();
+    projectHealthMock.mockReset();
+    projectHealthMock.mockReturnValue({ data: undefined });
     useProjectDocumentsMock.mockReturnValue({
       documents: [],
       loading: false,
@@ -214,5 +233,108 @@ describe("Project analysis page real-data boundary", () => {
 
     expect(screen.getByRole("button", { name: /re-run analysis/i })).toBeDisabled();
     expect(screen.getByText(/upload contract, budget, and schedule/i)).toBeInTheDocument();
+  });
+});
+
+describe("P0b-L4-5 — Health surface placement and Coherence suppression", () => {
+  // Models the real contract: coherence_subscore is not a HealthVector field; the
+  // CONTRACT dimension carries the project-coherence-subscore evidence ref only when a
+  // subscore was actually incorporated.
+  function vectorWithCoherence(incorporated: boolean) {
+    return {
+      project_id: "proj-real-7",
+      tenant_id: "tenant-1",
+      dimensions: [
+        {
+          dimension: "contract",
+          band: "unknown",
+          confidence: 0.5,
+          score: null,
+          evidence: incorporated
+            ? [
+                {
+                  ref_id: "project-coherence-subscore",
+                  source: "project_coherence",
+                  tier: "weak",
+                  locator: "overall_score",
+                },
+              ]
+            : [],
+          missing_data: incorporated ? [] : ["coherence subscore unavailable"],
+        },
+      ],
+    };
+  }
+
+  function baseMocks() {
+    getDashboardMock.mockReturnValue({
+      data: { coherence_score: 62, score_version: "v1_weighted" },
+      isLoading: false,
+      error: null,
+    });
+    listProjectAlertsMock.mockReturnValue({
+      data: { items: [] },
+      isLoading: false,
+      error: null,
+    });
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        { id: "contract", name: "Contract.pdf", type: "contract", status: "parsed" },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+  }
+
+  it("mounts the single-document Health surface for this project", () => {
+    baseMocks();
+    projectHealthMock.mockReturnValue({ data: vectorWithCoherence(false) });
+
+    renderWithProviders(<AnalysisPage />);
+
+    expect(screen.getByTestId("single-document-health")).toHaveTextContent(
+      "proj-real-7",
+    );
+  });
+
+  it("suppresses the Coherence readouts while no coherence subscore was incorporated", () => {
+    // INV-COH: one document cannot produce a relational score. The page must not show
+    // the dashboard's number, and must not substitute zero for it. "No subscore" is read
+    // from the contract as ABSENCE of the project-coherence-subscore evidence ref.
+    baseMocks();
+    projectHealthMock.mockReturnValue({ data: vectorWithCoherence(false) });
+
+    renderWithProviders(<AnalysisPage />);
+
+    expect(screen.queryByTestId("analysis-coherence-score")).not.toBeInTheDocument();
+    expect(screen.queryByText("Coherence Score")).not.toBeInTheDocument();
+    const note = screen.getByTestId("analysis-coherence-unavailable");
+    expect(note).toHaveTextContent(/at least\s+two/i);
+    expect(note.textContent).not.toMatch(/\b0\b/);
+  });
+
+  it("keeps the existing Coherence readouts once a subscore exists", () => {
+    // The suppression is scoped to the undefined case only; multi-document behaviour
+    // is untouched.
+    baseMocks();
+    projectHealthMock.mockReturnValue({ data: vectorWithCoherence(true) });
+
+    renderWithProviders(<AnalysisPage />);
+
+    expect(screen.getByTestId("analysis-coherence-score")).toHaveTextContent("62");
+    expect(
+      screen.queryByTestId("analysis-coherence-unavailable"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the existing readouts when the Health vector has not loaded", () => {
+    // Absence of the vector is not evidence that coherence is undefined.
+    baseMocks();
+    projectHealthMock.mockReturnValue({ data: undefined });
+
+    renderWithProviders(<AnalysisPage />);
+
+    expect(screen.getByTestId("analysis-coherence-score")).toBeInTheDocument();
   });
 });
