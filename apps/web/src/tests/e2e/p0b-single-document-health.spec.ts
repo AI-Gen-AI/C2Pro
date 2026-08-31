@@ -203,9 +203,13 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
       }
     }
 
-    // --- 8. The user-visible surface.
-    const health = page.getByTestId("single-document-health");
-    await expect(health).toBeVisible({ timeout: 60_000 });
+    // --- 8. The user-visible surface. The granularity disclosure and the six
+    //        tiles render only on SingleDocumentHealth's success path -- the
+    //        loading, error, not-found and unavailable states each render a
+    //        different element instead -- so their presence IS the assertion
+    //        that the real surface rendered.
+    const granularityDisclosure = page.getByTestId("health-granularity");
+    await expect(granularityDisclosure).toBeVisible({ timeout: 60_000 });
 
     for (const category of CANONICAL_CATEGORIES) {
       await expect(
@@ -214,19 +218,31 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
       ).toBeVisible();
     }
 
-    // --- 9. Honest null: never 0%, never a fabricated measured score.
-    const healthText = (await health.innerText()) ?? "";
-    expect(healthText, "INV-1: unknown must never render as 0%").not.toMatch(/\b0\s*%/);
+    // --- 9. Honest null: never 0%, never a fabricated measured score, and an
+    //        insufficient tile must say what is missing and what to do -- per
+    //        tile, not merely somewhere on the page.
+    for (const category of CANONICAL_CATEGORIES) {
+      const tile = page.getByTestId(`health-category-${category}`);
+      const tileText = await tile.innerText();
+      expect(tileText, `${category}: INV-1 -- unknown must never render as 0%`).not.toMatch(
+        /\b0\s*%/,
+      );
 
-    const unknownTiles = page.getByText("Unknown / Insufficient evidence");
-    if ((await unknownTiles.count()) > 0) {
-      // An insufficient category must say what is missing and what to do.
-      await expect(page.getByTestId("health-missing-data").first()).toBeVisible();
-      await expect(page.getByTestId("health-gap").first()).toBeVisible();
+      const isUnknown = tileText.includes("Unknown / Insufficient evidence");
+      if (isUnknown) {
+        await expect(
+          tile.getByTestId("health-missing-data"),
+          `${category}: an unknown tile must state what is missing`,
+        ).toBeVisible();
+        await expect(
+          tile.getByTestId("health-gap"),
+          `${category}: an unknown tile must offer an action`,
+        ).toBeVisible();
+      }
     }
 
     // --- 10. Granularity disclosed in the UI, matching the API's claim.
-    const granularityText = await page.getByTestId("health-granularity").innerText();
+    const granularityText = await granularityDisclosure.innerText();
     if (granularity === "clause") {
       expect(granularityText).toMatch(/clause-level/i);
     } else if (granularity === "document") {
@@ -256,6 +272,7 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     await expect(page.getByTestId("health-loading")).toHaveCount(0);
     await expect(page.getByTestId("health-error")).toHaveCount(0);
     await expect(page.getByTestId("health-unavailable")).toHaveCount(0);
+    await expect(page.getByTestId("health-not-found")).toHaveCount(0);
     await expect(page.getByText(/finalizing/i)).toHaveCount(0);
     await expect(page.locator(".animate-spin")).toHaveCount(0);
 
