@@ -1038,6 +1038,14 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
 
+      # Bounded auth-continuity gate. The journey's auth preamble failed three
+      # times in three different ways, so the seam is isolated and answered in
+      # seconds here. If a storageState session cannot survive into a chromium
+      # context, no project is created, nothing is uploaded, and no worker runs.
+      - name: Auth continuity micro-gate
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright test src/tests/e2e/auth-continuity.spec.ts --project=chromium
+
       - name: P0b single-document Health journey
         working-directory: apps/web
         run: ./node_modules/.bin/playwright test src/tests/e2e/p0b-single-document-health.spec.ts --project=chromium
