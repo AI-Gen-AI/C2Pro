@@ -98,23 +98,29 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     await page.goto("/");
     await page.waitForFunction(() => window.Clerk?.loaded === true);
 
-    // storageState may already carry a session, and clerk.signIn throws
-    // "You're already signed in." if one is live. Sign out first so the journey
-    // always starts from a known, deterministic identity rather than depending
-    // on whatever the setup project happened to leave behind.
-    if (await sessionSubject(page)) {
-      await page.evaluate(async () => window.Clerk?.signOut());
-      await page.waitForFunction(() => window.Clerk?.session === null);
+    // Sign in ONLY if storageState did not already carry a session.
+    //
+    // Three CI runs mapped this out. Without setupClerkTestingToken the restored
+    // session is bounced to /sign-in by the dev instance's bot protection. With
+    // the token, clerk.signIn fails with "You're already signed in." -- proof
+    // the restored session is live and valid. Signing out first and back in is
+    // worse still: it invalidates the session cookie the Next.js middleware
+    // reads, so the app renders once and then redirects to /sign-in on every
+    // subsequent navigation.
+    //
+    // The session from auth.setup was always fine; it only ever needed the
+    // testing token. So keep it, and sign in only to cover the case where the
+    // setup project left none.
+    if (!(await sessionSubject(page))) {
+      await clerk.signIn({
+        page,
+        signInParams: {
+          strategy: "password",
+          identifier: "testuser@c2pro.com",
+          password: "Testpasword123",
+        },
+      });
     }
-
-    await clerk.signIn({
-      page,
-      signInParams: {
-        strategy: "password",
-        identifier: "testuser@c2pro.com",
-        password: "Testpasword123",
-      },
-    });
     expect(await sessionSubject(page), "Clerk session must be established").toBeTruthy();
 
     await page.goto("/projects");
