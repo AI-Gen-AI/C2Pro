@@ -15,9 +15,12 @@
  * dressed up as a measured failure — "we did not look" and "we looked and found
  * nothing" are different claims, and neither is a score.
  *
- * INV-COH: relational Coherence needs at least two reconcilable documents. While
- * ``coherence_subscore`` is null this surface shows NO Coherence score and explains
- * why, rather than substituting zero.
+ * INV-COH: Coherence requires enough reconcilable evidence to evaluate consistency.
+ * Eligibility is a property of the EVIDENCE, not of the file count -- one document can
+ * carry several independently reconcilable claims, and two unrelated documents can
+ * carry none. While no subscore has been incorporated this surface shows NO Coherence
+ * score and says only that it is unavailable: the contract records whether a subscore
+ * was incorporated, not why one was not, so anything more would over-claim.
  *
  * Evidence granularity is disclosed rather than inferred: clause-granular evidence and
  * a degraded whole-document fallback are different product claims, so the surface says
@@ -290,8 +293,8 @@ export function SingleDocumentHealth({ projectId }: { projectId: string }) {
 
       {!coherenceSubscoreIsIncorporated(data) && (
         <p data-testid="health-coherence-note" className="text-xs text-muted-foreground">
-          Coherence compares documents against each other, so it needs at least two
-          reconcilable documents. Upload a schedule or budget to assess alignment.
+          Coherence is not available for this analysis yet. Availability depends on
+          having enough reconcilable evidence to evaluate consistency.
         </p>
       )}
     </Shell>
