@@ -177,6 +177,23 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     });
     await uploadButton.click();
 
+    //     Prove the upload was ACCEPTED before waiting minutes on analysis.
+    //     DocumentUploadDropzone closes the dialog only from onUploadComplete,
+    //     i.e. only after uploadDocument resolved; a failure keeps it open with
+    //     the reason on screen. Without this, a rejected upload is indistinguish-
+    //     able from a stalled pipeline and burns the full analysis budget before
+    //     reporting the wrong cause.
+    const uploadSurface = page.getByTestId("document-upload-surface");
+    try {
+      await expect(uploadSurface).toBeHidden({ timeout: 60_000 });
+    } catch {
+      const reason = await uploadSurface.innerText().catch(() => "(surface unavailable)");
+      throw new Error(
+        `UPLOAD_NOT_ACCEPTED: the upload dialog stayed open, so uploadDocument did not ` +
+          `resolve. The surface reported:\n${reason}`,
+      );
+    }
+
     // --- 6. Wait for the async pipeline to actually LAND.
     //
     //        A 200 from /health is NOT a completion signal: the endpoint answers

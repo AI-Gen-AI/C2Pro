@@ -1117,6 +1117,15 @@ jobs:
         working-directory: apps/api
         run: python scripts/verify_p0b_journey.py --project-id-file ../web/playwright/.p0b/project-id.txt
 
+      # Diagnostic only -- never gates. When the journey fails, this says WHICH
+      # link of the chain is missing (document / clauses / chunks / analysis /
+      # event / snapshot) instead of leaving only the browser-side symptom.
+      - name: Diagnose P0b persistence chain on failure
+        if: failure()
+        continue-on-error: true
+        working-directory: apps/api
+        run: python scripts/verify_p0b_journey.py --project-id-file ../web/playwright/.p0b/project-id.txt
+
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
