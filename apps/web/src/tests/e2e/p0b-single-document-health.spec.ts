@@ -101,7 +101,16 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     // --- 3. A clean project, so no prior snapshot or document can contaminate.
     const projectName = `P0b Health Journey ${Date.now()}`;
     await page.getByTestId("project-name-input").fill(projectName);
-    await page.getByTestId("create-project-button").click();
+
+    //     CreateProjectWizard is a real 3-step wizard: only the name is
+    //     required, and create-project-button renders solely on the review
+    //     step. Drive it the way a user does rather than reaching for the
+    //     submit button that does not exist yet.
+    await page.getByRole("button", { name: "Next step" }).click();
+    await page.getByRole("button", { name: "Review project" }).click();
+    const createButton = page.getByTestId("create-project-button");
+    await expect(createButton).toBeEnabled({ timeout: 15_000 });
+    await createButton.click();
 
     await page.waitForURL(/\/projects\/[0-9a-f-]{36}/, { timeout: 60_000 });
     const projectId = page.url().match(/\/projects\/([0-9a-f-]{36})/)?.[1];
