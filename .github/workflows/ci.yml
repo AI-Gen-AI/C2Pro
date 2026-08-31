@@ -1062,10 +1062,19 @@ jobs:
             exit 1
           fi
 
+      # The backend cannot verify a Clerk JWT without JWKS: _get_jwks() returns
+      # None with neither CLERK_JWKS_URL nor CLERK_ISSUER set, so every
+      # authenticated call 401s and the app hard-redirects to /sign-in. The
+      # fixture step wrote the instance JWKS; serve it locally, as the FRT-192
+      # lane already does, rather than depending on a hard-coded Clerk host.
       - name: Start backend API
         working-directory: apps/api
         run: |
-          python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 \
+          python -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP" \
+            > "$RUNNER_TEMP/c2pro-p0b-jwks.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-p0b-jwks.pid"
+          CLERK_JWKS_URL=http://127.0.0.1:8765/clerk-jwks.json \
+            python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 \
             > "$RUNNER_TEMP/c2pro-p0b-api.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/c2pro-p0b-api.pid"
           for _ in {1..45}; do
@@ -1123,7 +1132,7 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          for name in worker api; do
+          for name in worker api jwks; do
             if [ -f "$RUNNER_TEMP/c2pro-p0b-$name.pid" ]; then
               kill "$(cat "$RUNNER_TEMP/c2pro-p0b-$name.pid")" || true
             fi

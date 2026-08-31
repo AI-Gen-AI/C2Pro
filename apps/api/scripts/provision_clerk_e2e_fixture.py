@@ -40,6 +40,7 @@ because the database seed needs it, but is never echoed to stdout.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -118,6 +119,10 @@ class ClerkAdmin:
                 f"Clerk API {method} {path} failed with {response.status_code}: {response.text}"
             )
         return response.json()
+
+    def jwks(self) -> dict[str, Any]:
+        """The instance JWKS, so the local backend can verify Clerk JWTs."""
+        return dict(self._call("GET", "/jwks"))
 
     def get_organization(self, org_id: str) -> dict[str, Any]:
         return dict(self._call("GET", f"/organizations/{org_id}"))
@@ -257,6 +262,18 @@ def main() -> int:
     parser.add_argument("--tenant-id", default=os.getenv("E2E_TENANT_ID", DEFAULT_TENANT_ID))
     parser.add_argument("--role", default="org:admin")
     parser.add_argument(
+        "--jwks-out",
+        default=(
+            str(Path(os.environ["RUNNER_TEMP"], "clerk-jwks.json"))
+            if os.getenv("RUNNER_TEMP")
+            else None
+        ),
+        help=(
+            "Write the instance JWKS here so the local backend can verify Clerk JWTs. "
+            "Without it the backend cannot validate any Clerk token and answers 401."
+        ),
+    )
+    parser.add_argument(
         "--github-env",
         default=os.getenv("GITHUB_ENV"),
         help="File to append CLERK_E2E_* exports to (GitHub Actions env file).",
@@ -331,6 +348,13 @@ def main() -> int:
             print(f"organization_tenant_id_matches = {confirmed_tenant == args.tenant_id}")
             if confirmed_tenant != args.tenant_id:
                 raise FixtureError("Organization publicMetadata.tenant_id did not persist.")
+
+            # Without JWKS the backend cannot verify a Clerk JWT at all, so every
+            # authenticated API call 401s and the app hard-redirects to /sign-in.
+            # Public verification keys only -- no secret is written.
+            if args.jwks_out:
+                Path(args.jwks_out).write_text(json.dumps(admin.jwks()), encoding="utf-8")
+                print("jwks_written = true")
 
             # The Organization id is an identifier, not a secret, but it is only
             # exported for the database seed -- never echoed to the build log.
