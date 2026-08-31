@@ -45,6 +45,16 @@ const PROJECT_ID_OUTPUT = path.join(process.cwd(), "playwright", ".p0b", "projec
 /** Analysis is a real async pipeline; it is slow, not instant. */
 const ANALYSIS_TIMEOUT_MS = 240_000;
 
+/** The serialized shape of one CategoryAssessment (single_document_coverage.py). */
+interface CategoryAssessment {
+  category: string;
+  state: string;
+  evidence_count?: number;
+  evidence_clause_ids?: string[];
+  missing_data?: string[];
+  gap?: unknown;
+}
+
 const CANONICAL_CATEGORIES = [
   "SCOPE",
   "BUDGET",
@@ -160,14 +170,36 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     const granularity = vector.single_document_evidence_granularity;
     expect(granularity, "granularity must be disclosed, not inferred").toBeTruthy();
 
-    // Evidence ids must be persisted clause UUIDs when granularity is clause-level.
-    if (granularity === "clause") {
-      const evidenceIds = assessments.flatMap(
-        (a: { evidence_clause_ids?: string[] }) => a.evidence_clause_ids ?? [],
-      );
-      expect(evidenceIds.length, "clause granularity must carry clause ids").toBeGreaterThan(0);
-      for (const id of evidenceIds) {
-        expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    // INV-1, per assessment and per state. The domain contract
+    // (CategoryAssessment._enforce_consistency) is that PRESENT carries
+    // qualifying evidence while INSUFFICIENT_EVIDENCE carries NONE and must say
+    // what is missing. Granularity is a document-level disclosure of what the
+    // ids would identify, so it does NOT imply any category reached PRESENT --
+    // a contract where nothing is evidenced is an honest, valid outcome.
+    for (const assessment of assessments as CategoryAssessment[]) {
+      const ids = assessment.evidence_clause_ids ?? [];
+      const label = `${assessment.category} (${assessment.state})`;
+
+      expect(assessment.evidence_count ?? 0, `${label}: count must match its ids`).toBe(ids.length);
+      expect(new Set(ids).size, `${label}: clause ids must not repeat`).toBe(ids.length);
+
+      if (assessment.state === "present") {
+        expect(ids.length, `${label}: PRESENT requires qualifying evidence`).toBeGreaterThan(0);
+        if (granularity === "clause") {
+          for (const id of ids) {
+            expect(id, `${label}: clause granularity means persisted clause UUIDs`).toMatch(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            );
+          }
+        }
+      } else {
+        expect(ids.length, `${label}: INSUFFICIENT_EVIDENCE must carry no evidence`).toBe(0);
+        expect(
+          (assessment.missing_data ?? []).length,
+          `${label}: INSUFFICIENT_EVIDENCE must state what is missing`,
+        ).toBeGreaterThan(0);
+        expect(assessment.gap, `${label}: INSUFFICIENT_EVIDENCE requires an actionable gap`)
+          .toBeTruthy();
       }
     }
 
