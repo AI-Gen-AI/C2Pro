@@ -1012,6 +1012,41 @@ jobs:
       - name: Bootstrap infrastructure (PostgreSQL + Redis)
         run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
 
+      # The E2E identity had ZERO Clerk Organization memberships, so C2Pro could
+      # never resolve a tenant: lib/clerk-tenant.ts reads the tenant from the
+      # ACTIVE Organization's publicMetadata, and AuthSync auto-activates one
+      # only at exactly one membership. This reconciles the dedicated E2E
+      # Organization idempotently, and FAILS CLOSED unless the Clerk credentials
+      # are positively identified as a development/test instance.
+      - name: Reconcile dedicated Clerk E2E Organization fixture
+        run: python apps/api/scripts/provision_clerk_e2e_fixture.py
+
+      # Clerk and the local database must describe the SAME tenant. Auth
+      # tenancy only -- the journey still creates its own clean project and
+      # uploads its own document through the browser.
+      - name: Seed deterministic E2E auth tenancy
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          import asyncio
+
+          from src.core.database import close_db, get_raw_session, init_db
+          from tests.e2e_seed.seed_wedge import seed_e2e_auth_tenancy
+
+
+          async def main() -> None:
+              await init_db()
+              try:
+                  async with get_raw_session() as db:
+                      ids = await seed_e2e_auth_tenancy(db)
+                  print(f"seeded tenant={ids['tenant_id']} user={ids['user_id']}")
+              finally:
+                  await close_db()
+
+
+          asyncio.run(main())
+          PY
+
       # The async seam that failed in production. Not mocked away.
       - name: Start Celery worker (document_parsing)
         working-directory: apps/api

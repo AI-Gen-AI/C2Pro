@@ -23,9 +23,9 @@ import {
 test.describe("TS-E2E-AUTH-CONTINUITY-001: project-entry seam (diagnostic only)", () => {
   test.describe.configure({ timeout: 120_000 });
 
-  test("session survives project entry", async ({ baseURL, page, context }) => {
+  test("session survives project entry", async ({ baseURL, page }) => {
     const observation = observeAuth(page, baseURL ?? "http://localhost:3100");
     await establishAuthenticatedSession(page, observation);
-    await assertProjectEntryContinuity(page, context, observation);
+    await assertProjectEntryContinuity(page, observation);
   });
 });

@@ -79,7 +79,6 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
   test("upload one contract and see honest, evidence-backed Health", async ({
     baseURL,
     page,
-    context,
   }) => {
     const consoleErrors = collectConsoleErrors(page);
     const observation = observeAuth(page, baseURL ?? "http://localhost:3100");
@@ -97,7 +96,7 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     //        health together, fails fast with a classification instead of
     //        burning the journey timeout, and leaves the dialog open and
     //        editable so the journey continues from that exact state.
-    await assertProjectEntryContinuity(page, context, observation);
+    await assertProjectEntryContinuity(page, observation);
 
     // --- 3. A clean project, so no prior snapshot or document can contaminate.
     const projectName = `P0b Health Journey ${Date.now()}`;

@@ -1,63 +1,53 @@
 /**
  * The canonical P0b authentication + project-entry preamble, in ONE place.
  *
- * WHY THIS SHAPE
- *
- * The real product is known to work interactively: a Clerk user created with its
- * Organization signs in, completes email verification, and reaches C2Pro. So the
- * leading hypothesis is NOT "Clerk is broken" or "the tenant is broken" — it is
- * that the automated bootstrap, or the session/Organization/application-token
- * synchronisation on top of it, differs from that known-good flow.
- *
- * Two consequences shape this file:
- *
- * 1. The bootstrap uses the flow the INSTALLED @clerk/testing exposes
- *    (`clerk.signIn({ page, emailAddress })`, resolved from
- *    dist/types/playwright/helpers.d.ts): it looks the user up through the Clerk
- *    Backend API, mints a short-lived sign-in token and consumes it with the
- *    `ticket` strategy. No password, no first-factor form, no email inbox, no
- *    OTP — and no credential literal in this repository.
- *
- * 2. The journey signs in LIVE in its own page and context instead of restoring
- *    a serialized storageState. Serialize/restore is one of the two suspected
- *    variables, so it is removed from the acceptance path rather than debugged
- *    through it.
- *
  * WHAT "AUTHENTICATED" MEANS HERE
  *
- * `Clerk.session.status === "active"` is NOT sufficient. C2Pro has more than one
- * auth state, and repository truth shows at least four independent owners of a
- * `/sign-in` transition (proxy.ts `auth.protect()`, lib/api/client.ts
- * `handleAuthFailure()`, AuthSync's `handleAuthErrorStatus(401)`, and
- * ProtectedRoute's `router.push`). The gate therefore proves, simultaneously:
- * Clerk session active, Clerk user present, expected Organization active,
- * application bearer observed on the wire, route still /projects, and no
- * same-origin API 401/403.
+ * `Clerk.session.status === "active"` is NOT sufficient. C2Pro derives its
+ * tenant from the ACTIVE Organization's metadata (`lib/clerk-tenant.ts`
+ * `getTenantIdFromOrganizationMetadata`), and `AuthSync` auto-activates an
+ * Organization only when the identity has exactly one membership. A
+ * Clerk-signed-in user with no Organization has no tenant, so it cannot
+ * represent the real journey. The gate therefore proves, together:
  *
- * DIAGNOSTICS ARE STRUCTURAL ONLY. No tokens, JWTs, cookie values, hashes,
- * passwords, testing tokens or Organization secrets are ever emitted. Identity
- * and Organization state come from Clerk's typed client resources
- * (Clerk.session.status, Clerk.user.id, Clerk.organization,
- * Clerk.user.organizationMemberships per @clerk/shared) — never from decoding a
- * JWT. Organization identity is reported as booleans; raw ids stay in process.
- * A failing auth test must not become a credential disclosure.
+ *   Clerk session active + Clerk user present + expected Organization active
+ *   + that Organization's tenant_id matches the deterministic CI tenant
+ *   + an application bearer seen on a same-origin API call
+ *   + route still /projects + no same-origin API 401/403.
+ *
+ * BOOTSTRAP
+ *
+ * `clerk.signIn({ page, emailAddress })` — the flow the installed
+ * @clerk/testing 2.2.7 documents (resolved from
+ * dist/types/playwright/helpers.d.ts): Backend-API user lookup, short-lived
+ * sign-in token, `ticket` strategy. No password, no first-factor form, no
+ * inbox, no OTP, no credential literal. The journey signs in live in its own
+ * page and context rather than restoring a serialized storageState.
+ *
+ * DIAGNOSTICS ARE STRUCTURAL ONLY. No tokens, JWTs, cookie values, passwords,
+ * testing tokens or Organization ids are ever emitted. Identity, Organization
+ * and tenant state come from Clerk's typed client resources
+ * (`Clerk.session.status`, `Clerk.user.id`, `Clerk.organization`,
+ * `Clerk.user.organizationMemberships`, `Clerk.organization.publicMetadata` per
+ * @clerk/shared) — never from decoding a JWT. Identifiers are compared in
+ * process and reported as booleans. A failing auth test must not become a
+ * credential disclosure.
  */
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
-import { expect, type BrowserContext, type Page, type Response } from "@playwright/test";
+import { expect, type Page, type Response } from "@playwright/test";
 
 export const AUTH_STATE_FILE = path.join(process.cwd(), "playwright", ".auth", "user.json");
 
-/**
- * The configured E2E identity. Reused, never replaced: MASTER's manual control
- * established that this user and its Organization work interactively.
- */
+/** The configured E2E identity. Reused, never replaced. */
 export const E2E_USER_EMAIL = process.env.E2E_CLERK_USER_EMAIL ?? "testuser@c2pro.com";
-/** Optional pin. When unset, the single Organization membership is "expected". */
+/** Pin written by the fixture provisioner; falls back to the single membership. */
 const EXPECTED_ORGANIZATION_ID = process.env.E2E_CLERK_ORGANIZATION_ID ?? null;
+/** The deterministic CI tenant (apps/api/tests/e2e_seed/seed_wedge.py). */
+const EXPECTED_TENANT_ID =
+  process.env.E2E_EXPECTED_TENANT_ID ?? "00000000-0000-0000-0000-00000000a113";
 
 /** How long /projects must hold every auth invariant with no interaction. */
 const STABILITY_WINDOW_MS = 4_500;
@@ -81,44 +71,47 @@ export type TokenAcquisition = "GET_TOKEN_OK" | "GET_TOKEN_NULL" | "GET_TOKEN_ER
 // Clerk client state (typed resources only — no JWT decoding, no token values)
 // ---------------------------------------------------------------------------
 
-/** Raw read. Organization ids stay in this process and are never emitted. */
+/** Raw read. Identifiers stay in this process and are never emitted. */
 interface RawClerkState {
   loaded: boolean;
   sessionActive: boolean;
   sessionStatus: string | null;
   userPresent: boolean;
-  userId: string | null;
   organizationPresent: boolean;
   activeOrganizationId: string | null;
+  activeOrganizationTenantId: string | null;
   membershipOrganizationIds: string[];
 }
+
+const EMPTY_CLERK_STATE: RawClerkState = {
+  loaded: false,
+  sessionActive: false,
+  sessionStatus: null,
+  userPresent: false,
+  organizationPresent: false,
+  activeOrganizationId: null,
+  activeOrganizationTenantId: null,
+  membershipOrganizationIds: [],
+};
 
 async function readRawClerkState(page: Page): Promise<RawClerkState> {
   return page
     .evaluate(() => {
       const clerkClient = window.Clerk;
       const memberships = clerkClient?.user?.organizationMemberships ?? [];
+      const tenantId = clerkClient?.organization?.publicMetadata?.tenant_id;
       return {
         loaded: Boolean(clerkClient?.loaded),
         sessionActive: clerkClient?.session?.status === "active",
         sessionStatus: clerkClient?.session?.status ?? null,
         userPresent: Boolean(clerkClient?.user),
-        userId: clerkClient?.user?.id ?? null,
         organizationPresent: Boolean(clerkClient?.organization),
         activeOrganizationId: clerkClient?.organization?.id ?? null,
+        activeOrganizationTenantId: typeof tenantId === "string" ? tenantId : null,
         membershipOrganizationIds: memberships.map((m) => m.organization.id),
       };
     })
-    .catch(() => ({
-      loaded: false,
-      sessionActive: false,
-      sessionStatus: null,
-      userPresent: false,
-      userId: null,
-      organizationPresent: false,
-      activeOrganizationId: null,
-      membershipOrganizationIds: [],
-    }));
+    .catch(() => EMPTY_CLERK_STATE);
 }
 
 /** Safe, emittable Clerk facts. Booleans and counts only. */
@@ -133,6 +126,8 @@ export interface ClerkFacts {
   /** False when neither a pinned id nor exactly one membership resolves one. */
   expectedOrganizationResolvable: boolean;
   expectedOrganizationActive: boolean;
+  /** The active Organization carries the deterministic CI tenant id. */
+  expectedTenantIdActive: boolean;
 }
 
 function toFacts(raw: RawClerkState): ClerkFacts {
@@ -149,8 +144,9 @@ function toFacts(raw: RawClerkState): ClerkFacts {
     membershipCount: raw.membershipOrganizationIds.length,
     organizationPresent: raw.organizationPresent,
     expectedOrganizationResolvable: expectedId !== null,
-    // Equality is computed here; neither id is ever emitted.
+    // Identifiers are compared here; neither is ever emitted.
     expectedOrganizationActive: expectedId !== null && raw.activeOrganizationId === expectedId,
+    expectedTenantIdActive: raw.activeOrganizationTenantId === EXPECTED_TENANT_ID,
   };
 }
 
@@ -249,10 +245,10 @@ async function describeHop(response: Response): Promise<MainFrameHop> {
  * Install the observers. Main-frame documents only: an iframe document (Clerk
  * renders several) cannot be told apart from a page transition otherwise.
  *
- * NOTE ON PROVENANCE: a main-frame document response with status 200 does NOT
- * prove a server redirect. `window.location.assign("/sign-in")`, which
- * lib/api/client.ts performs on a 401, produces exactly that. Only
- * `redirectedFrom` with a genuine 3xx distinguishes the two.
+ * A main-frame document response with status 200 does NOT prove a server
+ * redirect — `window.location.assign("/sign-in")`, which lib/api/client.ts
+ * performs on a 401, produces exactly that. Only `redirectedFrom` carrying a
+ * genuine 3xx distinguishes the two, which is why the chain is recorded.
  */
 export function observeAuth(page: Page, baseUrl: string): AuthObservation {
   const pending: Promise<MainFrameHop>[] = [];
@@ -340,71 +336,6 @@ export async function authPoint(
 }
 
 // ---------------------------------------------------------------------------
-// Cookie diagnostics — identity and change only, never values
-// ---------------------------------------------------------------------------
-
-interface RawCookie {
-  name: string;
-  value: string;
-  domain: string;
-}
-
-export interface CookieEvidence {
-  storedButNotRestored: string[];
-  restoredButNotStored: string[];
-  changedCookieNames: string[];
-  unchangedCookieNames: string[];
-  sessionCookieChanged: boolean;
-}
-
-const SESSION_COOKIE_PREFIXES = ["__session", "__client_uat", "__clerk_db_jwt"];
-
-function readStoredCookies(): RawCookie[] {
-  try {
-    const raw = JSON.parse(readFileSync(AUTH_STATE_FILE, "utf8")) as { cookies?: RawCookie[] };
-    return raw.cookies ?? [];
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Values are compared in-process to produce change booleans; they are never
- * returned, logged or hashed. Supporting evidence only — Clerk, Organization
- * and application-auth state have priority over cookie identity, which does not
- * prove validity.
- */
-export async function cookieEvidence(context: BrowserContext): Promise<CookieEvidence> {
-  const live = (await context.cookies()) as RawCookie[];
-  const stored = readStoredCookies();
-  const key = (c: RawCookie) => `${c.name}@${c.domain}`;
-
-  const storedByKey = new Map(stored.map((c) => [key(c), c]));
-  const liveByKey = new Map(live.map((c) => [key(c), c]));
-
-  const changed: string[] = [];
-  const unchanged: string[] = [];
-  for (const [k, storedCookie] of storedByKey) {
-    const liveCookie = liveByKey.get(k);
-    if (!liveCookie) continue;
-    // Equality only. The values themselves never leave this scope.
-    (liveCookie.value === storedCookie.value ? unchanged : changed).push(storedCookie.name);
-  }
-
-  const names = (keys: Iterable<string>) => [...new Set([...keys].map((k) => k.split("@")[0]!))].sort();
-
-  return {
-    storedButNotRestored: names([...storedByKey.keys()].filter((k) => !liveByKey.has(k))),
-    restoredButNotStored: names([...liveByKey.keys()].filter((k) => !storedByKey.has(k))),
-    changedCookieNames: [...new Set(changed)].sort(),
-    unchangedCookieNames: [...new Set(unchanged)].sort(),
-    sessionCookieChanged: changed.some((name) =>
-      SESSION_COOKIE_PREFIXES.some((prefix) => name.startsWith(prefix)),
-    ),
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Failure classification
 // ---------------------------------------------------------------------------
 
@@ -412,7 +343,6 @@ export interface ClassificationInput {
   hops: MainFrameHop[];
   apiAuthFailures: ApiAuthFailure[];
   points: AuthPoint[];
-  bootstrapSucceeded: boolean;
 }
 
 /**
@@ -421,9 +351,7 @@ export interface ClassificationInput {
  * classification is never forced when the evidence does not carry it.
  */
 export function classifyAuthFailure(input: ClassificationInput): AuthFailureClassification {
-  const { hops, apiAuthFailures, points, bootstrapSucceeded } = input;
-
-  if (!bootstrapSucceeded) return "E2E_AUTH_BOOTSTRAP_DEFECT";
+  const { hops, apiAuthFailures, points } = input;
 
   const signInHops = hops.filter((hop) => hop.pathname.startsWith("/sign-in"));
   if (signInHops.length === 0 && apiAuthFailures.length === 0) return "UNCLASSIFIED";
@@ -450,13 +378,16 @@ export function classifyAuthFailure(input: ClassificationInput): AuthFailureClas
     return "CLIENT_API_401_REDIRECT";
   }
 
-  // D. Clerk stayed active throughout, but the Organization or the application
-  //    bearer never stabilised before the transition.
+  // D. Clerk stayed active throughout, but the Organization, its tenant or the
+  //    application bearer never stabilised before the transition.
   const clerkStayedActive = points.length > 0 && points.every((point) => point.clerkSessionActive);
-  const orgOrTokenUnstable = points.some(
-    (point) => !point.expectedOrganizationActive || !point.applicationBearerObserved,
+  const tenancyUnstable = points.some(
+    (point) =>
+      !point.expectedOrganizationActive ||
+      !point.expectedTenantIdActive ||
+      !point.applicationBearerObserved,
   );
-  if (clerkStayedActive && orgOrTokenUnstable) return "CLERK_ORG_SYNC_FAILURE";
+  if (clerkStayedActive && tenancyUnstable) return "CLERK_ORG_SYNC_FAILURE";
 
   // C. No server 3xx and no API 401, but auth state fell away and a client
   //    navigation to /sign-in followed.
@@ -472,19 +403,7 @@ export function classifyAuthFailure(input: ClassificationInput): AuthFailureClas
 // Step 1 — the documented Clerk bootstrap
 // ---------------------------------------------------------------------------
 
-/**
- * Sign in live, in this page and context, with the documented installed API.
- *
- * `clerk.signIn({ page, emailAddress })` (@clerk/testing 2.2.7) resolves the
- * user through the Clerk Backend API, mints a sign-in token and consumes it via
- * the `ticket` strategy. It calls `setupClerkTestingToken` internally, so bot
- * protection on the development instance is handled. `page.goto` must precede
- * it, on a route that loads Clerk and is not protected.
- *
- * Then it waits — bounded — for the Organization to become active. It does NOT
- * activate the Organization itself: AuthSync owns that, and doing it here would
- * mask the very seam under investigation.
- */
+/** Sign in live, in this page and context, with the documented installed API. */
 export async function signInWithClerk(
   page: Page,
   observation?: AuthObservation,
@@ -496,7 +415,7 @@ export async function signInWithClerk(
   await clerk.signIn({ page, emailAddress: E2E_USER_EMAIL });
 
   const afterSignIn = await clerkFacts(page);
-  await requireBootstrapInvariant(
+  await requireAuthInvariant(
     afterSignIn.clerkUserPresent && afterSignIn.clerkSessionActive,
     "E2E_AUTH_BOOTSTRAP_DEFECT",
     `the documented Clerk bootstrap did not produce an active session ` +
@@ -516,18 +435,18 @@ export async function requireExpectedOrganization(
   observation?: AuthObservation,
 ): Promise<void> {
   const memberships = await clerkFacts(page);
-  await requireBootstrapInvariant(
+  await requireAuthInvariant(
     memberships.membershipPresent,
     "CLERK_ORG_SYNC_FAILURE",
     "the configured E2E identity holds no Organization membership, so there is no tenant " +
-      "and no expected Organization to activate. Clerk signed in is not C2Pro authenticated",
+      "and no expected Organization to activate. Run the Clerk E2E fixture provisioner",
     page,
     observation,
   );
 
   // AuthSync (root layout, so mounted on "/" too) calls setActive() when exactly
   // one membership exists. Observe that landing; do NOT activate it here, which
-  // would mask the very seam under investigation.
+  // would mask the seam this gate exists to prove.
   await page
     .waitForFunction(() => Boolean(window.Clerk?.organization), undefined, {
       timeout: ORGANIZATION_SYNC_TIMEOUT_MS,
@@ -535,7 +454,7 @@ export async function requireExpectedOrganization(
     .catch(() => undefined);
 
   const afterOrganization = await clerkFacts(page);
-  await requireBootstrapInvariant(
+  await requireAuthInvariant(
     afterOrganization.expectedOrganizationResolvable,
     "CLERK_ORG_SYNC_FAILURE",
     `the expected Organization is unresolvable (memberships=${afterOrganization.membershipCount}); ` +
@@ -543,7 +462,7 @@ export async function requireExpectedOrganization(
     page,
     observation,
   );
-  await requireBootstrapInvariant(
+  await requireAuthInvariant(
     afterOrganization.expectedOrganizationActive,
     "CLERK_ORG_SYNC_FAILURE",
     "the expected Organization never became active within " +
@@ -551,9 +470,17 @@ export async function requireExpectedOrganization(
     page,
     observation,
   );
+  await requireAuthInvariant(
+    afterOrganization.expectedTenantIdActive,
+    "CLERK_ORG_SYNC_FAILURE",
+    "the active Organization's publicMetadata.tenant_id does not match the deterministic " +
+      "CI tenant, so the frontend would resolve a tenant the local database does not hold",
+    page,
+    observation,
+  );
 }
 
-/** Sign in, prove the Organization, and land on a rendered /projects. */
+/** Sign in, prove the Organization and tenant, and land on a rendered /projects. */
 export async function establishAuthenticatedSession(
   page: Page,
   observation?: AuthObservation,
@@ -570,10 +497,10 @@ export async function openProjects(page: Page): Promise<void> {
 }
 
 /**
- * Fail the bootstrap with an explicit classification rather than an opaque
- * assertion, so an Organization/token seam is never mistaken for "Clerk broken".
+ * Fail with an explicit classification rather than an opaque assertion, so an
+ * Organization/tenant seam is never mistaken for "Clerk is broken".
  */
-async function requireBootstrapInvariant(
+async function requireAuthInvariant(
   held: boolean,
   classification: AuthFailureClassification,
   detail: string,
@@ -602,27 +529,13 @@ async function requireBootstrapInvariant(
 // Step 2 — bounded pre-click stability, then the project-entry transition
 // ---------------------------------------------------------------------------
 
-interface GateReport {
-  classification: AuthFailureClassification;
-  failedAt: string;
-  points: AuthPoint[];
-  hops: MainFrameHop[];
-  apiAuthFailures: ApiAuthFailure[];
-  tokenAcquisition: TokenAcquisition;
-  cookies: CookieEvidence;
-  clickStartedAt: number | null;
-  firstMainFrameHopAfterClick: MainFrameHop | null;
-  msFromClickToFirstMainFrameNavigation: number | null;
-}
-
 async function buildReport(
   failedAt: string,
   page: Page,
-  context: BrowserContext,
   observation: AuthObservation,
   points: AuthPoint[],
   clickStartedAt: number | null,
-): Promise<GateReport> {
+): Promise<Record<string, unknown>> {
   const hops = await observation.hops();
   const firstAfterClick =
     clickStartedAt === null ? null : (hops.find((hop) => hop.at >= clickStartedAt) ?? null);
@@ -632,14 +545,12 @@ async function buildReport(
       hops,
       apiAuthFailures: observation.apiAuthFailures,
       points,
-      bootstrapSucceeded: true,
     }),
     failedAt,
     points,
     hops,
     apiAuthFailures: observation.apiAuthFailures,
     tokenAcquisition: await classifyTokenAcquisition(page),
-    cookies: await cookieEvidence(context),
     clickStartedAt,
     firstMainFrameHopAfterClick: firstAfterClick,
     msFromClickToFirstMainFrameNavigation:
@@ -652,6 +563,7 @@ function stabilityViolation(point: AuthPoint): string | null {
   if (point.currentPath !== "/projects") return `route left /projects (now ${point.currentPath})`;
   if (!point.clerkSessionActive) return "Clerk session stopped being active";
   if (!point.expectedOrganizationActive) return "expected Organization became inactive or absent";
+  if (!point.expectedTenantIdActive) return "active Organization stopped carrying the CI tenant id";
   if (point.firstSameOriginApiAuthFailure) {
     const failure = point.firstSameOriginApiAuthFailure;
     return `same-origin API auth failure ${failure.method} ${failure.pathname} -> ${failure.status}`;
@@ -669,7 +581,6 @@ function stabilityViolation(point: AuthPoint): string | null {
  */
 export async function assertProjectEntryContinuity(
   page: Page,
-  context: BrowserContext,
   observation: AuthObservation,
 ): Promise<void> {
   const points: AuthPoint[] = [];
@@ -677,11 +588,14 @@ export async function assertProjectEntryContinuity(
   // T1 — stable /projects, before any interaction.
   const t1 = await authPoint("T1 stable /projects", page, observation);
   points.push(t1);
-  expect(
-    t1.applicationBearerObserved,
-    "the application must have attached a bearer to a same-origin API call before " +
-      "/projects can be considered authenticated; Clerk state alone does not prove it",
-  ).toBe(true);
+  if (!t1.applicationBearerObserved) {
+    const report = await buildReport("T1_NO_APPLICATION_BEARER", page, observation, points, null);
+    throw new Error(
+      "The application never attached a bearer to a same-origin API call, so /projects is " +
+        "not proven authenticated; Clerk state alone does not prove it. Structural " +
+        `diagnostics (no values, no tokens):\n${JSON.stringify(report, null, 2)}`,
+    );
+  }
 
   // Does every invariant survive with NO interaction at all? If not, the click
   // is not the cause and clicking would only muddy the evidence.
@@ -692,10 +606,7 @@ export async function assertProjectEntryContinuity(
     const violation = stabilityViolation(sample);
     if (violation !== null) {
       points.push(sample);
-      const report = await buildReport("PRE_CLICK", page, context, observation, points, null);
-      // Thrown, not asserted: inside this branch the violation is known, so an
-      // assertion on it would be a gratuitous condition. A throw is the hardest
-      // possible failure and carries the evidence with it.
+      const report = await buildReport("PRE_CLICK", page, observation, points, null);
       throw new Error(
         `PRE_CLICK_AUTH_CONTINUITY_FAILURE: ${violation}. The New Project click was NOT ` +
           `performed. Structural diagnostics (no values, no tokens):\n${JSON.stringify(report, null, 2)}`,
@@ -704,8 +615,7 @@ export async function assertProjectEntryContinuity(
   }
 
   // T2 — immediately before the click.
-  const t2 = await authPoint("T2 immediately before click", page, observation);
-  points.push(t2);
+  points.push(await authPoint("T2 immediately before click", page, observation));
 
   // Arm observers BEFORE the click, and stamp the clock BEFORE it, so a
   // navigation that happens DURING the click is still attributable to it.
@@ -722,7 +632,7 @@ export async function assertProjectEntryContinuity(
   if (outcome !== "input") {
     // T3 — the first auth/navigation failure event.
     points.push(await authPoint("T3 first failure event", page, observation));
-    const report = await buildReport("PROJECT_ENTRY", page, context, observation, points, clickStartedAt);
+    const report = await buildReport("PROJECT_ENTRY", page, observation, points, clickStartedAt);
     throw new Error(
       `PROJECT_ENTRY_AUTH_CONTINUITY_FAILURE: outcome=${outcome}, expected the project-name ` +
         `input to become visible. Structural diagnostics (no values, no tokens):\n${JSON.stringify(

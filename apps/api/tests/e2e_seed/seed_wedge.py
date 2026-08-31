@@ -244,7 +244,25 @@ async def _upsert_review_item(db: AsyncSession) -> None:
     )
 
 
-# ── Public entry point ─────────────────────────────────────────────
+# ── Public entry points ────────────────────────────────────────────
+
+
+async def seed_e2e_auth_tenancy(db: AsyncSession) -> dict[str, UUID]:
+    """Seed ONLY the authentication tenancy: tenant + user, nothing else.
+
+    The canonical P0b journey must create its own clean project and upload its
+    own document through the browser, so seeding a project or documents would
+    invalidate exactly what that gate is meant to prove. This reuses the same
+    upserts as seed_wedge_e2e rather than adding a parallel tenant bootstrap.
+
+    Idempotent. Returns the fixed tenant/user ids for downstream assertions.
+    """
+    await _upsert_tenant(db)
+    await db.flush()
+    await _upsert_user(db)
+    await db.commit()
+
+    return {"tenant_id": TENANT_ID, "user_id": USER_ID}
 
 
 async def seed_wedge_e2e(db: AsyncSession) -> dict[str, UUID]:
