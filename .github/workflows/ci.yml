@@ -1051,10 +1051,9 @@ jobs:
       # times in three different ways, so the seam is isolated and answered in
       # seconds here. If a storageState session cannot survive into a chromium
       # context, no project is created, nothing is uploaded, and no worker runs.
-      - name: Auth continuity micro-gate
-        working-directory: apps/web
-        run: ./node_modules/.bin/playwright test src/tests/e2e/auth-continuity.spec.ts --project=chromium
-
+      # The project-entry seam is gated INSIDE this journey, in its own page and
+      # context, so no separate invocation is needed or trusted. It fails fast
+      # (~20s) before any project creation, upload or worker work.
       - name: P0b single-document Health journey
         working-directory: apps/web
         run: ./node_modules/.bin/playwright test src/tests/e2e/p0b-single-document-health.spec.ts --project=chromium

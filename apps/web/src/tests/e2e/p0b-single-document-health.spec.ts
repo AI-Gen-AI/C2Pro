@@ -32,7 +32,11 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test, type ConsoleMessage, type Page } from "@playwright/test";
 
-import { establishAuthenticatedSession } from "./support/p0b-auth";
+import {
+  assertProjectEntryContinuity,
+  establishAuthenticatedSession,
+  recordMainFrameNavigations,
+} from "./support/p0b-auth";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CONTRACT_FIXTURE = path.join(HERE, "test-data", "sample-contract.pdf");
@@ -72,17 +76,24 @@ function collectConsoleErrors(page: Page): string[] {
 test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
   test.describe.configure({ mode: "serial", timeout: ANALYSIS_TIMEOUT_MS + 120_000 });
 
-  test("upload one contract and see honest, evidence-backed Health", async ({ page }) => {
+  test("upload one contract and see honest, evidence-backed Health", async ({ page, context }) => {
     const consoleErrors = collectConsoleErrors(page);
+    const mainFrameHops = recordMainFrameNavigations(page);
 
-    // --- 1. Real Clerk authentication, via the SAME helper the bounded
-    //        project-entry gate uses, so a green gate genuinely says something
-    //        about this journey. No credentials live here.
+    // --- 1. Real Clerk authentication. No credentials live here.
     await establishAuthenticatedSession(page);
 
-    // --- 2. A clean project, so no prior snapshot or document can contaminate.
+    // --- 2. Project entry is gated INLINE, in this same test/page/context,
+    //        before any project creation, upload or worker-dependent work. A
+    //        separate spec could not license this run: separate Playwright tests
+    //        get separate browser contexts. If continuity is broken this fails in
+    //        ~20s with structural evidence instead of burning the journey
+    //        timeout. It leaves the dialog open and editable, so the journey
+    //        continues from that exact state rather than repeating the click.
+    await assertProjectEntryContinuity(page, context, mainFrameHops);
+
+    // --- 3. A clean project, so no prior snapshot or document can contaminate.
     const projectName = `P0b Health Journey ${Date.now()}`;
-    await page.getByRole("button", { name: /new project|create project/i }).first().click();
     await page.getByTestId("project-name-input").fill(projectName);
     await page.getByTestId("create-project-button").click();
 
@@ -91,12 +102,12 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     expect(projectId, "project id must be resolvable from the URL").toBeTruthy();
     recordProjectId(projectId!);
 
-    // --- 3. Upload one real contract through the real upload surface.
+    // --- 5. Upload one real contract through the real upload surface.
     await page.goto(`/projects/${projectId}/documents`);
     await expect(page.getByTestId("documents-page")).toBeVisible({ timeout: 30_000 });
     await page.setInputFiles('input[type="file"]', CONTRACT_FIXTURE);
 
-    // --- 4. Wait for the async pipeline. The Health call is the completion
+    // --- 6. Wait for the async pipeline. The Health call is the completion
     //        signal: it is the thing the user is actually waiting for.
     const healthResponsePromise = page.waitForResponse(
       (response) =>
@@ -107,7 +118,7 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     await page.goto(`/projects/${projectId}/analysis`);
     const healthResponse = await healthResponsePromise;
 
-    // --- 5. /health = 200 with the real single-document payload.
+    // --- 7. /health = 200 with the real single-document payload.
     expect(healthResponse.status()).toBe(200);
     const vector = await healthResponse.json();
 
@@ -132,7 +143,7 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
       }
     }
 
-    // --- 6. The user-visible surface.
+    // --- 8. The user-visible surface.
     const health = page.getByTestId("single-document-health");
     await expect(health).toBeVisible({ timeout: 60_000 });
 
@@ -143,7 +154,7 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
       ).toBeVisible();
     }
 
-    // --- 7. Honest null: never 0%, never a fabricated measured score.
+    // --- 9. Honest null: never 0%, never a fabricated measured score.
     const healthText = (await health.innerText()) ?? "";
     expect(healthText, "INV-1: unknown must never render as 0%").not.toMatch(/\b0\s*%/);
 
@@ -154,7 +165,7 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
       await expect(page.getByTestId("health-gap").first()).toBeVisible();
     }
 
-    // --- 8. Granularity disclosed in the UI, matching the API's claim.
+    // --- 10. Granularity disclosed in the UI, matching the API's claim.
     const granularityText = await page.getByTestId("health-granularity").innerText();
     if (granularity === "clause") {
       expect(granularityText).toMatch(/clause-level/i);
@@ -162,7 +173,7 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
       expect(granularityText).toMatch(/whole-document/i);
     }
 
-    // --- 9. Coherence: a number only when positive evidence says it is available.
+    // --- 11. Coherence: a number only when positive evidence says it is available.
     const coherenceShown = await page.getByTestId("analysis-coherence-score").count();
     const coherenceSuppressed = await page.getByTestId("analysis-coherence-unavailable").count();
     expect(
@@ -181,14 +192,14 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
       "a Coherence number may render only with incorporated-subscore evidence",
     ).toBe(hasSubscoreEvidence);
 
-    // --- 10. Terminal UX: nothing still claiming to be in progress.
+    // --- 12. Terminal UX: nothing still claiming to be in progress.
     await expect(page.getByTestId("health-loading")).toHaveCount(0);
     await expect(page.getByTestId("health-error")).toHaveCount(0);
     await expect(page.getByTestId("health-unavailable")).toHaveCount(0);
     await expect(page.getByText(/finalizing/i)).toHaveCount(0);
     await expect(page.locator(".animate-spin")).toHaveCount(0);
 
-    // --- 11. No console exception attributable to this surface.
+    // --- 13. No console exception attributable to this surface.
     expect(consoleErrors, "no attributable console errors").toEqual([]);
   });
 });

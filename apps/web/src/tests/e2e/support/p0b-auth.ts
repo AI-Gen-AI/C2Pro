@@ -1,24 +1,27 @@
 /**
- * The canonical P0b authentication preamble, in ONE place.
+ * The canonical P0b authentication + project-entry preamble, in ONE place.
  *
- * The journey's auth kept failing and every diagnostic I wrote drifted from it,
- * so the diagnostic proved nothing about the journey. This module is the fix:
- * the bounded project-entry gate and the six-minute journey import the same
- * function and therefore execute byte-for-byte the same sequence, in the same
- * page and the same context.
+ * A standalone spec cannot license the journey: separate Playwright tests get
+ * separate browser contexts, so a green micro-gate proves nothing about the run
+ * that follows it. The acceptance authority is therefore
+ * assertProjectEntryContinuity() called INSIDE the canonical journey, in the same
+ * test, page and context, before any project creation, upload or worker work.
+ * The standalone spec keeps these helpers only as a cheap diagnostic.
  *
- * Sequence (no sign-in): the chromium project already restores the storageState
- * that auth.setup produced, so the session exists before this runs. It needs
- * only the testing token, which the Clerk development instance requires before
- * it will honour a restored session.
+ * Sequence (no sign-in): the chromium project restores the storageState that
+ * auth.setup produced, so the session already exists. It needs only the testing
+ * token, which the Clerk development instance requires before honouring it.
  *
  *   restored storageState -> setupClerkTestingToken -> / -> Clerk.loaded
- *   -> session present/subject -> /projects -> Projects visible
+ *   -> session present -> /projects -> Projects visible
+ *   -> stability window -> New Project -> project-name-input editable
  *
- * DIAGNOSTICS ARE STRUCTURAL ONLY. Cookie names, domains, paths and flags are
- * reported; values never are. Session presence and subject are reported; tokens,
- * testing tokens and passwords never are. A failing auth test must not become a
- * credential disclosure.
+ * DIAGNOSTICS ARE STRUCTURAL ONLY. Cookie names and flags are reported, and
+ * values are compared internally to emit change booleans -- never the values
+ * themselves, never a hash of them. Session identity comes from Clerk's typed
+ * client state (Clerk.user.id / Clerk.session.id / .status per @clerk/shared),
+ * never from decoding a JWT. A failing auth test must not become a credential
+ * disclosure.
  */
 
 import { readFileSync } from "node:fs";
@@ -29,7 +32,22 @@ import { expect, type BrowserContext, type Page } from "@playwright/test";
 
 const STORAGE_STATE = path.join(process.cwd(), "playwright", ".auth", "user.json");
 
-/** Cookie identity WITHOUT its value. */
+/** How long /projects must hold a session with no interaction at all. */
+const STABILITY_WINDOW_MS = 4_000;
+/** Bounded race after the click: seconds, never the journey's minutes. */
+const ENTRY_RACE_MS = 20_000;
+
+interface RawCookie {
+  name: string;
+  value: string;
+  domain: string;
+  path: string;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: string;
+}
+
+/** Cookie identity and flags WITHOUT its value. */
 export interface CookieShape {
   name: string;
   domain: string;
@@ -37,15 +55,6 @@ export interface CookieShape {
   httpOnly: boolean;
   secure: boolean;
   sameSite: string;
-}
-
-interface RawCookie {
-  name: string;
-  domain: string;
-  path: string;
-  httpOnly?: boolean;
-  secure?: boolean;
-  sameSite?: string;
 }
 
 function shape(cookie: RawCookie): CookieShape {
@@ -59,105 +68,236 @@ function shape(cookie: RawCookie): CookieShape {
   };
 }
 
-function sortByName(cookies: CookieShape[]): CookieShape[] {
-  return [...cookies].sort((a, b) => a.name.localeCompare(b.name));
+function key(cookie: { name: string; domain: string }): string {
+  return `${cookie.name}@${cookie.domain}`;
 }
 
-/** Cookie shapes auth.setup serialized, read straight from storageState. */
-export function storedCookieShapes(): CookieShape[] {
+function readStoredCookies(): RawCookie[] {
   try {
     const raw = JSON.parse(readFileSync(STORAGE_STATE, "utf8")) as { cookies?: RawCookie[] };
-    return sortByName((raw.cookies ?? []).map(shape));
+    return raw.cookies ?? [];
   } catch {
     return [];
   }
 }
 
-export async function restoredCookieShapes(context: BrowserContext): Promise<CookieShape[]> {
-  return sortByName((await context.cookies()).map(shape));
-}
-
-/** Session presence and subject only — never the token itself. */
-export async function sessionFacts(
-  page: Page,
-): Promise<{ present: boolean; subject: unknown }> {
+/**
+ * Session identity from Clerk's typed client state.
+ *
+ * Deliberately does NOT decode the session JWT: the diagnostic has no need to
+ * interpret an unverified token, and hand-rolled base64/JSON parsing of one is a
+ * security-sensitive construct with no upside here.
+ */
+export async function sessionFacts(page: Page): Promise<{
+  present: boolean;
+  userId: string | null;
+  sessionId: string | null;
+  sessionStatus: string | null;
+}> {
   return page
-    .evaluate(async () => {
+    .evaluate(() => {
       const clerk = window.Clerk;
-      if (!clerk?.session) return { present: false, subject: null };
-      const token = await clerk.session.getToken();
-      if (!token) return { present: true, subject: null };
-      const payload = token.split(".")[1];
-      if (!payload) return { present: true, subject: null };
-      const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
       return {
-        present: true,
-        subject: (JSON.parse(atob(normalized)) as { sub?: unknown }).sub ?? null,
+        present: Boolean(clerk?.session),
+        userId: clerk?.user?.id ?? null,
+        sessionId: clerk?.session?.id ?? null,
+        sessionStatus: (clerk?.session?.status as string | undefined) ?? null,
       };
     })
-    .catch(() => ({ present: false, subject: null }));
+    .catch(() => ({ present: false, userId: null, sessionId: null, sessionStatus: null }));
 }
 
-export interface DocumentHop {
+export interface MainFrameHop {
   url: string;
   status: number;
   at: number;
 }
 
 /**
- * Record document-level responses only — the redirect chain the middleware
- * actually drives, with timings so a redirect can be placed relative to a click.
+ * Record MAIN-FRAME document responses only.
+ *
+ * Filtering on resourceType alone mixes iframe documents into the chain, so a
+ * middleware redirect of the page cannot be told apart from an embedded frame
+ * loading. Clerk renders iframes, which makes that distinction essential here.
  */
-export function recordDocumentChain(page: Page): DocumentHop[] {
-  const chain: DocumentHop[] = [];
+export function recordMainFrameNavigations(page: Page): MainFrameHop[] {
+  const hops: MainFrameHop[] = [];
   page.on("response", (response) => {
-    if (response.request().resourceType() === "document") {
-      chain.push({ url: response.url(), status: response.status(), at: Date.now() });
-    }
+    const request = response.request();
+    if (request.resourceType() !== "document") return;
+    if (request.frame() !== page.mainFrame()) return;
+    hops.push({ url: response.url(), status: response.status(), at: Date.now() });
   });
-  return chain;
+  return hops;
 }
 
-/** A safe, structural snapshot of auth state at one point in the flow. */
+export interface AuthSnapshot {
+  label: string;
+  at: number;
+  url: string;
+  clerkSessionPresent: boolean;
+  clerkUserId: string | null;
+  clerkSessionId: string | null;
+  clerkSessionStatus: string | null;
+  cookieShapes: CookieShape[];
+  missingFromStorageState: string[];
+  addedSinceStorageState: string[];
+  /** Names whose value differs from the storageState value. Values never emitted. */
+  changedCookieNames: string[];
+  unchangedCookieNames: string[];
+  /** True when any Clerk session-bearing cookie value changed. */
+  sessionCookieChanged: boolean;
+}
+
+const SESSION_COOKIE_PREFIXES = ["__session", "__client_uat", "__clerk_db_jwt"];
+
+/**
+ * Structural snapshot. Cookie VALUES are compared in-process to produce change
+ * booleans; they are never returned, logged or hashed.
+ */
 export async function authSnapshot(
   label: string,
   page: Page,
   context: BrowserContext,
-): Promise<Record<string, unknown>> {
+): Promise<AuthSnapshot> {
   const facts = await sessionFacts(page);
-  const restored = await restoredCookieShapes(context);
-  const stored = storedCookieShapes();
+  const live = (await context.cookies()) as RawCookie[];
+  const stored = readStoredCookies();
+
+  const storedByKey = new Map(stored.map((c) => [key(c), c]));
+  const liveByKey = new Map(live.map((c) => [key(c), c]));
+
+  const changed: string[] = [];
+  const unchanged: string[] = [];
+  for (const [k, storedCookie] of storedByKey) {
+    const liveCookie = liveByKey.get(k);
+    if (!liveCookie) continue;
+    // Equality only. The values themselves never leave this scope.
+    (liveCookie.value === storedCookie.value ? unchanged : changed).push(storedCookie.name);
+  }
+
   return {
     label,
     at: Date.now(),
     url: page.url(),
     clerkSessionPresent: facts.present,
-    clerkSubject: facts.subject,
-    restoredCookies: restored,
-    storedButNotRestored: stored
-      .filter((s) => !restored.some((r) => r.name === s.name && r.domain === s.domain))
-      .map((c) => c.name),
-    restoredButNotStored: restored
-      .filter((r) => !stored.some((s) => s.name === r.name && s.domain === r.domain))
-      .map((c) => c.name),
+    clerkUserId: facts.userId,
+    clerkSessionId: facts.sessionId,
+    clerkSessionStatus: facts.sessionStatus,
+    cookieShapes: live.map(shape).sort((a, b) => a.name.localeCompare(b.name)),
+    missingFromStorageState: [...storedByKey.keys()]
+      .filter((k) => !liveByKey.has(k))
+      .map((k) => k.split("@")[0]!),
+    addedSinceStorageState: [...liveByKey.keys()]
+      .filter((k) => !storedByKey.has(k))
+      .map((k) => k.split("@")[0]!),
+    changedCookieNames: [...new Set(changed)].sort(),
+    unchangedCookieNames: [...new Set(unchanged)].sort(),
+    sessionCookieChanged: changed.some((name) =>
+      SESSION_COOKIE_PREFIXES.some((prefix) => name.startsWith(prefix)),
+    ),
   };
 }
 
-/**
- * The canonical preamble. Used identically by the project-entry gate and by the
- * full journey, so a green gate genuinely says something about the journey.
- */
+function compact(snapshots: AuthSnapshot[]): Array<Record<string, unknown>> {
+  return snapshots.map((s) => ({
+    label: s.label,
+    url: s.url,
+    clerkSessionPresent: s.clerkSessionPresent,
+    clerkSessionStatus: s.clerkSessionStatus,
+    hasUserId: s.clerkUserId !== null,
+    hasSessionId: s.clerkSessionId !== null,
+    sessionCookieChanged: s.sessionCookieChanged,
+    changedCookieNames: s.changedCookieNames,
+    missingFromStorageState: s.missingFromStorageState,
+  }));
+}
+
+/** Step 1: the authenticated session, up to a rendered /projects. */
 export async function establishAuthenticatedSession(page: Page): Promise<void> {
   await setupClerkTestingToken({ page });
   await page.goto("/");
   await page.waitForFunction(() => window.Clerk?.loaded === true);
 
   const facts = await sessionFacts(page);
-  expect(
-    facts.present,
-    "storageState from auth.setup must restore a live Clerk session",
-  ).toBe(true);
+  expect(facts.present, "storageState from auth.setup must restore a live Clerk session").toBe(
+    true,
+  );
 
   await page.goto("/projects");
   await expect(page.locator('h1:has-text("Projects")')).toBeVisible({ timeout: 30_000 });
+}
+
+/**
+ * Step 2: prove the session survives project entry, and LEAVE THE PAGE THERE.
+ *
+ * The journey continues from this exact state rather than repeating the
+ * transition, so the gate is the journey's own first step and cannot drift from
+ * it. Returns only once project-name-input is genuinely editable; otherwise
+ * fails in ~20s with structural evidence instead of burning the journey timeout.
+ */
+export async function assertProjectEntryContinuity(
+  page: Page,
+  context: BrowserContext,
+  mainFrameHops: MainFrameHop[],
+): Promise<void> {
+  const afterProjects = await authSnapshot("after /projects", page, context);
+
+  // Does the session survive with NO interaction at all? If it dies here, the
+  // click is not the cause and clicking would only muddy the evidence.
+  await page.waitForTimeout(STABILITY_WINDOW_MS);
+  const afterIdle = await authSnapshot("after idle stability window", page, context);
+
+  if (!afterIdle.clerkSessionPresent) {
+    expect(
+      afterIdle.clerkSessionPresent,
+      `Session lost on /projects with NO interaction -> background/session-revalidation failure, not the click.\n${JSON.stringify(
+        { SUMMARY: compact([afterProjects, afterIdle]), mainFrameHops },
+        null,
+        2,
+      )}`,
+    ).toBe(true);
+  }
+
+  // Arm observers BEFORE the click, and stamp the clock BEFORE it, so a
+  // navigation that happens DURING the click is still attributable to it.
+  const input = page.getByTestId("project-name-input");
+  const signedOut = page.waitForURL(/\/sign-in/, { timeout: ENTRY_RACE_MS }).then(() => "sign-in");
+  const editable = input
+    .waitFor({ state: "visible", timeout: ENTRY_RACE_MS })
+    .then(() => "input");
+
+  const clickStartedAt = Date.now();
+  await page.getByRole("button", { name: /new project|create project/i }).first().click();
+  const immediatelyAfterClick = await authSnapshot("immediately after click", page, context);
+
+  const outcome = await Promise.race([editable, signedOut]).catch(() => "timeout");
+
+  if (outcome !== "input") {
+    const atTransition = await authSnapshot("at first main-frame transition", page, context);
+    const firstHop = mainFrameHops.find((hop) => hop.at >= clickStartedAt) ?? null;
+
+    expect(
+      outcome,
+      `Project entry lost the session. Structural diagnostics (no cookie values, no tokens):\n${JSON.stringify(
+        {
+          SUMMARY: compact([afterProjects, afterIdle, immediatelyAfterClick, atTransition]),
+          outcome,
+          clickStartedAt,
+          firstMainFrameHopAfterClick: firstHop,
+          msFromClickToFirstMainFrameNavigation: firstHop ? firstHop.at - clickStartedAt : null,
+          // A main-frame document response after the click is a server-side
+          // redirect; its absence means the bounce was client-side routing.
+          redirectWasServerSide: firstHop !== null,
+          mainFrameHops,
+          fullSnapshots: [afterProjects, afterIdle, immediatelyAfterClick, atTransition],
+        },
+        null,
+        2,
+      )}`,
+    ).toBe("input");
+  }
+
+  await expect(input).toBeEditable({ timeout: 5_000 });
+  expect(page.url(), "must remain on an authenticated route").not.toContain("/sign-in");
 }

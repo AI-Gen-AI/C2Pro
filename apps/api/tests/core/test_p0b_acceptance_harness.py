@@ -10,7 +10,11 @@ more importantly, that it can never be switched on in production.
 
 from __future__ import annotations
 
+import secrets
+
 import pytest
+
+_DSN = "postgresql://localhost:5432/db"
 
 # ---------------------------------------------------------------------------
 # Deterministic embeddings: harness support that must never reach production.
@@ -42,7 +46,10 @@ def test_embeddings_mock_is_refused_in_production() -> None:
             ENVIRONMENT="production",
             C2PRO_AI_MOCK=False,  # isolate: the AI-mock guard would otherwise fire first
             C2PRO_EMBEDDINGS_MOCK=True,
-            TEST_DATABASE_URL="postgresql://u:p@localhost:5432/db",
-            DATABASE_URL="postgresql://u:p@localhost:5432/db",
-            JWT_SECRET_KEY="x" * 32,
+            # No embedded credentials: validate_database_url only checks the
+            # scheme, so a credential-shaped DSN is avoidable noise here. The
+            # signing key is generated rather than a literal.
+            TEST_DATABASE_URL=_DSN,
+            DATABASE_URL=_DSN,
+            JWT_SECRET_KEY=secrets.token_hex(32),
         )
