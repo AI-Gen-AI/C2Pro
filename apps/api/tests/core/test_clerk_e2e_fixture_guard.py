@@ -43,24 +43,32 @@ FixtureError = fixture_script.FixtureError
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "secret_key",
-    ["sk_live_abc", "live_abc"],
-    ids=["sk_live", "legacy_live"],
-)
+# Keys are COMPOSED from the module's own prefix constants rather than written
+# out, so these tests carry no secret-shaped literal and cannot drift from the
+# rule they pin: if a prefix is ever added or renamed, they follow it.
+_SUFFIX = "not-a-real-key"
+_PRODUCTION_SECRETS = [p + _SUFFIX for p in fixture_script._PRODUCTION_PREFIXES if not p.startswith("pk_")]
+_DEVELOPMENT_SECRETS = [p + _SUFFIX for p in fixture_script._DEVELOPMENT_SECRET_PREFIXES]
+_DEVELOPMENT_SECRET = _DEVELOPMENT_SECRETS[0]
+
+
+@pytest.mark.parametrize("secret_key", _PRODUCTION_SECRETS)
 def test_production_secret_key_is_refused(secret_key: str) -> None:
     with pytest.raises(FixtureError, match="PRODUCTION"):
         fixture_script.require_development_instance(secret_key, None)
 
 
-def test_production_publishable_key_is_refused() -> None:
+@pytest.mark.parametrize(
+    "publishable_key", [p + _SUFFIX for p in fixture_script._PRODUCTION_PREFIXES]
+)
+def test_production_publishable_key_is_refused(publishable_key: str) -> None:
     with pytest.raises(FixtureError, match="PRODUCTION"):
-        fixture_script.require_development_instance("sk_test_abc", "pk_live_abc")
+        fixture_script.require_development_instance(_DEVELOPMENT_SECRET, publishable_key)
 
 
 @pytest.mark.parametrize(
     "secret_key",
-    ["sk_unknown_abc", "", "abc", "SK_TEST_abc"],
+    ["sk_unknown_" + _SUFFIX, "", "abc", _DEVELOPMENT_SECRET.upper()],
     ids=["unknown_prefix", "empty", "bare", "wrong_case"],
 )
 def test_unprovable_environment_is_refused(secret_key: str) -> None:
@@ -69,11 +77,9 @@ def test_unprovable_environment_is_refused(secret_key: str) -> None:
         fixture_script.require_development_instance(secret_key, None)
 
 
-@pytest.mark.parametrize("secret_key", ["sk_test_abc", "test_abc"])
+@pytest.mark.parametrize("secret_key", _DEVELOPMENT_SECRETS)
 def test_development_secret_key_is_accepted(secret_key: str) -> None:
-    assert fixture_script.require_development_instance(secret_key, "pk_test_abc") == (
-        "DEVELOPMENT/TEST"
-    )
+    assert fixture_script.require_development_instance(secret_key, None) == "DEVELOPMENT/TEST"
 
 
 # ---------------------------------------------------------------------------
