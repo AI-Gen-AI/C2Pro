@@ -485,7 +485,7 @@ export function classifyAuthFailure(input: ClassificationInput): AuthFailureClas
  * activate the Organization itself: AuthSync owns that, and doing it here would
  * mask the very seam under investigation.
  */
-export async function establishAuthenticatedSession(
+export async function signInWithClerk(
   page: Page,
   observation?: AuthObservation,
 ): Promise<void> {
@@ -504,8 +504,20 @@ export async function establishAuthenticatedSession(
     page,
     observation,
   );
+}
+
+/**
+ * The stricter C2Pro contract, required by the P0b gate and NOT by the shared
+ * storageState setup: Clerk signed in is not the same as C2Pro authenticated,
+ * because the tenant comes from the active Organization's metadata.
+ */
+export async function requireExpectedOrganization(
+  page: Page,
+  observation?: AuthObservation,
+): Promise<void> {
+  const memberships = await clerkFacts(page);
   await requireBootstrapInvariant(
-    afterSignIn.membershipPresent,
+    memberships.membershipPresent,
     "CLERK_ORG_SYNC_FAILURE",
     "the configured E2E identity holds no Organization membership, so there is no tenant " +
       "and no expected Organization to activate. Clerk signed in is not C2Pro authenticated",
@@ -539,7 +551,20 @@ export async function establishAuthenticatedSession(
     page,
     observation,
   );
+}
 
+/** Sign in, prove the Organization, and land on a rendered /projects. */
+export async function establishAuthenticatedSession(
+  page: Page,
+  observation?: AuthObservation,
+): Promise<void> {
+  await signInWithClerk(page, observation);
+  await requireExpectedOrganization(page, observation);
+  await openProjects(page);
+}
+
+/** Navigate to /projects and wait for it to render. */
+export async function openProjects(page: Page): Promise<void> {
   await page.goto("/projects");
   await expect(page.locator('h1:has-text("Projects")')).toBeVisible({ timeout: 30_000 });
 }
