@@ -19,7 +19,8 @@
  * Eligibility is a property of the EVIDENCE, not of the file count -- one document can
  * carry several independently reconcilable claims, and two unrelated documents can
  * carry none. While no subscore has been incorporated this surface shows NO Coherence
- * score and explains why, rather than substituting zero.
+ * score and says only that it is unavailable: the contract records whether a subscore
+ * was incorporated, not why one was not, so anything more would over-claim.
  *
  * Evidence granularity is disclosed rather than inferred: clause-granular evidence and
  * a degraded whole-document fallback are different product claims, so the surface says
@@ -292,9 +293,8 @@ export function SingleDocumentHealth({ projectId }: { projectId: string }) {
 
       {!coherenceSubscoreIsIncorporated(data) && (
         <p data-testid="health-coherence-note" className="text-xs text-muted-foreground">
-          Coherence becomes available when there is enough reconcilable evidence to
-          evaluate consistency. This analysis has not produced enough yet. Adding a
-          schedule or budget usually provides more evidence to reconcile.
+          Coherence is not available for this analysis yet. Availability depends on
+          having enough reconcilable evidence to evaluate consistency.
         </p>
       )}
     </Shell>

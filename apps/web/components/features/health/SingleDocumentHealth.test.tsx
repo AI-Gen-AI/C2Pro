@@ -411,6 +411,18 @@ describe("8 — Coherence suppression for one document", () => {
     );
   });
 
+  it("does not assert this analysis was judged to have insufficient evidence", () => {
+    // Absence of the subscore ref can mean not evaluated, failed, or simply not
+    // incorporated. Until the eligibility contract exists, say only "unavailable".
+    healthQueryMock.mockReturnValue(resolved(vector()));
+
+    renderHealth();
+
+    expect(screen.getByTestId("health-coherence-note")).not.toHaveTextContent(
+      /has not produced enough|insufficient evidence/i,
+    );
+  });
+
   it("never substitutes zero for an unavailable coherence subscore", () => {
     healthQueryMock.mockReturnValue(resolved(vector()));
 

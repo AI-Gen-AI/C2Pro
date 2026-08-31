@@ -77,17 +77,21 @@ export default function AnalysisPage() {
     isError: healthErrored,
   } = useGetProjectHealthApiV1ProjectsProjectIdHealthGet(id);
   const showCoherence = coherenceSubscoreIsIncorporated(healthVector);
-  // Why it is suppressed. Only a LOADED vector lacking the evidence licenses the
-  // "needs a second document" claim; loading or an error means we simply do not know,
-  // and inferring "single document" from a failed request would fabricate a finding.
-  // "insufficient_evidence", not "single_document": eligibility is a property of
-  // the evidence, not the file count. One document can carry several reconcilable
-  // claims; two unrelated documents can carry none.
-  const coherenceSuppressionReason: "loading" | "unverified" | "insufficient_evidence" =
+  // Why it is suppressed. The Health contract records only whether a coherence
+  // subscore was incorporated; it does not say why one was not. Absence can mean
+  // insufficient evidence, not evaluated, evaluated and failed, or simply not
+  // incorporated -- so a LOADED vector without that evidence licenses only
+  // "unavailable", never a verdict on this analysis. Loading or an error means we
+  // do not know yet, which is a different thing again.
+  //
+  // A richer contract (availability / eligible_pair_count / scope /
+  // reason_if_unavailable) is a governed P1 follow-up; until it exists, this stays
+  // neutral rather than asserting more than the contract proves.
+  const coherenceSuppressionReason: "loading" | "unverified" | "coherence_unavailable" =
     healthLoading
       ? "loading"
       : !healthErrored && healthVector != null
-        ? "insufficient_evidence"
+        ? "coherence_unavailable"
         : "unverified";
   const {
     data: alertsResponse,
@@ -260,7 +264,7 @@ export default function AnalysisPage() {
                   ? "Checking whether Coherence is available for this project…"
                   : coherenceSuppressionReason === "unverified"
                     ? "Coherence availability could not be verified."
-                    : "Coherence becomes available when there is enough reconcilable evidence to evaluate consistency. This analysis has not produced enough yet."}
+                    : "Coherence is not available for this analysis yet. Availability depends on having enough reconcilable evidence to evaluate consistency."}
               </p>
             )}
             <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
