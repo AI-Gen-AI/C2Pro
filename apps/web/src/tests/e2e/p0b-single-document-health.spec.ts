@@ -295,12 +295,23 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     ).toBe(hasSubscoreEvidence);
 
     // --- 12. Terminal UX: nothing still claiming to be in progress.
+    //         Scoped to the Health region this journey owns. A page-wide
+    //         /finalizing/i scan matched AnalysisProgressTracker's STATIC stage
+    //         label ("Finalizing" is one of four names always listed), not a
+    //         progress claim -- its live claim is "Currently: <stage>" -- so it
+    //         asserted nothing while looking like it did. The tracker also
+    //         reopens its SSE stream on reload, after this analysis already
+    //         finished, so its live state is not this journey's to assert.
+    const healthRegion = page.getByRole("region", { name: "Document health" });
+    await expect(healthRegion).toBeVisible();
     await expect(page.getByTestId("health-loading")).toHaveCount(0);
     await expect(page.getByTestId("health-error")).toHaveCount(0);
     await expect(page.getByTestId("health-unavailable")).toHaveCount(0);
     await expect(page.getByTestId("health-not-found")).toHaveCount(0);
-    await expect(page.getByText(/finalizing/i)).toHaveCount(0);
-    await expect(page.locator(".animate-spin")).toHaveCount(0);
+    await expect(
+      healthRegion.locator(".animate-spin"),
+      "the Health surface must not still claim to be working",
+    ).toHaveCount(0);
 
     // --- 13. No console exception attributable to this surface.
     expect(consoleErrors, "no attributable console errors").toEqual([]);
