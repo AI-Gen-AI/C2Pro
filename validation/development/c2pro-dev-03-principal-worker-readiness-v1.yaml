@@ -1,0 +1,161 @@
+schema: c2pro-dev-03-principal-worker-readiness-v1
+status: DEV_03A_COMPLETE_BLOCKED_PENDING_MR_DEV_01C
+date: '2026-08-24'
+repository: AI-Gen-AI/C2Pro
+baseline_main: 0400c05e8af1458aaa14bc47a8378d9cdd560284
+work_ref: .c2pro/work/C2PRO-DEV-03.yaml
+runbook_ref: docs/architecture/development/c2pro-dev-03-principal-worker-readiness-runbook-v1.md
+
+cross_project_dependency:
+  ai_gen_repository: AI-Gen-AI/2SB
+  observed_main: 357029a580e360de4e92046bd7aa295b54d9c113
+  af_dev_01_status: DONE
+  mr_dev_01b_status: DONE
+  mr_dev_01c_status: NEXT
+  mr_dev_01c_remote_implementation_pr_observed: false
+  live_development_provider_invocation_authorized: false
+  rule: c2pro_must_not_bypass_ai_gen_mr_dev_authority
+
+principal_workers:
+  claude_code:
+    class: PRINCIPAL
+    executable: claude
+    discovered: true
+    version: 2.1.237
+    version_label: Claude_Code
+    binary_path: /home/aigen-claude/.local/bin/claude
+    resolved_path: /home/aigen-claude/.local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe
+    binary_owner: aigen-claude
+    binary_group: aigen-claude
+    binary_mode: '755'
+    binary_size_bytes: 334715184
+    binary_sha256: 73975167f0108693cf6fd6614994781657ebb8456ebef5d247458734abfb3916
+    binary_type: ELF_64_x86_64_dynamic
+    execution_identity: aigen-claude
+    execution_identity_uid: 1006
+    execution_identity_gid: 1006
+    execution_identity_home: /home/aigen-claude
+    home_mode: '700'
+    node_path: /home/aigen-claude/.local/bin/node
+    node_version: v24.19.0
+    npm_path: /home/aigen-claude/.local/bin/npm
+    npm_version: 11.17.0
+    npx_path: /home/aigen-claude/.local/bin/npx
+    config_dir: /home/aigen-claude/.claude
+    config_dir_mode: '775'
+    auth_state: AUTHENTICATED
+    auth_method: claude.ai
+    api_provider: firstParty
+    subscription_type: pro
+    sensitive_identity_fields_recorded: false
+    local_version_help_probe: PASS
+    live_provider_probe: BLOCKED_BY_MR_DEV_01C
+    af_dev_read_only_job: BLOCKED_BY_MR_DEV_01C
+    af_dev_write_commit_job: BLOCKED_BY_MR_DEV_01C
+    canonical_main_denial: PENDING_03B
+    runtime_secret_denial: PENDING_03B
+    timeout_resource_enforcement: PENDING_03B
+  codex:
+    class: PRINCIPAL
+    executable: codex
+    discovered: true
+    version: 0.148.0
+    version_label: codex-cli
+    binary_path: /home/aigen-codex/.local/bin/codex
+    resolved_path: /home/aigen-codex/.codex/packages/standalone/releases/0.148.0-x86_64-unknown-linux-musl/bin/codex
+    binary_owner: aigen-codex
+    binary_group: aigen-codex
+    binary_mode: '755'
+    binary_size_bytes: 251271488
+    binary_sha256: ac2cfed85fb647d61e0150b8548102b330e4799d9d81ad5d354de701edf6b074
+    binary_type: ELF_64_x86_64_static_pie
+    execution_identity: aigen-codex
+    execution_identity_uid: 1005
+    execution_identity_gid: 1005
+    execution_identity_home: /home/aigen-codex
+    home_mode: '700'
+    node_path: NOT_REQUIRED_BY_CURRENT_STANDALONE_BINARY
+    npm_path: NOT_REQUIRED_BY_CURRENT_STANDALONE_BINARY
+    npx_path: NOT_REQUIRED_BY_CURRENT_STANDALONE_BINARY
+    config_dir: /home/aigen-codex/.codex
+    config_dir_mode: '700'
+    auth_state: AUTHENTICATED
+    auth_method: ChatGPT
+    sensitive_identity_fields_recorded: false
+    local_version_help_probe: PASS
+    live_provider_probe: BLOCKED_BY_MR_DEV_01C
+    af_dev_read_only_job: BLOCKED_BY_MR_DEV_01C
+    af_dev_write_commit_job: BLOCKED_BY_MR_DEV_01C
+    canonical_main_denial: PENDING_03B
+    runtime_secret_denial: PENDING_03B
+    timeout_resource_enforcement: PENDING_03B
+
+host_readiness:
+  observed_at: '2026-08-24T10:58:57+00:00'
+  evidence_source: owner_executed_terminal_capture
+  operator_identity: aigenadmin
+  operator_uid: 1001
+  hostname: vmi3226522
+  os: ubuntu_24.04
+  kernel: Linux_6.8.0-137-generic_x86_64
+  memory_total: 23Gi
+  memory_available: 22Gi
+  swap_total: 8Gi
+  root_filesystem_size: 387G
+  root_filesystem_available: 348G
+  root_filesystem_use_percent: 11
+  git: /usr/bin/git
+  bubblewrap: /usr/bin/bwrap
+  timeout: /usr/bin/timeout
+  prlimit: /usr/bin/prlimit
+  node_operator_path: NOT_FOUND
+  npm_operator_path: NOT_FOUND
+  python3: /usr/bin/python3
+  tmux: /usr/bin/tmux
+  c2pro_operator_session: c2pro
+  c2pro_operator_working_directory: /home/aigenadmin
+  resource_readiness: PASS
+
+identity_inventory:
+  aigen_claude:
+    supplementary_groups: []
+    home_writable_as_identity: true
+    dedicated_cli_present: true
+    installation_shape: per_identity_local_node_module_with_native_claude_binary
+  aigen_codex:
+    supplementary_groups: []
+    home_writable_as_identity: true
+    dedicated_cli_present: true
+    installation_shape: per_identity_standalone_native_binary
+  isolation_observation: dedicated_principal_identities_exist_without_shared_supplementary_aigen_group
+  installation_decision: KEEP_EXISTING_INSTALLATIONS_NO_REINSTALL
+  update_decision: DEFER_UNTIL_ROUTE_QUALIFICATION_REQUIRES_CHANGE
+
+qualification_gates:
+  DEV_03A1_HOST_BASELINE: PASS
+  DEV_03A2_BINARY_INVENTORY: PASS_BINARIES_FOUND_IN_DEDICATED_IDENTITIES
+  DEV_03A3_EXECUTION_IDENTITIES: PASS
+  DEV_03A4_AUTH_SESSION_STATE: PASS_BOTH_PRINCIPALS_AUTHENTICATED
+  DEV_03A5_INSTALL_UPDATE_DECISION: PASS_KEEP_EXISTING_NO_REINSTALL
+  DEV_03A: PASS
+  DEV_03B1_LIVE_NONINTERACTIVE_SMOKE: BLOCKED_BY_MR_DEV_01C
+  DEV_03B2_AF_DEV_READ_ONLY: BLOCKED_BY_MR_DEV_01C
+  DEV_03B3_AF_DEV_WRITE_COMMIT: BLOCKED_BY_MR_DEV_01C
+  DEV_03B4_NEGATIVE_BOUNDARIES: PENDING_AFTER_03B2
+  DEV_03B5_RESOURCE_TIMEOUT: PENDING_AFTER_03B2
+  DEV_03B6_RECIPROCAL_HANDOFF: PENDING_AFTER_BOTH_PRINCIPALS_LIVE_QUALIFIED
+
+secret_handling:
+  raw_credentials_in_git: false
+  raw_session_payload_in_git: false
+  raw_environment_dump_forbidden: true
+  normalized_auth_state_only: true
+  email_recorded: false
+  org_id_recorded: false
+  org_name_recorded: false
+
+next_action:
+  gate: AI_GEN_MR_DEV_01C
+  mode: CROSS_PROJECT_AUTHORITY_GATE
+  owner_micro_approval_required: false
+  expected_output: explicit_live_development_route_invocation_authority_before_c2pro_dev_03b
