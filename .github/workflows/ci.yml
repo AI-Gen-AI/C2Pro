@@ -966,6 +966,12 @@ jobs:
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
       BACKEND_URL: http://localhost:8000
       PLAYWRIGHT_BASE_URL: http://localhost:3100
+      # uploadDocument deliberately bypasses the /api proxy and POSTs straight to
+      # the backend (Vercel caps proxied bodies at ~4.5MB), so the backend must
+      # allow this lane's browser origin. cors_origins defaults to ports
+      # 3000/3001 and this lane serves on 3100; production already allows its own
+      # origin, which is why only CI needed this.
+      CORS_ORIGINS: http://localhost:3100
     services:
       redis:
         image: redis:7-alpine

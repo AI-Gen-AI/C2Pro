@@ -89,14 +89,27 @@ function recordProjectId(projectId: string): void {
   writeFileSync(PROJECT_ID_OUTPUT, projectId, "utf8");
 }
 
-/** Console errors attributable to the app, ignoring third-party noise. */
+/**
+ * Console errors attributable to the app, ignoring third-party noise.
+ *
+ * The ignore list is deliberately narrow and named: anything genuinely
+ * attributable to this surface -- including CORS and other network failures --
+ * must still fail the journey.
+ */
+const IGNORED_CONSOLE_NOISE = [
+  // Clerk/telemetry/analytics chatter is not an L4-5 regression signal.
+  /clerk|telemetry|favicon|analytics|third-party/i,
+  // Emitted by Next's dev renderer on every page of every lane, including the
+  // green E2E smoke lane. Not produced by any component this journey exercises.
+  /Encountered a script tag while rendering React component/i,
+];
+
 function collectConsoleErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on("console", (message: ConsoleMessage) => {
     if (message.type() !== "error") return;
     const text = message.text();
-    // Clerk/telemetry/network chatter is not an L4-5 regression signal.
-    if (/clerk|telemetry|favicon|analytics|third-party/i.test(text)) return;
+    if (IGNORED_CONSOLE_NOISE.some((pattern) => pattern.test(text))) return;
     errors.push(text);
   });
   return errors;
