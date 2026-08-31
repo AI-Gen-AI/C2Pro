@@ -28,7 +28,7 @@ enough to authorise a mutation.
 
 It also stops rather than guessing when:
   * the E2E email resolves to zero or several Clerk users;
-  * several Organizations match the dedicated E2E slug;
+  * several Organizations claim the E2E tenant_id, or share its name;
   * a matching Organization already carries a DIFFERENT tenant_id;
   * the E2E identity would end up in more than one Organization (which would
     silently disable AuthSync's auto-activation).
@@ -53,7 +53,6 @@ CLERK_API_BASE = "https://api.clerk.com/v1"
 # apps/api/tests/e2e_seed/seed_wedge.py and apps/api/tests/conftest.py.
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-00000000a113"
 DEFAULT_E2E_EMAIL = "testuser@c2pro.com"
-DEFAULT_ORG_SLUG = "c2pro-e2e"
 DEFAULT_ORG_NAME = "C2Pro E2E"
 
 # @clerk/shared/keys: a key is production when it carries one of these prefixes.
@@ -126,19 +125,22 @@ class ClerkAdmin:
     def users_by_email(self, email: str) -> list[dict[str, Any]]:
         return _unwrap(self._call("GET", "/users", params={"email_address": [email]}))
 
-    def organizations_by_query(self, query: str) -> list[dict[str, Any]]:
-        return _unwrap(self._call("GET", "/organizations", params={"query": query, "limit": 100}))
+    def list_organizations(self, limit: int = 100) -> tuple[list[dict[str, Any]], int | None]:
+        """Return (organizations, total_count). total_count is None when unknown."""
+        payload = self._call("GET", "/organizations", params={"limit": limit})
+        total = payload.get("total_count") if isinstance(payload, dict) else None
+        return _unwrap(payload), (int(total) if isinstance(total, int) else None)
 
-    def create_organization(
-        self, *, name: str, slug: str, created_by: str, tenant_id: str
-    ) -> dict[str, Any]:
+    def create_organization(self, *, name: str, created_by: str, tenant_id: str) -> dict[str, Any]:
+        # No slug: this Clerk instance rejects slugs entirely
+        # (organization_slugs_disabled), and the fixture identifies its
+        # Organization by tenant metadata rather than by slug anyway.
         return dict(
             self._call(
                 "POST",
                 "/organizations",
                 json={
                     "name": name,
-                    "slug": slug,
                     "created_by": created_by,
                     "public_metadata": {"tenant_id": tenant_id},
                 },
@@ -190,27 +192,45 @@ def resolve_user(admin: ClerkAdmin, email: str) -> str:
     return user_id
 
 
-def resolve_organization(
-    admin: ClerkAdmin, slug: str
-) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
-    """Return the single Organization matching the dedicated slug, if any."""
-    candidates = admin.organizations_by_query(slug)
-    exact = [org for org in candidates if org.get("slug") == slug]
-    if len(exact) > 1:
+def _tenant_of(org: dict[str, Any]) -> str | None:
+    tenant_id = (org.get("public_metadata") or {}).get("tenant_id")
+    return tenant_id if isinstance(tenant_id, str) and tenant_id else None
+
+
+def select_organization(
+    organizations: list[dict[str, Any]], *, name: str, tenant_id: str
+) -> dict[str, Any] | None:
+    """Pick the dedicated E2E Organization, or None when it does not exist yet.
+
+    Identity is the deterministic tenant id in publicMetadata -- that is what the
+    frontend actually reads -- falling back to an exact name match for the first
+    run, before any metadata has been written. Either match being ambiguous
+    fails closed rather than picking one.
+    """
+    by_tenant = [org for org in organizations if _tenant_of(org) == tenant_id]
+    if len(by_tenant) > 1:
         raise FixtureError(
-            f"{len(exact)} Organizations share the dedicated E2E slug '{slug}'. "
+            f"{len(by_tenant)} Organizations already claim the E2E tenant_id. "
             "Refusing to pick one; resolve the ambiguity in Clerk first."
         )
-    return (exact[0] if exact else None), candidates
+    if by_tenant:
+        return by_tenant[0]
+
+    by_name = [org for org in organizations if org.get("name") == name]
+    if len(by_name) > 1:
+        raise FixtureError(
+            f"{len(by_name)} Organizations share the dedicated E2E name '{name}'. "
+            "Refusing to pick one; resolve the ambiguity in Clerk first."
+        )
+    return by_name[0] if by_name else None
 
 
 def ensure_tenant_metadata(admin: ClerkAdmin, org: dict[str, Any], tenant_id: str) -> bool:
     """Return True when metadata had to be written. Conflicts fail closed."""
-    metadata = org.get("public_metadata") or {}
-    existing = metadata.get("tenant_id")
+    existing = _tenant_of(org)
     if existing == tenant_id:
         return False
-    if isinstance(existing, str) and existing:
+    if existing is not None:
         raise FixtureError(
             "The dedicated E2E Organization already points at a DIFFERENT tenant_id. "
             "Refusing to repoint an Organization that belongs to another tenant."
@@ -233,8 +253,7 @@ def ensure_membership(admin: ClerkAdmin, org_id: str, user_id: str, role: str) -
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--email", default=os.getenv("E2E_CLERK_USER_EMAIL", DEFAULT_E2E_EMAIL))
-    parser.add_argument("--slug", default=os.getenv("E2E_CLERK_ORG_SLUG", DEFAULT_ORG_SLUG))
-    parser.add_argument("--name", default=DEFAULT_ORG_NAME)
+    parser.add_argument("--name", default=os.getenv("E2E_CLERK_ORG_NAME", DEFAULT_ORG_NAME))
     parser.add_argument("--tenant-id", default=os.getenv("E2E_TENANT_ID", DEFAULT_TENANT_ID))
     parser.add_argument("--role", default="org:admin")
     parser.add_argument(
@@ -265,18 +284,24 @@ def main() -> int:
             user_id = resolve_user(admin, args.email)
             print("e2e_user_resolved = true")
 
-            org, candidates = resolve_organization(admin, args.slug)
+            organizations, total = admin.list_organizations()
+            if total is not None and total > len(organizations):
+                raise FixtureError(
+                    f"The instance reports {total} Organizations but only {len(organizations)} "
+                    "were listed. Refusing to reconcile against a truncated view."
+                )
+
+            org = select_organization(
+                organizations, name=args.name, tenant_id=args.tenant_id
+            )
             if org is None:
                 org = admin.create_organization(
-                    name=args.name,
-                    slug=args.slug,
-                    created_by=user_id,
-                    tenant_id=args.tenant_id,
+                    name=args.name, created_by=user_id, tenant_id=args.tenant_id
                 )
                 print("organization = CREATED")
-                print(f"organization_candidates_seen = {len(candidates)}")
             else:
                 print("organization = EXISTED")
+            print(f"organizations_listed = {len(organizations)}")
 
             org_id = str(org["id"])
             metadata_written = ensure_tenant_metadata(admin, org, args.tenant_id)

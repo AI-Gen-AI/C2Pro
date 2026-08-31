@@ -7,6 +7,11 @@ instance. Everything here therefore pins the REFUSALS rather than the happy
 path: an unprovable environment, an ambiguous identity, an ambiguous
 Organization, or an Organization that already belongs to another tenant must
 all stop before any write.
+
+Note on slugs: this Clerk instance rejects them outright
+(``organization_slugs_disabled``), so the fixture identifies its Organization by
+the deterministic tenant id in publicMetadata -- which is what the frontend
+actually reads -- and never sends a slug.
 """
 
 from __future__ import annotations
@@ -92,9 +97,6 @@ class _FakeAdmin:
     def users_by_email(self, email: str) -> list[dict[str, Any]]:
         return self._users
 
-    def organizations_by_query(self, query: str) -> list[dict[str, Any]]:
-        return self._organizations
-
     def merge_organization_metadata(self, org_id: str, tenant_id: str) -> dict[str, Any]:
         self.writes.append(f"metadata:{org_id}")
         return {}
@@ -122,21 +124,51 @@ def test_single_identity_resolves() -> None:
     assert fixture_script.resolve_user(admin, "testuser@c2pro.com") == "user_only"
 
 
-def test_duplicate_slug_organizations_are_refused() -> None:
-    admin = _FakeAdmin(
-        organizations=[{"id": "org_1", "slug": "c2pro-e2e"}, {"id": "org_2", "slug": "c2pro-e2e"}]
+_TENANT = fixture_script.DEFAULT_TENANT_ID
+_NAME = fixture_script.DEFAULT_ORG_NAME
+
+
+def _select(organizations: list[dict[str, Any]]) -> dict[str, Any] | None:
+    return fixture_script.select_organization(organizations, name=_NAME, tenant_id=_TENANT)
+
+
+def test_organization_is_identified_by_tenant_metadata() -> None:
+    """Tenant metadata wins: it is what the frontend actually reads."""
+    chosen = _select(
+        [
+            {"id": "org_named", "name": _NAME},
+            {"id": "org_tenant", "name": "Something Else",
+             "public_metadata": {"tenant_id": _TENANT}},
+        ]
     )
-    with pytest.raises(FixtureError, match="share the dedicated E2E slug"):
-        fixture_script.resolve_organization(admin, "c2pro-e2e")
-    assert admin.writes == []
+    assert chosen is not None
+    assert chosen["id"] == "org_tenant"
 
 
-def test_non_matching_slugs_are_not_adopted() -> None:
-    """A fuzzy query hit whose slug differs is NOT the dedicated Organization."""
-    admin = _FakeAdmin(organizations=[{"id": "org_other", "slug": "c2pro-e2e-old"}])
-    organization, candidates = fixture_script.resolve_organization(admin, "c2pro-e2e")
-    assert organization is None
-    assert len(candidates) == 1
+def test_duplicate_tenant_claims_are_refused() -> None:
+    with pytest.raises(FixtureError, match="claim the E2E tenant_id"):
+        _select(
+            [
+                {"id": "org_1", "public_metadata": {"tenant_id": _TENANT}},
+                {"id": "org_2", "public_metadata": {"tenant_id": _TENANT}},
+            ]
+        )
+
+
+def test_duplicate_names_are_refused() -> None:
+    with pytest.raises(FixtureError, match="share the dedicated E2E name"):
+        _select([{"id": "org_1", "name": _NAME}, {"id": "org_2", "name": _NAME}])
+
+
+def test_first_run_adopts_the_exact_name_before_metadata_exists() -> None:
+    chosen = _select([{"id": "org_named", "name": _NAME}])
+    assert chosen is not None
+    assert chosen["id"] == "org_named"
+
+
+def test_unrelated_organizations_are_not_adopted() -> None:
+    assert _select([{"id": "org_other", "name": "Someone Else's Org"}]) is None
+    assert _select([]) is None
 
 
 def test_organization_pointing_at_another_tenant_is_refused() -> None:
