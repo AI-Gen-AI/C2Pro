@@ -971,7 +971,10 @@ jobs:
       # allow this lane's browser origin. cors_origins defaults to ports
       # 3000/3001 and this lane serves on 3100; production already allows its own
       # origin, which is why only CI needed this.
-      CORS_ORIGINS: http://localhost:3100
+      # JSON array, not a bare string: pydantic-settings JSON-parses complex-typed
+      # env vars in EnvSettingsSource BEFORE field validators run, so a bare
+      # value raises SettingsError and Settings() cannot be constructed at all.
+      CORS_ORIGINS: '["http://localhost:3100"]'
     services:
       redis:
         image: redis:7-alpine
