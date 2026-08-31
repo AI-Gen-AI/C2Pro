@@ -55,6 +55,18 @@ function recordProjectId(projectId: string): void {
   writeFileSync(PROJECT_ID_OUTPUT, projectId, "utf8");
 }
 
+/** The signed-in Clerk subject, or null when no session is live. */
+async function sessionSubject(page: Page): Promise<unknown> {
+  return page.evaluate(async () => {
+    const token = await window.Clerk?.session?.getToken();
+    if (!token) return null;
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    return (JSON.parse(atob(normalized)) as { sub?: unknown }).sub ?? null;
+  });
+}
+
 /** Console errors attributable to the app, ignoring third-party noise. */
 function collectConsoleErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -85,6 +97,16 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     await setupClerkTestingToken({ page });
     await page.goto("/");
     await page.waitForFunction(() => window.Clerk?.loaded === true);
+
+    // storageState may already carry a session, and clerk.signIn throws
+    // "You're already signed in." if one is live. Sign out first so the journey
+    // always starts from a known, deterministic identity rather than depending
+    // on whatever the setup project happened to leave behind.
+    if (await sessionSubject(page)) {
+      await page.evaluate(async () => window.Clerk?.signOut());
+      await page.waitForFunction(() => window.Clerk?.session === null);
+    }
+
     await clerk.signIn({
       page,
       signInParams: {
@@ -93,6 +115,7 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
         password: "Testpasword123",
       },
     });
+    expect(await sessionSubject(page), "Clerk session must be established").toBeTruthy();
 
     await page.goto("/projects");
     await expect(page.locator('h1:has-text("Projects")')).toBeVisible({ timeout: 30_000 });
