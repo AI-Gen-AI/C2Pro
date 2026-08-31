@@ -979,7 +979,12 @@ jobs:
       # Generated per run rather than hard-coded: this lane is new code, and a
       # literal secret here is a real finding even when the value is throwaway.
       - name: Generate ephemeral test JWT secret
-        run: echo "JWT_SECRET_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+        run: |
+          secret="$(openssl rand -hex 32)"
+          # $GITHUB_ENV values are NOT masked in the step env dump, so register
+          # it with the runner's masker before exporting it.
+          echo "::add-mask::$secret"
+          echo "JWT_SECRET_KEY=$secret" >> "$GITHUB_ENV"
 
       # Fail, never skip. This step is the whole point of the lane.
       - name: Verify gate prerequisites

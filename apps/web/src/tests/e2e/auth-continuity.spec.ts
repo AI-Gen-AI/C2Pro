@@ -64,7 +64,19 @@ test.describe("TS-E2E-AUTH-CONTINUITY-001: session survives project entry", () =
       const atRedirect = await authSnapshot("at first navigation after click", page, context);
       const firstHopAfterClick = documentChain.find((hop) => hop.at >= clickedAt) ?? null;
 
+      // Compact first: the decisive fields must be readable without paging
+      // through cookie arrays in a CI log.
+      const summary = [afterProjects, beforeInput, atRedirect].map((snap) => ({
+        label: snap.label,
+        url: snap.url,
+        clerkSessionPresent: snap.clerkSessionPresent,
+        clerkSubjectPresent: snap.clerkSubject !== null,
+        cookieCount: (snap.restoredCookies as unknown[]).length,
+        storedButNotRestored: snap.storedButNotRestored,
+      }));
+
       const diagnostics = {
+        SUMMARY: summary,
         outcome,
         clickedAt,
         firstDocumentHopAfterClick: firstHopAfterClick,
