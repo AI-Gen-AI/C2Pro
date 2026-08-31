@@ -30,6 +30,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, test, type ConsoleMessage, type Page } from "@playwright/test";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -73,7 +74,26 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
   test("upload one contract and see honest, evidence-backed Health", async ({ page }) => {
     const consoleErrors = collectConsoleErrors(page);
 
-    // --- 1. Authenticated session (storageState from auth.setup -> real Clerk).
+    // --- 1. Real Clerk authentication.
+    //
+    // storageState alone is NOT enough: on a Clerk development instance the bot
+    // protection rejects a restored session unless the context also carries a
+    // testing token, and the first run of this journey bounced straight to
+    // /sign-in because of it. This mirrors journey-3-wedge, the repository's
+    // established pattern for storageState specs, so authentication is genuinely
+    // exercised rather than assumed.
+    await setupClerkTestingToken({ page });
+    await page.goto("/");
+    await page.waitForFunction(() => window.Clerk?.loaded === true);
+    await clerk.signIn({
+      page,
+      signInParams: {
+        strategy: "password",
+        identifier: "testuser@c2pro.com",
+        password: "Testpasword123",
+      },
+    });
+
     await page.goto("/projects");
     await expect(page.locator('h1:has-text("Projects")')).toBeVisible({ timeout: 30_000 });
 
