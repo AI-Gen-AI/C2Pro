@@ -41,6 +41,16 @@ class RagProviderUnavailableError(RuntimeError):
         self.status_code = status_code
 
 
+class RagProviderMisconfiguredError(RuntimeError):
+    """TS-UD-RAG-ERR-002: the embedding provider is not usable as configured.
+
+    Distinct from :class:`RagProviderUnavailableError`: retrying will not help
+    until an operator changes configuration. Kept separate so a deployment
+    missing its embedding credentials degrades loudly instead of looking like a
+    document that simply had nothing to embed.
+    """
+
+
 class RagProjectNotFoundError(RuntimeError):
     """TS-UD-RAG-ERR-001: project is not visible in the current tenant."""
 
@@ -198,7 +208,7 @@ async def _embed_texts(texts: list[str]) -> list[list[float]]:
     """
     api_key = _resolve_openai_api_key()
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured.")
+        raise RagProviderMisconfiguredError("OPENAI_API_KEY is not configured.")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(

@@ -42,6 +42,7 @@ from src.documents.application.trigger_document_analysis_use_case import (
     TriggerDocumentAnalysisUseCase,
 )
 from src.documents.domain.models import Clause, ClauseType, DocumentStatus, DocumentType
+from src.documents.ports.rag_ingestion_service import RagIngestionOutcome
 from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.application.use_cases.bom_use_cases import CreateBOMItemUseCase
@@ -507,6 +508,120 @@ async def _run_analysis_graph_best_effort(
     return analysis_id if isinstance(analysis_id, str) else None
 
 
+# Retry policy for ``documents.analyze_document``, declared once so the task and
+# the test that guards it cannot drift apart. ``AnalysisIncompleteRetryableError``
+# is only useful because ``autoretry_for`` catches it; if that were ever removed,
+# every transient failure would silently become a one-shot give-up.
+ANALYSIS_TASK_RETRY_OPTIONS: dict[str, Any] = {
+    "autoretry_for": (Exception,),
+    "retry_kwargs": {"max_retries": 3},
+    "retry_backoff": True,
+    "retry_backoff_max": 60,
+}
+
+
+class AnalysisIncompleteRetryableError(RuntimeError):
+    """Analysis did not complete, and retrying it is worthwhile.
+
+    ``process_document_analysis_async`` declares ``autoretry_for=(Exception,)``
+    with ``max_retries=3``, so raising is the ONLY way to obtain an automatic
+    retry: a normal return -- however honest its payload -- is a completed task
+    to Celery. Leaving a document in a re-enterable state is not a retry; this
+    exception is what actually re-enqueues one.
+
+    Raised only AFTER the degraded status has been committed, so the document is
+    already durably honest even if every retry is exhausted.
+    """
+
+
+# Document types whose product value depends on the N1-N17 free-text graph.
+# Grounded in DOC_TYPES ("contract", "technical_spec", "budget", "schedule") and
+# in how parsing treats them: schedule/budget are completed by structured WBS/BOM
+# extraction and legitimately never need the text graph.
+TEXT_ANALYSIS_DOCUMENT_TYPES: frozenset[DocumentType] = frozenset(
+    {
+        DocumentType.CONTRACT,
+        DocumentType.TECHNICAL_SPEC,
+        DocumentType.SPECIFICATION,
+    }
+)
+
+
+def requires_text_analysis(
+    document_type: DocumentType | None, parsed_text: str | None
+) -> bool:
+    """Whether this document's analysis is incomplete without the N1-N17 graph.
+
+    Deliberately NOT ``bool(parsed_text)`` alone. ``composite_file_parser``
+    emits ``text_blocks`` for ANY PDF or DOCX, so a schedule or budget uploaded
+    as a PDF carries incidental parsed text. Keying on text alone would hold
+    those documents pending forever for a graph they never needed -- trading the
+    old false-success bug for a false-incomplete one.
+
+    A structured document is complete via WBS/BOM extraction; only a free-text
+    document that actually has text can be owed a graph run.
+    """
+    if document_type not in TEXT_ANALYSIS_DOCUMENT_TYPES:
+        return False
+    return bool(parsed_text)
+
+
+def decide_document_status(
+    *,
+    requires_text_analysis: bool,
+    rag_chunk_count: int,
+    graph_analysis_id: str | None,
+) -> DocumentStatus:
+    """Decide whether a document may be called ANALYZED.
+
+    ANALYZED has to mean the analysis this document actually needed completed.
+    Previously it was set unconditionally, so a contract whose N1-N17 graph never
+    ran was indistinguishable from one fully analysed -- the shape observed in
+    production, where a contract reached ANALYZED with zero RAG chunks, zero
+    analyses and zero snapshots.
+
+    Structured documents (schedule/budget) carry no free text, so no graph is
+    required and zero chunks is their correct terminal outcome. Only free-text
+    documents that genuinely needed the graph can be held back.
+
+    PARSED_PENDING_ANALYSIS is reused rather than adding a new enum value: it
+    already means "ingestion complete, analysis not yet started", it already
+    satisfies ``Document.is_parsed()``, and ``_run_document_analysis`` accepts
+    parsed documents -- so the degraded state is retryable by construction
+    instead of being a dead end.
+    """
+    if not requires_text_analysis:
+        return DocumentStatus.ANALYZED
+    if rag_chunk_count > 0 and graph_analysis_id:
+        return DocumentStatus.ANALYZED
+    return DocumentStatus.PARSED_PENDING_ANALYSIS
+
+
+def should_retry_analysis(
+    *,
+    status: DocumentStatus,
+    rag_outcome: str | None,
+) -> bool:
+    """Whether an incomplete analysis is worth re-enqueueing automatically.
+
+    A completed document never retries. Beyond that the distinction is whether
+    anything could plausibly change on its own:
+
+    - MISCONFIGURED: an operator must set configuration. Three backoff retries
+      would burn a worker and change nothing, and the resulting task failure
+      would misreport a config problem as a transient one. Return normally
+      instead, leaving the document pending for an operator.
+    - PROVIDER_UNAVAILABLE / unknown / graph failure: plausibly transient, so
+      take the bounded automatic retry the task already declares.
+
+    Either way the document has already been persisted as incomplete, so
+    exhausting the retries never yields ANALYZED.
+    """
+    if status is DocumentStatus.ANALYZED:
+        return False
+    return rag_outcome != RagIngestionOutcome.MISCONFIGURED.value
+
+
 async def _run_document_analysis(
     *,
     tenant_id: TenantId,
@@ -561,10 +676,19 @@ async def _run_document_analysis(
                 },
             )
 
-        # Parsing + structured extraction already completed upstream, so the
-        # document is analyzed regardless of the optional graph enrichment.
-        await repo.update_status(tenant_id, document_id, DocumentStatus.ANALYZED)
+        # Structured extraction completing is not the same claim as the analysis
+        # completing. A free-text contract whose graph never ran stays in a
+        # retryable state instead of advertising success it does not have.
+        status = decide_document_status(
+            requires_text_analysis=requires_text_analysis(
+                document.document_type, parsed_text
+            ),
+            rag_chunk_count=chunk_count,
+            graph_analysis_id=analysis_id,
+        )
+        await repo.update_status(tenant_id, document_id, status)
         await session.commit()
+        completed = status is DocumentStatus.ANALYZED
         logger.info(
             "document_analysis_task_finished",
             extra={
@@ -572,14 +696,45 @@ async def _run_document_analysis(
                 "tenant_id": str(tenant_id),
                 "analysis_id": analysis_id,
                 "persisted": bool(analysis_id),
+                "document_status": status.value,
+                "rag_chunk_count": chunk_count,
             },
         )
-        return {
-            "status": "completed",
+        rag_outcome = (
+            document.document_metadata.get("rag_ingestion_outcome")
+            if document.document_metadata
+            else None
+        )
+        retry = should_retry_analysis(status=status, rag_outcome=rag_outcome)
+        if not completed:
+            logger.warning(
+                "document_analysis_incomplete",
+                extra={
+                    "document_id": str(document_id),
+                    "tenant_id": str(tenant_id),
+                    "reason": "no_rag_chunks" if chunk_count == 0 else "graph_did_not_persist",
+                    "rag_outcome": rag_outcome,
+                    "will_retry": retry,
+                },
+            )
+
+        result = {
+            "status": "completed" if completed else "incomplete",
             "document_id": str(document_id),
             "analysis_id": analysis_id,
             "persisted": bool(analysis_id),
+            "document_status": status.value,
+            "will_retry": retry,
         }
+
+    # Raised outside the session block: the degraded status is already committed,
+    # so the document stays honestly incomplete even when every retry is spent.
+    if retry:
+        raise AnalysisIncompleteRetryableError(
+            f"document {document_id} analysis incomplete "
+            f"(rag_outcome={rag_outcome or 'unknown'}, chunks={chunk_count})"
+        )
+    return result
 
 
 async def _process(document_id: UUID) -> dict[str, Any]:
@@ -638,7 +793,7 @@ async def _process(document_id: UUID) -> dict[str, Any]:
                 tenant_id=tenant_id,
             )
 
-            await rag_ingestion.ingest_document_chunks(
+            rag_result = await rag_ingestion.ingest_document_chunks(
                 document=document,
                 parsed_payload=parsed_payload,
                 tenant_id=tenant_id,
@@ -651,6 +806,10 @@ async def _process(document_id: UUID) -> dict[str, Any]:
             ).strip()
             contract_clause_count = 0
             metadata = dict(document.document_metadata or {})
+            # Enum value only -- provider messages can carry credentials and
+            # never belong in document metadata. Recorded so an operator (or a
+            # retry) can tell "nothing to embed" from "provider misconfigured".
+            metadata["rag_ingestion_outcome"] = rag_result.outcome.value
             if parsed_text:
                 metadata["parsed_text"] = parsed_text
                 if document.document_type == DocumentType.CONTRACT:
@@ -769,12 +928,9 @@ def process_document_async(self: Any, document_id: str) -> dict[str, Any]:
 @celery_app.task(
     name="documents.analyze_document",
     bind=True,
-    autoretry_for=(Exception,),
-    retry_kwargs={"max_retries": 3},
-    retry_backoff=True,
-    retry_backoff_max=60,
     task_track_started=True,
     queue="document_parsing",
+    **ANALYSIS_TASK_RETRY_OPTIONS,
 )
 def process_document_analysis_async(self: Any, tenant_id: str, document_id: str) -> dict[str, Any]:
     """Run full document analysis after parsing; persists via graph N17."""

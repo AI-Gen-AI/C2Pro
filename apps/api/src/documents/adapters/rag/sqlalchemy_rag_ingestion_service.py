@@ -10,9 +10,17 @@ from uuid import UUID
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.documents.adapters.rag.rag_service import RagService
+from src.documents.adapters.rag.rag_service import (
+    RagProviderMisconfiguredError,
+    RagProviderUnavailableError,
+    RagService,
+)
 from src.documents.domain.models import Document
-from src.documents.ports.rag_ingestion_service import IRagIngestionService
+from src.documents.ports.rag_ingestion_service import (
+    IRagIngestionService,
+    RagIngestionOutcome,
+    RagIngestionResult,
+)
 
 logger = structlog.get_logger()
 
@@ -27,10 +35,12 @@ class SqlAlchemyRagIngestionService(IRagIngestionService):
         document: Document,
         parsed_payload: dict[str, Any],
         tenant_id: UUID,
-    ) -> None:
+    ) -> RagIngestionResult:
         text_content = _extract_rag_text(parsed_payload).strip()
         if not text_content:
-            return
+            # Nothing to embed is a complete outcome for structured documents,
+            # not a failure -- and must not be confused with one.
+            return RagIngestionResult(outcome=RagIngestionOutcome.NOT_REQUIRED)
 
         try:
             ingested = await self._rag_service.ingest_document(
@@ -40,19 +50,45 @@ class SqlAlchemyRagIngestionService(IRagIngestionService):
                 text_content=text_content,
                 metadata={"document_type": document.document_type.value},
             )
-            logger.info(
-                "rag_ingest_completed",
+        except RagProviderMisconfiguredError as exc:
+            # An operator has to act; retrying changes nothing. Logged at error
+            # level precisely because the old warning was easy to never notice:
+            # production ran for days with zero chunks and nobody saw it.
+            logger.error(
+                "rag_ingest_misconfigured",
                 document_id=str(document.id),
-                chunks=ingested,
+                error=str(exc),
                 tenant_id=str(tenant_id),
             )
-        except Exception as exc:
+            return RagIngestionResult(outcome=RagIngestionOutcome.MISCONFIGURED)
+        except RagProviderUnavailableError as exc:
+            logger.warning(
+                "rag_ingest_provider_unavailable",
+                document_id=str(document.id),
+                error=str(exc),
+                tenant_id=str(tenant_id),
+            )
+            return RagIngestionResult(outcome=RagIngestionOutcome.PROVIDER_UNAVAILABLE)
+        except Exception as exc:  # noqa: BLE001 - unknown upstream shapes stay retryable.
             logger.warning(
                 "rag_ingest_failed",
                 document_id=str(document.id),
                 error=str(exc),
                 tenant_id=str(tenant_id),
             )
+            return RagIngestionResult(outcome=RagIngestionOutcome.PROVIDER_UNAVAILABLE)
+
+        logger.info(
+            "rag_ingest_completed",
+            document_id=str(document.id),
+            chunks=ingested,
+            tenant_id=str(tenant_id),
+        )
+        if ingested <= 0:
+            # Text was present but produced no chunks: something upstream is
+            # wrong, and calling that "ingested" would restate the old bug.
+            return RagIngestionResult(outcome=RagIngestionOutcome.PROVIDER_UNAVAILABLE)
+        return RagIngestionResult(outcome=RagIngestionOutcome.INGESTED, chunks=ingested)
 
 
 def _extract_rag_text(parsed_payload: dict[str, Any]) -> str:

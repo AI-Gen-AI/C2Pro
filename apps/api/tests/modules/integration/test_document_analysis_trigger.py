@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import pytest
 
+from src.core.tasks.ingestion_tasks import AnalysisIncompleteRetryableError
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
 
@@ -560,11 +561,20 @@ class TestDocumentAnalysisTask:
 
         assert orchestrator.called is False
         assert result["persisted"] is False
+        # Structured docs legitimately need no N1-N17 graph: ANALYZED is correct,
+        # and no retry is scheduled for work that was never owed.
+        assert result["will_retry"] is False
         inst.update_status.assert_called_once_with(tenant_id, document_id, DocumentStatus.ANALYZED)
-
     @pytest.mark.asyncio
-    async def test_run_document_analysis_marks_analyzed_when_no_rag_chunks(self):
-        """Zero RAG chunks (e.g. embeddings unavailable) -> ANALYZED, graph skipped, not stuck/DLQ."""
+    async def test_run_document_analysis_holds_contract_pending_when_no_rag_chunks(self):
+        """Zero RAG chunks on a CONTRACT -> pending + retry, never ANALYZED.
+
+        This test previously asserted ANALYZED. That was the production defect:
+        document ab813007 reached upload_status=analyzed with 25 clauses, zero
+        chunks, zero analyses and zero snapshots, and this test certified it.
+        The assertion is inverted rather than deleted so the regression stays
+        pinned from the exact angle that missed it.
+        """
         from src.core.tasks.ingestion_tasks import _run_document_analysis
 
         document_id = uuid4()
@@ -600,10 +610,13 @@ class TestDocumentAnalysisTask:
             inst.get_by_id = AsyncMock(return_value=document)
             inst.update_status = AsyncMock()
 
-            result = await _run_document_analysis(
-                tenant_id=tenant_id, document_id=document_id, orchestrator=orchestrator
-            )
+            with pytest.raises(AnalysisIncompleteRetryableError):
+                await _run_document_analysis(
+                    tenant_id=tenant_id, document_id=document_id, orchestrator=orchestrator
+                )
 
         assert orchestrator.called is False
-        assert result["persisted"] is False
-        inst.update_status.assert_called_once_with(tenant_id, document_id, DocumentStatus.ANALYZED)
+        # Persisted BEFORE the raise: honest even if every retry is exhausted.
+        inst.update_status.assert_called_once_with(
+            tenant_id, document_id, DocumentStatus.PARSED_PENDING_ANALYSIS
+        )
