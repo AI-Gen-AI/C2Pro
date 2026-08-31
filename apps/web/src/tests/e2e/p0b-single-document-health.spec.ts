@@ -120,7 +120,20 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     // --- 5. Upload one real contract through the real upload surface.
     await page.goto(`/projects/${projectId}/documents`);
     await expect(page.getByTestId("documents-page")).toBeVisible({ timeout: 30_000 });
+
+    //     The real upload surface: the file input lives inside the upload
+    //     dialog, so it must be opened first, and staging a file is separate
+    //     from uploading it. A .pdf defaults to the "contract" document type
+    //     (defaultDocumentTypeForFile), which is what this journey needs.
+    await page.getByRole("button", { name: /upload document/i }).click();
+    await expect(page.getByTestId("document-upload-surface")).toBeVisible({ timeout: 15_000 });
     await page.setInputFiles('input[type="file"]', CONTRACT_FIXTURE);
+
+    const uploadButton = page.getByRole("button", { name: /^upload 1 file$/i });
+    await expect(uploadButton, "the staged file must be uploadable").toBeEnabled({
+      timeout: 15_000,
+    });
+    await uploadButton.click();
 
     // --- 6. Wait for the async pipeline. The Health call is the completion
     //        signal: it is the thing the user is actually waiting for.
