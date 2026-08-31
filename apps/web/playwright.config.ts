@@ -33,11 +33,31 @@ export default defineConfig({
     },
     {
       name: "chromium",
-      use: { 
+      // The P0b specs sign in live in their own context; restoring a session
+      // under them would both mask the variable under investigation and collide
+      // with the ticket sign-in.
+      testIgnore: [/p0b-single-document-health\.spec\.ts/, /auth-continuity\.spec\.ts/],
+      use: {
         ...devices["Desktop Chrome"],
         storageState: "playwright/.auth/user.json",
       },
       dependencies: ["setup"],
+    },
+    {
+      // Canonical P0b acceptance. NO storageState: the journey performs the
+      // documented Clerk bootstrap itself, in the same page and context it then
+      // gates and continues into. It still needs global-setup, which fetches the
+      // Clerk testing token that the development instance requires.
+      name: "p0b-acceptance",
+      testMatch: [/p0b-single-document-health\.spec\.ts/, /auth-continuity\.spec\.ts/],
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
+      metadata: {
+        suite: "TS-E2E-P0B-HEALTH-001",
+        type: "e2e",
+        priority: "p0",
+        description: "Single-document Health journey with inline auth gate",
+      },
     },
     {
       name: "cross-browser-chromium",

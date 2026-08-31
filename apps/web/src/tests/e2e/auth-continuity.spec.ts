@@ -17,15 +17,15 @@ import { test } from "@playwright/test";
 import {
   assertProjectEntryContinuity,
   establishAuthenticatedSession,
-  recordMainFrameNavigations,
+  observeAuth,
 } from "./support/p0b-auth";
 
 test.describe("TS-E2E-AUTH-CONTINUITY-001: project-entry seam (diagnostic only)", () => {
   test.describe.configure({ timeout: 120_000 });
 
-  test("session survives project entry", async ({ page, context }) => {
-    const mainFrameHops = recordMainFrameNavigations(page);
-    await establishAuthenticatedSession(page);
-    await assertProjectEntryContinuity(page, context, mainFrameHops);
+  test("session survives project entry", async ({ baseURL, page, context }) => {
+    const observation = observeAuth(page, baseURL ?? "http://localhost:3100");
+    await establishAuthenticatedSession(page, observation);
+    await assertProjectEntryContinuity(page, context, observation);
   });
 });

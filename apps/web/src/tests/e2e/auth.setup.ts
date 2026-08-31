@@ -1,34 +1,40 @@
-import { expect, test as setup } from "@playwright/test";
-import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
+/**
+ * Shared authenticated storageState for the E2E specs that restore one.
+ *
+ * Uses the flow the INSTALLED @clerk/testing (2.2.7) documents for automated
+ * sign-in: `clerk.signIn({ page, emailAddress })` resolves the configured E2E
+ * identity through the Clerk Backend API, mints a short-lived sign-in token and
+ * consumes it with the `ticket` strategy.
+ *
+ * That replaces the previous password-first-factor flow, which required a
+ * password literal in this file. There is no credential here now, and no
+ * hand-rolled JWT decoding: identity comes from Clerk's typed client resources.
+ *
+ * The canonical P0b journey deliberately does NOT restore this file — it signs
+ * in live in its own context, because serialize/restore is one of the variables
+ * under investigation. This setup remains for the specs that do rely on it.
+ */
 
-const authFile = "playwright/.auth/user.json";
-const clerkE2eUserId = "user_3H0l5NCcPYLnfWokjdm2D8m3iGR";
+import { expect, test as setup } from "@playwright/test";
+
+import { AUTH_STATE_FILE, clerkFacts, establishAuthenticatedSession } from "./support/p0b-auth";
+
+/** Optional pin for the configured E2E identity. Reused, never replaced. */
+const expectedUserId = process.env.E2E_CLERK_USER_ID ?? null;
 
 setup("authenticate", async ({ page }) => {
-  await setupClerkTestingToken({ page });
-  await page.goto("/");
-  await clerk.signIn({
-    page,
-    signInParams: {
-      strategy: "password",
-      identifier: "testuser@c2pro.com",
-      password: "Testpasword123",
-    },
-  });
+  await establishAuthenticatedSession(page);
 
-  const sessionSubject = await page.evaluate(async () => {
-    const token = await window.Clerk?.session?.getToken();
-    if (!token) return null;
+  const facts = await clerkFacts(page);
+  expect(facts.clerkSessionActive, "storageState must be saved from an active session").toBe(true);
+  expect(facts.expectedOrganizationActive, "storageState must carry an active Organization").toBe(
+    true,
+  );
 
-    const payload = token.split(".")[1];
-    if (!payload) return null;
+  if (expectedUserId) {
+    const userId = await page.evaluate(() => window.Clerk?.user?.id ?? null);
+    expect(userId, "signed-in identity must be the configured E2E user").toBe(expectedUserId);
+  }
 
-    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
-    return (JSON.parse(atob(normalizedPayload)) as { sub?: unknown }).sub;
-  });
-  expect(sessionSubject).toBe(clerkE2eUserId);
-
-  await page.goto("/projects");
-  await expect(page.locator('h1:has-text("Projects")')).toBeVisible();
-  await page.context().storageState({ path: authFile });
+  await page.context().storageState({ path: AUTH_STATE_FILE });
 });

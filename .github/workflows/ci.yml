@@ -1056,7 +1056,7 @@ jobs:
       # (~20s) before any project creation, upload or worker work.
       - name: P0b single-document Health journey
         working-directory: apps/web
-        run: ./node_modules/.bin/playwright test src/tests/e2e/p0b-single-document-health.spec.ts --project=chromium
+        run: ./node_modules/.bin/playwright test src/tests/e2e/p0b-single-document-health.spec.ts --project=p0b-acceptance
 
       # Browser-only assertions would have passed in production. This proves the
       # chain underneath actually ran.

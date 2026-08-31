@@ -35,7 +35,7 @@ import { expect, test, type ConsoleMessage, type Page } from "@playwright/test";
 import {
   assertProjectEntryContinuity,
   establishAuthenticatedSession,
-  recordMainFrameNavigations,
+  observeAuth,
 } from "./support/p0b-auth";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -76,21 +76,28 @@ function collectConsoleErrors(page: Page): string[] {
 test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
   test.describe.configure({ mode: "serial", timeout: ANALYSIS_TIMEOUT_MS + 120_000 });
 
-  test("upload one contract and see honest, evidence-backed Health", async ({ page, context }) => {
+  test("upload one contract and see honest, evidence-backed Health", async ({
+    baseURL,
+    page,
+    context,
+  }) => {
     const consoleErrors = collectConsoleErrors(page);
-    const mainFrameHops = recordMainFrameNavigations(page);
+    const observation = observeAuth(page, baseURL ?? "http://localhost:3100");
 
-    // --- 1. Real Clerk authentication. No credentials live here.
-    await establishAuthenticatedSession(page);
+    // --- 1. Real Clerk authentication, performed LIVE in this page and context
+    //        with the documented @clerk/testing flow. No storageState restore,
+    //        no password, no credential literal.
+    await establishAuthenticatedSession(page, observation);
 
     // --- 2. Project entry is gated INLINE, in this same test/page/context,
     //        before any project creation, upload or worker-dependent work. A
     //        separate spec could not license this run: separate Playwright tests
-    //        get separate browser contexts. If continuity is broken this fails in
-    //        ~20s with structural evidence instead of burning the journey
-    //        timeout. It leaves the dialog open and editable, so the journey
-    //        continues from that exact state rather than repeating the click.
-    await assertProjectEntryContinuity(page, context, mainFrameHops);
+    //        get separate browser contexts. It proves Clerk session, Clerk user,
+    //        expected Organization, application bearer, route and API auth
+    //        health together, fails fast with a classification instead of
+    //        burning the journey timeout, and leaves the dialog open and
+    //        editable so the journey continues from that exact state.
+    await assertProjectEntryContinuity(page, context, observation);
 
     // --- 3. A clean project, so no prior snapshot or document can contaminate.
     const projectName = `P0b Health Journey ${Date.now()}`;
