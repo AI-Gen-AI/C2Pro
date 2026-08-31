@@ -18,16 +18,16 @@ supabase==2.31.0
 
 # Cache
 redis==5.0.1
-upstash-redis==1.7.0
+upstash-redis==1.8.0
 
 # Storage
-boto3==1.43.64
+boto3==1.43.82
 python-multipart>=0.0.18
 
 # AI
 anthropic>=0.120.0,<1.0.0
 jinja2>=3.1.6  # Prompt templating
-langgraph==1.2.10
+langgraph==1.2.11
 langgraph-checkpoint-postgres>=3.1.0  # PostgreSQL checkpointer for state persistence
 langchain-core>=0.2.40
 langchain>=1.3.14  # Full LangChain for LangSmith integration
@@ -35,7 +35,7 @@ langchain-anthropic==1.4.8  # ChatAnthropic adapter used by procurement applicat
 langsmith>=0.9.3,<1.0.0  # LangSmith observability; compatible with langchain-core 1.4.x tracing context
 
 # Document Parsing
-pymupdf==1.28.0  # PDF
+pymupdf==1.28.2  # PDF
 openpyxl==3.1.5   # Excel
 python-docx==1.2.0  # Word
 # pyfiebdc==0.8.1    # BC3/FIEBDC - Not available on PyPI, commented out
@@ -52,9 +52,9 @@ cryptography>=50.0.0
 # spacy on Windows needs a prebuilt wheel or Visual Studio Build Tools to
 # compile from source; both are available as manylinux wheels on Linux
 # (CI/Docker), where this actually installs and runs.
-presidio-analyzer==2.2.354  # Requires spacy
-presidio-anonymizer==2.2.354  # Requires spacy
-spacy==3.7.2
+presidio-analyzer==2.2.364  # Requires spacy
+presidio-anonymizer==2.2.364  # Requires spacy
+spacy==3.8.16
 # The Spanish spaCy model is not pip-installable — it's a separate ~100MB
 # download, provisioned in the Docker image (see apps/api/Dockerfile) via:
 #   python -m spacy download es_core_news_md
@@ -87,7 +87,7 @@ tiktoken>=0.5.0
 # Windows: pip install python-magic-bin
 lark==1.3.1
 pyyaml==6.0.3 # For Coherence Engine rules
-python-dotenv==1.2.2
+python-dotenv==1.2.3
 orjson>=3.11.0
 tenacity>=9.1.4,<10.0  # Retry logic; compatible with Schemathesis v4
 email-validator==2.3.0
@@ -97,17 +97,17 @@ networkx==3.6.1
 pytest>=9.0.3  # >=9.0.3 fixes tmpdir predictable path CVE
 pytest-asyncio>=1.4.0  # >=1.4.0 required for Windows event loop fixes
 pytest-cov>=5.0.0  # >=5.0.0 required for pytest 9 compatibility
-pytest-benchmark==5.2.3
+pytest-benchmark==5.3.0
 schemathesis>=4.24.3  # TASK-QA-200/TASK-OPS-DOCFLOW-015: OpenAPI contract testing
 factory-boy==3.3.3
-Faker==40.36.0  # For factory-boy
+Faker==40.37.0  # For factory-boy
 docker>=7.2.0  # Required by testcontainers-backed persistence tests
 testcontainers>=4.14.0  # PostgreSQL integration tests
 freezegun==1.5.5  # Deterministic time control for boundary-sensitive tests
 
 # Linting & Formatting
-ruff==0.16.1
-mypy==2.3.0
+ruff==0.16.5
+mypy==2.3.1
 
 # Type stubs
 types-redis==4.6.0.20241004
