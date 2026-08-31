@@ -44,6 +44,25 @@ const PROJECT_ID_OUTPUT = path.join(process.cwd(), "playwright", ".p0b", "projec
 
 /** Analysis is a real async pipeline; it is slow, not instant. */
 const ANALYSIS_TIMEOUT_MS = 240_000;
+const HEALTH_POLL_INTERVAL_MS = 5_000;
+
+/** Load the analysis page and return the health vector it fetched. */
+async function loadHealthVector(page: Page, projectId: string): Promise<HealthVector> {
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      /\/projects\/[0-9a-f-]{36}\/health/.test(response.url()) && response.status() === 200,
+    { timeout: 60_000 },
+  );
+  await page.goto(`/projects/${projectId}/analysis`);
+  return (await responsePromise).json() as Promise<HealthVector>;
+}
+
+/** The serialized health vector, as far as this journey inspects it. */
+interface HealthVector {
+  single_document_coverage?: { assessments?: CategoryAssessment[] } | null;
+  single_document_evidence_granularity?: string | null;
+  dimensions?: { dimension: string; evidence?: { ref_id: string }[] }[];
+}
 
 /** The serialized shape of one CategoryAssessment (single_document_coverage.py). */
 interface CategoryAssessment {
@@ -145,25 +164,32 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     });
     await uploadButton.click();
 
-    // --- 6. Wait for the async pipeline. The Health call is the completion
-    //        signal: it is the thing the user is actually waiting for.
-    const healthResponsePromise = page.waitForResponse(
-      (response) =>
-        /\/projects\/[0-9a-f-]{36}\/health/.test(response.url()) && response.status() === 200,
-      { timeout: ANALYSIS_TIMEOUT_MS },
-    );
-
-    await page.goto(`/projects/${projectId}/analysis`);
-    const healthResponse = await healthResponsePromise;
+    // --- 6. Wait for the async pipeline to actually LAND.
+    //
+    //        A 200 from /health is NOT a completion signal: the endpoint answers
+    //        200 with single_document_coverage = null while the analysis has not
+    //        produced an assessment yet -- which is exactly the state production
+    //        was stuck in. Accepting the first 200 made this spec pass or fail on
+    //        timing luck. SingleDocumentHealth fetches once with no refetch
+    //        interval, so poll the way a waiting user does: reload until the
+    //        assessment exists, bounded, then fail loudly if it never does.
+    let vector = await loadHealthVector(page, projectId!);
+    const analysisDeadline = Date.now() + ANALYSIS_TIMEOUT_MS;
+    while (!vector.single_document_coverage && Date.now() < analysisDeadline) {
+      await page.waitForTimeout(HEALTH_POLL_INTERVAL_MS);
+      vector = await loadHealthVector(page, projectId!);
+    }
 
     // --- 7. /health = 200 with the real single-document payload.
-    expect(healthResponse.status()).toBe(200);
-    const vector = await healthResponse.json();
-
-    expect(vector.single_document_coverage, "single_document_coverage must exist").toBeTruthy();
-    const assessments = vector.single_document_coverage.assessments ?? [];
+    expect(
+      vector.single_document_coverage,
+      `single_document_coverage was still null after ${ANALYSIS_TIMEOUT_MS}ms: the async chain ` +
+        "did not produce a document assessment -- the exact production failure this gate exists " +
+        "to catch",
+    ).toBeTruthy();
+    const assessments = vector.single_document_coverage?.assessments ?? [];
     expect(assessments).toHaveLength(6);
-    expect(new Set(assessments.map((a: { category: string }) => a.category))).toEqual(
+    expect(new Set(assessments.map((a) => a.category))).toEqual(
       new Set(CANONICAL_CATEGORIES),
     );
 
@@ -176,7 +202,7 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     // what is missing. Granularity is a document-level disclosure of what the
     // ids would identify, so it does NOT imply any category reached PRESENT --
     // a contract where nothing is evidenced is an honest, valid outcome.
-    for (const assessment of assessments as CategoryAssessment[]) {
+    for (const assessment of assessments) {
       const ids = assessment.evidence_clause_ids ?? [];
       const label = `${assessment.category} (${assessment.state})`;
 
