@@ -287,3 +287,141 @@ def test_only_ingested_and_not_required_permit_analyzed() -> None:
     }
 
     assert permitting == {RagIngestionOutcome.INGESTED, RagIngestionOutcome.NOT_REQUIRED}
+
+
+# ---------------------------------------------------------------------------
+# Retry matrix. "Re-enterable state" is not "a retry happened" -- the Celery
+# task declares autoretry_for=(Exception,) with max_retries=3, so a normal
+# return is a COMPLETED task no matter how honest its payload.
+# ---------------------------------------------------------------------------
+
+
+def test_misconfigured_does_not_schedule_a_pointless_retry() -> None:
+    """An operator must act; three backoff retries would change nothing."""
+    from src.core.tasks.ingestion_tasks import should_retry_analysis
+
+    assert (
+        should_retry_analysis(
+            status=DocumentStatus.PARSED_PENDING_ANALYSIS,
+            rag_outcome=RagIngestionOutcome.MISCONFIGURED.value,
+        )
+        is False
+    )
+
+
+@pytest.mark.parametrize(
+    "rag_outcome",
+    [
+        RagIngestionOutcome.PROVIDER_UNAVAILABLE.value,
+        None,  # unknown: treat as plausibly transient
+    ],
+)
+def test_transient_failures_do_schedule_a_bounded_retry(rag_outcome: str | None) -> None:
+    from src.core.tasks.ingestion_tasks import should_retry_analysis
+
+    assert (
+        should_retry_analysis(
+            status=DocumentStatus.PARSED_PENDING_ANALYSIS, rag_outcome=rag_outcome
+        )
+        is True
+    )
+
+
+def test_graph_failure_after_successful_rag_is_retried() -> None:
+    """Chunks existed, so the provider is fine; the graph run itself is retryable."""
+    from src.core.tasks.ingestion_tasks import should_retry_analysis
+
+    assert (
+        should_retry_analysis(
+            status=DocumentStatus.PARSED_PENDING_ANALYSIS,
+            rag_outcome=RagIngestionOutcome.INGESTED.value,
+        )
+        is True
+    )
+
+
+def test_completed_analysis_never_retries() -> None:
+    from src.core.tasks.ingestion_tasks import should_retry_analysis
+
+    for outcome in RagIngestionOutcome:
+        assert (
+            should_retry_analysis(status=DocumentStatus.ANALYZED, rag_outcome=outcome.value)
+            is False
+        )
+
+
+def test_analysis_task_declares_the_bounded_retry_this_relies_on() -> None:
+    """The raise is only useful because the task actually auto-retries.
+
+    Pinning it here means a future change to the task options cannot silently
+    turn every transient failure into a one-shot give-up.
+    """
+    from src.core.tasks.ingestion_tasks import ANALYSIS_TASK_RETRY_OPTIONS
+
+    # Single-sourced with the decorator, so this cannot pass while the real task
+    # has quietly stopped retrying. (Celery is stubbed suite-wide, so the task
+    # registry itself is not observable from tests.)
+    assert Exception in ANALYSIS_TASK_RETRY_OPTIONS["autoretry_for"]
+    assert ANALYSIS_TASK_RETRY_OPTIONS["retry_kwargs"]["max_retries"] == 3
+    assert ANALYSIS_TASK_RETRY_OPTIONS["retry_backoff"] is True
+
+
+def test_retryable_error_is_an_exception_so_celery_autoretry_catches_it() -> None:
+    from src.core.tasks.ingestion_tasks import AnalysisIncompleteRetryableError
+
+    assert issubclass(AnalysisIncompleteRetryableError, Exception)
+
+
+# ---------------------------------------------------------------------------
+# Document-type contract. bool(parsed_text) alone is NOT the predicate.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "document_type",
+    [DocumentType.CONTRACT, DocumentType.TECHNICAL_SPEC, DocumentType.SPECIFICATION],
+)
+def test_free_text_documents_require_the_graph(document_type: DocumentType) -> None:
+    from src.core.tasks.ingestion_tasks import requires_text_analysis
+
+    assert requires_text_analysis(document_type, "real contract text") is True
+
+
+@pytest.mark.parametrize(
+    "document_type",
+    [DocumentType.SCHEDULE, DocumentType.BUDGET, DocumentType.DRAWING, DocumentType.OTHER],
+)
+def test_structured_documents_are_not_held_pending_by_incidental_parser_text(
+    document_type: DocumentType,
+) -> None:
+    """The regression this predicate exists to prevent.
+
+    ``composite_file_parser`` emits ``text_blocks`` for ANY PDF or DOCX, so a
+    schedule or budget uploaded as a PDF carries incidental parsed text. Keying
+    on text alone would strand it pending forever waiting for a graph run it
+    never needed -- swapping the old false-success bug for a false-incomplete
+    one.
+    """
+    from src.core.tasks.ingestion_tasks import requires_text_analysis
+
+    assert requires_text_analysis(document_type, "incidental text from the PDF parser") is False
+
+
+def test_free_text_document_without_any_text_cannot_be_owed_a_graph_run() -> None:
+    from src.core.tasks.ingestion_tasks import requires_text_analysis
+
+    assert requires_text_analysis(DocumentType.CONTRACT, None) is False
+    assert requires_text_analysis(DocumentType.CONTRACT, "") is False
+
+
+def test_structured_document_reaches_analyzed_without_the_graph() -> None:
+    """End of the contract: schedule/budget stay terminally ANALYZED."""
+    from src.core.tasks.ingestion_tasks import decide_document_status, requires_text_analysis
+
+    status = decide_document_status(
+        requires_text_analysis=requires_text_analysis(DocumentType.BUDGET, "incidental"),
+        rag_chunk_count=0,
+        graph_analysis_id=None,
+    )
+
+    assert status is DocumentStatus.ANALYZED
