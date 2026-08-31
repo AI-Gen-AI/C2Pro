@@ -30,8 +30,9 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, test, type ConsoleMessage, type Page } from "@playwright/test";
+
+import { establishAuthenticatedSession } from "./support/p0b-auth";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CONTRACT_FIXTURE = path.join(HERE, "test-data", "sample-contract.pdf");
@@ -55,18 +56,6 @@ function recordProjectId(projectId: string): void {
   writeFileSync(PROJECT_ID_OUTPUT, projectId, "utf8");
 }
 
-/** The signed-in Clerk subject, or null when no session is live. */
-async function sessionSubject(page: Page): Promise<unknown> {
-  return page.evaluate(async () => {
-    const token = await window.Clerk?.session?.getToken();
-    if (!token) return null;
-    const payload = token.split(".")[1];
-    if (!payload) return null;
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    return (JSON.parse(atob(normalized)) as { sub?: unknown }).sub ?? null;
-  });
-}
-
 /** Console errors attributable to the app, ignoring third-party noise. */
 function collectConsoleErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -86,45 +75,10 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
   test("upload one contract and see honest, evidence-backed Health", async ({ page }) => {
     const consoleErrors = collectConsoleErrors(page);
 
-    // --- 1. Real Clerk authentication.
-    //
-    // storageState alone is NOT enough: on a Clerk development instance the bot
-    // protection rejects a restored session unless the context also carries a
-    // testing token, and the first run of this journey bounced straight to
-    // /sign-in because of it. This mirrors journey-3-wedge, the repository's
-    // established pattern for storageState specs, so authentication is genuinely
-    // exercised rather than assumed.
-    await setupClerkTestingToken({ page });
-    await page.goto("/");
-    await page.waitForFunction(() => window.Clerk?.loaded === true);
-
-    // Sign in ONLY if storageState did not already carry a session.
-    //
-    // Three CI runs mapped this out. Without setupClerkTestingToken the restored
-    // session is bounced to /sign-in by the dev instance's bot protection. With
-    // the token, clerk.signIn fails with "You're already signed in." -- proof
-    // the restored session is live and valid. Signing out first and back in is
-    // worse still: it invalidates the session cookie the Next.js middleware
-    // reads, so the app renders once and then redirects to /sign-in on every
-    // subsequent navigation.
-    //
-    // The session from auth.setup was always fine; it only ever needed the
-    // testing token. So keep it, and sign in only to cover the case where the
-    // setup project left none.
-    if (!(await sessionSubject(page))) {
-      await clerk.signIn({
-        page,
-        signInParams: {
-          strategy: "password",
-          identifier: "testuser@c2pro.com",
-          password: "Testpasword123",
-        },
-      });
-    }
-    expect(await sessionSubject(page), "Clerk session must be established").toBeTruthy();
-
-    await page.goto("/projects");
-    await expect(page.locator('h1:has-text("Projects")')).toBeVisible({ timeout: 30_000 });
+    // --- 1. Real Clerk authentication, via the SAME helper the bounded
+    //        project-entry gate uses, so a green gate genuinely says something
+    //        about this journey. No credentials live here.
+    await establishAuthenticatedSession(page);
 
     // --- 2. A clean project, so no prior snapshot or document can contaminate.
     const projectName = `P0b Health Journey ${Date.now()}`;

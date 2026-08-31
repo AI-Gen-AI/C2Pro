@@ -1,163 +1,93 @@
 /**
- * TS-E2E-AUTH-CONTINUITY-001 — does a setup-project session survive into a
- * chromium/storageState context?
+ * TS-E2E-AUTH-CONTINUITY-001 — does the canonical session survive project entry?
  *
- * The P0b journey failed three times in the auth preamble, each time
- * differently, and each "fix" was a guess at signIn/signOut ordering. This gate
- * stops guessing: it isolates the one seam under suspicion —
+ * A previous version of this gate ran `testing token -> /projects` and passed,
+ * while the journey kept failing. That proved nothing: it was a second Playwright
+ * invocation, a second setup/storageState/chromium execution, and a shorter
+ * sequence than the journey's real preamble. A gate that does not reproduce the
+ * thing it guards is not evidence.
  *
- *   auth.setup context -> serialized storageState -> new chromium context
- *   -> Next.js middleware authentication continuity
+ * This version imports establishAuthenticatedSession from support/p0b-auth, the
+ * SAME function the journey uses, so the preamble is byte-for-byte identical and
+ * runs in the same page and context. It then advances exactly one step further —
+ * to the transition the evidence points at:
  *
- * — and nothing else. No project creation, no upload, no worker, no analysis.
- * It resolves in seconds, so the answer is cheap and unambiguous, and the
- * six-minute journey never runs against an auth path that cannot hold.
+ *   ... -> /projects -> Projects visible -> New Project click
+ *   -> project-name-input interactable
  *
- * Repository truth it builds on: auth.setup already does
- * setupClerkTestingToken -> clerk.signIn -> loads /projects -> validates the
- * session subject -> saves storageState, and playwright.config gives the
- * chromium project that storageState with a dependency on setup. So if
- * /projects holds in setup but not here, the loss is in serialization/restore
- * or in what the middleware reads — not in the credentials.
+ * The journey's last failure showed the input RESOLVING and then the app
+ * redirecting to /sign-in 58 times, so the loss happens at or just after that
+ * click. This races the two outcomes on a short bound (~20s) instead of burning
+ * the journey's 360s timeout, and captures structural state at three points so
+ * we can tell whether the session deteriorates BEFORE the click, whether the
+ * CLICK causes it, or whether a background/middleware refresh invalidates it.
  *
- * DIAGNOSTICS ARE DELIBERATELY STRUCTURAL ONLY. Cookie names, domains, paths
- * and flags are reported; values never are. Clerk presence and subject are
- * reported; tokens never are. A failing auth test must not become a credential
- * disclosure.
+ * Never emits cookie values, JWTs, testing tokens, passwords or any other secret
+ * material.
  */
 
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { expect, test } from "@playwright/test";
 
-import { setupClerkTestingToken } from "@clerk/testing/playwright";
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import {
+  authSnapshot,
+  establishAuthenticatedSession,
+  recordDocumentChain,
+} from "./support/p0b-auth";
 
-const STORAGE_STATE = path.join(process.cwd(), "playwright", ".auth", "user.json");
+/** Short by design: this answers in seconds, not in journey minutes. */
+const ENTRY_RACE_MS = 20_000;
 
-/** Cookie identity WITHOUT its value. */
-interface CookieShape {
-  name: string;
-  domain: string;
-  cookiePath: string;
-  httpOnly: boolean;
-  secure: boolean;
-  sameSite: string;
-}
+test.describe("TS-E2E-AUTH-CONTINUITY-001: session survives project entry", () => {
+  test.describe.configure({ timeout: 120_000 });
 
-function shape(cookie: {
-  name: string;
-  domain: string;
-  path: string;
-  httpOnly?: boolean;
-  secure?: boolean;
-  sameSite?: string;
-}): CookieShape {
-  return {
-    name: cookie.name,
-    domain: cookie.domain,
-    cookiePath: cookie.path,
-    httpOnly: Boolean(cookie.httpOnly),
-    secure: Boolean(cookie.secure),
-    sameSite: cookie.sameSite ?? "unset",
-  };
-}
+  test("clicking New Project keeps an authenticated context", async ({ page, context }) => {
+    const documentChain = recordDocumentChain(page);
 
-function sortByName(cookies: CookieShape[]): CookieShape[] {
-  return [...cookies].sort((a, b) => a.name.localeCompare(b.name));
-}
+    // Byte-for-byte the journey's preamble.
+    await establishAuthenticatedSession(page);
+    const afterProjects = await authSnapshot("after /projects", page, context);
 
-/** Cookie shapes auth.setup serialized, read straight from storageState. */
-function storedCookieShapes(): CookieShape[] {
-  try {
-    const raw = JSON.parse(readFileSync(STORAGE_STATE, "utf8")) as {
-      cookies?: Array<Parameters<typeof shape>[0]>;
-    };
-    return sortByName((raw.cookies ?? []).map(shape));
-  } catch {
-    return [];
-  }
-}
+    await page.getByRole("button", { name: /new project|create project/i }).first().click();
+    const beforeInput = await authSnapshot("immediately after New Project click", page, context);
+    const clickedAt = Date.now();
 
-async function restoredCookieShapes(context: BrowserContext): Promise<CookieShape[]> {
-  return sortByName((await context.cookies()).map(shape));
-}
+    // Race the two outcomes rather than waiting out a long timeout.
+    const input = page.getByTestId("project-name-input");
+    const signedOut = page.waitForURL(/\/sign-in/, { timeout: ENTRY_RACE_MS }).then(() => "sign-in");
+    const interactable = input
+      .waitFor({ state: "visible", timeout: ENTRY_RACE_MS })
+      .then(() => "input");
 
-/** Session presence and subject only — never the token. */
-async function sessionFacts(page: Page): Promise<{ present: boolean; subject: unknown }> {
-  return page.evaluate(async () => {
-    const clerk = window.Clerk;
-    if (!clerk?.session) return { present: false, subject: null };
-    const token = await clerk.session.getToken();
-    if (!token) return { present: true, subject: null };
-    const payload = token.split(".")[1];
-    if (!payload) return { present: true, subject: null };
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    return {
-      present: true,
-      subject: (JSON.parse(atob(normalized)) as { sub?: unknown }).sub ?? null,
-    };
-  });
-}
+    const outcome = await Promise.race([interactable, signedOut]).catch(() => "timeout");
 
-test.describe("TS-E2E-AUTH-CONTINUITY-001: storageState session survives into chromium", () => {
-  test.describe.configure({ timeout: 90_000 });
+    if (outcome !== "input") {
+      const atRedirect = await authSnapshot("at first navigation after click", page, context);
+      const firstHopAfterClick = documentChain.find((hop) => hop.at >= clickedAt) ?? null;
 
-  test("a restored session stays on /projects instead of bouncing to sign-in", async ({
-    page,
-    context,
-  }) => {
-    // Document-level responses only: this is the redirect chain the middleware
-    // actually drives, before any client-side routing.
-    const documentChain: Array<{ url: string; status: number }> = [];
-    page.on("response", (response) => {
-      if (response.request().resourceType() === "document") {
-        documentChain.push({ url: response.url(), status: response.status() });
-      }
-    });
+      const diagnostics = {
+        outcome,
+        clickedAt,
+        firstDocumentHopAfterClick: firstHopAfterClick,
+        msFromClickToFirstRedirect: firstHopAfterClick ? firstHopAfterClick.at - clickedAt : null,
+        // A middleware redirect appears as a document response; a purely
+        // client-side bounce leaves the chain untouched around the click.
+        redirectWasServerSide: firstHopAfterClick !== null,
+        documentChain,
+        snapshots: [afterProjects, beforeInput, atRedirect],
+      };
 
-    const cookiesBeforeToken = await restoredCookieShapes(context);
-    await setupClerkTestingToken({ page });
-    const cookiesAfterToken = await restoredCookieShapes(context);
+      expect(
+        outcome,
+        `Project entry lost the session. Structural diagnostics (no cookie values, no tokens):\n${JSON.stringify(
+          diagnostics,
+          null,
+          2,
+        )}`,
+      ).toBe("input");
+    }
 
-    const requestedUrl = "/projects";
-    const response = await page.goto(requestedUrl, { waitUntil: "domcontentloaded" });
-
-    // A middleware redirect is visible on the FIRST document response, before
-    // hydration. A client-side bounce shows up only in the later chain.
-    const firstDocumentStatus = response?.status() ?? null;
-    const redirectedServerSide = (response?.request().redirectedFrom() ?? null) !== null;
-    const finalUrl = page.url();
-
-    const facts = await sessionFacts(page).catch(() => ({ present: false, subject: null }));
-
-    const diagnostics = {
-      requestedUrl,
-      finalUrl,
-      firstDocumentStatus,
-      redirectedServerSide,
-      redirectChain: documentChain,
-      clerkSessionPresent: facts.present,
-      clerkSubject: facts.subject,
-      storageStateCookies: storedCookieShapes(),
-      restoredCookiesBeforeTestingToken: cookiesBeforeToken,
-      restoredCookiesAfterTestingToken: cookiesAfterToken,
-      storedButNotRestored: storedCookieShapes()
-        .filter((s) => !cookiesAfterToken.some((r) => r.name === s.name && r.domain === s.domain))
-        .map((c) => c.name),
-      restoredButNotStored: cookiesAfterToken
-        .filter((r) => !storedCookieShapes().some((s) => s.name === r.name && s.domain === r.domain))
-        .map((c) => c.name),
-    };
-
-    expect(
-      finalUrl,
-      `Auth continuity broken. Structural diagnostics (no cookie values, no tokens):\n${JSON.stringify(
-        diagnostics,
-        null,
-        2,
-      )}`,
-    ).not.toContain("/sign-in");
-
-    await expect(page.locator('h1:has-text("Projects")')).toBeVisible({ timeout: 20_000 });
+    // Interactable, not merely present: the journey's fill() is what actually failed.
+    await expect(input).toBeEditable({ timeout: 5_000 });
+    expect(page.url(), "must remain on an authenticated route").not.toContain("/sign-in");
   });
 });

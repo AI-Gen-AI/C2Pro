@@ -955,7 +955,6 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       CELERY_BROKER_URL: redis://localhost:6379/0
       ENVIRONMENT: test
-      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
       AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
       # Deterministic inference at the provider boundary ONLY. RAG chunking,
       # chunk persistence, the graph, DB, Redis and the browser stay real.
@@ -976,6 +975,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Generated per run rather than hard-coded: this lane is new code, and a
+      # literal secret here is a real finding even when the value is throwaway.
+      - name: Generate ephemeral test JWT secret
+        run: echo "JWT_SECRET_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
       # Fail, never skip. This step is the whole point of the lane.
       - name: Verify gate prerequisites
