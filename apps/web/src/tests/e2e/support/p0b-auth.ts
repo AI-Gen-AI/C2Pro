@@ -184,19 +184,19 @@ function pathnameOf(url: string, base?: string): string {
   }
 }
 
-export interface RedirectOrigin {
-  pathname: string;
-  status: number | null;
-  /** Only populated for a genuine 3xx. Pathname only, never the full URL. */
-  locationPathname: string | null;
-}
-
 export interface MainFrameHop {
   method: string;
   pathname: string;
   status: number;
   at: number;
-  redirectedFrom: RedirectOrigin | null;
+  /**
+   * Status of the response that redirected TO this one, when there was one.
+   * A 3xx here means the server sent the browser somewhere; null means the
+   * navigation was client-side. That single discriminator is what separates a
+   * middleware redirect from window.location.assign(), which is the only thing
+   * the fuller redirect-chain forensics were ever needed for.
+   */
+  redirectedFromStatus: number | null;
 }
 
 export interface ApiAuthFailure {
@@ -217,27 +217,14 @@ export interface AuthObservation {
 async function describeHop(response: Response): Promise<MainFrameHop> {
   const request = response.request();
   const from = request.redirectedFrom();
-
-  let redirectedFrom: RedirectOrigin | null = null;
-  if (from) {
-    const fromResponse = await from.response().catch(() => null);
-    const status = fromResponse?.status() ?? null;
-    // A Location pathname is reported ONLY when a real 3xx produced it.
-    const isRedirectStatus = status !== null && status >= 300 && status < 400;
-    const location = isRedirectStatus ? fromResponse?.headers()["location"] : undefined;
-    redirectedFrom = {
-      pathname: pathnameOf(from.url()),
-      status,
-      locationPathname: location ? pathnameOf(location, from.url()) : null,
-    };
-  }
+  const fromResponse = from ? await from.response().catch(() => null) : null;
 
   return {
     method: request.method(),
     pathname: pathnameOf(response.url()),
     status: response.status(),
     at: Date.now(),
-    redirectedFrom,
+    redirectedFromStatus: fromResponse?.status() ?? null,
   };
 }
 
@@ -247,8 +234,8 @@ async function describeHop(response: Response): Promise<MainFrameHop> {
  *
  * A main-frame document response with status 200 does NOT prove a server
  * redirect — `window.location.assign("/sign-in")`, which lib/api/client.ts
- * performs on a 401, produces exactly that. Only `redirectedFrom` carrying a
- * genuine 3xx distinguishes the two, which is why the chain is recorded.
+ * performs on a 401, produces exactly that. Only a genuine 3xx on the response
+ * that redirected to it distinguishes the two, which is why that status is kept.
  */
 export function observeAuth(page: Page, baseUrl: string): AuthObservation {
   const pending: Promise<MainFrameHop>[] = [];
@@ -358,14 +345,12 @@ export function classifyAuthFailure(input: ClassificationInput): AuthFailureClas
 
   const firstSignInHop = signInHops[0] ?? null;
 
-  // A. A genuine 3xx from a protected path whose Location is /sign-in.
+  // A. /sign-in was reached THROUGH a genuine 3xx, i.e. the server sent us.
   const serverRedirect = signInHops.some(
     (hop) =>
-      hop.redirectedFrom !== null &&
-      hop.redirectedFrom.status !== null &&
-      hop.redirectedFrom.status >= 300 &&
-      hop.redirectedFrom.status < 400 &&
-      (hop.redirectedFrom.locationPathname?.startsWith("/sign-in") ?? false),
+      hop.redirectedFromStatus !== null &&
+      hop.redirectedFromStatus >= 300 &&
+      hop.redirectedFromStatus < 400,
   );
   if (serverRedirect) return "SERVER_MIDDLEWARE_REDIRECT";
 
@@ -374,7 +359,7 @@ export function classifyAuthFailure(input: ClassificationInput): AuthFailureClas
   const precedingUnauthorized = apiAuthFailures.find(
     (failure) => failure.status === 401 && (!firstSignInHop || failure.at <= firstSignInHop.at),
   );
-  if (precedingUnauthorized && firstSignInHop && firstSignInHop.redirectedFrom === null) {
+  if (precedingUnauthorized && firstSignInHop && firstSignInHop.redirectedFromStatus === null) {
     return "CLIENT_API_401_REDIRECT";
   }
 

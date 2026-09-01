@@ -1056,6 +1056,14 @@ jobs:
           asyncio.run(main())
           PY
 
+      # Seeding a value and proving it are different things, and this is a
+      # tenant boundary: a wrong clerk_org_id would resolve the Clerk JWT to a
+      # different tenant (or auto-provision one) while the journey still passed.
+      # Boolean equality evidence only; no Clerk identifier is printed.
+      - name: Verify Clerk <-> local tenant linkage
+        working-directory: apps/api
+        run: python scripts/verify_e2e_tenant_link.py
+
       # The async seam that failed in production. Not mocked away.
       - name: Start Celery worker (document_parsing)
         working-directory: apps/api
