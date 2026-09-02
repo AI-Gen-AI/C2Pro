@@ -19,18 +19,15 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import os
 import subprocess
 import sys
-import types
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    REPO_ROOT
-    / "apps/api/alembic/versions/20260902_0001_p0_sec_a_data_api_containment.py"
-)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from p0_sec_a_common import REPO_ROOT, emitted_sql  # noqa: E402
+
 FIXTURE = REPO_ROOT / "apps/api/tests/security/fixtures/p0_sec_a_prestate.sql"
 LINT = REPO_ROOT / "apps/api/scripts/supabase_security_lint.py"
 DB_NAME = "p0_sec_a_gate"
@@ -42,22 +39,20 @@ def psql(dsn: str, *args: str, sql: str | None = None, path: Path | None = None)
         cmd += ["-c", sql]
     if path:
         cmd += ["-f", str(path)]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603
     if result.returncode != 0:
         raise SystemExit(f"psql failed:\n{result.stderr}")
 
 
-def emitted_sql(direction: str) -> str:
-    collected: list[str] = []
-    stub = types.ModuleType("alembic")
-    stub.op = types.SimpleNamespace(execute=lambda s: collected.append(str(s)))
-    sys.modules["alembic"] = stub
-    spec = importlib.util.spec_from_file_location("p0_sec_a_migration", MIGRATION)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    getattr(module, direction)()
-    del sys.modules["alembic"]
-    return "\n".join(s.strip().rstrip(";") + ";" for s in collected)
+def role_exists(dsn: str, role: str) -> bool:
+    """Check for a role without interpolating it into SQL."""
+    result = subprocess.run(  # noqa: S603
+        ["psql", dsn, "-tA", "-v", "role_name", "-c",
+         "SELECT 1 FROM pg_roles WHERE rolname = current_setting('p0sec.role')"],
+        capture_output=True, text=True,
+        env={**os.environ, "PGOPTIONS": f"-c p0sec.role={role}"},
+    )
+    return bool(result.stdout.strip())
 
 
 def lint_passes(dsn: str) -> bool:
@@ -109,11 +104,7 @@ def main() -> int:
             # literally aborted the entire migration chain with
             # `role "anon" does not exist`, which took every DB-backed lane down.
             for role in ("anon", "authenticated"):
-                out = subprocess.run(
-                    ["psql", target, "-tAc",
-                     f"SELECT 1 FROM pg_roles WHERE rolname = '{role}'"],
-                    capture_output=True, text=True)
-                if out.stdout.strip():
+                if role_exists(target, role):
                     raise SystemExit(
                         f"bare mode needs a cluster without the '{role}' role; "
                         f"this cluster has it. Run bare mode on a clean cluster."

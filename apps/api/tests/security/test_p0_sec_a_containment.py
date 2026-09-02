@@ -17,11 +17,9 @@ at production.
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import subprocess
 import sys
-import types
 from pathlib import Path
 
 import pytest
@@ -62,32 +60,13 @@ requires_db = pytest.mark.skipif(
 )
 
 
-def _load_migration() -> types.ModuleType:
-    """Import the migration with a stub ``alembic.op`` that records emitted SQL."""
-    collected: list[str] = []
-    stub = types.ModuleType("alembic")
-    stub.op = types.SimpleNamespace(execute=lambda sql: collected.append(str(sql)))
-    saved = sys.modules.get("alembic")
-    sys.modules["alembic"] = stub
-    try:
-        spec = importlib.util.spec_from_file_location("p0_sec_a_migration", MIGRATION)
-        assert spec is not None and spec.loader is not None
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-    finally:
-        if saved is not None:
-            sys.modules["alembic"] = saved
-        else:
-            del sys.modules["alembic"]
-    module._collected = collected  # type: ignore[attr-defined]
-    return module
+sys.path.insert(0, str(REPO_ROOT / "apps/api/scripts"))
+from p0_sec_a_common import emitted_sql as _emitted_sql  # noqa: E402
+from p0_sec_a_common import load_migration as _load_migration  # noqa: E402
 
 
 def _emitted(direction: str) -> str:
-    module = _load_migration()
-    module._collected.clear()  # type: ignore[attr-defined]
-    getattr(module, direction)()
-    return "\n".join(module._collected)  # type: ignore[attr-defined]
+    return _emitted_sql(direction)
 
 
 # --------------------------------------------------------------- static checks
