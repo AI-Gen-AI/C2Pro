@@ -30,9 +30,57 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 DEFAULT_PROJECT_ID_FILE = "apps/web/playwright/.p0b/project-id.txt"
 
+# apps/api/scripts/verify_p0b_journey.py -> the repository checkout.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+# The single file the Playwright journey records its project id into, and the
+# only file --project-id-file may name. DEFAULT_PROJECT_ID_FILE is the same
+# file spelled relative to the repository root.
+EXPECTED_PROJECT_ID_FILE = _REPO_ROOT / DEFAULT_PROJECT_ID_FILE
+
 
 class CheckFailure(Exception):
     """A required P0b persistence guarantee did not hold."""
+
+
+def _literal_target(path: Path) -> Path:
+    """Absolute path with the final component kept literal.
+
+    The parent is resolved (so ``..`` and symlinked directories collapse) but
+    the last component is not, because resolving it would follow a symlink
+    planted AT the destination and make the escape compare equal to the very
+    contract it escapes.
+    """
+    return path.parent.resolve() / path.name
+
+
+def resolve_project_id_file(raw: str) -> Path:
+    """Require ``--project-id-file`` to be exactly the canonical P0b id file.
+
+    The option names a file this script READS and then parses as a UUID, so an
+    unconstrained value is a path-injection sink: it lets whoever controls the
+    argument point the verifier at any readable file and have a fragment of it
+    echoed back through the resulting ``ValueError``.
+
+    Only one file is ever legitimate. ``ci.yml`` spells it
+    ``../web/playwright/.p0b/project-id.txt`` from ``apps/api`` and the default
+    spells it from the repository root; the two differ textually and resolve to
+    the same file. Nothing else in the checkout is authorised, so the check is
+    equality against that one path rather than containment in a directory.
+    """
+    expected = _literal_target(EXPECTED_PROJECT_ID_FILE)
+    candidate = Path(raw).expanduser()
+    resolved = _literal_target(candidate)
+    if resolved != expected:
+        raise CheckFailure(
+            f"--project-id-file resolves to {resolved}, which is not the canonical P0b "
+            f"project id file ({expected}). Refusing to read it."
+        )
+    if candidate.is_symlink():
+        raise CheckFailure(
+            f"--project-id-file is a symlink at {resolved}. Refusing to read through it."
+        )
+    return resolved
 
 
 def _normalize_database_url(raw: str) -> str:
@@ -148,7 +196,7 @@ async def verify(project_id: UUID, database_url: str) -> list[tuple[str, bool, s
 def _resolve_project_id(args: argparse.Namespace) -> UUID:
     if args.project_id:
         return UUID(args.project_id)
-    path = Path(args.project_id_file)
+    path = resolve_project_id_file(args.project_id_file)
     if not path.is_file():
         raise CheckFailure(
             f"No project id at {path}. The Playwright journey must run first and record one; "

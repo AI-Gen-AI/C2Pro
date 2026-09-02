@@ -17,6 +17,7 @@ actually reads -- and never sends a slug.
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -235,3 +236,200 @@ def test_unwrap_handles_both_clerk_list_shapes() -> None:
     assert fixture_script._unwrap({"data": [{"id": "a"}]}) == [{"id": "a"}]
     assert fixture_script._unwrap([{"id": "b"}]) == [{"id": "b"}]
     assert fixture_script._unwrap({"total_count": 0}) == []
+
+
+# ---------------------------------------------------------------------------
+# Output paths: --jwks-out and --github-env are WRITE sinks
+# ---------------------------------------------------------------------------
+#
+# Both options name a file this script writes, so an unconstrained value lets
+# whoever controls the argument redirect a write anywhere the process can
+# reach. .github/workflows/ci.yml passes NEITHER option -- it runs the script
+# from the repository root and relies on the defaults -- so each option has
+# exactly one legitimate destination and the guard is equality against it, not
+# containment in a directory the process happens to own.
+#
+#   --jwks-out    $RUNNER_TEMP/clerk-jwks.json  (a later ci.yml step serves that
+#                                                directory over http.server and
+#                                                the backend fetches
+#                                                /clerk-jwks.json from it)
+#   --github-env  $GITHUB_ENV                   (the file itself, not its
+#                                                directory, which also holds the
+#                                                other _runner_file_commands)
+
+
+@pytest.fixture
+def runner_temp(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path))
+    return tmp_path
+
+
+@pytest.fixture
+def github_env_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    env_file = tmp_path / "_runner_file_commands" / "set_env_abc"
+    env_file.parent.mkdir(parents=True)
+    env_file.touch()
+    monkeypatch.setenv("GITHUB_ENV", str(env_file))
+    return env_file
+
+
+def _resolve_jwks(raw: str) -> Path:
+    return fixture_script.resolve_exact_path(
+        raw,
+        expected=fixture_script.expected_jwks_path(),
+        option="--jwks-out",
+        requires="RUNNER_TEMP",
+    )
+
+
+def _resolve_github_env(raw: str) -> Path:
+    return fixture_script.resolve_exact_path(
+        raw,
+        expected=fixture_script.expected_github_env_path(),
+        option="--github-env",
+        requires="GITHUB_ENV",
+    )
+
+
+# --- the contracts CI actually depends on ----------------------------------
+
+
+def test_jwks_contract_is_the_file_ci_serves(runner_temp: Path) -> None:
+    assert fixture_script.expected_jwks_path() == runner_temp / "clerk-jwks.json"
+
+
+def test_jwks_exact_path_is_accepted(runner_temp: Path) -> None:
+    assert _resolve_jwks(str(runner_temp / "clerk-jwks.json")) == runner_temp / "clerk-jwks.json"
+
+
+def test_github_env_contract_is_the_env_file_itself(github_env_file: Path) -> None:
+    assert fixture_script.expected_github_env_path() == github_env_file
+
+
+def test_github_env_exact_path_is_accepted(github_env_file: Path) -> None:
+    assert _resolve_github_env(str(github_env_file)) == github_env_file
+
+
+# --- a sibling in the same trusted directory is NOT authorised -------------
+
+
+def test_jwks_sibling_in_runner_temp_is_refused(runner_temp: Path) -> None:
+    """Being inside RUNNER_TEMP is not the contract; being THE file is."""
+    with pytest.raises(FixtureError, match="not the one file"):
+        _resolve_jwks(str(runner_temp / "other.json"))
+
+
+def test_github_env_sibling_in_the_same_directory_is_refused(github_env_file: Path) -> None:
+    with pytest.raises(FixtureError, match="not the one file"):
+        _resolve_github_env(str(github_env_file.parent / "set_env_other"))
+
+
+# --- traversal, arbitrary absolute paths, symlinks -------------------------
+
+
+def test_jwks_traversal_is_refused(runner_temp: Path) -> None:
+    with pytest.raises(FixtureError, match="not the one file"):
+        _resolve_jwks(str(runner_temp / ".." / ".." / ".." / "etc" / "shadow"))
+
+
+def test_github_env_traversal_is_refused(github_env_file: Path) -> None:
+    with pytest.raises(FixtureError, match="not the one file"):
+        _resolve_github_env(str(github_env_file.parent / ".." / ".." / "etc" / "shadow"))
+
+
+@pytest.mark.parametrize(
+    ("resolve", "fixture_name"),
+    [(_resolve_jwks, "runner_temp"), (_resolve_github_env, "github_env_file")],
+    ids=["jwks", "github_env"],
+)
+def test_arbitrary_absolute_path_is_refused(
+    resolve: Any, fixture_name: str, request: pytest.FixtureRequest
+) -> None:
+    request.getfixturevalue(fixture_name)
+    with pytest.raises(FixtureError, match="not the one file"):
+        resolve("/etc/c2pro-should-not-exist")
+
+
+def test_jwks_symlink_at_the_contract_path_is_refused(runner_temp: Path) -> None:
+    """A link planted AT the destination must not redirect the write."""
+    link = runner_temp / "clerk-jwks.json"
+    link.symlink_to("/etc/c2pro-should-not-exist")
+
+    with pytest.raises(FixtureError, match="symlink"):
+        _resolve_jwks(str(link))
+
+
+def test_github_env_symlink_at_the_contract_path_is_refused(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    link = tmp_path / "set_env_abc"
+    link.symlink_to("/etc/c2pro-should-not-exist")
+    monkeypatch.setenv("GITHUB_ENV", str(link))
+
+    with pytest.raises(FixtureError, match="symlink"):
+        _resolve_github_env(str(link))
+
+
+# --- off a runner there is no destination to guess -------------------------
+
+
+def test_jwks_default_is_absent_off_a_runner(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("RUNNER_TEMP", raising=False)
+
+    assert fixture_script.expected_jwks_path() is None
+
+
+def test_jwks_override_without_runner_temp_is_refused(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("RUNNER_TEMP", raising=False)
+
+    with pytest.raises(FixtureError, match="RUNNER_TEMP"):
+        _resolve_jwks(str(tmp_path / "clerk-jwks.json"))
+
+
+def test_github_env_override_without_github_env_is_refused(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("GITHUB_ENV", raising=False)
+
+    with pytest.raises(FixtureError, match="GITHUB_ENV"):
+        _resolve_github_env(str(tmp_path / "set_env_abc"))
+
+
+# --- refusals name the option and leak nothing -----------------------------
+
+
+def test_refusal_names_the_option_and_leaks_no_content(runner_temp: Path) -> None:
+    secret = runner_temp / "other.json"
+    secret.write_text('{"leaked": "SHOULD-NOT-APPEAR"}', encoding="utf-8")
+
+    with pytest.raises(FixtureError) as excinfo:
+        _resolve_jwks(str(secret))
+
+    message = str(excinfo.value)
+    assert "--jwks-out" in message
+    assert "SHOULD-NOT-APPEAR" not in message
+
+
+# --- a rejected path stops the run before any Clerk mutation ---------------
+
+
+def test_rejected_output_path_never_reaches_clerk(
+    monkeypatch: pytest.MonkeyPatch, runner_temp: Path
+) -> None:
+    """The resolution happens before the first Clerk call, not after."""
+    called: list[str] = []
+
+    def _explode(*args: Any, **kwargs: Any) -> str:
+        called.append("clerk")
+        raise AssertionError("Clerk must not be contacted once a path is rejected")
+
+    monkeypatch.setattr(fixture_script, "require_development_instance", _explode)
+    monkeypatch.setenv("CLERK_SECRET_KEY", _DEVELOPMENT_SECRET)
+    monkeypatch.setattr(
+        sys, "argv", ["provision", "--jwks-out", str(runner_temp / "other.json")]
+    )
+
+    assert fixture_script.main() == 1
+    assert called == []

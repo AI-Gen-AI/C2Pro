@@ -67,6 +67,76 @@ class FixtureError(RuntimeError):
 
 
 # ---------------------------------------------------------------------------
+# Output paths
+# ---------------------------------------------------------------------------
+
+
+def expected_jwks_path() -> Path | None:
+    """The ONE file ``--jwks-out`` may write, or None off a runner.
+
+    ``.github/workflows/ci.yml`` runs this script with no ``--jwks-out``, then
+    serves ``$RUNNER_TEMP`` over ``http.server`` and points the backend at
+    ``/clerk-jwks.json``. That single file is the whole contract: move it and
+    every authenticated call in the lane 401s. There is no repository truth for
+    any other destination, so no other destination is authorised -- including
+    a sibling inside ``$RUNNER_TEMP``.
+    """
+    runner_temp = os.getenv("RUNNER_TEMP")
+    return Path(runner_temp).expanduser() / "clerk-jwks.json" if runner_temp else None
+
+
+def expected_github_env_path() -> Path | None:
+    """The ONE file ``--github-env`` may append to, or None off a runner.
+
+    The option exists to append exports to THE GitHub Actions environment file,
+    so ``$GITHUB_ENV`` itself is the contract -- not its directory, which also
+    holds the other ``_runner_file_commands`` files.
+    """
+    value = os.getenv("GITHUB_ENV")
+    return Path(value).expanduser() if value else None
+
+
+def _literal_target(path: Path) -> Path:
+    """Absolute path with the final component kept literal.
+
+    The parent is resolved (so ``..`` and symlinked directories collapse) but
+    the last component is not, because resolving it would follow a symlink
+    planted AT the destination and make the escape compare equal to the very
+    contract it escapes.
+    """
+    return path.parent.resolve() / path.name
+
+
+def resolve_exact_path(raw: str, *, expected: Path | None, option: str, requires: str) -> Path:
+    """Require a caller-supplied path to be exactly the file this option may touch.
+
+    ``--jwks-out`` and ``--github-env`` each name a single file this script
+    WRITES, and CI passes neither -- it relies on the defaults. So an
+    unconstrained value buys nothing and lets whoever controls the argument
+    redirect a write anywhere the process can reach. Exact-file equality is
+    both the narrowest contract and the simplest one to verify.
+    """
+    if expected is None:
+        raise FixtureError(
+            f"{option} was supplied but ${requires} is unset, so there is no destination "
+            "this script is authorised to write. Refusing to guess one."
+        )
+    target = _literal_target(expected)
+    candidate = Path(raw).expanduser()
+    resolved = _literal_target(candidate)
+    if resolved != target:
+        raise FixtureError(
+            f"{option} resolves to {resolved}, which is not the one file it may write "
+            f"({target}). Refusing to write there."
+        )
+    if candidate.is_symlink():
+        raise FixtureError(
+            f"{option} is a symlink at {resolved}. Refusing to write through it."
+        )
+    return resolved
+
+
+# ---------------------------------------------------------------------------
 # Environment safety
 # ---------------------------------------------------------------------------
 
@@ -261,13 +331,10 @@ def main() -> int:
     parser.add_argument("--name", default=os.getenv("E2E_CLERK_ORG_NAME", DEFAULT_ORG_NAME))
     parser.add_argument("--tenant-id", default=os.getenv("E2E_TENANT_ID", DEFAULT_TENANT_ID))
     parser.add_argument("--role", default="org:admin")
+    jwks_contract = expected_jwks_path()
     parser.add_argument(
         "--jwks-out",
-        default=(
-            str(Path(os.environ["RUNNER_TEMP"], "clerk-jwks.json"))
-            if os.getenv("RUNNER_TEMP")
-            else None
-        ),
+        default=str(jwks_contract) if jwks_contract else None,
         help=(
             "Write the instance JWKS here so the local backend can verify Clerk JWTs. "
             "Without it the backend cannot validate any Clerk token and answers 401."
@@ -290,6 +357,30 @@ def main() -> int:
     )
 
     try:
+        # Resolved BEFORE the first Clerk call: a rejected output path must stop
+        # the run while nothing has been mutated, not after the Organization
+        # exists and only the write is left to fail.
+        jwks_out = (
+            resolve_exact_path(
+                args.jwks_out,
+                expected=expected_jwks_path(),
+                option="--jwks-out",
+                requires="RUNNER_TEMP",
+            )
+            if args.jwks_out
+            else None
+        )
+        github_env = (
+            resolve_exact_path(
+                args.github_env,
+                expected=expected_github_env_path(),
+                option="--github-env",
+                requires="GITHUB_ENV",
+            )
+            if args.github_env
+            else None
+        )
+
         environment = require_development_instance(secret_key, publishable_key)
         print(f"clerk_environment = {environment}")
 
@@ -352,14 +443,14 @@ def main() -> int:
             # Without JWKS the backend cannot verify a Clerk JWT at all, so every
             # authenticated API call 401s and the app hard-redirects to /sign-in.
             # Public verification keys only -- no secret is written.
-            if args.jwks_out:
-                Path(args.jwks_out).write_text(json.dumps(admin.jwks()), encoding="utf-8")
+            if jwks_out:
+                jwks_out.write_text(json.dumps(admin.jwks()), encoding="utf-8")
                 print("jwks_written = true")
 
             # The Organization id is an identifier, not a secret, but it is only
             # exported for the database seed -- never echoed to the build log.
-            if args.github_env:
-                with Path(args.github_env).open("a", encoding="utf-8") as handle:
+            if github_env:
+                with github_env.open("a", encoding="utf-8") as handle:
                     handle.write(f"CLERK_E2E_ORG_ID={org_id}\n")
                     handle.write(f"E2E_CLERK_ORGANIZATION_ID={org_id}\n")
                     handle.write(f"CLERK_E2E_USER_ID={user_id}\n")
