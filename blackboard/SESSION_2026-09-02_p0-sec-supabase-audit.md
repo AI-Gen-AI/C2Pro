@@ -633,3 +633,189 @@ remediation authorization.**
 
 **Carried as UNPROVEN:** runtime `DATABASE_URL` role (P1-SEC-12) · checkpoint payload
 sensitivity (P0-SEC-11) · `pgaudit` EXECUTE revoke safety.
+
+---
+---
+
+# AMENDMENT — PRE-REMEDIATION GATE (2026-09-02, READ-ONLY)
+
+Phase-1 accepted by MASTER. MASTER independently confirmed anon-visible row counts
+(checkpoints 81 / blobs 274 / writes 1314 / migrations 10 / document_revisions 8).
+This amendment resolves the two architectural preconditions. **No mutation performed.**
+
+## A — BACKEND / CELERY DATABASE ROLE
+
+### Evidence
+
+`pg_stat_activity` (metadata only, no query text) shows **no FastAPI or Celery
+connection present**. Only three client backends exist:
+
+| role | application_name | client class | conns |
+|---|---|---|---|
+| `authenticator` | `postgrest` | external | 1 |
+| `postgres` | `mgmt-api` | external | 1 |
+| `supabase_admin` | `postgres_exporter` | external | 1 |
+
+Live correlation is therefore **not available** — the runtime is not currently
+connected. The role is established instead from configuration (evidence class *c*):
+
+- `.env.example:29` — `postgresql://postgres.<project-ref>:***@aws-1-<region>.pooler.supabase.com:6543/postgres`
+  (Supavisor **transaction-mode** pooler; the pooler username `postgres.<ref>` maps to role **`postgres`**)
+- `.env.example:34` — direct connection variant, same `postgres.<project-ref>` principal
+- `docker-compose.yml:135` (api) and `:185` (celery-worker) — **identical `DATABASE_URL`**
+
+No credential, password or full URL is reproduced here.
+
+### Role attributes (`pg_roles`)
+
+| role | superuser | **BYPASSRLS** | can login |
+|---|---|---|---|
+| `supabase_admin` | **yes** | **yes** | yes |
+| **`postgres`** | no | **YES** | yes |
+| `service_role` | no | **yes** | no (via authenticator) |
+| `authenticator` | no | no | yes |
+| `anon` / `authenticated` | no | no | no |
+
+### Verdict
+
+```
+BACKEND_DB_ROLE     = postgres        (via Supavisor pooler principal postgres.<project-ref>)
+CELERY_DB_ROLE      = postgres        (same DATABASE_URL; only Redis differs)
+SUPERUSER?          = NO              (rolsuper = false)
+BYPASSRLS?          = YES             (rolbypassrls = true)
+TABLE_OWNER?        = YES             (all public tables owned by postgres)
+CURRENT_RLS_EFFECT  = BYPASSED
+```
+
+Confidence: **CONFIRMED by configuration**, not by live correlation. Residual
+caveat: production Railway env vars were not readable, so a non-documented role
+cannot be excluded with certainty. Both documented forms resolve to `postgres`.
+
+### CONSEQUENCE — this corrects the Phase-1 P1-SEC-12 framing
+
+`FORCE ROW LEVEL SECURITY` removes only the **table-owner** exemption. It does
+**not** override the **BYPASSRLS role attribute**. `postgres` holds BYPASSRLS, so:
+
+> **Would enabling FORCE RLS on tenant tables break FastAPI/Celery? → NO.**
+> It would be a **no-op** for this connection model.
+
+Phase-1 listed FORCE RLS as a high-risk change that might break backend reads. That
+was wrong in this specific direction and is corrected here: it is neither risky nor
+useful under the current role. It cannot restore tenant enforcement either.
+
+**Three consequences that reshape remediation:**
+
+1. **Every RLS policy in this database is currently decorative for the backend.**
+   Production tenant isolation rests entirely on application-level `WHERE tenant_id`
+   filtering, not on RLS. The `SET LOCAL app.current_tenant` calls are set but never
+   evaluated on the backend path.
+2. **RLS today protects exactly one surface: the external PostgREST surface**
+   (`anon` / `authenticated`) — precisely the surface P0-SEC-A closes.
+3. **P0-SEC-A is therefore near-zero product-breakage risk.** Revoking `anon` and
+   `authenticated` cannot affect FastAPI, Celery or LangGraph, because none of them
+   use those roles. This is a much stronger safety argument than Phase-1 could make.
+
+Restoring real backend-side RLS would require changing the connection role to a
+non-BYPASSRLS principal — a substantial change, correctly out of scope here.
+
+**Side note (not a P0-SEC finding):** port 6543 is transaction-mode pooling, where
+`SET SESSION app.current_tenant = ''` (`core/database.py:115`) is not reliably
+scoped to subsequent statements. `SET LOCAL` usage is correct and unaffected.
+
+## B — LANGGRAPH CHECKPOINT ARCHITECTURE
+
+### Schema (standard `langgraph-checkpoint-postgres`)
+
+| table | columns | PK |
+|---|---|---|
+| `checkpoints` | `thread_id`, `checkpoint_ns`, `checkpoint_id`, `parent_checkpoint_id`, `type`, `checkpoint` jsonb, `metadata` jsonb | (`thread_id`,`checkpoint_ns`,`checkpoint_id`) |
+| `checkpoint_blobs` | `thread_id`, `checkpoint_ns`, `channel`, `version`, `type`, `blob` bytea | (`thread_id`,`checkpoint_ns`,`channel`,`version`) |
+| `checkpoint_writes` | `thread_id`, `checkpoint_ns`, `checkpoint_id`, `task_id`, `idx`, `channel`, `type`, `blob` bytea, `task_path` | (`thread_id`,`checkpoint_ns`,`checkpoint_id`,`task_id`,`idx`) |
+| `checkpoint_migrations` | `v` | (`v`) |
+
+Secondary indexes: `*_thread_id_idx` on the three data tables. **Foreign keys: none.**
+
+### Tenant correlation — the decisive result
+
+- **No `tenant_id` column. No `project_id` column.** On any of the four.
+- `thread_id` is generated as **`str(uuid4())`** — `apps/api/src/analysis/application/analyze_document_use_case.py:23`.
+  It is a **random UUID with no tenant or project derivation**.
+- `checkpoint_ns` is LangGraph-internal subgraph namespacing, not a tenant boundary.
+
+**Therefore tenant RLS is not naturally expressible on these tables.** Any tenant
+policy would require adding columns — which MASTER prohibited, and rightly so.
+This proves (rather than assumes) that **access removal is the correct control**.
+
+Note the asymmetry that makes this urgent: the **keys** carry no tenant identity, but
+the **payloads** do — `checkpoint`/`metadata` jsonb and `blob` bytea hold serialized
+`ProjectState`, and `nodes.py:500-515` writes `thread_id` and project context into
+checkpoint metadata. Tenant-bearing data under non-tenant-derivable keys is the
+worst combination for RLS and the best case for revoking access. *(Payloads were
+not read.)*
+
+### Access path
+
+- **Writer/reader:** `AsyncPostgresSaver` over a psycopg `AsyncConnectionPool` built
+  from `settings.database_url_async` — `analysis/adapters/graph/workflow.py:325-393`
+  (`conn_string` at :362 strips `+asyncpg`). Lifecycle via
+  `ensure_checkpointer_ready()` / `close_checkpointer_resources()` in `main.py:109,174`.
+- **Consumers:** `modules/hitl/adapters/checkpoint_service.py` (`aget_tuple`) and
+  `modules/hitl/application/resume_workflow_use_case.py` (HITL resume).
+- **Access class: DIRECT PostgreSQL as `postgres`.** Not PostgREST. Not service_role.
+
+### Origin of the `USING (true)` policies — a lint workaround, not a requirement
+
+`apps/api/alembic/versions/20260403_0003_fix_security_definer_views_rls_infra.py`
+— docstring line 10: *"6 infrastructure tables missing RLS (alembic_version, checkpoint_*)"*;
+lines 35-53 loop over the four tables emitting:
+
+```
+DROP POLICY IF EXISTS "{table}_select" ON {table};
+CREATE POLICY "{table}_select" ON {table} FOR SELECT USING (true);
+```
+
+**These policies are C2Pro-authored to clear the `rls_disabled_in_public` advisor
+ERROR. LangGraph does not require them.** Enabling RLS satisfied the linter; the
+permissive policy re-opened the data to `anon`. This is the concrete case for the
+Phase-1 position that a green dashboard is not the objective — chasing the lint
+*created* the most exposed surface in the database.
+
+### Verdicts
+
+```
+CHECKPOINT_DATA_API_REQUIREMENT = NOT_REQUIRED
+CAN WE REVOKE anon/authenticated/PUBLIC FROM CHECKPOINTS? = YES
+```
+
+Proof: no browser Supabase client exists (Phase-1 §5); the only REST caller is the
+waitlist route on **service_role**; the checkpointer uses direct PostgreSQL as
+`postgres`, which is both owner and BYPASSRLS. Removing `anon`/`authenticated`/`PUBLIC`
+privileges cannot affect any code path in the repository.
+
+## C — SUPERSEDED PHASE-1 SEQUENCING CONSTRAINT
+
+Phase-1 stated P0-SEC-C (partition RLS) must not ship before P0-SEC-B (fail-open
+policies), because leaves would inherit a fail-open parent policy. **That constraint
+assumed the `anon` grants remained in place.** Once PR-A revokes those grants, the
+external path is closed regardless of policy text, and the ordering constraint
+dissolves — leaf RLS can safely ship in PR-A. P0-SEC-B remains required, but as
+defence-in-depth and correctness work, not as a prerequisite for partition hardening.
+
+## D — VERIFIED NON-RISKS FOR PR-A
+
+- **Realtime:** `supabase_realtime` publication contains **no `public` tables** →
+  no subscription breakage.
+- **Waitlist:** uses `service_role`, which retains its grants and holds BYPASSRLS →
+  unaffected.
+- **Studio / mgmt-api:** connects as `postgres` → unaffected.
+- **PostgREST `authenticator`:** retains role-switching to `service_role` → unaffected.
+
+## E — CARRIED FORWARD AS UNPROVEN
+
+- Production Railway env vars not readable → backend role is config-confirmed, not
+  live-confirmed.
+- Checkpoint payload contents not read (out of scope, by instruction).
+- `pgaudit` EXECUTE revoke safety (deferred to P1-SEC-E).
+
+**Gate status: BOTH PRECONDITIONS RESOLVED. No mutation performed.
+STOPPED for MASTER authorization of P0-SEC-A.**
