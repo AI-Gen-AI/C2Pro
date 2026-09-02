@@ -3,7 +3,7 @@
 This directory contains active session scratch notes for ongoing work.
 
 ## Active Sessions
-- `SESSION_2026-09-02_p0-sec-supabase-audit.md` — P0-SEC Supabase security audit (Phase 1, read-only; awaiting MASTER remediation authorization)
+- `SESSION_2026-09-02_p0-sec-supabase-audit.md` — P0-SEC Supabase security audit + P0-SEC-A containment migration (validated on disposable DB; NOT applied to production)
 
 ## Archive
 All completed session notes, phase reports, and working documents are in `blackboard/archive/`.

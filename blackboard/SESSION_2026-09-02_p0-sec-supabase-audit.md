@@ -819,3 +819,109 @@ defence-in-depth and correctness work, not as a prerequisite for partition harde
 
 **Gate status: BOTH PRECONDITIONS RESOLVED. No mutation performed.
 STOPPED for MASTER authorization of P0-SEC-A.**
+
+---
+---
+
+# AMENDMENT 2 — P0-SEC-A IMPLEMENTED AS CODE (2026-09-02)
+
+**Status: MIGRATION AUTHORED AND VALIDATED. NOT APPLIED TO PRODUCTION.**
+Validation ran exclusively against a disposable local PostgreSQL 16.13 instance.
+
+## Accepted architecture truth
+
+`postgres` (BYPASSRLS, owner, not superuser) is the FastAPI/Celery role;
+`service_role` also holds BYPASSRLS; FORCE RLS cannot override BYPASSRLS;
+LangGraph checkpoints use direct PostgreSQL via `AsyncPostgresSaver`; the
+checkpoint `USING (true)` policies were a C2Pro lint workaround; no `public`
+table is in the Realtime publication; the frontend has no Data API dependency;
+the waitlist uses server-side `service_role`.
+
+## Scope delivered
+
+1. Revoke ALL on ALL TABLES + SEQUENCES in `public` from `anon`, `authenticated`,
+   `PUBLIC`. `service_role` untouched.
+2. Drop the 4 permissive checkpoint `SELECT ... USING (true)` policies.
+3. Enable RLS on `evidence_claims`, `evidence_extraction_events`,
+   `category_centroids` (no policies authored — `category_centroids` is global
+   reference data and must not be given manufactured tenant semantics).
+4. Enable RLS on the 4 snapshot leaf/default partitions (no policies — copying
+   the parent's fail-open policy down would reproduce the defect).
+5. Close default privileges for TABLES + SEQUENCES. FUNCTIONS untouched (P0-SEC-D).
+
+## Two defects caught during implementation
+
+**(a) `%` placeholder collision.** The first draft used `format('%I', ...)` and
+`RAISE NOTICE '%'`. A literal `%` in migration SQL is consumed by psycopg2's
+parameter interpolation under `op.execute()`, so the statements would have
+behaved differently under Alembic than under a raw `psql` test — passing local
+validation and failing at deploy. Rewritten using `quote_ident()` and
+concatenation; a regression test asserts the emitted SQL contains no `%`. The
+same bug was then found and fixed in the lint script's `LIKE` patterns.
+
+**(b) Hard-coded default-ACL owner list was incomplete.** The first draft
+iterated `ARRAY['postgres','supabase_admin',current_user]`. The self-verifying
+gate failed at the "after upgrade" phase with 4 blocking violations, because the
+fixture's owner (`c2pro_owner`) was not in that list and its default ACL kept
+granting to `anon`. Rewritten to drive from `pg_default_acl`, selecting only
+entries that actually grant to an external role — the minimal delta, and
+complete for any owner. This is exactly the "do not assume owner/global syntax"
+trap; a fixed list silently leaves the recurrence engine running.
+
+Related and unchanged: `postgres` is NOT a member of `supabase_admin`, so an
+unguarded `ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin` fails at deploy.
+Each target is attempted only when `pg_has_role(current_user, rec.owner, 'USAGE')`
+holds, and skipped with a NOTICE otherwise. In production, running as `postgres`,
+the `postgres` entry closes and `supabase_admin` is reported as requiring
+platform-level action.
+
+## Evidence
+
+**RED (pre-state, disposable DB):** `anon` read checkpoints 1 / blobs 1 / writes 1
+/ migrations 1, `document_revisions` 2 rows across 2 tenants (fail-open),
+evidence 1, centroids 1, snapshot leaf 1. `anon` INSERT succeeded on
+`category_centroids`, `evidence_claims`, and cross-tenant `document_revisions`.
+A newly created table auto-granted `DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE`
+to `anon`. Security lint: **45 blocking violations**.
+
+**GREEN (post-migration):** 38/38 external denial assertions DENIED for both
+`anon` and `authenticated`. Backend non-regression PASS: checkpoint put/get round
+trip, checkpoint resume read, evidence writer, centroid read, snapshot
+writer/read with leaf routing, tenant-scoped read, waitlist INSERT+SELECT as
+`service_role`. New table/sequence inherit no external grants; `service_role`
+default grants persist. Security lint: **PASSED (0 blocking, 6 informational)**.
+
+**Scope invariants held:** 6 fail-open COALESCE policies still present; snapshot
+leaves carry 0 policies; function default EXECUTE UNCHANGED; `waitlist_signups`
+still 0 policies (EXPECTED_DENY_ALL); FORCE RLS count still 0; `service_role`
+retains grants on all 15 tables; `anon`/`authenticated` grants = 0.
+
+**Cycle:** `p0_sec_a_gate.py` asserts RED → GREEN → RED → GREEN and passes.
+Downgrade restores exactly the 45 pre-state violations, proving deterministic
+symmetry. Re-apply is idempotent.
+
+**Pytest:** 59 passed against the migrated DB; 37 failed / 22 passed against the
+un-migrated DB (RED-first confirmed).
+
+## Gaps — NOT run, and why
+
+The repository's own Python suite could not be executed here: `apps/api` runtime
+dependencies are not installed and the package index repeatedly timed out in
+this sandbox. Therefore **the P0b canonical Acceptance Journey, the document
+analysis pipeline tests, and the Celery task-path tests were NOT run.** Their
+DB-level equivalents were exercised directly against the disposable database
+(items 1, 2, 5, 6, 7, 9, 10 of the required matrix), but that is not a substitute.
+These must go green in CI before production authorization.
+
+No Supabase development branch was created (that needs separate cost
+authorization), so no non-production Security Advisor result exists yet.
+
+## Residual findings after P0-SEC-A
+
+P0-SEC-B (24 fail-open policies; `app.current_tenant_id` split on 6 objects),
+P0-SEC-D (function EXECUTE grants, SECURITY DEFINER `is_project_member`, mutable
+search_path on 15 functions, FUNCTION default ACL), P1-SEC-E (extensions in
+`public`; `vector` has 237 dependents), and the unproven production
+`DATABASE_URL` role.
+
+**NOT APPLIED TO PRODUCTION. Awaiting MASTER production-remediation authorization.**
