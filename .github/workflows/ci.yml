@@ -345,6 +345,14 @@ jobs:
           python -m pytest tests/security/test_p0_sec_a_containment.py \
             --tb=short -q
 
+      # Portability guard. anon/authenticated are Supabase-only roles; naming
+      # them literally aborted the whole migration chain on plain PostgreSQL.
+      # Must run BEFORE the full gate, whose fixture creates those roles.
+      - name: P0-SEC-A portability gate (plain PostgreSQL, no Supabase roles)
+        env:
+          ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
+        run: python apps/api/scripts/p0_sec_a_gate.py --mode bare
+
       # Self-verifying gate: builds a disposable database from the recorded
       # production pre-state and asserts RED -> GREEN -> RED -> GREEN, so a
       # containment test that has lost its teeth fails the build instead of
@@ -352,7 +360,7 @@ jobs:
       - name: P0-SEC-A Supabase containment gate (disposable DB)
         env:
           ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
-        run: python apps/api/scripts/p0_sec_a_gate.py
+        run: python apps/api/scripts/p0_sec_a_gate.py --mode full
 
       - name: Upload security test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

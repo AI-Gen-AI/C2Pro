@@ -97,15 +97,29 @@ class TestMigrationShape:
     def test_migration_chains_to_production_head(self) -> None:
         module = _load_migration()
         assert module.revision == "20260902_0001"
-        # 20260824_0001 is the revision production actually reports in
-        # alembic_version. The repository carries other, unmerged heads.
+        # 20260824_0001 was the single Alembic head before this migration and
+        # is the revision production reports in alembic_version.
         assert module.down_revision == "20260824_0001"
 
     def test_upgrade_revokes_tables_and_sequences_from_external_roles(self) -> None:
         sql = _emitted("upgrade")
-        assert "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public" in sql
-        assert "REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public" in sql
-        assert sql.count("FROM anon, authenticated, PUBLIC") >= 2
+        assert "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM " in sql
+        assert "REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM " in sql
+        assert "'anon', 'authenticated'" in sql
+        assert "'PUBLIC'" in sql
+
+    def test_external_roles_are_never_named_literally_in_ddl(self) -> None:
+        """anon/authenticated are Supabase-only roles and do not exist on the
+        plain PostgreSQL used by CI and local dev. Naming them directly aborted
+        the whole migration chain with 'role \"anon\" does not exist'."""
+        for direction in ("upgrade", "downgrade"):
+            sql = _emitted(direction)
+            assert "FROM anon, authenticated" not in sql
+            assert "TO anon, authenticated" not in sql
+
+    def test_role_existence_is_guarded(self) -> None:
+        for direction in ("upgrade", "downgrade"):
+            assert "FROM pg_roles g WHERE g.rolname = r.name" in _emitted(direction)
 
     def test_service_role_is_never_revoked(self) -> None:
         """The waitlist route depends on service_role; it must survive intact."""
@@ -159,8 +173,8 @@ class TestMigrationShape:
 
     def test_downgrade_restores_pre_state(self) -> None:
         sql = _emitted("downgrade")
-        assert "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public" in sql
-        assert "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public" in sql
+        assert "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO " in sql
+        assert "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO " in sql
         for table in CHECKPOINT_TABLES:
             assert f'CREATE POLICY "{table}_select"' in sql
 

@@ -34,6 +34,20 @@ So `anon` and `authenticated` are unused by C2Pro, and removing their
 privileges is the narrowest control that actually closes the surface. RLS is
 retained as defence-in-depth, not as the sole control.
 
+PORTABILITY
+-----------
+`anon`, `authenticated` and `service_role` are Supabase platform roles. They do
+NOT exist on a plain PostgreSQL instance, which is what CI and local
+development use, so every statement here is guarded on role existence. An
+earlier revision of this migration named the roles literally and aborted the
+whole chain with ``role "anon" does not exist``, taking every DB-backed CI lane
+down with it.
+
+The SQL is also deliberately free of ``%``: a literal percent sign is consumed
+by psycopg2 parameter interpolation under ``op.execute()``, so ``format('%I')``
+and ``RAISE NOTICE '%'`` would behave differently under Alembic than under a
+raw psql test. Identifiers are quoted with ``quote_ident()`` and concatenated.
+
 SCOPE DISCIPLINE
 ----------------
 Deliberately NOT changed here (each belongs to a later phase):
@@ -81,42 +95,48 @@ _CHECKPOINT_POLICIES = (
     ("checkpoint_migrations", "checkpoint_migrations_select"),
 )
 
-# Default-ACL owners to close. `pg_default_acl` shows entries for both, but
-# `postgres` is NOT a member of `supabase_admin`, so a bare
-# ``ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin`` fails at deploy time with
-# "must be member of role". Each target is therefore attempted only when the
+# Builds a comma-separated grantee list containing only the external Supabase
+# roles that actually exist, always ending in PUBLIC (a keyword, never quoted).
+# On a plain PostgreSQL instance this collapses to just PUBLIC.
+_EXTERNAL_ROLE_LIST = """
+    SELECT concat_ws(', ',
+               (SELECT string_agg(quote_ident(r.name), ', ' ORDER BY r.name)
+                  FROM unnest(ARRAY['anon', 'authenticated']) AS r(name)
+                 WHERE EXISTS (SELECT 1 FROM pg_roles g WHERE g.rolname = r.name)),
+               'PUBLIC')
+"""
+
+REVOKE_EXISTING_SQL = f"""
+DO $$
+DECLARE
+    grantees text;
+BEGIN
+    {_EXTERNAL_ROLE_LIST} INTO grantees;
+
+    EXECUTE 'REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM ' || grantees;
+    EXECUTE 'REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM ' || grantees;
+END $$;
+"""
+
+# Driven from pg_default_acl rather than a hard-coded owner list: the set of
+# roles holding default privileges in `public` is environment-specific
+# (production shows `postgres` and `supabase_admin`), and a fixed list silently
+# misses any other owner, leaving the recurrence engine running for it.
+# Selecting only entries that actually grant to an external role keeps this the
+# minimal delta.
+#
+# `postgres` is NOT a member of `supabase_admin`, so an unguarded
+# ``ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin`` fails at deploy with
+# "must be member of role". Each owner is therefore attempted only when the
 # migration role can act for it, and skipped with a NOTICE otherwise.
-# ``current_user`` is always included so the role actually creating tables is
-# covered in every environment.
-_DEFAULT_ACL_OWNERS = ("postgres", "supabase_admin")
-
-REVOKE_EXISTING_TABLES_SQL = """
-REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public
-    FROM anon, authenticated, PUBLIC
-"""
-
-REVOKE_EXISTING_SEQUENCES_SQL = """
-REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public
-    FROM anon, authenticated, PUBLIC
-"""
-
-# NOTE: these DO blocks deliberately use quote_ident() + concatenation rather
-# than format()/RAISE placeholders. A literal "%" in migration SQL is consumed
-# by psycopg2's parameter interpolation when routed through op.execute(), so
-# "%I" and "%" placeholders would break at deploy time while still passing a
-# raw psql test. Keeping the SQL "%"-free makes it behave identically under
-# psql and under Alembic.
-DEFAULT_ACL_REVOKE_SQL = """
+DEFAULT_ACL_REVOKE_SQL = f"""
 DO $$
 DECLARE
     rec record;
+    grantees text;
 BEGIN
-    -- Driven from pg_default_acl rather than a hard-coded owner list: the set of
-    -- roles holding default privileges in `public` is environment-specific
-    -- (production shows `postgres` and `supabase_admin`), and a fixed list
-    -- silently misses any other owner, leaving the recurrence engine running for
-    -- it. Selecting only entries that actually grant to an external role keeps
-    -- this the minimal delta.
+    {_EXTERNAL_ROLE_LIST} INTO grantees;
+
     FOR rec IN
         SELECT DISTINCT pg_get_userbyid(d.defaclrole) AS owner, d.defaclobjtype AS objtype
           FROM pg_default_acl d
@@ -137,12 +157,10 @@ BEGIN
         END IF;
         IF rec.objtype = 'r' THEN
             EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE ' || quote_ident(rec.owner) ||
-                    ' IN SCHEMA public REVOKE ALL ON TABLES'
-                    ' FROM anon, authenticated, PUBLIC';
+                    ' IN SCHEMA public REVOKE ALL ON TABLES FROM ' || grantees;
         ELSE
             EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE ' || quote_ident(rec.owner) ||
-                    ' IN SCHEMA public REVOKE ALL ON SEQUENCES'
-                    ' FROM anon, authenticated, PUBLIC';
+                    ' IN SCHEMA public REVOKE ALL ON SEQUENCES FROM ' || grantees;
         END IF;
     END LOOP;
 END $$;
@@ -150,54 +168,80 @@ END $$;
 
 # Emergency-only. Restores the exact pre-state captured read-only from the
 # production project on 2026-09-02 and reproduced in
-# apps/api/tests/security/fixtures/p0_sec_a_prestate.sql. Values are hard-coded
-# rather than introspected so restoration is deterministic.
+# apps/api/tests/security/fixtures/p0_sec_a_prestate.sql. The grantee set is
+# hard-coded rather than introspected so restoration is deterministic; only the
+# existence guard is dynamic, because the roles are absent outside Supabase.
 DEFAULT_ACL_RESTORE_SQL = """
 DO $$
 DECLARE
-    target text;
-    targets text[] := ARRAY['postgres', 'supabase_admin', current_user];
+    rec record;
+    grantees text;
 BEGIN
-    FOREACH target IN ARRAY targets LOOP
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = target) THEN
+    SELECT string_agg(quote_ident(r.name), ', ' ORDER BY r.name) INTO grantees
+      FROM unnest(ARRAY['anon', 'authenticated']) AS r(name)
+     WHERE EXISTS (SELECT 1 FROM pg_roles g WHERE g.rolname = r.name);
+
+    IF grantees IS NULL THEN
+        RETURN;
+    END IF;
+
+    FOR rec IN
+        SELECT DISTINCT pg_get_userbyid(d.defaclrole) AS owner, d.defaclobjtype AS objtype
+          FROM pg_default_acl d
+          JOIN pg_namespace n ON n.oid = d.defaclnamespace
+         WHERE n.nspname = 'public' AND d.defaclobjtype IN ('r', 'S')
+    LOOP
+        IF NOT pg_has_role(current_user, rec.owner, 'USAGE') THEN
             CONTINUE;
         END IF;
-        IF NOT pg_has_role(current_user, target, 'USAGE') THEN
-            CONTINUE;
+        IF rec.objtype = 'r' THEN
+            EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE ' || quote_ident(rec.owner) ||
+                    ' IN SCHEMA public GRANT ALL ON TABLES TO ' || grantees;
+        ELSE
+            EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE ' || quote_ident(rec.owner) ||
+                    ' IN SCHEMA public GRANT ALL ON SEQUENCES TO ' || grantees;
         END IF;
-        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE ' || quote_ident(target) ||
-                ' IN SCHEMA public GRANT ALL ON TABLES'
-                ' TO anon, authenticated';
-        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE ' || quote_ident(target) ||
-                ' IN SCHEMA public GRANT ALL ON SEQUENCES'
-                ' TO anon, authenticated';
     END LOOP;
 END $$;
 """
 
-RESTORE_EXISTING_TABLES_SQL = """
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public
-    TO anon, authenticated
-"""
+RESTORE_EXISTING_SQL = """
+DO $$
+DECLARE
+    grantees text;
+BEGIN
+    SELECT string_agg(quote_ident(r.name), ', ' ORDER BY r.name) INTO grantees
+      FROM unnest(ARRAY['anon', 'authenticated']) AS r(name)
+     WHERE EXISTS (SELECT 1 FROM pg_roles g WHERE g.rolname = r.name);
 
-RESTORE_EXISTING_SEQUENCES_SQL = """
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public
-    TO anon, authenticated
+    IF grantees IS NULL THEN
+        RETURN;
+    END IF;
+
+    EXECUTE 'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ' || grantees;
+    EXECUTE 'GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ' || grantees;
+END $$;
 """
 
 
 def upgrade() -> None:
     # 1. Remove the external Data API surface on existing objects.
     #    service_role is intentionally untouched: the waitlist route depends on it.
-    op.execute(REVOKE_EXISTING_TABLES_SQL)
-    op.execute(REVOKE_EXISTING_SEQUENCES_SQL)
+    op.execute(REVOKE_EXISTING_SQL)
 
     # 2. Drop the permissive checkpoint SELECT policies. With RLS still enabled
     #    and no policy left, these tables become deny-by-default externally while
     #    the backend (owner + BYPASSRLS) is unaffected.
     for table, policy in _CHECKPOINT_POLICIES:
         op.execute(
-            f'DROP POLICY IF EXISTS "{policy}" ON public.{table}'
+            f"""
+            DO $$
+            BEGIN
+                IF to_regclass('public.{table}') IS NOT NULL THEN
+                    EXECUTE 'DROP POLICY IF EXISTS "{policy}" ON public.{table}';
+                END IF;
+            END $$;
+            """
         )
 
     # 3. Enable RLS where it was missing entirely, including every snapshot leaf.
@@ -256,5 +300,4 @@ def downgrade() -> None:
             """
         )
 
-    op.execute(RESTORE_EXISTING_TABLES_SQL)
-    op.execute(RESTORE_EXISTING_SEQUENCES_SQL)
+    op.execute(RESTORE_EXISTING_SQL)

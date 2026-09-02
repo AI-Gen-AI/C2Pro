@@ -83,17 +83,55 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--admin-dsn", default=os.environ.get("ADMIN_DSN"))
     parser.add_argument("--keep", action="store_true", help="do not drop the disposable DB")
+    parser.add_argument(
+        "--mode",
+        choices=["full", "bare"],
+        default="full",
+        help="full: Supabase-shaped pre-state cycle. bare: plain PostgreSQL with no "
+        "anon/authenticated roles, proving the migration is portable.",
+    )
     args = parser.parse_args()
     if not args.admin_dsn:
         print("pass --admin-dsn or set ADMIN_DSN", file=sys.stderr)
         return 2
 
     admin = args.admin_dsn.replace("postgresql+asyncpg://", "postgresql://")
-    target = admin.rsplit("/", 1)[0] + "/" + DB_NAME
 
-    psql(admin, sql=f'DROP DATABASE IF EXISTS "{DB_NAME}"')
-    psql(admin, sql=f'CREATE DATABASE "{DB_NAME}"')
+    db_name = DB_NAME if args.mode == "full" else DB_NAME + "_bare"
+    target = admin.rsplit("/", 1)[0] + "/" + db_name
+
+    psql(admin, sql=f'DROP DATABASE IF EXISTS "{db_name}"')
+    psql(admin, sql=f'CREATE DATABASE "{db_name}"')
     try:
+        if args.mode == "bare":
+            # Reproduces CI and local development: a plain PostgreSQL instance
+            # where the Supabase platform roles simply do not exist. Naming them
+            # literally aborted the entire migration chain with
+            # `role "anon" does not exist`, which took every DB-backed lane down.
+            for role in ("anon", "authenticated"):
+                out = subprocess.run(
+                    ["psql", target, "-tAc",
+                     f"SELECT 1 FROM pg_roles WHERE rolname = '{role}'"],
+                    capture_output=True, text=True)
+                if out.stdout.strip():
+                    raise SystemExit(
+                        f"bare mode needs a cluster without the '{role}' role; "
+                        f"this cluster has it. Run bare mode on a clean cluster."
+                    )
+            psql(target, sql="CREATE TABLE public.bare_probe (id int); "
+                             "CREATE SEQUENCE public.bare_probe_seq")
+            print("\n=== bare PostgreSQL: upgrade must apply cleanly ===")
+            psql(target, sql=emitted_sql("upgrade"))
+            print("--- bare upgrade: OK")
+            print("=== bare PostgreSQL: downgrade must apply cleanly ===")
+            psql(target, sql=emitted_sql("downgrade"))
+            print("--- bare downgrade: OK")
+            print("=== bare PostgreSQL: re-apply must apply cleanly ===")
+            psql(target, sql=emitted_sql("upgrade"))
+            print("--- bare re-apply: OK")
+            print("\nP0-SEC-A GATE (bare): PASSED (portable on plain PostgreSQL)")
+            return 0
+
         psql(target, path=FIXTURE)
         phase("pre-state", target, expect_pass=False)
 
@@ -108,7 +146,7 @@ def main() -> int:
         phase("after re-apply", target, expect_pass=True)
     finally:
         if not args.keep:
-            psql(admin, sql=f'DROP DATABASE IF EXISTS "{DB_NAME}"')
+            psql(admin, sql=f'DROP DATABASE IF EXISTS "{db_name}"')
 
     print("\nP0-SEC-A GATE: PASSED (RED -> GREEN -> RED -> GREEN)")
     return 0

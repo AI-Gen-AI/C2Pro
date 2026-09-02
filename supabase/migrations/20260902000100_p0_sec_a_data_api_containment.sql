@@ -7,19 +7,49 @@
 --
 -- Audit record: blackboard/SESSION_2026-09-02_p0-sec-supabase-audit.md
 
-REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public
-    FROM anon, authenticated, PUBLIC;
+DO $$
+DECLARE
+    grantees text;
+BEGIN
+    
+    SELECT concat_ws(', ',
+               (SELECT string_agg(quote_ident(r.name), ', ' ORDER BY r.name)
+                  FROM unnest(ARRAY['anon', 'authenticated']) AS r(name)
+                 WHERE EXISTS (SELECT 1 FROM pg_roles g WHERE g.rolname = r.name)),
+               'PUBLIC')
+ INTO grantees;
 
-REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public
-    FROM anon, authenticated, PUBLIC;
+    EXECUTE 'REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM ' || grantees;
+    EXECUTE 'REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM ' || grantees;
+END $$;
 
-DROP POLICY IF EXISTS "checkpoints_select" ON public.checkpoints;
+DO $$
+            BEGIN
+                IF to_regclass('public.checkpoints') IS NOT NULL THEN
+                    EXECUTE 'DROP POLICY IF EXISTS "checkpoints_select" ON public.checkpoints';
+                END IF;
+            END $$;
 
-DROP POLICY IF EXISTS "checkpoint_blobs_select" ON public.checkpoint_blobs;
+DO $$
+            BEGIN
+                IF to_regclass('public.checkpoint_blobs') IS NOT NULL THEN
+                    EXECUTE 'DROP POLICY IF EXISTS "checkpoint_blobs_select" ON public.checkpoint_blobs';
+                END IF;
+            END $$;
 
-DROP POLICY IF EXISTS "checkpoint_writes_select" ON public.checkpoint_writes;
+DO $$
+            BEGIN
+                IF to_regclass('public.checkpoint_writes') IS NOT NULL THEN
+                    EXECUTE 'DROP POLICY IF EXISTS "checkpoint_writes_select" ON public.checkpoint_writes';
+                END IF;
+            END $$;
 
-DROP POLICY IF EXISTS "checkpoint_migrations_select" ON public.checkpoint_migrations;
+DO $$
+            BEGIN
+                IF to_regclass('public.checkpoint_migrations') IS NOT NULL THEN
+                    EXECUTE 'DROP POLICY IF EXISTS "checkpoint_migrations_select" ON public.checkpoint_migrations';
+                END IF;
+            END $$;
 
 DO $$
             BEGIN
@@ -73,13 +103,16 @@ DO $$
 DO $$
 DECLARE
     rec record;
+    grantees text;
 BEGIN
-    -- Driven from pg_default_acl rather than a hard-coded owner list: the set of
-    -- roles holding default privileges in `public` is environment-specific
-    -- (production shows `postgres` and `supabase_admin`), and a fixed list
-    -- silently misses any other owner, leaving the recurrence engine running for
-    -- it. Selecting only entries that actually grant to an external role keeps
-    -- this the minimal delta.
+    
+    SELECT concat_ws(', ',
+               (SELECT string_agg(quote_ident(r.name), ', ' ORDER BY r.name)
+                  FROM unnest(ARRAY['anon', 'authenticated']) AS r(name)
+                 WHERE EXISTS (SELECT 1 FROM pg_roles g WHERE g.rolname = r.name)),
+               'PUBLIC')
+ INTO grantees;
+
     FOR rec IN
         SELECT DISTINCT pg_get_userbyid(d.defaclrole) AS owner, d.defaclobjtype AS objtype
           FROM pg_default_acl d
@@ -100,12 +133,10 @@ BEGIN
         END IF;
         IF rec.objtype = 'r' THEN
             EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE ' || quote_ident(rec.owner) ||
-                    ' IN SCHEMA public REVOKE ALL ON TABLES'
-                    ' FROM anon, authenticated, PUBLIC';
+                    ' IN SCHEMA public REVOKE ALL ON TABLES FROM ' || grantees;
         ELSE
             EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE ' || quote_ident(rec.owner) ||
-                    ' IN SCHEMA public REVOKE ALL ON SEQUENCES'
-                    ' FROM anon, authenticated, PUBLIC';
+                    ' IN SCHEMA public REVOKE ALL ON SEQUENCES FROM ' || grantees;
         END IF;
     END LOOP;
 END $$;
