@@ -925,3 +925,205 @@ search_path on 15 functions, FUNCTION default ACL), P1-SEC-E (extensions in
 `DATABASE_URL` role.
 
 **NOT APPLIED TO PRODUCTION. Awaiting MASTER production-remediation authorization.**
+
+---
+---
+
+# AMENDMENT 3 — CI ROOT CAUSE, PREVIEW FIDELITY, SUPABASE_ADMIN RESIDUAL
+
+**Correction to Amendment 2.** It said the repository suite was "not run". That
+was wrong in an important way: CI had actually run and **FAILED** (run
+33684769444 on b713ec8). "Not run" understated it. CI is authoritative.
+
+## A — CI root cause (from run 33684769444, not inferred)
+
+Two distinct failures, both **INTRODUCED_BY_#590**.
+
+**A1 — `role "anon" does not exist`.** Migrations Check log, verbatim:
+
+```
+sqlalchemy.exc.ProgrammingError: (asyncpg.exceptions.UndefinedObjectError)
+role "anon" does not exist
+[SQL:
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public
+    FROM anon, authenticated, PUBLIC
+]
+  File ".../alembic/versions/20260902_0001_p0_sec_a_data_api_containment.py",
+    line 192, in upgrade
+    op.execute(REVOKE_EXISTING_TABLES_SQL)
+```
+
+`anon`/`authenticated`/`service_role` are Supabase **platform** roles. They do
+not exist on the plain PostgreSQL that CI and local development use. Naming them
+literally aborted `alembic upgrade head`, which `bootstrap_test_infra.py:150`
+runs, so every DB-backed lane died at the same statement.
+
+Why the disposable DB missed it: the fixture *creates* those roles, so it was
+faithful to Supabase but **not** to CI. A validation environment that only
+models production cannot catch portability defects.
+
+**A2 — head pin.** `Backend Unit Tests`, independent of bootstrap:
+
+```
+FAILED tests/unit/test_alembic_single_head.py::
+  test_migration_health_parser_accepts_merge_revisions
+AssertionError: assert '20260902_0001' == '20260824_0001'
+1 failed, 2406 passed
+```
+
+`test_alembic_single_head.py:77` pins the expected single head, which this
+migration legitimately advances.
+
+**Classification**
+
+| Job | Class | Cause |
+|---|---|---|
+| Migrations Check (Alembic) | INTRODUCED_BY_#590 | A1 |
+| Backend Integration / Core / Security / Coherence / Modules | INTRODUCED_BY_#590 | A1 via bootstrap |
+| Frontend E2E Smoke | INTRODUCED_BY_#590 | A1 via E2E bootstrap |
+| Backend Unit | INTRODUCED_BY_#590 | A2 |
+| CI Status | INTRODUCED_BY_#590 | aggregate of the above |
+| Backend Lint / Typecheck / Presidio / Frontend Lint / Build / Tests | — | passed throughout |
+
+No PRE_EXISTING or INDEPENDENT failures were found.
+
+## B — Correction: the repository has ONE Alembic head, not five
+
+Amendment 1 reported 5 heads. **That was wrong.** The ad-hoc parser used there
+mishandled tuple `down_revision` values on merge revisions (e.g. `20260524_0001`
+has parents `("20260516_0004", "20260517_0002")`), so merge parents were never
+marked as referenced and their ancestors looked like heads. Using the
+repository's own `verify_migration_health.parse_migration_graph`, the head count
+is **1**. `down_revision = 20260824_0001` was correct, but because it was THE
+head, not one of several. The misleading comment has been removed from the
+migration and the test.
+
+## C — Fix applied
+
+Every statement now guards on role existence: the grantee list is built from
+`pg_roles` and collapses to `PUBLIC` alone where the Supabase roles are absent,
+so the migration is portable to plain PostgreSQL. The gate gained a
+`--mode bare` phase that applies upgrade/downgrade/re-apply on a cluster without
+those roles and **refuses to run vacuously** if the roles are present. CI runs
+bare mode before the full gate, because the full gate's fixture creates them.
+The head pin was updated to `20260902_0001`; the single-head invariant is
+unchanged and still enforced.
+
+## D — CI result after the fix (run 33687301888, head cd81545)
+
+| Job | Result |
+|---|---|
+| Migrations Check (Alembic) — incl. single-head regression | **SUCCESS** |
+| Backend Unit Tests (3.11) | **SUCCESS** |
+| Backend Security Suite | **SUCCESS** |
+| Backend Integration / Core / Coherence | **SUCCESS** |
+| Backend Lint / Typecheck / Presidio NER | **SUCCESS** |
+| Frontend Lint+Typecheck / Build / Tests+API Drift | **SUCCESS** |
+| CodeQL, gitleaks, Dependency Review, Supabase Preview | **SUCCESS** |
+
+The three new steps **executed** (they were skipped in the failed run):
+
+* `P0-SEC-A static containment checks` — SUCCESS
+* `P0-SEC-A portability gate (plain PostgreSQL, no Supabase roles)` — SUCCESS
+* `P0-SEC-A Supabase containment gate (disposable DB)` — SUCCESS
+
+## E — Preview vs production fidelity (read-only, both projects)
+
+Preview `pawvrrriovxjqkeggaeg` is built from **Supabase CLI migrations only** —
+23 applied, **no `alembic_version` table**, 45 public tables vs production's 61
+objects. It is therefore a *partial* validator.
+
+| Object | Production | Preview | Verdict |
+|---|---|---|---|
+| `checkpoints`, `checkpoint_blobs`, `checkpoint_writes`, `checkpoint_migrations` | RLS ON + 4 `USING (true)` policies | **RLS OFF, 0 policies** | **PREVIEW_BASELINE_DIVERGENCE** — the exposure never existed there, so dropping it is untestable |
+| `project_snapshots` leaf partitions (×4) | present, RLS OFF | **absent — parent has no partitions** | **PREVIEW_MISSING_OBJECT** — P0-SEC-02 untestable |
+| `evidence_claims`, `evidence_extraction_events` | RLS OFF, 0 policies | RLS ON, FORCE, **4 tenant policies** | **REPO_DRIFT** — the Supabase mirror and the Alembic migration disagree |
+| `category_centroids` | RLS OFF | RLS ON + FORCE, 0 policies | EXPECTED (RLS from this migration) + FORCE from the mirror = REPO_DRIFT |
+| `document_revisions` | RLS ON, 4 fail-open policies, FORCE OFF | RLS ON, 4 policies, **FORCE ON** | REPO_DRIFT on FORCE |
+| `waitlist_signups` | RLS ON, 0 policies | RLS ON, 0 policies | **MATCH** |
+| ext grants (anon/authenticated) on all above | ALL | **0** | **MATCH — containment confirmed** |
+
+**Consequence:** the Preview green proves the grant revoke and the `postgres`
+default-ACL closure. It does **not** prove the checkpoint policy drop, partition
+RLS, or the production evidence baseline. Per MASTER's instruction, no Advisor
+item is claimed fixed for an object Preview does not contain.
+
+## F — Preview security result (read-only)
+
+MASTER-observed and independently re-checked: for `category_centroids`,
+`checkpoint_*`, `evidence_claims`, `evidence_extraction_events` —
+anon SELECT false, anon INSERT false, authenticated SELECT false,
+service_role SELECT true. External table grants for anon/authenticated = **0**.
+
+Default ACL in Preview after the migration:
+
+| Owner | tables | sequences | functions |
+|---|---|---|---|
+| `postgres` | `{postgres, service_role}` — **CLOSED** | `{postgres, service_role}` — **CLOSED** | anon/authenticated retain EXECUTE (**out of scope, P0-SEC-D**) |
+| `supabase_admin` | anon/authenticated **STILL PRESENT** | anon/authenticated **STILL PRESENT** | unchanged |
+
+This is exactly the NOTICE/skip path. Recurrence prevention is **PARTIAL**.
+
+## G — SUPABASE_ADMIN_DEFAULT_ACL classification
+
+Evidence:
+
+* **A. Can a C2Pro migration create objects as `supabase_admin`?** No. Alembic
+  connects as `postgres` (`.env.example`), and the Supabase CLI migrations also
+  apply as `postgres`. Neither can `SET ROLE supabase_admin` — `postgres` is not
+  a member of it.
+* **B. Who owns the application tables?** Production: **61/61** public objects
+  owned by `postgres` (52 tables, 1 partitioned, 8 views). Preview: **45/45**
+  owned by `postgres`. **Zero** owned by `supabase_admin` in either.
+* **C. What does `supabase_admin` create?** Platform objects, in platform schemas
+  (`auth`, `storage`, `realtime`, `extensions`, `graphql`) — not `public`
+  application tables.
+* **D. Supported platform mechanism?** None found that a project-level role can
+  invoke; `supabase_admin` is platform-managed and `postgres` cannot alter its
+  default privileges. Changing it would require Supabase platform support.
+
+**Classification: `SUPABASE_ADMIN_DEFAULT_ACL = PLATFORM_RESIDUAL`.**
+
+Narrowed claim, as instructed — the ACL is **not** fixed:
+
+> C2Pro-created TABLE/SEQUENCE recurrence is closed for `postgres`-owned
+> application DDL; the Supabase-platform-owned default ACL remains a platform
+> security residual. Should the platform ever create a `public` object as
+> `supabase_admin`, that object would be born with anon/authenticated grants.
+
+Proposed separately (not in this PR): raise with Supabase support, or add a
+detector that fails CI if any `public` object appears owned by `supabase_admin`.
+
+## H — Sonar
+
+Quality Gate **FAILED** on b713ec8: Duplication on New Code **3.9%** (≤3%),
+Security Rating on New Code **C** (≥A). Addressed at source rather than by
+weakening tests:
+
+* **Duplication** — the stub-`alembic.op` migration loader was written three
+  times (mirror generator, gate, tests). Extracted to
+  `apps/api/scripts/p0_sec_a_common.py`; all three now share it.
+* **Security** — the gate's bare-mode role probe interpolated a role name into
+  SQL. Replaced with a parameter passed via `PGOPTIONS` and read through
+  `current_setting()`, so no value reaches statement text.
+
+No security assertion was removed or relaxed.
+
+## I — Downgrade review (MASTER item 9)
+
+* Production cannot auto-downgrade: deployment runs `alembic upgrade head` only
+  (`bootstrap_test_infra.py`, Makefile `db-migrate`); nothing invokes `downgrade`.
+* The downgrade contains a deterministic hard-coded pre-state; the only dynamic
+  part is role existence, which is required for portability, not a lookup of
+  what to restore.
+* Labelled **KNOWN-INSECURE** in the docstring, asserted by a test.
+* Rollback remains emergency-only and requires explicit incident authorization.
+
+## J — Residual
+
+P0-SEC-B, P0-SEC-D, P1-SEC-E, the unproven production `DATABASE_URL` role, the
+`supabase_admin` platform residual, and the Alembic/Supabase migration drift
+surfaced in §E (evidence tables, FORCE RLS, missing partitions) — that drift is
+a **new finding** worth its own task.
+
+**STILL NOT APPLIED TO PRODUCTION. PR #590 remains draft.**
