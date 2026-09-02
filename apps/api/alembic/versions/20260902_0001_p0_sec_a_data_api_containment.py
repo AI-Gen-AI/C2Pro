@@ -224,6 +224,22 @@ END $$;
 """
 
 
+def _guarded(table: str, statement: str) -> str:
+    """Wrap DDL so it is a no-op where the table is absent.
+
+    The same four-line guard was repeated for every table in both directions;
+    generating it keeps one definition of "only touch what exists".
+    """
+    return f"""
+            DO $$
+            BEGIN
+                IF to_regclass('public.{table}') IS NOT NULL THEN
+                    EXECUTE '{statement}';
+                END IF;
+            END $$;
+            """
+
+
 def upgrade() -> None:
     # 1. Remove the external Data API surface on existing objects.
     #    service_role is intentionally untouched: the waitlist route depends on it.
@@ -234,14 +250,7 @@ def upgrade() -> None:
     #    the backend (owner + BYPASSRLS) is unaffected.
     for table, policy in _CHECKPOINT_POLICIES:
         op.execute(
-            f"""
-            DO $$
-            BEGIN
-                IF to_regclass('public.{table}') IS NOT NULL THEN
-                    EXECUTE 'DROP POLICY IF EXISTS "{policy}" ON public.{table}';
-                END IF;
-            END $$;
-            """
+            _guarded(table, f'DROP POLICY IF EXISTS \"{policy}\" ON public.{table}')
         )
 
     # 3. Enable RLS where it was missing entirely, including every snapshot leaf.
@@ -249,14 +258,7 @@ def upgrade() -> None:
     #    policy down would reproduce the very defect P0-SEC-B exists to remove.
     for table in _RLS_ENABLE_TABLES:
         op.execute(
-            f"""
-            DO $$
-            BEGIN
-                IF to_regclass('public.{table}') IS NOT NULL THEN
-                    EXECUTE 'ALTER TABLE public.{table} ENABLE ROW LEVEL SECURITY';
-                END IF;
-            END $$;
-            """
+            _guarded(table, f"ALTER TABLE public.{table} ENABLE ROW LEVEL SECURITY")
         )
 
     # 4. Close the recurrence engine so the next CREATE TABLE does not re-open
@@ -277,27 +279,15 @@ def downgrade() -> None:
 
     for table in _RLS_ENABLE_TABLES:
         op.execute(
-            f"""
-            DO $$
-            BEGIN
-                IF to_regclass('public.{table}') IS NOT NULL THEN
-                    EXECUTE 'ALTER TABLE public.{table} DISABLE ROW LEVEL SECURITY';
-                END IF;
-            END $$;
-            """
+            _guarded(table, f"ALTER TABLE public.{table} DISABLE ROW LEVEL SECURITY")
         )
 
     for table, policy in _CHECKPOINT_POLICIES:
         op.execute(
-            f"""
-            DO $$
-            BEGIN
-                IF to_regclass('public.{table}') IS NOT NULL THEN
-                    EXECUTE 'CREATE POLICY "{policy}" ON public.{table} '
-                            'FOR SELECT USING (true)';
-                END IF;
-            END $$;
-            """
+            _guarded(
+                table,
+                f'CREATE POLICY \"{policy}\" ON public.{table} FOR SELECT USING (true)',
+            )
         )
 
     op.execute(RESTORE_EXISTING_SQL)
