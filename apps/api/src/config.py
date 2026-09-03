@@ -494,7 +494,7 @@ class Settings(BaseSettings):
 
         if self.environment == "test":
             if self.supabase_url is None:
-                self.supabase_url = "http://test.supabase.local"
+                self.supabase_url = "https://test.supabase.local"
             if self.supabase_anon_key is None:
                 self.supabase_anon_key = "test-anon-key"
             if self.supabase_service_role_key is None:
