@@ -127,6 +127,11 @@ def test_test_settings_allow_missing_supabase_credentials(
 
     settings = Settings(_env_file=None)
 
-    assert settings.supabase_url == "http://test.supabase.local"
+    assert settings.supabase_url == "https://test.supabase.local"
     assert settings.supabase_anon_key == "test-anon-key"
     assert settings.supabase_service_role_key == "test-service-role-key"
+    # The placeholder is never dialled, but it is still a URL the codebase
+    # hands out, and a clear-text scheme in one is a security finding whether
+    # or not anything connects to it. Nothing here needs http://, so nothing
+    # here uses it.
+    assert not settings.supabase_url.startswith("http://")

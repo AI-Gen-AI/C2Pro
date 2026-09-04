@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import os
 import re
 from typing import Any
@@ -39,6 +41,21 @@ class RagProviderUnavailableError(RuntimeError):
     def __init__(self, message: str, *, status_code: int | None = None) -> None:
         super().__init__(message)
         self.status_code = status_code
+
+
+def _deterministic_embedding(text_value: str) -> list[float]:
+    """A stable unit-length vector derived from the text itself.
+
+    Same text -> same vector, different text -> different vector, so similarity
+    search stays meaningful in tests without any network call.
+    """
+    digest = hashlib.sha256(text_value.encode("utf-8")).digest()
+    raw = [
+        ((digest[index % len(digest)] + index) % 256) / 255.0
+        for index in range(EMBEDDING_DIMENSION)
+    ]
+    norm = math.sqrt(sum(value * value for value in raw)) or 1.0
+    return [value / norm for value in raw]
 
 
 class RagProviderMisconfiguredError(RuntimeError):
@@ -206,6 +223,13 @@ async def _embed_texts(texts: list[str]) -> list[list[float]]:
     Protected by circuit breaker to prevent cascading failures
     when OpenAI API is unavailable.
     """
+    if settings.embeddings_mock:
+        # Provider/network boundary only: chunking, vector shape and the chunk
+        # INSERT stay exactly as in production, so the acceptance journey still
+        # exercises the seam that silently produced zero chunks. Refused in
+        # production by validate_security_posture.
+        return [_deterministic_embedding(text_value) for text_value in texts]
+
     api_key = _resolve_openai_api_key()
     if not api_key:
         raise RagProviderMisconfiguredError("OPENAI_API_KEY is not configured.")

@@ -929,6 +929,242 @@ jobs:
           fi
           docker compose -f docker-compose.test.yml down -v
 
+  # ──────────────── P0b canonical acceptance gate (required) ─────────────
+  # Guards the seam that failed silently in production: a real contract reached
+  # upload_status=analyzed with 25 clauses, ZERO RAG chunks, zero analyses, zero
+  # project_events and zero project_snapshots -- while every existing check was
+  # green, including frontend-e2e-smoke.
+  #
+  # It has NO `RUN_FULL_E2E` guard on purpose. The smoke lane above green-skips
+  # when that variable is unset, which is exactly how a completely broken
+  # pipeline coexisted with a green CI. Here, absent prerequisites FAIL: a gate
+  # that could not run has not passed.
+  p0b-acceptance:
+    name: P0b Acceptance Journey
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      ENVIRONMENT: test
+      AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
+      # Deterministic inference at the provider boundary ONLY. RAG chunking,
+      # chunk persistence, the graph, DB, Redis and the browser stay real.
+      C2PRO_AI_MOCK: "1"
+      C2PRO_EMBEDDINGS_MOCK: "1"
+      # Browser calls must go through the Next.js proxy so the Clerk bearer token
+      # reaches the local backend without a cross-origin preflight.
+      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+      BACKEND_URL: http://localhost:8000
+      PLAYWRIGHT_BASE_URL: http://localhost:3100
+      # uploadDocument deliberately bypasses the /api proxy and POSTs straight to
+      # the backend (Vercel caps proxied bodies at ~4.5MB), so the backend must
+      # allow this lane's browser origin. cors_origins defaults to ports
+      # 3000/3001 and this lane serves on 3100; production already allows its own
+      # origin, which is why only CI needed this.
+      # JSON array, not a bare string: pydantic-settings JSON-parses complex-typed
+      # env vars in EnvSettingsSource BEFORE field validators run, so a bare
+      # value raises SettingsError and Settings() cannot be constructed at all.
+      CORS_ORIGINS: '["http://localhost:3100"]'
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Generated per run rather than hard-coded: this lane is new code, and a
+      # literal secret here is a real finding even when the value is throwaway.
+      - name: Generate ephemeral test JWT secret
+        run: |
+          secret="$(openssl rand -hex 32)"
+          # $GITHUB_ENV values are NOT masked in the step env dump, so register
+          # it with the runner's masker before exporting it.
+          echo "::add-mask::$secret"
+          echo "JWT_SECRET_KEY=$secret" >> "$GITHUB_ENV"
+
+      # Fail, never skip. This step is the whole point of the lane.
+      - name: Verify gate prerequisites
+        run: |
+          set -euo pipefail
+          missing=0
+          if [ -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" ]; then
+            echo "::error::NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is not configured."
+            missing=1
+          fi
+          if [ -z "${CLERK_SECRET_KEY:-}" ]; then
+            echo "::error::CLERK_SECRET_KEY is not configured."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::P0b acceptance cannot run without Clerk test credentials."
+            echo "::error::This is a CI CONFIGURATION DEFECT, reported as a failure rather"
+            echo "::error::than a green skip: an un-runnable gate has not been satisfied."
+            exit 1
+          fi
+
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Bootstrap infrastructure (PostgreSQL + Redis)
+        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
+
+      # The E2E identity had ZERO Clerk Organization memberships, so C2Pro could
+      # never resolve a tenant: lib/clerk-tenant.ts reads the tenant from the
+      # ACTIVE Organization's publicMetadata, and AuthSync auto-activates one
+      # only at exactly one membership. This reconciles the dedicated E2E
+      # Organization idempotently, and FAILS CLOSED unless the Clerk credentials
+      # are positively identified as a development/test instance.
+      - name: Reconcile dedicated Clerk E2E Organization fixture
+        run: python apps/api/scripts/provision_clerk_e2e_fixture.py
+
+      # Clerk and the local database must describe the SAME tenant. Auth
+      # tenancy only -- the journey still creates its own clean project and
+      # uploads its own document through the browser.
+      - name: Seed deterministic E2E auth tenancy
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          import asyncio
+
+          from src.core.database import close_db, get_raw_session, init_db
+          from tests.e2e_seed.seed_wedge import seed_e2e_auth_tenancy
+
+
+          async def main() -> None:
+              await init_db()
+              try:
+                  async with get_raw_session() as db:
+                      ids = await seed_e2e_auth_tenancy(db)
+                  print(f"seeded tenant={ids['tenant_id']} user={ids['user_id']}")
+              finally:
+                  await close_db()
+
+
+          asyncio.run(main())
+          PY
+
+      # Seeding a value and proving it are different things, and this is a
+      # tenant boundary: a wrong clerk_org_id would resolve the Clerk JWT to a
+      # different tenant (or auto-provision one) while the journey still passed.
+      # Boolean equality evidence only; no Clerk identifier is printed.
+      - name: Verify Clerk <-> local tenant linkage
+        working-directory: apps/api
+        run: python scripts/verify_e2e_tenant_link.py
+
+      # The async seam that failed in production. Not mocked away.
+      - name: Start Celery worker (document_parsing)
+        working-directory: apps/api
+        run: |
+          python -m celery -A src.core.tasks.celery_app worker \
+            --loglevel=info --queues=document_parsing --concurrency=2 \
+            > "$RUNNER_TEMP/c2pro-p0b-worker.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-p0b-worker.pid"
+          sleep 10
+          if ! kill -0 "$(cat "$RUNNER_TEMP/c2pro-p0b-worker.pid")"; then
+            cat "$RUNNER_TEMP/c2pro-p0b-worker.log"
+            echo "::error::Celery worker failed to start; the P0b async seam cannot be exercised."
+            exit 1
+          fi
+
+      # The backend cannot verify a Clerk JWT without JWKS: _get_jwks() returns
+      # None with neither CLERK_JWKS_URL nor CLERK_ISSUER set, so every
+      # authenticated call 401s and the app hard-redirects to /sign-in. The
+      # fixture step wrote the instance JWKS; serve it locally, as the FRT-192
+      # lane already does, rather than depending on a hard-coded Clerk host.
+      - name: Start backend API
+        working-directory: apps/api
+        run: |
+          python -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP" \
+            > "$RUNNER_TEMP/c2pro-p0b-jwks.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-p0b-jwks.pid"
+          CLERK_JWKS_URL=http://127.0.0.1:8765/clerk-jwks.json \
+            python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 \
+            > "$RUNNER_TEMP/c2pro-p0b-api.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-p0b-api.pid"
+          for _ in {1..45}; do
+            if curl --fail --silent http://localhost:8000/health/live > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/c2pro-p0b-api.log"
+          exit 1
+
+      - name: Setup web environment
+        uses: ./.github/actions/setup-node-web
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Bounded auth-continuity gate. The journey's auth preamble failed three
+      # times in three different ways, so the seam is isolated and answered in
+      # seconds here. If a storageState session cannot survive into a chromium
+      # context, no project is created, nothing is uploaded, and no worker runs.
+      # The project-entry seam is gated INSIDE this journey, in its own page and
+      # context, so no separate invocation is needed or trusted. It fails fast
+      # (~20s) before any project creation, upload or worker work.
+      - name: P0b single-document Health journey
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright test src/tests/e2e/p0b-single-document-health.spec.ts --project=p0b-acceptance
+
+      # Browser-only assertions would have passed in production. This proves the
+      # chain underneath actually ran.
+      - name: Verify P0b persistence chain
+        working-directory: apps/api
+        run: python scripts/verify_p0b_journey.py --project-id-file ../web/playwright/.p0b/project-id.txt
+
+      # Diagnostic only -- never gates. When the journey fails, this says WHICH
+      # link of the chain is missing (document / clauses / chunks / analysis /
+      # event / snapshot) instead of leaving only the browser-side symptom.
+      - name: Diagnose P0b persistence chain on failure
+        if: failure()
+        continue-on-error: true
+        working-directory: apps/api
+        run: python scripts/verify_p0b_journey.py --project-id-file ../web/playwright/.p0b/project-id.txt
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: p0b-playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 14
+
+      - name: Upload P0b service logs on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: p0b-service-logs
+          path: |
+            ${{ runner.temp }}/c2pro-p0b-api.log
+            ${{ runner.temp }}/c2pro-p0b-worker.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Cleanup
+        if: always()
+        run: |
+          for name in worker api jwks; do
+            if [ -f "$RUNNER_TEMP/c2pro-p0b-$name.pid" ]; then
+              kill "$(cat "$RUNNER_TEMP/c2pro-p0b-$name.pid")" || true
+            fi
+          done
+          docker compose -f docker-compose.test.yml down -v || true
+
   # TASK-DEV-018: previously only Vercel ran `next build` at deploy time — a
   # production build break was never caught in CI, only at deploy. Advisory
   # for now; promote to REQUIRED_JOBS once it has run green for a while.
@@ -977,6 +1213,7 @@ jobs:
       - frontend-quality
       - frontend-test
       - frontend-e2e-smoke
+      - p0b-acceptance
       - frontend-build
     if: always()
     permissions:
@@ -1078,6 +1315,7 @@ jobs:
           RESULT_BACKEND_MODULES: ${{ needs.backend-modules.result }}
           RESULT_BACKEND_COVERAGE: ${{ needs.backend-coverage.result }}
           RESULT_FRONTEND_BUILD: ${{ needs.frontend-build.result }}
+          RESULT_P0B_ACCEPTANCE: ${{ needs.p0b-acceptance.result }}
         run: |
           set -euo pipefail
 
@@ -1100,6 +1338,7 @@ jobs:
             "frontend-test:$RESULT_FRONTEND_TEST"
             "frontend-e2e-smoke:$RESULT_FRONTEND_E2E"
             "frontend-build:$RESULT_FRONTEND_BUILD"
+            "p0b-acceptance:$RESULT_P0B_ACCEPTANCE"
           )
           ADVISORY_JOBS=()
 

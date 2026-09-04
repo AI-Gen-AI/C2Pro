@@ -252,6 +252,10 @@ class Settings(BaseSettings):
     ai_use_cache: bool = True
     ai_cache_ttl: int = Field(default=3600, ge=0)  # 1 hora
     ai_mock: bool = Field(default=False, validation_alias="C2PRO_AI_MOCK")
+    # Deterministic embeddings for the P0b acceptance journey. The journey has to
+    # persist REAL RAG chunks -- that is the seam that failed in production -- so
+    # only the provider network call is replaced, never the chunking or the write.
+    embeddings_mock: bool = Field(default=False, validation_alias="C2PRO_EMBEDDINGS_MOCK")
 
     # ===========================================
     # DOCUMENT PROCESSING
@@ -485,9 +489,12 @@ class Settings(BaseSettings):
         if self.environment == "production" and self.ai_mock:
             raise ValueError("C2PRO_AI_MOCK cannot be enabled in production")
 
+        if self.environment == "production" and self.embeddings_mock:
+            raise ValueError("C2PRO_EMBEDDINGS_MOCK cannot be enabled in production")
+
         if self.environment == "test":
             if self.supabase_url is None:
-                self.supabase_url = "http://test.supabase.local"
+                self.supabase_url = "https://test.supabase.local"
             if self.supabase_anon_key is None:
                 self.supabase_anon_key = "test-anon-key"
             if self.supabase_service_role_key is None:
