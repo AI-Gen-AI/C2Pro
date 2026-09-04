@@ -144,7 +144,32 @@ def test_no_credential_in_failure_output() -> None:
     assert canary not in r.stderr, "Canary password leaked to stderr"
 
 
-# ── 11. No shell=True in subprocess calls ────────────────────────────────────
+# ── 11. _pg_exec must not split SQL on semicolons (dollar-quoted PL/pgSQL regression) ──
+
+def test_pg_exec_does_not_split_on_semicolons() -> None:
+    """Regression: _pg_exec must send the full SQL string to the server unparsed.
+
+    The upgrade SQL begins with a dollar-quoted PL/pgSQL block:
+        DO $$
+        DECLARE
+            grantees text;     ← interior semicolon
+        BEGIN ...
+        $$;
+
+    Splitting on ';' cuts this block after 'grantees text', producing an
+    unterminated dollar-quoted string error (SyntaxError from PostgreSQL).
+    The fix: pass the complete query string to psycopg.execute() with no params
+    so psycopg uses the simple query protocol (PQsendQuery) and the server
+    parses all statements including dollar-quoted blocks.
+    """
+    content = GATE.read_text(encoding="utf-8")
+    assert 'split(";")' not in content and "split(';')" not in content, (
+        "_pg_exec still uses split(';') which corrupts dollar-quoted PL/pgSQL blocks. "
+        "Send the full SQL string to the server and let PostgreSQL parse it."
+    )
+
+
+# ── 12. No shell=True in subprocess calls ────────────────────────────────────
 
 def test_no_shell_execution() -> None:
     """The gate script must not use shell=True in any subprocess call."""

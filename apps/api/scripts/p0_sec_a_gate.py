@@ -79,7 +79,12 @@ def _sanitize_exc_msg(msg: str, dsn: str) -> str:
 
 
 def _pg_exec(dsn: str, *, sql: str | None = None, path: Path | None = None) -> None:
-    """Execute a SQL script against dsn using psycopg (no psql subprocess)."""
+    """Execute a SQL script against dsn using psycopg (no psql subprocess).
+
+    The full query string is sent to PostgreSQL as a single unit via the simple
+    query protocol so the server handles all parsing, including dollar-quoted
+    PL/pgSQL blocks. Never split trusted SQL strings on semicolons.
+    """
     query = sql or (path.read_text(encoding="utf-8") if path else None)
     if not query:
         raise ValueError("sql or path required")
@@ -87,18 +92,14 @@ def _pg_exec(dsn: str, *, sql: str | None = None, path: Path | None = None) -> N
         try:
             import psycopg
             with psycopg.connect(dsn, autocommit=True) as conn:
-                # Execute statements one at a time; emitted_sql joins them with ;\n\n
-                # and the fixture file terminates each statement with ;.
-                for stmt in (s.strip() for s in query.split(";") if s.strip()):
-                    conn.execute(stmt)
+                conn.execute(query)
         except ImportError:
             import psycopg2
             conn = psycopg2.connect(dsn)
             conn.autocommit = True
             try:
                 with conn.cursor() as cur:
-                    for stmt in (s.strip() for s in query.split(";") if s.strip()):
-                        cur.execute(stmt)
+                    cur.execute(query)
             finally:
                 conn.close()
     except SystemExit:
