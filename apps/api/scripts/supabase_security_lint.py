@@ -13,9 +13,9 @@ findings but belong to P0-SEC-B/D; they are reported as INFO here and must not
 fail the build until their own remediation lands.
 
 Usage:
-    python apps/api/scripts/supabase_security_lint.py --dsn postgresql://...
-    DATABASE_URL=... python apps/api/scripts/supabase_security_lint.py
+    DATABASE_URL=postgresql://... python apps/api/scripts/supabase_security_lint.py
 Exit code 1 if any BLOCKING violation is found.
+DSN must be supplied via DATABASE_URL environment variable only (not CLI).
 """
 
 from __future__ import annotations
@@ -140,13 +140,15 @@ def run(dsn: str) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dsn", default=os.environ.get("DATABASE_URL"))
-    args = parser.parse_args()
-    if not args.dsn:
-        print("no DSN: pass --dsn or set DATABASE_URL", file=sys.stderr)
+    # Parse args with no custom arguments so any unrecognized flag (including the
+    # formerly-supported --dsn) is rejected by argparse. DSN must come from the
+    # environment, never from the CLI (S8706: CLI args flow to DB connection).
+    argparse.ArgumentParser().parse_args()
+    dsn = os.environ.get("DATABASE_URL")
+    if not dsn:
+        print("no DSN: set DATABASE_URL", file=sys.stderr)
         return 2
-    return run(args.dsn.replace("postgresql+asyncpg://", "postgresql://"))
+    return run(dsn.replace("postgresql+asyncpg://", "postgresql://"))
 
 
 if __name__ == "__main__":

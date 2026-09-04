@@ -350,7 +350,7 @@ jobs:
       # Must run BEFORE the full gate, whose fixture creates those roles.
       - name: P0-SEC-A portability gate (plain PostgreSQL, no Supabase roles)
         env:
-          ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
+          P0_SEC_ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
         run: python apps/api/scripts/p0_sec_a_gate.py --mode bare
 
       # Self-verifying gate: builds a disposable database from the recorded
@@ -359,7 +359,7 @@ jobs:
       # passing vacuously.
       - name: P0-SEC-A Supabase containment gate (disposable DB)
         env:
-          ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
+          P0_SEC_ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
         run: python apps/api/scripts/p0_sec_a_gate.py --mode full
 
       - name: Upload security test results
