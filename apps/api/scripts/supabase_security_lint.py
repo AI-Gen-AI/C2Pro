@@ -128,6 +128,60 @@ _EXCESS_POLICY_NAMES: tuple[tuple[str, str], ...] = (
 )
 
 
+def _check_p0_sec_a(cur: object, protected: list[str], blocking: list[str]) -> None:
+    """Execute P0-SEC-A control-family checks against an open cursor."""
+    cur.execute(Q_PERMISSIVE_POLICY, {"protected": protected})  # type: ignore[union-attr]
+    for table, policy, roles, cmd in cur.fetchall():  # type: ignore[union-attr]
+        blocking.append(
+            f"permissive policy {policy} on {table} ({cmd} to {roles}) "
+            f"exposes a protected table"
+        )
+
+    cur.execute(Q_RLS_DISABLED, {"protected": protected})  # type: ignore[union-attr]
+    for (table,) in cur.fetchall():  # type: ignore[union-attr]
+        blocking.append(f"RLS disabled on protected table {table}")
+
+    cur.execute(Q_EXTERNAL_GRANTS, {"roles": list(EXTERNAL_ROLES)})  # type: ignore[union-attr]
+    for table, grantee, privs in cur.fetchall():  # type: ignore[union-attr]
+        blocking.append(
+            f"{grantee} holds {privs} on public.{table}; "
+            f"no Data API dependency is proven for it"
+        )
+
+    cur.execute(Q_DEFAULT_ACL)  # type: ignore[union-attr]
+    for owner, objtype, acl in cur.fetchall():  # type: ignore[union-attr]
+        kind = "TABLES" if objtype == "r" else "SEQUENCES"
+        for role in EXTERNAL_ROLES:
+            if f"{role}=" in (acl or ""):
+                blocking.append(
+                    f"default privileges for {owner} grant {kind} to {role}; "
+                    f"new objects would be exposed on creation"
+                )
+
+
+def _check_p0_sec_b(cur: object, blocking: list[str]) -> None:
+    """Execute P0-SEC-B control-family checks against an open cursor."""
+    cur.execute(Q_BLOCKING_FAIL_OPEN)  # type: ignore[union-attr]
+    for table, policy, location in cur.fetchall():  # type: ignore[union-attr]
+        blocking.append(
+            f"fail-open COALESCE policy {policy} on {table} ({location}); "
+            f"P0-SEC-B migration (20260905_0001) must be applied"
+        )
+
+    for table, policy in _EXCESS_POLICY_NAMES:
+        cur.execute(  # type: ignore[union-attr]
+            "SELECT COUNT(*) FROM pg_policies "
+            "WHERE schemaname='public' AND tablename=%s AND policyname=%s",
+            (table, policy),
+        )
+        row = cur.fetchone()  # type: ignore[union-attr]
+        if row and row[0] > 0:
+            blocking.append(
+                f"excess FOR ALL policy {policy} on {table} still present; "
+                f"P0-SEC-B migration (20260905_0001) must be applied"
+            )
+
+
 def run(dsn: str, scope: str | None = None) -> int:
     """Check the database against Supabase security controls.
 
@@ -157,56 +211,9 @@ def run(dsn: str, scope: str | None = None) -> int:
 
     with conn, conn.cursor() as cur:
         if run_a:
-            cur.execute(Q_PERMISSIVE_POLICY, {"protected": protected})
-            for table, policy, roles, cmd in cur.fetchall():
-                blocking.append(
-                    f"permissive policy {policy} on {table} ({cmd} to {roles}) "
-                    f"exposes a protected table"
-                )
-
-            cur.execute(Q_RLS_DISABLED, {"protected": protected})
-            for (table,) in cur.fetchall():
-                blocking.append(f"RLS disabled on protected table {table}")
-
-            cur.execute(Q_EXTERNAL_GRANTS, {"roles": list(EXTERNAL_ROLES)})
-            for table, grantee, privs in cur.fetchall():
-                blocking.append(
-                    f"{grantee} holds {privs} on public.{table}; "
-                    f"no Data API dependency is proven for it"
-                )
-
-            cur.execute(Q_DEFAULT_ACL)
-            for owner, objtype, acl in cur.fetchall():
-                kind = "TABLES" if objtype == "r" else "SEQUENCES"
-                for role in EXTERNAL_ROLES:
-                    if f"{role}=" in (acl or ""):
-                        blocking.append(
-                            f"default privileges for {owner} grant {kind} to {role}; "
-                            f"new objects would be exposed on creation"
-                        )
-
+            _check_p0_sec_a(cur, protected, blocking)
         if run_b:
-            # P0-SEC-B: COALESCE fail-open (BLOCKING)
-            cur.execute(Q_BLOCKING_FAIL_OPEN)
-            for table, policy, location in cur.fetchall():
-                blocking.append(
-                    f"fail-open COALESCE policy {policy} on {table} ({location}); "
-                    f"P0-SEC-B migration (20260905_0001) must be applied"
-                )
-
-            # P0-SEC-B: excess permissive FOR ALL policies (BLOCKING)
-            for table, policy in _EXCESS_POLICY_NAMES:
-                cur.execute(
-                    "SELECT COUNT(*) FROM pg_policies "
-                    "WHERE schemaname='public' AND tablename=%s AND policyname=%s",
-                    (table, policy),
-                )
-                row = cur.fetchone()
-                if row and row[0] > 0:
-                    blocking.append(
-                        f"excess FOR ALL policy {policy} on {table} still present; "
-                        f"P0-SEC-B migration (20260905_0001) must be applied"
-                    )
+            _check_p0_sec_b(cur, blocking)
 
     for line in info:
         print(f"INFO     {line}")
