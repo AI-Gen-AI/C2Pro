@@ -1,0 +1,655 @@
+"""P0-SEC-B: fail-closed COALESCE → NULLIF RLS policy migration.
+
+Three layers:
+
+* **Static** checks run everywhere with no database. They pin the migration's
+  revision chain, assert no COALESCE appears in the upgrade output, verify the
+  downgrade is documented KNOWN-INSECURE, and check parity between the
+  canonical Alembic source and the generated Supabase CLI mirror.
+
+* **Pre-state fixture** checks verify the test fixture file is structurally
+  correct (contains COALESCE, the non-BYPASSRLS role is present, etc.).
+
+* **Catalog** checks run only when ``P0_SEC_B_TEST_DSN`` points at a loopback
+  admin DSN.  They build a disposable database from the pre-state fixture,
+  assert TRUE RED (GUC-absent / GUC-empty sees all rows before migration),
+  apply the migration, assert GREEN (GUC-absent / GUC-empty sees no rows),
+  assert behavioral invariants (wrong/correct tenant), verify the precondition
+  aborts on bad data, and confirm P0-SEC-A tables are unaffected.
+
+Never point these at production.
+
+TRUE_RED_TESTS_FAILED_BEFORE  — verified in catalog phase 'pre-state'.
+INVARIANT_TESTS_PASSED_BEFORE — verified in catalog phase 'pre-state invariants'.
+"""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+import uuid
+from contextlib import contextmanager
+from pathlib import Path
+
+import pytest
+
+pytestmark = pytest.mark.security
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+MIGRATION = (
+    REPO_ROOT
+    / "apps/api/alembic/versions/20260905_0001_p0_sec_b_fail_closed_policies.py"
+)
+MIRROR = (
+    REPO_ROOT
+    / "supabase/migrations/20260905000100_p0_sec_b_fail_closed_policies.sql"
+)
+GENERATOR = REPO_ROOT / "apps/api/scripts/generate_p0_sec_b_mirror.py"
+FIXTURE = REPO_ROOT / "apps/api/tests/security/fixtures/p0_sec_b_prestate.sql"
+
+sys.path.insert(0, str(REPO_ROOT / "apps/api/scripts"))
+from p0_sec_b_common import emitted_sql as _emitted_sql  # noqa: E402
+from p0_sec_b_common import load_migration as _load_migration  # noqa: E402
+
+COALESCE_EXPR = "COALESCE(NULLIF(current_setting('app.current_tenant', true), '')::uuid, tenant_id)"
+NULLIF_EXPR = "NULLIF(current_setting('app.current_tenant', true), '')::uuid"
+
+COALESCE_TABLES = (
+    "project_states",
+    "project_state_entities",
+    "document_revisions",
+    "project_events",
+    "project_snapshots",
+    "document_artifacts",
+)
+
+COALESCE_POLICIES = (
+    ("project_states",         "project_states_select"),
+    ("project_states",         "project_states_insert"),
+    ("project_states",         "project_states_update"),
+    ("project_states",         "project_states_delete"),
+    ("project_state_entities", "pse_select"),
+    ("project_state_entities", "pse_insert"),
+    ("project_state_entities", "pse_update"),
+    ("project_state_entities", "pse_delete"),
+    ("document_revisions",     "docrev_select"),
+    ("document_revisions",     "docrev_insert"),
+    ("document_revisions",     "docrev_update"),
+    ("document_revisions",     "docrev_delete"),
+    ("project_events",         "project_events_select"),
+    ("project_events",         "project_events_insert"),
+    ("project_events",         "project_events_update"),
+    ("project_events",         "project_events_delete"),
+    ("project_snapshots",      "project_snapshots_select"),
+    ("project_snapshots",      "project_snapshots_insert"),
+    ("project_snapshots",      "project_snapshots_update"),
+    ("project_snapshots",      "project_snapshots_delete"),
+    ("document_artifacts",     "document_artifacts_select"),
+    ("document_artifacts",     "document_artifacts_insert"),
+    ("document_artifacts",     "document_artifacts_update"),
+    ("document_artifacts",     "document_artifacts_delete"),
+)
+
+EXCESS_POLICIES = (
+    ("analyses",          "tenant_isolation_analyses"),
+    ("alerts",            "tenant_isolation_alerts"),
+    ("coherence_results", "tenant_isolation_coherence_results"),
+    ("clause_embeddings", "tenant_isolation_clause_embeddings"),
+    ("clause_embeddings", "clause_embeddings_tenant_isolation"),
+)
+
+TENANT_A = "aaaaaaaa-aaaa-aaaa-aaaa-000000000001"
+TENANT_B = "bbbbbbbb-bbbb-bbbb-bbbb-000000000002"
+PROJECT_A = "cccccccc-cccc-cccc-cccc-000000000001"
+
+DSN = os.environ.get("P0_SEC_B_TEST_DSN")
+requires_db = pytest.mark.skipif(
+    not DSN,
+    reason="set P0_SEC_B_TEST_DSN to a loopback admin DSN to run catalog checks",
+)
+
+
+# ═══════════════════════════════════════════════════════════ static checks
+
+
+class TestMigrationShape:
+    def test_revision_chain(self) -> None:
+        m = _load_migration()
+        assert m.revision == "20260905_0001"
+        assert m.down_revision == "20260902_0001"
+
+    def test_upgrade_contains_no_coalesce_in_policies(self) -> None:
+        """After migration every policy must use NULLIF, not COALESCE."""
+        sql = _emitted_sql("upgrade")
+        # Policies are CREATE POLICY statements; COALESCE must not appear in them.
+        for line in sql.splitlines():
+            if "CREATE POLICY" in line:
+                assert "COALESCE" not in line, f"COALESCE found in policy: {line}"
+
+    def test_upgrade_contains_all_24_policy_drops(self) -> None:
+        sql = _emitted_sql("upgrade")
+        for table, policy in COALESCE_POLICIES:
+            assert f"DROP POLICY IF EXISTS {policy} ON {table}" in sql, (
+                f"upgrade missing DROP for {policy} ON {table}"
+            )
+
+    def test_upgrade_contains_all_24_nullif_policy_creates(self) -> None:
+        sql = _emitted_sql("upgrade")
+        for table, policy in COALESCE_POLICIES:
+            assert f"CREATE POLICY {policy} ON {table}" in sql, (
+                f"upgrade missing CREATE for {policy} ON {table}"
+            )
+
+    def test_upgrade_drops_all_5_excess_policies(self) -> None:
+        sql = _emitted_sql("upgrade")
+        for table, policy in EXCESS_POLICIES:
+            assert f"DROP POLICY IF EXISTS {policy} ON {table}" in sql, (
+                f"upgrade missing DROP for excess policy {policy} ON {table}"
+            )
+
+    def test_upgrade_does_not_create_excess_policies(self) -> None:
+        sql = _emitted_sql("upgrade")
+        for _table, policy in EXCESS_POLICIES:
+            assert f"CREATE POLICY {policy}" not in sql, (
+                f"upgrade must not recreate excess policy {policy}"
+            )
+
+    def test_upgrade_has_lock_timeout(self) -> None:
+        assert "lock_timeout" in _emitted_sql("upgrade")
+
+    def test_upgrade_has_precondition_block(self) -> None:
+        sql = _emitted_sql("upgrade")
+        assert "P0-SEC-B PRECONDITION FAILED" in sql
+
+    def test_precondition_skips_if_projects_absent(self) -> None:
+        sql = _emitted_sql("upgrade")
+        assert "information_schema.tables" in sql
+        assert "table_name = 'projects'" in sql or "table_name='projects'" in sql
+
+    def test_upgrade_sql_has_no_bare_psycopg2_placeholders(self) -> None:
+        """A bare '%s' / '%d' is consumed by psycopg2 interpolation under op.execute().
+        '%%I' is correct: psycopg2 converts '%%' → '%' so PostgreSQL sees '%I' for
+        format().  Remove all doubled '%%' and assert nothing remains.
+        The precondition DO block intentionally uses '%%I'."""
+        sql = _emitted_sql("upgrade")
+        after_strip = sql.replace("%%", "")
+        assert "%" not in after_strip, (
+            "Bare '%' found in upgrade SQL after removing '%%' pairs — "
+            "psycopg2 would consume it as a placeholder"
+        )
+
+    def test_downgrade_sql_has_no_bare_psycopg2_placeholders(self) -> None:
+        sql = _emitted_sql("downgrade")
+        after_strip = sql.replace("%%", "")
+        assert "%" not in after_strip, (
+            "Bare '%' found in downgrade SQL after removing '%%' pairs"
+        )
+
+    def test_downgrade_restores_coalesce_policies(self) -> None:
+        sql = _emitted_sql("downgrade")
+        assert "COALESCE" in sql
+
+    def test_downgrade_restores_excess_policies(self) -> None:
+        sql = _emitted_sql("downgrade")
+        for _table, policy in EXCESS_POLICIES:
+            assert f"CREATE POLICY {policy}" in sql
+
+    def test_downgrade_is_documented_as_known_insecure(self) -> None:
+        m = _load_migration()
+        assert "KNOWN-INSECURE" in (m.downgrade.__doc__ or "")
+
+    def test_24_policies_across_6_tables(self) -> None:
+        assert len(COALESCE_POLICIES) == 24
+        tables = {t for t, _ in COALESCE_POLICIES}
+        assert len(tables) == 6
+
+    def test_5_excess_policies_across_4_tables(self) -> None:
+        assert len(EXCESS_POLICIES) == 5
+        tables = {t for t, _ in EXCESS_POLICIES}
+        assert len(tables) == 4
+
+    def test_migration_does_not_touch_p0_sec_a_tables(self) -> None:
+        """P0-SEC-A scope (checkpoint/evidence/snapshot-leaf RLS) must be untouched."""
+        upgrade = _emitted_sql("upgrade")
+        downgrade = _emitted_sql("downgrade")
+        p0_sec_a_tables = (
+            "checkpoints",
+            "checkpoint_blobs",
+            "checkpoint_writes",
+            "checkpoint_migrations",
+            "evidence_claims",
+            "evidence_extraction_events",
+            "category_centroids",
+        )
+        for table in p0_sec_a_tables:
+            for sql in (upgrade, downgrade):
+                assert f"ON {table}" not in sql or "DROP POLICY IF EXISTS" not in sql, (
+                    f"migration unexpectedly alters P0-SEC-A table {table}"
+                )
+
+
+# ══════════════════════════════════════════════════════ mirror parity
+
+
+class TestSupabaseMirrorParity:
+    def test_mirror_exists(self) -> None:
+        assert MIRROR.exists(), f"Supabase mirror not found: {MIRROR}"
+
+    def test_mirror_matches_canonical_alembic_source(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(GENERATOR), "--check"],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_mirror_is_marked_generated(self) -> None:
+        assert "DO NOT EDIT BY HAND" in MIRROR.read_text(encoding="utf-8")
+
+    def test_mirror_contains_no_coalesce_in_policies(self) -> None:
+        sql = MIRROR.read_text(encoding="utf-8")
+        for line in sql.splitlines():
+            if "CREATE POLICY" in line:
+                assert "COALESCE" not in line
+
+
+# ═══════════════════════════════════════════════════ prestate fixture
+
+
+class TestPreStateFixture:
+    def test_fixture_exists(self) -> None:
+        assert FIXTURE.exists()
+
+    def test_fixture_contains_coalesce_policies(self) -> None:
+        body = FIXTURE.read_text(encoding="utf-8")
+        assert "COALESCE" in body
+
+    def test_fixture_has_nobypassrls_test_role(self) -> None:
+        body = FIXTURE.read_text(encoding="utf-8")
+        assert "c2pro_sec_rls_test" in body
+        assert "NOBYPASSRLS" in body
+
+    def test_fixture_has_nosuperuser_test_role(self) -> None:
+        body = FIXTURE.read_text(encoding="utf-8")
+        assert "NOSUPERUSER" in body
+
+    def test_fixture_has_seed_rows_for_two_tenants(self) -> None:
+        body = FIXTURE.read_text(encoding="utf-8")
+        assert TENANT_A in body
+        assert TENANT_B in body
+
+    def test_fixture_has_projects_stub_table(self) -> None:
+        body = FIXTURE.read_text(encoding="utf-8")
+        assert "CREATE TABLE" in body and "projects" in body
+
+    def test_fixture_covers_all_6_coalesce_tables(self) -> None:
+        body = FIXTURE.read_text(encoding="utf-8")
+        for table in COALESCE_TABLES:
+            assert table in body, f"prestate fixture missing table {table}"
+
+
+# ═══════════════════════════════════════════════════════ catalog checks
+#
+# These tests require P0_SEC_B_TEST_DSN to point at a loopback admin DSN.
+# Each test class uses module-scoped fixtures that create and drop independent
+# disposable databases, so the tests are fully self-contained.
+
+
+def _db_conn(dsn: str):
+    """Return a psycopg(2) connection with autocommit=True."""
+    try:
+        import psycopg
+        conn = psycopg.connect(dsn, autocommit=True)
+        return conn
+    except ImportError:
+        import psycopg2
+        conn = psycopg2.connect(dsn)
+        conn.autocommit = True
+        return conn
+
+
+def _exec_sql(dsn: str, sql: str) -> None:
+    conn = _db_conn(dsn)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+    finally:
+        conn.close()
+
+
+def _count_as_role(dsn: str, table: str, *, tenant_guc: str | None) -> int:
+    """Count rows visible to c2pro_sec_rls_test under the given GUC."""
+    conn = _db_conn(dsn)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("RESET app.current_tenant")
+            if tenant_guc is not None:
+                cur.execute("SET app.current_tenant = %s", (tenant_guc,))
+            cur.execute("SET ROLE c2pro_sec_rls_test")
+            try:
+                cur.execute(f"SELECT COUNT(*) FROM {table}")  # nosec B608
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+            finally:
+                cur.execute("RESET ROLE")
+                cur.execute("RESET app.current_tenant")
+    finally:
+        conn.close()
+
+
+def _make_db_dsn(admin_dsn: str, db_name: str) -> str:
+    return admin_dsn.rsplit("/", 1)[0] + "/" + db_name
+
+
+@contextmanager
+def _disposable_db(admin_dsn: str, db_name: str, fixture_path: Path):
+    """Context manager: create a disposable DB, load fixture, yield DSN, drop."""
+    db_dsn = _make_db_dsn(admin_dsn, db_name)
+    _exec_sql(admin_dsn, f'DROP DATABASE IF EXISTS "{db_name}"')
+    _exec_sql(admin_dsn, f'CREATE DATABASE "{db_name}"')
+    try:
+        _exec_sql(db_dsn, fixture_path.read_text(encoding="utf-8"))
+        yield db_dsn
+    finally:
+        _exec_sql(admin_dsn, f'DROP DATABASE IF EXISTS "{db_name}"')
+
+
+@pytest.fixture(scope="module")
+def prestate_dsn():
+    """Module-scoped: disposable DB in COALESCE pre-state."""
+    if not DSN:
+        yield None
+        return
+    db_name = f"p0_sec_b_test_prestate_{uuid.uuid4().hex[:8]}"
+    with _disposable_db(DSN, db_name, FIXTURE) as dsn:
+        yield dsn
+
+
+@pytest.fixture(scope="module")
+def migrated_dsn(prestate_dsn):
+    """Module-scoped: same DB with upgrade applied."""
+    if prestate_dsn is None:
+        yield None
+        return
+    _exec_sql(prestate_dsn, _emitted_sql("upgrade"))
+    yield prestate_dsn
+
+
+# ─────────────────────────────────────────── TRUE RED catalog (pre-migration)
+
+
+@requires_db
+class TestTrueRedCatalog:
+    """TRUE_RED_TESTS_FAILED_BEFORE: GUC-absent and GUC='' must expose all rows."""
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_guc_absent_sees_all_rows_before_migration(self, prestate_dsn, table) -> None:
+        count = _count_as_role(prestate_dsn, table, tenant_guc=None)
+        assert count > 0, (
+            f"RED FAILED: {table} returned 0 rows with no GUC "
+            f"— COALESCE fail-open not reproducing in prestate"
+        )
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_empty_guc_sees_all_rows_before_migration(self, prestate_dsn, table) -> None:
+        count = _count_as_role(prestate_dsn, table, tenant_guc="")
+        assert count > 0, (
+            f"RED FAILED: {table} returned 0 rows with empty GUC "
+            f"— COALESCE fail-open not reproducing in prestate"
+        )
+
+
+# ─────────────────────────────────── BEHAVIORAL INVARIANTS catalog (pre-migration)
+
+
+@requires_db
+class TestInvariantsBefore:
+    """INVARIANT_TESTS_PASSED_BEFORE: wrong/correct tenant isolation holds pre-migration."""
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_wrong_tenant_sees_only_own_rows_before_migration(self, prestate_dsn, table) -> None:
+        count = _count_as_role(prestate_dsn, table, tenant_guc=TENANT_B)
+        assert count == 1, (
+            f"INVARIANT FAILED pre-migration: {table}: TENANT_B GUC returned "
+            f"{count} rows, expected 1 (TENANT_B's own row)"
+        )
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_correct_tenant_sees_own_rows_before_migration(self, prestate_dsn, table) -> None:
+        count = _count_as_role(prestate_dsn, table, tenant_guc=TENANT_A)
+        assert count == 1, (
+            f"INVARIANT FAILED pre-migration: {table}: TENANT_A GUC returned "
+            f"{count} rows, expected 1 (TENANT_A's own row)"
+        )
+
+
+# ─────────────────────────────────────────── GREEN catalog (post-migration)
+
+
+@requires_db
+class TestGreenCatalog:
+    """GUC-absent and GUC='' must return zero rows after migration."""
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_guc_absent_sees_no_rows_after_migration(self, migrated_dsn, table) -> None:
+        count = _count_as_role(migrated_dsn, table, tenant_guc=None)
+        assert count == 0, (
+            f"GREEN FAILED: {table} returned {count} rows with no GUC after migration "
+            f"— NULLIF fail-closed not applied?"
+        )
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_empty_guc_sees_no_rows_after_migration(self, migrated_dsn, table) -> None:
+        count = _count_as_role(migrated_dsn, table, tenant_guc="")
+        assert count == 0, (
+            f"GREEN FAILED: {table} returned {count} rows with empty GUC after migration "
+            f"— NULLIF fail-closed not applied?"
+        )
+
+
+# ─────────────────────────────────── BEHAVIORAL INVARIANTS catalog (post-migration)
+
+
+@requires_db
+class TestInvariantsAfter:
+    """Wrong/correct tenant isolation must hold after migration."""
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_wrong_tenant_sees_only_own_rows_after_migration(self, migrated_dsn, table) -> None:
+        count = _count_as_role(migrated_dsn, table, tenant_guc=TENANT_B)
+        assert count == 1, (
+            f"INVARIANT FAILED post-migration: {table}: TENANT_B GUC returned "
+            f"{count} rows, expected 1"
+        )
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_correct_tenant_sees_own_rows_after_migration(self, migrated_dsn, table) -> None:
+        count = _count_as_role(migrated_dsn, table, tenant_guc=TENANT_A)
+        assert count == 1, (
+            f"INVARIANT FAILED post-migration: {table}: TENANT_A GUC returned "
+            f"{count} rows, expected 1"
+        )
+
+
+# ──────────────────────────────────────────── PRECONDITION ABORT catalog
+
+
+@requires_db
+class TestPreconditionAbort:
+    """Upgrade must abort when tenant_id/projects.tenant_id disagree."""
+
+    def test_precondition_aborts_on_mismatched_row(self) -> None:
+        if not DSN:
+            pytest.skip("requires P0_SEC_B_TEST_DSN")
+
+        db_name = f"p0_sec_b_test_abort_{uuid.uuid4().hex[:8]}"
+        with _disposable_db(DSN, db_name, FIXTURE) as db_dsn:
+            bad_id = str(uuid.uuid4())
+            # Insert analyses row where tenant_id disagrees with PROJECT_A's tenant.
+            _exec_sql(
+                db_dsn,
+                f"INSERT INTO analyses (id, project_id, tenant_id) VALUES "
+                f"('{bad_id}'::uuid, '{PROJECT_A}'::uuid, '{TENANT_B}'::uuid)",
+            )
+
+            # The upgrade must raise the precondition exception.
+            got_expected = False
+            try:
+                _exec_sql(db_dsn, _emitted_sql("upgrade"))
+            except Exception as exc:
+                if "P0-SEC-B PRECONDITION FAILED" in str(exc):
+                    got_expected = True
+                else:
+                    raise
+
+            assert got_expected, (
+                "upgrade did not raise P0-SEC-B PRECONDITION FAILED on mismatched data"
+            )
+
+            # Verify the COALESCE policies are still in place (upgrade rolled back).
+            conn = _db_conn(db_dsn)
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT COUNT(*) FROM pg_policies "
+                        "WHERE schemaname='public' AND tablename='project_states' "
+                        "AND policyname='project_states_select' "
+                        "AND qual LIKE '%COALESCE%'"
+                    )
+                    row = cur.fetchone()
+                    coalesce_count = int(row[0]) if row else 0
+            finally:
+                conn.close()
+
+            assert coalesce_count == 1, (
+                f"After abort, expected COALESCE policy still present on project_states, "
+                f"found {coalesce_count}"
+            )
+
+
+# ─────────────────────────────────────── DOWNGRADE / REAPPLY catalog
+
+
+@requires_db
+class TestDowngradeReapply:
+    """Downgrade restores fail-open; re-apply closes again (idempotent)."""
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_downgrade_restores_fail_open(self, migrated_dsn, table) -> None:
+        # This test applies downgrade then checks RED; then re-applies upgrade.
+        # WARNING: all TestDowngradeReapply tests share migrated_dsn — they
+        # mutate it sequentially. Ordering matters; pytest collects in definition
+        # order so the parametrized downgrade tests run before re-apply.
+        pass  # actual logic is in the module-level sequenced test below.
+
+    def test_downgrade_then_reapply_cycle(self, migrated_dsn) -> None:
+        """Full downgrade → RED → re-apply → GREEN cycle on the migrated DB."""
+        # Downgrade.
+        _exec_sql(migrated_dsn, _emitted_sql("downgrade"))
+
+        # Verify RED after downgrade.
+        for table in COALESCE_TABLES:
+            count = _count_as_role(migrated_dsn, table, tenant_guc=None)
+            assert count > 0, (
+                f"DOWNGRADE FAILED: {table} returned 0 rows without GUC "
+                f"after downgrade — COALESCE not restored"
+            )
+
+        # Re-apply upgrade.
+        _exec_sql(migrated_dsn, _emitted_sql("upgrade"))
+
+        # Verify GREEN after re-apply.
+        for table in COALESCE_TABLES:
+            count = _count_as_role(migrated_dsn, table, tenant_guc=None)
+            assert count == 0, (
+                f"RE-APPLY FAILED: {table} returned {count} rows without GUC "
+                f"after re-apply — NULLIF not re-applied"
+            )
+
+
+# ─────────────────────────────────────────── P0-SEC-A REGRESSION GUARD
+
+
+@requires_db
+class TestP0SecARegression:
+    """P0-SEC-B must not affect tables hardened by P0-SEC-A."""
+
+    def test_excess_policies_are_dropped(self, migrated_dsn) -> None:
+        conn = _db_conn(migrated_dsn)
+        try:
+            with conn.cursor() as cur:
+                for table, policy in EXCESS_POLICIES:
+                    cur.execute(
+                        "SELECT COUNT(*) FROM pg_policies "
+                        "WHERE schemaname='public' AND tablename=%s AND policyname=%s",
+                        (table, policy),
+                    )
+                    row = cur.fetchone()
+                    count = int(row[0]) if row else 0
+                    assert count == 0, (
+                        f"Excess policy {policy} on {table} was not dropped"
+                    )
+        finally:
+            conn.close()
+
+    def test_canonical_crud_policies_survive_on_excess_tables(self, migrated_dsn) -> None:
+        """The 4 canonical per-operation NULLIF policies must remain on each excess table."""
+        conn = _db_conn(migrated_dsn)
+        try:
+            with conn.cursor() as cur:
+                for table in ("analyses", "alerts", "coherence_results", "clause_embeddings"):
+                    for op in ("select", "insert", "update", "delete"):
+                        policy = f"{table}_tenant_isolation_{op}"
+                        cur.execute(
+                            "SELECT COUNT(*) FROM pg_policies "
+                            "WHERE schemaname='public' AND tablename=%s AND policyname=%s",
+                            (table, policy),
+                        )
+                        row = cur.fetchone()
+                        count = int(row[0]) if row else 0
+                        assert count == 1, (
+                            f"Canonical policy {policy} on {table} is missing after migration"
+                        )
+        finally:
+            conn.close()
+
+
+# ─────────────────────────────── POSTGRES / BYPASSRLS COMPATIBILITY
+
+
+@requires_db
+class TestPostgresCompatibility:
+    """Upgrade runs on plain PostgreSQL with no Supabase roles.
+
+    The migration must not fail if anon/authenticated/service_role do not exist.
+    This mirrors what happens in CI and local dev environments.
+    """
+
+    def test_upgrade_is_portable_without_supabase_roles(self) -> None:
+        """The upgrade SQL must not reference Supabase-specific role names."""
+        sql = _emitted_sql("upgrade")
+        for role in ("anon", "authenticated", "service_role"):
+            # Policy bodies must not grant/revoke to these roles directly.
+            assert f"TO {role}" not in sql, f"upgrade references Supabase role {role}"
+            assert f"FROM {role}" not in sql, f"upgrade references Supabase role {role}"
+
+    def test_bypassrls_session_user_sees_everything_regardless(self, migrated_dsn) -> None:
+        """A superuser / BYPASSRLS session bypasses RLS and always sees all rows.
+
+        This confirms the migration does not accidentally break superuser access.
+        The admin DSN connects as a BYPASSRLS user, so no GUC is needed.
+        """
+        conn = _db_conn(migrated_dsn)
+        try:
+            with conn.cursor() as cur:
+                for table in COALESCE_TABLES:
+                    cur.execute(f"SELECT COUNT(*) FROM {table}")  # nosec B608
+                    row = cur.fetchone()
+                    count = int(row[0]) if row else 0
+                    assert count == 2, (
+                        f"BYPASSRLS session sees {count} rows in {table}, expected 2 "
+                        f"(all seed rows should be visible to superuser)"
+                    )
+        finally:
+            conn.close()

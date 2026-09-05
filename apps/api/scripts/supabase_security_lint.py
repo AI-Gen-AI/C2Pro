@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Catalog-driven Supabase security gate for the P0-SEC-A finding classes.
+"""Catalog-driven Supabase security gate for P0-SEC-A and P0-SEC-B findings.
 
 The Supabase Security Advisor is a dashboard, not a gate, and it missed two of
 the three most serious findings in the 2026-09-02 audit: it stops looking at a
@@ -7,10 +7,15 @@ table once RLS is enabled, so a permissive ``USING (true)`` policy over live
 rows produced no lint at all. These checks read `pg_catalog` directly so that
 class cannot regress silently.
 
-Scope is deliberately limited to what P0-SEC-A remediates. Function EXECUTE
-grants, mutable search_path and fail-open ``COALESCE`` policies are real
-findings but belong to P0-SEC-B/D; they are reported as INFO here and must not
-fail the build until their own remediation lands.
+P0-SEC-A scope (always BLOCKING):
+    - Permissive policies on protected tables
+    - RLS disabled on protected tables
+    - External-role grants
+    - Default-privilege grants to external roles
+
+P0-SEC-B scope (BLOCKING as of 20260905_0001):
+    - COALESCE fail-open expressions in any public-schema RLS policy (any table)
+    - Excess permissive FOR ALL policies by the known legacy names
 
 Usage:
     DATABASE_URL=postgresql://... python apps/api/scripts/supabase_security_lint.py
@@ -76,10 +81,37 @@ SELECT pg_get_userbyid(d.defaclrole), d.defaclobjtype, d.defaclacl::text
  WHERE n.nspname = 'public' AND d.defaclobjtype IN ('r', 'S');
 """
 
-Q_INFO_FAIL_OPEN = """
-SELECT tablename, policyname FROM pg_policies
- WHERE schemaname = 'public' AND qual LIKE '%COALESCE%';
+# ── P0-SEC-B: COALESCE fail-open detection (BLOCKING since 20260905_0001) ──────
+#
+# Detects any RLS policy whose USING or WITH CHECK expression contains the
+# COALESCE fail-open pattern regardless of which table it is on.  Raised from
+# INFO to BLOCKING because the migration that removes all 24 instances has
+# landed; any surviving COALESCE now means the migration was partially applied
+# or a new fail-open policy was introduced.
+Q_BLOCKING_FAIL_OPEN = """
+SELECT tablename, policyname,
+       CASE WHEN qual LIKE '%%COALESCE%%' AND with_check LIKE '%%COALESCE%%'
+            THEN 'USING+WITH CHECK'
+            WHEN qual LIKE '%%COALESCE%%' THEN 'USING'
+            ELSE 'WITH CHECK'
+       END AS coalesce_in
+  FROM pg_policies
+ WHERE schemaname = 'public'
+   AND (qual LIKE '%%COALESCE%%' OR with_check LIKE '%%COALESCE%%');
 """
+
+# ── P0-SEC-B: excess permissive FOR ALL policies (BLOCKING) ────────────────────
+#
+# These named policies are the legacy FOR ALL overrides that should have been
+# removed by the P0-SEC-B migration.  Their presence means the migration was
+# not applied or was reverted.
+_EXCESS_POLICY_NAMES: tuple[tuple[str, str], ...] = (
+    ("analyses",          "tenant_isolation_analyses"),
+    ("alerts",            "tenant_isolation_alerts"),
+    ("coherence_results", "tenant_isolation_coherence_results"),
+    ("clause_embeddings", "tenant_isolation_clause_embeddings"),
+    ("clause_embeddings", "clause_embeddings_tenant_isolation"),
+)
 
 
 def run(dsn: str) -> int:
@@ -123,9 +155,27 @@ def run(dsn: str) -> int:
                         f"new objects would be exposed on creation"
                     )
 
-        cur.execute(Q_INFO_FAIL_OPEN)
-        for table, policy in cur.fetchall():
-            info.append(f"fail-open COALESCE policy {policy} on {table} (P0-SEC-B)")
+        # P0-SEC-B: COALESCE fail-open (BLOCKING)
+        cur.execute(Q_BLOCKING_FAIL_OPEN)
+        for table, policy, location in cur.fetchall():
+            blocking.append(
+                f"fail-open COALESCE policy {policy} on {table} ({location}); "
+                f"P0-SEC-B migration (20260905_0001) must be applied"
+            )
+
+        # P0-SEC-B: excess permissive FOR ALL policies (BLOCKING)
+        for table, policy in _EXCESS_POLICY_NAMES:
+            cur.execute(
+                "SELECT COUNT(*) FROM pg_policies "
+                "WHERE schemaname='public' AND tablename=%s AND policyname=%s",
+                (table, policy),
+            )
+            row = cur.fetchone()
+            if row and row[0] > 0:
+                blocking.append(
+                    f"excess FOR ALL policy {policy} on {table} still present; "
+                    f"P0-SEC-B migration (20260905_0001) must be applied"
+                )
 
     for line in info:
         print(f"INFO     {line}")
