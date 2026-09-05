@@ -128,10 +128,17 @@ def _role_exists(dsn: str, role: str) -> bool:
 
 
 def _lint_passes(dsn: str) -> bool:
-    """Invoke the lint check directly (no subprocess) and return whether it passed."""
+    """Invoke the P0-SEC-A-scoped lint check and return whether it passed.
+
+    Scope is restricted to "p0_sec_a" so that P0-SEC-B blockers legitimately
+    present in the P0-SEC-A historical fixture (COALESCE fail-open policies that
+    P0-SEC-A intentionally does not touch) do not cause false failures here.
+    The global linter (scope=None) and the P0-SEC-B gate remain responsible for
+    those findings.
+    """
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        rc = _lint.run(dsn)
+        rc = _lint.run(dsn, scope="p0_sec_a")
     output = buf.getvalue()
     print(output.strip()[-2000:])
     return rc == 0
