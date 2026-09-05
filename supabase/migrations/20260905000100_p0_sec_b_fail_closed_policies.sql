@@ -21,7 +21,7 @@ DO $p0secb_pre$
                 RETURN;
             END IF;
 
-            FOREACH v_table IN ARRAY ARRAY['analyses', 'alerts', 'coherence_results', 'clause_embeddings']
+            FOREACH v_table IN ARRAY ARRAY['project_states', 'project_state_entities', 'document_revisions', 'project_events', 'project_snapshots', 'document_artifacts', 'analyses', 'alerts', 'coherence_results', 'clause_embeddings']
             LOOP
                 -- tenant_id vs project.tenant_id mismatch check
                 EXECUTE
@@ -55,6 +55,54 @@ DO $p0secb_pre$
         END $p0secb_pre$;
 
 SET LOCAL lock_timeout = '30s';
+
+DROP POLICY IF EXISTS project_states_tenant_isolation_select ON project_states;
+
+DROP POLICY IF EXISTS project_states_tenant_isolation_insert ON project_states;
+
+DROP POLICY IF EXISTS project_states_tenant_isolation_update ON project_states;
+
+DROP POLICY IF EXISTS project_states_tenant_isolation_delete ON project_states;
+
+DROP POLICY IF EXISTS project_state_entities_tenant_isolation_select ON project_state_entities;
+
+DROP POLICY IF EXISTS project_state_entities_tenant_isolation_insert ON project_state_entities;
+
+DROP POLICY IF EXISTS project_state_entities_tenant_isolation_update ON project_state_entities;
+
+DROP POLICY IF EXISTS project_state_entities_tenant_isolation_delete ON project_state_entities;
+
+DROP POLICY IF EXISTS document_revisions_tenant_isolation_select ON document_revisions;
+
+DROP POLICY IF EXISTS document_revisions_tenant_isolation_insert ON document_revisions;
+
+DROP POLICY IF EXISTS document_revisions_tenant_isolation_update ON document_revisions;
+
+DROP POLICY IF EXISTS document_revisions_tenant_isolation_delete ON document_revisions;
+
+DROP POLICY IF EXISTS project_events_tenant_isolation_select ON project_events;
+
+DROP POLICY IF EXISTS project_events_tenant_isolation_insert ON project_events;
+
+DROP POLICY IF EXISTS project_events_tenant_isolation_update ON project_events;
+
+DROP POLICY IF EXISTS project_events_tenant_isolation_delete ON project_events;
+
+DROP POLICY IF EXISTS project_snapshots_tenant_isolation_select ON project_snapshots;
+
+DROP POLICY IF EXISTS project_snapshots_tenant_isolation_insert ON project_snapshots;
+
+DROP POLICY IF EXISTS project_snapshots_tenant_isolation_update ON project_snapshots;
+
+DROP POLICY IF EXISTS project_snapshots_tenant_isolation_delete ON project_snapshots;
+
+DROP POLICY IF EXISTS document_artifacts_tenant_isolation_select ON document_artifacts;
+
+DROP POLICY IF EXISTS document_artifacts_tenant_isolation_insert ON document_artifacts;
+
+DROP POLICY IF EXISTS document_artifacts_tenant_isolation_update ON document_artifacts;
+
+DROP POLICY IF EXISTS document_artifacts_tenant_isolation_delete ON document_artifacts;
 
 DROP POLICY IF EXISTS project_states_select ON project_states;
 

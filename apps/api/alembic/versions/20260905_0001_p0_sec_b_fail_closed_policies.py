@@ -149,8 +149,68 @@ _EXCESS_POLICIES: tuple[tuple[str, str], ...] = (
     ("clause_embeddings", "clause_embeddings_tenant_isolation"),
 )
 
+# Historical Supabase CLI policy names from the June 2026 migrations
+# (20260613000100, 20260614000100).  Those migrations created the 6 COALESCE
+# tables with NULLIF *_tenant_isolation_* policies instead of the Alembic
+# short names.  On the Supabase path these survive the upgrade if not explicitly
+# dropped, leaving 2 PERMISSIVE policies per operation (catalog pollution).
+# IF EXISTS makes these DROPs safe no-ops on the Alembic path.
+# Each entry: (table, select_name, insert_name, update_name, delete_name)
+_SUPABASE_LEGACY_POLICIES: tuple[tuple[str, str, str, str, str], ...] = (
+    (
+        "project_states",
+        "project_states_tenant_isolation_select",
+        "project_states_tenant_isolation_insert",
+        "project_states_tenant_isolation_update",
+        "project_states_tenant_isolation_delete",
+    ),
+    (
+        "project_state_entities",
+        "project_state_entities_tenant_isolation_select",
+        "project_state_entities_tenant_isolation_insert",
+        "project_state_entities_tenant_isolation_update",
+        "project_state_entities_tenant_isolation_delete",
+    ),
+    (
+        "document_revisions",
+        "document_revisions_tenant_isolation_select",
+        "document_revisions_tenant_isolation_insert",
+        "document_revisions_tenant_isolation_update",
+        "document_revisions_tenant_isolation_delete",
+    ),
+    (
+        "project_events",
+        "project_events_tenant_isolation_select",
+        "project_events_tenant_isolation_insert",
+        "project_events_tenant_isolation_update",
+        "project_events_tenant_isolation_delete",
+    ),
+    (
+        "project_snapshots",
+        "project_snapshots_tenant_isolation_select",
+        "project_snapshots_tenant_isolation_insert",
+        "project_snapshots_tenant_isolation_update",
+        "project_snapshots_tenant_isolation_delete",
+    ),
+    (
+        "document_artifacts",
+        "document_artifacts_tenant_isolation_select",
+        "document_artifacts_tenant_isolation_insert",
+        "document_artifacts_tenant_isolation_update",
+        "document_artifacts_tenant_isolation_delete",
+    ),
+)
+
 # Tables for which a project-ownership consistency check is mandatory.
+# All 6 COALESCE tables carry project_id NOT NULL and must be verified before
+# any policy swap.  The 4 excess-policy tables are also included.
 _PRECONDITION_TABLES = (
+    "project_states",
+    "project_state_entities",
+    "document_revisions",
+    "project_events",
+    "project_snapshots",
+    "document_artifacts",
     "analyses",
     "alerts",
     "coherence_results",
@@ -221,8 +281,16 @@ def upgrade() -> None:
         """
     )
 
-    # ── Part B: 24 COALESCE -> NULLIF replacements ───────────────────────────
+    # ── Part B.0: pre-pass — drop Supabase-historical *_tenant_isolation_* names
+    # IF EXISTS makes these no-ops on the Alembic path where these names were
+    # never created.  On the Supabase CLI path (June 2026) they exist as NULLIF
+    # policies and must be removed so both paths converge to the same catalog.
     op.execute("SET LOCAL lock_timeout = '30s'")
+    for table, sel, ins, upd, dlt in _SUPABASE_LEGACY_POLICIES:
+        for name in (sel, ins, upd, dlt):
+            op.execute(f"DROP POLICY IF EXISTS {name} ON {table}")
+
+    # ── Part B: 24 COALESCE -> NULLIF replacements ───────────────────────────
     for table, sel, ins, upd, dlt in _COALESCE_TABLES:
         # SELECT
         op.execute(f"DROP POLICY IF EXISTS {sel} ON {table}")
@@ -257,6 +325,14 @@ def downgrade() -> None:
     policies and the 5 excess permissive FOR ALL policies.  It exists so that a
     failed upgrade or a pre-production rollback can reach a deterministic known
     state without data loss.  It does NOT make the system safe.
+
+    MIGRATION-PATH NOTE: on the Supabase CLI historical path (June 2026
+    migrations 20260613000100/20260614000100), the pre-upgrade state held NULLIF
+    policies named *_tenant_isolation_*.  This downgrade restores Alembic
+    short-named COALESCE policies instead — a hybrid state that never existed on
+    the Supabase path.  This is intentional: downgrade targets a deterministic
+    rollback state, not the original per-path pre-state.  The
+    *_tenant_isolation_* names are NOT re-created by this downgrade.
 
     Only execute this with explicit MASTER incident authorisation.
     """

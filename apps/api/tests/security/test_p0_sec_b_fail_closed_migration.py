@@ -99,6 +99,57 @@ EXCESS_POLICIES = (
     ("clause_embeddings", "clause_embeddings_tenant_isolation"),
 )
 
+# Supabase CLI historical policy names created by the June 2026 migrations
+# (20260613000100 and 20260614000100).  These use NULLIF expressions (already
+# fail-closed) but differ in name from the Alembic-canonical short names.
+# P0-SEC-B upgrade must DROP them so both migration paths converge to exactly
+# 4 canonical policies per table with no catalog pollution.
+# Each entry: (table, select_name, insert_name, update_name, delete_name)
+SUPABASE_LEGACY_POLICIES: tuple[tuple[str, str, str, str, str], ...] = (
+    (
+        "project_states",
+        "project_states_tenant_isolation_select",
+        "project_states_tenant_isolation_insert",
+        "project_states_tenant_isolation_update",
+        "project_states_tenant_isolation_delete",
+    ),
+    (
+        "project_state_entities",
+        "project_state_entities_tenant_isolation_select",
+        "project_state_entities_tenant_isolation_insert",
+        "project_state_entities_tenant_isolation_update",
+        "project_state_entities_tenant_isolation_delete",
+    ),
+    (
+        "document_revisions",
+        "document_revisions_tenant_isolation_select",
+        "document_revisions_tenant_isolation_insert",
+        "document_revisions_tenant_isolation_update",
+        "document_revisions_tenant_isolation_delete",
+    ),
+    (
+        "project_events",
+        "project_events_tenant_isolation_select",
+        "project_events_tenant_isolation_insert",
+        "project_events_tenant_isolation_update",
+        "project_events_tenant_isolation_delete",
+    ),
+    (
+        "project_snapshots",
+        "project_snapshots_tenant_isolation_select",
+        "project_snapshots_tenant_isolation_insert",
+        "project_snapshots_tenant_isolation_update",
+        "project_snapshots_tenant_isolation_delete",
+    ),
+    (
+        "document_artifacts",
+        "document_artifacts_tenant_isolation_select",
+        "document_artifacts_tenant_isolation_insert",
+        "document_artifacts_tenant_isolation_update",
+        "document_artifacts_tenant_isolation_delete",
+    ),
+)
+
 TENANT_A = "aaaaaaaa-aaaa-aaaa-aaaa-000000000001"
 TENANT_B = "bbbbbbbb-bbbb-bbbb-bbbb-000000000002"
 PROJECT_A = "cccccccc-cccc-cccc-cccc-000000000001"
@@ -225,6 +276,49 @@ class TestMigrationShape:
             for sql in (upgrade, downgrade):
                 assert f"ON {table}" not in sql or "DROP POLICY IF EXISTS" not in sql, (
                     f"migration unexpectedly alters P0-SEC-A table {table}"
+                )
+
+    def test_precondition_covers_all_coalesce_tables(self) -> None:
+        """FINDING 1 RED: _PRECONDITION_TABLES must include every COALESCE table.
+
+        Before fix: only 4 excess-policy tables are listed ('analyses', 'alerts',
+        'coherence_results', 'clause_embeddings').  The 6 COALESCE tables all
+        carry project_id NOT NULL, so a tenant/project mismatch or orphaned
+        project_id in them is not verified before the migration executes.
+
+        RED: each COALESCE_TABLES member is absent from _PRECONDITION_TABLES →
+        the assertion fails on the first missing table.
+        GREEN: _PRECONDITION_TABLES expanded to all 10 tables.
+        """
+        m = _load_migration()
+        for table in COALESCE_TABLES:
+            assert table in m._PRECONDITION_TABLES, (
+                f"FINDING 1: {table} not in _PRECONDITION_TABLES — "
+                "tenant/project mismatch or orphaned project_id in this "
+                "COALESCE table is not checked before migration"
+            )
+
+    def test_upgrade_drops_supabase_legacy_policy_names(self) -> None:
+        """FINDING 2 RED: upgrade must DROP Supabase-historical *_tenant_isolation_* names.
+
+        The June 2026 Supabase CLI path (20260613000100, 20260614000100) created
+        the 6 COALESCE tables with NULLIF policies named *_tenant_isolation_*.
+        After P0-SEC-B upgrade on that path, each table would have 2 PERMISSIVE
+        policies per operation (both NULLIF fail-closed) — catalog pollution even
+        though there is no security regression.
+
+        The fix adds IF EXISTS DROPs for all 24 legacy names so both paths converge
+        to exactly 4 canonical policies per table.
+
+        RED: upgrade SQL has no DROP for any *_tenant_isolation_* name.
+        GREEN: all 24 legacy DROPs present.
+        """
+        sql = _emitted_sql("upgrade")
+        for table, sel, ins, upd, dlt in SUPABASE_LEGACY_POLICIES:
+            for name in (sel, ins, upd, dlt):
+                assert f"DROP POLICY IF EXISTS {name} ON {table}" in sql, (
+                    f"FINDING 2: upgrade missing DROP for Supabase-historical "
+                    f"policy {name} ON {table} — migration paths do not converge"
                 )
 
 
@@ -534,16 +628,11 @@ class TestPreconditionAbort:
 class TestDowngradeReapply:
     """Downgrade restores fail-open; re-apply closes again (idempotent)."""
 
-    @pytest.mark.parametrize("table", COALESCE_TABLES)
-    def test_downgrade_restores_fail_open(self, migrated_dsn, table) -> None:
-        # This test applies downgrade then checks RED; then re-applies upgrade.
-        # WARNING: all TestDowngradeReapply tests share migrated_dsn — they
-        # mutate it sequentially. Ordering matters; pytest collects in definition
-        # order so the parametrized downgrade tests run before re-apply.
-        pass  # actual logic is in the module-level sequenced test below.
-
     def test_downgrade_then_reapply_cycle(self, migrated_dsn) -> None:
-        """Full downgrade → RED → re-apply → GREEN cycle on the migrated DB."""
+        """Full downgrade → RED → re-apply → GREEN cycle on the migrated DB.
+
+        This test owns the complete lifecycle verification for the downgrade path.
+        """
         # Downgrade.
         _exec_sql(migrated_dsn, _emitted_sql("downgrade"))
 
