@@ -43,6 +43,12 @@ import sys
 _SCOPE_P0_SEC_A: frozenset[str | None] = frozenset({"p0_sec_a", None})
 _SCOPE_P0_SEC_B: frozenset[str | None] = frozenset({"p0_sec_b", None})
 
+# Explicit allowlist of recognised scope values.  Any value not in this set is
+# rejected by run() before any database work occurs.  This prevents an unknown
+# scope from silently setting both run_a and run_b to False and reaching
+# "PASSED: no blocking violations" with zero checks executed (fail-open).
+_VALID_SCOPES: frozenset[str | None] = frozenset({None, "p0_sec_a", "p0_sec_b"})
+
 EXTERNAL_ROLES = ("anon", "authenticated")
 
 # Objects that must never be reachable through the Data API.
@@ -190,11 +196,24 @@ def run(dsn: str, scope: str | None = None) -> int:
                          external-grant, default-ACL)
     scope="p0_sec_b"  → P0-SEC-B controls only (COALESCE fail-open,
                          excess FOR ALL policies)
+    any other value   → returns 1 immediately; no DB connection is made.
 
     Historical gates must use their own scope so that P0-SEC-B blockers present
     in a P0-SEC-A-only fixture do not cause false failures in the A gate (and
     vice versa).
+
+    Fail-closed scope validation: an unrecognised scope would silently set both
+    run_a and run_b to False, execute zero checks, and return 0 — fail-open.
+    The explicit guard below prevents that.
     """
+    if scope not in _VALID_SCOPES:
+        print(
+            f"INVALID SCOPE: {scope!r} is not a recognised lint control family. "
+            f"Valid values: None (global — all controls), 'p0_sec_a', 'p0_sec_b'.",
+            file=sys.stderr,
+        )
+        return 1
+
     run_a = scope in _SCOPE_P0_SEC_A
     run_b = scope in _SCOPE_P0_SEC_B
 
