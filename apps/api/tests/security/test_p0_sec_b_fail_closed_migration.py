@@ -168,10 +168,9 @@ class TestMigrationShape:
         assert "table_name = 'projects'" in sql or "table_name='projects'" in sql
 
     def test_upgrade_sql_has_no_bare_psycopg2_placeholders(self) -> None:
-        """A bare '%s' / '%d' is consumed by psycopg2 interpolation under op.execute().
-        '%%I' is correct: psycopg2 converts '%%' → '%' so PostgreSQL sees '%I' for
-        format().  Remove all doubled '%%' and assert nothing remains.
-        The precondition DO block intentionally uses '%%I'."""
+        """The precondition uses quote_ident() + string concatenation (no % signs).
+        The policy USING/WITH CHECK expressions contain no % either.
+        Verify no bare '%' remain after stripping any '%%' escape pairs."""
         sql = _emitted_sql("upgrade")
         after_strip = sql.replace("%%", "")
         assert "%" not in after_strip, (

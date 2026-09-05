@@ -189,35 +189,32 @@ def upgrade() -> None:
             FOREACH v_table IN ARRAY ARRAY[{table_list}]
             LOOP
                 -- tenant_id vs project.tenant_id mismatch check
-                EXECUTE format(
-                    'SELECT COUNT(*) FROM public.%%I t
-                       JOIN public.projects p ON p.id = t.project_id
-                      WHERE t.tenant_id IS DISTINCT FROM p.tenant_id',
-                    v_table
-                ) INTO v_bad;
+                EXECUTE
+                    'SELECT COUNT(*) FROM public.' || quote_ident(v_table) ||
+                    ' t JOIN public.projects p ON p.id = t.project_id'
+                    ' WHERE t.tenant_id IS DISTINCT FROM p.tenant_id'
+                INTO v_bad;
                 IF v_bad > 0 THEN
-                    RAISE EXCEPTION
-                        'P0-SEC-B PRECONDITION FAILED: table %% has %% row(s) where '
-                        'tenant_id IS DISTINCT FROM projects.tenant_id. '
-                        'Inspect and reconcile before re-running this migration.',
-                        v_table, v_bad;
+                    RAISE EXCEPTION USING MESSAGE =
+                        'P0-SEC-B PRECONDITION FAILED: table ' || v_table ||
+                        ' has ' || v_bad::text ||
+                        ' row(s) where tenant_id IS DISTINCT FROM projects.tenant_id.'
+                        ' Inspect and reconcile before re-running this migration.';
                 END IF;
 
                 -- orphaned project_id check
-                EXECUTE format(
-                    'SELECT COUNT(*) FROM public.%%I t
-                      WHERE t.project_id IS NOT NULL
-                        AND NOT EXISTS (
-                            SELECT 1 FROM public.projects p WHERE p.id = t.project_id
-                        )',
-                    v_table
-                ) INTO v_bad;
+                EXECUTE
+                    'SELECT COUNT(*) FROM public.' || quote_ident(v_table) ||
+                    ' t WHERE t.project_id IS NOT NULL'
+                    ' AND NOT EXISTS ('
+                    'SELECT 1 FROM public.projects p WHERE p.id = t.project_id)'
+                INTO v_bad;
                 IF v_bad > 0 THEN
-                    RAISE EXCEPTION
-                        'P0-SEC-B PRECONDITION FAILED: table %% has %% orphaned '
-                        'project_id(s) with no matching projects row. '
-                        'Inspect and reconcile before re-running this migration.',
-                        v_table, v_bad;
+                    RAISE EXCEPTION USING MESSAGE =
+                        'P0-SEC-B PRECONDITION FAILED: table ' || v_table ||
+                        ' has ' || v_bad::text ||
+                        ' orphaned project_id(s) with no matching projects row.'
+                        ' Inspect and reconcile before re-running this migration.';
                 END IF;
             END LOOP;
         END $p0secb_pre$;
