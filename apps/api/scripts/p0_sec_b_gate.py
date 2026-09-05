@@ -68,9 +68,7 @@ def _resolve_admin_dsn() -> str:
     except Exception:
         raise SystemExit("GATE ABORTED: could not parse P0_SEC_ADMIN_DSN")
     if not host or host not in _LOOPBACK_HOSTS:
-        raise SystemExit(
-            f"GATE ABORTED: P0_SEC_ADMIN_DSN host {host!r} is not a loopback address."
-        )
+        raise SystemExit(f"GATE ABORTED: P0_SEC_ADMIN_DSN host {host!r} is not a loopback address.")
     return normalized
 
 
@@ -135,9 +133,7 @@ def _exec_script_expect_error(dsn: str, sql: str, expected_fragment: str) -> Non
     except Exception as exc:
         msg = str(exc)
         if expected_fragment not in msg:
-            raise SystemExit(
-                f"GATE FAILED: expected '{expected_fragment}' in error, got: {msg}"
-            )
+            raise SystemExit(f"GATE FAILED: expected '{expected_fragment}' in error, got: {msg}")
         return
     raise SystemExit(
         f"GATE FAILED: expected exception containing '{expected_fragment}' but SQL succeeded"
@@ -176,11 +172,15 @@ def _count_rows_as_role(
     SET ROLE switches effective user to a NOSUPERUSER NOBYPASSRLS role so RLS
     is enforced.  The GUC is SET/RESET within the same autocommit session so it
     affects only this call.
+
+    set_config() is used instead of "SET app.current_tenant = %s" because
+    PostgreSQL's SET command does not accept parameterised placeholders ($1).
+    is_local=false sets it at session scope so the subsequent SELECT sees it.
     """
     with _connection(dsn) as conn, conn.cursor() as cur:
         cur.execute("RESET app.current_tenant")
         if tenant_guc is not None:
-            cur.execute("SET app.current_tenant = %s", (tenant_guc,))
+            cur.execute("SELECT set_config('app.current_tenant', %s, false)", (tenant_guc,))
         cur.execute("SET ROLE c2pro_sec_rls_test")
         try:
             cur.execute(f"SELECT COUNT(*) FROM {table}")  # nosec B608 — table is hardcoded
@@ -189,6 +189,29 @@ def _count_rows_as_role(
         finally:
             cur.execute("RESET ROLE")
             cur.execute("RESET app.current_tenant")
+
+
+def _assert_single_table_phase(
+    dsn: str,
+    table: str,
+    label: str,
+    *,
+    expect_fail_open: bool,
+) -> None:
+    """Check one table for the expected fail-open/fail-closed behaviour."""
+    for tenant_guc in (None, ""):
+        guc_label = "GUC absent" if tenant_guc is None else "GUC=''"
+        count = _count_rows_as_role(dsn, table, tenant_guc=tenant_guc)
+        if expect_fail_open and count == 0:
+            raise SystemExit(
+                f"GATE FAILED at '{label}': {table} ({guc_label}): "
+                f"expected fail-open (rows > 0), got 0 — COALESCE policy absent?"
+            )
+        if not expect_fail_open and count > 0:
+            raise SystemExit(
+                f"GATE FAILED at '{label}': {table} ({guc_label}): "
+                f"expected fail-closed (0 rows), got {count} — NULLIF not applied?"
+            )
 
 
 def _check_phase(
@@ -200,21 +223,7 @@ def _check_phase(
     """Assert fail-open (all rows visible without GUC) or fail-closed (no rows)."""
     print(f"\n=== {label} (expect {'FAIL-OPEN' if expect_fail_open else 'FAIL-CLOSED'}) ===")
     for table in _COALESCE_TABLES:
-        for tenant_guc in (None, ""):
-            guc_label = "GUC absent" if tenant_guc is None else "GUC=''"
-            count = _count_rows_as_role(dsn, table, tenant_guc=tenant_guc)
-            if expect_fail_open:
-                if count == 0:
-                    raise SystemExit(
-                        f"GATE FAILED at '{label}': {table} ({guc_label}): "
-                        f"expected fail-open (rows > 0), got 0 — COALESCE policy absent?"
-                    )
-            else:
-                if count > 0:
-                    raise SystemExit(
-                        f"GATE FAILED at '{label}': {table} ({guc_label}): "
-                        f"expected fail-closed (0 rows), got {count} — NULLIF not applied?"
-                    )
+        _assert_single_table_phase(dsn, table, label, expect_fail_open=expect_fail_open)
         print(f"    {table}: OK")
     print(f"--- {label}: as expected")
 
