@@ -419,7 +419,12 @@ def _count_as_role(dsn: str, table: str, *, tenant_guc: str | None) -> int:
         with conn.cursor() as cur:
             cur.execute("RESET app.current_tenant")
             if tenant_guc is not None:
-                cur.execute("SET app.current_tenant = %s", (tenant_guc,))
+                # SET ... = %s is rejected by psycopg3 (PostgreSQL rejects bind
+                # parameters in SET commands).  set_config() accepts %s cleanly.
+                cur.execute(
+                    "SELECT set_config('app.current_tenant', %s, false)",
+                    (tenant_guc,),
+                )
             cur.execute("SET ROLE c2pro_sec_rls_test")
             try:
                 cur.execute(f"SELECT COUNT(*) FROM {table}")  # nosec B608
@@ -831,12 +836,14 @@ class TestDualPathCatalogParity:
             conn = _db_conn(dsn)
             try:
                 with conn.cursor() as cur:
+                    # Pass the LIKE pattern as a bind parameter; embedding '%'
+                    # in the SQL string alongside other %s params confuses psycopg3.
                     cur.execute(
                         "SELECT tablename, policyname FROM pg_policies "
                         "WHERE schemaname = 'public' "
-                        "AND policyname LIKE '%tenant_isolation%' "
+                        "AND policyname LIKE %s "
                         "AND tablename = ANY(%s)",
-                        (list(COALESCE_TABLES),),
+                        ("%tenant_isolation%", list(COALESCE_TABLES)),
                     )
                     survivors = cur.fetchall()
             finally:
@@ -853,13 +860,15 @@ class TestDualPathCatalogParity:
             conn = _db_conn(dsn)
             try:
                 with conn.cursor() as cur:
+                    # Pass ILIKE patterns as bind parameters to avoid psycopg3
+                    # interpreting the embedded '%' as a placeholder prefix.
                     cur.execute(
                         "SELECT tablename, policyname, qual, with_check "
                         "FROM pg_policies "
                         "WHERE schemaname = 'public' "
                         "AND tablename = ANY(%s) "
-                        "AND (qual ILIKE '%COALESCE%' OR with_check ILIKE '%COALESCE%')",
-                        (list(COALESCE_TABLES),),
+                        "AND (qual ILIKE %s OR with_check ILIKE %s)",
+                        (list(COALESCE_TABLES), "%COALESCE%", "%COALESCE%"),
                     )
                     coalesce_rows = cur.fetchall()
             finally:
