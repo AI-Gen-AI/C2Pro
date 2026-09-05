@@ -28,9 +28,10 @@ effective access beyond what the CRUD policies alone would allow.
 This migration:
 
   Part A — CONSISTENCY PRECONDITION
-    For each of the four excess-policy tables that also carry a project_id,
-    asserts that every row's tenant_id matches its project's tenant_id.
-    If any mismatch exists, the transaction is ABORTED.
+    For each of the 10 migration-touched tables (all 6 COALESCE tables +
+    all 4 excess-policy tables), asserts that every row's tenant_id matches
+    its project's tenant_id and that no orphaned project_id exists.
+    If any inconsistency is found, the transaction is ABORTED.
     Silent data repair is NOT performed here.
 
   Part B — 24 COALESCE → NULLIF REPLACEMENTS (6 tables × 4 policies)

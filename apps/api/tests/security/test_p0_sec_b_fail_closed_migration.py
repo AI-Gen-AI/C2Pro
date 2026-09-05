@@ -47,6 +47,7 @@ MIRROR = (
 )
 GENERATOR = REPO_ROOT / "apps/api/scripts/generate_p0_sec_b_mirror.py"
 FIXTURE = REPO_ROOT / "apps/api/tests/security/fixtures/p0_sec_b_prestate.sql"
+SUPABASE_FIXTURE = REPO_ROOT / "apps/api/tests/security/fixtures/p0_sec_b_supabase_prestate.sql"
 
 sys.path.insert(0, str(REPO_ROOT / "apps/api/scripts"))
 from p0_sec_b_common import emitted_sql as _emitted_sql  # noqa: E402
@@ -469,6 +470,32 @@ def migrated_dsn(prestate_dsn):
     yield prestate_dsn
 
 
+@pytest.fixture(scope="module")
+def supabase_prestate_dsn():
+    """Module-scoped: disposable DB in Supabase-historical pre-state (PATH B)."""
+    if not DSN:
+        yield None
+        return
+    db_name = f"p0_sec_b_test_supa_pre_{uuid.uuid4().hex[:8]}"
+    with _disposable_db(DSN, db_name, SUPABASE_FIXTURE) as dsn:
+        yield dsn
+
+
+@pytest.fixture(scope="module")
+def supabase_migrated_dsn(supabase_prestate_dsn):
+    """Module-scoped: Supabase-historical DB with checked-in mirror SQL applied (PATH B).
+
+    Deliberately applies MIRROR.read_text() (the checked-in Supabase mirror SQL),
+    NOT _emitted_sql("upgrade"), to prove PATH B converges via the file that
+    Supabase preview bot actually applies.
+    """
+    if supabase_prestate_dsn is None:
+        yield None
+        return
+    _exec_sql(supabase_prestate_dsn, MIRROR.read_text(encoding="utf-8"))
+    yield supabase_prestate_dsn
+
+
 # ─────────────────────────────────────────── TRUE RED catalog (pre-migration)
 
 
@@ -741,3 +768,141 @@ class TestPostgresCompatibility:
                     )
         finally:
             conn.close()
+
+
+# ──────────────────────────────────────── DUAL-PATH CATALOG PARITY GATE
+
+
+def _query_policies(dsn: str, table: str) -> list[dict]:
+    """Return ordered pg_policies rows for *table* as plain dicts."""
+    conn = _db_conn(dsn)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT policyname, cmd, permissive, roles, qual, with_check "
+                "FROM pg_policies "
+                "WHERE schemaname = 'public' AND tablename = %s "
+                "ORDER BY policyname",
+                (table,),
+            )
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row, strict=True)) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+@requires_db
+class TestDualPathCatalogParity:
+    """Prove PATH A (Alembic prestate + upgrade) and PATH B (Supabase-historical
+    prestate + mirror SQL) converge to an identical pg_policies catalog.
+
+    PATH A uses migrated_dsn  — Alembic COALESCE prestate + _emitted_sql("upgrade").
+    PATH B uses supabase_migrated_dsn — Supabase NULLIF *_tenant_isolation_* prestate
+                                        + MIRROR.read_text() (checked-in mirror SQL).
+    """
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_both_paths_produce_identical_policy_catalog(
+        self, migrated_dsn, supabase_migrated_dsn, table
+    ) -> None:
+        path_a = _query_policies(migrated_dsn, table)
+        path_b = _query_policies(supabase_migrated_dsn, table)
+        assert path_a == path_b, (
+            f"pg_policies DIVERGE for {table}:\n"
+            f"  PATH A (Alembic): {path_a}\n"
+            f"  PATH B (Supabase): {path_b}"
+        )
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_exactly_4_policies_per_coalesce_table_both_paths(
+        self, migrated_dsn, supabase_migrated_dsn, table
+    ) -> None:
+        for label, dsn in (("PATH A", migrated_dsn), ("PATH B", supabase_migrated_dsn)):
+            policies = _query_policies(dsn, table)
+            assert len(policies) == 4, (
+                f"{label}: {table} has {len(policies)} policies, expected exactly 4. "
+                f"Policies: {[p['policyname'] for p in policies]}"
+            )
+
+    def test_zero_legacy_tenant_isolation_names_both_paths(
+        self, migrated_dsn, supabase_migrated_dsn
+    ) -> None:
+        for label, dsn in (("PATH A", migrated_dsn), ("PATH B", supabase_migrated_dsn)):
+            conn = _db_conn(dsn)
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT tablename, policyname FROM pg_policies "
+                        "WHERE schemaname = 'public' "
+                        "AND policyname LIKE '%tenant_isolation%' "
+                        "AND tablename = ANY(%s)",
+                        (list(COALESCE_TABLES),),
+                    )
+                    survivors = cur.fetchall()
+            finally:
+                conn.close()
+            assert survivors == [], (
+                f"{label}: *tenant_isolation* names survive on COALESCE tables after migration: "
+                f"{survivors}"
+            )
+
+    def test_zero_coalesce_expressions_both_paths(
+        self, migrated_dsn, supabase_migrated_dsn
+    ) -> None:
+        for label, dsn in (("PATH A", migrated_dsn), ("PATH B", supabase_migrated_dsn)):
+            conn = _db_conn(dsn)
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT tablename, policyname, qual, with_check "
+                        "FROM pg_policies "
+                        "WHERE schemaname = 'public' "
+                        "AND tablename = ANY(%s) "
+                        "AND (qual ILIKE '%COALESCE%' OR with_check ILIKE '%COALESCE%')",
+                        (list(COALESCE_TABLES),),
+                    )
+                    coalesce_rows = cur.fetchall()
+            finally:
+                conn.close()
+            assert coalesce_rows == [], (
+                f"{label}: COALESCE found in pg_policies qual/with_check after migration: "
+                f"{coalesce_rows}"
+            )
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_supabase_path_guc_absent_sees_no_rows(
+        self, supabase_migrated_dsn, table
+    ) -> None:
+        count = _count_as_role(supabase_migrated_dsn, table, tenant_guc=None)
+        assert count == 0, (
+            f"PATH B: {table} returned {count} rows with GUC absent after mirror — "
+            f"NULLIF fail-closed not in effect"
+        )
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_supabase_path_empty_guc_sees_no_rows(
+        self, supabase_migrated_dsn, table
+    ) -> None:
+        count = _count_as_role(supabase_migrated_dsn, table, tenant_guc="")
+        assert count == 0, (
+            f"PATH B: {table} returned {count} rows with empty GUC after mirror — "
+            f"NULLIF fail-closed not in effect"
+        )
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_supabase_path_tenant_a_sees_own_rows(
+        self, supabase_migrated_dsn, table
+    ) -> None:
+        count = _count_as_role(supabase_migrated_dsn, table, tenant_guc=TENANT_A)
+        assert count == 1, (
+            f"PATH B: {table}: TENANT_A sees {count} rows, expected 1"
+        )
+
+    @pytest.mark.parametrize("table", COALESCE_TABLES)
+    def test_supabase_path_tenant_b_sees_own_rows(
+        self, supabase_migrated_dsn, table
+    ) -> None:
+        count = _count_as_role(supabase_migrated_dsn, table, tenant_guc=TENANT_B)
+        assert count == 1, (
+            f"PATH B: {table}: TENANT_B sees {count} rows, expected 1"
+        )
