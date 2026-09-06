@@ -91,9 +91,24 @@ def cargar_legacy_compatibility() -> dict:
         try:
             with open(compat_path, encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
-        except Exception:  # noqa: BLE001, S110
+        except (OSError, yaml.YAMLError):
             pass
     return {}
+
+
+def _buscar_work_item(work_id: str) -> dict | None:
+    """Helper privado para cargar el work-queue.yaml y buscar un item por ID."""
+    wq_path = BASE_DIR / ".c2pro" / "control" / "work-queue.yaml"
+    if wq_path.exists():
+        try:
+            with open(wq_path, encoding="utf-8") as f:
+                wq = yaml.safe_load(f) or {}
+                for item in wq.get("items", []):
+                    if item.get("work_id") == work_id:
+                        return item
+        except (OSError, yaml.YAMLError):
+            pass
+    return None
 
 
 def es_nuevo_control_work_id(backlog_id: str) -> bool:
@@ -105,17 +120,7 @@ def es_nuevo_control_work_id(backlog_id: str) -> bool:
         return True
 
     # También verificar si está listado en work-queue.yaml
-    wq_path = BASE_DIR / ".c2pro" / "control" / "work-queue.yaml"
-    if wq_path.exists():
-        try:
-            with open(wq_path, encoding="utf-8") as f:
-                wq = yaml.safe_load(f) or {}
-                for item in wq.get("items", []):
-                    if item.get("work_id") == backlog_id:
-                        return True
-        except Exception:  # noqa: BLE001, S110
-            pass
-    return False
+    return _buscar_work_item(backlog_id) is not None
 
 
 def cargar_json(ruta: Path) -> dict:
@@ -429,19 +434,11 @@ def validate_new_control_work(work_id: str) -> tuple[bool, str]:
     if not work_id:
         return False, "ID de trabajo vacio"
 
-    wq_path = BASE_DIR / ".c2pro" / "control" / "work-queue.yaml"
-    if not wq_path.exists():
-        return False, "No existe .c2pro/control/work-queue.yaml"
-
-    try:
-        with open(wq_path, encoding="utf-8") as f:
-            wq = yaml.safe_load(f) or {}
-    except (OSError, yaml.YAMLError) as e:
-        return False, f"Error al cargar work-queue.yaml: {e}"
-
-    items = wq.get("items", [])
-    work_item = next((item for item in items if item.get("work_id") == work_id), None)
+    work_item = _buscar_work_item(work_id)
     if not work_item:
+        wq_path = BASE_DIR / ".c2pro" / "control" / "work-queue.yaml"
+        if not wq_path.exists():
+            return False, "No existe .c2pro/control/work-queue.yaml"
         return False, f"El work_id '{work_id}' no existe en .c2pro/control/work-queue.yaml"
 
     # Verificar archivo de envelope de trabajo

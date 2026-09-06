@@ -19,6 +19,38 @@ from core.supervisor import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def setup_mock_control_plane_files(tmp_path: Path, work_id: str = "C2PRO-DEV-02") -> tuple[Path, Path]:
+    """Helper to provision mocked .c2pro control and work files to prevent duplication."""
+    control_dir = tmp_path / ".c2pro" / "control"
+    work_dir = tmp_path / ".c2pro" / "work"
+    control_dir.mkdir(parents=True, exist_ok=True)
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    wq_file = control_dir / "work-queue.yaml"
+    wq_data = {
+        "schema": "c2pro-work-queue-v1",
+        "items": [
+            {
+                "work_id": work_id,
+                "status": "in_progress",
+                "work_ref": f".c2pro/work/{work_id}.yaml",
+            }
+        ]
+    }
+    with open(wq_file, "w", encoding="utf-8") as f:
+        yaml.dump(wq_data, f)
+
+    env_file = work_dir / f"{work_id}.yaml"
+    env_data = {
+        "schema": "c2pro-work-envelope-v1",
+        "work_id": work_id,
+    }
+    with open(env_file, "w", encoding="utf-8") as f:
+        yaml.dump(env_data, f)
+
+    return wq_file, env_file
+
+
 def test_es_nuevo_control_work_id():
     """Verify that es_nuevo_control_work_id correctly identifies new-control work IDs."""
     assert es_nuevo_control_work_id("C2PRO-DEV-02") is True
@@ -42,36 +74,8 @@ def test_new_control_worker_no_legacy_write(monkeypatch, tmp_path):
         lambda x: x == "C2PRO-DEV-02",
     )
 
-    # Create the correct folder structures
-    control_dir = tmp_path / ".c2pro" / "control"
-    work_dir = tmp_path / ".c2pro" / "work"
-    control_dir.mkdir(parents=True, exist_ok=True)
-    work_dir.mkdir(parents=True, exist_ok=True)
-
-    # 1. PRE-EXEC validation
-    # Create a mock work-queue.yaml
-    wq_file = control_dir / "work-queue.yaml"
-    wq_data = {
-        "schema": "c2pro-work-queue-v1",
-        "items": [
-            {
-                "work_id": "C2PRO-DEV-02",
-                "status": "in_progress",
-                "work_ref": ".c2pro/work/C2PRO-DEV-02.yaml",
-            }
-        ]
-    }
-    with open(wq_file, "w", encoding="utf-8") as f:
-        yaml.dump(wq_data, f)
-
-    # Create a mock envelope
-    env_file = work_dir / "C2PRO-DEV-02.yaml"
-    env_data = {
-        "schema": "c2pro-work-envelope-v1",
-        "work_id": "C2PRO-DEV-02",
-    }
-    with open(env_file, "w", encoding="utf-8") as f:
-        yaml.dump(env_data, f)
+    # Setup mocked folder structures using consolidated helper
+    setup_mock_control_plane_files(tmp_path, "C2PRO-DEV-02")
 
     # Point BASE_DIR in core.supervisor to our tmp_path to find mock files
     monkeypatch.setattr("core.supervisor.BASE_DIR", tmp_path)
@@ -284,34 +288,8 @@ def test_validate_new_control_work_and_handoff(monkeypatch, tmp_path):
     """Test G1-R4: validate_new_control_work reads canonical state and blocks legacy execution."""
     from core.supervisor import _ejecutar_secuencial, validate_new_control_work
 
-    # Setup mocked folder structures
-    control_dir = tmp_path / ".c2pro" / "control"
-    work_dir = tmp_path / ".c2pro" / "work"
-    control_dir.mkdir(parents=True, exist_ok=True)
-    work_dir.mkdir(parents=True, exist_ok=True)
-
-    # A & B. Setup canonical work config files
-    wq_file = control_dir / "work-queue.yaml"
-    wq_data = {
-        "schema": "c2pro-work-queue-v1",
-        "items": [
-            {
-                "work_id": "C2PRO-DEV-02",
-                "status": "in_progress",
-                "work_ref": ".c2pro/work/C2PRO-DEV-02.yaml",
-            }
-        ]
-    }
-    with open(wq_file, "w", encoding="utf-8") as f:
-        yaml.dump(wq_data, f)
-
-    env_file = work_dir / "C2PRO-DEV-02.yaml"
-    env_data = {
-        "schema": "c2pro-work-envelope-v1",
-        "work_id": "C2PRO-DEV-02",
-    }
-    with open(env_file, "w", encoding="utf-8") as f:
-        yaml.dump(env_data, f)
+    # Setup mocked folder structures using consolidated helper
+    setup_mock_control_plane_files(tmp_path, "C2PRO-DEV-02")
 
     # Point BASE_DIR in core.supervisor to our tmp_path to find mock files
     monkeypatch.setattr("core.supervisor.BASE_DIR", tmp_path)
@@ -468,4 +446,3 @@ def test_legacy_task_preserves_behavior(monkeypatch, tmp_path):
     # Prompt contains legacy instructions
     assert "Lee blackboard.json." in prompt
     assert "Genuine legacy task" in prompt
-
