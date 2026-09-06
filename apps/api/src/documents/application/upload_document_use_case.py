@@ -23,7 +23,9 @@ from src.documents.ports.storage_service import IStorageService
 from src.projects.ports.project_repository import ProjectRepository
 from src.temporal.domain.document_revision import DocumentRevision
 from src.temporal.domain.project_snapshot import SnapshotTrigger
+from src.temporal.domain.revision_event_factory import build_revision_ingested_event
 from src.temporal.ports.document_revision_repository import IDocumentRevisionRepository
+from src.temporal.ports.project_event_repository import IProjectEventRepository
 
 logger = structlog.get_logger()
 
@@ -42,11 +44,21 @@ class UploadDocumentUseCase:
         storage_service: IStorageService,
         project_repository: ProjectRepository,
         revision_repository: IDocumentRevisionRepository | None = None,
+        event_repository: IProjectEventRepository | None = None,
     ):
         self.document_repository = document_repository
         self.storage_service = storage_service
         self.project_repository = project_repository
         self.revision_repository = revision_repository
+        self.event_repository = event_repository
+
+        # Dependency invariant: a revision without its material ProjectEvent must
+        # never be silently persisted. Legacy/test construction may omit BOTH, but
+        # a revision_repository can never be wired without an event_repository.
+        if revision_repository is not None and event_repository is None:
+            raise ValueError(
+                "event_repository is required when revision_repository is provided"
+            )
 
     @staticmethod
     def _blob_key(blob_hash: str, filename: str) -> str:
@@ -135,6 +147,7 @@ class UploadDocumentUseCase:
 
         # H1: genesis revision at initial upload, content-addressed
         if self.revision_repository:
+            assert self.event_repository is not None  # guaranteed by __init__ invariant
             blob_key = self._blob_key(file_hash, filename)
             if not await self.storage_service.file_exists(blob_key):
                 await self.storage_service.upload_bytes(content_bytes, blob_key)
@@ -152,16 +165,31 @@ class UploadDocumentUseCase:
                 created_at=now,
             )
             await self.revision_repository.append_revision(genesis)
+
+            event = build_revision_ingested_event(
+                document_id=new_document.id,
+                project_id=project_id,
+                tenant_id=scoped_tenant_id,
+                revision=genesis,
+                filename=filename,
+                actor=str(user_id),
+            )
+            await self.event_repository.append(event)
+
+            # REVISION + PROJECT_EVENT commit atomically here, before the enqueue.
+            await self.document_repository.commit()
+
             # Best-effort: enqueuing the snapshot task hits the Celery broker
             # synchronously. A broker/Redis outage must NOT fail the upload — the
-            # document and its genesis revision are already persisted. (Mirrors
-            # the resilient _enqueue_document_processing in the HTTP router.)
+            # document, its genesis revision, and its material event are already
+            # persisted. (Mirrors the resilient _enqueue_document_processing in
+            # the HTTP router.)
             try:
                 enqueue_project_snapshot(
                     project_id=project_id,
                     tenant_id=scoped_tenant_id,
                     trigger=SnapshotTrigger.REVISION_INGESTED,
-                    source_event_id=genesis.revision_id,
+                    source_event_id=event.event_id,
                 )
             except Exception as exc:  # pragma: no cover - infra failure path
                 logger.warning(

@@ -4,12 +4,19 @@ ADR-015: now writes content-addressed DocumentRevision lineage instead of
 silently forgetting history. Prior revisions are preserved, not reset.
 Blobs are content-addressed by sha256 and stored via IStorageService.
 
+Lineage fix: the ingested revision now materialises a ``revision.ingested``
+ProjectEvent in the SAME transaction as the revision, and the snapshot enqueue
+references ``event.event_id`` (not the revision id), satisfying the
+``project_snapshots.source_event_id -> project_events.event_id`` foreign key.
+
 Part of TASK-BCK-023 + TASK-V3-015-02.
 """
 import hashlib
 import os
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
+
+import structlog
 
 from src.core.tasks.snapshot_tasks import enqueue_project_snapshot
 from src.core.tenants.types import require_tenant_id
@@ -19,7 +26,11 @@ from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
 from src.temporal.domain.document_revision import DocumentRevision
 from src.temporal.domain.project_snapshot import SnapshotTrigger
+from src.temporal.domain.revision_event_factory import build_revision_ingested_event
 from src.temporal.ports.document_revision_repository import IDocumentRevisionRepository
+from src.temporal.ports.project_event_repository import IProjectEventRepository
+
+logger = structlog.get_logger()
 
 
 def _now_naive() -> datetime:
@@ -36,10 +47,12 @@ class ReuploadDocumentUseCase:
         document_repository: IDocumentRepository,
         revision_repository: IDocumentRevisionRepository,
         storage_service: IStorageService,
+        event_repository: IProjectEventRepository,
     ):
         self.document_repository = document_repository
         self.revision_repository = revision_repository
         self.storage_service = storage_service
+        self.event_repository = event_repository
 
     @staticmethod
     def _blob_key(blob_hash: str, filename: str | None = None) -> str:
@@ -84,6 +97,7 @@ class ReuploadDocumentUseCase:
         tenant_id: UUID,
         document_id: UUID,
         file_content: bytes,
+        user_id: UUID,
         filename: str | None = None,
     ) -> DocumentDTO:
         scoped_tenant_id = require_tenant_id(tenant_id)
@@ -115,7 +129,8 @@ class ReuploadDocumentUseCase:
         new_rev_no = (current_rev.rev_no + 1) if current_rev else 1
         parent_id = current_rev.revision_id if current_rev else None
         now = _now_naive()
-        blob_key = self._blob_key(new_file_hash, filename or document.filename)
+        resolved_filename = filename or document.filename
+        blob_key = self._blob_key(new_file_hash, resolved_filename)
 
         await self._store_blob(blob_key, file_content)
 
@@ -136,12 +151,16 @@ class ReuploadDocumentUseCase:
             await self.revision_repository.close_current(document_id, scoped_tenant_id, now)
 
         await self.revision_repository.append_revision(new_revision)
-        enqueue_project_snapshot(
+
+        event = build_revision_ingested_event(
+            document_id=document_id,
             project_id=document.project_id,
             tenant_id=scoped_tenant_id,
-            trigger=SnapshotTrigger.REVISION_INGESTED,
-            source_event_id=new_revision.revision_id,
+            revision=new_revision,
+            filename=resolved_filename,
+            actor=str(user_id),
         )
+        await self.event_repository.append(event)
 
         new_version = document.version + 1
         updated_document = await self.document_repository.update_version(
@@ -149,10 +168,29 @@ class ReuploadDocumentUseCase:
             document_id=document_id,
             version=new_version,
             file_hash=new_file_hash,
-            filename=filename or document.filename,
+            filename=resolved_filename,
             status=DocumentStatus.UPLOADED,
         )
 
+        # REVISION + PROJECT_EVENT commit atomically here, before the enqueue.
         await self.document_repository.commit()
+
+        # Best-effort: the snapshot enqueue hits the Celery broker synchronously.
+        # A broker outage must NOT fail the reupload — revision, event, and the
+        # updated document are already durably committed.
+        try:
+            enqueue_project_snapshot(
+                project_id=document.project_id,
+                tenant_id=scoped_tenant_id,
+                trigger=SnapshotTrigger.REVISION_INGESTED,
+                source_event_id=event.event_id,
+            )
+        except Exception as exc:  # pragma: no cover - infra failure path
+            logger.warning(
+                "project_snapshot_enqueue_failed",
+                document_id=str(document_id),
+                project_id=str(document.project_id),
+                error=str(exc),
+            )
 
         return DocumentDTO.from_domain(updated_document)
