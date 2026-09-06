@@ -1,14 +1,31 @@
 """P0-SEC-D: SECURITY DEFINER function-privilege hardening tests.
 
+CLASSIFICATION: DEFENSE_IN_DEPTH / privilege-boundary hardening, not a
+confirmed exploitable path. public.handle_new_user() is SECURITY DEFINER
+with an owner that carries BYPASSRLS in production, and PUBLIC/anon/
+authenticated/service_role all hold EXECUTE on it (pre-fix) -- but two
+independent PostgreSQL behaviors already block the only two ways to invoke
+it: (1) direct invocation is rejected outright ("trigger functions can only
+be called as triggers"), and (2) attaching it to a *new* trigger requires
+EXECUTE on it AND either CREATE on some schema or TRIGGER on some existing
+table, neither of which anon/authenticated hold anywhere in schema public
+post-P0-SEC-A (verified: has_schema_privilege('authenticated', 'public',
+'CREATE') = false; zero rows in information_schema.role_table_grants for
+anon/authenticated with privilege_type='TRIGGER'). No reachable path from
+the EXECUTE grant to the SECURITY DEFINER execution context is demonstrated.
+
+The REVOKE is still justified as consistency and defense-in-depth: every
+other SECURITY DEFINER function in this codebase (public.
+create_tenant_and_owner, all 7 auth_bootstrap.* functions) explicitly
+revokes PUBLIC/anon/authenticated; this one did not, for no documented
+reason, and the ACL would become live risk again the moment either
+prerequisite privilege is ever (re)granted for an unrelated purpose.
+
 RED against the pre-fix committed state:
-    public.handle_new_user() -- a SECURITY DEFINER trigger function whose
-    owner carries BYPASSRLS in production -- was created without any REVOKE,
-    so PostgreSQL's default (and, on production's actual pg_default_acl
-    posture, an explicit per-role default-privilege grant) leaves it
-    executable by PUBLIC, anon, authenticated, and service_role. Every other
-    SECURITY DEFINER function in this codebase (public.create_tenant_and_owner,
-    all 7 auth_bootstrap.* functions) explicitly revokes this; this one did
-    not.
+    PostgreSQL's default (and, on production's actual pg_default_acl
+    posture, an explicit per-role default-privilege grant) leaves
+    handle_new_user() executable by PUBLIC, anon, authenticated, and
+    service_role.
 
 GREEN after the fix:
     The new migration (20260906000100_p0_sec_d_function_privileges.sql)
@@ -31,7 +48,6 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 
 import pytest
 
@@ -40,21 +56,12 @@ sys.path.insert(0, str(REPO_ROOT / "apps/api/scripts"))
 
 import p0_sec_d_common as _common  # noqa: E402
 import supabase_security_lint as _lint  # noqa: E402
+from security_gate_common import exec_sql, is_loopback_dsn  # noqa: E402
 
 pytestmark = pytest.mark.security
 
-_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 _RAW_DSN = os.environ.get("P0_SEC_D_TEST_DSN")
-
-
-def _loopback_dsn() -> str | None:
-    if not _RAW_DSN:
-        return None
-    host = urlparse(_RAW_DSN.replace("postgresql+asyncpg://", "postgresql://")).hostname
-    return _RAW_DSN if host in _LOOPBACK_HOSTS else None
-
-
-DSN = _loopback_dsn()
+DSN = _RAW_DSN if _RAW_DSN and is_loopback_dsn(_RAW_DSN) else None
 requires_db = pytest.mark.skipif(
     not DSN,
     reason="set P0_SEC_D_TEST_DSN to a loopback admin DSN to run catalog checks",
@@ -70,11 +77,17 @@ class TestMigrationShape:
             f"{_common.FIX_MIGRATION_PATH} is missing"
         )
 
-    def test_fix_migration_is_guarded_by_existence_check(self) -> None:
-        """Must be a no-op where handle_new_user() never existed (Alembic path)."""
+    def test_fix_migration_is_guarded_by_exact_function_identity(self) -> None:
+        """Must be a no-op where handle_new_user() never existed (Alembic path),
+
+        and must resolve the exact (schema, name, argument-type) identity via
+        to_regprocedure -- not merely proname -- so a future overload named
+        handle_new_user with different arguments cannot make the guard true
+        while the zero-argument function itself is absent.
+        """
         sql = _common.fix_migration_sql()
-        assert "IF EXISTS" in sql
-        assert "pg_proc" in sql
+        assert "to_regprocedure('public.handle_new_user()')" in sql
+        assert "IS NOT NULL" in sql
 
     def test_fix_migration_revokes_all_four_roles(self) -> None:
         sql = _common.fix_migration_sql()
@@ -113,10 +126,10 @@ class TestMigrationShape:
 @requires_db
 class TestCatalogGate:
     def _build_prefix_db(self, dsn: str) -> None:
-        _run_psql_file(dsn, _common.FIXTURE_PATH)
-        _run_psql_sql(
+        exec_sql(dsn, path=_common.FIXTURE_PATH)
+        exec_sql(
             dsn,
-            f"SET ROLE c2pro_owner;\n{_common.extract_handle_new_user_ddl()}\nRESET ROLE;",
+            sql=f"SET ROLE c2pro_owner;\n{_common.extract_handle_new_user_ddl()}\nRESET ROLE;",
         )
 
     def test_prefix_state_is_blocking(self, disposable_db: str) -> None:
@@ -128,32 +141,10 @@ class TestCatalogGate:
 
     def test_postfix_state_is_clean(self, disposable_db: str) -> None:
         self._build_prefix_db(disposable_db)
-        _run_psql_sql(disposable_db, _common.fix_migration_sql())
+        exec_sql(disposable_db, sql=_common.fix_migration_sql())
         assert _lint.run(disposable_db, scope="p0_sec_d") == 0, (
             "lint still reports a violation after the fix migration was applied"
         )
-
-
-def _run_psql_sql(dsn: str, sql: str) -> None:
-    try:
-        import psycopg
-
-        with psycopg.connect(dsn, autocommit=True) as conn:
-            conn.execute(sql)
-    except ImportError:  # pragma: no cover - environment dependent
-        import psycopg2
-
-        conn = psycopg2.connect(dsn)
-        conn.autocommit = True
-        try:
-            with conn.cursor() as cur:
-                cur.execute(sql)
-        finally:
-            conn.close()
-
-
-def _run_psql_file(dsn: str, path: Path) -> None:
-    _run_psql_sql(dsn, path.read_text(encoding="utf-8"))
 
 
 @pytest.fixture
@@ -164,9 +155,9 @@ def disposable_db() -> str:
     db_name = "p0_sec_d_pytest_scratch"
     target = admin.rsplit("/", 1)[0] + "/" + db_name
 
-    _run_psql_sql(admin, f'DROP DATABASE IF EXISTS "{db_name}"')
-    _run_psql_sql(admin, f'CREATE DATABASE "{db_name}"')
+    exec_sql(admin, sql=f'DROP DATABASE IF EXISTS "{db_name}"')
+    exec_sql(admin, sql=f'CREATE DATABASE "{db_name}"')
     try:
         yield target
     finally:
-        _run_psql_sql(admin, f'DROP DATABASE IF EXISTS "{db_name}"')
+        exec_sql(admin, sql=f'DROP DATABASE IF EXISTS "{db_name}"')

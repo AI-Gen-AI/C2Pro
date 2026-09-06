@@ -39,8 +39,13 @@ ALTER DEFAULT PRIVILEGES FOR ROLE c2pro_owner IN SCHEMA public
 -- ---------------------------------------------------- auth (Supabase GoTrue)
 -- Owned by the superuser bootstrapping this fixture, not c2pro_owner --
 -- production auth.users is platform-managed and not owned by the project
--- role either. authenticated only needs USAGE + INSERT to exercise the
--- signup trigger, matching what Supabase Auth itself does on signup.
+-- role either. The USAGE + INSERT granted to `authenticated` below is a
+-- SYNTHETIC harness permission chosen only to exercise the trigger
+-- mechanism as a non-superuser, non-owner role. It is not a claim about
+-- which role or privilege model Supabase Auth's own GoTrue service
+-- actually uses to write auth.users in production -- that internal
+-- mechanism is platform-managed and outside what these migrations control
+-- or can observe.
 CREATE SCHEMA IF NOT EXISTS auth;
 GRANT ALL ON SCHEMA auth TO c2pro_owner;
 GRANT USAGE ON SCHEMA auth TO authenticated;
@@ -76,4 +81,6 @@ CREATE TABLE public.users (
 
 RESET ROLE;
 
+-- Synthetic harness grant -- see the auth-schema comment above. Not a
+-- reproduction of production's actual auth.users write path.
 GRANT INSERT ON auth.users TO authenticated;

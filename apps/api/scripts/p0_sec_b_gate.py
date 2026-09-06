@@ -28,15 +28,15 @@ startup.
 
 from __future__ import annotations
 
-import os
 import sys
-from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from p0_sec_b_common import REPO_ROOT, emitted_sql  # noqa: E402
+from security_gate_common import exec_sql as _exec_script  # noqa: E402
+from security_gate_common import pg_connection as _connection  # noqa: E402
+from security_gate_common import resolve_admin_dsn as _resolve_admin_dsn_impl  # noqa: E402
 
 FIXTURE = REPO_ROOT / "apps/api/tests/security/fixtures/p0_sec_b_prestate.sql"
 DB_NAME = "p0_sec_b_gate"
@@ -44,8 +44,6 @@ DB_NAME = "p0_sec_b_gate"
 TENANT_A = "aaaaaaaa-aaaa-aaaa-aaaa-000000000001"
 TENANT_B = "bbbbbbbb-bbbb-bbbb-bbbb-000000000002"
 PROJECT_A = "cccccccc-cccc-cccc-cccc-000000000001"
-
-_LOOPBACK_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1"})
 
 _COALESCE_TABLES = (
     "project_states",
@@ -58,56 +56,7 @@ _COALESCE_TABLES = (
 
 
 def _resolve_admin_dsn() -> str:
-    raw = os.environ.get("P0_SEC_ADMIN_DSN")
-    if not raw:
-        print("no DSN: set P0_SEC_ADMIN_DSN", file=sys.stderr)
-        raise SystemExit(2)
-    normalized = raw.replace("postgresql+asyncpg://", "postgresql://")
-    try:
-        host = urlparse(normalized).hostname
-    except Exception:
-        raise SystemExit("GATE ABORTED: could not parse P0_SEC_ADMIN_DSN")
-    if not host or host not in _LOOPBACK_HOSTS:
-        raise SystemExit(f"GATE ABORTED: P0_SEC_ADMIN_DSN host {host!r} is not a loopback address.")
-    return normalized
-
-
-def _sanitize(msg: str, dsn: str) -> str:
-    try:
-        pw = urlparse(dsn).password
-        if pw:
-            msg = msg.replace(pw, "***")
-    except Exception:
-        pass
-    return msg
-
-
-def _exec_script(dsn: str, *, sql: str | None = None, path: Path | None = None) -> None:
-    """Execute a SQL script as a single statement batch (for dollar-quoted blocks)."""
-    query = sql or (path.read_text(encoding="utf-8") if path else None)
-    if not query:
-        raise ValueError("sql or path required")
-    try:
-        try:
-            import psycopg
-
-            with psycopg.connect(dsn, autocommit=True) as conn:
-                conn.execute(query)
-        except ImportError:
-            import psycopg2
-
-            conn = psycopg2.connect(dsn)
-            conn.autocommit = True
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(query)
-            finally:
-                conn.close()
-    except SystemExit:
-        raise
-    except Exception as exc:
-        msg = _sanitize(str(exc), dsn)
-        raise SystemExit(f"database command failed: {type(exc).__name__}: {msg}") from None
+    return _resolve_admin_dsn_impl("P0_SEC_ADMIN_DSN")
 
 
 def _exec_script_expect_error(dsn: str, sql: str, expected_fragment: str) -> None:
@@ -138,27 +87,6 @@ def _exec_script_expect_error(dsn: str, sql: str, expected_fragment: str) -> Non
     raise SystemExit(
         f"GATE FAILED: expected exception containing '{expected_fragment}' but SQL succeeded"
     )
-
-
-@contextmanager
-def _connection(dsn: str):
-    try:
-        import psycopg
-
-        conn = psycopg.connect(dsn, autocommit=True)
-        try:
-            yield conn
-        finally:
-            conn.close()
-    except ImportError:
-        import psycopg2
-
-        conn = psycopg2.connect(dsn)
-        conn.autocommit = True
-        try:
-            yield conn
-        finally:
-            conn.close()
 
 
 def _count_rows_as_role(

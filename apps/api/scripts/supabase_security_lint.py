@@ -19,10 +19,17 @@ P0-SEC-B scope (BLOCKING as of 20260905_0001):
 
 P0-SEC-D scope (BLOCKING as of 20260906000100):
     - Any SECURITY DEFINER function (any schema) whose EXECUTE privilege is
-      held by PUBLIC, anon, or authenticated -- including a NULL proacl
-      (Postgres's own default grants PUBLIC execute on every new function
-      unless revoked). service_role is intentionally excluded: a backend-
-      only SECURITY DEFINER RPC may legitimately grant it EXECUTE.
+      held by PUBLIC -- including a NULL proacl (Postgres's own default
+      grants PUBLIC execute on every new function unless revoked). Never
+      allowlisted: PUBLIC on a SECURITY DEFINER function is not permitted.
+    - Any SECURITY DEFINER function whose EXECUTE is held by anon or
+      authenticated, UNLESS its exact (schema, name, identity-arguments)
+      appears in _SECURITY_DEFINER_ANON_AUTHENTICATED_ALLOWLIST -- a
+      deliberate, reviewed exception list, empty by default.
+    - service_role is intentionally excluded from both checks: a backend-
+      only SECURITY DEFINER RPC may legitimately grant it EXECUTE, and that
+      is governed by explicit, reviewed grants at the migration level, not
+      by this lint.
 
 Usage:
     DATABASE_URL=postgresql://... python apps/api/scripts/supabase_security_lint.py
@@ -155,9 +162,16 @@ _EXCESS_POLICY_NAMES: tuple[tuple[str, str], ...] = (
 # service_role is deliberately not in the grantee list: a backend-only
 # SECURITY DEFINER RPC (e.g. public.create_tenant_and_owner) may legitimately
 # grant it EXECUTE, and that is a deliberate, reviewed choice, not a leak.
+#
+# The grantee is returned per-row (rather than folding PUBLIC/anon/
+# authenticated into one boolean) because the security contract treats them
+# asymmetrically: PUBLIC on a SECURITY DEFINER function is never permitted,
+# while anon/authenticated may be explicitly allowlisted per function
+# identity below if a legitimate RPC ever requires it.
 Q_SECURITY_DEFINER_PUBLIC_EXECUTE = """
 SELECT DISTINCT n.nspname, p.proname,
-       pg_get_function_identity_arguments(p.oid) AS args
+       pg_get_function_identity_arguments(p.oid) AS args,
+       CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(acl.grantee) END AS grantee
   FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
   JOIN LATERAL aclexplode(
@@ -172,14 +186,31 @@ SELECT DISTINCT n.nspname, p.proname,
    );
 """
 
+# Explicit, reviewed allowlist of SECURITY DEFINER functions permitted to
+# grant EXECUTE to anon and/or authenticated, keyed by full function
+# identity (schema, name, identity-argument signature exactly as
+# pg_get_function_identity_arguments renders it). Empty today: no currently
+# known SECURITY DEFINER function has a reviewed, legitimate reason for
+# anon/authenticated to call it directly (public.create_tenant_and_owner
+# grants only service_role; every auth_bootstrap.* function grants no one
+# but its owner). Adding an entry here is a deliberate security decision to
+# be made if such an RPC is ever introduced, not a place to silence a
+# finding. PUBLIC has no equivalent allowlist: a SECURITY DEFINER function
+# executable by PUBLIC is never permitted, full stop.
+_SECURITY_DEFINER_ANON_AUTHENTICATED_ALLOWLIST: frozenset[tuple[str, str, str]] = frozenset()
+
 
 def _check_p0_sec_d(cur: object, blocking: list[str]) -> None:
     """Execute P0-SEC-D control-family checks against an open cursor."""
     cur.execute(Q_SECURITY_DEFINER_PUBLIC_EXECUTE)  # type: ignore[union-attr]
-    for schema, name, args in cur.fetchall():  # type: ignore[union-attr]
+    for schema, name, args, grantee in cur.fetchall():  # type: ignore[union-attr]
+        if grantee != "PUBLIC" and (schema, name, args) in (
+            _SECURITY_DEFINER_ANON_AUTHENTICATED_ALLOWLIST
+        ):
+            continue
         blocking.append(
             f"SECURITY DEFINER function {schema}.{name}({args}) is executable "
-            f"by PUBLIC/anon/authenticated with no reviewed REVOKE"
+            f"by {grantee} with no reviewed REVOKE (or allowlist entry)"
         )
 
 

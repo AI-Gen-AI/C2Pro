@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 """Self-verifying gate for the P0-SEC-D function-privilege hardening.
 
+CLASSIFICATION: DEFENSE_IN_DEPTH / privilege-boundary hardening. The EXECUTE
+grant this gate closes is not a demonstrated exploitable path: direct
+invocation of a trigger function is rejected by PostgreSQL itself, and
+attaching it to a *new* trigger additionally requires CREATE on some schema
+or TRIGGER on some existing table -- neither of which anon/authenticated
+hold anywhere in schema public on the current (post-P0-SEC-A) catalog. The
+REVOKE is justified as consistency (every sibling SECURITY DEFINER function
+already does this) and as removing a latent gap that would become live risk
+if either missing prerequisite were ever granted for an unrelated reason.
+
 Builds a disposable database reproducing the production Supabase role model
 and default-privilege posture, applies public.handle_new_user() exactly as
 committed in the init-schema migration, then proves the full lifecycle:
@@ -9,9 +19,12 @@ committed in the init-schema migration, then proves the full lifecycle:
                               EXECUTE on the SECURITY DEFINER function)
     fix       -> GREEN      (only the owner holds EXECUTE)
     regression proof        (the on_auth_user_created trigger this function
-                              serves still fires correctly for an
-                              `authenticated` INSERT after the fix -- EXECUTE
-                              ACLs are not checked for trigger invocation)
+                              serves still fires correctly for an INSERT
+                              performed as `authenticated` -- a synthetic
+                              harness choice, not a claim about production's
+                              actual auth.users caller/privilege model --
+                              after the fix, since EXECUTE ACLs are not
+                              checked for trigger invocation)
 
 Usage:
     P0_SEC_ADMIN_DSN=postgresql://postgres@localhost:5432/postgres \\
@@ -24,11 +37,8 @@ startup.
 
 from __future__ import annotations
 
-import os
 import sys
-from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -37,89 +47,14 @@ from p0_sec_d_common import (  # noqa: E402
     extract_handle_new_user_ddl,
     fix_migration_sql,
 )
+from security_gate_common import exec_sql, pg_connection, resolve_admin_dsn  # noqa: E402
 
 DB_NAME = "p0_sec_d_gate"
-
-_LOOPBACK_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1"})
 
 # Roles a SECURITY DEFINER function must never leak EXECUTE to without an
 # explicit, reviewed grant. service_role is deliberately excluded: backend-
 # only RPCs may legitimately grant it EXECUTE (e.g. create_tenant_and_owner).
 _UNTRUSTED_ROLES = ("PUBLIC", "anon", "authenticated")
-
-
-def _resolve_admin_dsn() -> str:
-    raw = os.environ.get("P0_SEC_ADMIN_DSN")
-    if not raw:
-        print("no DSN: set P0_SEC_ADMIN_DSN", file=sys.stderr)
-        raise SystemExit(2)
-    normalized = raw.replace("postgresql+asyncpg://", "postgresql://")
-    try:
-        host = urlparse(normalized).hostname
-    except Exception:
-        raise SystemExit("GATE ABORTED: could not parse P0_SEC_ADMIN_DSN") from None
-    if not host or host not in _LOOPBACK_HOSTS:
-        raise SystemExit(f"GATE ABORTED: P0_SEC_ADMIN_DSN host {host!r} is not a loopback address.")
-    return normalized
-
-
-def _sanitize(msg: str, dsn: str) -> str:
-    try:
-        pw = urlparse(dsn).password
-        if pw:
-            msg = msg.replace(pw, "***")
-    except Exception:
-        pass
-    return msg
-
-
-def _exec_script(dsn: str, *, sql: str | None = None, path: Path | None = None) -> None:
-    """Execute a SQL script as a single statement batch (for dollar-quoted blocks)."""
-    query = sql or (path.read_text(encoding="utf-8") if path else None)
-    if not query:
-        raise ValueError("sql or path required")
-    try:
-        try:
-            import psycopg
-
-            with psycopg.connect(dsn, autocommit=True) as conn:
-                conn.execute(query)
-        except ImportError:
-            import psycopg2
-
-            conn = psycopg2.connect(dsn)
-            conn.autocommit = True
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(query)
-            finally:
-                conn.close()
-    except SystemExit:
-        raise
-    except Exception as exc:
-        msg = _sanitize(str(exc), dsn)
-        raise SystemExit(f"database command failed: {type(exc).__name__}: {msg}") from None
-
-
-@contextmanager
-def _connection(dsn: str):
-    try:
-        import psycopg
-
-        conn = psycopg.connect(dsn, autocommit=True)
-        try:
-            yield conn
-        finally:
-            conn.close()
-    except ImportError:
-        import psycopg2
-
-        conn = psycopg2.connect(dsn)
-        conn.autocommit = True
-        try:
-            yield conn
-        finally:
-            conn.close()
 
 
 def _executable_by(dsn: str, role: str) -> bool:
@@ -134,7 +69,7 @@ def _executable_by(dsn: str, role: str) -> bool:
     catch. Reading the ACL directly checks what is actually granted, not
     who is asking.
     """
-    with _connection(dsn) as conn, conn.cursor() as cur:
+    with pg_connection(dsn) as conn, conn.cursor() as cur:
         cur.execute(
             """
             SELECT EXISTS (
@@ -173,22 +108,28 @@ def _check_phase(dsn: str, label: str, *, expect_executable: bool) -> None:
 
 
 def _check_trigger_still_fires(dsn: str) -> None:
-    """Prove the fix does not break the real Supabase Auth signup path.
+    """Prove the REVOKE does not stop the trigger from firing.
 
-    An `authenticated`-role INSERT into auth.users must still produce a
-    matching public.users row via the on_auth_user_created trigger --
-    EXECUTE ACLs on a trigger function are not consulted when the trigger
-    fires, only when the function is called directly.
+    An INSERT into auth.users, performed as `authenticated` (a synthetic
+    harness choice, not a claim about which role or privilege model
+    Supabase's own GoTrue service uses to write auth.users in production —
+    that mechanism is platform-managed and outside what these migrations
+    control), must still produce a matching public.users row via the
+    on_auth_user_created trigger and the exact committed function body.
+    This proves the mechanical fact that PostgreSQL does not consult a
+    trigger function's EXECUTE ACL when the trigger fires, only when the
+    function is called directly -- not that this reproduces production's
+    real caller/privilege model for auth.users.
     """
-    print("\n=== regression proof: signup trigger still fires ===")
+    print("\n=== regression proof: trigger still fires after REVOKE ===")
     tenant_id = "aaaaaaaa-aaaa-aaaa-aaaa-000000000001"
     user_id = "bbbbbbbb-bbbb-bbbb-bbbb-000000000002"
 
-    _exec_script(
+    exec_sql(
         dsn,
         sql=f"INSERT INTO public.tenants (id, name) VALUES ('{tenant_id}'::uuid, 'Acme')",
     )
-    _exec_script(
+    exec_sql(
         dsn,
         sql=(
             "SET ROLE authenticated; "
@@ -200,7 +141,7 @@ def _check_trigger_still_fires(dsn: str) -> None:
         ),
     )
 
-    with _connection(dsn) as conn, conn.cursor() as cur:
+    with pg_connection(dsn) as conn, conn.cursor() as cur:
         cur.execute(
             "SELECT tenant_id, email, role FROM public.users WHERE id = %s",
             (user_id,),
@@ -209,7 +150,7 @@ def _check_trigger_still_fires(dsn: str) -> None:
     if row is None:
         raise SystemExit(
             "GATE FAILED: on_auth_user_created did not create the public.users "
-            "row -- the REVOKE broke the Supabase Auth signup path"
+            "row -- the REVOKE stopped the trigger from firing"
         )
     got_tenant, got_email, got_role = str(row[0]), row[1], row[2]
     if got_tenant != tenant_id or got_email != "new.user@example.com" or got_role != "member":
@@ -228,11 +169,11 @@ def main() -> int:
     parser.add_argument("--keep", action="store_true", help="do not drop the disposable DB")
     args = parser.parse_args()
 
-    admin = _resolve_admin_dsn()
+    admin = resolve_admin_dsn("P0_SEC_ADMIN_DSN")
     target = admin.rsplit("/", 1)[0] + "/" + DB_NAME
 
-    _exec_script(admin, sql=f'DROP DATABASE IF EXISTS "{DB_NAME}"')
-    _exec_script(admin, sql=f'CREATE DATABASE "{DB_NAME}"')
+    exec_sql(admin, sql=f'DROP DATABASE IF EXISTS "{DB_NAME}"')
+    exec_sql(admin, sql=f'CREATE DATABASE "{DB_NAME}"')
 
     try:
         # Load the role/default-ACL pre-state fixture, then apply the exact
@@ -240,8 +181,8 @@ def main() -> int:
         # ALTER DEFAULT PRIVILEGES ... FOR ROLE c2pro_owner clause in the
         # fixture only auto-grants EXECUTE for objects that role creates,
         # matching how a real Supabase deploy applies this migration.
-        _exec_script(target, path=FIXTURE_PATH)
-        _exec_script(
+        exec_sql(target, path=FIXTURE_PATH)
+        exec_sql(
             target,
             sql=f"SET ROLE c2pro_owner;\n{extract_handle_new_user_ddl()}\nRESET ROLE;",
         )
@@ -250,7 +191,7 @@ def main() -> int:
         _check_phase(target, "pre-fix", expect_executable=True)
 
         # Step 2: apply the fix migration.
-        _exec_script(target, sql=fix_migration_sql())
+        exec_sql(target, sql=fix_migration_sql())
 
         # Step 3: confirm GREEN after the fix.
         _check_phase(target, "after fix", expect_executable=False)
@@ -260,7 +201,7 @@ def main() -> int:
 
     finally:
         if not args.keep:
-            _exec_script(admin, sql=f'DROP DATABASE IF EXISTS "{DB_NAME}"')
+            exec_sql(admin, sql=f'DROP DATABASE IF EXISTS "{DB_NAME}"')
 
     print("\nP0-SEC-D GATE: PASSED (RED -> GREEN + trigger regression proof)")
     return 0
