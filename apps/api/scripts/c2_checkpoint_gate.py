@@ -44,6 +44,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from psycopg import sql  # noqa: E402
 from security_gate_common import exec_sql as _exec_script  # noqa: E402
 from security_gate_common import pg_connection as _connection  # noqa: E402
 from security_gate_common import resolve_admin_dsn as _resolve_admin_dsn_impl  # noqa: E402
@@ -70,7 +71,7 @@ def _role_pool(dsn_as_admin: str, role: str):
     from psycopg_pool import AsyncConnectionPool
 
     async def _configure(conn) -> None:  # noqa: ANN001
-        await conn.execute(f"SET ROLE {role}")
+        await conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
 
     return AsyncConnectionPool(
         conninfo=dsn_as_admin,
@@ -135,14 +136,14 @@ async def _run_checkpoint_roundtrip(dsn_as_admin: str, role: str) -> tuple[bool,
         await pool.close()
 
 
-async def _run_denied(dsn_as_admin: str, role: str, sql: str) -> tuple[bool, str]:
-    """Run sql as role, expecting a permission error. Returns (was_denied, message)."""
+async def _run_denied(dsn_as_admin: str, role: str, query: sql.Composable) -> tuple[bool, str]:
+    """Run query as role, expecting a permission error. Returns (was_denied, message)."""
     pool = _role_pool(dsn_as_admin, role)
     try:
         await pool.open(wait=True, timeout=10)
         async with pool.connection() as conn, conn.cursor() as cur:
             try:
-                await cur.execute(sql)
+                await cur.execute(query)
             except Exception as exc:  # noqa: BLE001 - asserting the exact failure mode
                 msg = str(exc)
                 if "permission denied" not in msg.lower():
@@ -154,19 +155,22 @@ async def _run_denied(dsn_as_admin: str, role: str, sql: str) -> tuple[bool, str
 
 
 def _create_roles(target: str) -> None:
-    for role in (OWNER_ROLE, APP_ROLE, CHECKPOINT_ROLE):
-        _exec_script(
-            target,
-            sql=(
-                f"DO $r$ BEGIN "
-                f"IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='{role}') THEN "
-                f"CREATE ROLE {role} NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOLOGIN; "
-                f"END IF; END $r$;"
-            ),
+    with _connection(target) as conn, conn.cursor() as cur:
+        for role in (OWNER_ROLE, APP_ROLE, CHECKPOINT_ROLE):
+            cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,))
+            if cur.fetchone() is None:
+                cur.execute(
+                    sql.SQL("CREATE ROLE {} NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOLOGIN").format(
+                        sql.Identifier(role)
+                    )
+                )
+        cur.execute(
+            sql.SQL("GRANT CREATE, USAGE ON SCHEMA public TO {}").format(sql.Identifier(OWNER_ROLE))
         )
-    _exec_script(target, sql=f"GRANT CREATE, USAGE ON SCHEMA public TO {OWNER_ROLE}")
-    _exec_script(target, sql=f"GRANT USAGE ON SCHEMA public TO {APP_ROLE}")
-    _exec_script(target, sql=f"GRANT USAGE ON SCHEMA public TO {CHECKPOINT_ROLE}")
+        cur.execute(sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(sql.Identifier(APP_ROLE)))
+        cur.execute(
+            sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(sql.Identifier(CHECKPOINT_ROLE))
+        )
 
 
 def _check_role_properties(target: str) -> None:
@@ -225,10 +229,12 @@ def main() -> int:
             target,
             sql="CREATE TABLE business_probe (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), note text)",
         )
-        _exec_script(
-            target,
-            sql=f"GRANT SELECT, INSERT, UPDATE, DELETE ON business_probe TO {APP_ROLE}",
-        )
+        with _connection(target) as conn, conn.cursor() as cur:
+            cur.execute(
+                sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON business_probe TO {}").format(
+                    sql.Identifier(APP_ROLE)
+                )
+            )
 
         print("=" * 78)
         print("RED 1 — checkpoint role cannot execute setup() before owner provisioning")
@@ -275,20 +281,30 @@ def main() -> int:
         print("\n" + "=" * 78)
         print("TARGET GRANT/POLICY CONTRACT — apply to the disposable DB only")
         print("=" * 78)
-        for table in CHECKPOINT_TABLES:
-            _exec_script(target, sql=f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
-            _exec_script(target, sql=f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
-            _exec_script(
-                target,
-                sql=(
-                    f"CREATE POLICY {table}_checkpoint_role_only ON {table} "
-                    f"FOR ALL TO {CHECKPOINT_ROLE} USING (true) WITH CHECK (true)"
-                ),
-            )
-            _exec_script(
-                target,
-                sql=f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table} TO {CHECKPOINT_ROLE}",
-            )
+        with _connection(target) as conn, conn.cursor() as cur:
+            for table in CHECKPOINT_TABLES:
+                cur.execute(
+                    sql.SQL("ALTER TABLE {} ENABLE ROW LEVEL SECURITY").format(
+                        sql.Identifier(table)
+                    )
+                )
+                cur.execute(
+                    sql.SQL("ALTER TABLE {} FORCE ROW LEVEL SECURITY").format(sql.Identifier(table))
+                )
+                cur.execute(
+                    sql.SQL(
+                        "CREATE POLICY {policy} ON {table} FOR ALL TO {role} USING (true) WITH CHECK (true)"
+                    ).format(
+                        policy=sql.Identifier(f"{table}_checkpoint_role_only"),
+                        table=sql.Identifier(table),
+                        role=sql.Identifier(CHECKPOINT_ROLE),
+                    )
+                )
+                cur.execute(
+                    sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON {} TO {}").format(
+                        sql.Identifier(table), sql.Identifier(CHECKPOINT_ROLE)
+                    )
+                )
         # Deliberately NOT granted: APP_ROLE gets nothing on checkpoint tables;
         # CHECKPOINT_ROLE gets nothing on checkpoint_migrations or business_probe.
         print(
@@ -313,14 +329,22 @@ def main() -> int:
         print("GREEN 2 — app role denied on all 3 checkpoint tables")
         print("=" * 78)
         for table in CHECKPOINT_TABLES:
-            denied, msg = asyncio.run(_run_denied(target, APP_ROLE, f"SELECT * FROM {table}"))
+            denied, msg = asyncio.run(
+                _run_denied(
+                    target, APP_ROLE, sql.SQL("SELECT * FROM {}").format(sql.Identifier(table))
+                )
+            )
             print(f"  {APP_ROLE} SELECT {table}: {'DENIED (OK)' if denied else 'FAILED'} — {msg}")
             if not denied:
                 raise SystemExit(
                     f"GATE FAILED: GREEN 2 — {APP_ROLE} was not denied SELECT on {table}"
                 )
             denied, msg = asyncio.run(
-                _run_denied(target, APP_ROLE, f"INSERT INTO {table} DEFAULT VALUES")
+                _run_denied(
+                    target,
+                    APP_ROLE,
+                    sql.SQL("INSERT INTO {} DEFAULT VALUES").format(sql.Identifier(table)),
+                )
             )
             print(f"  {APP_ROLE} INSERT {table}: {'DENIED (OK)' if denied else 'FAILED'} — {msg}")
             if not denied:
@@ -332,7 +356,7 @@ def main() -> int:
         print("GREEN 3 — checkpoint role denied on the ordinary business table")
         print("=" * 78)
         denied, msg = asyncio.run(
-            _run_denied(target, CHECKPOINT_ROLE, "SELECT * FROM business_probe")
+            _run_denied(target, CHECKPOINT_ROLE, sql.SQL("SELECT * FROM business_probe"))
         )
         print(
             f"  {CHECKPOINT_ROLE} SELECT business_probe: {'DENIED (OK)' if denied else 'FAILED'} — {msg}"
@@ -347,7 +371,9 @@ def main() -> int:
         print("=" * 78)
         denied, msg = asyncio.run(
             _run_denied(
-                target, CHECKPOINT_ROLE, "CREATE TABLE checkpoint_role_should_not_create (id int)"
+                target,
+                CHECKPOINT_ROLE,
+                sql.SQL("CREATE TABLE checkpoint_role_should_not_create (id int)"),
             )
         )
         print(f"  {CHECKPOINT_ROLE} CREATE TABLE: {'DENIED (OK)' if denied else 'FAILED'} — {msg}")
@@ -358,7 +384,7 @@ def main() -> int:
         print("GREEN 5 — checkpoint role denied checkpoint_migrations access")
         print("=" * 78)
         denied, msg = asyncio.run(
-            _run_denied(target, CHECKPOINT_ROLE, "SELECT * FROM checkpoint_migrations")
+            _run_denied(target, CHECKPOINT_ROLE, sql.SQL("SELECT * FROM checkpoint_migrations"))
         )
         print(
             f"  {CHECKPOINT_ROLE} SELECT checkpoint_migrations: {'DENIED (OK)' if denied else 'FAILED'} — {msg}"
