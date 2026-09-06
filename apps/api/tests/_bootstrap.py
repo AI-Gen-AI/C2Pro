@@ -299,6 +299,28 @@ def _ensure_auth_users(session: Session, _flush_context, _instances) -> None:
 # ---------------------------------------------------------------------------
 
 
+async def _reprovision_checkpoint_schema() -> None:
+    """Restore the LangGraph checkpoint tables after a full public-schema reset.
+
+    Option-C C2 removed runtime's self-healing ``AsyncPostgresSaver.setup()``
+    call, so nothing re-creates ``checkpoints``/``checkpoint_blobs``/
+    ``checkpoint_writes`` once ``reset_public_schema`` drops the schema with
+    CASCADE. Those tables are neither Alembic-managed nor SQLAlchemy-ORM
+    metadata, so ``Base.metadata.create_all`` never recreates them either.
+    Any test using this fixture would otherwise leave the checkpoint schema
+    missing for the rest of the pytest session (including standalone tests,
+    e.g. ``test_mcp_startup.py``, that call ``lifespan(app)`` directly and
+    never touch ``test_engine`` themselves).
+    """
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from checkpoint_bootstrap import bootstrap_checkpoint_schema
+
+    await bootstrap_checkpoint_schema(settings.database_url_async)
+
+
 @pytest_asyncio.fixture(scope="function")
 async def test_engine(request):
     """Create a test database engine with full schema bootstrap.
@@ -308,7 +330,6 @@ async def test_engine(request):
     The marker is scoped to the requesting test item, so it cannot leak
     process-wide to co-located tests.
     """
-    from sqlalchemy.exc import OperationalError
 
     database_url = settings.database_url
     if database_url.startswith("postgresql://"):
@@ -331,77 +352,71 @@ async def test_engine(request):
     except Exception as exc:
         print(f"[WARNING] Could not ensure c2pro_test database exists: {exc}")
 
-    try:
-        engine = create_async_engine(
-            database_url,
-            echo=False,
-            pool_pre_ping=True,
-            pool_size=5,
-            max_overflow=10,
-            connect_args={"statement_cache_size": 0},
-        )
+    engine = create_async_engine(
+        database_url,
+        echo=False,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        connect_args={"statement_cache_size": 0},
+    )
 
-        _register_test_orm_models()
-        _ensure_test_fk_stub_tables()
+    _register_test_orm_models()
+    _ensure_test_fk_stub_tables()
 
-        if request.node.get_closest_marker("alembic_schema") is not None:
-            yield engine
-            await engine.dispose()
-            return
-
-        async def _cleanup_bootstrap(conn) -> None:
-            await reset_public_schema(conn)
-
-        async def _prepare_bootstrap(conn) -> None:
-            await _reset_metadata_enum_types(conn)
-            await _create_metadata_enum_types(conn)
-            _set_metadata_enum_create_type(False)
-            try:
-                await conn.run_sync(Base.metadata.create_all)
-            finally:
-                _set_metadata_enum_create_type(True)
-            await _ensure_rls_and_audit_compatibility(conn)
-
-        await run_postgres_test_bootstrap(
-            engine,
-            cleanup_step=_cleanup_bootstrap,
-            prepare_step=_prepare_bootstrap,
-            warning_sink=lambda exc: print(f"[WARNING] Bootstrap drop_all skipped: {exc}"),
-        )
-
-        # Recreate engine after schema reset to avoid stale pooled connections.
-        await engine.dispose()
-        engine = create_async_engine(
-            database_url,
-            echo=False,
-            pool_pre_ping=True,
-            pool_size=5,
-            max_overflow=10,
-            connect_args={"statement_cache_size": 0},
-        )
-        async with engine.begin() as conn:
-            _set_metadata_enum_create_type(False)
-            try:
-                await conn.run_sync(Base.metadata.create_all)
-            finally:
-                _set_metadata_enum_create_type(True)
-
+    if request.node.get_closest_marker("alembic_schema") is not None:
         yield engine
-
-        async with engine.begin() as conn:
-            try:
-                await conn.run_sync(Base.metadata.drop_all)
-            except Exception as exc:
-                print(f"[WARNING] Teardown drop_all skipped: {exc}")
-
         await engine.dispose()
+        return
 
-    except (OperationalError, OSError) as exc:
-        pytest.fail(
-            f"PostgreSQL test database unavailable at {settings.database_url}. "
-            "Start the test container with `docker-compose -f docker-compose.test.yml up -d`. "
-            f"Original error: {exc}"
-        )
+    async def _cleanup_bootstrap(conn) -> None:
+        await reset_public_schema(conn)
+
+    async def _prepare_bootstrap(conn) -> None:
+        await _reset_metadata_enum_types(conn)
+        await _create_metadata_enum_types(conn)
+        _set_metadata_enum_create_type(False)
+        try:
+            await conn.run_sync(Base.metadata.create_all)
+        finally:
+            _set_metadata_enum_create_type(True)
+        await _ensure_rls_and_audit_compatibility(conn)
+
+    await run_postgres_test_bootstrap(
+        engine,
+        cleanup_step=_cleanup_bootstrap,
+        prepare_step=_prepare_bootstrap,
+        warning_sink=lambda exc: print(f"[WARNING] Bootstrap drop_all skipped: {exc}"),
+    )
+
+    # Recreate engine after schema reset to avoid stale pooled connections.
+    await engine.dispose()
+    engine = create_async_engine(
+        database_url,
+        echo=False,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        connect_args={"statement_cache_size": 0},
+    )
+    async with engine.begin() as conn:
+        _set_metadata_enum_create_type(False)
+        try:
+            await conn.run_sync(Base.metadata.create_all)
+        finally:
+            _set_metadata_enum_create_type(True)
+
+    await _reprovision_checkpoint_schema()
+
+    yield engine
+
+    async with engine.begin() as conn:
+        try:
+            await conn.run_sync(Base.metadata.drop_all)
+        except Exception as exc:
+            print(f"[WARNING] Teardown drop_all skipped: {exc}")
+
+    await engine.dispose()
 
 
 @pytest_asyncio.fixture(scope="function")
