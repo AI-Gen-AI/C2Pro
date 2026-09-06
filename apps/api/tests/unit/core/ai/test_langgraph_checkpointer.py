@@ -15,6 +15,7 @@ Test Scenarios:
 
 import os
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -24,6 +25,8 @@ from sqlalchemy import text
 from src.analysis.adapters.graph import workflow as workflow_module
 from src.analysis.adapters.graph.workflow import _build_checkpointer, compile_workflow
 from src.config import settings
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
 
 pytestmark = [
     pytest.mark.asyncio,
@@ -156,6 +159,10 @@ class TestLangGraphCheckpointer:
 
     async def test_close_checkpointer_resources_resets_cached_graph_app(self):
         """Verify shutdown clears the cached graph app so the next lifespan rebuilds it."""
+        from checkpoint_bootstrap import bootstrap_checkpoint_schema
+
+        await bootstrap_checkpoint_schema(settings.database_url_async)
+
         workflow_module._graph_app = None
 
         app_before_shutdown = workflow_module.get_graph_app()
@@ -285,11 +292,23 @@ class TestLangGraphWorkflowPersistence:
 # Fixtures
 @pytest.fixture
 async def db_session():
-    """Provide database session for checkpoint table verification."""
+    """Provide database session for checkpoint table verification.
+
+    Option-C C2: runtime (ensure_checkpointer_ready) no longer runs
+    AsyncPostgresSaver.setup() -- that is exclusively scripts/
+    checkpoint_bootstrap.py's job, run under the owner credential before the
+    application starts. These integration tests exercise real checkpoint
+    infrastructure, so they must do that bootstrap step themselves first,
+    exactly as a real deployment would, before calling
+    ensure_checkpointer_ready() (which now only performs a read-only
+    readiness check and raises CheckpointSchemaNotReadyError if skipped).
+    """
+    from checkpoint_bootstrap import bootstrap_checkpoint_schema
     from sqlalchemy.ext.asyncio import create_async_engine
 
     from src.analysis.adapters.graph.workflow import ensure_checkpointer_ready
 
+    await bootstrap_checkpoint_schema(settings.database_url_async)
     await ensure_checkpointer_ready()
     engine = create_async_engine(settings.database_url_async, echo=False)
     async with engine.connect() as conn:
