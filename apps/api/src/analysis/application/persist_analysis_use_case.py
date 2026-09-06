@@ -90,7 +90,7 @@ class PersistAnalysisUseCase:
                 **(command.single_document_assessment or {}),
             },
         )
-        await self._analysis_repo.add_analysis(analysis)
+        await self._analysis_repo.add_analysis(analysis, tenant_id=command.tenant_id)
         await self._analysis_repo.flush()
 
         if command.extracted_risks:
@@ -120,7 +120,7 @@ class PersistAnalysisUseCase:
                 )
                 for dto in alert_dtos
             ]
-            await self._analysis_repo.add_alerts(alerts)
+            await self._analysis_repo.add_alerts(alerts, tenant_id=command.tenant_id)
 
         if command.extracted_wbs:
             await self._session.execute(

@@ -10,11 +10,18 @@ from src.analysis.ports.types import AlertWrite, AnalysisRecord, AnalysisWrite
 
 class IAnalysisRepository(ABC):
     @abstractmethod
-    async def add_analysis(self, analysis: AnalysisWrite, tenant_id: UUID | None = None) -> None:
+    async def add_analysis(self, analysis: AnalysisWrite, tenant_id: UUID) -> None:
+        """Persist an analysis.
+
+        ``tenant_id`` is mandatory and is verified against both the
+        analysis' own ``tenant_id`` and its project's ownership -- there
+        is no "skip verification" mode.
+        """
         ...
 
     @abstractmethod
-    async def add_alerts(self, alerts: Iterable[AlertWrite], tenant_id: UUID | None = None) -> None:
+    async def add_alerts(self, alerts: Iterable[AlertWrite], tenant_id: UUID) -> None:
+        """Persist alerts. ``tenant_id`` is mandatory and is verified per-alert."""
         ...
 
     @abstractmethod
