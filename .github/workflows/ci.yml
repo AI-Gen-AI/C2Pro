@@ -323,7 +323,7 @@ jobs:
         uses: ./.github/actions/setup-python-backend
 
       - name: Bootstrap test infrastructure
-        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
+        run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
 
       - name: Run multi-tenant isolation and auth security tests
         working-directory: apps/api
@@ -501,7 +501,7 @@ jobs:
         uses: ./.github/actions/setup-python-backend
 
       - name: Bootstrap test infrastructure
-        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
+        run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
 
       - name: Run integration tests
         working-directory: apps/api
@@ -544,7 +544,7 @@ jobs:
       - name: Setup backend environment
         uses: ./.github/actions/setup-python-backend
       - name: Bootstrap test infrastructure
-        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
+        run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
       - name: Run core tests
         working-directory: apps/api
         run: python -m pytest tests/core --tb=short --junit-xml=core-test-results.xml --cov=src --cov-report=xml:coverage.xml
@@ -589,7 +589,7 @@ jobs:
       - name: Setup backend environment
         uses: ./.github/actions/setup-python-backend
       - name: Bootstrap test infrastructure
-        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
+        run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
       - name: Run coherence tests
         working-directory: apps/api
         run: python -m pytest tests/coherence --tb=short --junit-xml=coherence-test-results.xml --cov=src --cov-report=xml:coverage.xml
@@ -634,7 +634,7 @@ jobs:
       - name: Setup backend environment
         uses: ./.github/actions/setup-python-backend
       - name: Bootstrap test infrastructure
-        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
+        run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
       - name: Run modules tests
         working-directory: apps/api
         run: python -m pytest tests/modules -m "not requires_services" --tb=short --junit-xml=modules-test-results.xml --cov=src --cov-report=xml:coverage.xml
@@ -871,7 +871,7 @@ jobs:
 
       - name: Bootstrap E2E backend infrastructure
         if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
-        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
+        run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
 
       - name: Resolve Clerk E2E user
         if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
@@ -1129,7 +1129,7 @@ jobs:
         uses: ./.github/actions/setup-python-backend
 
       - name: Bootstrap infrastructure (PostgreSQL + Redis)
-        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --redis-port 6379 --recreate-db
+        run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
 
       # The E2E identity had ZERO Clerk Organization memberships, so C2Pro could
       # never resolve a tenant: lib/clerk-tenant.ts reads the tenant from the

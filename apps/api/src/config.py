@@ -7,7 +7,7 @@ Soporta múltiples ambientes (dev, staging, prod).
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Any, ClassVar, Literal, Self
 from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
@@ -497,14 +497,17 @@ class Settings(BaseSettings):
 
         return expanded
 
+    C2PRO_ORIGIN: ClassVar[str] = "c2pro.io"
+    C2PRO_WWW_ORIGIN: ClassVar[str] = "www.c2pro.io"
+
     @staticmethod
     def _paired_c2pro_origin(origin: str) -> str | None:
         parts = urlsplit(origin)
         hostname = parts.hostname
-        if hostname not in {"c2pro.io", "www.c2pro.io"}:
+        if hostname not in {Settings.C2PRO_ORIGIN, Settings.C2PRO_WWW_ORIGIN}:
             return None
 
-        paired_hostname = "www.c2pro.io" if hostname == "c2pro.io" else "c2pro.io"
+        paired_hostname = Settings.C2PRO_WWW_ORIGIN if hostname == Settings.C2PRO_ORIGIN else Settings.C2PRO_ORIGIN
         netloc = paired_hostname
         if parts.port:
             netloc = f"{paired_hostname}:{parts.port}"
@@ -527,12 +530,20 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_security_posture(self) -> Self:
+        self._validate_production_mocks()
+        self._validate_supabase_credentials()
+        self._validate_cors_origins()
+        self._validate_auth_bootstrap_fallback()
+        return self
+
+    def _validate_production_mocks(self) -> None:
         if self.environment == "production" and self.ai_mock:
             raise ValueError("C2PRO_AI_MOCK cannot be enabled in production")
 
         if self.environment == "production" and self.embeddings_mock:
             raise ValueError("C2PRO_EMBEDDINGS_MOCK cannot be enabled in production")
 
+    def _validate_supabase_credentials(self) -> None:
         if self.environment == "test":
             if self.supabase_url is None:
                 self.supabase_url = "https://test.supabase.local"
@@ -552,21 +563,23 @@ class Settings(BaseSettings):
                 "supabase_url, supabase_anon_key, and supabase_service_role_key are required outside test"
             )
 
-        if self.environment in {"production", "staging"}:
-            if any(origin == "*" for origin in self.cors_origins):
-                raise ValueError("wildcard CORS is not allowed outside development/test")
+    def _validate_cors_origins(self) -> None:
+        if self.environment not in {"production", "staging"}:
+            return
 
-            localhost_markers = ("localhost", "127.0.0.1")
-            if any(
-                any(marker in origin for marker in localhost_markers)
-                for origin in self.cors_origins
-            ):
-                raise ValueError("localhost origins are not allowed outside development/test")
+        if any(origin == "*" for origin in self.cors_origins):
+            raise ValueError("wildcard CORS is not allowed outside development/test")
 
-            if self.auth_bootstrap_fallback_mode == "non_production":
-                self.auth_bootstrap_fallback_mode = "deny"
+        localhost_markers = ("localhost", "127.0.0.1")
+        if any(
+            any(marker in origin for marker in localhost_markers)
+            for origin in self.cors_origins
+        ):
+            raise ValueError("localhost origins are not allowed outside development/test")
 
-        return self
+    def _validate_auth_bootstrap_fallback(self) -> None:
+        if self.environment in {"production", "staging"} and self.auth_bootstrap_fallback_mode == "non_production":
+            self.auth_bootstrap_fallback_mode = "deny"
 
     @field_validator("ai_budget_monthly_default")
     @classmethod

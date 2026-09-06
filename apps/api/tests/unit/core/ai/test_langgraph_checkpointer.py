@@ -69,49 +69,45 @@ class TestLangGraphCheckpointer:
 
     async def test_checkpointer_pool_disables_prepared_statements_for_poolers(self, monkeypatch):
         """Verify psycopg pool config disables prepared statements for PgBouncer-compatible deployments."""
-        original_pool = workflow_module._checkpointer_pool
-        try:
-            workflow_module._checkpointer_pool = None
+        monkeypatch.setattr(workflow_module, "_checkpointer_pool", None)
 
-            captured: dict[str, object] = {}
-            sentinel_row_factory = object()
+        captured: dict[str, object] = {}
+        sentinel_row_factory = object()
 
-            class FakePool:
-                def __init__(self, **kwargs):
-                    captured.update(kwargs)
-                    self.closed = False
+        class FakePool:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+                self.closed = False
 
-            class FakeSaver:
-                def __init__(self, conn):
-                    self.conn = conn
+        class FakeSaver:
+            def __init__(self, conn):
+                self.conn = conn
 
-            monkeypatch.setitem(
-                sys.modules,
-                "langgraph.checkpoint.postgres.aio",
-                SimpleNamespace(AsyncPostgresSaver=FakeSaver),
-            )
-            monkeypatch.setitem(
-                sys.modules,
-                "psycopg.rows",
-                SimpleNamespace(dict_row=sentinel_row_factory),
-            )
-            monkeypatch.setitem(
-                sys.modules,
-                "psycopg_pool",
-                SimpleNamespace(AsyncConnectionPool=FakePool),
-            )
+        monkeypatch.setitem(
+            sys.modules,
+            "langgraph.checkpoint.postgres.aio",
+            SimpleNamespace(AsyncPostgresSaver=FakeSaver),
+        )
+        monkeypatch.setitem(
+            sys.modules,
+            "psycopg.rows",
+            SimpleNamespace(dict_row=sentinel_row_factory),
+        )
+        monkeypatch.setitem(
+            sys.modules,
+            "psycopg_pool",
+            SimpleNamespace(AsyncConnectionPool=FakePool),
+        )
 
-            checkpointer = _build_checkpointer()
+        checkpointer = _build_checkpointer()
 
-            assert isinstance(checkpointer, FakeSaver)
-            assert captured["open"] is False
-            assert captured["kwargs"] == {
-                "autocommit": True,
-                "prepare_threshold": None,
-                "row_factory": sentinel_row_factory,
-            }
-        finally:
-            workflow_module._checkpointer_pool = original_pool
+        assert isinstance(checkpointer, FakeSaver)
+        assert captured["open"] is False
+        assert captured["kwargs"] == {
+            "autocommit": True,
+            "prepare_threshold": None,
+            "row_factory": sentinel_row_factory,
+        }
 
     async def test_checkpoint_table_exists(self, db_session):
         """Verify checkpoints table exists in database."""
@@ -178,13 +174,13 @@ class TestLangGraphCheckpointer:
         assert app.checkpointer is not None
         assert app.checkpointer == checkpointer
 
-    async def test_close_checkpointer_resources_resets_cached_graph_app(self):
+    async def test_close_checkpointer_resources_resets_cached_graph_app(self, monkeypatch):
         """Verify shutdown clears the cached graph app so the next lifespan rebuilds it."""
         from checkpoint_bootstrap import bootstrap_checkpoint_schema
 
         await bootstrap_checkpoint_schema(settings.database_url_async)
 
-        workflow_module._graph_app = None
+        monkeypatch.setattr(workflow_module, "_graph_app", None)
 
         app_before_shutdown = workflow_module.get_graph_app()
         await workflow_module.ensure_checkpointer_ready()

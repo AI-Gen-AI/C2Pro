@@ -60,8 +60,12 @@ class TestRuntimeNoLongerRunsSetup:
         from src.analysis.adapters.graph import workflow
 
         source = inspect.getsource(workflow.ensure_checkpointer_ready)
-        assert '"setup"' not in source and "getattr(checkpointer" not in source, (
-            "ensure_checkpointer_ready() must not look up or call checkpointer.setup() -- "
+        assert '"setup"' not in source, (
+            "ensure_checkpointer_ready() must not contain literal 'setup' -- "
+            "that is exclusively scripts/checkpoint_bootstrap.py's job"
+        )
+        assert "getattr(checkpointer" not in source, (
+            "ensure_checkpointer_ready() must not look up checkpointer.setup via getattr -- "
             "that is exclusively scripts/checkpoint_bootstrap.py's job"
         )
         assert "verify_checkpoint_schema_ready" in source
@@ -122,22 +126,15 @@ class TestBootstrapScript:
         assert "saver.setup()" in text
         assert "verify_checkpoint_schema_ready" in text
 
-    def test_bootstrap_dsn_fallback_is_observable(self) -> None:
+    def test_bootstrap_dsn_fallback_is_observable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """CHECKPOINT_OWNER_DATABASE_URL -> DATABASE_URL fallback must be logged, not silent."""
         sys.path.insert(0, str(REPO_ROOT / "apps/api/scripts"))
         import checkpoint_bootstrap
 
-        env = dict(os.environ)
-        env.pop("CHECKPOINT_OWNER_DATABASE_URL", None)
-        env["DATABASE_URL"] = "postgresql://example/db"
-        old_environ = os.environ.copy()
-        try:
-            os.environ.clear()
-            os.environ.update(env)
-            dsn, is_fallback = checkpoint_bootstrap._resolve_owner_dsn()
-        finally:
-            os.environ.clear()
-            os.environ.update(old_environ)
+        monkeypatch.delenv("CHECKPOINT_OWNER_DATABASE_URL", raising=False)
+        monkeypatch.setenv("DATABASE_URL", "postgresql://example/db")
+        dsn, is_fallback = checkpoint_bootstrap._resolve_owner_dsn()
+
         assert dsn == "postgresql://example/db"
         assert is_fallback is True
 

@@ -640,10 +640,12 @@ async def test_008_concurrent_requests_tenant_isolation(
         body_a = response_a.json()
         body_b = response_b.json()
 
-        # Responses should be different (unless both have 0 projects)
-        # This is a weak assertion but validates basic isolation
-        assert body_a == body_a  # Self-consistent
-        assert body_b == body_b  # Self-consistent
+        # Responses should be different (unless both have 0 projects, in which case
+        # both return empty lists and are equal). This validates basic isolation:
+        # Tenant A should only see their projects, Tenant B only theirs.
+        if body_a or body_b:
+            # At least one has projects - they must be different due to RLS isolation
+            assert body_a != body_b, "Tenant responses must not leak across tenants"
 
 
 # ===========================================
