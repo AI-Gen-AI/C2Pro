@@ -63,7 +63,7 @@ def load_yaml(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as handle:
         value = yaml.safe_load(handle)
     if not isinstance(value, dict):
-        raise ValueError(f"{path.relative_to(ROOT)} must parse to a mapping")  # noqa: TRY004
+        raise ValueError(f"{path.relative_to(ROOT)} must parse to a mapping")
     return value
 
 

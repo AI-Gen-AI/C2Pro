@@ -301,11 +301,12 @@ Shared state:
    - Do NOT write new entries directly to legacy backlogs.
    - Include any newly discovered subtasks or risks in the `findings` and `residual_risks` arrays of your structured result block.
 
-**Multi-agent coordination:**
+**Multi-agent coordination & Handoff Boundary:**
 
-- Use `core/supervisor.py` to orchestrate multiple roles in a single session.
-- The supervisor reads role assignments from `core/session_config.json`.
-- It validates task execution against canonical `.c2pro` work-queue and envelope states.
+- **Legacy Supervisor (`core/supervisor.py`):** Dedicated to **legacy compatibility only** (managing genuine `TASK-*` legacy workitems). It reads role assignments from `core/session_config.json` and orchestrates legacy sequential execution via `blackboard.json`.
+- **New Control Plane (`.c2pro`):** Dedicated to modern `C2PRO-*` tasks assigned to workers/orchestrators.
+- **Handoff Boundary:** Under transition mode `dual_read_single_write_new_control`, if a modern `C2PRO-*` task is submitted to the legacy supervisor, execution **must stop immediately** before agent/worker invocation, returning `NEW_CONTROL_HANDOFF_REQUIRED`. This guarantees that modern tasks are executed purely outside the legacy blackboard runner and do not mutate legacy files.
+- **Native automated new-control orchestration:** Fully reserved for future G2 / Agent Academy.
 
 ### Role Assignment & Execution Rule
 

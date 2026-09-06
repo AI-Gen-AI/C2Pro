@@ -83,8 +83,8 @@ def test_new_control_worker_no_legacy_write(monkeypatch, tmp_path):
         "estado": "pendiente",
     }
     valido, mensaje = validar_tarea_antes_ejecucion(tarea)
-    assert valido is True, f"Pre-exec validation failed: {mensaje}"
-    assert "verificado en .c2pro/control/work-queue.yaml" in mensaje
+    assert valido is False
+    assert "NEW_CONTROL_HANDOFF_REQUIRED" in mensaje
 
     # 2. POST-EXEC validation
     tarea_completa = {
@@ -93,8 +93,8 @@ def test_new_control_worker_no_legacy_write(monkeypatch, tmp_path):
         "estado": "completado",
     }
     valido_post, mensaje_post = validar_tarea_post_ejecucion(tarea_completa)
-    assert valido_post is True, f"Post-exec validation failed: {mensaje_post}"
-    assert "validado exitosamente contra el plano de control canonical" in mensaje_post
+    assert valido_post is False
+    assert "NEW_CONTROL_HANDOFF_REQUIRED" in mensaje_post
 
 
 def test_legacy_compatibility_behavior(monkeypatch, tmp_path):
@@ -278,3 +278,194 @@ def test_workspace_guard_failure_mismatch_outcome():
     guard_fail = policy.get("guard_failure", {})
     assert guard_fail.get("code") == "WORKSPACE_GUARD_FAILURE"
     assert guard_fail.get("action") == "stop"
+
+
+def test_validate_new_control_work_and_handoff(monkeypatch, tmp_path):
+    """Test G1-R4: validate_new_control_work reads canonical state and blocks legacy execution."""
+    from core.supervisor import _ejecutar_secuencial, validate_new_control_work
+
+    # Setup mocked folder structures
+    control_dir = tmp_path / ".c2pro" / "control"
+    work_dir = tmp_path / ".c2pro" / "work"
+    control_dir.mkdir(parents=True, exist_ok=True)
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    # A & B. Setup canonical work config files
+    wq_file = control_dir / "work-queue.yaml"
+    wq_data = {
+        "schema": "c2pro-work-queue-v1",
+        "items": [
+            {
+                "work_id": "C2PRO-DEV-02",
+                "status": "in_progress",
+                "work_ref": ".c2pro/work/C2PRO-DEV-02.yaml",
+            }
+        ]
+    }
+    with open(wq_file, "w", encoding="utf-8") as f:
+        yaml.dump(wq_data, f)
+
+    env_file = work_dir / "C2PRO-DEV-02.yaml"
+    env_data = {
+        "schema": "c2pro-work-envelope-v1",
+        "work_id": "C2PRO-DEV-02",
+    }
+    with open(env_file, "w", encoding="utf-8") as f:
+        yaml.dump(env_data, f)
+
+    # Point BASE_DIR in core.supervisor to our tmp_path to find mock files
+    monkeypatch.setattr("core.supervisor.BASE_DIR", tmp_path)
+
+    # Test read-only helper validation
+    valido, msg = validate_new_control_work("C2PRO-DEV-02")
+    assert valido is True
+    assert "es valido en .c2pro" in msg
+
+    # Invalid ID check
+    valido_bad, msg_bad = validate_new_control_work("C2PRO-MISSING")
+    assert valido_bad is False
+    assert "no existe en .c2pro/control/work-queue.yaml" in msg_bad
+
+    # C, D, E, F. Test legacy supervisor boundary check
+    # Set transition_mode to dual_read_single_write_new_control
+    monkeypatch.setattr(
+        "core.supervisor.cargar_legacy_compatibility",
+        lambda: {"transition_mode": "dual_read_single_write_new_control"},
+    )
+
+    # Track blackboard writes and worker invocations
+    invocados = []
+    guardado_blackboard = []
+
+    def mock_invocar_rol(rol, prompt, auto=False):
+        invocados.append((rol, prompt))
+        return {"success": True}
+
+    def mock_guardar_blackboard(bb):
+        guardado_blackboard.append(bb)
+
+    monkeypatch.setattr("core.supervisor.invocar_rol", mock_invocar_rol)
+    monkeypatch.setattr("core.supervisor.guardar_blackboard", mock_guardar_blackboard)
+
+    # Submit new-control task in blackboard to sequential runner
+    mock_bb = {
+        "session_id": "test-session",
+        "tareas": [
+            {
+                "tarea_id": "T001",
+                "backlog_id": "C2PRO-DEV-02",
+                "asignado_a": "backend",
+                "descripcion": "Some description",
+                "estado": "pendiente",
+            }
+        ]
+    }
+
+    result = _ejecutar_secuencial(mock_bb, auto=True)
+
+    # Must STOP and return NEW_CONTROL_HANDOFF_REQUIRED
+    assert result == "NEW_CONTROL_HANDOFF_REQUIRED"
+
+    # D. worker invocation is NOT called
+    assert len(invocados) == 0
+
+    # E. guardar_blackboard is NOT called
+    assert len(guardado_blackboard) == 0
+
+
+def test_legacy_task_preserves_behavior(monkeypatch, tmp_path):
+    """Test G1-R4: genuine TASK-* legacy work preserves existing behavior."""
+    from core.supervisor import _ejecutar_secuencial
+
+    monkeypatch.setattr("core.supervisor.BASE_DIR", tmp_path)
+    monkeypatch.setattr(
+        "core.supervisor.cargar_legacy_compatibility",
+        lambda: {"transition_mode": "dual_read_single_write_new_control"},
+    )
+
+    # Track calls
+    invocados = []
+    guardado_blackboard = []
+
+    def mock_invocar_rol(rol, prompt, auto=False):
+        invocados.append((rol, prompt))
+        return {"success": True}
+
+    def mock_guardar_blackboard(bb):
+        guardado_blackboard.append(bb)
+
+    # Pre-exec validation mock to return True for legacy task
+    monkeypatch.setattr(
+        "core.supervisor.validar_tarea_antes_ejecucion",
+        lambda tarea: (True, "Mock pre-exec ok"),
+    )
+
+    # Mock post-exec validation
+    monkeypatch.setattr(
+        "core.supervisor.validar_tarea_post_ejecucion",
+        lambda tarea: (True, "Mock post-exec ok"),
+    )
+
+    monkeypatch.setattr("core.supervisor.invocar_rol", mock_invocar_rol)
+    monkeypatch.setattr("core.supervisor.guardar_blackboard", mock_guardar_blackboard)
+
+    # Mock reload of blackboard to simulate completion of the task
+    simulated_bbs = [
+        # Second reload showing complete
+        {
+            "session_id": "test-session",
+            "reintentos": 0,
+            "tareas": [
+                {
+                    "tarea_id": "T101",
+                    "backlog_id": "TASK-1490",
+                    "asignado_a": "backend",
+                    "descripcion": "Genuine legacy task",
+                    "estado": "completado",
+                }
+            ]
+        }
+    ]
+    def mock_cargar_blackboard():
+        if simulated_bbs:
+            return simulated_bbs.pop(0)
+        return {
+            "session_id": "test-session",
+            "reintentos": 0,
+            "tareas": [
+                {
+                    "tarea_id": "T101",
+                    "backlog_id": "TASK-1490",
+                    "asignado_a": "backend",
+                    "descripcion": "Genuine legacy task",
+                    "estado": "completado",
+                }
+            ]
+        }
+
+    monkeypatch.setattr("core.supervisor.cargar_blackboard", mock_cargar_blackboard)
+
+    mock_bb = {
+        "session_id": "test-session",
+        "reintentos": 0,
+        "tareas": [
+            {
+                "tarea_id": "T101",
+                "backlog_id": "TASK-1490",
+                "asignado_a": "backend",
+                "descripcion": "Genuine legacy task",
+                "estado": "pendiente",
+            }
+        ]
+    }
+
+    _ejecutar_secuencial(mock_bb, auto=True)
+
+    # For legacy, worker invocation IS called!
+    assert len(invocados) == 1
+    rol, prompt = invocados[0]
+    assert rol == "backend"
+    # Prompt contains legacy instructions
+    assert "Lee blackboard.json." in prompt
+    assert "Genuine legacy task" in prompt
+

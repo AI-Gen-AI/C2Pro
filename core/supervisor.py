@@ -285,7 +285,7 @@ def validar_task_schemas(tareas: list[dict]) -> list[str]:
                     error_msg += f"    - {err}\n"
                 errores.append(error_msg.rstrip())
 
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             # Catch unexpected validation errors
             errores.append(
                 f"Tarea {tarea_id} (rol: {rol}): Schema validation ERROR: {e!s}"
@@ -401,28 +401,10 @@ def validar_tarea_post_ejecucion(tarea: dict) -> tuple[bool, str]:
     es_nuevo = es_nuevo_control_work_id(backlog_id)
 
     if transition_mode == "dual_read_single_write_new_control" and es_nuevo:
-        # En modo nuevo control, no requerimos escrituras en el Markdown heredado.
-        # En su lugar, validamos contra el estado canonical de .c2pro
-        wq_path = BASE_DIR / ".c2pro" / "control" / "work-queue.yaml"
-        if not wq_path.exists():
-            return False, f"[POST-EXEC VALIDATION FAILED] Tarea {tarea_id}: No existe .c2pro/control/work-queue.yaml"
-
-        try:
-            with open(wq_path, encoding="utf-8") as f:
-                wq = yaml.safe_load(f) or {}
-        except Exception as e:  # noqa: BLE001
-            return False, f"[POST-EXEC VALIDATION FAILED] Tarea {tarea_id}: Error al cargar work-queue.yaml: {e}"
-
-        items = wq.get("items", [])
-        work_item = next((item for item in items if item.get("work_id") == backlog_id), None)
-        if not work_item:
-            return False, f"[POST-EXEC VALIDATION FAILED] Tarea {tarea_id}: El work_id '{backlog_id}' no existe en .c2pro/control/work-queue.yaml"
-
-        # Validación exitosa contra el plano de control canonical
-        return True, (
-            f"[POST-EXEC VALIDATION OK] Tarea {tarea_id}: "
-            f"work_id '{backlog_id}' validado exitosamente contra el plano de control canonical .c2pro"
-        )
+        valido, msg = validate_new_control_work(backlog_id)
+        if not valido:
+            return False, f"[POST-EXEC VALIDATION FAILED] Tarea {tarea_id}: {msg}"
+        return False, f"NEW_CONTROL_HANDOFF_REQUIRED: Tarea {tarea_id} con backlog_id '{backlog_id}' pertenece al nuevo plano de control."
 
     # Validacion 3: backlog_id debe estar marcado [x] en archivos para tareas legadas
     actualizado, archivo_o_error = verificar_backlog_actualizado(backlog_id)
@@ -440,6 +422,45 @@ def validar_tarea_post_ejecucion(tarea: dict) -> tuple[bool, str]:
         f"[POST-EXEC VALIDATION OK] Tarea {tarea_id}: "
         f"backlog_id '{backlog_id}' marcado [x] en {Path(archivo_o_error).name}"
     )
+
+
+def validate_new_control_work(work_id: str) -> tuple[bool, str]:
+    """Helper puro de lectura para validar la existencia y estructura de una tarea de nuevo control plane."""
+    if not work_id:
+        return False, "ID de trabajo vacio"
+
+    wq_path = BASE_DIR / ".c2pro" / "control" / "work-queue.yaml"
+    if not wq_path.exists():
+        return False, "No existe .c2pro/control/work-queue.yaml"
+
+    try:
+        with open(wq_path, encoding="utf-8") as f:
+            wq = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError) as e:
+        return False, f"Error al cargar work-queue.yaml: {e}"
+
+    items = wq.get("items", [])
+    work_item = next((item for item in items if item.get("work_id") == work_id), None)
+    if not work_item:
+        return False, f"El work_id '{work_id}' no existe en .c2pro/control/work-queue.yaml"
+
+    # Verificar archivo de envelope de trabajo
+    work_ref = work_item.get("work_ref")
+    if work_ref:
+        envelope_path = BASE_DIR / work_ref
+    else:
+        envelope_path = BASE_DIR / ".c2pro" / "work" / f"{work_id}.yaml"
+
+    if not envelope_path.exists():
+        return False, f"No existe el archivo de envelope de trabajo en '{envelope_path}'"
+
+    try:
+        with open(envelope_path, encoding="utf-8") as f:
+            _ = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError) as e:
+        return False, f"Error al cargar el envelope de trabajo '{envelope_path}': {e}"
+
+    return True, f"work_id '{work_id}' es valido en .c2pro"
 
 
 def validar_tarea_antes_ejecucion(tarea: dict) -> tuple[bool, str]:
@@ -487,43 +508,10 @@ def validar_tarea_antes_ejecucion(tarea: dict) -> tuple[bool, str]:
     es_nuevo = es_nuevo_control_work_id(backlog_id)
 
     if transition_mode == "dual_read_single_write_new_control" and es_nuevo:
-        # Validar contra el estado canonical de .c2pro
-        wq_path = BASE_DIR / ".c2pro" / "control" / "work-queue.yaml"
-        if not wq_path.exists():
-            return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: Modo '{transition_mode}' activo pero no existe .c2pro/control/work-queue.yaml"
-
-        try:
-            with open(wq_path, encoding="utf-8") as f:
-                wq = yaml.safe_load(f) or {}
-        except Exception as e:  # noqa: BLE001
-            return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: Error al cargar work-queue.yaml: {e}"
-
-        items = wq.get("items", [])
-        work_item = next((item for item in items if item.get("work_id") == backlog_id), None)
-        if not work_item:
-            return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: El work_id '{backlog_id}' no existe en .c2pro/control/work-queue.yaml"
-
-        # Verificar archivo de envelope de trabajo
-        work_ref = work_item.get("work_ref")
-        if work_ref:
-            envelope_path = BASE_DIR / work_ref
-        else:
-            envelope_path = BASE_DIR / ".c2pro" / "work" / f"{backlog_id}.yaml"
-
-        if not envelope_path.exists():
-            return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: No existe el archivo de envelope de trabajo en '{envelope_path}'"
-
-        try:
-            with open(envelope_path, encoding="utf-8") as f:
-                _ = yaml.safe_load(f) or {}
-        except Exception as e:  # noqa: BLE001
-            return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: Error al cargar el envelope de trabajo '{envelope_path}': {e}"
-
-        # Todo correcto para pre-ejecución en nuevo plano de control
-        return True, (
-            f"[PRE-EXEC VALIDATION OK] Tarea {tarea_id}: "
-            f"work_id '{backlog_id}' verificado en .c2pro/control/work-queue.yaml and {envelope_path.name}"
-        )
+        valido, msg = validate_new_control_work(backlog_id)
+        if not valido:
+            return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: {msg}"
+        return False, f"NEW_CONTROL_HANDOFF_REQUIRED: Tarea {tarea_id} con backlog_id '{backlog_id}' pertenece al nuevo plano de control."
 
     # Validacion 3: Patron obligatorio para tareas legadas
     if not BACKLOG_ID_PATTERN.match(backlog_id):
@@ -687,7 +675,7 @@ def construir_comando(modelo_config: dict, profile_path: Path, prompt: str) -> l
 
     flags = modelo_config.get("flags_sistema", [])
     soporta_system_prompt = modelo_config.get("soporta_system_prompt", False)
-    soporta_prompt_file = modelo_config.get("soporta_prompt_file", False)  # noqa: F841
+    soporta_prompt_file = modelo_config.get("soporta_prompt_file", False)
 
     if soporta_system_prompt:
         cmd = [cli_cmd]
@@ -744,7 +732,6 @@ def invocar_rol(rol: str, prompt: str, auto: bool = False) -> dict:
                 text=True,
                 timeout=modelo_config.get("timeout_seg", 300),
                 cwd=str(BASE_DIR),
-                check=False,
             )
             output = result.stdout
             if result.returncode != 0:
@@ -872,7 +859,7 @@ def ejecutar_ciclo(objetivo: str, modo: str = "interactivo") -> None:
         print(f"  [{t['tarea_id']}] ({t['asignado_a']}) {t['descripcion'][:60]}...")
 
     # Paso 2+: Ejecucion secuencial por rol
-    _ejecutar_secuencial(bb, auto=auto)
+    return _ejecutar_secuencial(bb, auto=auto)
 
 
 def _ejecutar_secuencial(bb: dict, auto: bool = False) -> None:
@@ -894,6 +881,17 @@ def _ejecutar_secuencial(bb: dict, auto: bool = False) -> None:
                 print(f"Descripcion: {tarea['descripcion']}")
                 print(f"{'='*60}")
 
+                # Check for G1 Single-Writer Control Plane handoff boundary
+                compat = cargar_legacy_compatibility()
+                transition_mode = compat.get("transition_mode")
+                backlog_id = tarea.get("backlog_id", "")
+                es_nuevo = es_nuevo_control_work_id(backlog_id)
+
+                if transition_mode == "dual_read_single_write_new_control" and es_nuevo:
+                    print(f"\n[SUPERVISOR] NEW_CONTROL_HANDOFF_REQUIRED: Tarea {tarea['tarea_id']} con backlog_id '{backlog_id}' pertenece al nuevo plano de control.")
+                    print("[SUPERVISOR] Deteniendo la ejecucion del supervisor legado antes de invocar al agente.")
+                    return "NEW_CONTROL_HANDOFF_REQUIRED"
+
                 # UNIFY-009: Pre-execution validation hook
                 valido, mensaje_validacion = validar_tarea_antes_ejecucion(tarea)
                 _log_trace("SUPERVISOR", mensaje_validacion)
@@ -914,7 +912,7 @@ def _ejecutar_secuencial(bb: dict, auto: bool = False) -> None:
 
                 print(f"[OK] {mensaje_validacion}")
 
-                contexto = bb.get("contexto_paso_anterior", "")  # noqa: F841
+                contexto = bb.get("contexto_paso_anterior", "")
                 errores = bb.get("trazas_de_error", [])
                 error_contexto = ""
                 if errores:
