@@ -3,11 +3,14 @@
 RED against the unfixed script:
   - --dsn accepted as CLI argument
   - DSN value from CLI flows directly to psycopg.connect()
+  - COALESCE detection was INFO-only (not BLOCKING)
 
 GREEN against the fixed script:
   - --dsn removed; DATABASE_URL env var only
   - CLI arguments (including --dsn) are rejected by argparse
   - asyncpg URL normalization preserved
+  - COALESCE detection is BLOCKING (P0-SEC-B)
+  - All 5 excess permissive FOR ALL policies are detected (BLOCKING)
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ pytestmark = pytest.mark.security
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 LINT = REPO_ROOT / "apps/api/scripts/supabase_security_lint.py"
+sys.path.insert(0, str(REPO_ROOT / "apps/api/scripts"))
 
 # Base env with DATABASE_URL stripped; each test controls it explicitly.
 _BASE_ENV: dict[str, str] = {
@@ -116,3 +120,59 @@ def test_credentials_not_in_output() -> None:
     r = _run_lint(env=env)
     assert canary not in r.stdout, "Canary password leaked to stdout"
     assert canary not in r.stderr, "Canary password leaked to stderr"
+
+
+# ── P0-SEC-B lint static checks (no DB required) ─────────────────────────────
+
+
+def test_coalesce_detection_is_blocking_not_info() -> None:
+    """COALESCE fail-open must be BLOCKING; the old INFO-only path must be gone."""
+    import supabase_security_lint as lint
+
+    # The old INFO query must no longer exist.
+    assert not hasattr(lint, "Q_INFO_FAIL_OPEN"), (
+        "Q_INFO_FAIL_OPEN still present — COALESCE detection was not promoted to BLOCKING"
+    )
+
+    # The new BLOCKING query must exist.
+    assert hasattr(lint, "Q_BLOCKING_FAIL_OPEN"), (
+        "Q_BLOCKING_FAIL_OPEN is missing — COALESCE detection not upgraded to BLOCKING"
+    )
+    assert "COALESCE" in lint.Q_BLOCKING_FAIL_OPEN
+
+
+def test_all_5_excess_policies_registered() -> None:
+    """All 5 known excess FOR ALL policy names must be in _EXCESS_POLICY_NAMES."""
+    import supabase_security_lint as lint
+
+    expected = {
+        ("analyses",          "tenant_isolation_analyses"),
+        ("alerts",            "tenant_isolation_alerts"),
+        ("coherence_results", "tenant_isolation_coherence_results"),
+        ("clause_embeddings", "tenant_isolation_clause_embeddings"),
+        ("clause_embeddings", "clause_embeddings_tenant_isolation"),
+    }
+    registered = set(lint._EXCESS_POLICY_NAMES)
+    missing = expected - registered
+    assert not missing, f"excess policies missing from lint registry: {missing}"
+
+
+def test_coalesce_query_covers_with_check_column() -> None:
+    """INSERT policies store fail-open in with_check, not qual."""
+    import supabase_security_lint as lint
+
+    assert "with_check" in lint.Q_BLOCKING_FAIL_OPEN, (
+        "Q_BLOCKING_FAIL_OPEN does not check with_check — INSERT policies would be missed"
+    )
+
+
+def test_lint_source_has_no_info_level_coalesce() -> None:
+    """The lint source must not demote COALESCE detection to info list."""
+    body = LINT.read_text(encoding="utf-8")
+    # If 'info.append' and 'COALESCE' appear on the same logical line, it means
+    # COALESCE is still INFO-level — that's a regression.
+    for line in body.splitlines():
+        if "info.append" in line and "COALESCE" in line:
+            pytest.fail(
+                f"COALESCE detection demoted to INFO in lint: {line.strip()!r}"
+            )

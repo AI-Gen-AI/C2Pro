@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Catalog-driven Supabase security gate for the P0-SEC-A finding classes.
+"""Catalog-driven Supabase security gate for P0-SEC-A and P0-SEC-B findings.
 
 The Supabase Security Advisor is a dashboard, not a gate, and it missed two of
 the three most serious findings in the 2026-09-02 audit: it stops looking at a
@@ -7,10 +7,15 @@ table once RLS is enabled, so a permissive ``USING (true)`` policy over live
 rows produced no lint at all. These checks read `pg_catalog` directly so that
 class cannot regress silently.
 
-Scope is deliberately limited to what P0-SEC-A remediates. Function EXECUTE
-grants, mutable search_path and fail-open ``COALESCE`` policies are real
-findings but belong to P0-SEC-B/D; they are reported as INFO here and must not
-fail the build until their own remediation lands.
+P0-SEC-A scope (always BLOCKING):
+    - Permissive policies on protected tables
+    - RLS disabled on protected tables
+    - External-role grants
+    - Default-privilege grants to external roles
+
+P0-SEC-B scope (BLOCKING as of 20260905_0001):
+    - COALESCE fail-open expressions in any public-schema RLS policy (any table)
+    - Excess permissive FOR ALL policies by the known legacy names
 
 Usage:
     DATABASE_URL=postgresql://... python apps/api/scripts/supabase_security_lint.py
@@ -23,6 +28,26 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+
+# ── Gate composition: scope membership sets ─────────────────────────────────
+#
+# Each historical gate validates only the control family it owns.  The global
+# linter (scope=None) validates all families.  These frozensets drive the
+# scope-aware run() dispatcher so the logic stays in one place and is testable
+# without a live database.
+#
+# _SCOPE_P0_SEC_A activates: permissive-policy, RLS-disabled, external-grant,
+#                             and default-ACL checks.
+# _SCOPE_P0_SEC_B activates: COALESCE fail-open and excess-FOR-ALL checks.
+# None (global)   activates: both families.
+_SCOPE_P0_SEC_A: frozenset[str | None] = frozenset({"p0_sec_a", None})
+_SCOPE_P0_SEC_B: frozenset[str | None] = frozenset({"p0_sec_b", None})
+
+# Explicit allowlist of recognised scope values.  Any value not in this set is
+# rejected by run() before any database work occurs.  This prevents an unknown
+# scope from silently setting both run_a and run_b to False and reaching
+# "PASSED: no blocking violations" with zero checks executed (fail-open).
+_VALID_SCOPES: frozenset[str | None] = frozenset({None, "p0_sec_a", "p0_sec_b"})
 
 EXTERNAL_ROLES = ("anon", "authenticated")
 
@@ -76,13 +101,122 @@ SELECT pg_get_userbyid(d.defaclrole), d.defaclobjtype, d.defaclacl::text
  WHERE n.nspname = 'public' AND d.defaclobjtype IN ('r', 'S');
 """
 
-Q_INFO_FAIL_OPEN = """
-SELECT tablename, policyname FROM pg_policies
- WHERE schemaname = 'public' AND qual LIKE '%COALESCE%';
+# ── P0-SEC-B: COALESCE fail-open detection (BLOCKING since 20260905_0001) ──────
+#
+# Detects any RLS policy whose USING or WITH CHECK expression contains the
+# COALESCE fail-open pattern regardless of which table it is on.  Raised from
+# INFO to BLOCKING because the migration that removes all 24 instances has
+# landed; any surviving COALESCE now means the migration was partially applied
+# or a new fail-open policy was introduced.
+Q_BLOCKING_FAIL_OPEN = """
+SELECT tablename, policyname,
+       CASE WHEN qual LIKE '%%COALESCE%%' AND with_check LIKE '%%COALESCE%%'
+            THEN 'USING+WITH CHECK'
+            WHEN qual LIKE '%%COALESCE%%' THEN 'USING'
+            ELSE 'WITH CHECK'
+       END AS coalesce_in
+  FROM pg_policies
+ WHERE schemaname = 'public'
+   AND (qual LIKE '%%COALESCE%%' OR with_check LIKE '%%COALESCE%%');
 """
 
+# ── P0-SEC-B: excess permissive FOR ALL policies (BLOCKING) ────────────────────
+#
+# These named policies are the legacy FOR ALL overrides that should have been
+# removed by the P0-SEC-B migration.  Their presence means the migration was
+# not applied or was reverted.
+_EXCESS_POLICY_NAMES: tuple[tuple[str, str], ...] = (
+    ("analyses",          "tenant_isolation_analyses"),
+    ("alerts",            "tenant_isolation_alerts"),
+    ("coherence_results", "tenant_isolation_coherence_results"),
+    ("clause_embeddings", "tenant_isolation_clause_embeddings"),
+    ("clause_embeddings", "clause_embeddings_tenant_isolation"),
+)
 
-def run(dsn: str) -> int:
+
+def _check_p0_sec_a(cur: object, protected: list[str], blocking: list[str]) -> None:
+    """Execute P0-SEC-A control-family checks against an open cursor."""
+    cur.execute(Q_PERMISSIVE_POLICY, {"protected": protected})  # type: ignore[union-attr]
+    for table, policy, roles, cmd in cur.fetchall():  # type: ignore[union-attr]
+        blocking.append(
+            f"permissive policy {policy} on {table} ({cmd} to {roles}) "
+            f"exposes a protected table"
+        )
+
+    cur.execute(Q_RLS_DISABLED, {"protected": protected})  # type: ignore[union-attr]
+    for (table,) in cur.fetchall():  # type: ignore[union-attr]
+        blocking.append(f"RLS disabled on protected table {table}")
+
+    cur.execute(Q_EXTERNAL_GRANTS, {"roles": list(EXTERNAL_ROLES)})  # type: ignore[union-attr]
+    for table, grantee, privs in cur.fetchall():  # type: ignore[union-attr]
+        blocking.append(
+            f"{grantee} holds {privs} on public.{table}; "
+            f"no Data API dependency is proven for it"
+        )
+
+    cur.execute(Q_DEFAULT_ACL)  # type: ignore[union-attr]
+    for owner, objtype, acl in cur.fetchall():  # type: ignore[union-attr]
+        kind = "TABLES" if objtype == "r" else "SEQUENCES"
+        for role in EXTERNAL_ROLES:
+            if f"{role}=" in (acl or ""):
+                blocking.append(
+                    f"default privileges for {owner} grant {kind} to {role}; "
+                    f"new objects would be exposed on creation"
+                )
+
+
+def _check_p0_sec_b(cur: object, blocking: list[str]) -> None:
+    """Execute P0-SEC-B control-family checks against an open cursor."""
+    cur.execute(Q_BLOCKING_FAIL_OPEN)  # type: ignore[union-attr]
+    for table, policy, location in cur.fetchall():  # type: ignore[union-attr]
+        blocking.append(
+            f"fail-open COALESCE policy {policy} on {table} ({location}); "
+            f"P0-SEC-B migration (20260905_0001) must be applied"
+        )
+
+    for table, policy in _EXCESS_POLICY_NAMES:
+        cur.execute(  # type: ignore[union-attr]
+            "SELECT COUNT(*) FROM pg_policies "
+            "WHERE schemaname='public' AND tablename=%s AND policyname=%s",
+            (table, policy),
+        )
+        row = cur.fetchone()  # type: ignore[union-attr]
+        if row and row[0] > 0:
+            blocking.append(
+                f"excess FOR ALL policy {policy} on {table} still present; "
+                f"P0-SEC-B migration (20260905_0001) must be applied"
+            )
+
+
+def run(dsn: str, scope: str | None = None) -> int:
+    """Check the database against Supabase security controls.
+
+    scope=None        → all controls (global lint, current-head use)
+    scope="p0_sec_a"  → P0-SEC-A controls only (permissive-policy, RLS,
+                         external-grant, default-ACL)
+    scope="p0_sec_b"  → P0-SEC-B controls only (COALESCE fail-open,
+                         excess FOR ALL policies)
+    any other value   → returns 1 immediately; no DB connection is made.
+
+    Historical gates must use their own scope so that P0-SEC-B blockers present
+    in a P0-SEC-A-only fixture do not cause false failures in the A gate (and
+    vice versa).
+
+    Fail-closed scope validation: an unrecognised scope would silently set both
+    run_a and run_b to False, execute zero checks, and return 0 — fail-open.
+    The explicit guard below prevents that.
+    """
+    if scope not in _VALID_SCOPES:
+        print(
+            f"INVALID SCOPE: {scope!r} is not a recognised lint control family. "
+            f"Valid values: None (global — all controls), 'p0_sec_a', 'p0_sec_b'.",
+            file=sys.stderr,
+        )
+        return 1
+
+    run_a = scope in _SCOPE_P0_SEC_A
+    run_b = scope in _SCOPE_P0_SEC_B
+
     try:
         import psycopg
         conn = psycopg.connect(dsn)
@@ -95,37 +229,10 @@ def run(dsn: str) -> int:
     protected = list(PROTECTED_TABLES)
 
     with conn, conn.cursor() as cur:
-        cur.execute(Q_PERMISSIVE_POLICY, {"protected": protected})
-        for table, policy, roles, cmd in cur.fetchall():
-            blocking.append(
-                f"permissive policy {policy} on {table} ({cmd} to {roles}) "
-                f"exposes a protected table"
-            )
-
-        cur.execute(Q_RLS_DISABLED, {"protected": protected})
-        for (table,) in cur.fetchall():
-            blocking.append(f"RLS disabled on protected table {table}")
-
-        cur.execute(Q_EXTERNAL_GRANTS, {"roles": list(EXTERNAL_ROLES)})
-        for table, grantee, privs in cur.fetchall():
-            blocking.append(
-                f"{grantee} holds {privs} on public.{table}; "
-                f"no Data API dependency is proven for it"
-            )
-
-        cur.execute(Q_DEFAULT_ACL)
-        for owner, objtype, acl in cur.fetchall():
-            kind = "TABLES" if objtype == "r" else "SEQUENCES"
-            for role in EXTERNAL_ROLES:
-                if f"{role}=" in (acl or ""):
-                    blocking.append(
-                        f"default privileges for {owner} grant {kind} to {role}; "
-                        f"new objects would be exposed on creation"
-                    )
-
-        cur.execute(Q_INFO_FAIL_OPEN)
-        for table, policy in cur.fetchall():
-            info.append(f"fail-open COALESCE policy {policy} on {table} (P0-SEC-B)")
+        if run_a:
+            _check_p0_sec_a(cur, protected, blocking)
+        if run_b:
+            _check_p0_sec_b(cur, blocking)
 
     for line in info:
         print(f"INFO     {line}")

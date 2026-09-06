@@ -362,6 +362,35 @@ jobs:
           P0_SEC_ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
         run: python apps/api/scripts/p0_sec_a_gate.py --mode full
 
+      - name: P0-SEC-B static fail-closed checks
+        working-directory: apps/api
+        run: |
+          python -m pytest \
+            tests/security/test_p0_sec_b_fail_closed_migration.py::TestMigrationShape \
+            tests/security/test_p0_sec_b_fail_closed_migration.py::TestSupabaseMirrorParity \
+            tests/security/test_p0_sec_b_fail_closed_migration.py::TestPreStateFixture \
+            --tb=short -q
+
+      # Self-verifying gate: builds a disposable DB, asserts COALESCE fail-open
+      # is TRUE RED before the migration, and fail-closed GREEN after.  Includes
+      # precondition-abort test and full downgrade/re-apply cycle.
+      - name: P0-SEC-B fail-closed RLS gate (disposable DB)
+        env:
+          P0_SEC_ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
+        run: python apps/api/scripts/p0_sec_b_gate.py
+
+      # Semantic dual-path gate: proves that PATH A (Alembic COALESCE prestate +
+      # upgrade()) and PATH B (Supabase-historical NULLIF *_tenant_isolation_*
+      # prestate + checked-in mirror SQL) converge to identical pg_policies.
+      - name: P0-SEC-B dual-path catalog parity gate (disposable DB)
+        env:
+          P0_SEC_B_TEST_DSN: postgresql://postgres:postgres@localhost:5433/postgres
+        working-directory: apps/api
+        run: |
+          python -m pytest \
+            tests/security/test_p0_sec_b_fail_closed_migration.py::TestDualPathCatalogParity \
+            --tb=short -q
+
       - name: Upload security test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
