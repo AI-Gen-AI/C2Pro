@@ -47,7 +47,7 @@ MIRROR = (
 )
 GENERATOR = REPO_ROOT / "apps/api/scripts/generate_p0_sec_b_mirror.py"
 FIXTURE = REPO_ROOT / "apps/api/tests/security/fixtures/p0_sec_b_prestate.sql"
-SUPABASE_FIXTURE = REPO_ROOT / "apps/api/tests/security/fixtures/p0_sec_b_supabase_prestate.sql"
+SUPABASE_POLICY_DELTA = REPO_ROOT / "apps/api/tests/security/fixtures/p0_sec_b_supabase_policy_delta.sql"
 
 sys.path.insert(0, str(REPO_ROOT / "apps/api/scripts"))
 from p0_sec_b_common import emitted_sql as _emitted_sql  # noqa: E402
@@ -375,7 +375,8 @@ class TestPreStateFixture:
 
     def test_fixture_has_projects_stub_table(self) -> None:
         body = FIXTURE.read_text(encoding="utf-8")
-        assert "CREATE TABLE" in body and "projects" in body
+        assert "CREATE TABLE" in body
+        assert "projects" in body
 
     def test_fixture_covers_all_6_coalesce_tables(self) -> None:
         body = FIXTURE.read_text(encoding="utf-8")
@@ -477,12 +478,22 @@ def migrated_dsn(prestate_dsn):
 
 @pytest.fixture(scope="module")
 def supabase_prestate_dsn():
-    """Module-scoped: disposable DB in Supabase-historical pre-state (PATH B)."""
+    """Module-scoped: disposable DB in Supabase-historical pre-state (PATH B).
+
+    Builds the database by composing the shared Alembic base fixture
+    (p0_sec_b_prestate.sql) with the Supabase-historical policy delta
+    (p0_sec_b_supabase_policy_delta.sql).  The delta drops the 24 COALESCE
+    short-named policies and replaces them with the 24 NULLIF
+    *_tenant_isolation_* policies that the June 2026 Supabase CLI migrations
+    emitted.  The final state is semantically identical to the former
+    p0_sec_b_supabase_prestate.sql but without duplicating the shared DDL.
+    """
     if not DSN:
         yield None
         return
     db_name = f"p0_sec_b_test_supa_pre_{uuid.uuid4().hex[:8]}"
-    with _disposable_db(DSN, db_name, SUPABASE_FIXTURE) as dsn:
+    with _disposable_db(DSN, db_name, FIXTURE) as dsn:
+        _exec_sql(dsn, SUPABASE_POLICY_DELTA.read_text(encoding="utf-8"))
         yield dsn
 
 

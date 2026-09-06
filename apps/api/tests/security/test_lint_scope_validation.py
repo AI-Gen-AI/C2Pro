@@ -109,7 +109,8 @@ def test_unknown_scope_not_in_valid_scopes() -> None:
     RED proof: _VALID_SCOPES is not defined → assertion fails (actual is None).
     """
     actual = getattr(_lint, "_VALID_SCOPES", None)
-    assert actual is not None and "p0_sec_aa" not in actual, (
+    assert actual is not None, "_VALID_SCOPES is not defined — validation contract is missing"
+    assert "p0_sec_aa" not in actual, (
         "unknown scope 'p0_sec_aa' is accepted — validation contract is wrong"
     )
 
@@ -143,7 +144,8 @@ def test_none_scope_is_in_valid_scopes() -> None:
     RED proof: _VALID_SCOPES not defined → actual is None → assertion fails.
     """
     actual = getattr(_lint, "_VALID_SCOPES", None)
-    assert actual is not None and None in actual, (
+    assert actual is not None, "_VALID_SCOPES is not defined — global lint scope would be broken"
+    assert None in actual, (
         "None is not in _VALID_SCOPES — global lint scope would be broken by the fix"
     )
 
@@ -154,7 +156,8 @@ def test_p0_sec_a_scope_is_in_valid_scopes() -> None:
     RED proof: _VALID_SCOPES not defined → actual is None → assertion fails.
     """
     actual = getattr(_lint, "_VALID_SCOPES", None)
-    assert actual is not None and "p0_sec_a" in actual, (
+    assert actual is not None, "_VALID_SCOPES is not defined — P0-SEC-A gate scope would be broken"
+    assert "p0_sec_a" in actual, (
         "'p0_sec_a' is not in _VALID_SCOPES — P0-SEC-A gate scope would be broken"
     )
 
@@ -165,7 +168,8 @@ def test_p0_sec_b_scope_is_in_valid_scopes() -> None:
     RED proof: _VALID_SCOPES not defined → actual is None → assertion fails.
     """
     actual = getattr(_lint, "_VALID_SCOPES", None)
-    assert actual is not None and "p0_sec_b" in actual, (
+    assert actual is not None, "_VALID_SCOPES is not defined — P0-SEC-B gate scope would be broken"
+    assert "p0_sec_b" in actual, (
         "'p0_sec_b' is not in _VALID_SCOPES — P0-SEC-B gate scope would be broken"
     )
 
