@@ -35,7 +35,7 @@ def test_new_control_worker_no_legacy_write(monkeypatch, tmp_path):
         "core.supervisor.cargar_legacy_compatibility",
         lambda: {"transition_mode": "dual_read_single_write_new_control"},
     )
-    
+
     # Mock es_nuevo_control_work_id to return True for C2PRO-DEV-02
     monkeypatch.setattr(
         "core.supervisor.es_nuevo_control_work_id",
@@ -207,7 +207,7 @@ def test_worker_cannot_be_instructed_to_mutate_legacy_files():
     agents_path = ROOT / "agents.md"
     assert agents_path.exists()
     content = agents_path.read_text(encoding="utf-8")
-    
+
     # Assert boundaries contain read-only statements
     assert "ALWAYS treat blackboard.json and C2PRO_MASTER_BACKLOG.md as READ-ONLY cold references" in content
     assert "ALWAYS provide structured worker evidence (fenced YAML result block matching c2pro-implementation-result-v1)" in content
@@ -218,7 +218,7 @@ def test_planner_master_retains_canonical_write_authority():
     req_path = ROOT / ".claude" / "rules" / "CRITICAL_BACKLOG_REQUIREMENT.md"
     assert req_path.exists()
     content = req_path.read_text(encoding="utf-8")
-    
+
     assert "Only the **Planner / Master Orchestrator** has write authority to mutate the canonical planning state" in content
 
 
@@ -246,7 +246,7 @@ def test_worker_cannot_be_instructed_to_create_remove_reset_clean_worktrees():
     assert policy_path.exists()
     with open(policy_path, encoding="utf-8") as f:
         policy = yaml.safe_load(f)
-    
+
     worker_perms = policy.get("worker_permissions", {})
     assert worker_perms.get("create_workspace") is False
     assert worker_perms.get("remove_workspace") is False
@@ -260,9 +260,9 @@ def test_no_local_filesystem_paths_in_canonical_state():
     """Assert that no absolute/local machine paths exist in any .yaml control config."""
     control_dir = ROOT / ".c2pro" / "control"
     assert control_dir.is_dir()
-    
+
     path_pattern = re.compile(r"(?:[a-zA-Z]:\\|/home/|/Users/)")
-    
+
     for yaml_path in control_dir.glob("*.yaml"):
         content = yaml_path.read_text(encoding="utf-8")
         assert not path_pattern.search(content), f"Local path detected in canonical state file: {yaml_path.name}"
@@ -274,8 +274,7 @@ def test_workspace_guard_failure_mismatch_outcome():
     assert policy_path.exists()
     with open(policy_path, encoding="utf-8") as f:
         policy = yaml.safe_load(f)
-    
+
     guard_fail = policy.get("guard_failure", {})
     assert guard_fail.get("code") == "WORKSPACE_GUARD_FAILURE"
     assert guard_fail.get("action") == "stop"
-

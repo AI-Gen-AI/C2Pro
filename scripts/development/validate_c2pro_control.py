@@ -63,7 +63,7 @@ def load_yaml(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as handle:
         value = yaml.safe_load(handle)
     if not isinstance(value, dict):
-        raise ValueError(f"{path.relative_to(ROOT)} must parse to a mapping")
+        raise ValueError(f"{path.relative_to(ROOT)} must parse to a mapping")  # noqa: TRY004
     return value
 
 
@@ -339,7 +339,7 @@ def validate_workspace_policy() -> dict[str, Any]:
     require(policy.get("lifecycle_owner") == "orchestrator", "workspace-policy.yaml: lifecycle_owner must be orchestrator")
     require(policy.get("persistent_workspace_per_agent") is True, "workspace-policy.yaml: persistent_workspace_per_agent must be true")
     require(policy.get("max_active_writer_tasks_per_workspace") == 1, "workspace-policy.yaml: max_active_writer_tasks_per_workspace must be 1")
-    
+
     worker_perms = policy.get("worker_permissions", {})
     require(worker_perms.get("create_workspace") is False, "workspace-policy.yaml: workers cannot create workspace")
     require(worker_perms.get("remove_workspace") is False, "workspace-policy.yaml: workers cannot remove workspace")
@@ -347,7 +347,7 @@ def validate_workspace_policy() -> dict[str, Any]:
     require(worker_perms.get("clean_workspace") is False, "workspace-policy.yaml: workers cannot clean workspace")
     require(worker_perms.get("repurpose_workspace") is False, "workspace-policy.yaml: workers cannot repurpose workspace")
     require(worker_perms.get("validate_workspace") is True, "workspace-policy.yaml: workers must validate workspace")
-    
+
     guard_fail = policy.get("guard_failure", {})
     require(guard_fail.get("code") == "WORKSPACE_GUARD_FAILURE", "workspace-policy.yaml: invalid guard_failure code")
     require(guard_fail.get("action") == "stop", "workspace-policy.yaml: invalid guard_failure action")

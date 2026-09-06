@@ -32,18 +32,18 @@ def parse_result_yaml(yaml_text: str) -> dict[str, Any]:
     """Parses a YAML string into a dictionary."""
     try:
         data = yaml.safe_load(yaml_text)
-    except Exception as e:
+    except yaml.YAMLError as e:
         raise ValueError(f"Failed to parse YAML: {e}")
-        
+
     if not isinstance(data, dict):
-        raise ValueError("Parsed data is not a dictionary mapping")
+        raise TypeError("Parsed data is not a dictionary mapping")
     return data
 
 
 def validate_result(result: dict[str, Any], expected_head_sha: str | None = None) -> None:
     """Validates a result dictionary against c2pro-implementation-result-v1 rules."""
     if not isinstance(result, dict):
-        raise ValueError("Result must be a dictionary")
+        raise TypeError("Result must be a dictionary")
 
     # 1. schema exact
     if result.get("schema") != "c2pro-implementation-result-v1":
@@ -66,11 +66,10 @@ def validate_result(result: dict[str, Any], expected_head_sha: str | None = None
         raise ValueError(f"Invalid head_sha format: {head_sha!r}")
 
     # 4. head_sha matches expected PR head when supplied by CI
-    if expected_head_sha:
-        if head_sha != expected_head_sha:
-            raise ValueError(
-                f"head_sha mismatch: expected PR head {expected_head_sha}, got {head_sha}"
-            )
+    if expected_head_sha and head_sha != expected_head_sha:
+        raise ValueError(
+            f"head_sha mismatch: expected PR head {expected_head_sha}, got {head_sha}"
+        )
 
     # 5. branch check
     branch = result.get("branch")
@@ -80,12 +79,12 @@ def validate_result(result: dict[str, Any], expected_head_sha: str | None = None
     # 6. files_changed is structured (must be a list)
     files_changed = result.get("files_changed")
     if not isinstance(files_changed, list):
-        raise ValueError("files_changed must be a list/array")
+        raise TypeError("files_changed must be a list/array")
 
     # 7. tests is structured (must be a list)
     tests = result.get("tests")
     if not isinstance(tests, list):
-        raise ValueError("tests must be a list/array")
+        raise TypeError("tests must be a list/array")
 
     # 8. recommendation enum
     rec = result.get("recommendation")
@@ -104,5 +103,5 @@ def validate_result(result: dict[str, Any], expected_head_sha: str | None = None
             jsonschema.validate(instance=result, schema=schema_data)
         except ImportError:
             pass  # jsonschema not installed, fallback to built-in checks
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             raise ValueError(f"JSON schema validation failed: {e}")

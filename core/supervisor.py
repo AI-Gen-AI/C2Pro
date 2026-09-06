@@ -91,7 +91,7 @@ def cargar_legacy_compatibility() -> dict:
         try:
             with open(compat_path, encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
     return {}
 
@@ -103,7 +103,7 @@ def es_nuevo_control_work_id(backlog_id: str) -> bool:
     # Patron estandar: C2PRO-DEV-xx o similar
     if re.match(r"^C2PRO-[A-Z0-9-]+$", backlog_id):
         return True
-    
+
     # También verificar si está listado en work-queue.yaml
     wq_path = BASE_DIR / ".c2pro" / "control" / "work-queue.yaml"
     if wq_path.exists():
@@ -113,7 +113,7 @@ def es_nuevo_control_work_id(backlog_id: str) -> bool:
                 for item in wq.get("items", []):
                     if item.get("work_id") == backlog_id:
                         return True
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
     return False
 
@@ -285,7 +285,7 @@ def validar_task_schemas(tareas: list[dict]) -> list[str]:
                     error_msg += f"    - {err}\n"
                 errores.append(error_msg.rstrip())
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # Catch unexpected validation errors
             errores.append(
                 f"Tarea {tarea_id} (rol: {rol}): Schema validation ERROR: {e!s}"
@@ -406,18 +406,18 @@ def validar_tarea_post_ejecucion(tarea: dict) -> tuple[bool, str]:
         wq_path = BASE_DIR / ".c2pro" / "control" / "work-queue.yaml"
         if not wq_path.exists():
             return False, f"[POST-EXEC VALIDATION FAILED] Tarea {tarea_id}: No existe .c2pro/control/work-queue.yaml"
-            
+
         try:
             with open(wq_path, encoding="utf-8") as f:
                 wq = yaml.safe_load(f) or {}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return False, f"[POST-EXEC VALIDATION FAILED] Tarea {tarea_id}: Error al cargar work-queue.yaml: {e}"
-            
+
         items = wq.get("items", [])
         work_item = next((item for item in items if item.get("work_id") == backlog_id), None)
         if not work_item:
             return False, f"[POST-EXEC VALIDATION FAILED] Tarea {tarea_id}: El work_id '{backlog_id}' no existe en .c2pro/control/work-queue.yaml"
-            
+
         # Validación exitosa contra el plano de control canonical
         return True, (
             f"[POST-EXEC VALIDATION OK] Tarea {tarea_id}: "
@@ -491,34 +491,34 @@ def validar_tarea_antes_ejecucion(tarea: dict) -> tuple[bool, str]:
         wq_path = BASE_DIR / ".c2pro" / "control" / "work-queue.yaml"
         if not wq_path.exists():
             return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: Modo '{transition_mode}' activo pero no existe .c2pro/control/work-queue.yaml"
-            
+
         try:
             with open(wq_path, encoding="utf-8") as f:
                 wq = yaml.safe_load(f) or {}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: Error al cargar work-queue.yaml: {e}"
-            
+
         items = wq.get("items", [])
         work_item = next((item for item in items if item.get("work_id") == backlog_id), None)
         if not work_item:
             return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: El work_id '{backlog_id}' no existe en .c2pro/control/work-queue.yaml"
-            
+
         # Verificar archivo de envelope de trabajo
         work_ref = work_item.get("work_ref")
         if work_ref:
             envelope_path = BASE_DIR / work_ref
         else:
             envelope_path = BASE_DIR / ".c2pro" / "work" / f"{backlog_id}.yaml"
-            
+
         if not envelope_path.exists():
             return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: No existe el archivo de envelope de trabajo en '{envelope_path}'"
-            
+
         try:
             with open(envelope_path, encoding="utf-8") as f:
-                envelope = yaml.safe_load(f) or {}
-        except Exception as e:
+                _ = yaml.safe_load(f) or {}
+        except Exception as e:  # noqa: BLE001
             return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: Error al cargar el envelope de trabajo '{envelope_path}': {e}"
-            
+
         # Todo correcto para pre-ejecución en nuevo plano de control
         return True, (
             f"[PRE-EXEC VALIDATION OK] Tarea {tarea_id}: "
@@ -687,7 +687,7 @@ def construir_comando(modelo_config: dict, profile_path: Path, prompt: str) -> l
 
     flags = modelo_config.get("flags_sistema", [])
     soporta_system_prompt = modelo_config.get("soporta_system_prompt", False)
-    soporta_prompt_file = modelo_config.get("soporta_prompt_file", False)
+    soporta_prompt_file = modelo_config.get("soporta_prompt_file", False)  # noqa: F841
 
     if soporta_system_prompt:
         cmd = [cli_cmd]
@@ -744,6 +744,7 @@ def invocar_rol(rol: str, prompt: str, auto: bool = False) -> dict:
                 text=True,
                 timeout=modelo_config.get("timeout_seg", 300),
                 cwd=str(BASE_DIR),
+                check=False,
             )
             output = result.stdout
             if result.returncode != 0:
@@ -913,7 +914,7 @@ def _ejecutar_secuencial(bb: dict, auto: bool = False) -> None:
 
                 print(f"[OK] {mensaje_validacion}")
 
-                contexto = bb.get("contexto_paso_anterior", "")
+                contexto = bb.get("contexto_paso_anterior", "")  # noqa: F841
                 errores = bb.get("trazas_de_error", [])
                 error_contexto = ""
                 if errores:
