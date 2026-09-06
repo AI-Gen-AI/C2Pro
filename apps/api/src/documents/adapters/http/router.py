@@ -95,6 +95,9 @@ from src.stakeholders.application.create_stakeholder_use_case import CreateStake
 from src.temporal.adapters.persistence.document_revision_repository import (
     SqlAlchemyDocumentRevisionRepository,
 )
+from src.temporal.adapters.persistence.project_event_repository import (
+    SqlAlchemyProjectEventRepository,
+)
 
 logger = structlog.get_logger()
 
@@ -294,17 +297,25 @@ def get_document_revision_repository(
     return SqlAlchemyDocumentRevisionRepository(session=db)
 
 
+def get_project_event_repository(
+    db: AsyncSession = Depends(get_session),
+) -> SqlAlchemyProjectEventRepository:
+    return SqlAlchemyProjectEventRepository(session=db)
+
+
 def get_upload_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
     storage: LocalFileStorageService = Depends(get_storage_service),
     project_repo: ProjectRepository = Depends(get_project_repository),
     rev_repo: SqlAlchemyDocumentRevisionRepository = Depends(get_document_revision_repository),
+    event_repo: SqlAlchemyProjectEventRepository = Depends(get_project_event_repository),
 ) -> UploadDocumentUseCase:
     return UploadDocumentUseCase(
         document_repository=repo,
         storage_service=storage,
         project_repository=project_repo,
         revision_repository=rev_repo,
+        event_repository=event_repo,
     )
 
 
@@ -312,11 +323,13 @@ def get_reupload_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
     rev_repo: SqlAlchemyDocumentRevisionRepository = Depends(get_document_revision_repository),
     storage: LocalFileStorageService = Depends(get_storage_service),
+    event_repo: SqlAlchemyProjectEventRepository = Depends(get_project_event_repository),
 ) -> ReuploadDocumentUseCase:
     return ReuploadDocumentUseCase(
         document_repository=repo,
         revision_repository=rev_repo,
         storage_service=storage,
+        event_repository=event_repo,
     )
 
 
@@ -470,7 +483,7 @@ async def upload_document_for_processing(
 )
 async def reupload_document_file(
     document_id: UUID,
-    _user_id: CurrentUserId,
+    user_id: CurrentUserId,
     tenant_id: CurrentTenantId,
     file: UploadFile = File(...),
     reupload_use_case: ReuploadDocumentUseCase = Depends(get_reupload_use_case),
@@ -522,6 +535,7 @@ async def reupload_document_file(
             document_id=document_id,
             file_content=file_content,
             filename=file.filename,
+            user_id=user_id,
         )
     except ValueError as e:
         if str(e) == STRUCTURED_DOCX_ERROR:

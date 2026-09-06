@@ -18,6 +18,9 @@ from src.documents.domain.models import DocumentStatus
 from src.temporal.adapters.persistence.document_revision_repository import (
     SqlAlchemyDocumentRevisionRepository,
 )
+from src.temporal.adapters.persistence.project_event_repository import (
+    SqlAlchemyProjectEventRepository,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -63,6 +66,7 @@ async def test_reupload_different_content_preserves_genesis(db: AsyncSession):
 
     doc_repo = SqlAlchemyDocumentRepository(db)
     rev_repo = SqlAlchemyDocumentRevisionRepository(db)
+    event_repo = SqlAlchemyProjectEventRepository(db)
     storage = _mock_storage()
 
     new_content = b"new content for reupload test"
@@ -72,8 +76,9 @@ async def test_reupload_different_content_preserves_genesis(db: AsyncSession):
         document_repository=doc_repo,
         revision_repository=rev_repo,
         storage_service=storage,
+        event_repository=event_repo,
     )
-    result = await uc.execute(tenant_id=tid, document_id=doc_id, file_content=new_content)
+    result = await uc.execute(tenant_id=tid, document_id=doc_id, file_content=new_content, user_id=uuid4())
 
     assert result.version == 2
     assert result.file_hash == new_hash
@@ -111,14 +116,16 @@ async def test_reupload_same_content_idempotent(db: AsyncSession):
 
     doc_repo = SqlAlchemyDocumentRepository(db)
     rev_repo = SqlAlchemyDocumentRevisionRepository(db)
+    event_repo = SqlAlchemyProjectEventRepository(db)
     storage = _mock_storage()
 
     uc = ReuploadDocumentUseCase(
         document_repository=doc_repo,
         revision_repository=rev_repo,
         storage_service=storage,
+        event_repository=event_repo,
     )
-    result = await uc.execute(tenant_id=tid, document_id=doc_id, file_content=content)
+    result = await uc.execute(tenant_id=tid, document_id=doc_id, file_content=content, user_id=uuid4())
 
     assert result.version == 1
     assert result.file_hash == same_hash
@@ -144,6 +151,7 @@ async def test_reupload_twice_builds_full_lineage(db: AsyncSession):
 
     doc_repo = SqlAlchemyDocumentRepository(db)
     rev_repo = SqlAlchemyDocumentRevisionRepository(db)
+    event_repo = SqlAlchemyProjectEventRepository(db)
     storage = _mock_storage()
 
     c1 = b"content v1"
@@ -155,9 +163,10 @@ async def test_reupload_twice_builds_full_lineage(db: AsyncSession):
         document_repository=doc_repo,
         revision_repository=rev_repo,
         storage_service=storage,
+        event_repository=event_repo,
     )
-    await uc.execute(tenant_id=tid, document_id=doc_id, file_content=c1)
-    await uc.execute(tenant_id=tid, document_id=doc_id, file_content=c2)
+    await uc.execute(tenant_id=tid, document_id=doc_id, file_content=c1, user_id=uuid4())
+    await uc.execute(tenant_id=tid, document_id=doc_id, file_content=c2, user_id=uuid4())
 
     lineage = await rev_repo.list_lineage(doc_id, tid)
     assert len(lineage) == 3, f"Expected 3 revisions, got {len(lineage)}"
@@ -188,6 +197,7 @@ async def test_blob_key_is_retrievable(db: AsyncSession):
 
     doc_repo = SqlAlchemyDocumentRepository(db)
     rev_repo = SqlAlchemyDocumentRevisionRepository(db)
+    event_repo = SqlAlchemyProjectEventRepository(db)
     storage = _mock_storage()
 
     new_content = b"blob test content"
@@ -197,8 +207,9 @@ async def test_blob_key_is_retrievable(db: AsyncSession):
         document_repository=doc_repo,
         revision_repository=rev_repo,
         storage_service=storage,
+        event_repository=event_repo,
     )
-    await uc.execute(tenant_id=tid, document_id=doc_id, file_content=new_content)
+    await uc.execute(tenant_id=tid, document_id=doc_id, file_content=new_content, user_id=uuid4())
 
     current = await rev_repo.get_current(doc_id, tid)
     assert current is not None
@@ -224,6 +235,7 @@ async def test_storage_skip_when_blob_exists(db: AsyncSession):
 
     doc_repo = SqlAlchemyDocumentRepository(db)
     rev_repo = SqlAlchemyDocumentRevisionRepository(db)
+    event_repo = SqlAlchemyProjectEventRepository(db)
 
     storage = AsyncMock()
     storage.file_exists = AsyncMock(return_value=True)
@@ -234,8 +246,9 @@ async def test_storage_skip_when_blob_exists(db: AsyncSession):
         document_repository=doc_repo,
         revision_repository=rev_repo,
         storage_service=storage,
+        event_repository=event_repo,
     )
-    await uc.execute(tenant_id=tid, document_id=doc_id, file_content=new_content)
+    await uc.execute(tenant_id=tid, document_id=doc_id, file_content=new_content, user_id=uuid4())
 
     storage.upload_bytes.assert_not_called()
 
@@ -251,6 +264,7 @@ async def test_di_wiring_produces_working_use_case(db: AsyncSession):
     from src.documents.adapters.http.router import (
         get_document_repository,
         get_document_revision_repository,
+        get_project_event_repository,
         get_reupload_use_case,
         get_storage_service,
     )
@@ -259,6 +273,9 @@ async def test_di_wiring_produces_working_use_case(db: AsyncSession):
     )
     from src.temporal.adapters.persistence.document_revision_repository import (
         SqlAlchemyDocumentRevisionRepository,
+    )
+    from src.temporal.adapters.persistence.project_event_repository import (
+        SqlAlchemyProjectEventRepository,
     )
 
     doc_id = uuid4()
@@ -269,14 +286,16 @@ async def test_di_wiring_produces_working_use_case(db: AsyncSession):
     # Simulate the FastAPI DI chain manually
     doc_repo = get_document_repository(db=db)
     rev_repo = get_document_revision_repository(db=db)
+    event_repo = get_project_event_repository(db=db)
     assert isinstance(doc_repo, SqlAlchemyDocumentRepository)
     assert isinstance(rev_repo, SqlAlchemyDocumentRevisionRepository)
+    assert isinstance(event_repo, SqlAlchemyProjectEventRepository)
 
     storage = get_storage_service()
-    uc = get_reupload_use_case(repo=doc_repo, rev_repo=rev_repo, storage=storage)
+    uc = get_reupload_use_case(repo=doc_repo, rev_repo=rev_repo, storage=storage, event_repo=event_repo)
 
     new_content = b"di test content"
-    result = await uc.execute(tenant_id=tid, document_id=doc_id, file_content=new_content)
+    result = await uc.execute(tenant_id=tid, document_id=doc_id, file_content=new_content, user_id=uuid4())
 
     assert result.version == 2
     lineage = await rev_repo.list_lineage(doc_id, tid)
@@ -319,6 +338,7 @@ async def test_upload_creates_genesis_revision_with_storage(db: AsyncSession):
 
     doc_repo = SqlAlchemyDocumentRepository(db)
     rev_repo = SqlAlchemyDocumentRevisionRepository(db)
+    event_repo = SqlAlchemyProjectEventRepository(db)
 
     content = b"upload genesis test content"
     content_hash = hashlib.sha256(content).hexdigest()
@@ -356,6 +376,7 @@ async def test_upload_creates_genesis_revision_with_storage(db: AsyncSession):
         storage_service=storage,
         project_repository=_FakeProjectRepo(),
         revision_repository=rev_repo,
+        event_repository=event_repo,
     )
     result = await uc.execute(
         project_id=proj_id,

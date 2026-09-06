@@ -18,6 +18,46 @@
   },
   "tareas": [
     {
+      "tarea_id": "T145",
+      "backlog_id": "TASK-BCK-128",
+      "tipo": "backend",
+      "descripcion": "Fix revision.ingested snapshot lineage: upload/reupload must enqueue source_event_id = ProjectEvent.event_id (not revision_id), materialize a revision.ingested ProjectEvent (source_revision_id -> revision) in the same transaction as the revision, record actor = str(user_id), and enforce the revision_repository -> event_repository dependency invariant.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Upload/reupload enqueue source_event_id == event.event_id; ProjectEvent event_type revision.ingested with source_revision_id == revision_id and actor == str(user_id); enqueue occurs after successful commit; event/commit failure never enqueues; enqueue failure is fail-open; dependency invariant enforced; PostgreSQL FK regression proves project_snapshots.source_event_id -> project_events.event_id commits without SQLSTATE 23503.",
+      "archivos_modificados": [
+        "apps/api/src/temporal/domain/revision_event_factory.py",
+        "apps/api/src/documents/application/upload_document_use_case.py",
+        "apps/api/src/documents/application/reupload_document_use_case.py",
+        "apps/api/src/documents/adapters/http/router.py",
+        "apps/api/tests/unit/documents/test_revision_snapshot_enqueue.py",
+        "apps/api/tests/modules/documents/application/test_upload_document_use_case.py",
+        "apps/api/tests/integration/documents/test_reupload_writes_revision.py",
+        "apps/api/tests/integration/documents/test_revision_ingested_lineage_fk.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-09-06T00:00:00Z",
+        "completado": "2026-09-06T00:00:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-BCK-128 completed: revision+event committed atomically before post-commit best-effort snapshot enqueue; source_event_id now references ProjectEvent.event_id; actor recorded from user_id in both upload and reupload.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "tests/unit/documents/test_revision_snapshot_enqueue.py -> 12 passed (RED/GREEN lineage invariants).",
+          "tests/modules/documents/application/test_upload_document_use_case.py -> 7 passed.",
+          "tests/integration/documents/test_revision_ingested_lineage_fk.py -> 2 passed (PostgreSQL FK path + enforcement).",
+          "tests/integration/documents/test_reupload_writes_revision.py -> 7 passed.",
+          "tests/unit/temporal + tests/integration/temporal -> 14 passed.",
+          "tests/modules/integration/test_document_reupload_endpoint.py -> 7 passed.",
+          "Ruff clean; mypy clean on changed src files."
+        ]
+      }
+    },
+    {
       "tarea_id": "T144",
       "backlog_id": "TASK-BCK-096",
       "tipo": "backend",

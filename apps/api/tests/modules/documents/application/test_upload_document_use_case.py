@@ -166,9 +166,14 @@ class TestUploadDocumentUseCase:
         project_repository = AsyncMock()
         project_repository.exists_by_id.return_value = True
         revision_repository = AsyncMock()
+        event_repository = AsyncMock()
 
         use_case = UploadDocumentUseCase(
-            repo, storage, project_repository, revision_repository=revision_repository
+            repo,
+            storage,
+            project_repository,
+            revision_repository=revision_repository,
+            event_repository=event_repository,
         )
 
         document = await use_case.execute(
