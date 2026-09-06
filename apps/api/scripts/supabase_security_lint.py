@@ -17,6 +17,13 @@ P0-SEC-B scope (BLOCKING as of 20260905_0001):
     - COALESCE fail-open expressions in any public-schema RLS policy (any table)
     - Excess permissive FOR ALL policies by the known legacy names
 
+P0-SEC-D scope (BLOCKING as of 20260906000100):
+    - Any SECURITY DEFINER function (any schema) whose EXECUTE privilege is
+      held by PUBLIC, anon, or authenticated -- including a NULL proacl
+      (Postgres's own default grants PUBLIC execute on every new function
+      unless revoked). service_role is intentionally excluded: a backend-
+      only SECURITY DEFINER RPC may legitimately grant it EXECUTE.
+
 Usage:
     DATABASE_URL=postgresql://... python apps/api/scripts/supabase_security_lint.py
 Exit code 1 if any BLOCKING violation is found.
@@ -39,15 +46,20 @@ import sys
 # _SCOPE_P0_SEC_A activates: permissive-policy, RLS-disabled, external-grant,
 #                             and default-ACL checks.
 # _SCOPE_P0_SEC_B activates: COALESCE fail-open and excess-FOR-ALL checks.
-# None (global)   activates: both families.
+# _SCOPE_P0_SEC_D activates: SECURITY DEFINER PUBLIC/anon/authenticated
+#                             EXECUTE checks.
+# None (global)   activates: all three families.
 _SCOPE_P0_SEC_A: frozenset[str | None] = frozenset({"p0_sec_a", None})
 _SCOPE_P0_SEC_B: frozenset[str | None] = frozenset({"p0_sec_b", None})
+_SCOPE_P0_SEC_D: frozenset[str | None] = frozenset({"p0_sec_d", None})
 
 # Explicit allowlist of recognised scope values.  Any value not in this set is
 # rejected by run() before any database work occurs.  This prevents an unknown
 # scope from silently setting both run_a and run_b to False and reaching
 # "PASSED: no blocking violations" with zero checks executed (fail-open).
-_VALID_SCOPES: frozenset[str | None] = frozenset({None, "p0_sec_a", "p0_sec_b"})
+_VALID_SCOPES: frozenset[str | None] = frozenset(
+    {None, "p0_sec_a", "p0_sec_b", "p0_sec_d"}
+)
 
 EXTERNAL_ROLES = ("anon", "authenticated")
 
@@ -134,6 +146,43 @@ _EXCESS_POLICY_NAMES: tuple[tuple[str, str], ...] = (
 )
 
 
+# ── P0-SEC-D: SECURITY DEFINER PUBLIC/anon/authenticated EXECUTE ───────────────
+#
+# ``acldefault('f', p.proowner)`` reproduces the effective default ACL for a
+# function whose ``proacl`` is NULL (Postgres grants PUBLIC EXECUTE on every
+# new function unless revoked), so an untouched SECURITY DEFINER function is
+# caught even before anything has explicitly granted it to anyone.
+# service_role is deliberately not in the grantee list: a backend-only
+# SECURITY DEFINER RPC (e.g. public.create_tenant_and_owner) may legitimately
+# grant it EXECUTE, and that is a deliberate, reviewed choice, not a leak.
+Q_SECURITY_DEFINER_PUBLIC_EXECUTE = """
+SELECT DISTINCT n.nspname, p.proname,
+       pg_get_function_identity_arguments(p.oid) AS args
+  FROM pg_proc p
+  JOIN pg_namespace n ON n.oid = p.pronamespace
+  JOIN LATERAL aclexplode(
+      COALESCE(p.proacl, acldefault('f', p.proowner))
+  ) AS acl ON true
+ WHERE p.prosecdef
+   AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+   AND acl.privilege_type = 'EXECUTE'
+   AND (
+       acl.grantee = 0
+       OR pg_get_userbyid(acl.grantee) IN ('anon', 'authenticated')
+   );
+"""
+
+
+def _check_p0_sec_d(cur: object, blocking: list[str]) -> None:
+    """Execute P0-SEC-D control-family checks against an open cursor."""
+    cur.execute(Q_SECURITY_DEFINER_PUBLIC_EXECUTE)  # type: ignore[union-attr]
+    for schema, name, args in cur.fetchall():  # type: ignore[union-attr]
+        blocking.append(
+            f"SECURITY DEFINER function {schema}.{name}({args}) is executable "
+            f"by PUBLIC/anon/authenticated with no reviewed REVOKE"
+        )
+
+
 def _check_p0_sec_a(cur: object, protected: list[str], blocking: list[str]) -> None:
     """Execute P0-SEC-A control-family checks against an open cursor."""
     cur.execute(Q_PERMISSIVE_POLICY, {"protected": protected})  # type: ignore[union-attr]
@@ -196,6 +245,8 @@ def run(dsn: str, scope: str | None = None) -> int:
                          external-grant, default-ACL)
     scope="p0_sec_b"  → P0-SEC-B controls only (COALESCE fail-open,
                          excess FOR ALL policies)
+    scope="p0_sec_d"  → P0-SEC-D controls only (SECURITY DEFINER
+                         PUBLIC/anon/authenticated EXECUTE)
     any other value   → returns 1 immediately; no DB connection is made.
 
     Historical gates must use their own scope so that P0-SEC-B blockers present
@@ -209,13 +260,15 @@ def run(dsn: str, scope: str | None = None) -> int:
     if scope not in _VALID_SCOPES:
         print(
             f"INVALID SCOPE: {scope!r} is not a recognised lint control family. "
-            f"Valid values: None (global — all controls), 'p0_sec_a', 'p0_sec_b'.",
+            f"Valid values: None (global — all controls), 'p0_sec_a', 'p0_sec_b', "
+            f"'p0_sec_d'.",
             file=sys.stderr,
         )
         return 1
 
     run_a = scope in _SCOPE_P0_SEC_A
     run_b = scope in _SCOPE_P0_SEC_B
+    run_d = scope in _SCOPE_P0_SEC_D
 
     try:
         import psycopg
@@ -233,6 +286,8 @@ def run(dsn: str, scope: str | None = None) -> int:
             _check_p0_sec_a(cur, protected, blocking)
         if run_b:
             _check_p0_sec_b(cur, blocking)
+        if run_d:
+            _check_p0_sec_d(cur, blocking)
 
     for line in info:
         print(f"INFO     {line}")

@@ -91,11 +91,13 @@ def test_valid_scopes_constant_is_defined() -> None:
 
 
 def test_valid_scopes_is_exactly_correct_frozenset() -> None:
-    """_VALID_SCOPES must be exactly frozenset({None, 'p0_sec_a', 'p0_sec_b'}).
+    """_VALID_SCOPES must be exactly frozenset({None, 'p0_sec_a', 'p0_sec_b', 'p0_sec_d'}).
 
     RED proof: _VALID_SCOPES is not defined → AttributeError.
     """
-    expected: frozenset[str | None] = frozenset({None, "p0_sec_a", "p0_sec_b"})
+    expected: frozenset[str | None] = frozenset(
+        {None, "p0_sec_a", "p0_sec_b", "p0_sec_d"}
+    )
     actual = getattr(_lint, "_VALID_SCOPES", None)
     assert actual == expected, (
         f"_VALID_SCOPES={actual!r} must be exactly {expected!r}; "
@@ -174,6 +176,15 @@ def test_p0_sec_b_scope_is_in_valid_scopes() -> None:
     )
 
 
+def test_p0_sec_d_scope_is_in_valid_scopes() -> None:
+    """'p0_sec_d' must be a valid scope."""
+    actual = getattr(_lint, "_VALID_SCOPES", None)
+    assert actual is not None, "_VALID_SCOPES is not defined — P0-SEC-D gate scope would be broken"
+    assert "p0_sec_d" in actual, (
+        "'p0_sec_d' is not in _VALID_SCOPES — P0-SEC-D gate scope would be broken"
+    )
+
+
 # ── E. existing gate-composition invariants must be unchanged ─────────────────
 
 
@@ -197,3 +208,24 @@ def test_scope_p0_sec_b_membership_unchanged() -> None:
     assert frozenset({"p0_sec_b", None}) == _lint._SCOPE_P0_SEC_B, (
         f"_SCOPE_P0_SEC_B changed: {_lint._SCOPE_P0_SEC_B!r}"
     )
+
+
+def test_scope_p0_sec_d_membership_is_correct() -> None:
+    """_SCOPE_P0_SEC_D must be frozenset({'p0_sec_d', None})."""
+    assert frozenset({"p0_sec_d", None}) == _lint._SCOPE_P0_SEC_D, (
+        f"_SCOPE_P0_SEC_D is wrong: {_lint._SCOPE_P0_SEC_D!r}"
+    )
+
+
+def test_p0_sec_d_scope_dispatches_to_its_own_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """scope='p0_sec_d' must invoke _check_p0_sec_d and nothing else."""
+    calls: list[str] = []
+    monkeypatch.setattr(_lint, "_check_p0_sec_a", lambda *a, **k: calls.append("a"))
+    monkeypatch.setattr(_lint, "_check_p0_sec_b", lambda *a, **k: calls.append("b"))
+    monkeypatch.setattr(_lint, "_check_p0_sec_d", lambda *a, **k: calls.append("d"))
+
+    mock_conn = _make_mock_conn()
+    with patch(_connect_target(), return_value=mock_conn):
+        _lint.run("postgresql://unused/unused", scope="p0_sec_d")
+
+    assert calls == ["d"], f"expected only the P0-SEC-D check to run, got {calls!r}"
