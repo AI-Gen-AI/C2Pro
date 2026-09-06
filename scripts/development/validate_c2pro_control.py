@@ -54,6 +54,8 @@ REQUIRED_SCHEMAS = {
     "review-result.schema.yaml": "c2pro-review-result-v1",
     "review-policy.schema.yaml": "c2pro-review-policy-v1",
     "routing.schema.yaml": "c2pro-routing-v2",
+    "implementation-result.schema.yaml": "c2pro-implementation-result-v1",
+    "workspace-policy.schema.yaml": "c2pro-workspace-policy-v1",
 }
 
 
@@ -330,6 +332,28 @@ def validate_legacy_transition() -> None:
         require(legacy.get(name, {}).get("delete_before_reconciliation") is False, f"legacy policy: {name} cannot be deleted before reconciliation")
 
 
+def validate_workspace_policy() -> dict[str, Any]:
+    policy = load_yaml(CONTROL / "workspace-policy.yaml")
+    require(policy.get("schema") == "c2pro-workspace-policy-v1", "workspace-policy.yaml: schema mismatch")
+    require(policy.get("schema_version") == 1, "workspace-policy.yaml: schema_version must be 1")
+    require(policy.get("lifecycle_owner") == "orchestrator", "workspace-policy.yaml: lifecycle_owner must be orchestrator")
+    require(policy.get("persistent_workspace_per_agent") is True, "workspace-policy.yaml: persistent_workspace_per_agent must be true")
+    require(policy.get("max_active_writer_tasks_per_workspace") == 1, "workspace-policy.yaml: max_active_writer_tasks_per_workspace must be 1")
+
+    worker_perms = policy.get("worker_permissions", {})
+    require(worker_perms.get("create_workspace") is False, "workspace-policy.yaml: workers cannot create workspace")
+    require(worker_perms.get("remove_workspace") is False, "workspace-policy.yaml: workers cannot remove workspace")
+    require(worker_perms.get("reset_workspace") is False, "workspace-policy.yaml: workers cannot reset workspace")
+    require(worker_perms.get("clean_workspace") is False, "workspace-policy.yaml: workers cannot clean workspace")
+    require(worker_perms.get("repurpose_workspace") is False, "workspace-policy.yaml: workers cannot repurpose workspace")
+    require(worker_perms.get("validate_workspace") is True, "workspace-policy.yaml: workers must validate workspace")
+
+    guard_fail = policy.get("guard_failure", {})
+    require(guard_fail.get("code") == "WORKSPACE_GUARD_FAILURE", "workspace-policy.yaml: invalid guard_failure code")
+    require(guard_fail.get("action") == "stop", "workspace-policy.yaml: invalid guard_failure action")
+    return policy
+
+
 def validate_context_budget(current: dict[str, Any]) -> int:
     budget = current.get("context_budget", {})
     max_bytes = budget.get("bootstrap_hot_max_bytes")
@@ -355,6 +379,7 @@ def validate() -> int:
     validate_review_policy()
     validate_identity_preserving_principal_handoff(current, queue, routing)
     validate_legacy_transition()
+    validate_workspace_policy()
     total = validate_context_budget(current)
     return total
 

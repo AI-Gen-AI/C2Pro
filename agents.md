@@ -13,12 +13,10 @@ protected_routes:
   - "skill_registry.yaml"
 boundaries:
   always:
-    - "ALWAYS read blackboard.json before starting any task."
-    - "ALWAYS consult C2PRO_MASTER_BACKLOG.md before starting substantial work."
-    - "ALWAYS register discovered tasks in C2PRO_MASTER_BACKLOG.md in the same changeset."
-    - "ALWAYS mark completed tasks in C2PRO_MASTER_BACKLOG.md in the same changeset."
-    - "ALWAYS update blackboard.json when completing tasks with timestamp and result."
-    - "ALWAYS include backlog_id when creating tasks in blackboard.json."
+    - "ALWAYS treat blackboard.json and C2PRO_MASTER_BACKLOG.md as READ-ONLY cold references."
+    - "ALWAYS consult .c2pro/control/ and assigned .c2pro/work/ envelope for task specifications."
+    - "ALWAYS provide structured worker evidence (fenced YAML result block matching c2pro-implementation-result-v1) in standard output/PR description instead of mutating backlogs."
+    - "ALWAYS validate assigned workspace and branch. On any mismatch, STOP immediately and return WORKSPACE_GUARD_FAILURE."
     - "ALWAYS include Test Suite ID in docstrings of tests and implementation."
     - "ALWAYS filter by tenant_id in database queries."
   ask:
@@ -26,6 +24,7 @@ boundaries:
     - "ASK before adding unapproved external dependencies."
     - "ASK before proposing technologies outside the approved stack."
   never:
+    - "NEVER independently create, remove, reset, or clean workspace worktrees."
     - "NEVER import sqlalchemy in src/{module}/domain."
     - "NEVER execute DB operations in unit tests."
     - "NEVER place business logic in routers/controllers."
@@ -45,13 +44,12 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 
 ## Canonical Governance
 
-- `C2PRO_MASTER_BACKLOG.md` is the single source of truth for all active, pending, and completed follow-up tasks.
-- Before starting substantial work, check `C2PRO_MASTER_BACKLOG.md` for related task IDs, priorities, and current state.
-- If you discover a task, blocker, or follow-up that is not listed there, add it to `C2PRO_MASTER_BACKLOG.md` as part of the same change set whenever feasible.
-- If you discover any additional task, TODO, blocker, follow-up, or verification item in code, docs, runbooks, plans, or execution notes, you MUST add it to `C2PRO_MASTER_BACKLOG.md` in the same change set. This is mandatory and applies even when the source document is historical or informational only.
-- When you complete a task, mark it complete in `C2PRO_MASTER_BACKLOG.md` in the same change set whenever feasible.
-- Do not create or treat any other status file as the authoritative task register.
-- The backlog's tables must stay compact (no padded spaces) and retain the `|Status|Priority|ID|Dependency|Task|Source|` column order whenever an agent edits `C2PRO_MASTER_BACKLOG.md`.
+- Under the **Single-Writer Control Plane**, all legacy files (`C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md`, `blackboard.json`) are **read-only cold references** for workers. Workers **MUST NOT** mutate them directly.
+- The single authoritative write-target for control and planning state is `.c2pro/`, owned exclusively by the **Planner / Master Orchestrator**.
+- Implementation, QA, and review workers read `.c2pro/control/` and their assigned `.c2pro/work/` envelopes.
+- Upon completion of any task or when discovering new tasks/risks, workers **MUST NOT** update any legacy markdown or JSON files.
+- Instead, workers **MUST** provide structured evidence via a fenced YAML block matching the `c2pro-implementation-result-v1` schema in their PR descriptions or standard output.
+- Task completion is non-canonical until verified in CI, merged, and reconciled on main by the Master Reconciler.
 
 ### Backlog Interpretation Rules
 
@@ -281,86 +279,56 @@ Change the assignment at any time — no role files need modification.
 Shared state:
 
 - `blackboard.json` — ephemeral session state (active tasks, retries, errors, role assignments)
-- `C2PRO_MASTER_BACKLOG.md` — permanent project task register (source of truth)
+- `C2PRO_MASTER_BACKLOG.md` — permanent project task register (cold read source of truth)
 - The Planner reads the Backlog for context, writes the session plan to the Blackboard.
 
 ### Blackboard Integration & Task Lifecycle
 
-**Every role must:**
+**Every worker role must:**
 
 1. **Before starting work:**
-   - Read `blackboard.json` to get session state and assigned tasks
-   - Read `C2PRO_MASTER_BACKLOG.md` to understand context via task's `backlog_id`
-   - Verify prerequisites and dependencies are met
+   - Read `blackboard.json` and legacy backlog files as read-only cold references.
+   - Read `.c2pro/control/` and the assigned `.c2pro/work/` envelope to get task specs.
 
 2. **During execution:**
-   - Update `blackboard.json` task state: `pendiente` → `en_progreso`
-   - Log progress and any errors in `trazas_de_error` array
-   - Communicate with other roles via blackboard state
+   - Do NOT attempt to write to `blackboard.json`, `C2PRO_MASTER_BACKLOG.md`, or `backlogs/*.md`.
 
 3. **After completion:**
-   - Update `blackboard.json`: mark task `completado` with timestamp and resultado
-   - Update `C2PRO_MASTER_BACKLOG.md`: mark task `[x]` with completion note
-   - Add discovered tasks to backlog immediately with proper priority and source
+   - Provide structured worker evidence (fenced YAML result block matching the `c2pro-implementation-result-v1` schema) in standard output or the PR description.
+   - Do NOT commit result files or write to legacy backlog files.
 
 4. **When discovering new work:**
-   - Create new `TASK-xxxx` entry in `C2PRO_MASTER_BACKLOG.md` in the same changeset
-   - Reference source document in `Source` column
-   - Assign priority `P0`/`P1`/`P2`/`P3` based on criticality
+   - Do NOT write new entries directly to legacy backlogs.
+   - Include any newly discovered subtasks or risks in the `findings` and `residual_risks` arrays of your structured result block.
 
-**Multi-agent coordination:**
+**Multi-agent coordination & Handoff Boundary:**
 
-- Use `core/supervisor.py` to orchestrate multiple roles in a single session
-- The supervisor reads role assignments from `core/session_config.json`
-- Each role operates independently but coordinates via `blackboard.json` shared state
+- **Legacy Supervisor (`core/supervisor.py`):** Dedicated to **legacy compatibility only** (managing genuine `TASK-*` legacy workitems). It reads role assignments from `core/session_config.json` and orchestrates legacy sequential execution via `blackboard.json`.
+- **New Control Plane (`.c2pro`):** Dedicated to modern `C2PRO-*` tasks assigned to workers/orchestrators.
+- **Handoff Boundary:** Under transition mode `dual_read_single_write_new_control`, if a modern `C2PRO-*` task is submitted to the legacy supervisor, execution **must stop immediately** before agent/worker invocation, returning `NEW_CONTROL_HANDOFF_REQUIRED`. This guarantees that modern tasks are executed purely outside the legacy blackboard runner and do not mutate legacy files.
+- **Native automated new-control orchestration:** Fully reserved for future G2 / Agent Academy.
 
 ### Role Assignment & Execution Rule
 
-- When the user assigns a backlog group such as `2.2 Frontend`, `2.3 AI & Intelligence`, `2.5 Security`, or another active backlog section, agents must treat that group as the active work queue.
-- Within that queue, agents should execute by priority, then by prerequisite readiness, then by task order as recorded in `C2PRO_MASTER_BACKLOG.md`.
-- Supporting agents should collaborate on the same task stream rather than opening parallel unrelated work outside the approved group.
+- When the user assigns a backlog group, agents must treat that group as the active work queue.
+- Within that queue, agents execute by priority, prerequisite readiness, and task order as mapped from `.c2pro/control/work-queue.yaml`.
 
 ## State Management & Documentation Updates (CRITICAL)
 
 **This section is MANDATORY for all roles.**
 
-After successfully completing any task:
+Under the Single-Writer Control Plane, workers **MUST NOT** directly update:
+- `C2PRO_MASTER_BACKLOG.md`
+- `backlogs/*.md`
+- `blackboard.json`
 
-1. **Update `C2PRO_MASTER_BACKLOG.md`:**
-   - Find the task row by ID (`TASK-xxxx`)
-   - Change status from `[ ]` to `[x]`
-   - Add completion note: `[x] Implemented (Unit Tests & Domain Logic)` or similar
-   - Update in the same changeset as the code changes
+Instead, after successfully completing any task, workers **MUST** return a structured result block matching the `c2pro-implementation-result-v1` schema as standard output or in the PR body.
 
-2. **Update `blackboard.json`:**
-   - Mark task `estado: "completado"`
-   - Add `timestamps.completado` with UTC ISO timestamp
-   - Add `resultado` object with success status and details
+The master/planner remains the sole writer allowed to reconcile this returned evidence back into canonical control state.
 
-3. **Update category-specific backlog files (when applicable):**
-   - Each agent category has a detailed backlog file in `backlogs/`:
-     - **Frontend**: `backlogs/FRT_FRONTEND.md`
-     - **Backend**: `backlogs/BCK_BACKEND.md`
-     - **AI/ML**: `backlogs/AI_AI_ML_INTELLIGENCE.md`
-     - **QA**: `backlogs/QA_QUALITY_ASSURANCE.md`
-     - **DevOps**: `backlogs/DEV_DEVOPS.md`
-     - **Infrastructure**: `backlogs/INF_INFRASTRUCTURE.md`
-   - **DO NOT create new documentation files** like `FRONTEND_ANALYSIS.md`, `BACKEND_PLAN.md`, etc.
-   - Instead, **update the existing category backlog file** in section "2. Specifications"
-   - Add detailed task specifications, architectural decisions, lessons learned, and technical debt there
-   - This keeps all agent-specific knowledge organized in one place per category
-
-4. **Update supporting documentation (when applicable):**
-   - `docs/testing/C2PRO_TDD_BACKLOG_v1.0.md` when test suite tracking changes
-   - `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md` when platform architecture changes
-   - Role-specific documentation in `docs/` only for cross-cutting architectural decisions
-
-**File Organization Rule:**
-
-- **CRITICAL**: Each agent has their own detailed backlog file in `backlogs/`
-- All category-specific work (analysis, specifications, decisions, debt) goes in that file
-- DO NOT create standalone analysis/plan/specification files
-- This prevents file proliferation and keeps agent knowledge consolidated
+### Category-specific Backlogs & Support Docs
+- Category-specific backlog files in `backlogs/` (such as `backlogs/BCK_BACKEND.md`, `backlogs/FRT_FRONTEND.md`, etc.) are read-only cold references for workers during the transition.
+- Any suggested specifications or technical debt findings must be reported in the `findings` field of the returned structured result block.
 
 **Why this matters:**
 

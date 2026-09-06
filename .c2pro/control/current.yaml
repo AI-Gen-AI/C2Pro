@@ -33,5 +33,6 @@ context_budget:
     - .c2pro/control/work-queue.yaml
     - .c2pro/control/routing.yaml
     - .c2pro/control/review-policy.yaml
+    - .c2pro/control/workspace-policy.yaml
     - .c2pro/roles/orchestrator.yaml
     - .c2pro/work/C2PRO-DEV-02.yaml
