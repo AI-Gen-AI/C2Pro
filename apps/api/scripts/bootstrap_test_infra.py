@@ -15,22 +15,19 @@ import psycopg
 from checkpoint_bootstrap import bootstrap_checkpoint_schema
 from verify_migration_health import parse_migration_graph, recreate_database, validate_linear_chain
 
-# This script only ever probes LOCAL/CI test services. Restrict the socket
-# probe to explicit loopback hosts so a misconfigured invocation can never
-# turn the port probe into a connection to an arbitrary external host.
-_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1"})
-
-
-def _validate_loopback_host(host: str) -> None:
-    if host not in _LOOPBACK_HOSTS:
-        raise ValueError(
-            f"refusing to probe non-loopback host {host!r}; "
-            f"only {sorted(_LOOPBACK_HOSTS)} are allowed for test-infra port probes."
-        )
+# This script only ever probes LOCAL/CI test services. The socket probe is
+# pinned to a fixed loopback literal — there is no caller-controlled host
+# selection, so a misconfigured invocation can never turn the port probe into
+# a connection to an arbitrary external host (removes the SSRF taint source).
+LOOPBACK_HOST = "127.0.0.1"
 
 
 def is_port_open(host: str, port: int, timeout_seconds: float = 1.0) -> bool:
-    _validate_loopback_host(host)
+    if host != LOOPBACK_HOST:
+        raise ValueError(
+            f"refusing to probe non-loopback host {host!r}; "
+            f"only {LOOPBACK_HOST!r} is allowed for test-infra port probes."
+        )
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(timeout_seconds)
         return sock.connect_ex((host, port)) == 0
@@ -107,22 +104,23 @@ def assert_head_revision(database_url: str, api_dir: Path) -> str:
 
 def _ensure_db_ready(args, repo_root: Path, api_dir: Path) -> None:
     """Preflight DB: port reachable, admin connection ready, DB exists, migrations + checkpoint schema."""
+    host = LOOPBACK_HOST
     print("== Preflight: DB port ==")
-    if not is_port_open(args.db_host, args.db_port):
+    if not is_port_open(host, args.db_port):
         if args.start_services:
             print("DB port closed. Starting postgres-test via docker compose...")
             try:
                 start_postgres_with_docker_compose(repo_root)
             except Exception as exc:
                 raise RuntimeError(f"Failed to start postgres-test with docker compose: {exc}") from exc
-            if not wait_for_port(args.db_host, args.db_port, args.wait_seconds):
-                raise RuntimeError(f"DB port {args.db_host}:{args.db_port} did not become reachable.")
+            if not wait_for_port(host, args.db_port, args.wait_seconds):
+                raise RuntimeError(f"DB port {host}:{args.db_port} did not become reachable.")
         else:
             raise RuntimeError(
-                f"DB port {args.db_host}:{args.db_port} is not reachable. "
+                f"DB port {host}:{args.db_port} is not reachable. "
                 "Use --start-services or start test DB manually."
             )
-    print(f"OK DB port reachable: {args.db_host}:{args.db_port}")
+    print(f"OK DB port reachable: {host}:{args.db_port}")
 
     print("== Preflight: DB readiness ==")
     wait_for_database_ready(args.admin_url, args.wait_seconds)
@@ -155,34 +153,33 @@ def _ensure_db_ready(args, repo_root: Path, api_dir: Path) -> None:
 
 def _ensure_redis_ready(args, repo_root: Path) -> None:
     """Preflight Redis: start via docker compose if needed; soft-fail unless --require-redis."""
+    host = LOOPBACK_HOST
     print("== Preflight: Redis ==")
-    redis_ok = is_port_open(args.redis_host, args.redis_port)
+    redis_ok = is_port_open(host, args.redis_port)
     if not redis_ok and args.start_services:
         print("Redis port closed. Starting redis-test via docker compose...")
         try:
             start_redis_with_docker_compose(repo_root)
         except Exception as exc:
             raise RuntimeError(f"Failed to start redis-test with docker compose: {exc}") from exc
-        redis_ok = wait_for_port(args.redis_host, args.redis_port, args.wait_seconds)
+        redis_ok = wait_for_port(host, args.redis_port, args.wait_seconds)
 
     if redis_ok:
-        print(f"OK Redis reachable: {args.redis_host}:{args.redis_port}")
+        print(f"OK Redis reachable: {host}:{args.redis_port}")
     elif args.require_redis:
         raise RuntimeError(
-            f"Redis not reachable at {args.redis_host}:{args.redis_port} and --require-redis is set."
+            f"Redis not reachable at {host}:{args.redis_port} and --require-redis is set."
         )
     else:
         print(
-            f"WARN Redis not reachable at {args.redis_host}:{args.redis_port}. "
+            f"WARN Redis not reachable at {host}:{args.redis_port}. "
             "Continuing (soft fail policy)."
         )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db-host", default="localhost")
     parser.add_argument("--db-port", type=int, default=5433)
-    parser.add_argument("--redis-host", default="localhost")
     parser.add_argument("--redis-port", type=int, default=6380)
     parser.add_argument(
         "--database-url",
