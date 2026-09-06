@@ -18,16 +18,21 @@ class SqlAlchemyAnalysisRepository(IAnalysisRepository):
         self.session = session
         self.tenant_id = tenant_id
 
-    async def _verify_project_ownership(self, project_id: UUID) -> bool:
-        """Verify that a project belongs to the current tenant."""
+    async def _verify_project_ownership(
+        self, project_id: UUID, tenant_id: UUID
+    ) -> bool:
+        """Verify that a project belongs to the given tenant.
+
+        ``tenant_id`` is the caller-supplied, per-call tenant -- not
+        ``self.tenant_id`` -- so this check cannot be bypassed by
+        constructing the repository without a tenant.
+        """
         stmt = select(ProjectORM.tenant_id).where(ProjectORM.id == project_id)
         result = await self.session.execute(stmt)
         project_tenant = result.scalar_one_or_none()
         if project_tenant is None:
             return False
-        if self.tenant_id is None:
-            return True
-        return project_tenant == self.tenant_id
+        return project_tenant == tenant_id
 
     async def get_result_json(
         self, analysis_id: UUID, tenant_id: UUID
@@ -40,24 +45,29 @@ class SqlAlchemyAnalysisRepository(IAnalysisRepository):
         result = await self.session.execute(stmt)
         return result.scalars().first()
 
-    async def add_analysis(
-        self, analysis: AnalysisWrite, tenant_id: UUID | None = None
-    ) -> None:
-        effective_tenant_id = tenant_id or self.tenant_id
-        if effective_tenant_id is not None:  # noqa: SIM102
-            if not await self._verify_project_ownership(analysis.project_id):
-                raise PermissionError("Cannot add analysis for project outside tenant")
+    async def add_analysis(self, analysis: AnalysisWrite, tenant_id: UUID) -> None:
+        """Persist an analysis.
+
+        ``tenant_id`` is mandatory and always verified against both the
+        DTO's own tenant and its project's ownership -- there is no code
+        path where verification is silently skipped for lack of context.
+        """
+        owns_project = await self._verify_project_ownership(
+            analysis.project_id, tenant_id
+        )
+        if analysis.tenant_id != tenant_id or not owns_project:
+            raise PermissionError("Cannot add analysis for project outside tenant")
         self.session.add(Analysis(**analysis.__dict__))
 
-    async def add_alerts(
-        self, alerts: Iterable[AlertWrite], tenant_id: UUID | None = None
-    ) -> None:
-        effective_tenant_id = tenant_id or self.tenant_id
+    async def add_alerts(self, alerts: Iterable[AlertWrite], tenant_id: UUID) -> None:
+        """Persist alerts. Ownership is verified per-alert; see ``add_analysis``."""
         alert_list = list(alerts)
         for alert in alert_list:
-            if effective_tenant_id is not None:  # noqa: SIM102
-                if not await self._verify_project_ownership(alert.project_id):
-                    raise PermissionError("Cannot add alert for project outside tenant")
+            owns_project = await self._verify_project_ownership(
+                alert.project_id, tenant_id
+            )
+            if alert.tenant_id != tenant_id or not owns_project:
+                raise PermissionError("Cannot add alert for project outside tenant")
         self.session.add_all([Alert(**alert.__dict__) for alert in alert_list])
 
     async def list_recent(
