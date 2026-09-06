@@ -66,51 +66,13 @@ class TestRuntimeNoLongerRunsSetup:
         )
         assert "verify_checkpoint_schema_ready" in source
 
-    def test_ensure_checkpointer_ready_raises_on_unready_schema(self) -> None:
+    @pytest.mark.asyncio
+    async def test_ensure_checkpointer_ready_raises_on_unready_schema(self) -> None:
         """Behavioral proof: a checkpointer whose schema check fails raises, not warns."""
-        import asyncio
-
         from src.analysis.adapters.graph import workflow
+        from tests.support.checkpointer_readiness_fakes import assert_unready_schema_raises
 
-        class _FakeCheckpointer:
-            pass
-
-        class _FakePool:
-            closed = False
-
-            async def open(self) -> None:
-                return None
-
-            async def connection(self):  # pragma: no cover - not reached in this test
-                raise AssertionError("verify_checkpoint_schema_ready should be monkeypatched")
-
-        class _FakeApp:
-            checkpointer = _FakeCheckpointer()
-
-        original_pool = workflow._checkpointer_pool
-        original_ready = workflow._checkpointer_ready
-        original_get_graph_app = workflow.get_graph_app
-        original_verify = workflow.verify_checkpoint_schema_ready
-        original_version_check = workflow.verify_checkpoint_package_supported
-        try:
-            workflow._checkpointer_pool = _FakePool()
-            workflow._checkpointer_ready = False
-            workflow.get_graph_app = lambda: _FakeApp()
-            workflow.verify_checkpoint_package_supported = lambda: None
-
-            async def _not_ready(_pool: object) -> bool:
-                return False
-
-            workflow.verify_checkpoint_schema_ready = _not_ready
-
-            with pytest.raises(workflow.CheckpointSchemaNotReadyError):
-                asyncio.run(workflow.ensure_checkpointer_ready())
-        finally:
-            workflow._checkpointer_pool = original_pool
-            workflow._checkpointer_ready = original_ready
-            workflow.get_graph_app = original_get_graph_app
-            workflow.verify_checkpoint_schema_ready = original_verify
-            workflow.verify_checkpoint_package_supported = original_version_check
+        await assert_unready_schema_raises(workflow)
 
     def test_ensure_checkpointer_ready_never_claims_memory_fallback(self) -> None:
         """No false 'in-memory fallback' log/comment may remain in the readiness path."""
@@ -120,87 +82,25 @@ class TestRuntimeNoLongerRunsSetup:
         assert "in-memory fallback" not in source
         assert "continues with in-memory" not in source
 
-    def test_pool_open_failure_raises_and_ready_stays_false(self) -> None:
+    @pytest.mark.asyncio
+    async def test_pool_open_failure_raises_and_ready_stays_false(self) -> None:
         """A pool open failure is fail-closed: raises and never marks ready."""
-        import asyncio
-
         from src.analysis.adapters.graph import workflow
+        from tests.support.checkpointer_readiness_fakes import (
+            assert_pool_open_failure_is_fail_closed,
+        )
 
-        class _FakeCheckpointer:
-            pass
+        await assert_pool_open_failure_is_fail_closed(workflow)
 
-        class _ClosedPool:
-            closed = True
-
-            async def open(self) -> None:
-                raise RuntimeError("connection refused")
-
-        class _FakeApp:
-            checkpointer = _FakeCheckpointer()
-
-        original_pool = workflow._checkpointer_pool
-        original_ready = workflow._checkpointer_ready
-        original_get_graph_app = workflow.get_graph_app
-        original_version_check = workflow.verify_checkpoint_package_supported
-        try:
-            workflow._checkpointer_pool = _ClosedPool()
-            workflow._checkpointer_ready = False
-            workflow.get_graph_app = lambda: _FakeApp()
-            workflow.verify_checkpoint_package_supported = lambda: None
-
-            with pytest.raises(workflow.CheckpointDatabaseUnavailableError):
-                asyncio.run(workflow.ensure_checkpointer_ready())
-
-            assert workflow._checkpointer_ready is False
-        finally:
-            workflow._checkpointer_pool = original_pool
-            workflow._checkpointer_ready = original_ready
-            workflow.get_graph_app = original_get_graph_app
-            workflow.verify_checkpoint_package_supported = original_version_check
-
-    def test_schema_query_connectivity_failure_raises_and_ready_stays_false(self) -> None:
+    @pytest.mark.asyncio
+    async def test_schema_query_connectivity_failure_raises_and_ready_stays_false(self) -> None:
         """A readiness-query connectivity failure is fail-closed."""
-        import asyncio
-
         from src.analysis.adapters.graph import workflow
+        from tests.support.checkpointer_readiness_fakes import (
+            assert_schema_query_failure_is_fail_closed,
+        )
 
-        class _FakeCheckpointer:
-            pass
-
-        class _OpenPool:
-            closed = False
-
-            async def open(self) -> None:
-                return None
-
-        class _FakeApp:
-            checkpointer = _FakeCheckpointer()
-
-        async def _verify_raises(_pool: object) -> bool:
-            raise RuntimeError("connection lost mid-query")
-
-        original_pool = workflow._checkpointer_pool
-        original_ready = workflow._checkpointer_ready
-        original_get_graph_app = workflow.get_graph_app
-        original_verify = workflow.verify_checkpoint_schema_ready
-        original_version_check = workflow.verify_checkpoint_package_supported
-        try:
-            workflow._checkpointer_pool = _OpenPool()
-            workflow._checkpointer_ready = False
-            workflow.get_graph_app = lambda: _FakeApp()
-            workflow.verify_checkpoint_package_supported = lambda: None
-            workflow.verify_checkpoint_schema_ready = _verify_raises
-
-            with pytest.raises(workflow.CheckpointDatabaseUnavailableError):
-                asyncio.run(workflow.ensure_checkpointer_ready())
-
-            assert workflow._checkpointer_ready is False
-        finally:
-            workflow._checkpointer_pool = original_pool
-            workflow._checkpointer_ready = original_ready
-            workflow.get_graph_app = original_get_graph_app
-            workflow.verify_checkpoint_schema_ready = original_verify
-            workflow.verify_checkpoint_package_supported = original_version_check
+        await assert_schema_query_failure_is_fail_closed(workflow)
 
     def test_verify_checkpoint_schema_ready_is_read_only(self) -> None:
         """The readiness check must never issue DDL (CREATE/ALTER/DROP)."""
