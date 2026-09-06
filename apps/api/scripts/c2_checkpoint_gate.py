@@ -49,6 +49,20 @@ from security_gate_common import exec_sql as _exec_script  # noqa: E402
 from security_gate_common import pg_connection as _connection  # noqa: E402
 from security_gate_common import resolve_admin_dsn as _resolve_admin_dsn_impl  # noqa: E402
 
+
+def _exec_ddl(dsn: str, statement: sql.Composable) -> None:
+    """Run a single safely-composed DDL statement (e.g. DROP/CREATE DATABASE).
+
+    exec_sql() takes a raw SQL string, which is right for the fixed,
+    hand-audited scripts it runs elsewhere -- but DROP/CREATE DATABASE
+    cannot be parameterized at all, so the database name still has to be
+    identifier-composed rather than f-string-interpolated, same as every
+    other dynamic identifier in this file.
+    """
+    with _connection(dsn) as conn, conn.cursor() as cur:
+        cur.execute(statement)
+
+
 DB_NAME = "c2_checkpoint_gate"
 CHECKPOINT_TABLES = ("checkpoints", "checkpoint_blobs", "checkpoint_writes")
 
@@ -215,8 +229,8 @@ def main() -> int:
     admin = _resolve_admin_dsn()
     target = admin.rsplit("/", 1)[0] + "/" + DB_NAME
 
-    _exec_script(admin, sql=f'DROP DATABASE IF EXISTS "{DB_NAME}"')
-    _exec_script(admin, sql=f'CREATE DATABASE "{DB_NAME}"')
+    _exec_ddl(admin, sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(DB_NAME)))
+    _exec_ddl(admin, sql.SQL("CREATE DATABASE {}").format(sql.Identifier(DB_NAME)))
 
     try:
         _create_roles(target)
@@ -396,7 +410,7 @@ def main() -> int:
 
     finally:
         if not args.keep:
-            _exec_script(admin, sql=f'DROP DATABASE IF EXISTS "{DB_NAME}"')
+            _exec_ddl(admin, sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(DB_NAME)))
 
     print(
         "\nC2 CHECKPOINT GATE: PASSED (RED x2 -> owner provisioning -> GREEN x5, "
