@@ -118,8 +118,13 @@ def _next_after_critique_v2(state: ProjectState) -> Literal[
 # ── Enrichment fan-out point (passthrough) ──────────────────────────────────
 
 
-async def enrichment_dispatch_node(_state: ProjectState) -> dict[str, Any]:
+def enrichment_dispatch_node(_state: ProjectState) -> dict[str, Any]:
     """TS-UA-ANA-GRAPH-001 - Anchor the fan-out without rewriting shared state.
+
+    Synchronous on purpose: the node emits a constant empty patch and performs
+    no I/O, so it needs no event-loop hop. LangGraph registers sync and async
+    nodes identically (``add_node`` wraps either), and the empty-patch return
+    is the sole contract downstream branches depend on.
 
     Why this node exists:
         1. The critique conditional edge must terminate at a *single* physical
