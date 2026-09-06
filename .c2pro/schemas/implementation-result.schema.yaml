@@ -1,0 +1,52 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: c2pro-implementation-result-v1
+type: object
+additionalProperties: false
+required:
+  - schema
+  - work_id
+  - base_sha
+  - head_sha
+  - branch
+  - files_changed
+  - tests
+  - ci_status
+  - findings
+  - residual_risks
+  - recommendation
+  - pr_url
+properties:
+  schema: {const: c2pro-implementation-result-v1}
+  work_id: {type: string, pattern: '^C2PRO-[A-Z0-9-]+$'}
+  base_sha: {type: string, pattern: '^[0-9a-f]{40}$'}
+  head_sha: {type: string, pattern: '^[0-9a-f]{40}$'}
+  branch: {type: string, minLength: 1}
+  files_changed:
+    type: array
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  tests:
+    type: array
+    items:
+      anyOf:
+        - type: string
+        - type: object
+          additionalProperties: false
+          required: [name, status]
+          properties:
+            name: {type: string, minLength: 1}
+            status: {enum: [PASS, FAIL, SKIPPED]}
+  ci_status: {enum: [success, failure, pending, skipped]}
+  findings:
+    type: array
+    uniqueItems: true
+    items: {type: string}
+  residual_risks:
+    type: array
+    uniqueItems: true
+    items: {type: string}
+  recommendation: {enum: [approve, remediate, escalate]}
+  pr_url:
+    anyOf:
+      - type: string
+      - type: "null"

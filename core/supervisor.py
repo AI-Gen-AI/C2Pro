@@ -45,13 +45,12 @@ Usage Examples:
     python core/supervisor.py --init
 """
 import json
+import re
 import shlex
 import subprocess
 import sys
-import os
-import re
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 
 try:
     import yaml
@@ -62,7 +61,7 @@ except ImportError:
 # Import schema validator for UNIFY-012
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from schemas.validator import validate_role_output, VALID_ROLES
+    from schemas.validator import VALID_ROLES, validate_role_output
 except ImportError as e:
     print(f"WARNING: Schema validator not available: {e}")
     print("Schema validation will be skipped. Install jsonschema: pip install jsonschema")
@@ -84,6 +83,39 @@ BACKLOG_ID_PATTERN = re.compile(r"^TASK-[A-Z0-9-]+$")
 # Backlog file paths
 MASTER_BACKLOG_PATH = BASE_DIR / "C2PRO_MASTER_BACKLOG.md"
 CATEGORY_BACKLOGS_DIR = BASE_DIR / "backlogs"
+
+
+def cargar_legacy_compatibility() -> dict:
+    compat_path = BASE_DIR / ".c2pro" / "control" / "legacy-compatibility.yaml"
+    if compat_path.exists():
+        try:
+            with open(compat_path, encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+        except Exception:
+            pass
+    return {}
+
+
+def es_nuevo_control_work_id(backlog_id: str) -> bool:
+    """Verifica si un ID es un ID de trabajo del nuevo plano de control."""
+    if not backlog_id:
+        return False
+    # Patron estandar: C2PRO-DEV-xx o similar
+    if re.match(r"^C2PRO-[A-Z0-9-]+$", backlog_id):
+        return True
+    
+    # También verificar si está listado en work-queue.yaml
+    wq_path = BASE_DIR / ".c2pro" / "control" / "work-queue.yaml"
+    if wq_path.exists():
+        try:
+            with open(wq_path, encoding="utf-8") as f:
+                wq = yaml.safe_load(f) or {}
+                for item in wq.get("items", []):
+                    if item.get("work_id") == backlog_id:
+                        return True
+        except Exception:
+            pass
+    return False
 
 
 def cargar_json(ruta: Path) -> dict:
@@ -178,6 +210,12 @@ def validar_backlog_ids(tareas: list[dict]) -> list[str]:
             continue
 
         # Validacion 3: Patron obligatorio
+        compat = cargar_legacy_compatibility()
+        transition_mode = compat.get("transition_mode")
+        if transition_mode == "dual_read_single_write_new_control" and es_nuevo_control_work_id(backlog_id):
+            # En modo nuevo control, los IDs de trabajo nuevos son validos
+            continue
+
         if not BACKLOG_ID_PATTERN.match(backlog_id):
             errores.append(
                 f"Tarea {tarea_id}: 'backlog_id' invalido: '{backlog_id}'. "
@@ -250,7 +288,7 @@ def validar_task_schemas(tareas: list[dict]) -> list[str]:
         except Exception as e:
             # Catch unexpected validation errors
             errores.append(
-                f"Tarea {tarea_id} (rol: {rol}): Schema validation ERROR: {str(e)}"
+                f"Tarea {tarea_id} (rol: {rol}): Schema validation ERROR: {e!s}"
             )
 
     return errores
@@ -334,7 +372,8 @@ def validar_tarea_post_ejecucion(tarea: dict) -> tuple[bool, str]:
     Validaciones:
         1. Tarea debe estar en estado 'completado'
         2. Tarea debe tener backlog_id valido
-        3. backlog_id debe estar marcado [x] en archivos de backlog
+        3. En modo de compatibilidad de nuevo control, se valida contra el estado canonical .c2pro.
+           Para tareas legadas, se valida que el backlog_id este marcado [x] en archivos de backlog.
         4. (Opcional) Verificar que tiene nota de implementacion
     """
     tarea_id = tarea.get("tarea_id", "UNKNOWN")
@@ -356,7 +395,36 @@ def validar_tarea_post_ejecucion(tarea: dict) -> tuple[bool, str]:
             f"Esto no deberia ocurrir (pre-exec validation debio bloquearlo)."
         )
 
-    # Validacion 3: backlog_id debe estar marcado [x] en archivos
+    # Validar si es nuevo control
+    compat = cargar_legacy_compatibility()
+    transition_mode = compat.get("transition_mode")
+    es_nuevo = es_nuevo_control_work_id(backlog_id)
+
+    if transition_mode == "dual_read_single_write_new_control" and es_nuevo:
+        # En modo nuevo control, no requerimos escrituras en el Markdown heredado.
+        # En su lugar, validamos contra el estado canonical de .c2pro
+        wq_path = BASE_DIR / ".c2pro" / "control" / "work-queue.yaml"
+        if not wq_path.exists():
+            return False, f"[POST-EXEC VALIDATION FAILED] Tarea {tarea_id}: No existe .c2pro/control/work-queue.yaml"
+            
+        try:
+            with open(wq_path, encoding="utf-8") as f:
+                wq = yaml.safe_load(f) or {}
+        except Exception as e:
+            return False, f"[POST-EXEC VALIDATION FAILED] Tarea {tarea_id}: Error al cargar work-queue.yaml: {e}"
+            
+        items = wq.get("items", [])
+        work_item = next((item for item in items if item.get("work_id") == backlog_id), None)
+        if not work_item:
+            return False, f"[POST-EXEC VALIDATION FAILED] Tarea {tarea_id}: El work_id '{backlog_id}' no existe en .c2pro/control/work-queue.yaml"
+            
+        # Validación exitosa contra el plano de control canonical
+        return True, (
+            f"[POST-EXEC VALIDATION OK] Tarea {tarea_id}: "
+            f"work_id '{backlog_id}' validado exitosamente contra el plano de control canonical .c2pro"
+        )
+
+    # Validacion 3: backlog_id debe estar marcado [x] en archivos para tareas legadas
     actualizado, archivo_o_error = verificar_backlog_actualizado(backlog_id)
     if not actualizado:
         return False, (
@@ -367,7 +435,7 @@ def validar_tarea_post_ejecucion(tarea: dict) -> tuple[bool, str]:
             f"C2PRO_MASTER_BACKLOG.md o el backlog de categoria correspondiente."
         )
 
-    # Validacion exitosa
+    # Validacion exitosa para tareas legadas
     return True, (
         f"[POST-EXEC VALIDATION OK] Tarea {tarea_id}: "
         f"backlog_id '{backlog_id}' marcado [x] en {Path(archivo_o_error).name}"
@@ -390,8 +458,8 @@ def validar_tarea_antes_ejecucion(tarea: dict) -> tuple[bool, str]:
 
     Validaciones:
         1. Tarea debe tener campo 'backlog_id'
-        2. backlog_id debe coincidir con patron ^TASK-[A-Z0-9-]+$
-        3. backlog_id debe existir en C2PRO_MASTER_BACKLOG.md o backlogs/*.md
+        2. backlog_id debe coincidir con patron ^TASK-[A-Z0-9-]+$ o ser ID de nuevo control
+        3. backlog_id debe existir en C2PRO_MASTER_BACKLOG.md, backlogs/*.md o ser valido en .c2pro/control/work-queue.yaml
     """
     tarea_id = tarea.get("tarea_id", "UNKNOWN")
 
@@ -413,7 +481,51 @@ def validar_tarea_antes_ejecucion(tarea: dict) -> tuple[bool, str]:
             f"Debe ser string con formato TASK-[A-Z0-9-]+"
         )
 
-    # Validacion 3: Patron obligatorio
+    # Validar si es nuevo control
+    compat = cargar_legacy_compatibility()
+    transition_mode = compat.get("transition_mode")
+    es_nuevo = es_nuevo_control_work_id(backlog_id)
+
+    if transition_mode == "dual_read_single_write_new_control" and es_nuevo:
+        # Validar contra el estado canonical de .c2pro
+        wq_path = BASE_DIR / ".c2pro" / "control" / "work-queue.yaml"
+        if not wq_path.exists():
+            return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: Modo '{transition_mode}' activo pero no existe .c2pro/control/work-queue.yaml"
+            
+        try:
+            with open(wq_path, encoding="utf-8") as f:
+                wq = yaml.safe_load(f) or {}
+        except Exception as e:
+            return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: Error al cargar work-queue.yaml: {e}"
+            
+        items = wq.get("items", [])
+        work_item = next((item for item in items if item.get("work_id") == backlog_id), None)
+        if not work_item:
+            return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: El work_id '{backlog_id}' no existe en .c2pro/control/work-queue.yaml"
+            
+        # Verificar archivo de envelope de trabajo
+        work_ref = work_item.get("work_ref")
+        if work_ref:
+            envelope_path = BASE_DIR / work_ref
+        else:
+            envelope_path = BASE_DIR / ".c2pro" / "work" / f"{backlog_id}.yaml"
+            
+        if not envelope_path.exists():
+            return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: No existe el archivo de envelope de trabajo en '{envelope_path}'"
+            
+        try:
+            with open(envelope_path, encoding="utf-8") as f:
+                envelope = yaml.safe_load(f) or {}
+        except Exception as e:
+            return False, f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: Error al cargar el envelope de trabajo '{envelope_path}': {e}"
+            
+        # Todo correcto para pre-ejecución en nuevo plano de control
+        return True, (
+            f"[PRE-EXEC VALIDATION OK] Tarea {tarea_id}: "
+            f"work_id '{backlog_id}' verificado en .c2pro/control/work-queue.yaml and {envelope_path.name}"
+        )
+
+    # Validacion 3: Patron obligatorio para tareas legadas
     if not BACKLOG_ID_PATTERN.match(backlog_id):
         return False, (
             f"[PRE-EXEC VALIDATION FAILED] Tarea {tarea_id}: "
@@ -432,7 +544,7 @@ def validar_tarea_antes_ejecucion(tarea: dict) -> tuple[bool, str]:
             f"ANTES de ejecutarla. Esto asegura trazabilidad completa."
         )
 
-    # Validacion exitosa
+    # Validacion exitosa para tareas legadas
     return True, (
         f"[PRE-EXEC VALIDATION OK] Tarea {tarea_id}: "
         f"backlog_id '{backlog_id}' verificado en {Path(archivo_o_error).name}"
@@ -562,7 +674,7 @@ def construir_comando(modelo_config: dict, profile_path: Path, prompt: str) -> l
     """Construye el comando real para invocar el CLI."""
     cli_cmd = modelo_config.get("cli_command", "")
     if not cli_cmd:
-        raise ValueError(f"Modelo sin cli_command configurado")
+        raise ValueError("Modelo sin cli_command configurado")
 
     formato = modelo_config.get("formato_invocacion", "")
     if formato:
@@ -722,14 +834,14 @@ def ejecutar_ciclo(objetivo: str, modo: str = "interactivo") -> None:
     print(f"[SUPERVISOR] Ciclo iniciado: {objetivo}")
     print(f"[SUPERVISOR] Modo: {modo}")
     print(f"[SUPERVISOR] Session: {bb['session_id']}")
-    print(f"[SUPERVISOR] Roles configurados:")
+    print("[SUPERVISOR] Roles configurados:")
     for rol, modelo_id in session_config.get("roles", {}).items():
         print(f"  {rol}: {modelo_id}")
     print(f"{'='*60}")
 
     # Paso 1: Planificacion
     print(f"\n{'='*60}")
-    print(f"PASO 1: PLANIFICACION")
+    print("PASO 1: PLANIFICACION")
     print(f"{'='*60}")
     resultado = invocar_rol(
         "planner",
@@ -807,7 +919,7 @@ def _ejecutar_secuencial(bb: dict, auto: bool = False) -> None:
                 if errores:
                     errores_tarea = [e for e in errores if e.get("tarea_id") == tarea["tarea_id"]]
                     if errores_tarea:
-                        error_contexto = f"\nErrores previos a corregir:\n"
+                        error_contexto = "\nErrores previos a corregir:\n"
                         for err in errores_tarea:
                             error_contexto += f"  - {err.get('mensaje', '')}\n"
 
@@ -885,7 +997,7 @@ def _ejecutar_secuencial(bb: dict, auto: bool = False) -> None:
             bb["estado_actual"] = "completado"
             guardar_blackboard(bb)
             print(f"\n{'='*60}")
-            print(f"[SUPERVISOR] TODAS LAS TAREAS COMPLETADAS")
+            print("[SUPERVISOR] TODAS LAS TAREAS COMPLETADAS")
             print(f"[SUPERVISOR] Session finalizada: {bb['session_id']}")
             print(f"{'='*60}")
             return

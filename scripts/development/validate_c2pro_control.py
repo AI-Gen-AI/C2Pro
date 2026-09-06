@@ -54,6 +54,7 @@ REQUIRED_SCHEMAS = {
     "review-result.schema.yaml": "c2pro-review-result-v1",
     "review-policy.schema.yaml": "c2pro-review-policy-v1",
     "routing.schema.yaml": "c2pro-routing-v2",
+    "implementation-result.schema.yaml": "c2pro-implementation-result-v1",
 }
 
 
