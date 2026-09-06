@@ -39,7 +39,7 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO_ROOT / "apps/api/scripts"))
 sys.path.insert(0, str(REPO_ROOT / "apps/api"))
 
-from security_gate_common import is_loopback_dsn  # noqa: E402
+from security_gate_common import is_loopback_dsn, pg_connection  # noqa: E402
 
 pytestmark = pytest.mark.security
 
@@ -213,6 +213,133 @@ class TestRuntimeNoLongerRunsSetup:
             )
         assert "information_schema" in source
 
+    def test_already_ready_short_circuits_without_touching_the_graph(self) -> None:
+        """Once ready, ensure_checkpointer_ready() must not even look up the graph app."""
+        import asyncio
+
+        from src.analysis.adapters.graph import workflow
+
+        calls: list[str] = []
+        original_ready = workflow._checkpointer_ready
+        original_get_graph_app = workflow.get_graph_app
+        try:
+            workflow._checkpointer_ready = True
+            workflow.get_graph_app = lambda: calls.append("called")
+
+            asyncio.run(workflow.ensure_checkpointer_ready())
+
+            assert calls == []
+        finally:
+            workflow._checkpointer_ready = original_ready
+            workflow.get_graph_app = original_get_graph_app
+
+    def test_missing_checkpointer_returns_without_marking_ready(self) -> None:
+        """No checkpointer configured at all (app.checkpointer is None) is a plain no-op."""
+        import asyncio
+
+        from src.analysis.adapters.graph import workflow
+
+        class _FakeApp:
+            checkpointer = None
+
+        original_ready = workflow._checkpointer_ready
+        original_get_graph_app = workflow.get_graph_app
+        try:
+            workflow._checkpointer_ready = False
+            workflow.get_graph_app = lambda: _FakeApp()
+
+            asyncio.run(workflow.ensure_checkpointer_ready())
+
+            assert workflow._checkpointer_ready is False
+        finally:
+            workflow._checkpointer_ready = original_ready
+            workflow.get_graph_app = original_get_graph_app
+
+    def test_non_postgres_checkpointer_marks_ready_without_a_pool(self) -> None:
+        """A MemorySaver/non-Postgres checkpointer (pool is None) needs no verification."""
+        import asyncio
+
+        from src.analysis.adapters.graph import workflow
+
+        class _FakeCheckpointer:
+            pass
+
+        class _FakeApp:
+            checkpointer = _FakeCheckpointer()
+
+        original_pool = workflow._checkpointer_pool
+        original_ready = workflow._checkpointer_ready
+        original_get_graph_app = workflow.get_graph_app
+        try:
+            workflow._checkpointer_pool = None
+            workflow._checkpointer_ready = False
+            workflow.get_graph_app = lambda: _FakeApp()
+
+            asyncio.run(workflow.ensure_checkpointer_ready())
+
+            assert workflow._checkpointer_ready is True
+        finally:
+            workflow._checkpointer_pool = original_pool
+            workflow._checkpointer_ready = original_ready
+            workflow.get_graph_app = original_get_graph_app
+
+    def test_ready_schema_marks_ready_without_raising(self) -> None:
+        """Full success path: package OK, pool open, schema ready -> marks ready, no raise."""
+        import asyncio
+
+        from src.analysis.adapters.graph import workflow
+
+        class _FakeCheckpointer:
+            pass
+
+        class _OpenPool:
+            closed = False
+
+            async def open(self) -> None:
+                return None
+
+        class _FakeApp:
+            checkpointer = _FakeCheckpointer()
+
+        async def _verify_ready(_pool: object) -> bool:
+            return True
+
+        original_pool = workflow._checkpointer_pool
+        original_ready = workflow._checkpointer_ready
+        original_get_graph_app = workflow.get_graph_app
+        original_verify = workflow.verify_checkpoint_schema_ready
+        original_version_check = workflow.verify_checkpoint_package_supported
+        try:
+            workflow._checkpointer_pool = _OpenPool()
+            workflow._checkpointer_ready = False
+            workflow.get_graph_app = lambda: _FakeApp()
+            workflow.verify_checkpoint_package_supported = lambda: None
+            workflow.verify_checkpoint_schema_ready = _verify_ready
+
+            asyncio.run(workflow.ensure_checkpointer_ready())
+
+            assert workflow._checkpointer_ready is True
+        finally:
+            workflow._checkpointer_pool = original_pool
+            workflow._checkpointer_ready = original_ready
+            workflow.get_graph_app = original_get_graph_app
+            workflow.verify_checkpoint_schema_ready = original_verify
+            workflow.verify_checkpoint_package_supported = original_version_check
+
+    def test_checkpoint_pool_conninfo_logs_dedicated_dsn(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When CHECKPOINT_DATABASE_URL is set, the dedicated (non-fallback) branch fires."""
+        from src.analysis.adapters.graph import workflow
+        from src.config import settings
+
+        monkeypatch.setattr(settings, "checkpoint_database_url", "postgresql://dedicated-host/db")
+
+        conninfo = workflow._checkpoint_pool_conninfo()
+
+        assert conninfo == "postgresql://dedicated-host/db"
+        assert settings.checkpoint_database_url_is_fallback is False
+
 
 class TestCheckpointPackageVersionContract:
     def test_correct_version_passes(self) -> None:
@@ -343,6 +470,16 @@ class TestConfig:
         assert settings.checkpoint_database_url_is_fallback is False
         assert settings.checkpoint_database_url_async == "postgresql+asyncpg://dedicated/db"
 
+    def test_checkpoint_dsn_async_passthrough_when_already_normalized(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Falling back to an already-asyncpg-prefixed database_url must pass through as-is."""
+        from src.config import settings
+
+        monkeypatch.setattr(settings, "checkpoint_database_url", None)
+        monkeypatch.setattr(settings, "database_url", "postgresql+asyncpg://already/normalized")
+        assert settings.checkpoint_database_url_async == "postgresql+asyncpg://already/normalized"
+
 
 class TestBootstrapLoopbackHardening:
     def test_non_loopback_host_rejected_before_socket_connection(self) -> None:
@@ -379,18 +516,22 @@ class TestCatalogGate:
     def test_bootstrap_checkpoint_schema_provisions_a_fresh_database(self) -> None:
         import asyncio
 
-        from security_gate_common import exec_sql
+        from psycopg import sql
 
         db_name = "c2_pytest_bootstrap_scratch"
         admin = DSN
         assert admin is not None  # guarded by requires_db
         target = admin.rsplit("/", 1)[0] + "/" + db_name
 
-        exec_sql(admin, sql=f'DROP DATABASE IF EXISTS "{db_name}"')
-        exec_sql(admin, sql=f'CREATE DATABASE "{db_name}"')
+        def _exec_ddl(statement: sql.Composable) -> None:
+            with pg_connection(admin) as conn, conn.cursor() as cur:
+                cur.execute(statement)
+
+        _exec_ddl(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(db_name)))
+        _exec_ddl(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(db_name)))
         try:
             from checkpoint_bootstrap import bootstrap_checkpoint_schema
 
             asyncio.run(bootstrap_checkpoint_schema(target))
         finally:
-            exec_sql(admin, sql=f'DROP DATABASE IF EXISTS "{db_name}"')
+            _exec_ddl(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(db_name)))
