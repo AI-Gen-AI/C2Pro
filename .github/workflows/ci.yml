@@ -391,6 +391,24 @@ jobs:
             tests/security/test_p0_sec_b_fail_closed_migration.py::TestDualPathCatalogParity \
             --tb=short -q
 
+      - name: P0-SEC-D static and DSN-gated catalog checks
+        env:
+          P0_SEC_D_TEST_DSN: postgresql://postgres:postgres@localhost:5433/postgres
+        working-directory: apps/api
+        run: |
+          python -m pytest tests/security/test_p0_sec_d_function_privileges.py \
+            --tb=short -q
+
+      # Self-verifying gate: builds a disposable DB reproducing production's
+      # Supabase role model and default-ACL posture, applies public.
+      # handle_new_user() exactly as committed, and asserts RED (PUBLIC/anon/
+      # authenticated hold EXECUTE) -> GREEN (only the owner does) -> the real
+      # Supabase Auth signup trigger still fires after the fix.
+      - name: P0-SEC-D function-privilege gate (disposable DB)
+        env:
+          P0_SEC_ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
+        run: python apps/api/scripts/p0_sec_d_gate.py
+
       - name: Upload security test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

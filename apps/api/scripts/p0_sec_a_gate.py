@@ -25,88 +25,22 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
-import os
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import supabase_security_lint as _lint  # noqa: E402
 from p0_sec_a_common import REPO_ROOT, emitted_sql  # noqa: E402
+from security_gate_common import exec_sql as _pg_exec  # noqa: E402
+from security_gate_common import resolve_admin_dsn as _resolve_admin_dsn_impl  # noqa: E402
 
 FIXTURE = REPO_ROOT / "apps/api/tests/security/fixtures/p0_sec_a_prestate.sql"
 DB_NAME = "p0_sec_a_gate"
 
-_LOOPBACK_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1"})
-
 
 def _resolve_admin_dsn() -> str:
-    """Read and validate the admin DSN from the trusted environment channel.
-
-    Rejects any DSN whose host is not a loopback address so the gate can never
-    be pointed at a remote or cloud database through a misconfigured environment.
-    """
-    raw = os.environ.get("P0_SEC_ADMIN_DSN")
-    if not raw:
-        print("no DSN: set P0_SEC_ADMIN_DSN", file=sys.stderr)
-        raise SystemExit(2)
-
-    normalized = raw.replace("postgresql+asyncpg://", "postgresql://")
-    try:
-        host = urlparse(normalized).hostname  # lowercases and strips IPv6 brackets
-    except Exception:
-        raise SystemExit("GATE ABORTED: could not parse P0_SEC_ADMIN_DSN")
-
-    if not host or host not in _LOOPBACK_HOSTS:
-        raise SystemExit(
-            f"GATE ABORTED: P0_SEC_ADMIN_DSN host {host!r} is not a loopback address. "
-            "The P0-SEC-A gate creates and destroys a disposable database and must only "
-            "target local/ephemeral PostgreSQL instances."
-        )
-    return normalized
-
-
-def _sanitize_exc_msg(msg: str, dsn: str) -> str:
-    """Remove any credential that may appear in a psycopg exception message."""
-    try:
-        pw = urlparse(dsn).password
-        if pw:
-            msg = msg.replace(pw, "***")
-    except Exception:
-        pass
-    return msg
-
-
-def _pg_exec(dsn: str, *, sql: str | None = None, path: Path | None = None) -> None:
-    """Execute a SQL script against dsn using psycopg (no psql subprocess).
-
-    The full query string is sent to PostgreSQL as a single unit via the simple
-    query protocol so the server handles all parsing, including dollar-quoted
-    PL/pgSQL blocks. Never split trusted SQL strings on semicolons.
-    """
-    query = sql or (path.read_text(encoding="utf-8") if path else None)
-    if not query:
-        raise ValueError("sql or path required")
-    try:
-        try:
-            import psycopg
-            with psycopg.connect(dsn, autocommit=True) as conn:
-                conn.execute(query)
-        except ImportError:
-            import psycopg2
-            conn = psycopg2.connect(dsn)
-            conn.autocommit = True
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(query)
-            finally:
-                conn.close()
-    except SystemExit:
-        raise
-    except Exception as exc:
-        msg = _sanitize_exc_msg(str(exc), dsn)
-        raise SystemExit(f"database command failed: {type(exc).__name__}: {msg}") from None
+    return _resolve_admin_dsn_impl("P0_SEC_ADMIN_DSN")
 
 
 def _role_exists(dsn: str, role: str) -> bool:
