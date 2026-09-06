@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from importlib import import_module
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
 
@@ -327,24 +328,28 @@ def build_workflow() -> ProjectWorkflow:
 # scripts/checkpoint_bootstrap.py under the owner/admin credential
 # (c2pro_owner). setup() unconditionally re-issues
 # `CREATE TABLE IF NOT EXISTS checkpoint_migrations` on every call regardless
-# of migration state (proven by the C2 investigation, apps/api/scripts/
-# c2_checkpoint_investigation.py), which requires schema CREATE privilege
-# even against an already-current schema -- a restricted, non-owning
-# `c2pro_checkpoint` runtime role can never satisfy that. Runtime now performs
-# a read-only readiness check instead (see verify_checkpoint_schema_ready
-# below), which needs no privilege beyond SELECT on the checkpoint tables
-# themselves and a read of information_schema (universally readable -- no
-# GRANT needed, and no access to checkpoint_migrations required either).
+# of migration state, which requires schema CREATE privilege even against an
+# already-current schema -- a restricted, non-owning `c2pro_checkpoint`
+# runtime role can never satisfy that. Runtime now performs a read-only
+# readiness check instead (see verify_checkpoint_schema_ready below).
 
 _checkpointer_pool: AsyncConnectionPool[AsyncConnection[dict[str, Any]]] | None = None
 _checkpointer_ready = False
 _checkpointer_setup_lock = asyncio.Lock()
 
-# The newest of AsyncPostgresSaver's 10 built-in migrations (v0-v9, as pinned
-# by langgraph-checkpoint-postgres==3.1.2) adds this column. Its presence is
-# a reliable, read-only proxy for "the checkpoint schema is fully current" --
-# checking it needs only SELECT on information_schema, which every role can
-# always read regardless of table-level GRANTs.
+# Deterministic checkpoint-package contract (C2-R1): the exact
+# langgraph-checkpoint-postgres version validated against the checkpoint schema.
+# The runtime refuses to claim readiness if the installed version differs (see
+# verify_checkpoint_package_supported), so a package upgrade can never go
+# unnoticed while the old floor marker still resolves.
+_CHECKPOINT_PACKAGE = "langgraph-checkpoint-postgres"
+_CHECKPOINT_SUPPORTED_VERSION = "3.1.2"
+
+# The newest of AsyncPostgresSaver's built-in migrations (v9 of v0-v9) adds
+# this column. Its presence is a read-only floor marker for "the checkpoint
+# schema is at least current with the validated package version". Because the
+# package itself is version-pinned and verified above, the floor marker is a
+# consistent proxy: a version mismatch fails closed before this check runs.
 _CHECKPOINT_SCHEMA_MARKER_TABLE = "checkpoint_writes"
 _CHECKPOINT_SCHEMA_MARKER_COLUMN = "task_path"
 
@@ -355,9 +360,28 @@ class CheckpointSchemaNotReadyError(RuntimeError):
     This must propagate out of ensure_checkpointer_ready() rather than being
     caught and downgraded to a warning: a missing/outdated checkpoint schema
     is a deployment problem (the owner bootstrap step -- scripts/
-    checkpoint_bootstrap.py -- was not run, or LangGraph's checkpoint-postgres
-    package was upgraded without re-running it) and must be an observable
-    startup failure, not a silently degraded runtime state.
+    checkpoint_bootstrap.py -- was not run) and must be an observable startup
+    failure, not a silently degraded runtime state.
+    """
+
+
+class CheckpointDatabaseUnavailableError(RuntimeError):
+    """Raised when the checkpoint database cannot be reached at startup.
+
+    A PostgreSQL checkpoint backend that cannot be reached during startup is
+    fail-closed: the exception propagates out of ensure_checkpointer_ready()
+    (and therefore out of the FastAPI lifespan) so startup fails rather than
+    silently continuing with in-memory checkpointing. ``_checkpointer_ready``
+    stays False, so a later process restart re-attempts the connection.
+    """
+
+
+class CheckpointPackageVersionMismatchError(RuntimeError):
+    """Raised when the installed checkpoint package differs from the validated version.
+
+    Guards the deterministic package contract: a package upgraded silently
+    while the old floor marker still resolves must fail closed instead of
+    claiming readiness.
     """
 
 
@@ -445,17 +469,41 @@ def _build_checkpointer() -> BaseCheckpointSaver[str]:
         return MemorySaver()
 
 
+def verify_checkpoint_package_supported() -> None:
+    """Fail closed if the installed checkpoint package differs from the validated version.
+
+    Guards the deterministic package/schema contract: a package upgraded
+    silently (while the old floor marker still resolves) must raise rather than
+    claim readiness. Exact-string match against the version pinned in
+    requirements.txt.
+    """
+    try:
+        installed = version(_CHECKPOINT_PACKAGE)
+    except PackageNotFoundError as exc:
+        raise CheckpointPackageVersionMismatchError(
+            f"Checkpoint package {_CHECKPOINT_PACKAGE!r} is not installed; "
+            f"the supported/validated version is {_CHECKPOINT_SUPPORTED_VERSION!r}."
+        ) from exc
+    if installed != _CHECKPOINT_SUPPORTED_VERSION:
+        raise CheckpointPackageVersionMismatchError(
+            f"Installed {_CHECKPOINT_PACKAGE} {installed!r} differs from the "
+            f"supported/validated version {_CHECKPOINT_SUPPORTED_VERSION!r}; "
+            f"re-pin the package and re-run scripts/checkpoint_bootstrap.py."
+        )
+
+
 async def verify_checkpoint_schema_ready(
     pool: AsyncConnectionPool[AsyncConnection[dict[str, Any]]],
 ) -> bool:
-    """Read-only check: is the checkpoint schema fully migrated?
+    """Read-only check: does the checkpoint schema contain the floor marker column?
 
     Queries information_schema.columns for the column added by the newest of
-    AsyncPostgresSaver's built-in migrations. information_schema is readable
-    by any role with USAGE on the schema (no table-level GRANT needed), so
-    this works under a runtime role with zero privileges on
-    checkpoint_migrations and no DDL rights at all -- exactly the
-    c2pro_checkpoint contract this slice establishes. Never issues DDL.
+    AsyncPostgresSaver's built-in migrations. information_schema.columns only
+    lists columns of tables the connecting role has privileges on, so this
+    requires SELECT on the checkpoint tables themselves (which the
+    c2pro_checkpoint role is granted) but never requires access to
+    checkpoint_migrations or any DDL right -- exactly the c2pro_checkpoint
+    contract this slice establishes. Never issues DDL.
     """
     async with pool.connection() as conn, conn.cursor() as cur:
         await cur.execute(
@@ -468,21 +516,25 @@ async def verify_checkpoint_schema_ready(
 
 
 async def ensure_checkpointer_ready() -> None:
-    """Verify (read-only) that the checkpoint schema is ready -- exactly once.
+    """Verify (read-only) that the checkpoint backend is ready -- exactly once.
 
     Does NOT run AsyncPostgresSaver.setup() and never issues DDL: schema
     provisioning/migration is the owner's job (scripts/checkpoint_bootstrap.py
-    under the c2pro_owner credential), run at deploy/bootstrap time, before
-    the application starts. See CheckpointSchemaNotReadyError's docstring for
-    why a missing/outdated schema must raise rather than degrade silently.
+    under the c2pro_owner credential), run at deploy/bootstrap time before the
+    application starts.
 
-    A connection failure (DB briefly unreachable -- network restriction in a
-    sandbox, PgBouncer misconfiguration, Supabase direct connection
-    unavailable) is a distinct failure mode from a missing/outdated schema:
-    it is logged and swallowed so the app can still start with in-memory
-    checkpointing, matching this function's pre-C2 behavior for connectivity
-    issues specifically. Only a *reachable* database whose checkpoint schema
-    is not current raises CheckpointSchemaNotReadyError.
+    Fail-closed contract for a configured PostgreSQL checkpoint backend:
+      - an installed checkpoint package whose version differs from the
+        supported/validated version raises CheckpointPackageVersionMismatchError;
+      - a database connectivity failure (pool open or readiness query) raises
+        CheckpointDatabaseUnavailableError;
+      - a reachable database whose checkpoint schema is not current raises
+        CheckpointSchemaNotReadyError.
+
+    None of these set ``_checkpointer_ready``, so a later process restart can
+    retry once the underlying cause is resolved. MemorySaver is used only when
+    the application deliberately selects it (SQLite, or missing optional
+    package) -- never as an implicit connectivity fallback.
     """
     global _checkpointer_ready
 
@@ -495,35 +547,30 @@ async def ensure_checkpointer_ready() -> None:
         return
 
     if _checkpointer_pool is None:
-        # Non-Postgres checkpointer (e.g. MemorySaver fallback) -- nothing to verify.
+        # Non-Postgres checkpointer (MemorySaver selected explicitly) -- nothing to verify.
         _checkpointer_ready = True
         return
+
+    verify_checkpoint_package_supported()
 
     async with _checkpointer_setup_lock:
         if _checkpointer_ready:
             return
+
         try:
             if getattr(_checkpointer_pool, "closed", False):
                 await _checkpointer_pool.open()
-        except Exception as exc:  # noqa: BLE001 — pool timeout, SSL error, etc.
-            _checkpointer_ready = True  # prevent retry storm on every request
-            logger.warning(
-                "langgraph_checkpointer_connection_failed",
-                error=str(exc),
-                reason="could not reach checkpoint database; app continues with in-memory fallback",
-            )
-            return
+        except Exception as exc:
+            raise CheckpointDatabaseUnavailableError(
+                "Could not reach the checkpoint database during startup."
+            ) from exc
 
         try:
             ready = await verify_checkpoint_schema_ready(_checkpointer_pool)
-        except Exception as exc:  # noqa: BLE001 — connectivity error surfaced mid-query
-            _checkpointer_ready = True  # prevent retry storm on every request
-            logger.warning(
-                "langgraph_checkpointer_connection_failed",
-                error=str(exc),
-                reason="could not verify checkpoint schema; app continues with in-memory fallback",
-            )
-            return
+        except Exception as exc:
+            raise CheckpointDatabaseUnavailableError(
+                "Could not verify the checkpoint schema during startup."
+            ) from exc
 
         if not ready:
             raise CheckpointSchemaNotReadyError(

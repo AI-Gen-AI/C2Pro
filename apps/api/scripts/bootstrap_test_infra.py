@@ -15,8 +15,22 @@ import psycopg
 from checkpoint_bootstrap import bootstrap_checkpoint_schema
 from verify_migration_health import parse_migration_graph, recreate_database, validate_linear_chain
 
+# This script only ever probes LOCAL/CI test services. Restrict the socket
+# probe to explicit loopback hosts so a misconfigured invocation can never
+# turn the port probe into a connection to an arbitrary external host.
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1"})
+
+
+def _validate_loopback_host(host: str) -> None:
+    if host not in _LOOPBACK_HOSTS:
+        raise ValueError(
+            f"refusing to probe non-loopback host {host!r}; "
+            f"only {sorted(_LOOPBACK_HOSTS)} are allowed for test-infra port probes."
+        )
+
 
 def is_port_open(host: str, port: int, timeout_seconds: float = 1.0) -> bool:
+    _validate_loopback_host(host)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(timeout_seconds)
         return sock.connect_ex((host, port)) == 0
@@ -91,34 +105,8 @@ def assert_head_revision(database_url: str, api_dir: Path) -> str:
     return expected_head
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db-host", default="localhost")
-    parser.add_argument("--db-port", type=int, default=5433)
-    parser.add_argument("--redis-host", default="localhost")
-    parser.add_argument("--redis-port", type=int, default=6380)
-    parser.add_argument(
-        "--database-url",
-        default="postgresql://postgres:postgres@localhost:5433/c2pro_test",
-    )
-    parser.add_argument(
-        "--admin-url",
-        default="postgresql://postgres:postgres@localhost:5433/postgres",
-    )
-    parser.add_argument("--database-name", default="c2pro_test")
-    parser.add_argument("--start-services", action="store_true")
-    parser.add_argument("--wait-seconds", type=int, default=45)
-    parser.add_argument("--require-redis", action="store_true")
-    parser.add_argument(
-        "--recreate-db",
-        action="store_true",
-        help="Drop and recreate the target test database before running migrations.",
-    )
-    args = parser.parse_args()
-
-    repo_root = Path(__file__).resolve().parents[3]
-    api_dir = repo_root / "apps" / "api"
-
+def _ensure_db_ready(args, repo_root: Path, api_dir: Path) -> None:
+    """Preflight DB: port reachable, admin connection ready, DB exists, migrations + checkpoint schema."""
     print("== Preflight: DB port ==")
     if not is_port_open(args.db_host, args.db_port):
         if args.start_services:
@@ -164,6 +152,9 @@ def main() -> int:
     asyncio.run(bootstrap_checkpoint_schema(args.database_url))
     print("OK checkpoint schema is current")
 
+
+def _ensure_redis_ready(args, repo_root: Path) -> None:
+    """Preflight Redis: start via docker compose if needed; soft-fail unless --require-redis."""
     print("== Preflight: Redis ==")
     redis_ok = is_port_open(args.redis_host, args.redis_port)
     if not redis_ok and args.start_services:
@@ -185,6 +176,38 @@ def main() -> int:
             f"WARN Redis not reachable at {args.redis_host}:{args.redis_port}. "
             "Continuing (soft fail policy)."
         )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db-host", default="localhost")
+    parser.add_argument("--db-port", type=int, default=5433)
+    parser.add_argument("--redis-host", default="localhost")
+    parser.add_argument("--redis-port", type=int, default=6380)
+    parser.add_argument(
+        "--database-url",
+        default="postgresql://postgres:postgres@localhost:5433/c2pro_test",
+    )
+    parser.add_argument(
+        "--admin-url",
+        default="postgresql://postgres:postgres@localhost:5433/postgres",
+    )
+    parser.add_argument("--database-name", default="c2pro_test")
+    parser.add_argument("--start-services", action="store_true")
+    parser.add_argument("--wait-seconds", type=int, default=45)
+    parser.add_argument("--require-redis", action="store_true")
+    parser.add_argument(
+        "--recreate-db",
+        action="store_true",
+        help="Drop and recreate the target test database before running migrations.",
+    )
+    args = parser.parse_args()
+
+    repo_root = Path(__file__).resolve().parents[3]
+    api_dir = repo_root / "apps" / "api"
+
+    _ensure_db_ready(args, repo_root, api_dir)
+    _ensure_redis_ready(args, repo_root)
 
     print("== Test infra bootstrap complete ==")
     return 0
