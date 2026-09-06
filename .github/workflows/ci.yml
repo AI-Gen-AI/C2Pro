@@ -409,6 +409,25 @@ jobs:
           P0_SEC_ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
         run: python apps/api/scripts/p0_sec_d_gate.py
 
+      - name: C1 static and DSN-gated catalog checks
+        env:
+          P0_SEC_ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
+        working-directory: apps/api
+        run: |
+          python -m pytest tests/security/test_c1_tenant_guc_fix.py \
+            --tb=short -q
+
+      # Self-verifying gate: builds a disposable DB reproducing the pre-fix
+      # broken-GUC-name state on dlq_failed_tasks/wbs_nodes/notification_configs/
+      # disclaimer_acceptances, and asserts RED (deny-all-for-everyone, incl.
+      # the correct tenant) -> GREEN (fail-closed + correct-tenant access) ->
+      # RED (downgrade) -> GREEN (re-apply), plus write-path proofs for every
+      # live verb (wbs_nodes DELETE, cross-tenant tenant_id mutation rejection).
+      - name: C1 tenant-GUC-name RLS gate (disposable DB)
+        env:
+          P0_SEC_ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
+        run: python apps/api/scripts/c1_gate.py
+
       - name: Upload security test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
