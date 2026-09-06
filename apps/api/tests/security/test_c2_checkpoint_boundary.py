@@ -351,19 +351,14 @@ class TestBootstrapLoopbackHardening:
 
         assert bootstrap_test_infra.LOOPBACK_HOST == "127.0.0.1"
 
-    def test_non_loopback_host_rejected_before_socket_connection(self) -> None:
-        """The test-infra port probe must refuse non-loopback hosts (Sonar SSRF)."""
-        from bootstrap_test_infra import is_port_open
+    def test_is_port_open_has_no_caller_controlled_host(self) -> None:
+        """is_port_open must not accept a host argument: the loopback is fixed."""
+        import inspect
 
-        with pytest.raises(ValueError, match="non-loopback"):
-            is_port_open("evil.example.com", 80)
+        import bootstrap_test_infra
 
-        with pytest.raises(ValueError, match="non-loopback"):
-            is_port_open("203.0.113.7", 80)
-
-        # Even a benign hostname is rejected: only the fixed literal is probed.
-        with pytest.raises(ValueError, match="non-loopback"):
-            is_port_open("localhost", 80)
+        params = inspect.signature(bootstrap_test_infra.is_port_open).parameters
+        assert "host" not in params
 
     def test_argparse_removes_caller_controlled_host_selection(self) -> None:
         """--db-host / --redis-host must be gone: host selection is not caller-controlled."""
