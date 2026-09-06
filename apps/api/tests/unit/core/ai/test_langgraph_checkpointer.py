@@ -38,6 +38,23 @@ pytestmark = [
 ]
 
 
+@pytest.fixture(autouse=True)
+async def _reset_checkpointer_globals():
+    """Isolate the module-level checkpointer globals between async tests.
+
+    Each async test runs in its own event loop; a psycopg pool created in one
+    test's loop cannot be closed in another's. Reset the cached pool/graph/ready
+    flag so no test observes state leaked by a previous one.
+    """
+    workflow_module._checkpointer_pool = None
+    workflow_module._checkpointer_ready = False
+    workflow_module._graph_app = None
+    yield
+    workflow_module._checkpointer_pool = None
+    workflow_module._checkpointer_ready = False
+    workflow_module._graph_app = None
+
+
 class TestLangGraphCheckpointer:
     """Test suite for LangGraph PostgreSQL checkpointer."""
 
@@ -52,45 +69,49 @@ class TestLangGraphCheckpointer:
 
     async def test_checkpointer_pool_disables_prepared_statements_for_poolers(self, monkeypatch):
         """Verify psycopg pool config disables prepared statements for PgBouncer-compatible deployments."""
-        workflow_module._checkpointer_pool = None
+        original_pool = workflow_module._checkpointer_pool
+        try:
+            workflow_module._checkpointer_pool = None
 
-        captured: dict[str, object] = {}
-        sentinel_row_factory = object()
+            captured: dict[str, object] = {}
+            sentinel_row_factory = object()
 
-        class FakePool:
-            def __init__(self, **kwargs):
-                captured.update(kwargs)
-                self.closed = False
+            class FakePool:
+                def __init__(self, **kwargs):
+                    captured.update(kwargs)
+                    self.closed = False
 
-        class FakeSaver:
-            def __init__(self, conn):
-                self.conn = conn
+            class FakeSaver:
+                def __init__(self, conn):
+                    self.conn = conn
 
-        monkeypatch.setitem(
-            sys.modules,
-            "langgraph.checkpoint.postgres.aio",
-            SimpleNamespace(AsyncPostgresSaver=FakeSaver),
-        )
-        monkeypatch.setitem(
-            sys.modules,
-            "psycopg.rows",
-            SimpleNamespace(dict_row=sentinel_row_factory),
-        )
-        monkeypatch.setitem(
-            sys.modules,
-            "psycopg_pool",
-            SimpleNamespace(AsyncConnectionPool=FakePool),
-        )
+            monkeypatch.setitem(
+                sys.modules,
+                "langgraph.checkpoint.postgres.aio",
+                SimpleNamespace(AsyncPostgresSaver=FakeSaver),
+            )
+            monkeypatch.setitem(
+                sys.modules,
+                "psycopg.rows",
+                SimpleNamespace(dict_row=sentinel_row_factory),
+            )
+            monkeypatch.setitem(
+                sys.modules,
+                "psycopg_pool",
+                SimpleNamespace(AsyncConnectionPool=FakePool),
+            )
 
-        checkpointer = _build_checkpointer()
+            checkpointer = _build_checkpointer()
 
-        assert isinstance(checkpointer, FakeSaver)
-        assert captured["open"] is False
-        assert captured["kwargs"] == {
-            "autocommit": True,
-            "prepare_threshold": None,
-            "row_factory": sentinel_row_factory,
-        }
+            assert isinstance(checkpointer, FakeSaver)
+            assert captured["open"] is False
+            assert captured["kwargs"] == {
+                "autocommit": True,
+                "prepare_threshold": None,
+                "row_factory": sentinel_row_factory,
+            }
+        finally:
+            workflow_module._checkpointer_pool = original_pool
 
     async def test_checkpoint_table_exists(self, db_session):
         """Verify checkpoints table exists in database."""

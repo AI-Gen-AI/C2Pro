@@ -91,10 +91,12 @@ class TestRuntimeNoLongerRunsSetup:
         original_ready = workflow._checkpointer_ready
         original_get_graph_app = workflow.get_graph_app
         original_verify = workflow.verify_checkpoint_schema_ready
+        original_version_check = workflow.verify_checkpoint_package_supported
         try:
             workflow._checkpointer_pool = _FakePool()
             workflow._checkpointer_ready = False
             workflow.get_graph_app = lambda: _FakeApp()
+            workflow.verify_checkpoint_package_supported = lambda: None
 
             async def _not_ready(_pool: object) -> bool:
                 return False
@@ -108,6 +110,97 @@ class TestRuntimeNoLongerRunsSetup:
             workflow._checkpointer_ready = original_ready
             workflow.get_graph_app = original_get_graph_app
             workflow.verify_checkpoint_schema_ready = original_verify
+            workflow.verify_checkpoint_package_supported = original_version_check
+
+    def test_ensure_checkpointer_ready_never_claims_memory_fallback(self) -> None:
+        """No false 'in-memory fallback' log/comment may remain in the readiness path."""
+        from src.analysis.adapters.graph import workflow
+
+        source = inspect.getsource(workflow.ensure_checkpointer_ready)
+        assert "in-memory fallback" not in source
+        assert "continues with in-memory" not in source
+
+    def test_pool_open_failure_raises_and_ready_stays_false(self) -> None:
+        """A pool open failure is fail-closed: raises and never marks ready."""
+        import asyncio
+
+        from src.analysis.adapters.graph import workflow
+
+        class _FakeCheckpointer:
+            pass
+
+        class _ClosedPool:
+            closed = True
+
+            async def open(self) -> None:
+                raise RuntimeError("connection refused")
+
+        class _FakeApp:
+            checkpointer = _FakeCheckpointer()
+
+        original_pool = workflow._checkpointer_pool
+        original_ready = workflow._checkpointer_ready
+        original_get_graph_app = workflow.get_graph_app
+        original_version_check = workflow.verify_checkpoint_package_supported
+        try:
+            workflow._checkpointer_pool = _ClosedPool()
+            workflow._checkpointer_ready = False
+            workflow.get_graph_app = lambda: _FakeApp()
+            workflow.verify_checkpoint_package_supported = lambda: None
+
+            with pytest.raises(workflow.CheckpointDatabaseUnavailableError):
+                asyncio.run(workflow.ensure_checkpointer_ready())
+
+            assert workflow._checkpointer_ready is False
+        finally:
+            workflow._checkpointer_pool = original_pool
+            workflow._checkpointer_ready = original_ready
+            workflow.get_graph_app = original_get_graph_app
+            workflow.verify_checkpoint_package_supported = original_version_check
+
+    def test_schema_query_connectivity_failure_raises_and_ready_stays_false(self) -> None:
+        """A readiness-query connectivity failure is fail-closed."""
+        import asyncio
+
+        from src.analysis.adapters.graph import workflow
+
+        class _FakeCheckpointer:
+            pass
+
+        class _OpenPool:
+            closed = False
+
+            async def open(self) -> None:
+                return None
+
+        class _FakeApp:
+            checkpointer = _FakeCheckpointer()
+
+        async def _verify_raises(_pool: object) -> bool:
+            raise RuntimeError("connection lost mid-query")
+
+        original_pool = workflow._checkpointer_pool
+        original_ready = workflow._checkpointer_ready
+        original_get_graph_app = workflow.get_graph_app
+        original_verify = workflow.verify_checkpoint_schema_ready
+        original_version_check = workflow.verify_checkpoint_package_supported
+        try:
+            workflow._checkpointer_pool = _OpenPool()
+            workflow._checkpointer_ready = False
+            workflow.get_graph_app = lambda: _FakeApp()
+            workflow.verify_checkpoint_package_supported = lambda: None
+            workflow.verify_checkpoint_schema_ready = _verify_raises
+
+            with pytest.raises(workflow.CheckpointDatabaseUnavailableError):
+                asyncio.run(workflow.ensure_checkpointer_ready())
+
+            assert workflow._checkpointer_ready is False
+        finally:
+            workflow._checkpointer_pool = original_pool
+            workflow._checkpointer_ready = original_ready
+            workflow.get_graph_app = original_get_graph_app
+            workflow.verify_checkpoint_schema_ready = original_verify
+            workflow.verify_checkpoint_package_supported = original_version_check
 
     def test_verify_checkpoint_schema_ready_is_read_only(self) -> None:
         """The readiness check must never issue DDL (CREATE/ALTER/DROP)."""
@@ -119,6 +212,90 @@ class TestRuntimeNoLongerRunsSetup:
                 f"verify_checkpoint_schema_ready() must be read-only; found {forbidden!r}"
             )
         assert "information_schema" in source
+
+
+class TestCheckpointPackageVersionContract:
+    def test_correct_version_passes(self) -> None:
+        from src.analysis.adapters.graph import workflow
+
+        original = workflow.version
+        try:
+            workflow.version = lambda _pkg: workflow._CHECKPOINT_SUPPORTED_VERSION
+            workflow.verify_checkpoint_package_supported()
+        finally:
+            workflow.version = original
+
+    def test_mismatched_version_raises(self) -> None:
+        from src.analysis.adapters.graph import workflow
+
+        original = workflow.version
+        try:
+            workflow.version = lambda _pkg: "0.0.0"
+            with pytest.raises(workflow.CheckpointPackageVersionMismatchError):
+                workflow.verify_checkpoint_package_supported()
+        finally:
+            workflow.version = original
+
+    def test_missing_package_raises(self) -> None:
+        from importlib.metadata import PackageNotFoundError
+
+        from src.analysis.adapters.graph import workflow
+
+        original = workflow.version
+
+        def _missing(_pkg: str) -> str:
+            raise PackageNotFoundError(_pkg)
+
+        try:
+            workflow.version = _missing
+            with pytest.raises(workflow.CheckpointPackageVersionMismatchError):
+                workflow.verify_checkpoint_package_supported()
+        finally:
+            workflow.version = original
+
+
+class TestVerifyCheckpointSchemaReady:
+    def _pool(self, row: object):
+        class _Cursor:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_exc):
+                return False
+
+            async def execute(self, _query, _params):
+                return None
+
+            async def fetchone(self):
+                return row
+
+        class _Conn:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_exc):
+                return False
+
+            def cursor(self):
+                return _Cursor()
+
+        class _Pool:
+            def connection(self):
+                return _Conn()
+
+        return _Pool()
+
+    @pytest.mark.asyncio
+    async def test_ready_row_returns_true(self) -> None:
+        from src.analysis.adapters.graph import workflow
+
+        assert await workflow.verify_checkpoint_schema_ready(self._pool((1,))) is True
+
+    @pytest.mark.asyncio
+    async def test_no_row_returns_false(self) -> None:
+        from src.analysis.adapters.graph import workflow
+
+        assert await workflow.verify_checkpoint_schema_ready(self._pool(None)) is False
 
 
 class TestBootstrapScript:
@@ -165,6 +342,24 @@ class TestConfig:
         monkeypatch.setattr(settings, "checkpoint_database_url", "postgresql://dedicated/db")
         assert settings.checkpoint_database_url_is_fallback is False
         assert settings.checkpoint_database_url_async == "postgresql+asyncpg://dedicated/db"
+
+
+class TestBootstrapLoopbackHardening:
+    def test_non_loopback_host_rejected_before_socket_connection(self) -> None:
+        """The test-infra port probe must refuse non-loopback hosts (Sonar SSRF)."""
+        from bootstrap_test_infra import _validate_loopback_host, is_port_open
+
+        with pytest.raises(ValueError, match="non-loopback"):
+            _validate_loopback_host("evil.example.com")
+
+        with pytest.raises(ValueError, match="non-loopback"):
+            is_port_open("203.0.113.7", 80)
+
+    def test_loopback_hosts_accepted(self) -> None:
+        from bootstrap_test_infra import _validate_loopback_host
+
+        for host in ("localhost", "127.0.0.1"):
+            _validate_loopback_host(host)
 
 
 # ═══════════════════════════════════════════════════════ catalog checks

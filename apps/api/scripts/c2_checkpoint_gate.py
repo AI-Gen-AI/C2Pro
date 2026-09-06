@@ -28,8 +28,8 @@ GREEN (after owner provisioning + the target grant/policy contract):
 
 All three synthetic roles are created NOSUPERUSER on a disposable database
 only -- no production credentials are created or touched. c2pro_checkpoint
-is additionally verified NOBYPASSRLS, NOCREATEROLE, and not the owner of any
-checkpoint table.
+is additionally verified NOBYPASSRLS, NOCREATEROLE, NOLOGIN, and not the
+owner of any checkpoint table.
 
 Usage:
     P0_SEC_ADMIN_DSN=postgresql://postgres@localhost:5432/postgres \\
@@ -200,10 +200,11 @@ def _check_role_properties(target: str) -> None:
         if row is None:
             raise SystemExit(f"GATE FAILED: role {CHECKPOINT_ROLE} does not exist")
         rolsuper, rolbypassrls, rolcreaterole, rolcanlogin = row
-        if rolsuper or rolbypassrls or rolcreaterole:
+        if rolsuper or rolbypassrls or rolcreaterole or rolcanlogin:
             raise SystemExit(
                 f"GATE FAILED: {CHECKPOINT_ROLE} has an unexpected privileged attribute "
-                f"(rolsuper={rolsuper} rolbypassrls={rolbypassrls} rolcreaterole={rolcreaterole})"
+                f"(rolsuper={rolsuper} rolbypassrls={rolbypassrls} "
+                f"rolcreaterole={rolcreaterole} rolcanlogin={rolcanlogin})"
             )
 
         for table in CHECKPOINT_TABLES:
@@ -215,8 +216,158 @@ def _check_role_properties(target: str) -> None:
                 raise SystemExit(f"GATE FAILED: {CHECKPOINT_ROLE} owns {table} (must be non-owner)")
     print(
         f"    {CHECKPOINT_ROLE}: NOSUPERUSER={not rolsuper} NOBYPASSRLS={not rolbypassrls} "
-        f"NOCREATEROLE={not rolcreaterole} non-owner=True — OK"
+        f"NOCREATEROLE={not rolcreaterole} NOLOGIN={not rolcanlogin} non-owner=True — OK"
     )
+
+
+def _create_business_probe(target: str) -> None:
+    """Create a minimal business table granted to APP_ROLE only.
+
+    Stands in for the real business schema (e.g. wbs_nodes) so this gate does
+    not depend on the full application schema.
+    """
+    _exec_script(target, sql="CREATE EXTENSION IF NOT EXISTS pgcrypto")
+    _exec_script(
+        target,
+        sql="CREATE TABLE business_probe (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), note text)",
+    )
+    with _connection(target) as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON business_probe TO {}").format(
+                sql.Identifier(APP_ROLE)
+            )
+        )
+
+
+def _run_red_phase(target: str) -> None:
+    """RED: checkpoint role denied setup() and steady-state round trip pre-provisioning."""
+    print("=" * 78)
+    print("RED 1 — checkpoint role cannot execute setup() before owner provisioning")
+    print("=" * 78)
+    ok, msg = asyncio.run(_run_setup(target, CHECKPOINT_ROLE))
+    print(
+        f"  setup() as {CHECKPOINT_ROLE} on unprovisioned schema: {'OK' if ok else 'FAILED'} — {msg}"
+    )
+    if ok:
+        raise SystemExit("GATE FAILED: RED 1 — checkpoint role's setup() unexpectedly succeeded")
+    if "permission denied" not in msg.lower():
+        raise SystemExit(f"GATE FAILED: RED 1 — expected 'permission denied', got: {msg}")
+
+    print("\n" + "=" * 78)
+    print("RED 2 — checkpoint role cannot perform steady-state round trip (no schema yet)")
+    print("=" * 78)
+    ok, msg = asyncio.run(_run_checkpoint_roundtrip(target, CHECKPOINT_ROLE))
+    print(
+        f"  round trip as {CHECKPOINT_ROLE} on unprovisioned schema: "
+        f"{'OK' if ok else 'FAILED'} — {msg}"
+    )
+    if ok:
+        raise SystemExit("GATE FAILED: RED 2 — round trip unexpectedly succeeded before provisioning")
+
+
+def _run_owner_provisioning(target: str) -> None:
+    """OWNER: real AsyncPostgresSaver.setup() as the owner-shaped role + watermark check."""
+    print("\n" + "=" * 78)
+    print("OWNER PROVISIONING — real AsyncPostgresSaver.setup() as c2pro_owner-shaped role")
+    print("=" * 78)
+    ok, msg = asyncio.run(_run_setup(target, OWNER_ROLE))
+    print(f"  setup() as {OWNER_ROLE}: {'OK' if ok else 'FAILED'} — {msg}")
+    if not ok:
+        raise SystemExit("GATE FAILED: owner setup() failed — see message above")
+    with _connection(target) as conn, conn.cursor() as cur:
+        cur.execute("SELECT MAX(v) FROM checkpoint_migrations")
+        watermark = cur.fetchone()[0]
+    print(f"  checkpoint_migrations watermark: v={watermark} (expect 9)")
+    if watermark != 9:
+        raise SystemExit(f"GATE FAILED: expected watermark 9 after owner setup(), got {watermark}")
+
+
+def _apply_target_contract(target: str) -> None:
+    """Apply the target grant/policy contract to the disposable DB only."""
+    print("\n" + "=" * 78)
+    print("TARGET GRANT/POLICY CONTRACT — apply to the disposable DB only")
+    print("=" * 78)
+    with _connection(target) as conn, conn.cursor() as cur:
+        for table in CHECKPOINT_TABLES:
+            cur.execute(
+                sql.SQL("ALTER TABLE {} ENABLE ROW LEVEL SECURITY").format(sql.Identifier(table))
+            )
+            cur.execute(
+                sql.SQL("ALTER TABLE {} FORCE ROW LEVEL SECURITY").format(sql.Identifier(table))
+            )
+            cur.execute(
+                sql.SQL(
+                    "CREATE POLICY {policy} ON {table} FOR ALL TO {role} "
+                    "USING (true) WITH CHECK (true)"
+                ).format(
+                    policy=sql.Identifier(f"{table}_checkpoint_role_only"),
+                    table=sql.Identifier(table),
+                    role=sql.Identifier(CHECKPOINT_ROLE),
+                )
+            )
+            cur.execute(
+                sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON {} TO {}").format(
+                    sql.Identifier(table), sql.Identifier(CHECKPOINT_ROLE)
+                )
+            )
+    # Deliberately NOT granted: APP_ROLE gets nothing on checkpoint tables;
+    # CHECKPOINT_ROLE gets nothing on checkpoint_migrations or business_probe.
+    print(
+        f"  RLS enabled+forced on {', '.join(CHECKPOINT_TABLES)}; "
+        f"TO-{CHECKPOINT_ROLE}-only policies + GRANTs applied; "
+        f"{APP_ROLE} and checkpoint_migrations/business_probe left untouched"
+    )
+
+
+def _assert_denied(target: str, role: str, query: sql.Composable, label: str) -> None:
+    """Assert `role` is denied `query` on the disposable DB; fail the gate otherwise."""
+    denied, msg = asyncio.run(_run_denied(target, role, query))
+    print(f"  {role} {label}: {'DENIED (OK)' if denied else 'FAILED'} — {msg}")
+    if not denied:
+        raise SystemExit(f"GATE FAILED: {role} was not denied {label}")
+
+
+def _run_green_phase(target: str) -> None:
+    """GREEN: checkpoint steady-state works; app/checkpoint cross-access denied."""
+    print("\n" + "=" * 78)
+    print("GREEN 1 — checkpoint role steady-state round trip succeeds")
+    print("=" * 78)
+    ok, msg = asyncio.run(_run_checkpoint_roundtrip(target, CHECKPOINT_ROLE))
+    print(f"  round trip as {CHECKPOINT_ROLE}: {'OK' if ok else 'FAILED'} — {msg}")
+    if not ok:
+        raise SystemExit("GATE FAILED: GREEN 1 — steady-state round trip failed after provisioning")
+
+    print("\n" + "=" * 78)
+    print("GREEN 2 — app role denied on all 3 checkpoint tables")
+    print("=" * 78)
+    for table in CHECKPOINT_TABLES:
+        _assert_denied(
+            target, APP_ROLE, sql.SQL("SELECT * FROM {}").format(sql.Identifier(table)),
+            f"SELECT {table}",
+        )
+        _assert_denied(
+            target, APP_ROLE, sql.SQL("INSERT INTO {} DEFAULT VALUES").format(sql.Identifier(table)),
+            f"INSERT {table}",
+        )
+
+    print("\n" + "=" * 78)
+    print("GREEN 3 — checkpoint role denied on the ordinary business table")
+    print("=" * 78)
+    _assert_denied(target, CHECKPOINT_ROLE, sql.SQL("SELECT * FROM business_probe"), "SELECT business_probe")
+
+    print("\n" + "=" * 78)
+    print("GREEN 4 — checkpoint role denied schema CREATE")
+    print("=" * 78)
+    _assert_denied(
+        target, CHECKPOINT_ROLE,
+        sql.SQL("CREATE TABLE checkpoint_role_should_not_create (id int)"),
+        "CREATE TABLE",
+    )
+
+    print("\n" + "=" * 78)
+    print("GREEN 5 — checkpoint role denied checkpoint_migrations access")
+    print("=" * 78)
+    _assert_denied(target, CHECKPOINT_ROLE, sql.SQL("SELECT * FROM checkpoint_migrations"), "SELECT checkpoint_migrations")
 
 
 def main() -> int:
@@ -234,180 +385,12 @@ def main() -> int:
 
     try:
         _create_roles(target)
-
-        # A minimal ordinary business table, granted to APP_ROLE only --
-        # stands in for the real business schema (e.g. wbs_nodes) so this
-        # gate does not depend on the full application schema.
-        _exec_script(target, sql="CREATE EXTENSION IF NOT EXISTS pgcrypto")
-        _exec_script(
-            target,
-            sql="CREATE TABLE business_probe (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), note text)",
-        )
-        with _connection(target) as conn, conn.cursor() as cur:
-            cur.execute(
-                sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON business_probe TO {}").format(
-                    sql.Identifier(APP_ROLE)
-                )
-            )
-
-        print("=" * 78)
-        print("RED 1 — checkpoint role cannot execute setup() before owner provisioning")
-        print("=" * 78)
-        ok, msg = asyncio.run(_run_setup(target, CHECKPOINT_ROLE))
-        print(
-            f"  setup() as {CHECKPOINT_ROLE} on unprovisioned schema: {'OK' if ok else 'FAILED'} — {msg}"
-        )
-        if ok:
-            raise SystemExit(
-                "GATE FAILED: RED 1 — checkpoint role's setup() unexpectedly succeeded"
-            )
-        if "permission denied" not in msg.lower():
-            raise SystemExit(f"GATE FAILED: RED 1 — expected 'permission denied', got: {msg}")
-
-        print("\n" + "=" * 78)
-        print("RED 2 — checkpoint role cannot perform steady-state round trip (no schema yet)")
-        print("=" * 78)
-        ok, msg = asyncio.run(_run_checkpoint_roundtrip(target, CHECKPOINT_ROLE))
-        print(
-            f"  round trip as {CHECKPOINT_ROLE} on unprovisioned schema: {'OK' if ok else 'FAILED'} — {msg}"
-        )
-        if ok:
-            raise SystemExit(
-                "GATE FAILED: RED 2 — round trip unexpectedly succeeded before provisioning"
-            )
-
-        print("\n" + "=" * 78)
-        print("OWNER PROVISIONING — real AsyncPostgresSaver.setup() as c2pro_owner-shaped role")
-        print("=" * 78)
-        ok, msg = asyncio.run(_run_setup(target, OWNER_ROLE))
-        print(f"  setup() as {OWNER_ROLE}: {'OK' if ok else 'FAILED'} — {msg}")
-        if not ok:
-            raise SystemExit("GATE FAILED: owner setup() failed — see message above")
-        with _connection(target) as conn, conn.cursor() as cur:
-            cur.execute("SELECT MAX(v) FROM checkpoint_migrations")
-            watermark = cur.fetchone()[0]
-        print(f"  checkpoint_migrations watermark: v={watermark} (expect 9)")
-        if watermark != 9:
-            raise SystemExit(
-                f"GATE FAILED: expected watermark 9 after owner setup(), got {watermark}"
-            )
-
-        print("\n" + "=" * 78)
-        print("TARGET GRANT/POLICY CONTRACT — apply to the disposable DB only")
-        print("=" * 78)
-        with _connection(target) as conn, conn.cursor() as cur:
-            for table in CHECKPOINT_TABLES:
-                cur.execute(
-                    sql.SQL("ALTER TABLE {} ENABLE ROW LEVEL SECURITY").format(
-                        sql.Identifier(table)
-                    )
-                )
-                cur.execute(
-                    sql.SQL("ALTER TABLE {} FORCE ROW LEVEL SECURITY").format(sql.Identifier(table))
-                )
-                cur.execute(
-                    sql.SQL(
-                        "CREATE POLICY {policy} ON {table} FOR ALL TO {role} USING (true) WITH CHECK (true)"
-                    ).format(
-                        policy=sql.Identifier(f"{table}_checkpoint_role_only"),
-                        table=sql.Identifier(table),
-                        role=sql.Identifier(CHECKPOINT_ROLE),
-                    )
-                )
-                cur.execute(
-                    sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON {} TO {}").format(
-                        sql.Identifier(table), sql.Identifier(CHECKPOINT_ROLE)
-                    )
-                )
-        # Deliberately NOT granted: APP_ROLE gets nothing on checkpoint tables;
-        # CHECKPOINT_ROLE gets nothing on checkpoint_migrations or business_probe.
-        print(
-            f"  RLS enabled+forced on {', '.join(CHECKPOINT_TABLES)}; "
-            f"TO-{CHECKPOINT_ROLE}-only policies + GRANTs applied; "
-            f"{APP_ROLE} and checkpoint_migrations/business_probe left untouched"
-        )
-
+        _create_business_probe(target)
+        _run_red_phase(target)
+        _run_owner_provisioning(target)
+        _apply_target_contract(target)
         _check_role_properties(target)
-
-        print("\n" + "=" * 78)
-        print("GREEN 1 — checkpoint role steady-state round trip succeeds")
-        print("=" * 78)
-        ok, msg = asyncio.run(_run_checkpoint_roundtrip(target, CHECKPOINT_ROLE))
-        print(f"  round trip as {CHECKPOINT_ROLE}: {'OK' if ok else 'FAILED'} — {msg}")
-        if not ok:
-            raise SystemExit(
-                "GATE FAILED: GREEN 1 — steady-state round trip failed after provisioning"
-            )
-
-        print("\n" + "=" * 78)
-        print("GREEN 2 — app role denied on all 3 checkpoint tables")
-        print("=" * 78)
-        for table in CHECKPOINT_TABLES:
-            denied, msg = asyncio.run(
-                _run_denied(
-                    target, APP_ROLE, sql.SQL("SELECT * FROM {}").format(sql.Identifier(table))
-                )
-            )
-            print(f"  {APP_ROLE} SELECT {table}: {'DENIED (OK)' if denied else 'FAILED'} — {msg}")
-            if not denied:
-                raise SystemExit(
-                    f"GATE FAILED: GREEN 2 — {APP_ROLE} was not denied SELECT on {table}"
-                )
-            denied, msg = asyncio.run(
-                _run_denied(
-                    target,
-                    APP_ROLE,
-                    sql.SQL("INSERT INTO {} DEFAULT VALUES").format(sql.Identifier(table)),
-                )
-            )
-            print(f"  {APP_ROLE} INSERT {table}: {'DENIED (OK)' if denied else 'FAILED'} — {msg}")
-            if not denied:
-                raise SystemExit(
-                    f"GATE FAILED: GREEN 2 — {APP_ROLE} was not denied INSERT on {table}"
-                )
-
-        print("\n" + "=" * 78)
-        print("GREEN 3 — checkpoint role denied on the ordinary business table")
-        print("=" * 78)
-        denied, msg = asyncio.run(
-            _run_denied(target, CHECKPOINT_ROLE, sql.SQL("SELECT * FROM business_probe"))
-        )
-        print(
-            f"  {CHECKPOINT_ROLE} SELECT business_probe: {'DENIED (OK)' if denied else 'FAILED'} — {msg}"
-        )
-        if not denied:
-            raise SystemExit(
-                "GATE FAILED: GREEN 3 — checkpoint role was not denied business-table SELECT"
-            )
-
-        print("\n" + "=" * 78)
-        print("GREEN 4 — checkpoint role denied schema CREATE")
-        print("=" * 78)
-        denied, msg = asyncio.run(
-            _run_denied(
-                target,
-                CHECKPOINT_ROLE,
-                sql.SQL("CREATE TABLE checkpoint_role_should_not_create (id int)"),
-            )
-        )
-        print(f"  {CHECKPOINT_ROLE} CREATE TABLE: {'DENIED (OK)' if denied else 'FAILED'} — {msg}")
-        if not denied:
-            raise SystemExit("GATE FAILED: GREEN 4 — checkpoint role was not denied CREATE TABLE")
-
-        print("\n" + "=" * 78)
-        print("GREEN 5 — checkpoint role denied checkpoint_migrations access")
-        print("=" * 78)
-        denied, msg = asyncio.run(
-            _run_denied(target, CHECKPOINT_ROLE, sql.SQL("SELECT * FROM checkpoint_migrations"))
-        )
-        print(
-            f"  {CHECKPOINT_ROLE} SELECT checkpoint_migrations: {'DENIED (OK)' if denied else 'FAILED'} — {msg}"
-        )
-        if not denied:
-            raise SystemExit(
-                "GATE FAILED: GREEN 5 — checkpoint role was not denied checkpoint_migrations access"
-            )
-
+        _run_green_phase(target)
     finally:
         if not args.keep:
             _exec_ddl(admin, sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(DB_NAME)))
