@@ -13,6 +13,7 @@ from typing import cast
 from uuid import UUID
 
 import structlog
+from anyio import open_file
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -144,9 +145,13 @@ async def _stream_upload_to_tempfile(file: UploadFile, max_bytes: int) -> pathli
     Content-Length or omits it. Caller owns deleting the returned path.
     """
     fd, tmp_name = tempfile.mkstemp(suffix=".upload")
+    # mkstemp returns a raw fd; hand the write path to anyio's async file API
+    # (offloaded to a worker thread) so the event loop is never blocked by
+    # synchronous file I/O.
+    os.close(fd)
     total = 0
     try:
-        with os.fdopen(fd, "wb") as tmp_file:
+        async with await open_file(tmp_name, "wb") as tmp_file:
             while True:
                 chunk = await file.read(_UPLOAD_STREAM_CHUNK_BYTES)
                 if not chunk:
@@ -157,7 +162,7 @@ async def _stream_upload_to_tempfile(file: UploadFile, max_bytes: int) -> pathli
                         status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                         detail=f"File size exceeds limit of {settings.max_upload_size_mb}MB.",
                     )
-                tmp_file.write(chunk)
+                await tmp_file.write(chunk)
     except Exception:
         with suppress(OSError):
             os.unlink(tmp_name)
