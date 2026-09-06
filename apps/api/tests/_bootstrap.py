@@ -299,6 +299,28 @@ def _ensure_auth_users(session: Session, _flush_context, _instances) -> None:
 # ---------------------------------------------------------------------------
 
 
+async def _reprovision_checkpoint_schema() -> None:
+    """Restore the LangGraph checkpoint tables after a full public-schema reset.
+
+    Option-C C2 removed runtime's self-healing ``AsyncPostgresSaver.setup()``
+    call, so nothing re-creates ``checkpoints``/``checkpoint_blobs``/
+    ``checkpoint_writes`` once ``reset_public_schema`` drops the schema with
+    CASCADE. Those tables are neither Alembic-managed nor SQLAlchemy-ORM
+    metadata, so ``Base.metadata.create_all`` never recreates them either.
+    Any test using this fixture would otherwise leave the checkpoint schema
+    missing for the rest of the pytest session (including standalone tests,
+    e.g. ``test_mcp_startup.py``, that call ``lifespan(app)`` directly and
+    never touch ``test_engine`` themselves).
+    """
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from checkpoint_bootstrap import bootstrap_checkpoint_schema
+
+    await bootstrap_checkpoint_schema(settings.database_url_async)
+
+
 @pytest_asyncio.fixture(scope="function")
 async def test_engine(request):
     """Create a test database engine with full schema bootstrap.
@@ -385,6 +407,8 @@ async def test_engine(request):
                 await conn.run_sync(Base.metadata.create_all)
             finally:
                 _set_metadata_enum_create_type(True)
+
+        await _reprovision_checkpoint_schema()
 
         yield engine
 

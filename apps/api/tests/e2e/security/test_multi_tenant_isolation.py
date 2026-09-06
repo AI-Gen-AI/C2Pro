@@ -19,9 +19,7 @@ Coverage Target: 90%
 from __future__ import annotations
 
 import asyncio
-import sys
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -36,8 +34,6 @@ from src.core.auth.models import SubscriptionPlan, Tenant, User, UserRole
 from src.core.auth.service import hash_password
 from src.core.database import get_session
 from src.main import create_application
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
 
 # ===========================================
 # ADDITIONAL FIXTURES FOR TENANT ISOLATION
@@ -68,19 +64,11 @@ async def client(app, test_session_factory):
     This ensures startup initializes infra (including DB manager) while requests
     still use isolated test sessions from the per-test factory.
 
-    test_session_factory depends on test_engine, whose per-test bootstrap wipes
-    and rebuilds the whole public schema via SQLAlchemy metadata only -- the
-    LangGraph checkpoint tables are not SQLAlchemy models, so they do not
-    survive that reset. Option-C C2 removed runtime's own ability to
-    self-heal this (ensure_checkpointer_ready no longer calls
-    AsyncPostgresSaver.setup()), so this fixture -- playing the owner-
-    bootstrap role, same as scripts/bootstrap_test_infra.py does once per CI
-    job -- must re-provision the checkpoint schema before running the real
-    app lifespan.
+    test_session_factory depends on test_engine, which re-provisions the
+    LangGraph checkpoint schema itself after its per-test public-schema reset
+    (see tests/_bootstrap.py's _reprovision_checkpoint_schema) -- so it is
+    already current by the time the real app lifespan runs below.
     """
-    from checkpoint_bootstrap import bootstrap_checkpoint_schema
-
-    await bootstrap_checkpoint_schema(settings.database_url_async)
 
     async def override_get_session():
         async with test_session_factory() as session:
