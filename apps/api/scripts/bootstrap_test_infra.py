@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import socket
 import subprocess
@@ -11,6 +12,7 @@ import time
 from pathlib import Path
 
 import psycopg
+from checkpoint_bootstrap import bootstrap_checkpoint_schema
 from verify_migration_health import parse_migration_graph, recreate_database, validate_linear_chain
 
 
@@ -150,6 +152,17 @@ def main() -> int:
     run_alembic_upgrade(api_dir, args.database_url)
     head = assert_head_revision(args.database_url, api_dir)
     print(f"OK migrations at head: {head}")
+
+    # Option-C C2: the LangGraph checkpoint schema is provisioned by
+    # AsyncPostgresSaver.setup(), which Alembic does not run (it is not an
+    # Alembic-managed schema) and which application runtime no longer runs
+    # either (ensure_checkpointer_ready is read-only -- see
+    # src/analysis/adapters/graph/workflow.py). Test infra plays the
+    # owner-bootstrap role here, exactly as a real deployment's bootstrap
+    # step would before the application starts.
+    print("== Checkpoint schema bootstrap ==")
+    asyncio.run(bootstrap_checkpoint_schema(args.database_url))
+    print("OK checkpoint schema is current")
 
     print("== Preflight: Redis ==")
     redis_ok = is_port_open(args.redis_host, args.redis_port)
