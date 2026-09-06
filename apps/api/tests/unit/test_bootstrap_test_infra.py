@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 import psycopg
+import pytest
 
 
 def _load_module():
@@ -56,3 +57,68 @@ def test_wait_for_database_ready_retries_after_operational_error(monkeypatch) ->
     )
 
     assert attempts == 3
+
+
+def test_resolve_db_test_port_accepts_allowed(monkeypatch) -> None:
+    """DB port 5433 must be accepted."""
+    monkeypatch.setenv("C2PRO_DB_TEST_PORT", "5433")
+    module = _load_module()
+    assert module.DB_TEST_PORT == 5433
+
+
+def test_resolve_db_test_port_rejects_arbitrary(monkeypatch) -> None:
+    """DB port 5432 must be rejected before any socket call."""
+    monkeypatch.setenv("C2PRO_DB_TEST_PORT", "5432")
+    with pytest.raises(ValueError, match="not in allowlist"):
+        _load_module()
+
+
+def test_resolve_db_test_port_rejects_common_alternatives(monkeypatch) -> None:
+    """DB ports 80, 443, 65535 must be rejected."""
+    for port in ("80", "443", "65535", "3306", "1433"):
+        monkeypatch.setenv("C2PRO_DB_TEST_PORT", port)
+        with pytest.raises(ValueError, match="not in allowlist"):
+            _load_module()
+
+
+def test_resolve_db_test_port_rejects_non_integer(monkeypatch) -> None:
+    """Non-integer DB port must be rejected."""
+    monkeypatch.setenv("C2PRO_DB_TEST_PORT", "not-a-port")
+    with pytest.raises(ValueError, match="must be an integer"):
+        _load_module()
+
+
+def test_resolve_redis_test_port_accepts_ci(monkeypatch) -> None:
+    """Redis port 6379 (GitHub Actions) must be accepted."""
+    monkeypatch.setenv("C2PRO_REDIS_TEST_PORT", "6379")
+    module = _load_module()
+    assert module.REDIS_TEST_PORT == 6379
+
+
+def test_resolve_redis_test_port_accepts_local(monkeypatch) -> None:
+    """Redis port 6380 (local docker-compose) must be accepted."""
+    monkeypatch.setenv("C2PRO_REDIS_TEST_PORT", "6380")
+    module = _load_module()
+    assert module.REDIS_TEST_PORT == 6380
+
+
+def test_resolve_redis_test_port_rejects_arbitrary(monkeypatch) -> None:
+    """Redis port 6378 must be rejected before any socket call."""
+    monkeypatch.setenv("C2PRO_REDIS_TEST_PORT", "6378")
+    with pytest.raises(ValueError, match="not in allowlist"):
+        _load_module()
+
+
+def test_resolve_redis_test_port_rejects_common_alternatives(monkeypatch) -> None:
+    """Redis ports 80, 443, 65535, 26379 must be rejected."""
+    for port in ("80", "443", "65535", "26379", "6378"):
+        monkeypatch.setenv("C2PRO_REDIS_TEST_PORT", port)
+        with pytest.raises(ValueError, match="not in allowlist"):
+            _load_module()
+
+
+def test_resolve_redis_test_port_rejects_non_integer(monkeypatch) -> None:
+    """Non-integer Redis port must be rejected."""
+    monkeypatch.setenv("C2PRO_REDIS_TEST_PORT", "not-a-port")
+    with pytest.raises(ValueError, match="must be an integer"):
+        _load_module()

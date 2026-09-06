@@ -21,10 +21,45 @@ from verify_migration_health import parse_migration_graph, recreate_database, va
 # a connection to an arbitrary external host (removes the SSRF taint source).
 LOOPBACK_HOST = "127.0.0.1"
 
-# Port constants - configured via environment variables to avoid CLI taint
-# CI uses GitHub Actions services which expose Redis on 6379, local docker-compose uses 6380
-DB_TEST_PORT = int(os.getenv("C2PRO_DB_TEST_PORT", "5433"))
-REDIS_TEST_PORT = int(os.getenv("C2PRO_REDIS_TEST_PORT", "6380"))
+# Strict port allowlist — only these values are accepted to prevent
+# arbitrary port data from reaching the network sink.
+ALLOWED_DB_PORTS: frozenset[int] = frozenset({5433})
+ALLOWED_REDIS_PORTS: frozenset[int] = frozenset({6379, 6380})
+
+
+def _resolve_db_test_port(raw: str) -> int:
+    """Resolve and validate DB test port from environment."""
+    try:
+        port = int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"C2PRO_DB_TEST_PORT must be an integer, got: {raw!r}"
+        ) from exc
+    if port not in ALLOWED_DB_PORTS:
+        raise ValueError(
+            f"C2PRO_DB_TEST_PORT={port} not in allowlist {sorted(ALLOWED_DB_PORTS)}"
+        )
+    return port
+
+
+def _resolve_redis_test_port(raw: str) -> int:
+    """Resolve and validate Redis test port from environment."""
+    try:
+        port = int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"C2PRO_REDIS_TEST_PORT must be an integer, got: {raw!r}"
+        ) from exc
+    if port not in ALLOWED_REDIS_PORTS:
+        raise ValueError(
+            f"C2PRO_REDIS_TEST_PORT={port} not in allowlist {sorted(ALLOWED_REDIS_PORTS)}"
+        )
+    return port
+
+
+# Port constants - validated via explicit allowlist to prevent SSRF via port injection
+DB_TEST_PORT = _resolve_db_test_port(os.getenv("C2PRO_DB_TEST_PORT", "5433"))
+REDIS_TEST_PORT = _resolve_redis_test_port(os.getenv("C2PRO_REDIS_TEST_PORT", "6380"))
 
 
 def is_port_open(port: int, timeout_seconds: float = 1.0) -> bool:
