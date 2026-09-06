@@ -428,6 +428,27 @@ jobs:
           P0_SEC_ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
         run: python apps/api/scripts/c1_gate.py
 
+      - name: C2 static and DSN-gated catalog checks
+        env:
+          P0_SEC_ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
+        working-directory: apps/api
+        run: |
+          python -m pytest tests/security/test_c2_checkpoint_boundary.py \
+            --tb=short -q
+
+      # Self-verifying gate: proves, using the REAL langgraph-checkpoint-
+      # postgres package, that a restricted c2pro_checkpoint-shaped role
+      # cannot run AsyncPostgresSaver.setup() or perform checkpoint CRUD
+      # before owner provisioning (RED), then that owner provisioning +
+      # the target grant/policy contract makes checkpoint steady-state work
+      # for c2pro_checkpoint only -- c2pro_app gets zero checkpoint access,
+      # c2pro_checkpoint gets zero business-table/schema-CREATE/
+      # checkpoint_migrations access (GREEN).
+      - name: C2 checkpoint role boundary gate (disposable DB)
+        env:
+          P0_SEC_ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
+        run: python apps/api/scripts/c2_checkpoint_gate.py
+
       - name: Upload security test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

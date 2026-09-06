@@ -320,11 +320,45 @@ def build_workflow() -> ProjectWorkflow:
     return workflow
 
 
-# ── Infrastructure helpers (unchanged) ───────────────────────────────────────
+# ── Infrastructure helpers ───────────────────────────────────────────────────
+#
+# Option-C C2 (checkpoint role boundary): runtime no longer calls
+# AsyncPostgresSaver.setup() -- that DDL now runs exclusively from
+# scripts/checkpoint_bootstrap.py under the owner/admin credential
+# (c2pro_owner). setup() unconditionally re-issues
+# `CREATE TABLE IF NOT EXISTS checkpoint_migrations` on every call regardless
+# of migration state (proven by the C2 investigation, apps/api/scripts/
+# c2_checkpoint_investigation.py), which requires schema CREATE privilege
+# even against an already-current schema -- a restricted, non-owning
+# `c2pro_checkpoint` runtime role can never satisfy that. Runtime now performs
+# a read-only readiness check instead (see verify_checkpoint_schema_ready
+# below), which needs no privilege beyond SELECT on the checkpoint tables
+# themselves and a read of information_schema (universally readable -- no
+# GRANT needed, and no access to checkpoint_migrations required either).
 
 _checkpointer_pool: AsyncConnectionPool[AsyncConnection[dict[str, Any]]] | None = None
 _checkpointer_ready = False
 _checkpointer_setup_lock = asyncio.Lock()
+
+# The newest of AsyncPostgresSaver's 10 built-in migrations (v0-v9, as pinned
+# by langgraph-checkpoint-postgres==3.1.2) adds this column. Its presence is
+# a reliable, read-only proxy for "the checkpoint schema is fully current" --
+# checking it needs only SELECT on information_schema, which every role can
+# always read regardless of table-level GRANTs.
+_CHECKPOINT_SCHEMA_MARKER_TABLE = "checkpoint_writes"
+_CHECKPOINT_SCHEMA_MARKER_COLUMN = "task_path"
+
+
+class CheckpointSchemaNotReadyError(RuntimeError):
+    """Raised when the checkpoint schema is missing or not fully migrated.
+
+    This must propagate out of ensure_checkpointer_ready() rather than being
+    caught and downgraded to a warning: a missing/outdated checkpoint schema
+    is a deployment problem (the owner bootstrap step -- scripts/
+    checkpoint_bootstrap.py -- was not run, or LangGraph's checkpoint-postgres
+    package was upgraded without re-running it) and must be an observable
+    startup failure, not a silently degraded runtime state.
+    """
 
 
 def _async_postgres_saver_factory() -> AsyncPostgresSaverFactory:
@@ -336,6 +370,24 @@ def _async_postgres_saver_factory() -> AsyncPostgresSaverFactory:
     return cast(AsyncPostgresSaverFactory, module.AsyncPostgresSaver)
 
 
+def _checkpoint_pool_conninfo() -> str:
+    """Resolve and log the checkpoint runtime DSN (never silently falls back)."""
+    from src.config import settings
+
+    if settings.checkpoint_database_url_is_fallback:
+        logger.warning(
+            "checkpoint_dsn_fallback",
+            reason=(
+                "CHECKPOINT_DATABASE_URL is not set; falling back to DATABASE_URL. "
+                "TRANSITIONAL -- scheduled for removal once C3 provisions a dedicated "
+                "c2pro_checkpoint credential in every environment."
+            ),
+        )
+    else:
+        logger.info("checkpoint_dsn_dedicated", reason="using CHECKPOINT_DATABASE_URL")
+    return settings.checkpoint_database_url_async.replace("postgresql+asyncpg://", "postgresql://")
+
+
 def _build_checkpointer() -> BaseCheckpointSaver[str]:
     """
     Build a checkpointer for persistent state management.
@@ -345,10 +397,13 @@ def _build_checkpointer() -> BaseCheckpointSaver[str]:
 
     Note: The pool is created with min_size=0, max_size=10 to avoid blocking on sync initialization.
     The pool will automatically open connections as needed.
+
+    Uses settings.checkpoint_database_url_async (not database_url_async) --
+    see _checkpoint_pool_conninfo for the TRANSITIONAL fallback contract.
     """
     from src.config import settings
 
-    if settings.database_url_async.startswith("sqlite"):
+    if settings.checkpoint_database_url_async.startswith("sqlite"):
         logger.warning("checkpointer_fallback", reason="SQLite not supported for postgres checkpointer")
         from langgraph.checkpoint.memory import MemorySaver
         return MemorySaver()
@@ -359,7 +414,7 @@ def _build_checkpointer() -> BaseCheckpointSaver[str]:
 
         global _checkpointer_pool
         if _checkpointer_pool is None:
-            conn_string = settings.database_url_async.replace("postgresql+asyncpg://", "postgresql://")
+            conn_string = _checkpoint_pool_conninfo()
 
             # String form: cast()'s type argument is evaluated at runtime, and
             # AsyncConnection is only imported under TYPE_CHECKING.
@@ -390,14 +445,44 @@ def _build_checkpointer() -> BaseCheckpointSaver[str]:
         return MemorySaver()
 
 
-async def ensure_checkpointer_ready() -> None:
-    """Ensure PostgreSQL checkpointer tables/migrations are initialized exactly once.
+async def verify_checkpoint_schema_ready(
+    pool: AsyncConnectionPool[AsyncConnection[dict[str, Any]]],
+) -> bool:
+    """Read-only check: is the checkpoint schema fully migrated?
 
-    If the pool cannot connect within its configured timeout (e.g. network
-    restriction in the sandbox, PgBouncer misconfiguration, or Supabase direct
-    connection unavailable), we log a warning and mark the checkpointer ready
-    without running setup — the app starts with in-memory checkpointing rather
-    than crashing entirely.
+    Queries information_schema.columns for the column added by the newest of
+    AsyncPostgresSaver's built-in migrations. information_schema is readable
+    by any role with USAGE on the schema (no table-level GRANT needed), so
+    this works under a runtime role with zero privileges on
+    checkpoint_migrations and no DDL rights at all -- exactly the
+    c2pro_checkpoint contract this slice establishes. Never issues DDL.
+    """
+    async with pool.connection() as conn, conn.cursor() as cur:
+        await cur.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema = 'public' AND table_name = %s AND column_name = %s",
+            (_CHECKPOINT_SCHEMA_MARKER_TABLE, _CHECKPOINT_SCHEMA_MARKER_COLUMN),
+        )
+        row = await cur.fetchone()
+        return row is not None
+
+
+async def ensure_checkpointer_ready() -> None:
+    """Verify (read-only) that the checkpoint schema is ready -- exactly once.
+
+    Does NOT run AsyncPostgresSaver.setup() and never issues DDL: schema
+    provisioning/migration is the owner's job (scripts/checkpoint_bootstrap.py
+    under the c2pro_owner credential), run at deploy/bootstrap time, before
+    the application starts. See CheckpointSchemaNotReadyError's docstring for
+    why a missing/outdated schema must raise rather than degrade silently.
+
+    A connection failure (DB briefly unreachable -- network restriction in a
+    sandbox, PgBouncer misconfiguration, Supabase direct connection
+    unavailable) is a distinct failure mode from a missing/outdated schema:
+    it is logged and swallowed so the app can still start with in-memory
+    checkpointing, matching this function's pre-C2 behavior for connectivity
+    issues specifically. Only a *reachable* database whose checkpoint schema
+    is not current raises CheckpointSchemaNotReadyError.
     """
     global _checkpointer_ready
 
@@ -409,8 +494,8 @@ async def ensure_checkpointer_ready() -> None:
     if checkpointer is None:
         return
 
-    setup = getattr(checkpointer, "setup", None)
-    if not callable(setup):
+    if _checkpointer_pool is None:
+        # Non-Postgres checkpointer (e.g. MemorySaver fallback) -- nothing to verify.
         _checkpointer_ready = True
         return
 
@@ -418,20 +503,38 @@ async def ensure_checkpointer_ready() -> None:
         if _checkpointer_ready:
             return
         try:
-            if _checkpointer_pool is not None and getattr(_checkpointer_pool, "closed", False):
+            if getattr(_checkpointer_pool, "closed", False):
                 await _checkpointer_pool.open()
-            setup_result = setup()
-            if asyncio.iscoroutine(setup_result):
-                await setup_result
-            _checkpointer_ready = True
-            logger.info("langgraph_checkpointer_ready", checkpointer_type=type(checkpointer).__name__)
         except Exception as exc:  # noqa: BLE001 — pool timeout, SSL error, etc.
             _checkpointer_ready = True  # prevent retry storm on every request
             logger.warning(
-                "langgraph_checkpointer_setup_failed",
+                "langgraph_checkpointer_connection_failed",
                 error=str(exc),
-                reason="checkpointer tables not verified; app continues with in-memory fallback",
+                reason="could not reach checkpoint database; app continues with in-memory fallback",
             )
+            return
+
+        try:
+            ready = await verify_checkpoint_schema_ready(_checkpointer_pool)
+        except Exception as exc:  # noqa: BLE001 — connectivity error surfaced mid-query
+            _checkpointer_ready = True  # prevent retry storm on every request
+            logger.warning(
+                "langgraph_checkpointer_connection_failed",
+                error=str(exc),
+                reason="could not verify checkpoint schema; app continues with in-memory fallback",
+            )
+            return
+
+        if not ready:
+            raise CheckpointSchemaNotReadyError(
+                f"Checkpoint schema is missing or not fully migrated: "
+                f"{_CHECKPOINT_SCHEMA_MARKER_TABLE}.{_CHECKPOINT_SCHEMA_MARKER_COLUMN} not found. "
+                f"Run scripts/checkpoint_bootstrap.py with the c2pro_owner credential "
+                f"before starting the application."
+            )
+
+        _checkpointer_ready = True
+        logger.info("langgraph_checkpointer_ready", checkpointer_type=type(checkpointer).__name__)
 
 
 async def close_checkpointer_resources() -> None:

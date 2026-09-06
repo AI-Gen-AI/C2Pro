@@ -73,6 +73,26 @@ class Settings(BaseSettings):
     )
     db_echo: bool = Field(default=False, description="Log SQL queries")
 
+    # LangGraph checkpoint runtime DSN (Option-C C2: checkpoint role boundary).
+    #
+    # TRANSITIONAL: when unset, the checkpointer falls back to `database_url`
+    # (src/analysis/adapters/graph/workflow.py logs this fallback explicitly at
+    # checkpointer build time — it is never silent). This setting exists so a
+    # future dedicated `c2pro_checkpoint` credential (C3 cutover) can be wired
+    # in per environment without another code change; until that credential
+    # exists, the fallback is expected and safe (today's runtime role already
+    # owns the checkpoint tables). Remove the fallback once every environment
+    # sets CHECKPOINT_DATABASE_URL.
+    checkpoint_database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("CHECKPOINT_DATABASE_URL"),
+        description=(
+            "Dedicated PostgreSQL DSN for LangGraph checkpoint runtime access "
+            "(the restricted c2pro_checkpoint role). TRANSITIONAL fallback to "
+            "database_url when unset -- see checkpoint_database_url_async."
+        ),
+    )
+
     @field_validator("database_url")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
@@ -417,6 +437,27 @@ class Settings(BaseSettings):
     def database_url_async(self) -> str:
         """URL de base de datos para asyncpg."""
         url = self.database_url
+        if url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
+            return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
+
+    @property
+    def checkpoint_database_url_is_fallback(self) -> bool:
+        """True when no dedicated CHECKPOINT_DATABASE_URL is configured (TRANSITIONAL)."""
+        return not self.checkpoint_database_url
+
+    @property
+    def checkpoint_database_url_async(self) -> str:
+        """LangGraph checkpoint runtime DSN, normalized like database_url_async.
+
+        TRANSITIONAL: falls back to database_url_async when checkpoint_database_url
+        is unset. Callers that care about the distinction should check
+        checkpoint_database_url_is_fallback and log it (see
+        src/analysis/adapters/graph/workflow.py::_build_checkpointer) --
+        this property itself does not log, since it may be read more than
+        once per process.
+        """
+        url = self.checkpoint_database_url or self.database_url
         if url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
             return url.replace("postgresql://", "postgresql+asyncpg://", 1)
         return url
