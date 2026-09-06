@@ -22,21 +22,16 @@ from verify_migration_health import parse_migration_graph, recreate_database, va
 LOOPBACK_HOST = "127.0.0.1"
 
 
-def is_port_open(host: str, port: int, timeout_seconds: float = 1.0) -> bool:
-    if host != LOOPBACK_HOST:
-        raise ValueError(
-            f"refusing to probe non-loopback host {host!r}; "
-            f"only {LOOPBACK_HOST!r} is allowed for test-infra port probes."
-        )
+def is_port_open(port: int, timeout_seconds: float = 1.0) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(timeout_seconds)
-        return sock.connect_ex((host, port)) == 0
+        return sock.connect_ex((LOOPBACK_HOST, port)) == 0
 
 
-def wait_for_port(host: str, port: int, timeout_seconds: int) -> bool:
+def wait_for_port(port: int, timeout_seconds: int) -> bool:
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
-        if is_port_open(host, port):
+        if is_port_open(port):
             return True
         time.sleep(1)
     return False
@@ -106,14 +101,14 @@ def _ensure_db_ready(args, repo_root: Path, api_dir: Path) -> None:
     """Preflight DB: port reachable, admin connection ready, DB exists, migrations + checkpoint schema."""
     host = LOOPBACK_HOST
     print("== Preflight: DB port ==")
-    if not is_port_open(host, args.db_port):
+    if not is_port_open(args.db_port):
         if args.start_services:
             print("DB port closed. Starting postgres-test via docker compose...")
             try:
                 start_postgres_with_docker_compose(repo_root)
             except Exception as exc:
                 raise RuntimeError(f"Failed to start postgres-test with docker compose: {exc}") from exc
-            if not wait_for_port(host, args.db_port, args.wait_seconds):
+            if not wait_for_port(args.db_port, args.wait_seconds):
                 raise RuntimeError(f"DB port {host}:{args.db_port} did not become reachable.")
         else:
             raise RuntimeError(
@@ -155,14 +150,14 @@ def _ensure_redis_ready(args, repo_root: Path) -> None:
     """Preflight Redis: start via docker compose if needed; soft-fail unless --require-redis."""
     host = LOOPBACK_HOST
     print("== Preflight: Redis ==")
-    redis_ok = is_port_open(host, args.redis_port)
+    redis_ok = is_port_open(args.redis_port)
     if not redis_ok and args.start_services:
         print("Redis port closed. Starting redis-test via docker compose...")
         try:
             start_redis_with_docker_compose(repo_root)
         except Exception as exc:
             raise RuntimeError(f"Failed to start redis-test with docker compose: {exc}") from exc
-        redis_ok = wait_for_port(host, args.redis_port, args.wait_seconds)
+        redis_ok = wait_for_port(args.redis_port, args.wait_seconds)
 
     if redis_ok:
         print(f"OK Redis reachable: {host}:{args.redis_port}")
