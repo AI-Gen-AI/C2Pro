@@ -1,6 +1,7 @@
 """Tests for G1 Single-Writer Control Plane transition and verification."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -219,3 +220,62 @@ def test_planner_master_retains_canonical_write_authority():
     content = req_path.read_text(encoding="utf-8")
     
     assert "Only the **Planner / Master Orchestrator** has write authority to mutate the canonical planning state" in content
+
+
+def test_workspace_lifecycle_owner_is_orchestrator():
+    """Assert that the workspace lifecycle is owned exclusively by the orchestrator."""
+    policy_path = ROOT / ".c2pro" / "control" / "workspace-policy.yaml"
+    assert policy_path.exists()
+    with open(policy_path, encoding="utf-8") as f:
+        policy = yaml.safe_load(f)
+    assert policy.get("lifecycle_owner") == "orchestrator"
+
+
+def test_max_active_writer_tasks():
+    """Assert that a workspace has at most one active writer task."""
+    policy_path = ROOT / ".c2pro" / "control" / "workspace-policy.yaml"
+    assert policy_path.exists()
+    with open(policy_path, encoding="utf-8") as f:
+        policy = yaml.safe_load(f)
+    assert policy.get("max_active_writer_tasks_per_workspace") == 1
+
+
+def test_worker_cannot_be_instructed_to_create_remove_reset_clean_worktrees():
+    """Assert that workers are forbidden from independently managing workspace lifecycles."""
+    policy_path = ROOT / ".c2pro" / "control" / "workspace-policy.yaml"
+    assert policy_path.exists()
+    with open(policy_path, encoding="utf-8") as f:
+        policy = yaml.safe_load(f)
+    
+    worker_perms = policy.get("worker_permissions", {})
+    assert worker_perms.get("create_workspace") is False
+    assert worker_perms.get("remove_workspace") is False
+    assert worker_perms.get("reset_workspace") is False
+    assert worker_perms.get("clean_workspace") is False
+    assert worker_perms.get("repurpose_workspace") is False
+    assert worker_perms.get("validate_workspace") is True
+
+
+def test_no_local_filesystem_paths_in_canonical_state():
+    """Assert that no absolute/local machine paths exist in any .yaml control config."""
+    control_dir = ROOT / ".c2pro" / "control"
+    assert control_dir.is_dir()
+    
+    path_pattern = re.compile(r"(?:[a-zA-Z]:\\|/home/|/Users/)")
+    
+    for yaml_path in control_dir.glob("*.yaml"):
+        content = yaml_path.read_text(encoding="utf-8")
+        assert not path_pattern.search(content), f"Local path detected in canonical state file: {yaml_path.name}"
+
+
+def test_workspace_guard_failure_mismatch_outcome():
+    """Assert that WORKSPACE_GUARD_FAILURE is the required mismatch outcome and action is stop."""
+    policy_path = ROOT / ".c2pro" / "control" / "workspace-policy.yaml"
+    assert policy_path.exists()
+    with open(policy_path, encoding="utf-8") as f:
+        policy = yaml.safe_load(f)
+    
+    guard_fail = policy.get("guard_failure", {})
+    assert guard_fail.get("code") == "WORKSPACE_GUARD_FAILURE"
+    assert guard_fail.get("action") == "stop"
+

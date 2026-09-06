@@ -1,0 +1,15 @@
+schema: c2pro-workspace-policy-v1
+schema_version: 1
+lifecycle_owner: orchestrator
+persistent_workspace_per_agent: true
+max_active_writer_tasks_per_workspace: 1
+worker_permissions:
+  create_workspace: false
+  remove_workspace: false
+  reset_workspace: false
+  clean_workspace: false
+  repurpose_workspace: false
+  validate_workspace: true
+guard_failure:
+  code: WORKSPACE_GUARD_FAILURE
+  action: stop

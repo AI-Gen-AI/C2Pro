@@ -16,6 +16,7 @@ boundaries:
     - "ALWAYS treat blackboard.json and C2PRO_MASTER_BACKLOG.md as READ-ONLY cold references."
     - "ALWAYS consult .c2pro/control/ and assigned .c2pro/work/ envelope for task specifications."
     - "ALWAYS provide structured worker evidence (fenced YAML result block matching c2pro-implementation-result-v1) in standard output/PR description instead of mutating backlogs."
+    - "ALWAYS validate assigned workspace and branch. On any mismatch, STOP immediately and return WORKSPACE_GUARD_FAILURE."
     - "ALWAYS include Test Suite ID in docstrings of tests and implementation."
     - "ALWAYS filter by tenant_id in database queries."
   ask:
@@ -23,6 +24,7 @@ boundaries:
     - "ASK before adding unapproved external dependencies."
     - "ASK before proposing technologies outside the approved stack."
   never:
+    - "NEVER independently create, remove, reset, or clean workspace worktrees."
     - "NEVER import sqlalchemy in src/{module}/domain."
     - "NEVER execute DB operations in unit tests."
     - "NEVER place business logic in routers/controllers."

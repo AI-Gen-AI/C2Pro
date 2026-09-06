@@ -1,0 +1,44 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: c2pro-workspace-policy-v1
+type: object
+additionalProperties: false
+required:
+  - schema
+  - schema_version
+  - lifecycle_owner
+  - persistent_workspace_per_agent
+  - max_active_writer_tasks_per_workspace
+  - worker_permissions
+  - guard_failure
+properties:
+  schema: {const: c2pro-workspace-policy-v1}
+  schema_version: {type: integer, minimum: 1}
+  lifecycle_owner: {enum: [orchestrator]}
+  persistent_workspace_per_agent: {type: boolean}
+  max_active_writer_tasks_per_workspace: {type: integer, minimum: 1}
+  worker_permissions:
+    type: object
+    additionalProperties: false
+    required:
+      - create_workspace
+      - remove_workspace
+      - reset_workspace
+      - clean_workspace
+      - repurpose_workspace
+      - validate_workspace
+    properties:
+      create_workspace: {type: boolean}
+      remove_workspace: {type: boolean}
+      reset_workspace: {type: boolean}
+      clean_workspace: {type: boolean}
+      repurpose_workspace: {type: boolean}
+      validate_workspace: {type: boolean}
+  guard_failure:
+    type: object
+    additionalProperties: false
+    required:
+      - code
+      - action
+    properties:
+      code: {const: WORKSPACE_GUARD_FAILURE}
+      action: {enum: [stop]}
