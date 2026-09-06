@@ -137,4 +137,3 @@ No standalone one-off tasks are pending. All active backend work is tracked in t
 | `TASK-COH-V2-CUTOVER-004` | Per-tenant v2 flag + canary 10→50→100% with shadow-MAE auto-block | 2026-08-07 (PRs #462/#464) |
 | `TASK-CE-F2-01` | LEGAL pilot extraction adapter | 2026-05-29 |
 | `TASK-OPS-DOCFLOW-019` | GitHub CI Alembic bootstrap repair (unsafe `ALTER TYPE ADD VALUE` → recreate migration) | 2026-05-27 |
-| `TASK-BCK-128` | revision.ingested snapshot lineage fix: enqueue `source_event_id = ProjectEvent.event_id` (not revision_id); materialize revision.ingested ProjectEvent in same transaction as revision; actor=user_id; dependency invariant; PostgreSQL FK regression | 2026-09-06 |
