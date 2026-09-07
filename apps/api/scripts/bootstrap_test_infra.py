@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 import psycopg
+from admin_ops_bootstrap import bootstrap_admin_ops_role
 from checkpoint_bootstrap import bootstrap_checkpoint_schema
 from verify_migration_health import parse_migration_graph, recreate_database, validate_linear_chain
 
@@ -175,6 +176,13 @@ def _ensure_db_ready(args: argparse.Namespace, repo_root: Path, api_dir: Path) -
     else:
         ensure_database_exists(ADMIN_DATABASE_URL, TEST_DATABASE_NAME)
         print(f"OK DB exists: {TEST_DATABASE_NAME}")
+
+    # C2.5: Provision c2pro_admin_ops capability role before alembic upgrade
+    # (required by 20260907_0001_c25_admin_ops_dlq.py migration)
+    print("== Admin ops capability role bootstrap ==")
+    admin_ops_dsn = ADMIN_DATABASE_URL
+    asyncio.run(bootstrap_admin_ops_role(admin_ops_dsn))
+    print("OK c2pro_admin_ops capability role is provisioned")
 
     print("== Apply migrations ==")
     run_alembic_upgrade(api_dir, TEST_DATABASE_URL)

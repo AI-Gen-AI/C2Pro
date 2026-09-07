@@ -449,6 +449,12 @@ jobs:
           P0_SEC_ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
         run: python apps/api/scripts/c2_checkpoint_gate.py
 
+      # C2.5: cross-tenant admin / DLQ boundary gate (disposable DB)
+      - name: C2.5 admin ops DLQ boundary gate (disposable DB)
+        env:
+          P0_SEC_ADMIN_DSN: postgresql://postgres:postgres@localhost:5433/postgres
+        run: python apps/api/scripts/c25_admin_ops_gate.py
+
       - name: Upload security test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
