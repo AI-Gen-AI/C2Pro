@@ -1,12 +1,13 @@
 """TDD unit tests for G2 Canonical Control-Plane Reconciler with full merge evidence gates."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 import yaml
 
-from core.reconciler import ValidationError, reconcile_result
+from core.reconciler import ReconciliationError, ValidationError, reconcile_result
 
 
 @pytest.fixture
@@ -91,6 +92,7 @@ def test_reconciliation_happy_path(mock_control_plane, valid_worker_result):
         "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
         "pr_base_branch": "main",
         "pr_state": "merged",
         "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
@@ -102,11 +104,14 @@ def test_reconciliation_happy_path(mock_control_plane, valid_worker_result):
         "ci_status": "success",
     }
 
+    mock_time = "2026-09-07T12:00:00Z"
+
     outcome = reconcile_result(
         valid_worker_result,
         remote_evidence=remote_evidence,
         ci_evidence=ci_evidence,
         control_dir=mock_control_plane,
+        now_fn=lambda: mock_time,
     )
 
     assert outcome["status"] == "RECONCILED"
@@ -138,6 +143,7 @@ def test_reconciliation_happy_path(mock_control_plane, valid_worker_result):
     assert record["worker_head_sha"] == "7c3a8347a5bea0c28f2e540559bd515f9afd282a"
     assert record["merge_commit_sha"] == "f00baaf00baaf00baaf00baaf00baaf00baaf00b"
     assert record["main_sha_after_merge"] == "f00baaf00baaf00baaf00baaf00baaf00baaf00b"
+    assert record["reconciled_at"] == mock_time
 
 
 def test_red_a_remote_head_mismatch(mock_control_plane, valid_worker_result):
@@ -146,6 +152,7 @@ def test_red_a_remote_head_mismatch(mock_control_plane, valid_worker_result):
         "remote_head_sha": "diff_sha_99999999999999999999999999999999",
         "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
     }
     ci_evidence = {
         "ci_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
@@ -167,6 +174,7 @@ def test_red_b_pr_head_mismatch(mock_control_plane, valid_worker_result):
         "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "pr_head_sha": "diff_sha_99999999999999999999999999999999",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
     }
     ci_evidence = {
         "ci_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
@@ -188,6 +196,7 @@ def test_red_c_stale_ci_sha(mock_control_plane, valid_worker_result):
         "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
     }
     ci_evidence = {
         "ci_sha": "stale_sha_1111111111111111111111111111111",
@@ -225,6 +234,7 @@ recommendation: approve
         "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
     }
     ci_evidence = {
         "ci_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
@@ -246,6 +256,7 @@ def test_red_e_duplicate_reconciliation(mock_control_plane, valid_worker_result)
         "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
         "pr_base_branch": "main",
         "pr_state": "merged",
         "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
@@ -303,10 +314,11 @@ def test_red_f_modern_result_attempting_legacy_backlog_blackboard_write(tmp_path
         "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
         "pr_base_branch": "main",
         "pr_state": "merged",
         "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
-        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00baaf00b",
+        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00b",
         "main_contains_merge_commit": True,
     }
     ci_evidence = {
@@ -349,10 +361,11 @@ pr_url: https://github.com/AI-Gen-AI/C2Pro/pull/597
         "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
         "pr_base_branch": "main",
         "pr_state": "merged",
-        "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
-        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00b",
+        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00b",
         "main_contains_merge_commit": True,
     }
     ci_evidence = {
@@ -375,10 +388,11 @@ def test_red_h_closed_work_conflicting_head(mock_control_plane, valid_worker_res
         "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
         "pr_base_branch": "main",
         "pr_state": "merged",
         "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
-        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00baaf00b",
         "main_contains_merge_commit": True,
     }
     ci_evidence = {
@@ -404,10 +418,11 @@ def test_red_h_closed_work_conflicting_head(mock_control_plane, valid_worker_res
         "remote_head_sha": "99999999999999999999999999999999999999aa",
         "pr_head_sha": "99999999999999999999999999999999999999aa",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
         "pr_base_branch": "main",
         "pr_state": "merged",
         "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
-        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00b",
         "main_contains_merge_commit": True,
     }
     ci_evidence_conflict = {
@@ -430,6 +445,7 @@ def test_i_ci_green_pr_still_open(mock_control_plane, valid_worker_result):
         "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
         "pr_base_branch": "main",
         "pr_state": "open",
         "merge_commit_sha": None,
@@ -473,6 +489,7 @@ def test_j_pr_closed_but_not_merged(mock_control_plane, valid_worker_result):
         "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
         "pr_base_branch": "main",
         "pr_state": "closed_unmerged",
         "merge_commit_sha": None,
@@ -499,6 +516,7 @@ def test_k_pr_merged_to_wrong_base(mock_control_plane, valid_worker_result):
         "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
         "pr_base_branch": "develop",
         "pr_state": "merged",
         "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
@@ -525,6 +543,7 @@ def test_l_squash_merge(mock_control_plane, valid_worker_result):
         "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
         "pr_base_branch": "main",
         "pr_state": "merged",
         "merge_commit_sha": "squash_merge_commit_sha_55555555555555",
@@ -558,6 +577,7 @@ def test_m_reported_merge_commit_not_reachable(mock_control_plane, valid_worker_
         "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
         "pr_base_branch": "main",
         "pr_state": "merged",
         "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
@@ -584,9 +604,10 @@ def test_n_main_advances_after_merge(mock_control_plane, valid_worker_result):
         "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
         "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
         "pr_base_branch": "main",
         "pr_state": "merged",
-        "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00b",
         "authoritative_main_sha": "advanced_main_sha_after_rebase_9999999",
         "main_contains_merge_commit": True,
     }
@@ -605,3 +626,369 @@ def test_n_main_advances_after_merge(mock_control_plane, valid_worker_result):
     with open(mock_control_plane / "current.yaml", encoding="utf-8") as f:
         curr = yaml.safe_load(f)
     assert curr["baseline"]["main_sha"] == "advanced_main_sha_after_rebase_9999999"
+
+
+def test_o_wrong_result_base_sha(mock_control_plane, valid_worker_result):
+    """Test O: valid worker head + CI + merged PR but wrong result.base_sha fails closed."""
+    remote_evidence = {
+        "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "wrong_base_sha_999999999999999999999999",  # wrong base SHA!
+        "pr_base_branch": "main",
+        "pr_state": "merged",
+        "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "main_contains_merge_commit": True,
+    }
+    ci_evidence = {
+        "ci_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "ci_status": "success",
+    }
+
+    with pytest.raises(ValidationError, match="Base SHA mismatch"):
+        reconcile_result(
+            valid_worker_result,
+            remote_evidence=remote_evidence,
+            ci_evidence=ci_evidence,
+            control_dir=mock_control_plane,
+        )
+
+
+def test_p_already_reconciled_stale_ci_sha(mock_control_plane, valid_worker_result):
+    """Test P: already-reconciled item with stale CI evidence on replay fails closed."""
+    remote_evidence = {
+        "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
+        "pr_base_branch": "main",
+        "pr_state": "merged",
+        "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "main_contains_merge_commit": True,
+    }
+    ci_evidence = {
+        "ci_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "ci_status": "success",
+    }
+
+    # Reconcile first
+    reconcile_result(
+        valid_worker_result,
+        remote_evidence=remote_evidence,
+        ci_evidence=ci_evidence,
+        control_dir=mock_control_plane,
+    )
+
+    # Replay with stale CI evidence -> must fail closed
+    ci_evidence_stale = {
+        "ci_sha": "stale_sha_9999999999999999999999999999999999",
+        "ci_status": "success",
+    }
+    with pytest.raises(ValidationError, match="Stale CI SHA"):
+        reconcile_result(
+            valid_worker_result,
+            remote_evidence=remote_evidence,
+            ci_evidence=ci_evidence_stale,
+            control_dir=mock_control_plane,
+        )
+
+
+def test_q_already_reconciled_remote_head_mismatch(mock_control_plane, valid_worker_result):
+    """Test Q: already-reconciled item with remote head mismatch on replay fails closed."""
+    remote_evidence = {
+        "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
+        "pr_base_branch": "main",
+        "pr_state": "merged",
+        "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00baaf00b",
+        "main_contains_merge_commit": True,
+    }
+    ci_evidence = {
+        "ci_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "ci_status": "success",
+    }
+
+    # Reconcile first
+    reconcile_result(
+        valid_worker_result,
+        remote_evidence=remote_evidence,
+        ci_evidence=ci_evidence,
+        control_dir=mock_control_plane,
+    )
+
+    # Replay with mismatched remote head -> must fail closed
+    remote_evidence_mismatch = remote_evidence.copy()
+    remote_evidence_mismatch["remote_head_sha"] = "mismatch_sha_99999999999999999999999999"
+    with pytest.raises(ValidationError, match="Remote HEAD mismatch"):
+        reconcile_result(
+            valid_worker_result,
+            remote_evidence=remote_evidence_mismatch,
+            ci_evidence=ci_evidence,
+            control_dir=mock_control_plane,
+        )
+
+
+def test_r_already_reconciled_wrong_base_sha(mock_control_plane, valid_worker_result):
+    """Test R: already-reconciled item with wrong base SHA on replay fails closed."""
+    remote_evidence = {
+        "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
+        "pr_base_branch": "main",
+        "pr_state": "merged",
+        "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00b",
+        "main_contains_merge_commit": True,
+    }
+    ci_evidence = {
+        "ci_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "ci_status": "success",
+    }
+
+    # Reconcile first
+    reconcile_result(
+        valid_worker_result,
+        remote_evidence=remote_evidence,
+        ci_evidence=ci_evidence,
+        control_dir=mock_control_plane,
+    )
+
+    # Replay with different base SHA -> must fail closed
+    remote_evidence_mismatch = remote_evidence.copy()
+    remote_evidence_mismatch["pr_base_sha"] = "wrong_base_sha_99999999999999999999999"
+    with pytest.raises(ValidationError, match="Base SHA mismatch"):
+        reconcile_result(
+            valid_worker_result,
+            remote_evidence=remote_evidence_mismatch,
+            ci_evidence=ci_evidence,
+            control_dir=mock_control_plane,
+        )
+
+
+def test_s_already_reconciled_merge_not_reachable(mock_control_plane, valid_worker_result):
+    """Test S: already-reconciled item with unreachable merge commit on replay fails closed."""
+    remote_evidence = {
+        "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
+        "pr_base_branch": "main",
+        "pr_state": "merged",
+        "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00b",
+        "main_contains_merge_commit": True,
+    }
+    ci_evidence = {
+        "ci_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "ci_status": "success",
+    }
+
+    # Reconcile first
+    reconcile_result(
+        valid_worker_result,
+        remote_evidence=remote_evidence,
+        ci_evidence=ci_evidence,
+        control_dir=mock_control_plane,
+    )
+
+    # Replay with unreachable merge commit -> must fail closed
+    remote_evidence_mismatch = remote_evidence.copy()
+    remote_evidence_mismatch["main_contains_merge_commit"] = False
+    with pytest.raises(ValidationError, match="is not reachable from the canonical main"):
+        reconcile_result(
+            valid_worker_result,
+            remote_evidence=remote_evidence_mismatch,
+            ci_evidence=ci_evidence,
+            control_dir=mock_control_plane,
+        )
+
+
+def test_t_work_queue_publication_failure(mock_control_plane, valid_worker_result, monkeypatch):
+    """Test T: work-queue replacement failure prevents reconciliation, stages transaction in prepared state."""
+    remote_evidence = {
+        "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
+        "pr_base_branch": "main",
+        "pr_state": "merged",
+        "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "main_contains_merge_commit": True,
+    }
+    ci_evidence = {
+        "ci_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "ci_status": "success",
+    }
+
+    # Inject write-failure specifically on os.replace of work-queue.yaml
+    original_replace = os.replace
+
+    def mock_replace(src, dst):
+        if "work-queue.yaml" in str(dst):
+            raise OSError("Injected disk I/O failure during work-queue replacement")
+        return original_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", mock_replace)
+
+    with pytest.raises(ReconciliationError, match="Atomic replacement of control files failed"):
+        reconcile_result(
+            valid_worker_result,
+            remote_evidence=remote_evidence,
+            ci_evidence=ci_evidence,
+            control_dir=mock_control_plane,
+        )
+
+    # The prepared transaction file must still exist
+    tx_file = mock_control_plane / "reconciliation-transaction.yaml"
+    assert tx_file.exists()
+    with open(tx_file, encoding="utf-8") as f:
+        tx_data = yaml.safe_load(f)
+    assert tx_data["state"] == "prepared"
+    assert tx_data["work_id"] == "C2PRO-DEV-02"
+
+    # Subsequent run must fail closed because of pending transaction
+    with pytest.raises(ReconciliationError, match="Incomplete transaction detected"):
+        reconcile_result(
+            valid_worker_result,
+            remote_evidence=remote_evidence,
+            ci_evidence=ci_evidence,
+            control_dir=mock_control_plane,
+        )
+
+
+def test_u_current_publication_failure(mock_control_plane, valid_worker_result, monkeypatch):
+    """Test U: current.yaml publication failure blocks complete reconciliation, leaving prepared transaction."""
+    remote_evidence = {
+        "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
+        "pr_base_branch": "main",
+        "pr_state": "merged",
+        "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "main_contains_merge_commit": True,
+    }
+    ci_evidence = {
+        "ci_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "ci_status": "success",
+    }
+
+    # Inject write-failure specifically on os.replace of current.yaml
+    original_replace = os.replace
+
+    def mock_replace(src, dst):
+        if "current.yaml" in str(dst):
+            raise OSError("Injected disk I/O failure during current.yaml replacement")
+        return original_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", mock_replace)
+
+    with pytest.raises(ReconciliationError, match="Atomic replacement of control files failed"):
+        reconcile_result(
+            valid_worker_result,
+            remote_evidence=remote_evidence,
+            ci_evidence=ci_evidence,
+            control_dir=mock_control_plane,
+        )
+
+    # Prepared transaction remains
+    tx_file = mock_control_plane / "reconciliation-transaction.yaml"
+    assert tx_file.exists()
+
+    # Subsequent run must fail closed
+    with pytest.raises(ReconciliationError, match="Incomplete transaction detected"):
+        reconcile_result(
+            valid_worker_result,
+            remote_evidence=remote_evidence,
+            ci_evidence=ci_evidence,
+            control_dir=mock_control_plane,
+        )
+
+
+def test_v_history_publication_failure(mock_control_plane, valid_worker_result, monkeypatch):
+    """Test V: history publication failure blocks transaction commit, leaving prepared transaction."""
+    remote_evidence = {
+        "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
+        "pr_base_branch": "main",
+        "pr_state": "merged",
+        "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "main_contains_merge_commit": True,
+    }
+    ci_evidence = {
+        "ci_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "ci_status": "success",
+    }
+
+    # Inject write-failure specifically on os.replace of reconciliation-history.yaml
+    original_replace = os.replace
+
+    def mock_replace(src, dst):
+        if "reconciliation-history.yaml" in str(dst):
+            raise OSError("Injected disk I/O failure during history replacement")
+        return original_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", mock_replace)
+
+    with pytest.raises(ReconciliationError, match="Atomic replacement of control files failed"):
+        reconcile_result(
+            valid_worker_result,
+            remote_evidence=remote_evidence,
+            ci_evidence=ci_evidence,
+            control_dir=mock_control_plane,
+        )
+
+    # Prepared transaction remains
+    tx_file = mock_control_plane / "reconciliation-transaction.yaml"
+    assert tx_file.exists()
+
+
+def test_legacy_write_full_path_guard(mock_control_plane, valid_worker_result, monkeypatch):
+    """Test Legacy Guard: explicitly prove NO write operations occur to C2PRO_MASTER_BACKLOG.md, backlogs/**, blackboard.json."""
+    remote_evidence = {
+        "remote_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "pr_head_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
+        "pr_base_branch": "main",
+        "pr_state": "merged",
+        "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00b",
+        "main_contains_merge_commit": True,
+    }
+    ci_evidence = {
+        "ci_sha": "7c3a8347a5bea0c28f2e540559bd515f9afd282a",
+        "ci_status": "success",
+    }
+
+    # Intercept all open/write operations and verify target path
+    original_open = open
+
+    def mock_open(file, mode="r", *args, **kwargs):
+        path_str = str(Path(file).resolve())
+        if "w" in mode or "a" in mode:
+            # Enforce absolutely no writes to legacy paths
+            assert "C2PRO_MASTER_BACKLOG.md" not in path_str
+            assert "backlogs" not in path_str
+            assert "blackboard.json" not in path_str
+        return original_open(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", mock_open)
+
+    reconcile_result(
+        valid_worker_result,
+        remote_evidence=remote_evidence,
+        ci_evidence=ci_evidence,
+        control_dir=mock_control_plane,
+    )
