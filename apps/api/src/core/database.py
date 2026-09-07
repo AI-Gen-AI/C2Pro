@@ -304,3 +304,109 @@ async def get_raw_session() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
+
+
+# =============================================================================
+# C2.5 — Cross-Tenant Admin Operations Session
+# =============================================================================
+
+_admin_ops_engine: AsyncEngine | None = None
+_admin_ops_session_factory: async_sessionmaker[AsyncSession] | None = None
+
+
+async def init_admin_ops_db() -> None:
+    """
+    Initialize the admin operations database engine.
+
+    Uses ADMIN_OPS_DATABASE_URL from settings. No fallback to DATABASE_URL.
+    Must be called before any admin operations endpoints are accessed.
+    """
+    global _admin_ops_engine, _admin_ops_session_factory
+
+    from src.config import settings
+
+    dsn = settings.admin_ops_database_url
+    if not dsn:
+        raise RuntimeError(
+            "ADMIN_OPS_DATABASE_URL is not configured. "
+            "Cross-tenant admin operations require a dedicated credential "
+            "(the c2pro_admin_ops capability role via LOGIN principal member). "
+            "No fallback to DATABASE_URL or owner credential is permitted."
+        )
+
+    if dsn.startswith("postgresql://") and not dsn.startswith("postgresql+asyncpg://"):
+        dsn = dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    _admin_ops_engine = create_async_engine(
+        dsn,
+        echo=settings.db_echo,
+        pool_pre_ping=settings.db_pool_pre_ping,
+        pool_size=2,  # Small pool for admin operations
+        max_overflow=0,
+        pool_timeout=settings.db_pool_timeout,
+        pool_recycle=settings.db_pool_recycle,
+        connect_args={"statement_cache_size": 0},
+    )
+
+    _admin_ops_session_factory = async_sessionmaker(
+        bind=_admin_ops_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+
+    logger.info("admin_ops_database_engine_created", url=dsn[:50] + "...")
+
+
+async def close_admin_ops_db() -> None:
+    """Close the admin operations database engine."""
+    global _admin_ops_engine
+
+    if _admin_ops_engine:
+        await _admin_ops_engine.dispose()
+        _admin_ops_engine = None
+        logger.info("admin_ops_database_engine_closed")
+
+
+@asynccontextmanager
+async def get_admin_ops_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Get a database session for cross-tenant admin operations.
+
+    Uses the dedicated ADMIN_OPS_DATABASE_URL credential (C2.5).
+    The session sets the app.admin_ops GUC to signal admin policy evaluation.
+
+    This session is ONLY reachable from explicit admin/DLQ endpoints.
+    Non-admin HTTP callers are rejected BEFORE this session is acquired.
+
+    Yields:
+        AsyncSession with app.admin_ops = '1' set for admin policy evaluation
+
+    Raises:
+        RuntimeError: If ADMIN_OPS_DATABASE_URL is not configured or
+                      admin_ops DB not initialized.
+    """
+    if _admin_ops_session_factory is None:
+        raise RuntimeError(
+            "Admin ops database not initialized. Call init_admin_ops_db() first. "
+            "ADMIN_OPS_DATABASE_URL must be configured."
+        )
+
+    async with _admin_ops_session_factory() as session:
+        try:
+            # Set admin ops GUC for admin policy evaluation
+            await session.execute(text("SET LOCAL app.admin_ops = '1'"))
+            logger.debug("admin_ops_guc_set")
+
+            yield session
+
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            # Explicit cleanup
+            with suppress(Exception):
+                await session.execute(text("RESET app.admin_ops"))
+            logger.debug("admin_ops_guc_reset")

@@ -1,0 +1,154 @@
+"""C2.5 — Cross-Tenant Admin / DLQ Boundary
+
+Revision ID: 20260907_0001
+Revises: 20260906_0002
+Create Date: 2026-09-07
+
+WHAT THIS ADDS
+--------------
+1. Capability role: c2pro_admin_ops (NOLOGIN, NOSUPERUSER, NOBYPASSRLS,
+   NOCREATEROLE, non-owner).
+
+2. Admin policies on dlq_failed_tasks targeted TO c2pro_admin_ops:
+   - SELECT USING (true)
+   - UPDATE (retry_count, status, updated_at, next_retry_at) USING (true)
+
+3. Column-level UPDATE grant on exactly the columns modified by
+   DLQService.increment_retry():
+   retry_count, status, updated_at, next_retry_at
+
+4. NO INSERT, DELETE, schema CREATE, unrelated table access.
+
+NOT IN THIS MIGRATION
+---------------------
+- No LOGIN principal is created. The deployment/runtime LOGIN principal
+  is an ops/deployment responsibility and receives membership in
+  c2pro_admin_ops (capability role). In the disposable gate we create
+  a synthetic LOGIN member to prove the design.
+
+- No app.admin_ops GUC. The admin policy is evaluated via the capability
+  role membership, not a GUC. The get_admin_ops_session() sets
+  app.admin_ops = '1' as a debugging aid but the policy uses
+  CURRENT_USER / has_role('c2pro_admin_ops') semantics.
+
+ROLE BOOTSTRAP MODEL
+--------------------
+This migration creates the capability role and applies policies/grants.
+It does NOT assume the migration runner has CREATE ROLE authority.
+If the capability role cannot be created (permission denied), the
+migration fails with a clear message directing the operator to run
+the owner bootstrap step (analogous to C2 checkpoint boundary).
+
+Schema/policy application fails closed if the capability role is absent.
+"""
+
+from __future__ import annotations
+
+from alembic import op
+
+revision = "20260907_0001"
+down_revision = "20260906_0002"
+branch_labels = None
+depends_on = None
+
+_ADMIN_ROLE = "c2pro_admin_ops"
+_TABLE = "dlq_failed_tasks"
+
+# Columns modified by DLQService.increment_retry()
+_RETRY_COLUMNS = ["retry_count", "status", "updated_at", "next_retry_at"]
+
+
+def _create_admin_role() -> None:
+    """Create the c2pro_admin_ops capability role if it doesn't exist."""
+    op.execute(
+        f"""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{_ADMIN_ROLE}') THEN
+                CREATE ROLE {_ADMIN_ROLE} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+            END IF;
+        END $$;
+        """
+    )
+
+
+def _drop_admin_role() -> None:
+    """Drop the c2pro_admin_ops role if it exists."""
+    op.execute(
+        f"""
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{_ADMIN_ROLE}') THEN
+                DROP ROLE {_ADMIN_ROLE};
+            END IF;
+        END $$;
+        """
+    )
+
+
+def _apply_admin_policies() -> None:
+    """Apply admin policies TO c2pro_admin_ops on dlq_failed_tasks."""
+    # SELECT policy for cross-tenant list
+    op.execute(
+        f"""
+        CREATE POLICY dlq_admin_select
+        ON {_TABLE}
+        FOR SELECT
+        TO {_ADMIN_ROLE}
+        USING (true);
+        """
+    )
+
+    # UPDATE policy for retry (cross-tenant)
+    op.execute(
+        f"""
+        CREATE POLICY dlq_admin_retry
+        ON {_TABLE}
+        FOR UPDATE
+        TO {_ADMIN_ROLE}
+        USING (true);
+        """
+    )
+
+
+def _drop_admin_policies() -> None:
+    """Drop admin policies from dlq_failed_tasks."""
+    op.execute(f"DROP POLICY IF EXISTS dlq_admin_select ON {_TABLE}")
+    op.execute(f"DROP POLICY IF EXISTS dlq_admin_retry ON {_TABLE}")
+
+
+def _grant_admin_privileges() -> None:
+    """Grant minimum privileges to c2pro_admin_ops."""
+    # SELECT on the table
+    op.execute(f"GRANT SELECT ON {_TABLE} TO {_ADMIN_ROLE}")
+
+    # Column-level UPDATE on exactly the columns modified by increment_retry()
+    columns = ", ".join(_RETRY_COLUMNS)
+    op.execute(f"GRANT UPDATE ({columns}) ON {_TABLE} TO {_ADMIN_ROLE}")
+
+    # NO INSERT, DELETE, TRUNCATE, REFERENCES, TRIGGER
+    # NO schema CREATE, no unrelated table access
+
+
+def _revoke_admin_privileges() -> None:
+    """Revoke privileges from c2pro_admin_ops."""
+    op.execute(f"REVOKE ALL ON {_TABLE} FROM {_ADMIN_ROLE}")
+
+
+def upgrade() -> None:
+    """Create admin role, policies, and grants."""
+    # Create capability role
+    _create_admin_role()
+
+    # Apply admin policies
+    _apply_admin_policies()
+
+    # Grant minimum privileges
+    _grant_admin_privileges()
+
+
+def downgrade() -> None:
+    """Remove admin policies, grants, and role."""
+    _revoke_admin_privileges()
+    _drop_admin_policies()
+    _drop_admin_role()

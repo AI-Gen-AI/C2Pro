@@ -93,6 +93,22 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Cross-tenant admin operations DSN (C2.5: admin role boundary).
+    #
+    # NO FALLBACK: missing/invalid credential must fail closed.
+    # Points to a LOGIN principal that is a MEMBER OF c2pro_admin_ops capability role.
+    # The capability role is NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, non-owner.
+    # Do not fallback to DATABASE_URL or owner credential.
+    admin_ops_database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ADMIN_OPS_DATABASE_URL"),
+        description=(
+            "Dedicated PostgreSQL DSN for cross-tenant admin operations "
+            "(the c2pro_admin_ops capability role via LOGIN principal member). "
+            "REQUIRED for admin DLQ endpoints — no fallback."
+        ),
+    )
+
     @field_validator("database_url")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
@@ -458,6 +474,25 @@ class Settings(BaseSettings):
         once per process.
         """
         url = self.checkpoint_database_url or self.database_url
+        if url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
+            return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
+
+    @property
+    def admin_ops_database_url_async(self) -> str:
+        """Cross-tenant admin operations DSN, normalized for asyncpg.
+
+        NO FALLBACK: raises if ADMIN_OPS_DATABASE_URL is not configured.
+        This enforces fail-closed for cross-tenant admin operations (C2.5).
+        """
+        url = self.admin_ops_database_url
+        if not url:
+            raise RuntimeError(
+                "ADMIN_OPS_DATABASE_URL is not configured. "
+                "Cross-tenant admin operations require a dedicated credential "
+                "(the c2pro_admin_ops capability role via LOGIN principal member). "
+                "No fallback to DATABASE_URL or owner credential is permitted."
+            )
         if url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
             return url.replace("postgresql://", "postgresql+asyncpg://", 1)
         return url

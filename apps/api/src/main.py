@@ -94,6 +94,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_db()
     logger.info("database_initialized")
 
+    # Inicializar admin operations database (C2.5)
+    from src.core.database import init_admin_ops_db
+    await init_admin_ops_db()
+    logger.info("admin_ops_database_initialized")
+
     await init_cache()
     logger.info("cache_initialized")
 
@@ -157,6 +162,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Cerrar base de datos
     await close_db()
     logger.info("database_closed")
+
+    # Cerrar admin operations database (C2.5)
+    from src.core.database import close_admin_ops_db
+    await close_admin_ops_db()
+    logger.info("admin_ops_database_closed")
 
     await close_cache()
     logger.info("cache_closed")
