@@ -33,13 +33,28 @@ NOT IN THIS MIGRATION
 
 ROLE BOOTSTRAP MODEL
 --------------------
-This migration creates the capability role and applies policies/grants.
-It does NOT assume the migration runner has CREATE ROLE authority.
-If the capability role cannot be created (permission denied), the
-migration fails with a clear message directing the operator to run
-the owner bootstrap step (analogous to C2 checkpoint boundary).
+OWNER_BOOTSTRAP (not Alembic).
 
-Schema/policy application fails closed if the capability role is absent.
+This migration does NOT create the c2pro_admin_ops capability role.
+The owner/bootstrap step (analogous to C2 checkpoint boundary) provisions:
+
+  c2pro_admin_ops
+  - NOLOGIN
+  - NOSUPERUSER
+  - NOBYPASSRLS
+  - NOCREATEROLE
+  - non-owner
+
+Production/deployment creates or supplies the LOGIN principal separately
+and grants membership in c2pro_admin_ops.
+
+No password or LOGIN secret in repository code.
+
+This migration:
+- REQUIRES c2pro_admin_ops to exist
+- fails closed with explicit error if absent
+- creates only policies/grants/schema-level contract
+- never silently creates an elevated role
 """
 
 from __future__ import annotations
@@ -58,28 +73,23 @@ _TABLE = "dlq_failed_tasks"
 _RETRY_COLUMNS = ["retry_count", "status", "updated_at", "next_retry_at"]
 
 
-def _create_admin_role() -> None:
-    """Create the c2pro_admin_ops capability role if it doesn't exist."""
+def _require_admin_role() -> None:
+    """Require c2pro_admin_ops role to exist; fail closed if absent.
+
+    OWNER_BOOTSTRAP model: the capability role must be provisioned by the
+    owner/bootstrap step before this migration runs (analogous to C2
+    checkpoint boundary). If absent, fail with explicit actionable message.
+    """
     op.execute(
         f"""
         DO $$
         BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{_ADMIN_ROLE}') THEN
-                CREATE ROLE {_ADMIN_ROLE} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-            END IF;
-        END $$;
-        """
-    )
-
-
-def _drop_admin_role() -> None:
-    """Drop the c2pro_admin_ops role if it exists."""
-    op.execute(
-        f"""
-        DO $$
-        BEGIN
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{_ADMIN_ROLE}') THEN
-                DROP ROLE {_ADMIN_ROLE};
+                RAISE EXCEPTION
+                    'C2.5 OWNER_BOOTSTRAP REQUIRED: role c2pro_admin_ops does not exist. '
+                    'Provision it before running this migration (analogous to C2 '
+                    'checkpoint_bootstrap.py): '
+                    'CREATE ROLE c2pro_admin_ops NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;';
             END IF;
         END $$;
         """
@@ -136,9 +146,9 @@ def _revoke_admin_privileges() -> None:
 
 
 def upgrade() -> None:
-    """Create admin role, policies, and grants."""
-    # Create capability role
-    _create_admin_role()
+    """Apply admin policies and grants (requires pre-existing c2pro_admin_ops role)."""
+    # Require capability role to exist (OWNER_BOOTSTRAP)
+    _require_admin_role()
 
     # Apply admin policies
     _apply_admin_policies()
@@ -148,7 +158,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Remove admin policies, grants, and role."""
+    """Remove admin policies and grants (does NOT drop role - owner responsibility)."""
     _revoke_admin_privileges()
     _drop_admin_policies()
-    _drop_admin_role()
+    # Role is NOT dropped - owner/bootstrap is responsible for role lifecycle

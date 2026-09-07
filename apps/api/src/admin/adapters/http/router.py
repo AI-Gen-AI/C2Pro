@@ -6,12 +6,14 @@ HTTP routes for DLQ admin operations.
 
 from __future__ import annotations
 
+from contextlib import AbstractAsyncContextManager
 from typing import cast
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.admin.application.dtos.dlq import (
     DLQEntryResponse,
@@ -50,12 +52,22 @@ class DLQAdminOpsAdapter:
     def __init__(self, service: DLQService | None = None) -> None:
         self._service = service or DLQService()
 
+    async def _admin_session(self) -> AbstractAsyncContextManager[AsyncSession]:
+        """Acquire admin ops session, mapping unavailability to 503."""
+        try:
+            return get_admin_ops_session()
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Admin operations database unavailable",
+            ) from exc
+
     async def list_by_status(
         self, status: str, *, limit: int, offset: int
     ) -> list[DLQEntryView]:
         """List DLQ entries across tenants with LIMIT/OFFSET pagination (C2.5)."""
 
-        async with get_admin_ops_session() as session:
+        async with await self._admin_session() as session:
             result = await session.execute(
                 select(DLQFailedTask)
                 .where(DLQFailedTask.status == status)
@@ -69,7 +81,7 @@ class DLQAdminOpsAdapter:
     async def count_by_status(self, status: str) -> int:
         """Return the total number of DLQ entries for the given status (C2.5)."""
 
-        async with get_admin_ops_session() as session:
+        async with await self._admin_session() as session:
             result = await session.execute(
                 select(func.count())
                 .select_from(DLQFailedTask)
@@ -80,7 +92,7 @@ class DLQAdminOpsAdapter:
     async def get_by_id(self, dlq_id: UUID) -> DLQEntryView | None:
         """Return a DLQ entry by id using the admin ops session (C2.5)."""
 
-        async with get_admin_ops_session() as session:
+        async with await self._admin_session() as session:
             result = await session.execute(
                 select(DLQFailedTask).where(DLQFailedTask.id == dlq_id)
             )
@@ -90,7 +102,7 @@ class DLQAdminOpsAdapter:
     async def retry(self, dlq_id: UUID) -> None:
         """Retry a DLQ entry using the admin ops session (C2.5)."""
 
-        async with get_admin_ops_session() as session:
+        async with await self._admin_session() as session:
             # Fetch the record in admin session context
             result = await session.execute(
                 select(DLQFailedTask).where(DLQFailedTask.id == dlq_id)
