@@ -15,6 +15,7 @@ Test Scenarios:
 
 import os
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -25,6 +26,8 @@ from src.analysis.adapters.graph import workflow as workflow_module
 from src.analysis.adapters.graph.workflow import _build_checkpointer, compile_workflow
 from src.config import settings
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
+
 pytestmark = [
     pytest.mark.asyncio,
     pytest.mark.integration,
@@ -33,6 +36,23 @@ pytestmark = [
         reason="TS-AI-051: PostgreSQL checkpointer verification is integration-only.",
     ),
 ]
+
+
+@pytest.fixture(autouse=True)
+async def _reset_checkpointer_globals():
+    """Isolate the module-level checkpointer globals between async tests.
+
+    Each async test runs in its own event loop; a psycopg pool created in one
+    test's loop cannot be closed in another's. Reset the cached pool/graph/ready
+    flag so no test observes state leaked by a previous one.
+    """
+    workflow_module._checkpointer_pool = None
+    workflow_module._checkpointer_ready = False
+    workflow_module._graph_app = None
+    yield
+    workflow_module._checkpointer_pool = None
+    workflow_module._checkpointer_ready = False
+    workflow_module._graph_app = None
 
 
 class TestLangGraphCheckpointer:
@@ -49,7 +69,7 @@ class TestLangGraphCheckpointer:
 
     async def test_checkpointer_pool_disables_prepared_statements_for_poolers(self, monkeypatch):
         """Verify psycopg pool config disables prepared statements for PgBouncer-compatible deployments."""
-        workflow_module._checkpointer_pool = None
+        monkeypatch.setattr(workflow_module, "_checkpointer_pool", None)
 
         captured: dict[str, object] = {}
         sentinel_row_factory = object()
@@ -154,9 +174,13 @@ class TestLangGraphCheckpointer:
         assert app.checkpointer is not None
         assert app.checkpointer == checkpointer
 
-    async def test_close_checkpointer_resources_resets_cached_graph_app(self):
+    async def test_close_checkpointer_resources_resets_cached_graph_app(self, monkeypatch):
         """Verify shutdown clears the cached graph app so the next lifespan rebuilds it."""
-        workflow_module._graph_app = None
+        from checkpoint_bootstrap import bootstrap_checkpoint_schema
+
+        await bootstrap_checkpoint_schema(settings.database_url_async)
+
+        monkeypatch.setattr(workflow_module, "_graph_app", None)
 
         app_before_shutdown = workflow_module.get_graph_app()
         await workflow_module.ensure_checkpointer_ready()
@@ -285,11 +309,23 @@ class TestLangGraphWorkflowPersistence:
 # Fixtures
 @pytest.fixture
 async def db_session():
-    """Provide database session for checkpoint table verification."""
+    """Provide database session for checkpoint table verification.
+
+    Option-C C2: runtime (ensure_checkpointer_ready) no longer runs
+    AsyncPostgresSaver.setup() -- that is exclusively scripts/
+    checkpoint_bootstrap.py's job, run under the owner credential before the
+    application starts. These integration tests exercise real checkpoint
+    infrastructure, so they must do that bootstrap step themselves first,
+    exactly as a real deployment would, before calling
+    ensure_checkpointer_ready() (which now only performs a read-only
+    readiness check and raises CheckpointSchemaNotReadyError if skipped).
+    """
+    from checkpoint_bootstrap import bootstrap_checkpoint_schema
     from sqlalchemy.ext.asyncio import create_async_engine
 
     from src.analysis.adapters.graph.workflow import ensure_checkpointer_ready
 
+    await bootstrap_checkpoint_schema(settings.database_url_async)
     await ensure_checkpointer_ready()
     engine = create_async_engine(settings.database_url_async, echo=False)
     async with engine.connect() as conn:

@@ -63,7 +63,13 @@ async def client(app, test_session_factory):
 
     This ensures startup initializes infra (including DB manager) while requests
     still use isolated test sessions from the per-test factory.
+
+    test_session_factory depends on test_engine, which re-provisions the
+    LangGraph checkpoint schema itself after its per-test public-schema reset
+    (see tests/_bootstrap.py's _reprovision_checkpoint_schema) -- so it is
+    already current by the time the real app lifespan runs below.
     """
+
     async def override_get_session():
         async with test_session_factory() as session:
             try:
@@ -582,6 +588,8 @@ async def test_008_concurrent_requests_tenant_isolation(
     user_b: User,
     tenant_a: Tenant,
     tenant_b: Tenant,
+    project_a: dict,
+    project_b: dict,
     generate_token,
 ):
     """
@@ -607,6 +615,9 @@ async def test_008_concurrent_requests_tenant_isolation(
     headers_a = {"Authorization": f"Bearer {token_a}"}
     headers_b = {"Authorization": f"Bearer {token_b}"}
 
+    project_a_id = str(project_a["id"])
+    project_b_id = str(project_b["id"])
+
     # Make concurrent requests
     async def fetch_projects_a():
         return await client.get("/api/v1/projects", headers=headers_a)
@@ -629,15 +640,21 @@ async def test_008_concurrent_requests_tenant_isolation(
         assert response_a.status_code == 200
         assert response_b.status_code == 200
 
-        # Extract tenant_ids from responses (if available in metadata)
-        # At minimum, verify responses are different
         body_a = response_a.json()
         body_b = response_b.json()
 
-        # Responses should be different (unless both have 0 projects)
-        # This is a weak assertion but validates basic isolation
-        assert body_a == body_a  # Self-consistent
-        assert body_b == body_b  # Self-consistent
+        ids_a = {item["id"] for item in body_a.get("items", [])}
+        ids_b = {item["id"] for item in body_b.get("items", [])}
+
+        # Tenant A sees their own project
+        assert project_a_id in ids_a, f"Tenant A should see Project A ({project_a_id})"
+        # Tenant A never sees Tenant B's project
+        assert project_b_id not in ids_a, f"Tenant A must not see Project B ({project_b_id})"
+
+        # Tenant B sees their own project
+        assert project_b_id in ids_b, f"Tenant B should see Project B ({project_b_id})"
+        # Tenant B never sees Tenant A's project
+        assert project_a_id not in ids_b, f"Tenant B must not see Project A ({project_a_id})"
 
 
 # ===========================================

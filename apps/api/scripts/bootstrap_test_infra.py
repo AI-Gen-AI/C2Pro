@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import socket
 import subprocess
@@ -11,19 +12,72 @@ import time
 from pathlib import Path
 
 import psycopg
+from checkpoint_bootstrap import bootstrap_checkpoint_schema
 from verify_migration_health import parse_migration_graph, recreate_database, validate_linear_chain
 
+# This script only ever probes LOCAL/CI test services. The network boundary is
+# deliberately closed: callers cannot choose a host, port, database URL, or
+# database name. This matters for agent/LLM-driven invocations too — malformed
+# CLI input cannot redirect any connection to an arbitrary network target.
+LOOPBACK_HOST = "127.0.0.1"
 
-def is_port_open(host: str, port: int, timeout_seconds: float = 1.0) -> bool:
+# Strict port allowlist — only these values are accepted to prevent arbitrary
+# port data from reaching the network sink.
+ALLOWED_DB_PORTS: frozenset[int] = frozenset({5433})
+ALLOWED_REDIS_PORTS: frozenset[int] = frozenset({6379, 6380})
+
+
+def _resolve_db_test_port(raw: str) -> int:
+    """Resolve and validate DB test port from environment."""
+    try:
+        port = int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"C2PRO_DB_TEST_PORT must be an integer, got: {raw!r}"
+        ) from exc
+    if port not in ALLOWED_DB_PORTS:
+        raise ValueError(
+            f"C2PRO_DB_TEST_PORT={port} not in allowlist {sorted(ALLOWED_DB_PORTS)}"
+        )
+    return port
+
+
+def _resolve_redis_test_port(raw: str) -> int:
+    """Resolve and validate Redis test port from environment."""
+    try:
+        port = int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"C2PRO_REDIS_TEST_PORT must be an integer, got: {raw!r}"
+        ) from exc
+    if port not in ALLOWED_REDIS_PORTS:
+        raise ValueError(
+            f"C2PRO_REDIS_TEST_PORT={port} not in allowlist {sorted(ALLOWED_REDIS_PORTS)}"
+        )
+    return port
+
+
+DB_TEST_PORT = _resolve_db_test_port(os.getenv("C2PRO_DB_TEST_PORT", "5433"))
+REDIS_TEST_PORT = _resolve_redis_test_port(os.getenv("C2PRO_REDIS_TEST_PORT", "6380"))
+
+# PostgreSQL test targets are fixed literals, matching docker-compose.test.yml.
+# Do not reintroduce CLI/env DSN overrides here; use a purpose-built migration
+# or staging tool when a non-local target is required.
+TEST_DATABASE_NAME = "c2pro_test"
+ADMIN_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5433/postgres"
+TEST_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5433/c2pro_test"
+
+
+def is_port_open(port: int, timeout_seconds: float = 1.0) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(timeout_seconds)
-        return sock.connect_ex((host, port)) == 0
+        return sock.connect_ex((LOOPBACK_HOST, port)) == 0
 
 
-def wait_for_port(host: str, port: int, timeout_seconds: int) -> bool:
+def wait_for_port(port: int, timeout_seconds: int) -> bool:
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
-        if is_port_open(host, port):
+        if is_port_open(port):
             return True
         time.sleep(1)
     return False
@@ -89,89 +143,100 @@ def assert_head_revision(database_url: str, api_dir: Path) -> str:
     return expected_head
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db-host", default="localhost")
-    parser.add_argument("--db-port", type=int, default=5433)
-    parser.add_argument("--redis-host", default="localhost")
-    parser.add_argument("--redis-port", type=int, default=6380)
-    parser.add_argument(
-        "--database-url",
-        default="postgresql://postgres:postgres@localhost:5433/c2pro_test",
-    )
-    parser.add_argument(
-        "--admin-url",
-        default="postgresql://postgres:postgres@localhost:5433/postgres",
-    )
-    parser.add_argument("--database-name", default="c2pro_test")
-    parser.add_argument("--start-services", action="store_true")
-    parser.add_argument("--wait-seconds", type=int, default=45)
-    parser.add_argument("--require-redis", action="store_true")
-    parser.add_argument(
-        "--recreate-db",
-        action="store_true",
-        help="Drop and recreate the target test database before running migrations.",
-    )
-    args = parser.parse_args()
-
-    repo_root = Path(__file__).resolve().parents[3]
-    api_dir = repo_root / "apps" / "api"
-
+def _ensure_db_ready(args: argparse.Namespace, repo_root: Path, api_dir: Path) -> None:
+    """Preflight DB: local port, DB readiness, migrations, checkpoint schema."""
+    host = LOOPBACK_HOST
+    db_port = DB_TEST_PORT
     print("== Preflight: DB port ==")
-    if not is_port_open(args.db_host, args.db_port):
+    if not is_port_open(db_port):
         if args.start_services:
             print("DB port closed. Starting postgres-test via docker compose...")
             try:
                 start_postgres_with_docker_compose(repo_root)
             except Exception as exc:
                 raise RuntimeError(f"Failed to start postgres-test with docker compose: {exc}") from exc
-            if not wait_for_port(args.db_host, args.db_port, args.wait_seconds):
-                raise RuntimeError(f"DB port {args.db_host}:{args.db_port} did not become reachable.")
+            if not wait_for_port(db_port, args.wait_seconds):
+                raise RuntimeError(f"DB port {host}:{db_port} did not become reachable.")
         else:
             raise RuntimeError(
-                f"DB port {args.db_host}:{args.db_port} is not reachable. "
+                f"DB port {host}:{db_port} is not reachable. "
                 "Use --start-services or start test DB manually."
             )
-    print(f"OK DB port reachable: {args.db_host}:{args.db_port}")
+    print(f"OK DB port reachable: {host}:{db_port}")
 
     print("== Preflight: DB readiness ==")
-    wait_for_database_ready(args.admin_url, args.wait_seconds)
+    wait_for_database_ready(ADMIN_DATABASE_URL, args.wait_seconds)
     print("OK DB admin connection ready")
 
     print("== Preflight: Ensure DB exists ==")
     if args.recreate_db:
-        recreate_database(args.admin_url, args.database_name)
-        print(f"OK DB recreated: {args.database_name}")
+        recreate_database(ADMIN_DATABASE_URL, TEST_DATABASE_NAME)
+        print(f"OK DB recreated: {TEST_DATABASE_NAME}")
     else:
-        ensure_database_exists(args.admin_url, args.database_name)
-        print(f"OK DB exists: {args.database_name}")
+        ensure_database_exists(ADMIN_DATABASE_URL, TEST_DATABASE_NAME)
+        print(f"OK DB exists: {TEST_DATABASE_NAME}")
 
     print("== Apply migrations ==")
-    run_alembic_upgrade(api_dir, args.database_url)
-    head = assert_head_revision(args.database_url, api_dir)
+    run_alembic_upgrade(api_dir, TEST_DATABASE_URL)
+    head = assert_head_revision(TEST_DATABASE_URL, api_dir)
     print(f"OK migrations at head: {head}")
 
+    # Option-C C2: the LangGraph checkpoint schema is provisioned by
+    # AsyncPostgresSaver.setup(), which Alembic does not run (it is not an
+    # Alembic-managed schema) and which application runtime no longer runs
+    # either (ensure_checkpointer_ready is read-only -- see
+    # src/analysis/adapters/graph/workflow.py). Test infra plays the
+    # owner-bootstrap role here, exactly as a real deployment's bootstrap
+    # step would before the application starts.
+    print("== Checkpoint schema bootstrap ==")
+    asyncio.run(bootstrap_checkpoint_schema(TEST_DATABASE_URL))
+    print("OK checkpoint schema is current")
+
+
+def _ensure_redis_ready(args: argparse.Namespace, repo_root: Path) -> None:
+    """Preflight Redis: start via docker compose if needed; soft-fail unless --require-redis."""
+    host = LOOPBACK_HOST
+    redis_port = REDIS_TEST_PORT
     print("== Preflight: Redis ==")
-    redis_ok = is_port_open(args.redis_host, args.redis_port)
+    redis_ok = is_port_open(redis_port)
     if not redis_ok and args.start_services:
         print("Redis port closed. Starting redis-test via docker compose...")
         try:
             start_redis_with_docker_compose(repo_root)
         except Exception as exc:
             raise RuntimeError(f"Failed to start redis-test with docker compose: {exc}") from exc
-        redis_ok = wait_for_port(args.redis_host, args.redis_port, args.wait_seconds)
+        redis_ok = wait_for_port(redis_port, args.wait_seconds)
 
     if redis_ok:
-        print(f"OK Redis reachable: {args.redis_host}:{args.redis_port}")
+        print(f"OK Redis reachable: {host}:{redis_port}")
     elif args.require_redis:
         raise RuntimeError(
-            f"Redis not reachable at {args.redis_host}:{args.redis_port} and --require-redis is set."
+            f"Redis not reachable at {host}:{redis_port} and --require-redis is set."
         )
     else:
         print(
-            f"WARN Redis not reachable at {args.redis_host}:{args.redis_port}. "
+            f"WARN Redis not reachable at {host}:{redis_port}. "
             "Continuing (soft fail policy)."
         )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--start-services", action="store_true")
+    parser.add_argument("--wait-seconds", type=int, default=45)
+    parser.add_argument("--require-redis", action="store_true")
+    parser.add_argument(
+        "--recreate-db",
+        action="store_true",
+        help="Drop and recreate the canonical local test database before running migrations.",
+    )
+    args = parser.parse_args()
+
+    repo_root = Path(__file__).resolve().parents[3]
+    api_dir = repo_root / "apps" / "api"
+
+    _ensure_db_ready(args, repo_root, api_dir)
+    _ensure_redis_ready(args, repo_root)
 
     print("== Test infra bootstrap complete ==")
     return 0

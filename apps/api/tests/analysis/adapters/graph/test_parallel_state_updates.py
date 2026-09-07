@@ -67,10 +67,13 @@ async def test_parallel_branches_return_only_branch_local_updates(monkeypatch: p
         assert "tenant_id" not in result
 
 
-@pytest.mark.asyncio
-async def test_parallel_dispatch_does_not_rewrite_shared_identity_state() -> None:
-    """TS-UA-ANA-GRAPH-001 - The fan-out anchor emits no full-state rewrite."""
-    assert await enrichment_dispatch_node(_base_state()) == {}  # type: ignore[arg-type]
+def test_parallel_dispatch_does_not_rewrite_shared_identity_state() -> None:
+    """TS-UA-ANA-GRAPH-001 - The fan-out anchor emits no full-state rewrite.
+
+    The dispatch node is synchronous: it returns a plain dict (not a coroutine),
+    which also proves it is the sync passthrough contract the graph expects.
+    """
+    assert enrichment_dispatch_node(_base_state()) == {}  # type: ignore[arg-type]
 
 
 def test_workflow_compile_does_not_use_reserved_checkpoint_channel() -> None:
