@@ -588,6 +588,8 @@ async def test_008_concurrent_requests_tenant_isolation(
     user_b: User,
     tenant_a: Tenant,
     tenant_b: Tenant,
+    project_a: dict,
+    project_b: dict,
     generate_token,
 ):
     """
@@ -613,6 +615,9 @@ async def test_008_concurrent_requests_tenant_isolation(
     headers_a = {"Authorization": f"Bearer {token_a}"}
     headers_b = {"Authorization": f"Bearer {token_b}"}
 
+    project_a_id = str(project_a["id"])
+    project_b_id = str(project_b["id"])
+
     # Make concurrent requests
     async def fetch_projects_a():
         return await client.get("/api/v1/projects", headers=headers_a)
@@ -635,17 +640,21 @@ async def test_008_concurrent_requests_tenant_isolation(
         assert response_a.status_code == 200
         assert response_b.status_code == 200
 
-        # Extract tenant_ids from responses (if available in metadata)
-        # At minimum, verify responses are different
         body_a = response_a.json()
         body_b = response_b.json()
 
-        # Responses should be different (unless both have 0 projects, in which case
-        # both return empty lists and are equal). This validates basic isolation:
-        # Tenant A should only see their projects, Tenant B only theirs.
-        if body_a or body_b:
-            # At least one has projects - they must be different due to RLS isolation
-            assert body_a != body_b, "Tenant responses must not leak across tenants"
+        ids_a = {item["id"] for item in body_a.get("items", [])}
+        ids_b = {item["id"] for item in body_b.get("items", [])}
+
+        # Tenant A sees their own project
+        assert project_a_id in ids_a, f"Tenant A should see Project A ({project_a_id})"
+        # Tenant A never sees Tenant B's project
+        assert project_b_id not in ids_a, f"Tenant A must not see Project B ({project_b_id})"
+
+        # Tenant B sees their own project
+        assert project_b_id in ids_b, f"Tenant B should see Project B ({project_b_id})"
+        # Tenant B never sees Tenant A's project
+        assert project_a_id not in ids_b, f"Tenant B must not see Project A ({project_a_id})"
 
 
 # ===========================================
