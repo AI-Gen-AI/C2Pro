@@ -15,14 +15,14 @@ import psycopg
 from checkpoint_bootstrap import bootstrap_checkpoint_schema
 from verify_migration_health import parse_migration_graph, recreate_database, validate_linear_chain
 
-# This script only ever probes LOCAL/CI test services. The socket probe is
-# pinned to a fixed loopback literal — there is no caller-controlled host
-# selection, so a misconfigured invocation can never turn the port probe into
-# a connection to an arbitrary external host (removes the SSRF taint source).
+# This script only ever probes LOCAL/CI test services. The network boundary is
+# deliberately closed: callers cannot choose a host, port, database URL, or
+# database name. This matters for agent/LLM-driven invocations too — malformed
+# CLI input cannot redirect any connection to an arbitrary network target.
 LOOPBACK_HOST = "127.0.0.1"
 
-# Strict port allowlist — only these values are accepted to prevent
-# arbitrary port data from reaching the network sink.
+# Strict port allowlist — only these values are accepted to prevent arbitrary
+# port data from reaching the network sink.
 ALLOWED_DB_PORTS: frozenset[int] = frozenset({5433})
 ALLOWED_REDIS_PORTS: frozenset[int] = frozenset({6379, 6380})
 
@@ -57,9 +57,15 @@ def _resolve_redis_test_port(raw: str) -> int:
     return port
 
 
-# Port constants - validated via explicit allowlist to prevent SSRF via port injection
 DB_TEST_PORT = _resolve_db_test_port(os.getenv("C2PRO_DB_TEST_PORT", "5433"))
 REDIS_TEST_PORT = _resolve_redis_test_port(os.getenv("C2PRO_REDIS_TEST_PORT", "6380"))
+
+# PostgreSQL test targets are fixed literals, matching docker-compose.test.yml.
+# Do not reintroduce CLI/env DSN overrides here; use a purpose-built migration
+# or staging tool when a non-local target is required.
+TEST_DATABASE_NAME = "c2pro_test"
+ADMIN_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5433/postgres"
+TEST_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5433/c2pro_test"
 
 
 def is_port_open(port: int, timeout_seconds: float = 1.0) -> bool:
@@ -138,7 +144,7 @@ def assert_head_revision(database_url: str, api_dir: Path) -> str:
 
 
 def _ensure_db_ready(args: argparse.Namespace, repo_root: Path, api_dir: Path) -> None:
-    """Preflight DB: port reachable, admin connection ready, DB exists, migrations + checkpoint schema."""
+    """Preflight DB: local port, DB readiness, migrations, checkpoint schema."""
     host = LOOPBACK_HOST
     db_port = DB_TEST_PORT
     print("== Preflight: DB port ==")
@@ -159,20 +165,20 @@ def _ensure_db_ready(args: argparse.Namespace, repo_root: Path, api_dir: Path) -
     print(f"OK DB port reachable: {host}:{db_port}")
 
     print("== Preflight: DB readiness ==")
-    wait_for_database_ready(args.admin_url, args.wait_seconds)
+    wait_for_database_ready(ADMIN_DATABASE_URL, args.wait_seconds)
     print("OK DB admin connection ready")
 
     print("== Preflight: Ensure DB exists ==")
     if args.recreate_db:
-        recreate_database(args.admin_url, args.database_name)
-        print(f"OK DB recreated: {args.database_name}")
+        recreate_database(ADMIN_DATABASE_URL, TEST_DATABASE_NAME)
+        print(f"OK DB recreated: {TEST_DATABASE_NAME}")
     else:
-        ensure_database_exists(args.admin_url, args.database_name)
-        print(f"OK DB exists: {args.database_name}")
+        ensure_database_exists(ADMIN_DATABASE_URL, TEST_DATABASE_NAME)
+        print(f"OK DB exists: {TEST_DATABASE_NAME}")
 
     print("== Apply migrations ==")
-    run_alembic_upgrade(api_dir, args.database_url)
-    head = assert_head_revision(args.database_url, api_dir)
+    run_alembic_upgrade(api_dir, TEST_DATABASE_URL)
+    head = assert_head_revision(TEST_DATABASE_URL, api_dir)
     print(f"OK migrations at head: {head}")
 
     # Option-C C2: the LangGraph checkpoint schema is provisioned by
@@ -183,7 +189,7 @@ def _ensure_db_ready(args: argparse.Namespace, repo_root: Path, api_dir: Path) -
     # owner-bootstrap role here, exactly as a real deployment's bootstrap
     # step would before the application starts.
     print("== Checkpoint schema bootstrap ==")
-    asyncio.run(bootstrap_checkpoint_schema(args.database_url))
+    asyncio.run(bootstrap_checkpoint_schema(TEST_DATABASE_URL))
     print("OK checkpoint schema is current")
 
 
@@ -216,22 +222,13 @@ def _ensure_redis_ready(args: argparse.Namespace, repo_root: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--database-url",
-        default="postgresql://postgres:postgres@localhost:5433/c2pro_test",
-    )
-    parser.add_argument(
-        "--admin-url",
-        default="postgresql://postgres:postgres@localhost:5433/postgres",
-    )
-    parser.add_argument("--database-name", default="c2pro_test")
     parser.add_argument("--start-services", action="store_true")
     parser.add_argument("--wait-seconds", type=int, default=45)
     parser.add_argument("--require-redis", action="store_true")
     parser.add_argument(
         "--recreate-db",
         action="store_true",
-        help="Drop and recreate the target test database before running migrations.",
+        help="Drop and recreate the canonical local test database before running migrations.",
     )
     args = parser.parse_args()
 
