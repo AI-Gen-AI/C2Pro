@@ -130,36 +130,15 @@ async def test_provision_clerk_user_does_not_collide_personal_tenants_for_simila
     """Should derive unique fallback tenant names for Clerk users that share a prefix."""
     personal_lookup = AsyncMock(return_value=None)
     user_lookup = AsyncMock(return_value=None)
-
-    tenant_a_id = uuid4()
-    tenant_b_id = uuid4()
-
-    # Pre-insert mock Tenant objects so the foreign key constraint is satisfied during the fallback ORM path
-    tenant_a = Tenant(
-        id=tenant_a_id,
-        name="Personal-user_3BgY58Wt12J4J5RU0Skakyqdl2w",
-        slug="personal-user-3bgy58wt12j4j5ru0skakyqdl2w",
-        is_active=True,
-    )
-    tenant_b = Tenant(
-        id=tenant_b_id,
-        name="Personal-user_3BgeltNBwogx83fcj2SMFBQFm1D",
-        slug="personal-user-3bgeltnbwogx83fcj2smfbqfm1d",
-        is_active=True,
-    )
-    db.add(tenant_a)
-    db.add(tenant_b)
-    await db.flush()
-
     create_tenant = AsyncMock(
         side_effect=[
             BootstrapTenantRecord(
-                tenant_id=tenant_a_id,
+                tenant_id=uuid4(),
                 is_active=True,
                 tenant_name="Personal-user_3BgY58Wt12J4J5RU0Skakyqdl2w",
             ),
             BootstrapTenantRecord(
-                tenant_id=tenant_b_id,
+                tenant_id=uuid4(),
                 is_active=True,
                 tenant_name="Personal-user_3BgeltNBwogx83fcj2SMFBQFm1D",
             ),
