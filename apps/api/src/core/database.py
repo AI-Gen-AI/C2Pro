@@ -320,6 +320,7 @@ async def init_admin_ops_db() -> None:
 
     Uses ADMIN_OPS_DATABASE_URL from settings. No fallback to DATABASE_URL.
     Must be called before any admin operations endpoints are accessed.
+    Missing ADMIN_OPS_DATABASE_URL does not kill ordinary API startup.
     """
     global _admin_ops_engine, _admin_ops_session_factory
 
@@ -327,12 +328,11 @@ async def init_admin_ops_db() -> None:
 
     dsn = settings.admin_ops_database_url
     if not dsn:
-        raise RuntimeError(
-            "ADMIN_OPS_DATABASE_URL is not configured. "
-            "Cross-tenant admin operations require a dedicated credential "
-            "(the c2pro_admin_ops capability role via LOGIN principal member). "
-            "No fallback to DATABASE_URL or owner credential is permitted."
+        logger.warning(
+            "admin_ops_db_unconfigured_at_startup",
+            message="ADMIN_OPS_DATABASE_URL is not set. Cross-tenant admin/DLQ endpoints will be unavailable (503)."
         )
+        return
 
     if dsn.startswith("postgresql://") and not dsn.startswith("postgresql+asyncpg://"):
         dsn = dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
@@ -356,16 +356,19 @@ async def init_admin_ops_db() -> None:
         autoflush=False,
     )
 
-    logger.info("admin_ops_database_engine_created", url=dsn[:50] + "...")
+    logger.info("admin_ops_database_engine_created")
 
 
 async def close_admin_ops_db() -> None:
-    """Close the admin operations database engine."""
-    global _admin_ops_engine
+    """Close the admin operations database engine, clearing both engine and session factory."""
+    global _admin_ops_engine, _admin_ops_session_factory
 
-    if _admin_ops_engine:
-        await _admin_ops_engine.dispose()
+    try:
+        if _admin_ops_engine:
+            await _admin_ops_engine.dispose()
+    finally:
         _admin_ops_engine = None
+        _admin_ops_session_factory = None
         logger.info("admin_ops_database_engine_closed")
 
 
@@ -375,38 +378,78 @@ async def get_admin_ops_session() -> AsyncGenerator[AsyncSession, None]:
     Get a database session for cross-tenant admin operations.
 
     Uses the dedicated ADMIN_OPS_DATABASE_URL credential (C2.5).
-    The session sets the app.admin_ops GUC to signal admin policy evaluation.
+    PostgreSQL ROLE membership is the ONLY database authorization boundary.
+    No GUC (app.admin_ops) is set.
 
-    This session is ONLY reachable from explicit admin/DLQ endpoints.
-    Non-admin HTTP callers are rejected BEFORE this session is acquired.
+    Before yielding, validates the actual database principal to ensure:
+    - LOGIN capability
+    - NOT superuser
+    - NOT BYPASSRLS
+    - NOT CREATEROLE
+    - Correct membership in c2pro_admin_ops
+    - NOT owner of 'dlq_failed_tasks'
+    - No unexpected inherited elevated role membership
 
     Yields:
-        AsyncSession with app.admin_ops = '1' set for admin policy evaluation
+        AsyncSession connected as the verified restricted admin login role.
 
     Raises:
-        RuntimeError: If ADMIN_OPS_DATABASE_URL is not configured or
-                      admin_ops DB not initialized.
+        RuntimeError: If admin DB is uninitialized or validation fails.
     """
     if _admin_ops_session_factory is None:
         raise RuntimeError(
-            "Admin ops database not initialized. Call init_admin_ops_db() first. "
-            "ADMIN_OPS_DATABASE_URL must be configured."
+            "ADMIN_OPS_DATABASE_URL is uninitialized or not configured."
         )
 
     async with _admin_ops_session_factory() as session:
+        # Validate PostgreSQL principal and privileges dynamically via catalog
+        if session.bind and session.bind.dialect.name == "postgresql":
+            result = await session.execute(
+                text(
+                    """
+                    SELECT
+                        rolcanlogin,
+                        rolsuper,
+                        rolbypassrls,
+                        rolcreaterole,
+                        pg_has_role(current_user, 'c2pro_admin_ops', 'member') AS is_member,
+                        EXISTS (
+                            SELECT 1 FROM pg_class c
+                            JOIN pg_roles r ON c.relowner = r.oid
+                            WHERE c.relname = 'dlq_failed_tasks' AND r.rolname = current_user
+                        ) AS is_table_owner,
+                        EXISTS (
+                            SELECT 1 FROM pg_auth_members m
+                            JOIN pg_roles r ON m.roleid = r.oid
+                            WHERE m.member = current_user::regrole
+                            AND r.rolname NOT IN ('c2pro_admin_ops', 'public')
+                        ) AS has_extra_inherited
+                    FROM pg_roles
+                    WHERE rolname = current_user
+                    """
+                )
+            )
+            row = result.fetchone()
+            if row:
+                rolcanlogin, rolsuper, rolbypassrls, rolcreaterole, is_member, is_table_owner, has_extra_inherited = row
+                if not rolcanlogin:
+                    raise RuntimeError("Database principal lacks LOGIN privilege.")
+                if rolsuper:
+                    raise RuntimeError("Superuser login is strictly forbidden for admin operations.")
+                if rolbypassrls:
+                    raise RuntimeError("BypassRLS login is strictly forbidden for admin operations.")
+                if rolcreaterole:
+                    raise RuntimeError("CreateRole login is strictly forbidden for admin operations.")
+                if not is_member:
+                    raise RuntimeError("Database principal is not a member of c2pro_admin_ops.")
+                if is_table_owner:
+                    raise RuntimeError("Database principal owns dlq_failed_tasks (bypassing RLS).")
+                if has_extra_inherited:
+                    raise RuntimeError("Database principal possesses unexpected inherited role memberships.")
+
         try:
-            # Set admin ops GUC for admin policy evaluation
-            await session.execute(text("SET LOCAL app.admin_ops = '1'"))
-            logger.debug("admin_ops_guc_set")
-
             yield session
-
             await session.commit()
         except Exception:
             await session.rollback()
             raise
-        finally:
-            # Explicit cleanup
-            with suppress(Exception):
-                await session.execute(text("RESET app.admin_ops"))
-            logger.debug("admin_ops_guc_reset")

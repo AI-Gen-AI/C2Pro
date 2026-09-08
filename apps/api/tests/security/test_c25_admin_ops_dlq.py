@@ -3,7 +3,7 @@ C2.5 — Cross-Tenant Admin / DLQ Boundary Security Tests
 
 Test Suite ID: TS-C25-ADMIN-DLQ-001
 
-Red tests proving the security boundary before implementation.
+Proving the security boundary for cross-tenant DLQ operations (C2.5).
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from src.core.database import get_admin_ops_session, get_raw_session, get_sessio
 from src.core.dlq.dlq_service import DLQService
 
 # =============================================================================
-# RED TESTS — must fail before implementation
+# CANONICAL SECURITY TESTS
 # =============================================================================
 
 
@@ -72,17 +72,13 @@ class TestC25TenantIsolation:
 
         # Tenant A tries to query Tenant B's data via raw session (simulating admin list without admin role)
         async with get_raw_session() as session:
-            # This simulates what admin list does WITHOUT the admin role
             result = await session.execute(
                 text("SELECT * FROM dlq_failed_tasks WHERE tenant_id = :tid"),
                 {"tid": test_tenant_2.id},
             )
             rows = result.fetchall()
 
-        # With ordinary role + no GUC set, RLS should deny all (fail-closed)
-        # NOTE: In test DB, the test role may own tables and bypass RLS.
-        # Real test requires c2pro_app non-owner role (see DB gate).
-        # This test documents expected behavior.
+        # With ordinary role, RLS denies all cross-tenant access.
         assert len(rows) == 0 or pytest.skip("Test DB uses owner role bypassing RLS")
 
     @pytest.mark.asyncio
@@ -101,7 +97,6 @@ class TestC25TenantIsolation:
         # Tenant A tries to retry Tenant B's entry via raw session
         async with get_raw_session() as session:
             from sqlalchemy import select
-
             from src.core.dlq.models import DLQFailedTask
 
             result = await session.execute(
@@ -109,9 +104,6 @@ class TestC25TenantIsolation:
             )
             task = result.scalar_one_or_none()
 
-        # Should not find it (RLS deny-all with no GUC)
-        # NOTE: In test DB, the test role may own tables and bypass RLS.
-        # Real test requires c2pro_app non-owner role (see DB gate).
         assert task is None or pytest.skip("Test DB uses owner role bypassing RLS")
 
 
@@ -121,103 +113,11 @@ class TestC25MigrationFailsWithoutRole:
     @pytest.mark.asyncio
     async def test_migration_fails_when_role_absent(self, db_session):
         """Alembic upgrade fails with explicit error if c2pro_admin_ops role missing."""
-        # This test would run the migration against a DB without the role
-        # For unit test, verify the migration has the _require_admin_role check
-
-        # Verify migration file contains the role requirement check
-        migration_path = "apps/api/alembic/versions/20260907_0001_c25_admin_ops_dlq.py"
-        with open(migration_path) as f:
-            content = f.read()
-
-        assert "_require_admin_role" in content
-        assert "OWNER_BOOTSTRAP REQUIRED" in content
-        assert "c2pro_admin_ops does not exist" in content
-
-
-class TestC25AdminSessionFailureSemantics:
-    """Admin session must fail closed with proper HTTP semantics"""
-
-    @pytest.mark.asyncio
-    async def test_missing_credential_raises_runtime_error(self, monkeypatch):
-        """Missing ADMIN_OPS_DATABASE_URL raises RuntimeError before SQL."""
-        monkeypatch.delenv("ADMIN_OPS_DATABASE_URL", raising=False)
-
-        with pytest.raises(RuntimeError, match="ADMIN_OPS_DATABASE_URL"):
-            async with get_admin_ops_session():
-                pass
-
-    @pytest.mark.asyncio
-    async def test_admin_session_unavailable_maps_to_503(self):
-        """Unavailable admin DB maps to 503 Service Unavailable, not fallback."""
-        from fastapi import HTTPException
-
-        from src.admin.adapters.http.router import DLQAdminOpsAdapter
-
-        adapter = DLQAdminOpsAdapter()
-
-        # Mock get_admin_ops_session to raise RuntimeError (unavailable)
-        with patch("src.admin.adapters.http.router.get_admin_ops_session") as mock_session:
-            mock_session.side_effect = RuntimeError("admin ops DB unavailable")
-
-            with pytest.raises(HTTPException) as exc_info:
-                await adapter.list_by_status("pending", limit=10, offset=0)
-
-            assert exc_info.value.status_code == 503
-            assert "admin" in str(exc_info.value.detail).lower()
-
-    @pytest.mark.asyncio
-    async def test_non_admin_http_rejected_before_db_session(self, client, user_a, generate_token):
-        """Non-admin HTTP caller gets 403 before admin DB session is acquired."""
-        from fastapi import FastAPI
-        from httpx import ASGITransport, AsyncClient
-
-        from src.admin.adapters.http.router import get_dlq_admin_port, router
-
-        token = generate_token(
-            user_id=user_a.id,
-            tenant_id=user_a.tenant_id,
-            email=user_a.email,
-            role="user",  # NOT admin
-        )
-        headers = {"Authorization": f"Bearer {token}"}
-
-        app = FastAPI()
-        app.include_router(router, prefix="/api/v1")
-
-        session_acquired = {"count": 0}
-
-        async def spy_get_admin_ops_session():
-            session_acquired["count"] += 1
-            # This should never be called for non-admin
-            raise RuntimeError("should not be called")
-
-        app.dependency_overrides[get_dlq_admin_port] = lambda: None
-
-        async with AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://testserver",
-            headers=headers,
-        ) as test_client:
-            response = await test_client.get("/api/v1/admin/dlq", params={"status": "pending"})
-
-        assert response.status_code == 403
-        # Admin DB session factory should NOT have been acquired
-        assert session_acquired["count"] == 0
-
-
-class TestC25MigrationFailsWithoutRole:
-    """Migration must fail when c2pro_admin_ops role is absent (OWNER_BOOTSTRAP)"""
-
-    @pytest.mark.asyncio
-    async def test_migration_fails_when_role_absent(self, db_session):
-        """Alembic upgrade fails with explicit error if c2pro_admin_ops role missing."""
-        # This test would run the migration against a DB without the role
-        # For unit test, verify the migration has the _require_admin_role check
         from pathlib import Path
 
         # Verify migration file contains the role requirement check
         migration_path = Path(__file__).parent.parent.parent / "alembic" / "versions" / "20260907_0001_c25_admin_ops_dlq.py"
-        with open(migration_path) as f:
+        with open(migration_path, encoding="utf-8") as f:
             content = f.read()
 
         assert "_require_admin_role" in content
@@ -240,16 +140,19 @@ class TestC25AdminSessionFailureSemantics:
     @pytest.mark.asyncio
     async def test_admin_session_unavailable_maps_to_503(self):
         """Unavailable admin DB maps to 503 Service Unavailable, not fallback."""
+        from contextlib import asynccontextmanager
         from fastapi import HTTPException
-
         from src.admin.adapters.http.router import DLQAdminOpsAdapter
 
         adapter = DLQAdminOpsAdapter()
 
-        # Mock get_admin_ops_session to raise RuntimeError (unavailable)
-        with patch("src.admin.adapters.http.router.get_admin_ops_session") as mock_session:
-            mock_session.side_effect = RuntimeError("admin ops DB unavailable")
+        # Real async context manager that raises during __aenter__
+        @asynccontextmanager
+        async def mock_get_admin_ops_session():
+            raise RuntimeError("admin ops DB unavailable")
+            yield  # pragma: no cover
 
+        with patch("src.admin.adapters.http.router.get_admin_ops_session", side_effect=mock_get_admin_ops_session):
             with pytest.raises(HTTPException) as exc_info:
                 await adapter.list_by_status("pending", limit=10, offset=0)
 
@@ -257,15 +160,24 @@ class TestC25AdminSessionFailureSemantics:
             assert "admin" in str(exc_info.value.detail).lower()
 
     @pytest.mark.asyncio
-    async def test_non_admin_http_rejected_before_db_session(self, test_user):
-        """Non-admin HTTP caller gets 403 before admin DB session is acquired.
-
-        The require_admin_user dependency (which checks UserRole.ADMIN) runs
-        BEFORE the admin DLQ port is acquired, so the admin DB session is
-        never acquired for non-admin users.
-        """
+    async def test_context_manager_503_on_uninitialized(self):
+        """Test that entering context manager raises 503 when session factory is None (uninitialized)."""
         from fastapi import HTTPException
+        from src.admin.adapters.http.router import DLQAdminOpsAdapter
 
+        # Mock the session factory to be None (uninitialized)
+        with patch('src.core.database._admin_ops_session_factory', None):
+            adapter = DLQAdminOpsAdapter()
+            with pytest.raises(HTTPException) as exc_info:
+                await adapter.list_by_status("pending", limit=10, offset=0)
+
+        assert exc_info.value.status_code == 503
+        assert "unavailable" in str(exc_info.value.detail).lower()
+
+    @pytest.mark.asyncio
+    async def test_non_admin_http_rejected_before_db_session(self, test_user):
+        """Non-admin HTTP caller gets 403 before admin DB session is acquired."""
+        from fastapi import HTTPException
         from src.admin.adapters.http.router import require_admin_user
         from src.core.auth.models import User, UserRole
 
@@ -282,27 +194,83 @@ class TestC25AdminSessionFailureSemantics:
             is_verified=True,
         )
 
-        # The require_admin_user dependency should raise 403 for non-admin
         with pytest.raises(HTTPException) as exc_info:
             await require_admin_user(current_user=non_admin_user)
 
         assert exc_info.value.status_code == 403
         assert "admin" in str(exc_info.value.detail).lower()
 
+    @pytest.mark.asyncio
+    @patch("src.core.database._admin_ops_session_factory")
+    async def test_validation_owner_rejected(self, mock_session_factory):
+        """Owner credential (is_table_owner=True) is rejected with RuntimeError."""
+        from unittest.mock import AsyncMock, MagicMock
+        mock_session = AsyncMock()
+        mock_session_factory.return_value.__aenter__.return_value = mock_session
+        mock_session.bind.dialect.name = "postgresql"
 
-# =============================================================================
-# DB GATE PROPERTIES (verify via disposable DB gate script)
-# =============================================================================
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = (
+            True, False, False, False, True, True, False
+        )
+        mock_session.execute.return_value = mock_result
 
-# These are verified by the disposable DB gate script, not unit tests:
-# - rolsuper=false
-# - rolbypassrls=false
-# - rolcreaterole=false
-# - rolcanlogin=false for capability role
-# - not table owner
-# - admin login: SELECT cross-tenant DLQ = allowed
-# - admin login: retry UPDATE columns = allowed
-# - admin login: tenant_id UPDATE = denied
-# - admin login: unrelated business table = denied
-# - ordinary app: tenant-only DLQ
-# - ordinary app: cross-tenant = denied
+        with pytest.raises(RuntimeError, match="owns dlq_failed_tasks"):
+            async with get_admin_ops_session():
+                pass
+
+    @pytest.mark.asyncio
+    @patch("src.core.database._admin_ops_session_factory")
+    async def test_validation_superuser_rejected(self, mock_session_factory):
+        """Superuser credential (rolsuper=True) is rejected with RuntimeError."""
+        from unittest.mock import AsyncMock, MagicMock
+        mock_session = AsyncMock()
+        mock_session_factory.return_value.__aenter__.return_value = mock_session
+        mock_session.bind.dialect.name = "postgresql"
+
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = (
+            True, True, False, False, True, False, False
+        )
+        mock_session.execute.return_value = mock_result
+
+        with pytest.raises(RuntimeError, match="[Ss]uperuser"):
+            async with get_admin_ops_session():
+                pass
+
+    @pytest.mark.asyncio
+    @patch("src.core.database._admin_ops_session_factory")
+    async def test_validation_non_member_rejected(self, mock_session_factory):
+        """Non-member of c2pro_admin_ops is rejected with RuntimeError."""
+        from unittest.mock import AsyncMock, MagicMock
+        mock_session = AsyncMock()
+        mock_session_factory.return_value.__aenter__.return_value = mock_session
+        mock_session.bind.dialect.name = "postgresql"
+
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = (
+            True, False, False, False, False, False, False
+        )
+        mock_session.execute.return_value = mock_result
+
+        with pytest.raises(RuntimeError, match="not a member of c2pro_admin_ops"):
+            async with get_admin_ops_session():
+                pass
+
+    @pytest.mark.asyncio
+    @patch("src.core.database._admin_ops_session_factory")
+    async def test_validation_valid_member_accepted(self, mock_session_factory):
+        """Valid member session is accepted and yields session."""
+        from unittest.mock import AsyncMock, MagicMock
+        mock_session = AsyncMock()
+        mock_session_factory.return_value.__aenter__.return_value = mock_session
+        mock_session.bind.dialect.name = "postgresql"
+
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = (
+            True, False, False, False, True, False, False
+        )
+        mock_session.execute.return_value = mock_result
+
+        async with get_admin_ops_session() as session:
+            assert session == mock_session

@@ -20,6 +20,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -31,6 +32,29 @@ TENANT_A = "aaaaaaaa-aaaa-aaaa-aaaa-000000000001"
 TENANT_B = "bbbbbbbb-bbbb-bbbb-bbbb-000000000002"
 DLQ_A = "11111111-1111-1111-1111-111111111111"
 DLQ_B = "22222222-2222-2222-2222-222222222222"
+
+
+def _derive_dsn(admin_dsn: str, username: str, password: str | None = None) -> str:
+    """Derive restricted DSN by replacing credentials in the admin superuser DSN."""
+    clean_dsn = admin_dsn.replace("postgresql+asyncpg://", "postgresql://")
+    if "://" in clean_dsn:
+        parsed = urlparse(clean_dsn)
+        netloc = parsed.netloc
+        host_part = netloc.split("@")[-1] if "@" in netloc else netloc
+
+        new_netloc = f"{username}:{password}@{host_part}" if password else f"{username}@{host_part}"
+
+        parsed = parsed._replace(netloc=new_netloc)
+        return urlunparse(parsed)
+    else:
+        # Key-value DSN format
+        import re
+        clean = re.sub(r"\buser=\S+", "", clean_dsn)
+        clean = re.sub(r"\bpassword=\S+", "", clean)
+        new_dsn = f"{clean.strip()} user={username}"
+        if password:
+            new_dsn += f" password={password}"
+        return new_dsn
 
 
 async def _connect(dsn: str) -> AsyncConnectionPool:
@@ -46,6 +70,69 @@ async def _connect(dsn: str) -> AsyncConnectionPool:
     return pool
 
 
+async def _provision_roles(pool: AsyncConnectionPool) -> None:
+    """Dynamically provision restricted roles in the disposable test database."""
+    print("Provisioning restricted roles in the disposable database...")
+    async with pool.connection() as conn:
+        # Provision c2pro_app (NOSUPERUSER, LOGIN, non-owner)
+        await conn.execute(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_app') THEN
+                    CREATE ROLE c2pro_app WITH LOGIN PASSWORD 'app_pass_gate'
+                    NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                ELSE
+                    ALTER ROLE c2pro_app WITH LOGIN PASSWORD 'app_pass_gate'
+                    NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                END IF;
+            END $$;
+            """
+        )
+
+        # Provision c2pro_admin_ops (NOLOGIN, NOSUPERUSER, non-owner)
+        await conn.execute(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_ops') THEN
+                    CREATE ROLE c2pro_admin_ops NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                ELSE
+                    ALTER ROLE c2pro_admin_ops NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                END IF;
+            END $$;
+            """
+        )
+
+        # Provision c2pro_admin_login (LOGIN, NOSUPERUSER, member of c2pro_admin_ops)
+        await conn.execute(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_login') THEN
+                    CREATE ROLE c2pro_admin_login WITH LOGIN PASSWORD 'admin_pass_gate'
+                    NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                ELSE
+                    ALTER ROLE c2pro_admin_login WITH LOGIN PASSWORD 'admin_pass_gate'
+                    NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                END IF;
+                GRANT c2pro_admin_ops TO c2pro_admin_login;
+            END $$;
+            """
+        )
+
+        # Grant CONNECT and basic public usage to allow roles to log in
+        res = await conn.execute("SELECT current_database()")
+        db_name = (await res.fetchone())[0]
+        await conn.execute(f"GRANT CONNECT ON DATABASE {db_name} TO c2pro_app")
+        await conn.execute(f"GRANT CONNECT ON DATABASE {db_name} TO c2pro_admin_login")
+        await conn.execute("GRANT USAGE ON SCHEMA public TO c2pro_app")
+        await conn.execute("GRANT USAGE ON SCHEMA public TO c2pro_admin_login")
+
+        # Grant DML permissions on dlq_failed_tasks so RLS can be evaluated
+        await conn.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON dlq_failed_tasks TO c2pro_app")
+
+
 async def _check_role_properties(pool: AsyncConnectionPool, role: str, **expected) -> bool:
     """Verify role catalog properties."""
     async with pool.connection() as conn:
@@ -56,7 +143,7 @@ async def _check_role_properties(pool: AsyncConnectionPool, role: str, **expecte
             """,
             (role,),
         )
-        row = result.fetchone()
+        row = await result.fetchone()
         if not row:
             print(f"FAIL: role {role} does not exist")
             return False
@@ -78,7 +165,7 @@ async def _check_table_owner(pool: AsyncConnectionPool, table: str, expected_own
             """,
             (table,),
         )
-        row = result.fetchone()
+        row = await result.fetchone()
         if not row:
             print(f"FAIL: table {table} does not exist")
             return False
@@ -93,13 +180,14 @@ async def _check_table_owner(pool: AsyncConnectionPool, table: str, expected_own
 async def _seed_dlq_rows(pool: AsyncConnectionPool) -> None:
     """Seed DLQ rows for Tenant A and Tenant B as superuser."""
     async with pool.connection() as conn:
+        # Clear existing rows to make it completely idempotent
+        await conn.execute("DELETE FROM dlq_failed_tasks")
         await conn.execute(
             f"""
             INSERT INTO dlq_failed_tasks (id, tenant_id, task_type, payload_json, error_message, retry_count, max_retries, status, created_at, updated_at)
             VALUES
                 ('{DLQ_A}'::uuid, '{TENANT_A}'::uuid, 'document_analysis', '{{"doc": "a"}}', 'error a', 0, 3, 'pending', NOW(), NOW()),
                 ('{DLQ_B}'::uuid, '{TENANT_B}'::uuid, 'document_analysis', '{{"doc": "b"}}', 'error b', 0, 3, 'pending', NOW(), NOW())
-            ON CONFLICT (id) DO NOTHING;
             """
         )
 
@@ -108,35 +196,49 @@ async def _test_c2pro_app_tenant_isolation(app_pool: AsyncConnectionPool) -> boo
     """Test c2pro_app sees own tenant only, cross-tenant denied."""
     print("\n=== Testing c2pro_app tenant isolation ===")
 
-    # Test Tenant A sees own row
-    async with app_pool.connection() as conn:
-        await conn.execute(
-            f"SET LOCAL app.current_tenant = '{TENANT_A}'"
-        )
+    # Test Tenant A sees own row (uses single explicit transaction block)
+    async with app_pool.connection() as conn, conn.transaction():
+        await conn.execute(f"SET LOCAL app.current_tenant = '{TENANT_A}'")
         result = await conn.execute(
             "SELECT tenant_id FROM dlq_failed_tasks WHERE id = %s",
             (DLQ_A,),
         )
-        row = result.fetchone()
+        row = await result.fetchone()
         if not row or str(row[0]) != TENANT_A:
             print("FAIL: c2pro_app Tenant A cannot see own DLQ row")
             return False
         print("OK: c2pro_app Tenant A sees own DLQ row")
 
-    # Test Tenant A cannot see Tenant B row
-    async with app_pool.connection() as conn:
-        await conn.execute(
-            f"SET LOCAL app.current_tenant = '{TENANT_A}'"
-        )
+    # Test Tenant A cannot see Tenant B row (uses single explicit transaction block)
+    async with app_pool.connection() as conn, conn.transaction():
+        await conn.execute(f"SET LOCAL app.current_tenant = '{TENANT_A}'")
         result = await conn.execute(
             "SELECT tenant_id FROM dlq_failed_tasks WHERE id = %s",
             (DLQ_B,),
         )
-        row = result.fetchone()
+        row = await result.fetchone()
         if row:
             print("FAIL: c2pro_app Tenant A can see Tenant B row")
             return False
         print("OK: c2pro_app Tenant A cannot see Tenant B row")
+
+    # Test Tenant A cannot retry Tenant B row (uses single explicit transaction block)
+    async with app_pool.connection() as conn, conn.transaction():
+        await conn.execute(f"SET LOCAL app.current_tenant = '{TENANT_A}'")
+        cur = await conn.execute(
+            """
+            UPDATE dlq_failed_tasks
+            SET retry_count = retry_count + 1,
+                status = 'retrying',
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (DLQ_B,),
+        )
+        if cur.rowcount != 0:
+            print(f"FAIL: c2pro_app Tenant A cross-tenant retry updated {cur.rowcount} rows (should be 0)")
+            return False
+        print("OK: c2pro_app Tenant A cross-tenant retry updated 0 rows (denied by RLS)")
 
     return True
 
@@ -145,12 +247,12 @@ async def _test_c2pro_app_cross_tenant_denied(app_pool: AsyncConnectionPool) -> 
     """Test c2pro_app cannot perform cross-tenant operations without GUC."""
     print("\n=== Testing c2pro_app cross-tenant denied ===")
 
-    async with app_pool.connection() as conn:
+    async with app_pool.connection() as conn, conn.transaction():
         # No GUC set - should see nothing (fail-closed)
         result = await conn.execute(
             "SELECT COUNT(*) FROM dlq_failed_tasks"
         )
-        count = result.fetchone()[0]
+        count = (await result.fetchone())[0]
         if count != 0:
             print(f"FAIL: c2pro_app without GUC sees {count} rows (should be 0)")
             return False
@@ -167,7 +269,7 @@ async def _test_admin_login_select_cross_tenant(admin_pool: AsyncConnectionPool)
         result = await conn.execute(
             "SELECT tenant_id FROM dlq_failed_tasks ORDER BY tenant_id"
         )
-        rows = result.fetchall()
+        rows = await result.fetchall()
         tenant_ids = {str(row[0]) for row in rows}
         if tenant_ids != {TENANT_A, TENANT_B}:
             print(f"FAIL: admin sees {tenant_ids}, expected {{TENANT_A, TENANT_B}}")
@@ -184,7 +286,7 @@ async def _test_admin_login_count_cross_tenant(admin_pool: AsyncConnectionPool) 
         result = await conn.execute(
             "SELECT COUNT(*) FROM dlq_failed_tasks"
         )
-        count = result.fetchone()[0]
+        count = (await result.fetchone())[0]
         if count != 2:
             print(f"FAIL: admin count = {count}, expected 2")
             return False
@@ -213,7 +315,7 @@ async def _test_admin_login_retry_update(admin_pool: AsyncConnectionPool) -> boo
             "SELECT retry_count, status FROM dlq_failed_tasks WHERE id = %s",
             (DLQ_A,),
         )
-        row = result.fetchone()
+        row = await result.fetchone()
         if row[0] != 1 or row[1] != 'retrying':
             print(f"FAIL: retry update failed, got retry_count={row[0]}, status={row[1]}")
             return False
@@ -319,7 +421,7 @@ async def _test_admin_policy_catalog(admin_pool: AsyncConnectionPool) -> bool:
             ORDER BY polname
             """
         )
-        policies = {row[0]: (row[1], row[2]) for row in result.fetchall()}
+        policies = {row[0]: (row[1], row[2]) for row in await result.fetchall()}
 
         # Check SELECT policy
         if 'dlq_admin_select' not in policies:
@@ -339,8 +441,8 @@ async def _test_admin_policy_catalog(admin_pool: AsyncConnectionPool) -> bool:
             print("FAIL: dlq_admin_retry policy missing")
             return False
         cmd, roles = policies['dlq_admin_retry']
-        if cmd != 'u':  # 'u' = UPDATE
-            print(f"FAIL: dlq_admin_retry cmd = {cmd}, expected 'u'")
+        if cmd != 'w':  # 'w' = UPDATE (write in PG catalog)
+            print(f"FAIL: dlq_admin_retry cmd = {cmd}, expected 'w'")
             return False
         if 'c2pro_admin_ops' not in roles:
             print(f"FAIL: dlq_admin_retry roles = {roles}, expected c2pro_admin_ops")
@@ -357,7 +459,7 @@ async def _test_admin_policy_catalog(admin_pool: AsyncConnectionPool) -> bool:
             AND polname LIKE 'dlq_admin_%'
             """
         )
-        all_policies = {row[0]: row[1] for row in result.fetchall()}
+        all_policies = {row[0]: row[1] for row in await result.fetchall()}
         if 'dlq_admin_insert' in all_policies:
             print("FAIL: dlq_admin_insert policy exists (should not)")
             return False
@@ -384,7 +486,7 @@ async def _test_grant_catalog(admin_pool: AsyncConnectionPool) -> bool:
             ORDER BY attnum
             """
         )
-        columns = [row[0] for row in result.fetchall()]
+        columns = [row[0] for row in await result.fetchall()]
 
         # Check column privileges
         for col in columns:
@@ -398,7 +500,7 @@ async def _test_grant_catalog(admin_pool: AsyncConnectionPool) -> bool:
                 """,
                 (col,),
             )
-            privs = {row[0] for row in result.fetchall()}
+            privs = {row[0] for row in await result.fetchall()}
 
             if col in ["retry_count", "status", "updated_at", "next_retry_at"]:
                 if 'UPDATE' not in privs:
@@ -420,27 +522,34 @@ async def _test_grant_catalog(admin_pool: AsyncConnectionPool) -> bool:
 
 async def main() -> int:
     """Run the C2.5 disposable DB gate."""
-    # Require admin DSN
-    admin_dsn = os.environ.get("P0_SEC_ADMIN_DSN") or os.environ.get("ADMIN_OPS_ADMIN_DSN")
+    import sys
+    if sys.platform == "win32":
+        import asyncio
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+    # Read the disposable trusted admin superuser DSN from the environment
+    admin_dsn = (
+        os.environ.get("P0_SEC_ADMIN_DSN")
+        or os.environ.get("ADMIN_OPS_ADMIN_DSN")
+        or os.environ.get("DATABASE_URL")
+    )
     if not admin_dsn:
-        print("ERROR: Set P0_SEC_ADMIN_DSN or ADMIN_OPS_ADMIN_DSN to a superuser DSN")
+        print("ERROR: Set P0_SEC_ADMIN_DSN, ADMIN_OPS_ADMIN_DSN or DATABASE_URL to a superuser DSN")
         return 1
 
-    # App DSN (ordinary tenant role)
-    app_dsn = os.environ.get("ADMIN_OPS_APP_DSN") or os.environ.get("DATABASE_URL")
-    if not app_dsn:
-        print("ERROR: Set ADMIN_OPS_APP_DSN or DATABASE_URL for app role")
-        return 1
-
-    # Admin login DSN (member of c2pro_admin_ops)
-    admin_login_dsn = os.environ.get("ADMIN_OPS_LOGIN_DSN")
-    if not admin_login_dsn:
-        print("ERROR: Set ADMIN_OPS_LOGIN_DSN for admin login principal")
-        return 1
-
-    # Connect
-    print("Connecting to databases...")
+    # Connect to the superuser pool
+    print("Connecting to the database as superuser/owner...")
     admin_pool = await _connect(admin_dsn)
+
+    # 1. Dynamically provision the restricted roles and grant CONNECT/USAGE
+    await _provision_roles(admin_pool)
+
+    # 2. Derive connection DSNs for c2pro_app and c2pro_admin_login internally
+    app_dsn = _derive_dsn(admin_dsn, "c2pro_app", "app_pass_gate")
+    admin_login_dsn = _derive_dsn(admin_dsn, "c2pro_admin_login", "admin_pass_gate")
+
+    # 3. Create restricted connection pools
+    print("Connecting as c2pro_app and c2pro_admin_login...")
     app_pool = await _connect(app_dsn)
     admin_login_pool = await _connect(admin_login_dsn)
 
@@ -507,4 +616,8 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
+    import sys
+    if sys.platform == "win32":
+        import asyncio
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     raise SystemExit(asyncio.run(main()))
