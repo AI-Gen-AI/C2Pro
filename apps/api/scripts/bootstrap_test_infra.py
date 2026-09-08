@@ -33,13 +33,9 @@ def _resolve_db_test_port(raw: str) -> int:
     try:
         port = int(raw)
     except ValueError as exc:
-        raise ValueError(
-            f"C2PRO_DB_TEST_PORT must be an integer, got: {raw!r}"
-        ) from exc
+        raise ValueError(f"C2PRO_DB_TEST_PORT must be an integer, got: {raw!r}") from exc
     if port not in ALLOWED_DB_PORTS:
-        raise ValueError(
-            f"C2PRO_DB_TEST_PORT={port} not in allowlist {sorted(ALLOWED_DB_PORTS)}"
-        )
+        raise ValueError(f"C2PRO_DB_TEST_PORT={port} not in allowlist {sorted(ALLOWED_DB_PORTS)}")
     return port
 
 
@@ -48,9 +44,7 @@ def _resolve_redis_test_port(raw: str) -> int:
     try:
         port = int(raw)
     except ValueError as exc:
-        raise ValueError(
-            f"C2PRO_REDIS_TEST_PORT must be an integer, got: {raw!r}"
-        ) from exc
+        raise ValueError(f"C2PRO_REDIS_TEST_PORT must be an integer, got: {raw!r}") from exc
     if port not in ALLOWED_REDIS_PORTS:
         raise ValueError(
             f"C2PRO_REDIS_TEST_PORT={port} not in allowlist {sorted(ALLOWED_REDIS_PORTS)}"
@@ -108,11 +102,16 @@ def run_command(command: list[str], cwd: Path | None = None) -> None:
 
 
 def start_postgres_with_docker_compose(root: Path) -> None:
-    run_command(["docker", "compose", "-f", "docker-compose.test.yml", "up", "-d", "postgres-test"], cwd=root)
+    run_command(
+        ["docker", "compose", "-f", "docker-compose.test.yml", "up", "-d", "postgres-test"],
+        cwd=root,
+    )
 
 
 def start_redis_with_docker_compose(root: Path) -> None:
-    run_command(["docker", "compose", "-f", "docker-compose.test.yml", "up", "-d", "redis-test"], cwd=root)
+    run_command(
+        ["docker", "compose", "-f", "docker-compose.test.yml", "up", "-d", "redis-test"], cwd=root
+    )
 
 
 def ensure_database_exists(admin_url: str, database_name: str) -> None:
@@ -125,7 +124,9 @@ def ensure_database_exists(admin_url: str, database_name: str) -> None:
 def run_alembic_upgrade(api_dir: Path, database_url: str) -> None:
     env = os.environ.copy()
     env["DATABASE_URL"] = database_url
-    subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=str(api_dir), env=env, check=True)
+    subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"], cwd=str(api_dir), env=env, check=True
+    )
 
 
 def assert_head_revision(database_url: str, api_dir: Path) -> str:
@@ -140,7 +141,9 @@ def assert_head_revision(database_url: str, api_dir: Path) -> str:
             raise RuntimeError("alembic_version table is missing rows.")
         applied = row[0]
         if applied != expected_head:
-            raise RuntimeError(f"Alembic head mismatch. expected={expected_head}, applied={applied}")
+            raise RuntimeError(
+                f"Alembic head mismatch. expected={expected_head}, applied={applied}"
+            )
     return expected_head
 
 
@@ -155,7 +158,9 @@ def _ensure_db_ready(args: argparse.Namespace, repo_root: Path, api_dir: Path) -
             try:
                 start_postgres_with_docker_compose(repo_root)
             except Exception as exc:
-                raise RuntimeError(f"Failed to start postgres-test with docker compose: {exc}") from exc
+                raise RuntimeError(
+                    f"Failed to start postgres-test with docker compose: {exc}"
+                ) from exc
             if not wait_for_port(db_port, args.wait_seconds):
                 raise RuntimeError(f"DB port {host}:{db_port} did not become reachable.")
         else:
@@ -197,6 +202,9 @@ def _ensure_db_ready(args: argparse.Namespace, repo_root: Path, api_dir: Path) -
     # owner-bootstrap role here, exactly as a real deployment's bootstrap
     # step would before the application starts.
     print("== Checkpoint schema bootstrap ==")
+    os.environ["TEST_DATABASE_URL"] = TEST_DATABASE_URL
+    if "JWT_SECRET_KEY" not in os.environ:
+        os.environ["JWT_SECRET_KEY"] = "test_secret_for_gate_only"
     asyncio.run(bootstrap_checkpoint_schema(TEST_DATABASE_URL))
     print("OK checkpoint schema is current")
 
@@ -222,10 +230,7 @@ def _ensure_redis_ready(args: argparse.Namespace, repo_root: Path) -> None:
             f"Redis not reachable at {host}:{redis_port} and --require-redis is set."
         )
     else:
-        print(
-            f"WARN Redis not reachable at {host}:{redis_port}. "
-            "Continuing (soft fail policy)."
-        )
+        print(f"WARN Redis not reachable at {host}:{redis_port}. Continuing (soft fail policy).")
 
 
 def main() -> int:
@@ -252,7 +257,9 @@ def main() -> int:
 
 if __name__ == "__main__":
     import sys
+
     if sys.platform == "win32":
         import asyncio
+
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     raise SystemExit(main())
