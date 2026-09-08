@@ -94,48 +94,63 @@ async def test_red_a_migration_raises(monkeypatch):
 async def test_red_b_role_provisioning_fails_halfway(monkeypatch):
     """RED B: Synthetic role provisioning fails after first LOGIN creation.
 
-    Asserts that the first LOGIN is removed, DB is removed, capability role cleanup according to ownership occurs, and returns 1.
+    Asserts that the first LOGIN is genuinely created in PostgreSQL, but creation of the
+    second LOGIN fails. Then, verifies that the first LOGIN is cleanly removed during teardown.
     """
+    # 1. Resolve to the real PostgreSQL local database DSN
     monkeypatch.setattr(
         c25_admin_ops_gate,
         "_resolve_admin_dsn_impl",
         lambda x: "postgresql://postgres:postgres@127.0.0.1:5433/postgres",
     )
 
-    responses = {
-        "rolname = 'c2pro_app'": (False,),
-        "rolname = 'c2pro_admin_login'": (False,),
-        "rolname = 'c2pro_admin_ops'": (False,),  # Doesn't exist initially
-        "c25_gate_app_": (False,),
-        "c25_gate_admin_": (False,),
-        "datname = 'c25_admin_ops_gate'": (False,),
-    }
-    cursor = MockCursor(responses)
-    patch_connect = patch("psycopg.connect", return_value=cursor)
+    # 2. Intercept AsyncConnection.execute to raise on the second role creation
+    from psycopg import AsyncConnection
+    real_async_execute = AsyncConnection.execute
 
-    # Mock migration to succeed
+    first_created = False
+    second_attempted = False
+
+    async def monkey_async_execute(self, query, params=None, *args, **kwargs):
+        query_str = str(query)
+        if "CREATE ROLE" in query_str and "c25_gate_admin_" in query_str:
+            nonlocal second_attempted
+            second_attempted = True
+            raise RuntimeError("Deliberate failure during second synthetic role creation")
+
+        if "CREATE ROLE" in query_str and "c25_gate_app_" in query_str:
+            nonlocal first_created
+            first_created = True
+
+        return await real_async_execute(self, query, params, *args, **kwargs)
+
+    monkeypatch.setattr(AsyncConnection, "execute", monkey_async_execute)
+
+    # Mock migration to be super fast and avoid schema dependencies
     monkeypatch.setattr(c25_admin_ops_gate, "_run_alembic_migrations", lambda x: None)
 
-    # Mock superuser pool connection to succeed as an async function
-    mock_admin_pool = AsyncMock()
+    # 3. Execute main gate, which must return non-zero (1)
+    exit_code = await c25_admin_ops_gate.main()
+    assert exit_code == 1
 
-    async def mock_connect(dsn):
-        return mock_admin_pool
+    # 4. Verify that our injection successfully triggered
+    assert first_created is True
+    assert second_attempted is True
 
-    monkeypatch.setattr(c25_admin_ops_gate, "_connect", mock_connect)
+    # 5. Connect to PostgreSQL and verify cluster state: no leaked synthetic roles or database
+    import psycopg
+    with psycopg.connect("postgresql://postgres:postgres@127.0.0.1:5433/postgres") as conn:
+        # Verify app login role was cleanly dropped
+        res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname LIKE 'c25_gate_app_%')")
+        assert res.fetchone()[0] is False, "Leaked app role detected in cluster"
 
-    # Mock _provision_roles to fail halfway
-    async def mock_provision_fails(pool, app_role, admin_login_role):
-        raise RuntimeError("Synthetic provisioning failed halfway")
+        # Verify admin login role is not present
+        res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname LIKE 'c25_gate_admin_%')")
+        assert res.fetchone()[0] is False, "Leaked admin login role detected in cluster"
 
-    monkeypatch.setattr(c25_admin_ops_gate, "_provision_roles", mock_provision_fails)
-
-    with patch_connect:
-        exit_code = await c25_admin_ops_gate.main()
-        assert exit_code == 1
-
-    # Verified clean teardown called
-    assert mock_admin_pool.close.called
+        # Verify disposable database dropped
+        res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'c25_admin_ops_gate')")
+        assert res.fetchone()[0] is False, "Leaked disposable database detected in cluster"
 
 
 @pytest.mark.asyncio

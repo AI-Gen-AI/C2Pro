@@ -79,52 +79,59 @@ async def _connect(dsn: str) -> AsyncConnectionPool:
     return pool
 
 
-async def _provision_roles(pool: AsyncConnectionPool, app_role: str, admin_login_role: str) -> None:
+async def _provision_roles(
+    pool: AsyncConnectionPool,
+    app_role: str,
+    admin_login_role: str,
+    created_synthetic_roles: list[str],
+) -> None:
     """Dynamically provision synthetic restricted roles in the disposable test database."""
     print(
         f"Provisioning synthetic restricted roles ({app_role}, {admin_login_role}) in the disposable database..."
     )
     async with pool.connection() as conn:
-        # Provision synthetic app role (NOSUPERUSER, LOGIN, non-owner)
-        await conn.execute(
-            sql.SQL(
-                """
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {app_role}) THEN
-                        CREATE ROLE {app_role_id} WITH LOGIN PASSWORD 'app_pass_gate'
-                        NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-                    ELSE
-                        ALTER ROLE {app_role_id} WITH LOGIN PASSWORD 'app_pass_gate'
-                        NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-                    END IF;
-                END $$;
-                """
-            ).format(
-                app_role=sql.Literal(app_role),
-                app_role_id=sql.Identifier(app_role),
+        # 1. Provision synthetic app role (NOSUPERUSER, LOGIN, non-owner)
+        res = await conn.execute(
+            sql.SQL("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {role})").format(
+                role=sql.Literal(app_role)
             )
         )
+        if (await res.fetchone())[0]:
+            raise RuntimeError(
+                f"SAFETY VIOLATION: Synthetic role '{app_role}' unexpectedly already exists. Failing closed."
+            )
 
-        # Provision synthetic admin login role (LOGIN, NOSUPERUSER, member of c2pro_admin_ops)
         await conn.execute(
             sql.SQL(
-                """
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {admin_login_role}) THEN
-                        CREATE ROLE {admin_login_role_id} WITH LOGIN PASSWORD 'admin_pass_gate'
-                        NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-                    ELSE
-                        ALTER ROLE {admin_login_role_id} WITH LOGIN PASSWORD 'admin_pass_gate'
-                        NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-                    END IF;
-                    GRANT c2pro_admin_ops TO {admin_login_role_id};
-                END $$;
-                """
-            ).format(
-                admin_login_role=sql.Literal(admin_login_role),
-                admin_login_role_id=sql.Identifier(admin_login_role),
+                "CREATE ROLE {role_id} WITH LOGIN PASSWORD 'app_pass_gate' "
+                "NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS"
+            ).format(role_id=sql.Identifier(app_role))
+        )
+        created_synthetic_roles.append(app_role)
+
+        # 2. Provision synthetic admin login role (LOGIN, NOSUPERUSER)
+        res = await conn.execute(
+            sql.SQL("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {role})").format(
+                role=sql.Literal(admin_login_role)
+            )
+        )
+        if (await res.fetchone())[0]:
+            raise RuntimeError(
+                f"SAFETY VIOLATION: Synthetic role '{admin_login_role}' unexpectedly already exists. Failing closed."
+            )
+
+        await conn.execute(
+            sql.SQL(
+                "CREATE ROLE {role_id} WITH LOGIN PASSWORD 'admin_pass_gate' "
+                "NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS"
+            ).format(role_id=sql.Identifier(admin_login_role))
+        )
+        created_synthetic_roles.append(admin_login_role)
+
+        # 3. Grant capability membership only after required roles exist
+        await conn.execute(
+            sql.SQL("GRANT c2pro_admin_ops TO {role_id}").format(
+                role_id=sql.Identifier(admin_login_role)
             )
         )
 
@@ -892,8 +899,7 @@ async def main() -> int:
     admin_role_preexisted = False
     created_by_gate = False
     database_created_by_gate = False
-    synthetic_app_role_created = False
-    synthetic_admin_role_created = False
+    created_synthetic_roles: list[str] = []
 
     canonical_app_existed = False
     canonical_admin_login_existed = False
@@ -989,9 +995,7 @@ async def main() -> int:
         admin_pool = await _connect(target_dsn)
 
         # 1. Dynamically provision the restricted synthetic roles and grant CONNECT/USAGE
-        await _provision_roles(admin_pool, app_role, admin_login_role)
-        synthetic_app_role_created = True
-        synthetic_admin_role_created = True
+        await _provision_roles(admin_pool, app_role, admin_login_role, created_synthetic_roles)
 
         # 2. Derive connection DSNs for synthetic roles internally
         app_dsn = _derive_dsn(target_dsn, app_role, "app_pass_gate")
@@ -1135,20 +1139,13 @@ async def main() -> int:
                     except Exception as e:
                         cleanup_errors.append(f"Failed to drop disposable database {DB_NAME}: {e}")
 
-                # Drop synthetic login roles if created
-                if synthetic_admin_role_created:
+                # Drop synthetic login roles actually created by this invocation
+                for role_name in reversed(created_synthetic_roles):
                     try:
-                        conn.execute(sql.SQL("DROP ROLE IF EXISTS {role}").format(role=sql.Identifier(admin_login_role)))
-                        print(f"OK: Synthetic login role '{admin_login_role}' dropped cleanly")
+                        conn.execute(sql.SQL("DROP ROLE IF EXISTS {role}").format(role=sql.Identifier(role_name)))
+                        print(f"OK: Synthetic login role '{role_name}' dropped cleanly")
                     except Exception as e:
-                        cleanup_errors.append(f"Failed to drop synthetic admin role {admin_login_role}: {e}")
-
-                if synthetic_app_role_created:
-                    try:
-                        conn.execute(sql.SQL("DROP ROLE IF EXISTS {role}").format(role=sql.Identifier(app_role)))
-                        print(f"OK: Synthetic login role '{app_role}' dropped cleanly")
-                    except Exception as e:
-                        cleanup_errors.append(f"Failed to drop synthetic app role {app_role}: {e}")
+                        cleanup_errors.append(f"Failed to drop synthetic role {role_name}: {e}")
 
                 # If c2pro_admin_ops was created by the gate, drop it
                 if created_by_gate:
