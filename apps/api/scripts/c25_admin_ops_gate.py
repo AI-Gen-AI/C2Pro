@@ -156,6 +156,216 @@ async def _check_role_properties(pool: AsyncConnectionPool, role: str, **expecte
         return True
 
 
+def _assert_loopback(dsn: str) -> None:
+    """Refuse obvious non-loopback/prod DSNs for security safety."""
+    if "://" in dsn:
+        parsed = urlparse(dsn)
+        host = parsed.hostname
+    else:
+        # Key-value DSN
+        import re
+        m = re.search(r"\bhost=(\S+)", dsn)
+        host = m.group(1) if m else "127.0.0.1"
+
+    if not host:
+        host = "127.0.0.1"
+
+    # Normalize host
+    host = host.lower().strip()
+    if host not in ("127.0.0.1", "localhost", "::1", "postgres-test"):
+        raise ValueError(
+            f"SAFETY VIOLATION: Target host {host!r} is not loopback. "
+            f"The gate only permits local/loopback test databases to prevent accidental production mutation."
+        )
+
+
+async def _test_admin_ops_unprivileged(pool: AsyncConnectionPool) -> bool:
+    """Verify c2pro_admin_ops is completely unprivileged as expected by contract."""
+    print("\n=== Testing c2pro_admin_ops catalog/privilege properties ===")
+    async with pool.connection() as conn:
+        # 1. rolcreatedb false
+        res = await conn.execute(
+            "SELECT rolcreatedb FROM pg_roles WHERE rolname = 'c2pro_admin_ops'"
+        )
+        row = await res.fetchone()
+        if not row or row[0] is not False:
+            print("FAIL: c2pro_admin_ops.rolcreatedb is not False")
+            return False
+
+        # 2. no memberships (member of no other role besides public/itself)
+        res = await conn.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM pg_auth_members m
+                JOIN pg_roles r ON m.roleid = r.oid
+                WHERE m.member = 'c2pro_admin_ops'::regrole
+                AND r.rolname != 'public'
+            )
+            """
+        )
+        row = await res.fetchone()
+        if row[0]:
+            print("FAIL: c2pro_admin_ops inherits unexpected memberships")
+            return False
+
+        # 3. no DB/schema ownership
+        res = await conn.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM pg_database d
+                JOIN pg_roles r ON d.datdba = r.oid
+                WHERE d.datname = current_database() AND r.rolname = 'c2pro_admin_ops'
+            ) OR EXISTS (
+                SELECT 1 FROM pg_namespace n
+                JOIN pg_roles r ON n.nspowner = r.oid
+                WHERE n.nspname = 'public' AND r.rolname = 'c2pro_admin_ops'
+            )
+            """
+        )
+        row = await res.fetchone()
+        if row[0]:
+            print("FAIL: c2pro_admin_ops owns database or public schema")
+            return False
+
+        # 4. no CREATE on database or public schema
+        res = await conn.execute(
+            """
+            SELECT has_schema_privilege('c2pro_admin_ops', 'public', 'CREATE') OR
+                   has_database_privilege('c2pro_admin_ops', current_database(), 'CREATE')
+            """
+        )
+        row = await res.fetchone()
+        if row[0]:
+            print("FAIL: c2pro_admin_ops has CREATE privilege on database or public schema")
+            return False
+
+        print("OK: c2pro_admin_ops catalog/privilege properties are fully unprivileged as expected")
+        return True
+
+
+async def _test_admin_login_exact_unprivileged(pool: AsyncConnectionPool) -> bool:
+    """Verify c2pro_admin_login is exact member of c2pro_admin_ops and has no elevated permissions."""
+    print("\n=== Testing c2pro_admin_login properties ===")
+    async with pool.connection() as conn:
+        # 1. session_user == current_user
+        res = await conn.execute("SELECT session_user = current_user")
+        row = await res.fetchone()
+        if not row or not row[0]:
+            print("FAIL: session_user != current_user")
+            return False
+
+        # 2. exact membership only in c2pro_admin_ops
+        res = await conn.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM pg_auth_members m
+                JOIN pg_roles r ON m.roleid = r.oid
+                WHERE m.member = 'c2pro_admin_login'::regrole
+                AND r.rolname NOT IN ('c2pro_admin_ops', 'public')
+            )
+            """
+        )
+        row = await res.fetchone()
+        if row[0]:
+            print("FAIL: c2pro_admin_login possesses unexpected role memberships")
+            return False
+
+        # 3. no elevated flags
+        res = await conn.execute(
+            """
+            SELECT rolsuper, rolbypassrls, rolcreaterole, rolcreatedb
+            FROM pg_roles WHERE rolname = 'c2pro_admin_login'
+            """
+        )
+        row = await res.fetchone()
+        if not row or any(row):
+            print(f"FAIL: c2pro_admin_login has elevated flags: {row}")
+            return False
+
+        # 4. no DB/schema/table ownership
+        res = await conn.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM pg_database d
+                JOIN pg_roles r ON d.datdba = r.oid
+                WHERE d.datname = current_database() AND r.rolname = 'c2pro_admin_login'
+            ) OR EXISTS (
+                SELECT 1 FROM pg_namespace n
+                JOIN pg_roles r ON n.nspowner = r.oid
+                WHERE n.nspname = 'public' AND r.rolname = 'c2pro_admin_login'
+            ) OR EXISTS (
+                SELECT 1 FROM pg_class c
+                JOIN pg_roles r ON c.relowner = r.oid
+                WHERE c.relname = 'dlq_failed_tasks' AND r.rolname = 'c2pro_admin_login'
+            )
+            """
+        )
+        row = await res.fetchone()
+        if row[0]:
+            print("FAIL: c2pro_admin_login owns database, schema or dlq_failed_tasks")
+            return False
+
+        # 5. no CREATE on database or public schema
+        res = await conn.execute(
+            """
+            SELECT has_schema_privilege('c2pro_admin_login', 'public', 'CREATE') OR
+                   has_database_privilege('c2pro_admin_login', current_database(), 'CREATE')
+            """
+        )
+        row = await res.fetchone()
+        if row[0]:
+            print("FAIL: c2pro_admin_login has CREATE privilege on database or public schema")
+            return False
+
+        print("OK: c2pro_admin_login properties match exact unprivileged contract")
+        return True
+
+
+async def _test_admin_truncate_denied(pool: AsyncConnectionPool) -> bool:
+    """Verify TRUNCATE is denied for c2pro_admin_login."""
+    print("\n=== Testing admin login TRUNCATE DENIED ===")
+    async with pool.connection() as conn:
+        try:
+            await conn.execute("TRUNCATE TABLE dlq_failed_tasks")
+            print("FAIL: TRUNCATE succeeded (should be denied)")
+            return False
+        except psycopg.errors.InsufficientPrivilege:
+            print("OK: TRUNCATE denied as expected")
+            return True
+        except Exception as e:
+            print(f"FAIL: unexpected error: {e}")
+            return False
+
+
+async def _test_catalog_no_unexpected_dml(pool: AsyncConnectionPool) -> bool:
+    """Verify no unexpected DML grants exist on other public business tables."""
+    print("\n=== Verifying no unexpected DML on unrelated public business tables ===")
+    async with pool.connection() as conn:
+        res = await conn.execute(
+            """
+            SELECT DISTINCT c.relname
+            FROM (
+                SELECT relname, relnamespace
+                FROM pg_class
+                WHERE relkind = 'r'
+            ) c
+            CROSS JOIN LATERAL (
+                VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')
+            ) p(privilege_type)
+            JOIN pg_namespace n ON c.relnamespace = n.oid
+            WHERE n.nspname = 'public'
+              AND c.relname != 'dlq_failed_tasks'
+              AND has_table_privilege('c2pro_admin_ops', n.nspname || '.' || c.relname, p.privilege_type)
+            """
+        )
+        unexpected = [row[0] for row in await res.fetchall()]
+        if unexpected:
+            print(f"FAIL: c2pro_admin_ops possesses privileges on unrelated public tables: {unexpected}")
+            return False
+        print("OK: c2pro_admin_ops possesses absolutely no DML grants on unrelated public tables")
+        return True
+
+
 async def _check_table_owner(pool: AsyncConnectionPool, table: str, expected_owner: str) -> bool:
     """Verify table is not owned by the restricted role."""
     async with pool.connection() as conn:
@@ -537,6 +747,9 @@ async def main() -> int:
         print("ERROR: Set P0_SEC_ADMIN_DSN, ADMIN_OPS_ADMIN_DSN or DATABASE_URL to a superuser DSN")
         return 1
 
+    # Safety: Refuse obvious non-loopback/prod DSNs
+    _assert_loopback(admin_dsn)
+
     # Connect to the superuser pool
     print("Connecting to the database as superuser/owner...")
     admin_pool = await _connect(admin_dsn)
@@ -566,41 +779,53 @@ async def main() -> int:
         # 2. Table ownership
         all_passed &= await _check_table_owner(admin_pool, "dlq_failed_tasks", "c2pro_admin_ops")
 
-        # 3. Seed DLQ rows
+        # 3. Extended unprivileged check on c2pro_admin_ops
+        all_passed &= await _test_admin_ops_unprivileged(admin_pool)
+
+        # 4. Extended unprivileged check on c2pro_admin_login
+        all_passed &= await _test_admin_login_exact_unprivileged(admin_login_pool)
+
+        # 5. Seed DLQ rows
         await _seed_dlq_rows(admin_pool)
 
-        # 4. c2pro_app tenant isolation
+        # 6. c2pro_app tenant isolation
         all_passed &= await _test_c2pro_app_tenant_isolation(app_pool)
 
-        # 5. c2pro_app cross-tenant denied
+        # 7. c2pro_app cross-tenant denied
         all_passed &= await _test_c2pro_app_cross_tenant_denied(app_pool)
 
-        # 6. Admin login cross-tenant SELECT
+        # 8. Admin login cross-tenant SELECT
         all_passed &= await _test_admin_login_select_cross_tenant(admin_login_pool)
 
-        # 7. Admin login COUNT cross-tenant
+        # 9. Admin login COUNT cross-tenant
         all_passed &= await _test_admin_login_count_cross_tenant(admin_login_pool)
 
-        # 8. Admin login retry UPDATE
+        # 10. Admin login retry UPDATE
         all_passed &= await _test_admin_login_retry_update(admin_login_pool)
 
-        # 9. Admin tenant_id UPDATE denied
+        # 11. Admin tenant_id UPDATE denied
         all_passed &= await _test_admin_tenant_id_update_denied(admin_login_pool)
 
-        # 10. Admin INSERT denied
+        # 12. Admin INSERT denied
         all_passed &= await _test_admin_insert_denied(admin_login_pool)
 
-        # 11. Admin DELETE denied
+        # 13. Admin DELETE denied
         all_passed &= await _test_admin_delete_denied(admin_login_pool)
 
-        # 12. Unrelated table access denied
+        # 14. Unrelated table access denied
         all_passed &= await _test_admin_unrelated_table_denied(admin_login_pool)
 
-        # 13. Admin policy catalog
+        # 15. Admin policy catalog
         all_passed &= await _test_admin_policy_catalog(admin_login_pool)
 
-        # 14. Column-level UPDATE grant
+        # 16. Column-level UPDATE grant
         all_passed &= await _test_grant_catalog(admin_login_pool)
+
+        # 17. Admin TRUNCATE denied
+        all_passed &= await _test_admin_truncate_denied(admin_login_pool)
+
+        # 18. No unexpected DML on unrelated public business tables
+        all_passed &= await _test_catalog_no_unexpected_dml(admin_pool)
 
     finally:
         await admin_pool.close()

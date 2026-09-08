@@ -412,6 +412,7 @@ async def get_admin_ops_session() -> AsyncGenerator[AsyncSession, None]:
                         rolsuper,
                         rolbypassrls,
                         rolcreaterole,
+                        rolcreatedb,
                         pg_has_role(current_user, 'c2pro_admin_ops', 'member') AS is_member,
                         EXISTS (
                             SELECT 1 FROM pg_class c
@@ -423,7 +424,20 @@ async def get_admin_ops_session() -> AsyncGenerator[AsyncSession, None]:
                             JOIN pg_roles r ON m.roleid = r.oid
                             WHERE m.member = current_user::regrole
                             AND r.rolname NOT IN ('c2pro_admin_ops', 'public')
-                        ) AS has_extra_inherited
+                        ) AS has_extra_inherited,
+                        EXISTS (
+                            SELECT 1 FROM pg_database d
+                            JOIN pg_roles r ON d.datdba = r.oid
+                            WHERE d.datname = current_database() AND r.rolname = current_user
+                        ) AS is_db_owner,
+                        EXISTS (
+                            SELECT 1 FROM pg_namespace n
+                            JOIN pg_roles r ON n.nspowner = r.oid
+                            WHERE n.nspname = 'public' AND r.rolname = current_user
+                        ) AS is_schema_owner,
+                        has_database_privilege(current_user, current_database(), 'CREATE') AS has_db_create,
+                        has_schema_privilege(current_user, 'public', 'CREATE') AS has_schema_create,
+                        (SELECT session_user = current_user) AS session_user_eq_current_user
                     FROM pg_roles
                     WHERE rolname = current_user
                     """
@@ -431,7 +445,7 @@ async def get_admin_ops_session() -> AsyncGenerator[AsyncSession, None]:
             )
             row = result.fetchone()
             if row:
-                rolcanlogin, rolsuper, rolbypassrls, rolcreaterole, is_member, is_table_owner, has_extra_inherited = row
+                rolcanlogin, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb, is_member, is_table_owner, has_extra_inherited, is_db_owner, is_schema_owner, has_db_create, has_schema_create, session_user_eq_current_user = row
                 if not rolcanlogin:
                     raise RuntimeError("Database principal lacks LOGIN privilege.")
                 if rolsuper:
@@ -440,12 +454,24 @@ async def get_admin_ops_session() -> AsyncGenerator[AsyncSession, None]:
                     raise RuntimeError("BypassRLS login is strictly forbidden for admin operations.")
                 if rolcreaterole:
                     raise RuntimeError("CreateRole login is strictly forbidden for admin operations.")
+                if rolcreatedb:
+                    raise RuntimeError("CreateDB login is strictly forbidden for admin operations.")
                 if not is_member:
                     raise RuntimeError("Database principal is not a member of c2pro_admin_ops.")
                 if is_table_owner:
                     raise RuntimeError("Database principal owns dlq_failed_tasks (bypassing RLS).")
                 if has_extra_inherited:
                     raise RuntimeError("Database principal possesses unexpected inherited role memberships.")
+                if is_db_owner:
+                    raise RuntimeError("Database principal owns the current database.")
+                if is_schema_owner:
+                    raise RuntimeError("Database principal owns the public schema.")
+                if has_db_create:
+                    raise RuntimeError("Database principal possesses CREATE privilege on the database.")
+                if has_schema_create:
+                    raise RuntimeError("Database principal possesses CREATE privilege on the public schema.")
+                if not session_user_eq_current_user:
+                    raise RuntimeError("session_user and current_user must match exactly.")
 
         try:
             yield session

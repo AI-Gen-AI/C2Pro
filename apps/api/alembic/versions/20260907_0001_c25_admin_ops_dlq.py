@@ -27,8 +27,7 @@ NOT IN THIS MIGRATION
   a synthetic LOGIN member to prove the design.
 
 - No app.admin_ops GUC. The admin policy is evaluated via the capability
-  role membership, not a GUC. The get_admin_ops_session() sets
-  app.admin_ops = '1' as a debugging aid but the policy uses
+  role membership, not a GUC. The policy uses
   CURRENT_USER / has_role('c2pro_admin_ops') semantics.
 
 ROLE BOOTSTRAP MODEL
@@ -128,7 +127,10 @@ def _drop_admin_policies() -> None:
 
 
 def _grant_admin_privileges() -> None:
-    """Grant minimum privileges to c2pro_admin_ops."""
+    """Normalize and then grant minimum privileges to c2pro_admin_ops."""
+    # First: normalize by deliberately revoking all existing direct table privileges
+    op.execute(f"REVOKE ALL ON {_TABLE} FROM {_ADMIN_ROLE}")
+
     # SELECT on the table
     op.execute(f"GRANT SELECT ON {_TABLE} TO {_ADMIN_ROLE}")
 
