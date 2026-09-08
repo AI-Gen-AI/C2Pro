@@ -59,10 +59,10 @@ def _validate_uuid_for_sql(value: UUID | str) -> str:
 @event.listens_for(Engine, "before_cursor_execute")
 def _receive_before_cursor_execute(
     conn: Any,
-    cursor: Any,
-    statement: Any,
-    parameters: Any,
-    context: Any,
+    cursor: Any,  # noqa: ARG001
+    statement: Any,  # noqa: ARG001
+    parameters: Any,  # noqa: ARG001
+    context: Any,  # noqa: ARG001
     executemany: Any,  # noqa: ARG001
 ) -> None:
     """SQLAlchemy event handler - all args required by event listener interface."""
@@ -72,10 +72,10 @@ def _receive_before_cursor_execute(
 @event.listens_for(Engine, "after_cursor_execute")
 def _receive_after_cursor_execute(
     conn: Any,
-    cursor: Any,
+    cursor: Any,  # noqa: ARG001
     statement: Any,
-    parameters: Any,
-    context: Any,
+    parameters: Any,  # noqa: ARG001
+    context: Any,  # noqa: ARG001
     executemany: Any,  # noqa: ARG001
 ) -> None:
     """SQLAlchemy event handler - all args required by event listener interface."""

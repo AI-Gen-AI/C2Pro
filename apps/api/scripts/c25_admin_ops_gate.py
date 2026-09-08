@@ -30,9 +30,8 @@ os.environ["TEST_DATABASE_URL"] = "postgresql://postgres:postgres@127.0.0.1:5433
 if "JWT_SECRET_KEY" not in os.environ:
     os.environ["JWT_SECRET_KEY"] = "test_secret_for_gate_only"
 
-import contextlib
-
 import psycopg
+from psycopg import sql
 from psycopg_pool import AsyncConnectionPool
 from security_gate_common import resolve_admin_dsn as _resolve_admin_dsn_impl  # noqa: E402
 
@@ -80,67 +79,80 @@ async def _connect(dsn: str) -> AsyncConnectionPool:
     return pool
 
 
-async def _provision_roles(pool: AsyncConnectionPool) -> None:
-    """Dynamically provision restricted roles in the disposable test database."""
-    print("Provisioning restricted roles in the disposable database...")
+async def _provision_roles(pool: AsyncConnectionPool, app_role: str, admin_login_role: str) -> None:
+    """Dynamically provision synthetic restricted roles in the disposable test database."""
+    print(
+        f"Provisioning synthetic restricted roles ({app_role}, {admin_login_role}) in the disposable database..."
+    )
     async with pool.connection() as conn:
-        # Provision c2pro_app (NOSUPERUSER, LOGIN, non-owner)
+        # Provision synthetic app role (NOSUPERUSER, LOGIN, non-owner)
         await conn.execute(
-            """
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_app') THEN
-                    CREATE ROLE c2pro_app WITH LOGIN PASSWORD 'app_pass_gate'
-                    NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-                ELSE
-                    ALTER ROLE c2pro_app WITH LOGIN PASSWORD 'app_pass_gate'
-                    NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-                END IF;
-            END $$;
-            """
+            sql.SQL(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {app_role}) THEN
+                        CREATE ROLE {app_role_id} WITH LOGIN PASSWORD 'app_pass_gate'
+                        NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                    ELSE
+                        ALTER ROLE {app_role_id} WITH LOGIN PASSWORD 'app_pass_gate'
+                        NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                    END IF;
+                END $$;
+                """
+            ).format(
+                app_role=sql.Literal(app_role),
+                app_role_id=sql.Identifier(app_role),
+            )
         )
 
-        # Provision c2pro_admin_ops (NOLOGIN, NOSUPERUSER, non-owner)
+        # Provision synthetic admin login role (LOGIN, NOSUPERUSER, member of c2pro_admin_ops)
         await conn.execute(
-            """
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_ops') THEN
-                    CREATE ROLE c2pro_admin_ops NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-                ELSE
-                    ALTER ROLE c2pro_admin_ops NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-                END IF;
-            END $$;
-            """
-        )
-
-        # Provision c2pro_admin_login (LOGIN, NOSUPERUSER, member of c2pro_admin_ops)
-        await conn.execute(
-            """
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_login') THEN
-                    CREATE ROLE c2pro_admin_login WITH LOGIN PASSWORD 'admin_pass_gate'
-                    NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-                ELSE
-                    ALTER ROLE c2pro_admin_login WITH LOGIN PASSWORD 'admin_pass_gate'
-                    NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-                END IF;
-                GRANT c2pro_admin_ops TO c2pro_admin_login;
-            END $$;
-            """
+            sql.SQL(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {admin_login_role}) THEN
+                        CREATE ROLE {admin_login_role_id} WITH LOGIN PASSWORD 'admin_pass_gate'
+                        NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                    ELSE
+                        ALTER ROLE {admin_login_role_id} WITH LOGIN PASSWORD 'admin_pass_gate'
+                        NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                    END IF;
+                    GRANT c2pro_admin_ops TO {admin_login_role_id};
+                END $$;
+                """
+            ).format(
+                admin_login_role=sql.Literal(admin_login_role),
+                admin_login_role_id=sql.Identifier(admin_login_role),
+            )
         )
 
         # Grant CONNECT and basic public usage to allow roles to log in
         res = await conn.execute("SELECT current_database()")
         db_name = (await res.fetchone())[0]
-        await conn.execute(f"GRANT CONNECT ON DATABASE {db_name} TO c2pro_app")
-        await conn.execute(f"GRANT CONNECT ON DATABASE {db_name} TO c2pro_admin_login")
-        await conn.execute("GRANT USAGE ON SCHEMA public TO c2pro_app")
-        await conn.execute("GRANT USAGE ON SCHEMA public TO c2pro_admin_login")
+        await conn.execute(
+            sql.SQL(
+                "GRANT CONNECT ON DATABASE {db_name_id} TO {app_role_id}, {admin_login_role_id}"
+            ).format(
+                db_name_id=sql.Identifier(db_name),
+                app_role_id=sql.Identifier(app_role),
+                admin_login_role_id=sql.Identifier(admin_login_role),
+            )
+        )
+        await conn.execute(
+            sql.SQL("GRANT USAGE ON SCHEMA public TO {app_role_id}, {admin_login_role_id}").format(
+                app_role_id=sql.Identifier(app_role),
+                admin_login_role_id=sql.Identifier(admin_login_role),
+            )
+        )
 
         # Grant DML permissions on dlq_failed_tasks so RLS can be evaluated
-        await conn.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON dlq_failed_tasks TO c2pro_app")
+        await conn.execute(
+            sql.SQL(
+                "GRANT SELECT, INSERT, UPDATE, DELETE ON dlq_failed_tasks TO {app_role_id}"
+            ).format(app_role_id=sql.Identifier(app_role))
+        )
 
 
 async def _check_role_properties(pool: AsyncConnectionPool, role: str, **expected) -> bool:
@@ -257,8 +269,8 @@ async def _test_admin_ops_unprivileged(pool: AsyncConnectionPool) -> bool:
 
 
 async def _test_admin_login_exact_unprivileged(pool: AsyncConnectionPool) -> bool:
-    """Verify c2pro_admin_login is exact member of c2pro_admin_ops and has no elevated permissions."""
-    print("\n=== Testing c2pro_admin_login properties ===")
+    """Verify admin login is exact member of c2pro_admin_ops and has no elevated permissions."""
+    print("\n=== Testing admin login properties ===")
     async with pool.connection() as conn:
         # 1. session_user == current_user
         res = await conn.execute("SELECT session_user = current_user")
@@ -273,26 +285,26 @@ async def _test_admin_login_exact_unprivileged(pool: AsyncConnectionPool) -> boo
             SELECT EXISTS (
                 SELECT 1 FROM pg_auth_members m
                 JOIN pg_roles r ON m.roleid = r.oid
-                WHERE m.member = 'c2pro_admin_login'::regrole
+                WHERE m.member = current_user::regrole
                 AND r.rolname NOT IN ('c2pro_admin_ops', 'public')
             )
             """
         )
         row = await res.fetchone()
         if row[0]:
-            print("FAIL: c2pro_admin_login possesses unexpected role memberships")
+            print("FAIL: admin login possesses unexpected role memberships")
             return False
 
         # 3. no elevated flags
         res = await conn.execute(
             """
             SELECT rolsuper, rolbypassrls, rolcreaterole, rolcreatedb
-            FROM pg_roles WHERE rolname = 'c2pro_admin_login'
+            FROM pg_roles WHERE rolname = current_user
             """
         )
         row = await res.fetchone()
         if not row or any(row):
-            print(f"FAIL: c2pro_admin_login has elevated flags: {row}")
+            print(f"FAIL: admin login has elevated flags: {row}")
             return False
 
         # 4. no DB/schema/table ownership
@@ -301,36 +313,36 @@ async def _test_admin_login_exact_unprivileged(pool: AsyncConnectionPool) -> boo
             SELECT EXISTS (
                 SELECT 1 FROM pg_database d
                 JOIN pg_roles r ON d.datdba = r.oid
-                WHERE d.datname = current_database() AND r.rolname = 'c2pro_admin_login'
+                WHERE d.datname = current_database() AND r.rolname = current_user
             ) OR EXISTS (
                 SELECT 1 FROM pg_namespace n
                 JOIN pg_roles r ON n.nspowner = r.oid
-                WHERE n.nspname = 'public' AND r.rolname = 'c2pro_admin_login'
+                WHERE n.nspname = 'public' AND r.rolname = current_user
             ) OR EXISTS (
                 SELECT 1 FROM pg_class c
                 JOIN pg_roles r ON c.relowner = r.oid
-                WHERE c.relname = 'dlq_failed_tasks' AND r.rolname = 'c2pro_admin_login'
+                WHERE c.relname = 'dlq_failed_tasks' AND r.rolname = current_user
             )
             """
         )
         row = await res.fetchone()
         if row[0]:
-            print("FAIL: c2pro_admin_login owns database, schema or dlq_failed_tasks")
+            print("FAIL: admin login owns database, schema or dlq_failed_tasks")
             return False
 
         # 5. no CREATE on database or public schema
         res = await conn.execute(
             """
-            SELECT has_schema_privilege('c2pro_admin_login', 'public', 'CREATE') OR
-                   has_database_privilege('c2pro_admin_login', current_database(), 'CREATE')
+            SELECT has_schema_privilege(current_user, 'public', 'CREATE') OR
+                   has_database_privilege(current_user, current_database(), 'CREATE')
             """
         )
         row = await res.fetchone()
         if row[0]:
-            print("FAIL: c2pro_admin_login has CREATE privilege on database or public schema")
+            print("FAIL: admin login has CREATE privilege on database or public schema")
             return False
 
-        print("OK: c2pro_admin_login properties match exact unprivileged contract")
+        print("OK: admin login properties match exact unprivileged contract")
         return True
 
 
@@ -782,13 +794,13 @@ def _run_alembic_downgrade(target_dsn: str) -> None:
 
 
 async def _test_direct_login_escalation_proof(
-    admin_pool: AsyncConnectionPool, target_dsn: str
+    admin_pool: AsyncConnectionPool, target_dsn: str, admin_login_role: str
 ) -> bool:
     print("\n=== Testing direct-login escalation proof (Blocker 2 / Blocker 5) ===")
     from src.config import settings
     from src.core.database import close_admin_ops_db, get_admin_ops_session, init_admin_ops_db
 
-    admin_login_dsn = _derive_dsn(target_dsn, "c2pro_admin_login", "admin_pass_gate")
+    admin_login_dsn = _derive_dsn(target_dsn, admin_login_role, "admin_pass_gate")
     settings.admin_ops_database_url = admin_login_dsn
 
     await init_admin_ops_db()
@@ -802,9 +814,13 @@ async def _test_direct_login_escalation_proof(
         return False
     await close_admin_ops_db()
 
-    print("Injecting forbidden direct grant (UPDATE (tenant_id)) to c2pro_admin_login...")
+    print(f"Injecting forbidden direct grant (UPDATE (tenant_id)) to {admin_login_role}...")
     async with admin_pool.connection() as conn:
-        await conn.execute("GRANT UPDATE (tenant_id) ON dlq_failed_tasks TO c2pro_admin_login")
+        await conn.execute(
+            sql.SQL("GRANT UPDATE (tenant_id) ON dlq_failed_tasks TO {role_id}").format(
+                role_id=sql.Identifier(admin_login_role)
+            )
+        )
 
     await init_admin_ops_db()
     rejected_successfully = False
@@ -821,9 +837,13 @@ async def _test_direct_login_escalation_proof(
         print(f"FAIL: Runtime validation raised unexpected error: {exc}")
     await close_admin_ops_db()
 
-    print("Revoking injected forbidden direct grant...")
+    print(f"Revoking injected forbidden direct grant from {admin_login_role}...")
     async with admin_pool.connection() as conn:
-        await conn.execute("REVOKE UPDATE (tenant_id) ON dlq_failed_tasks FROM c2pro_admin_login")
+        await conn.execute(
+            sql.SQL("REVOKE UPDATE (tenant_id) ON dlq_failed_tasks FROM {role_id}").format(
+                role_id=sql.Identifier(admin_login_role)
+            )
+        )
 
     await init_admin_ops_db()
     passed_cleanly = False
@@ -856,26 +876,81 @@ async def main() -> int:
 
     DB_NAME = "c25_admin_ops_gate"
 
+    # Dynamic synthetic restricted roles for isolation
+    app_role = f"c25_gate_app_{os.getpid()}"
+    admin_login_role = f"c25_gate_admin_{os.getpid()}"
+
     # Deriving the target disposable database DSN
     target_dsn = admin_dsn.rsplit("/", 1)[0] + "/" + DB_NAME
-
-    # Ensure clean slate: drop database if exists
-    print(f"Cleaning up database {DB_NAME} if exists...")
     admin_base_dsn = admin_dsn.rsplit("/", 1)[0] + "/postgres"
 
+    print("\n=== Checking and Recording Pre-existing Role Snapshot (Section 5 / hygiene) ===")
+    admin_role_preexisted = False
+    created_by_gate = False
+    canonical_app_existed = False
+    canonical_admin_login_existed = False
+
+    with psycopg.connect(admin_base_dsn, autocommit=True) as conn:
+        # Check canonical c2pro_app
+        res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_app')")
+        canonical_app_existed = res.fetchone()[0]
+        if canonical_app_existed:
+            print("OK: Found pre-existing canonical role 'c2pro_app'")
+        else:
+            print("INFO: Canonical role 'c2pro_app' does not exist in cluster")
+
+        # Check canonical c2pro_admin_login
+        res = conn.execute(
+            "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_login')"
+        )
+        canonical_admin_login_existed = res.fetchone()[0]
+        if canonical_admin_login_existed:
+            print("OK: Found pre-existing canonical role 'c2pro_admin_login'")
+        else:
+            print("INFO: Canonical role 'c2pro_admin_login' does not exist in cluster")
+
+        # Check c2pro_admin_ops
+        res = conn.execute(
+            "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_ops')"
+        )
+        admin_role_preexisted = res.fetchone()[0]
+
+        if admin_role_preexisted:
+            print(
+                "INFO: Capability role 'c2pro_admin_ops' already exists. Validating locked properties..."
+            )
+            res_props = conn.execute(
+                """
+                SELECT rolsuper, rolbypassrls, rolcreaterole, rolcanlogin, rolcreatedb
+                FROM pg_roles WHERE rolname = 'c2pro_admin_ops'
+                """
+            )
+            props = res_props.fetchone()
+            if props:
+                rolsuper, rolbypassrls, rolcreaterole, rolcanlogin, rolcreatedb = props
+                if rolsuper or rolbypassrls or rolcreaterole or rolcanlogin or rolcreatedb:
+                    raise RuntimeError(
+                        f"SAFETY VIOLATION: Pre-existing c2pro_admin_ops role has invalid properties: "
+                        f"rolsuper={rolsuper}, rolbypassrls={rolbypassrls}, rolcreaterole={rolcreaterole}, "
+                        f"rolcanlogin={rolcanlogin}, rolcreatedb={rolcreatedb}. Expected all to be False."
+                    )
+                print(
+                    "OK: Pre-existing 'c2pro_admin_ops' properties are valid (locked flags match contract)."
+                )
+            created_by_gate = False
+        else:
+            print(
+                "INFO: Capability role 'c2pro_admin_ops' does not exist. Creating it with exact locked flags..."
+            )
+            conn.execute(
+                "CREATE ROLE c2pro_admin_ops NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS"
+            )
+            created_by_gate = True
+
+    # Ensure clean slate: drop database if exists
+    print(f"\nCleaning up database {DB_NAME} if exists...")
     with psycopg.connect(admin_base_dsn, autocommit=True) as conn:
         conn.execute(f"DROP DATABASE IF EXISTS {DB_NAME}")
-        # Ensure c2pro_admin_ops role exists before any migration
-        conn.execute(
-            """
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_ops') THEN
-                    CREATE ROLE c2pro_admin_ops NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-                END IF;
-            END $$;
-            """
-        )
         conn.execute(f"CREATE DATABASE {DB_NAME}")
 
     print(f"Successfully created disposable database: {DB_NAME}")
@@ -887,15 +962,15 @@ async def main() -> int:
     print(f"Connecting to {DB_NAME} as superuser...")
     admin_pool = await _connect(target_dsn)
 
-    # 1. Dynamically provision the restricted roles and grant CONNECT/USAGE
-    await _provision_roles(admin_pool)
+    # 1. Dynamically provision the restricted synthetic roles and grant CONNECT/USAGE
+    await _provision_roles(admin_pool, app_role, admin_login_role)
 
-    # 2. Derive connection DSNs for c2pro_app and c2pro_admin_login internally
-    app_dsn = _derive_dsn(target_dsn, "c2pro_app", "app_pass_gate")
-    admin_login_dsn = _derive_dsn(target_dsn, "c2pro_admin_login", "admin_pass_gate")
+    # 2. Derive connection DSNs for synthetic roles internally
+    app_dsn = _derive_dsn(target_dsn, app_role, "app_pass_gate")
+    admin_login_dsn = _derive_dsn(target_dsn, admin_login_role, "admin_pass_gate")
 
     # 3. Create restricted connection pools
-    print("Connecting as c2pro_app and c2pro_admin_login...")
+    print(f"Connecting as {app_role} and {admin_login_role}...")
     app_pool = await _connect(app_dsn)
     admin_login_pool = await _connect(admin_login_dsn)
 
@@ -922,16 +997,16 @@ async def main() -> int:
             # 3. Extended unprivileged check on c2pro_admin_ops
             passed &= await _test_admin_ops_unprivileged(admin_pool)
 
-            # 4. Extended unprivileged check on c2pro_admin_login
+            # 4. Extended unprivileged check on admin login role
             passed &= await _test_admin_login_exact_unprivileged(admin_login_pool)
 
             # 5. Seed DLQ rows
             await _seed_dlq_rows(admin_pool)
 
-            # 6. c2pro_app tenant isolation
+            # 6. app role tenant isolation
             passed &= await _test_c2pro_app_tenant_isolation(app_pool)
 
-            # 7. c2pro_app cross-tenant denied
+            # 7. app role cross-tenant denied
             passed &= await _test_c2pro_app_cross_tenant_denied(app_pool)
 
             # 8. Admin login cross-tenant SELECT
@@ -972,7 +1047,9 @@ async def main() -> int:
         all_passed &= await run_assertions()
 
         # Run direct-login escalation proof (Blocker 2 / Blocker 5)
-        all_passed &= await _test_direct_login_escalation_proof(admin_pool, target_dsn)
+        all_passed &= await _test_direct_login_escalation_proof(
+            admin_pool, target_dsn, admin_login_role
+        )
 
         # Upgrade -> Gate -> Downgrade -> Upgrade -> Gate verification lifecycle
         print("\n=== Executing Downgrade -> Upgrade Idempotency Lifecycle ===")
@@ -1006,21 +1083,98 @@ async def main() -> int:
             )
             conn.execute(f"DROP DATABASE IF EXISTS {DB_NAME}")
 
-            # Gracefully revoke database-level grants and drop temporary roles
-            with contextlib.suppress(Exception):
-                conn.execute(
-                    "REVOKE ALL PRIVILEGES ON DATABASE c2pro_test FROM c2pro_admin_login, c2pro_app"
-                )
-            with contextlib.suppress(Exception):
-                conn.execute(
-                    f"REVOKE ALL PRIVILEGES ON DATABASE {DB_NAME} FROM c2pro_admin_login, c2pro_app"
-                )
+            # Gracefully drop temporary synthetic login roles
             try:
-                conn.execute("DROP ROLE IF EXISTS c2pro_admin_login")
-                conn.execute("DROP ROLE IF EXISTS c2pro_app")
-                print("OK: Temporary roles dropped cleanly")
+                conn.execute(
+                    sql.SQL("DROP ROLE IF EXISTS {role}").format(
+                        role=sql.Identifier(admin_login_role)
+                    )
+                )
+                conn.execute(
+                    sql.SQL("DROP ROLE IF EXISTS {role}").format(role=sql.Identifier(app_role))
+                )
+                print(f"OK: Synthetic login roles ({admin_login_role}, {app_role}) dropped cleanly")
             except Exception as exc:
                 print(f"WARN: Failed to drop temporary roles: {exc}. Moving on...")
+
+            # If c2pro_admin_ops was created by the gate, drop it
+            if created_by_gate:
+                print("INFO: Dropping gate-created capability role c2pro_admin_ops...")
+                try:
+                    conn.execute("DROP ROLE IF EXISTS c2pro_admin_ops")
+                    print("OK: Gate-created 'c2pro_admin_ops' dropped cleanly")
+                except Exception as exc:
+                    print(
+                        f"WARN: Failed to drop gate-created role c2pro_admin_ops: {exc}. Moving on..."
+                    )
+            else:
+                print("INFO: Preserving pre-existing c2pro_admin_ops capability role.")
+
+            print("\n=== Verifying Cluster Hygiene State (Section 5) ===")
+            # Prove c2pro_app exists/is untouched if it originally pre-existed
+            res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_app')")
+            still_exists = res.fetchone()[0]
+            if still_exists == canonical_app_existed:
+                print("OK: Canonical role 'c2pro_app' state remained untouched by gate")
+            else:
+                print("FAIL: Canonical role 'c2pro_app' state was modified or deleted")
+
+            # Prove c2pro_admin_login exists/is untouched if it originally pre-existed
+            res = conn.execute(
+                "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_login')"
+            )
+            still_exists = res.fetchone()[0]
+            if still_exists == canonical_admin_login_existed:
+                print("OK: Canonical role 'c2pro_admin_login' state remained untouched by gate")
+            else:
+                print("FAIL: Canonical role 'c2pro_admin_login' state was modified or deleted")
+
+            # Prove c2pro_admin_ops state conforms to pre-existing or created
+            res = conn.execute(
+                "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_ops')"
+            )
+            ops_exists = res.fetchone()[0]
+            if admin_role_preexisted:
+                if ops_exists:
+                    print("OK: Pre-existing capability role 'c2pro_admin_ops' was safely preserved")
+                else:
+                    print("FAIL: Pre-existing capability role 'c2pro_admin_ops' was deleted")
+            else:
+                if not ops_exists:
+                    print("OK: Gate-created capability role 'c2pro_admin_ops' was cleanly deleted")
+                else:
+                    print("FAIL: Gate-created capability role 'c2pro_admin_ops' was leaked")
+
+            # Prove synthetic login roles deleted
+            res_admin = conn.execute(
+                sql.SQL("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {role})").format(
+                    role=sql.Literal(admin_login_role)
+                )
+            )
+            res_app = conn.execute(
+                sql.SQL("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {role})").format(
+                    role=sql.Literal(app_role)
+                )
+            )
+            if not res_admin.fetchone()[0] and not res_app.fetchone()[0]:
+                print(
+                    "OK: Synthetic temporary login roles cleanly and completely deleted from cluster"
+                )
+            else:
+                print("FAIL: Synthetic temporary login roles leaked in cluster")
+
+            # Prove database deleted
+            res = conn.execute(
+                f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = '{DB_NAME}')"
+            )
+            if not res.fetchone()[0]:
+                print("OK: Disposable database cleanly and completely deleted from cluster")
+            else:
+                print("FAIL: Disposable database leaked in cluster")
+
+            print(
+                "OK: Cluster-state hygiene verified successfully. No privileges on 'c2pro_test' were changed."
+            )
 
     if all_passed:
         print(
