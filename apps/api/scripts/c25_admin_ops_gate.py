@@ -23,9 +23,18 @@ from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+os.environ["ENVIRONMENT"] = "test"
+os.environ["TEST_DATABASE_URL"] = "postgresql://postgres:postgres@127.0.0.1:5433/c2pro_test"
+if "JWT_SECRET_KEY" not in os.environ:
+    os.environ["JWT_SECRET_KEY"] = "test_secret_for_gate_only"
+
+import contextlib
 
 import psycopg
 from psycopg_pool import AsyncConnectionPool
+from security_gate_common import resolve_admin_dsn as _resolve_admin_dsn_impl  # noqa: E402
 
 # Test constants
 TENANT_A = "aaaaaaaa-aaaa-aaaa-aaaa-000000000001"
@@ -49,6 +58,7 @@ def _derive_dsn(admin_dsn: str, username: str, password: str | None = None) -> s
     else:
         # Key-value DSN format
         import re
+
         clean = re.sub(r"\buser=\S+", "", clean_dsn)
         clean = re.sub(r"\bpassword=\S+", "", clean)
         new_dsn = f"{clean.strip()} user={username}"
@@ -147,7 +157,9 @@ async def _check_role_properties(pool: AsyncConnectionPool, role: str, **expecte
         if not row:
             print(f"FAIL: role {role} does not exist")
             return False
-        actual = dict(zip(["rolsuper", "rolbypassrls", "rolcreaterole", "rolcanlogin"], row, strict=False))
+        actual = dict(
+            zip(["rolsuper", "rolbypassrls", "rolcreaterole", "rolcanlogin"], row, strict=False)
+        )
         for k, v in expected.items():
             if actual[k] != v:
                 print(f"FAIL: {role}.{k} = {actual[k]}, expected {v}")
@@ -164,6 +176,7 @@ def _assert_loopback(dsn: str) -> None:
     else:
         # Key-value DSN
         import re
+
         m = re.search(r"\bhost=(\S+)", dsn)
         host = m.group(1) if m else "127.0.0.1"
 
@@ -360,7 +373,9 @@ async def _test_catalog_no_unexpected_dml(pool: AsyncConnectionPool) -> bool:
         )
         unexpected = [row[0] for row in await res.fetchall()]
         if unexpected:
-            print(f"FAIL: c2pro_admin_ops possesses privileges on unrelated public tables: {unexpected}")
+            print(
+                f"FAIL: c2pro_admin_ops possesses privileges on unrelated public tables: {unexpected}"
+            )
             return False
         print("OK: c2pro_admin_ops possesses absolutely no DML grants on unrelated public tables")
         return True
@@ -446,7 +461,9 @@ async def _test_c2pro_app_tenant_isolation(app_pool: AsyncConnectionPool) -> boo
             (DLQ_B,),
         )
         if cur.rowcount != 0:
-            print(f"FAIL: c2pro_app Tenant A cross-tenant retry updated {cur.rowcount} rows (should be 0)")
+            print(
+                f"FAIL: c2pro_app Tenant A cross-tenant retry updated {cur.rowcount} rows (should be 0)"
+            )
             return False
         print("OK: c2pro_app Tenant A cross-tenant retry updated 0 rows (denied by RLS)")
 
@@ -459,9 +476,7 @@ async def _test_c2pro_app_cross_tenant_denied(app_pool: AsyncConnectionPool) -> 
 
     async with app_pool.connection() as conn, conn.transaction():
         # No GUC set - should see nothing (fail-closed)
-        result = await conn.execute(
-            "SELECT COUNT(*) FROM dlq_failed_tasks"
-        )
+        result = await conn.execute("SELECT COUNT(*) FROM dlq_failed_tasks")
         count = (await result.fetchone())[0]
         if count != 0:
             print(f"FAIL: c2pro_app without GUC sees {count} rows (should be 0)")
@@ -476,9 +491,7 @@ async def _test_admin_login_select_cross_tenant(admin_pool: AsyncConnectionPool)
     print("\n=== Testing admin login SELECT cross-tenant ===")
 
     async with admin_pool.connection() as conn:
-        result = await conn.execute(
-            "SELECT tenant_id FROM dlq_failed_tasks ORDER BY tenant_id"
-        )
+        result = await conn.execute("SELECT tenant_id FROM dlq_failed_tasks ORDER BY tenant_id")
         rows = await result.fetchall()
         tenant_ids = {str(row[0]) for row in rows}
         if tenant_ids != {TENANT_A, TENANT_B}:
@@ -493,9 +506,7 @@ async def _test_admin_login_count_cross_tenant(admin_pool: AsyncConnectionPool) 
     print("\n=== Testing admin login COUNT cross-tenant ===")
 
     async with admin_pool.connection() as conn:
-        result = await conn.execute(
-            "SELECT COUNT(*) FROM dlq_failed_tasks"
-        )
+        result = await conn.execute("SELECT COUNT(*) FROM dlq_failed_tasks")
         count = (await result.fetchone())[0]
         if count != 2:
             print(f"FAIL: admin count = {count}, expected 2")
@@ -526,7 +537,7 @@ async def _test_admin_login_retry_update(admin_pool: AsyncConnectionPool) -> boo
             (DLQ_A,),
         )
         row = await result.fetchone()
-        if row[0] != 1 or row[1] != 'retrying':
+        if row[0] != 1 or row[1] != "retrying":
             print(f"FAIL: retry update failed, got retry_count={row[0]}, status={row[1]}")
             return False
         print("OK: admin login retry UPDATE succeeded on allowed columns")
@@ -634,27 +645,27 @@ async def _test_admin_policy_catalog(admin_pool: AsyncConnectionPool) -> bool:
         policies = {row[0]: (row[1], row[2]) for row in await result.fetchall()}
 
         # Check SELECT policy
-        if 'dlq_admin_select' not in policies:
+        if "dlq_admin_select" not in policies:
             print("FAIL: dlq_admin_select policy missing")
             return False
-        cmd, roles = policies['dlq_admin_select']
-        if cmd != 'r':  # 'r' = SELECT
+        cmd, roles = policies["dlq_admin_select"]
+        if cmd != "r":  # 'r' = SELECT
             print(f"FAIL: dlq_admin_select cmd = {cmd}, expected 'r'")
             return False
-        if 'c2pro_admin_ops' not in roles:
+        if "c2pro_admin_ops" not in roles:
             print(f"FAIL: dlq_admin_select roles = {roles}, expected c2pro_admin_ops")
             return False
         print("OK: dlq_admin_select policy TO c2pro_admin_ops FOR SELECT")
 
         # Check UPDATE policy
-        if 'dlq_admin_retry' not in policies:
+        if "dlq_admin_retry" not in policies:
             print("FAIL: dlq_admin_retry policy missing")
             return False
-        cmd, roles = policies['dlq_admin_retry']
-        if cmd != 'w':  # 'w' = UPDATE (write in PG catalog)
+        cmd, roles = policies["dlq_admin_retry"]
+        if cmd != "w":  # 'w' = UPDATE (write in PG catalog)
             print(f"FAIL: dlq_admin_retry cmd = {cmd}, expected 'w'")
             return False
-        if 'c2pro_admin_ops' not in roles:
+        if "c2pro_admin_ops" not in roles:
             print(f"FAIL: dlq_admin_retry roles = {roles}, expected c2pro_admin_ops")
             return False
         print("OK: dlq_admin_retry policy TO c2pro_admin_ops FOR UPDATE")
@@ -670,10 +681,10 @@ async def _test_admin_policy_catalog(admin_pool: AsyncConnectionPool) -> bool:
             """
         )
         all_policies = {row[0]: row[1] for row in await result.fetchall()}
-        if 'dlq_admin_insert' in all_policies:
+        if "dlq_admin_insert" in all_policies:
             print("FAIL: dlq_admin_insert policy exists (should not)")
             return False
-        if 'dlq_admin_delete' in all_policies:
+        if "dlq_admin_delete" in all_policies:
             print("FAIL: dlq_admin_delete policy exists (should not)")
             return False
         print("OK: no admin INSERT/DELETE policies")
@@ -713,53 +724,175 @@ async def _test_grant_catalog(admin_pool: AsyncConnectionPool) -> bool:
             privs = {row[0] for row in await result.fetchall()}
 
             if col in ["retry_count", "status", "updated_at", "next_retry_at"]:
-                if 'UPDATE' not in privs:
+                if "UPDATE" not in privs:
                     print(f"FAIL: column {col} missing UPDATE grant")
                     return False
                 print(f"OK: column {col} has UPDATE grant")
             elif col == "tenant_id":
-                if 'UPDATE' in privs:
+                if "UPDATE" in privs:
                     print("FAIL: column tenant_id has UPDATE grant (should be excluded)")
                     return False
                 print("OK: column tenant_id excluded from UPDATE grant")
             else:
-                if 'UPDATE' in privs:
+                if "UPDATE" in privs:
                     print(f"FAIL: column {col} has unexpected UPDATE grant")
                     return False
 
     return True
 
 
+def _run_alembic_migrations(target_dsn: str) -> None:
+    import subprocess
+    import sys
+
+    print("\nRunning Alembic migrations on the disposable database...")
+    env = os.environ.copy()
+    env["DATABASE_URL"] = target_dsn
+    env["TEST_DATABASE_URL"] = target_dsn
+    env["ENVIRONMENT"] = "test"
+    if "JWT_SECRET_KEY" not in env:
+        env["JWT_SECRET_KEY"] = "test_secret_for_gate_only"
+    api_dir = Path(__file__).resolve().parents[1]
+    subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=str(api_dir),
+        env=env,
+        check=True,
+    )
+
+
+def _run_alembic_downgrade(target_dsn: str) -> None:
+    import subprocess
+    import sys
+
+    print("\nRunning Alembic downgrade on the disposable database...")
+    env = os.environ.copy()
+    env["DATABASE_URL"] = target_dsn
+    env["TEST_DATABASE_URL"] = target_dsn
+    env["ENVIRONMENT"] = "test"
+    if "JWT_SECRET_KEY" not in env:
+        env["JWT_SECRET_KEY"] = "test_secret_for_gate_only"
+    api_dir = Path(__file__).resolve().parents[1]
+    subprocess.run(
+        [sys.executable, "-m", "alembic", "downgrade", "-1"],
+        cwd=str(api_dir),
+        env=env,
+        check=True,
+    )
+
+
+async def _test_direct_login_escalation_proof(
+    admin_pool: AsyncConnectionPool, target_dsn: str
+) -> bool:
+    print("\n=== Testing direct-login escalation proof (Blocker 2 / Blocker 5) ===")
+    from src.config import settings
+    from src.core.database import close_admin_ops_db, get_admin_ops_session, init_admin_ops_db
+
+    admin_login_dsn = _derive_dsn(target_dsn, "c2pro_admin_login", "admin_pass_gate")
+    settings.admin_ops_database_url = admin_login_dsn
+
+    await init_admin_ops_db()
+    try:
+        async with get_admin_ops_session():
+            pass
+        print("OK: Initial runtime validation passes (only CONNECT + public USAGE granted)")
+    except Exception as exc:
+        print(f"FAIL: Initial runtime validation failed: {exc}")
+        await close_admin_ops_db()
+        return False
+    await close_admin_ops_db()
+
+    print("Injecting forbidden direct grant (UPDATE (tenant_id)) to c2pro_admin_login...")
+    async with admin_pool.connection() as conn:
+        await conn.execute("GRANT UPDATE (tenant_id) ON dlq_failed_tasks TO c2pro_admin_login")
+
+    await init_admin_ops_db()
+    rejected_successfully = False
+    try:
+        async with get_admin_ops_session():
+            pass
+    except RuntimeError as exc:
+        if "unexpected direct" in str(exc) or "possesses unexpected direct" in str(exc):
+            print(f"OK: Runtime validation successfully rejected direct-login escalation: {exc}")
+            rejected_successfully = True
+        else:
+            print(f"FAIL: Runtime validation rejected for unexpected reason: {exc}")
+    except Exception as exc:
+        print(f"FAIL: Runtime validation raised unexpected error: {exc}")
+    await close_admin_ops_db()
+
+    print("Revoking injected forbidden direct grant...")
+    async with admin_pool.connection() as conn:
+        await conn.execute("REVOKE UPDATE (tenant_id) ON dlq_failed_tasks FROM c2pro_admin_login")
+
+    await init_admin_ops_db()
+    passed_cleanly = False
+    try:
+        async with get_admin_ops_session():
+            passed_cleanly = True
+        print("OK: Runtime validation passes cleanly after revoking the direct grant")
+    except Exception as exc:
+        print(f"FAIL: Runtime validation failed after revocation: {exc}")
+    await close_admin_ops_db()
+
+    return rejected_successfully and passed_cleanly
+
+
 async def main() -> int:
     """Run the C2.5 disposable DB gate."""
     import sys
+
     if sys.platform == "win32":
         import asyncio
+
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-    # Read the disposable trusted admin superuser DSN from the environment
-    admin_dsn = (
-        os.environ.get("P0_SEC_ADMIN_DSN")
-        or os.environ.get("ADMIN_OPS_ADMIN_DSN")
-        or os.environ.get("DATABASE_URL")
-    )
-    if not admin_dsn:
-        print("ERROR: Set P0_SEC_ADMIN_DSN, ADMIN_OPS_ADMIN_DSN or DATABASE_URL to a superuser DSN")
+    # 1. Resolve P0_SEC_ADMIN_DSN through the canonical loopback-only resolver
+    try:
+        admin_dsn = _resolve_admin_dsn_impl("P0_SEC_ADMIN_DSN")
+    except Exception as exc:
+        print(f"ERROR resolving P0_SEC_ADMIN_DSN: {exc}")
         return 1
 
-    # Safety: Refuse obvious non-loopback/prod DSNs
-    _assert_loopback(admin_dsn)
+    DB_NAME = "c25_admin_ops_gate"
 
-    # Connect to the superuser pool
-    print("Connecting to the database as superuser/owner...")
-    admin_pool = await _connect(admin_dsn)
+    # Deriving the target disposable database DSN
+    target_dsn = admin_dsn.rsplit("/", 1)[0] + "/" + DB_NAME
+
+    # Ensure clean slate: drop database if exists
+    print(f"Cleaning up database {DB_NAME} if exists...")
+    admin_base_dsn = admin_dsn.rsplit("/", 1)[0] + "/postgres"
+
+    with psycopg.connect(admin_base_dsn, autocommit=True) as conn:
+        conn.execute(f"DROP DATABASE IF EXISTS {DB_NAME}")
+        # Ensure c2pro_admin_ops role exists before any migration
+        conn.execute(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_ops') THEN
+                    CREATE ROLE c2pro_admin_ops NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                END IF;
+            END $$;
+            """
+        )
+        conn.execute(f"CREATE DATABASE {DB_NAME}")
+
+    print(f"Successfully created disposable database: {DB_NAME}")
+
+    # Run the initial migration chain
+    _run_alembic_migrations(target_dsn)
+
+    # Connect to the target disposable database as superuser
+    print(f"Connecting to {DB_NAME} as superuser...")
+    admin_pool = await _connect(target_dsn)
 
     # 1. Dynamically provision the restricted roles and grant CONNECT/USAGE
     await _provision_roles(admin_pool)
 
     # 2. Derive connection DSNs for c2pro_app and c2pro_admin_login internally
-    app_dsn = _derive_dsn(admin_dsn, "c2pro_app", "app_pass_gate")
-    admin_login_dsn = _derive_dsn(admin_dsn, "c2pro_admin_login", "admin_pass_gate")
+    app_dsn = _derive_dsn(target_dsn, "c2pro_app", "app_pass_gate")
+    admin_login_dsn = _derive_dsn(target_dsn, "c2pro_admin_login", "admin_pass_gate")
 
     # 3. Create restricted connection pools
     print("Connecting as c2pro_app and c2pro_admin_login...")
@@ -769,71 +902,130 @@ async def main() -> int:
     all_passed = True
 
     try:
-        # 1. Role catalog properties
-        print("\n=== Role Catalog Verification ===")
-        all_passed &= await _check_role_properties(
-            admin_pool, "c2pro_admin_ops",
-            rolsuper=False, rolbypassrls=False, rolcreaterole=False, rolcanlogin=False
-        )
 
-        # 2. Table ownership
-        all_passed &= await _check_table_owner(admin_pool, "dlq_failed_tasks", "c2pro_admin_ops")
+        async def run_assertions():
+            passed = True
+            # 1. Role catalog properties
+            print("\n=== Role Catalog Verification ===")
+            passed &= await _check_role_properties(
+                admin_pool,
+                "c2pro_admin_ops",
+                rolsuper=False,
+                rolbypassrls=False,
+                rolcreaterole=False,
+                rolcanlogin=False,
+            )
 
-        # 3. Extended unprivileged check on c2pro_admin_ops
-        all_passed &= await _test_admin_ops_unprivileged(admin_pool)
+            # 2. Table ownership
+            passed &= await _check_table_owner(admin_pool, "dlq_failed_tasks", "c2pro_admin_ops")
 
-        # 4. Extended unprivileged check on c2pro_admin_login
-        all_passed &= await _test_admin_login_exact_unprivileged(admin_login_pool)
+            # 3. Extended unprivileged check on c2pro_admin_ops
+            passed &= await _test_admin_ops_unprivileged(admin_pool)
 
-        # 5. Seed DLQ rows
-        await _seed_dlq_rows(admin_pool)
+            # 4. Extended unprivileged check on c2pro_admin_login
+            passed &= await _test_admin_login_exact_unprivileged(admin_login_pool)
 
-        # 6. c2pro_app tenant isolation
-        all_passed &= await _test_c2pro_app_tenant_isolation(app_pool)
+            # 5. Seed DLQ rows
+            await _seed_dlq_rows(admin_pool)
 
-        # 7. c2pro_app cross-tenant denied
-        all_passed &= await _test_c2pro_app_cross_tenant_denied(app_pool)
+            # 6. c2pro_app tenant isolation
+            passed &= await _test_c2pro_app_tenant_isolation(app_pool)
 
-        # 8. Admin login cross-tenant SELECT
-        all_passed &= await _test_admin_login_select_cross_tenant(admin_login_pool)
+            # 7. c2pro_app cross-tenant denied
+            passed &= await _test_c2pro_app_cross_tenant_denied(app_pool)
 
-        # 9. Admin login COUNT cross-tenant
-        all_passed &= await _test_admin_login_count_cross_tenant(admin_login_pool)
+            # 8. Admin login cross-tenant SELECT
+            passed &= await _test_admin_login_select_cross_tenant(admin_login_pool)
 
-        # 10. Admin login retry UPDATE
-        all_passed &= await _test_admin_login_retry_update(admin_login_pool)
+            # 9. Admin login COUNT cross-tenant
+            passed &= await _test_admin_login_count_cross_tenant(admin_login_pool)
 
-        # 11. Admin tenant_id UPDATE denied
-        all_passed &= await _test_admin_tenant_id_update_denied(admin_login_pool)
+            # 10. Admin login retry UPDATE
+            passed &= await _test_admin_login_retry_update(admin_login_pool)
 
-        # 12. Admin INSERT denied
-        all_passed &= await _test_admin_insert_denied(admin_login_pool)
+            # 11. Admin tenant_id UPDATE denied
+            passed &= await _test_admin_tenant_id_update_denied(admin_login_pool)
 
-        # 13. Admin DELETE denied
-        all_passed &= await _test_admin_delete_denied(admin_login_pool)
+            # 12. Admin INSERT denied
+            passed &= await _test_admin_insert_denied(admin_login_pool)
 
-        # 14. Unrelated table access denied
-        all_passed &= await _test_admin_unrelated_table_denied(admin_login_pool)
+            # 13. Admin DELETE denied
+            passed &= await _test_admin_delete_denied(admin_login_pool)
 
-        # 15. Admin policy catalog
-        all_passed &= await _test_admin_policy_catalog(admin_login_pool)
+            # 14. Unrelated table access denied
+            passed &= await _test_admin_unrelated_table_denied(admin_login_pool)
 
-        # 16. Column-level UPDATE grant
-        all_passed &= await _test_grant_catalog(admin_login_pool)
+            # 15. Admin policy catalog
+            passed &= await _test_admin_policy_catalog(admin_login_pool)
 
-        # 17. Admin TRUNCATE denied
-        all_passed &= await _test_admin_truncate_denied(admin_login_pool)
+            # 16. Column-level UPDATE grant
+            passed &= await _test_grant_catalog(admin_login_pool)
 
-        # 18. No unexpected DML on unrelated public business tables
-        all_passed &= await _test_catalog_no_unexpected_dml(admin_pool)
+            # 17. Admin TRUNCATE denied
+            passed &= await _test_admin_truncate_denied(admin_login_pool)
+
+            # 18. No unexpected DML on unrelated public business tables
+            passed &= await _test_catalog_no_unexpected_dml(admin_pool)
+            return passed
+
+        # Execute initial gate checks
+        all_passed &= await run_assertions()
+
+        # Run direct-login escalation proof (Blocker 2 / Blocker 5)
+        all_passed &= await _test_direct_login_escalation_proof(admin_pool, target_dsn)
+
+        # Upgrade -> Gate -> Downgrade -> Upgrade -> Gate verification lifecycle
+        print("\n=== Executing Downgrade -> Upgrade Idempotency Lifecycle ===")
+        # Close pools before downgrade
+        await app_pool.close()
+        await admin_login_pool.close()
+
+        _run_alembic_downgrade(target_dsn)
+        _run_alembic_migrations(target_dsn)
+
+        # Reconnect pools
+        app_pool = await _connect(app_dsn)
+        admin_login_pool = await _connect(admin_login_dsn)
+
+        print("\nRe-running all assertions after downgrade/upgrade...")
+        all_passed &= await run_assertions()
 
     finally:
         await admin_pool.close()
         await app_pool.close()
         await admin_login_pool.close()
 
+        # Teardown Phase: Cleanup target disposable database and roles
+        print(f"\nCleaning up target database: {DB_NAME}...")
+        with psycopg.connect(admin_base_dsn, autocommit=True) as conn:
+            conn.execute(
+                f"""
+                SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+                WHERE datname = '{DB_NAME}' AND pid <> pg_backend_pid()
+                """
+            )
+            conn.execute(f"DROP DATABASE IF EXISTS {DB_NAME}")
+
+            # Gracefully revoke database-level grants and drop temporary roles
+            with contextlib.suppress(Exception):
+                conn.execute(
+                    "REVOKE ALL PRIVILEGES ON DATABASE c2pro_test FROM c2pro_admin_login, c2pro_app"
+                )
+            with contextlib.suppress(Exception):
+                conn.execute(
+                    f"REVOKE ALL PRIVILEGES ON DATABASE {DB_NAME} FROM c2pro_admin_login, c2pro_app"
+                )
+            try:
+                conn.execute("DROP ROLE IF EXISTS c2pro_admin_login")
+                conn.execute("DROP ROLE IF EXISTS c2pro_app")
+                print("OK: Temporary roles dropped cleanly")
+            except Exception as exc:
+                print(f"WARN: Failed to drop temporary roles: {exc}. Moving on...")
+
     if all_passed:
-        print("\n✅ ALL C2.5 GATE CHECKS PASSED")
+        print(
+            "\n✅ ALL C2.5 GATE CHECKS PASSED (disposable DB + escalation proof + downgrade/upgrade)"
+        )
         return 0
     else:
         print("\n❌ SOME C2.5 GATE CHECKS FAILED")
@@ -842,7 +1034,9 @@ async def main() -> int:
 
 if __name__ == "__main__":
     import sys
+
     if sys.platform == "win32":
         import asyncio
+
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     raise SystemExit(asyncio.run(main()))

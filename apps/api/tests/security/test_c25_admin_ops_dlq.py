@@ -100,9 +100,7 @@ class TestC25TenantIsolation:
 
             from src.core.dlq.models import DLQFailedTask
 
-            result = await session.execute(
-                select(DLQFailedTask).where(DLQFailedTask.id == dlq_b)
-            )
+            result = await session.execute(select(DLQFailedTask).where(DLQFailedTask.id == dlq_b))
             task = result.scalar_one_or_none()
 
         assert task is None or pytest.skip("Test DB uses owner role bypassing RLS")
@@ -117,7 +115,12 @@ class TestC25MigrationFailsWithoutRole:
         from pathlib import Path
 
         # Verify migration file contains the role requirement check
-        migration_path = Path(__file__).parent.parent.parent / "alembic" / "versions" / "20260907_0001_c25_admin_ops_dlq.py"
+        migration_path = (
+            Path(__file__).parent.parent.parent
+            / "alembic"
+            / "versions"
+            / "20260907_0001_c25_admin_ops_dlq.py"
+        )
         with open(migration_path, encoding="utf-8") as f:
             content = f.read()
 
@@ -155,7 +158,10 @@ class TestC25AdminSessionFailureSemantics:
             raise RuntimeError("admin ops DB unavailable")
             yield  # pragma: no cover
 
-        with patch("src.admin.adapters.http.router.get_admin_ops_session", side_effect=mock_get_admin_ops_session):
+        with patch(
+            "src.admin.adapters.http.router.get_admin_ops_session",
+            side_effect=mock_get_admin_ops_session,
+        ):
             with pytest.raises(HTTPException) as exc_info:
                 await adapter.list_by_status("pending", limit=10, offset=0)
 
@@ -170,7 +176,7 @@ class TestC25AdminSessionFailureSemantics:
         from src.admin.adapters.http.router import DLQAdminOpsAdapter
 
         # Mock the session factory to be None (uninitialized)
-        with patch('src.core.database._admin_ops_session_factory', None):
+        with patch("src.core.database._admin_ops_session_factory", None):
             adapter = DLQAdminOpsAdapter()
             with pytest.raises(HTTPException) as exc_info:
                 await adapter.list_by_status("pending", limit=10, offset=0)
@@ -210,6 +216,7 @@ class TestC25AdminSessionFailureSemantics:
     async def test_validation_owner_rejected(self, mock_session_factory):
         """Owner credential (is_table_owner=True) is rejected with RuntimeError."""
         from unittest.mock import AsyncMock, MagicMock
+
         mock_session = AsyncMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
         mock_session.bind.dialect.name = "postgresql"
@@ -217,7 +224,25 @@ class TestC25AdminSessionFailureSemantics:
         mock_result = MagicMock()
         # rolcanlogin, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb, is_member, is_table_owner, has_extra_inherited, is_db_owner, is_schema_owner, has_db_create, has_schema_create, session_user_eq_current_user
         mock_result.fetchone.return_value = (
-            True, False, False, False, False, True, True, False, False, False, False, False, True
+            True,
+            False,
+            False,
+            False,
+            False,
+            True,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
         )
         mock_session.execute.return_value = mock_result
 
@@ -230,13 +255,32 @@ class TestC25AdminSessionFailureSemantics:
     async def test_validation_superuser_rejected(self, mock_session_factory):
         """Superuser credential (rolsuper=True) is rejected with RuntimeError."""
         from unittest.mock import AsyncMock, MagicMock
+
         mock_session = AsyncMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
         mock_session.bind.dialect.name = "postgresql"
 
         mock_result = MagicMock()
         mock_result.fetchone.return_value = (
-            True, True, False, False, False, True, False, False, False, False, False, False, True
+            True,
+            True,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
         )
         mock_session.execute.return_value = mock_result
 
@@ -249,13 +293,32 @@ class TestC25AdminSessionFailureSemantics:
     async def test_validation_non_member_rejected(self, mock_session_factory):
         """Non-member of c2pro_admin_ops is rejected with RuntimeError."""
         from unittest.mock import AsyncMock, MagicMock
+
         mock_session = AsyncMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
         mock_session.bind.dialect.name = "postgresql"
 
         mock_result = MagicMock()
         mock_result.fetchone.return_value = (
-            True, False, False, False, False, False, False, False, False, False, False, False, True
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
         )
         mock_session.execute.return_value = mock_result
 
@@ -268,13 +331,32 @@ class TestC25AdminSessionFailureSemantics:
     async def test_validation_valid_member_accepted(self, mock_session_factory):
         """Valid member session is accepted and yields session."""
         from unittest.mock import AsyncMock, MagicMock
+
         mock_session = AsyncMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
         mock_session.bind.dialect.name = "postgresql"
 
         mock_result = MagicMock()
         mock_result.fetchone.return_value = (
-            True, False, False, False, False, True, False, False, False, False, False, False, True
+            True,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
         )
         mock_session.execute.return_value = mock_result
 
@@ -290,25 +372,32 @@ class TestC25RuntimePrincipalExactContract:
     async def test_runtime_principal_catalog_rules_mock(self, mock_session_factory):
         """Mocks the exact postgres catalog attributes to assert verification matches contract requirements."""
         from unittest.mock import AsyncMock, MagicMock
+
         mock_session = AsyncMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
         mock_session.bind.dialect.name = "postgresql"
 
         mock_result = MagicMock()
         mock_result.fetchone.return_value = (
-            True,   # rolcanlogin
+            True,  # rolcanlogin
             False,  # rolsuper
             False,  # rolbypassrls
             False,  # rolcreaterole
             False,  # rolcreatedb
-            True,   # is_member of c2pro_admin_ops
+            True,  # is_member of c2pro_admin_ops
             False,  # is_table_owner
             False,  # has_extra_inherited
             False,  # is_db_owner
             False,  # is_schema_owner
             False,  # has_db_create
             False,  # has_schema_create
-            True,   # session_user_eq_current_user
+            True,  # session_user_eq_current_user
+            False,  # has_direct_rel_grants
+            False,  # has_direct_col_grants
+            False,  # has_direct_schema_grants
+            False,  # has_direct_db_grants
+            False,  # has_direct_proc_grants
+            False,  # has_direct_default_acls
         )
         mock_session.execute.return_value = mock_result
 
@@ -321,13 +410,32 @@ class TestC25RuntimePrincipalExactContract:
     async def test_validation_createdb_rejected(self, mock_session_factory):
         """Createdb credential (rolcreatedb=True) is rejected with RuntimeError."""
         from unittest.mock import AsyncMock, MagicMock
+
         mock_session = AsyncMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
         mock_session.bind.dialect.name = "postgresql"
 
         mock_result = MagicMock()
         mock_result.fetchone.return_value = (
-            True, False, False, False, True, True, False, False, False, False, False, False, True
+            True,
+            False,
+            False,
+            False,
+            True,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
         )
         mock_session.execute.return_value = mock_result
 
@@ -340,13 +448,32 @@ class TestC25RuntimePrincipalExactContract:
     async def test_validation_db_owner_rejected(self, mock_session_factory):
         """Database owner credential (is_db_owner=True) is rejected with RuntimeError."""
         from unittest.mock import AsyncMock, MagicMock
+
         mock_session = AsyncMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
         mock_session.bind.dialect.name = "postgresql"
 
         mock_result = MagicMock()
         mock_result.fetchone.return_value = (
-            True, False, False, False, False, True, False, False, True, False, False, False, True
+            True,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
         )
         mock_session.execute.return_value = mock_result
 
@@ -359,13 +486,32 @@ class TestC25RuntimePrincipalExactContract:
     async def test_validation_schema_owner_rejected(self, mock_session_factory):
         """Schema owner credential (is_schema_owner=True) is rejected with RuntimeError."""
         from unittest.mock import AsyncMock, MagicMock
+
         mock_session = AsyncMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
         mock_session.bind.dialect.name = "postgresql"
 
         mock_result = MagicMock()
         mock_result.fetchone.return_value = (
-            True, False, False, False, False, True, False, False, False, True, False, False, True
+            True,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
         )
         mock_session.execute.return_value = mock_result
 
@@ -378,17 +524,38 @@ class TestC25RuntimePrincipalExactContract:
     async def test_validation_db_create_rejected(self, mock_session_factory):
         """Database CREATE privilege (has_db_create=True) is rejected with RuntimeError."""
         from unittest.mock import AsyncMock, MagicMock
+
         mock_session = AsyncMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
         mock_session.bind.dialect.name = "postgresql"
 
         mock_result = MagicMock()
         mock_result.fetchone.return_value = (
-            True, False, False, False, False, True, False, False, False, False, True, False, True
+            True,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
         )
         mock_session.execute.return_value = mock_result
 
-        with pytest.raises(RuntimeError, match="Database principal possesses CREATE privilege on the database"):
+        with pytest.raises(
+            RuntimeError, match="Database principal possesses CREATE privilege on the database"
+        ):
             async with get_admin_ops_session():
                 pass
 
@@ -397,17 +564,38 @@ class TestC25RuntimePrincipalExactContract:
     async def test_validation_schema_create_rejected(self, mock_session_factory):
         """Schema CREATE privilege (has_schema_create=True) is rejected with RuntimeError."""
         from unittest.mock import AsyncMock, MagicMock
+
         mock_session = AsyncMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
         mock_session.bind.dialect.name = "postgresql"
 
         mock_result = MagicMock()
         mock_result.fetchone.return_value = (
-            True, False, False, False, False, True, False, False, False, False, False, True, True
+            True,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            True,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
         )
         mock_session.execute.return_value = mock_result
 
-        with pytest.raises(RuntimeError, match="Database principal possesses CREATE privilege on the public schema"):
+        with pytest.raises(
+            RuntimeError, match="Database principal possesses CREATE privilege on the public schema"
+        ):
             async with get_admin_ops_session():
                 pass
 
@@ -416,13 +604,32 @@ class TestC25RuntimePrincipalExactContract:
     async def test_validation_session_user_mismatch_rejected(self, mock_session_factory):
         """session_user and current_user mismatch is rejected with RuntimeError."""
         from unittest.mock import AsyncMock, MagicMock
+
         mock_session = AsyncMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
         mock_session.bind.dialect.name = "postgresql"
 
         mock_result = MagicMock()
         mock_result.fetchone.return_value = (
-            True, False, False, False, False, True, False, False, False, False, False, False, False
+            True,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
         )
         mock_session.execute.return_value = mock_result
 
@@ -434,6 +641,7 @@ class TestC25RuntimePrincipalExactContract:
     async def test_live_catalog_rules_if_available(self, db_session):
         """If real DB session has admin ops credentials configured, runs direct live catalog assertion."""
         from src.config import settings
+
         if not settings.admin_ops_database_url:
             pytest.skip("ADMIN_OPS_DATABASE_URL not configured locally.")
 
@@ -503,6 +711,7 @@ class TestC25RuntimePrincipalExactContract:
     async def test_live_target_effective_acl_if_available(self, db_session):
         """Live ACL verification: checks allowed/denied permissions for c2pro_admin_ops."""
         from src.config import settings
+
         if not settings.admin_ops_database_url:
             pytest.skip("ADMIN_OPS_DATABASE_URL not configured locally.")
 
@@ -522,21 +731,27 @@ class TestC25RuntimePrincipalExactContract:
             # retry_count, status, updated_at, next_retry_at must have UPDATE privilege
             for col in ["retry_count", "status", "updated_at", "next_retry_at"]:
                 res = await session.execute(
-                    text(f"SELECT has_column_privilege('c2pro_admin_ops', 'dlq_failed_tasks', '{col}', 'UPDATE')")
+                    text(
+                        f"SELECT has_column_privilege('c2pro_admin_ops', 'dlq_failed_tasks', '{col}', 'UPDATE')"
+                    )
                 )
                 assert res.scalar() is True
 
             # tenant_id, payload_json must NOT have UPDATE privilege
             for col in ["tenant_id", "payload_json"]:
                 res = await session.execute(
-                    text(f"SELECT has_column_privilege('c2pro_admin_ops', 'dlq_failed_tasks', '{col}', 'UPDATE')")
+                    text(
+                        f"SELECT has_column_privilege('c2pro_admin_ops', 'dlq_failed_tasks', '{col}', 'UPDATE')"
+                    )
                 )
                 assert res.scalar() is False
 
             # INSERT, DELETE, TRUNCATE must NOT be allowed
             for priv in ["INSERT", "DELETE", "TRUNCATE"]:
                 res = await session.execute(
-                    text(f"SELECT has_table_privilege('c2pro_admin_ops', 'dlq_failed_tasks', '{priv}')")
+                    text(
+                        f"SELECT has_table_privilege('c2pro_admin_ops', 'dlq_failed_tasks', '{priv}')"
+                    )
                 )
                 assert res.scalar() is False
 
@@ -547,29 +762,96 @@ class TestC25RuntimePrincipalExactContract:
         # On some systems, the test connection does not run as superuser/owner and is skipped.
         try:
             # Phase 1: Simulate the "RED" (stale/broken) state by granting full privileges
-            await db_session.execute(text("GRANT INSERT, DELETE, TRUNCATE, UPDATE ON dlq_failed_tasks TO c2pro_admin_ops"))
+            await db_session.execute(
+                text(
+                    "GRANT INSERT, DELETE, TRUNCATE, UPDATE ON dlq_failed_tasks TO c2pro_admin_ops"
+                )
+            )
             await db_session.commit()
 
             # Confirm that the role possesses stale INSERT, DELETE, TRUNCATE privileges
             for priv in ["INSERT", "DELETE", "TRUNCATE"]:
-                res = await db_session.execute(text(f"SELECT has_table_privilege('c2pro_admin_ops', 'dlq_failed_tasks', '{priv}')"))
+                res = await db_session.execute(
+                    text(
+                        f"SELECT has_table_privilege('c2pro_admin_ops', 'dlq_failed_tasks', '{priv}')"
+                    )
+                )
                 assert res.scalar() is True
 
             # Phase 2: Run the normalization and exact grant (mimicking _grant_admin_privileges() from the upgrade migration)
             await db_session.execute(text("REVOKE ALL ON dlq_failed_tasks FROM c2pro_admin_ops"))
             await db_session.execute(text("GRANT SELECT ON dlq_failed_tasks TO c2pro_admin_ops"))
-            await db_session.execute(text("GRANT UPDATE (retry_count, status, updated_at, next_retry_at) ON dlq_failed_tasks TO c2pro_admin_ops"))
+            await db_session.execute(
+                text(
+                    "GRANT UPDATE (retry_count, status, updated_at, next_retry_at) ON dlq_failed_tasks TO c2pro_admin_ops"
+                )
+            )
             await db_session.commit()
 
             # Phase 3: "GREEN" - verify stale direct INSERT/DELETE/TRUNCATE/full UPDATE are gone
             for priv in ["INSERT", "DELETE", "TRUNCATE"]:
-                res = await db_session.execute(text(f"SELECT has_table_privilege('c2pro_admin_ops', 'dlq_failed_tasks', '{priv}')"))
+                res = await db_session.execute(
+                    text(
+                        f"SELECT has_table_privilege('c2pro_admin_ops', 'dlq_failed_tasks', '{priv}')"
+                    )
+                )
                 assert res.scalar() is False
 
             # Confirm that table-wide UPDATE is gone (only specific column updates remain)
-            res = await db_session.execute(text("SELECT has_table_privilege('c2pro_admin_ops', 'dlq_failed_tasks', 'UPDATE')"))
+            res = await db_session.execute(
+                text("SELECT has_table_privilege('c2pro_admin_ops', 'dlq_failed_tasks', 'UPDATE')")
+            )
             assert res.scalar() is False
 
         except Exception as e:
             pytest.skip(f"Test database lacks owner privilege to alter role grants: {e}")
 
+
+@pytest.mark.asyncio
+async def test_admin_ops_unconfigured_or_malformed_dsn_does_not_crash_startup(monkeypatch) -> None:
+    """Test that malformed ADMIN_OPS_DATABASE_URL doesn't crash startup and logs exception_type safely."""
+    from src.config import settings
+    from src.core.database import _admin_ops_engine, _admin_ops_session_factory, init_admin_ops_db
+
+    monkeypatch.setattr(
+        settings, "admin_ops_database_url", "garbage-protocol://foo:bar@bad-host:5432/db"
+    )
+
+    # Run init and assert no exception is thrown
+    await init_admin_ops_db()
+
+    # Engine and factory must remain None
+    from src.core.database import _admin_ops_engine, _admin_ops_session_factory
+
+    assert _admin_ops_engine is None
+    assert _admin_ops_session_factory is None
+
+
+@pytest.mark.asyncio
+async def test_dlq_admin_ops_adapter_admin_session_maps_exceptions_to_503() -> None:
+    """Test that DLQAdminOpsAdapter._admin_session catches both RuntimeError and SQLAlchemyError and maps them to HTTP 503."""
+    from fastapi import HTTPException
+    from sqlalchemy.exc import OperationalError
+
+    from src.admin.adapters.http.router import DLQAdminOpsAdapter
+
+    adapter = DLQAdminOpsAdapter()
+
+    # 1. Test mapping for RuntimeError
+    with patch("src.admin.adapters.http.router.get_admin_ops_session") as mock_get:
+        mock_get.side_effect = RuntimeError("Principal validation failed")
+        with pytest.raises(HTTPException) as exc_info:
+            async with adapter._admin_session():
+                pass
+        assert exc_info.value.status_code == 503
+        assert "unavailable" in exc_info.value.detail
+
+    # 2. Test mapping for SQLAlchemyError (OperationalError)
+    with patch("src.admin.adapters.http.router.get_admin_ops_session") as mock_get:
+        # Mocking an operational database error
+        mock_get.side_effect = OperationalError("select 1", {}, "Connection refused")
+        with pytest.raises(HTTPException) as exc_info:
+            async with adapter._admin_session():
+                pass
+        assert exc_info.value.status_code == 503
+        assert "unavailable" in exc_info.value.detail

@@ -203,8 +203,6 @@ def _ensure_db_ready(args: argparse.Namespace, repo_root: Path, api_dir: Path) -
     # step would before the application starts.
     print("== Checkpoint schema bootstrap ==")
     os.environ["TEST_DATABASE_URL"] = TEST_DATABASE_URL
-    if "JWT_SECRET_KEY" not in os.environ:
-        os.environ["JWT_SECRET_KEY"] = "test_secret_for_gate_only"
     asyncio.run(bootstrap_checkpoint_schema(TEST_DATABASE_URL))
     print("OK checkpoint schema is current")
 

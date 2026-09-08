@@ -36,7 +36,9 @@ logger = structlog.get_logger()
 SLOW_QUERY_THRESHOLD_MS = 100
 
 # UUID validation pattern (safe for SQL string interpolation)
-_UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+_UUID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+)
 
 
 def _validate_uuid_for_sql(value: UUID | str) -> str:
@@ -56,7 +58,12 @@ def _validate_uuid_for_sql(value: UUID | str) -> str:
 
 @event.listens_for(Engine, "before_cursor_execute")
 def _receive_before_cursor_execute(
-    conn: Any, cursor: Any, statement: Any, parameters: Any, context: Any, executemany: Any  # noqa: ARG001
+    conn: Any,
+    cursor: Any,
+    statement: Any,
+    parameters: Any,
+    context: Any,
+    executemany: Any,  # noqa: ARG001
 ) -> None:
     """SQLAlchemy event handler - all args required by event listener interface."""
     conn.info.setdefault("query_start_time", []).append(time.perf_counter())
@@ -64,7 +71,12 @@ def _receive_before_cursor_execute(
 
 @event.listens_for(Engine, "after_cursor_execute")
 def _receive_after_cursor_execute(
-    conn: Any, cursor: Any, statement: Any, parameters: Any, context: Any, executemany: Any  # noqa: ARG001
+    conn: Any,
+    cursor: Any,
+    statement: Any,
+    parameters: Any,
+    context: Any,
+    executemany: Any,  # noqa: ARG001
 ) -> None:
     """SQLAlchemy event handler - all args required by event listener interface."""
     start_times = conn.info.get("query_start_time", [])
@@ -320,7 +332,7 @@ async def init_admin_ops_db() -> None:
 
     Uses ADMIN_OPS_DATABASE_URL from settings. No fallback to DATABASE_URL.
     Must be called before any admin operations endpoints are accessed.
-    Missing ADMIN_OPS_DATABASE_URL does not kill ordinary API startup.
+    Missing/malformed ADMIN_OPS_DATABASE_URL does not kill ordinary API startup.
     """
     global _admin_ops_engine, _admin_ops_session_factory
 
@@ -330,33 +342,48 @@ async def init_admin_ops_db() -> None:
     if not dsn:
         logger.warning(
             "admin_ops_db_unconfigured_at_startup",
-            message="ADMIN_OPS_DATABASE_URL is not set. Cross-tenant admin/DLQ endpoints will be unavailable (503)."
+            message="ADMIN_OPS_DATABASE_URL is not set. Cross-tenant admin/DLQ endpoints will be unavailable (503).",
         )
         return
 
     if dsn.startswith("postgresql://") and not dsn.startswith("postgresql+asyncpg://"):
         dsn = dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-    _admin_ops_engine = create_async_engine(
-        dsn,
-        echo=settings.db_echo,
-        pool_pre_ping=settings.db_pool_pre_ping,
-        pool_size=2,  # Small pool for admin operations
-        max_overflow=0,
-        pool_timeout=settings.db_pool_timeout,
-        pool_recycle=settings.db_pool_recycle,
-        connect_args={"statement_cache_size": 0},
-    )
+    try:
+        # Construct engine/factory locally first to prevent partial assignment
+        local_engine = create_async_engine(
+            dsn,
+            echo=settings.db_echo,
+            pool_pre_ping=settings.db_pool_pre_ping,
+            pool_size=2,  # Small pool for admin operations
+            max_overflow=0,
+            pool_timeout=settings.db_pool_timeout,
+            pool_recycle=settings.db_pool_recycle,
+            connect_args={"statement_cache_size": 0},
+        )
 
-    _admin_ops_session_factory = async_sessionmaker(
-        bind=_admin_ops_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
+        local_session_factory = async_sessionmaker(
+            bind=local_engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autocommit=False,
+            autoflush=False,
+        )
 
-    logger.info("admin_ops_database_engine_created")
+        # Assign globals only on successful construction
+        _admin_ops_engine = local_engine
+        _admin_ops_session_factory = local_session_factory
+        logger.info("admin_ops_database_engine_created")
+
+    except Exception as exc:
+        _admin_ops_engine = None
+        _admin_ops_session_factory = None
+        # Log only the exception class name to prevent credential leakage
+        logger.error(
+            "admin_ops_db_init_failed",
+            exception_type=type(exc).__name__,
+            message="Dedicated admin operations database failed to initialize. Ordinary API startup will proceed, but cross-tenant admin operations will be unavailable (503).",
+        )
 
 
 async def close_admin_ops_db() -> None:
@@ -397,9 +424,7 @@ async def get_admin_ops_session() -> AsyncGenerator[AsyncSession, None]:
         RuntimeError: If admin DB is uninitialized or validation fails.
     """
     if _admin_ops_session_factory is None:
-        raise RuntimeError(
-            "ADMIN_OPS_DATABASE_URL is uninitialized or not configured."
-        )
+        raise RuntimeError("ADMIN_OPS_DATABASE_URL is uninitialized or not configured.")
 
     async with _admin_ops_session_factory() as session:
         # Validate PostgreSQL principal and privileges dynamically via catalog
@@ -437,7 +462,63 @@ async def get_admin_ops_session() -> AsyncGenerator[AsyncSession, None]:
                         ) AS is_schema_owner,
                         has_database_privilege(current_user, current_database(), 'CREATE') AS has_db_create,
                         has_schema_privilege(current_user, 'public', 'CREATE') AS has_schema_create,
-                        (SELECT session_user = current_user) AS session_user_eq_current_user
+                        (SELECT session_user = current_user) AS session_user_eq_current_user,
+                        -- Indicators for direct grants to current_user
+                        (
+                            SELECT EXISTS (
+                                SELECT 1 FROM pg_class c
+                                JOIN pg_namespace n ON c.relnamespace = n.oid
+                                CROSS JOIN unnest(COALESCE(c.relacl, acldefault(
+                                    CASE c.relkind WHEN 'S' THEN 's'::"char" ELSE 'r'::"char" END,
+                                    c.relowner
+                                ))) acl
+                                WHERE n.nspname = 'public'
+                                  AND acl::text LIKE current_user || '=%'
+                            )
+                        ) AS has_direct_rel_grants,
+                        (
+                            SELECT EXISTS (
+                                SELECT 1 FROM pg_attribute a
+                                JOIN pg_class c ON a.attrelid = c.oid
+                                JOIN pg_namespace n ON c.relnamespace = n.oid
+                                CROSS JOIN unnest(COALESCE(a.attacl, acldefault('c', c.relowner))) acl
+                                WHERE n.nspname = 'public'
+                                  AND acl::text LIKE current_user || '=%'
+                            )
+                        ) AS has_direct_col_grants,
+                        (
+                            SELECT EXISTS (
+                                SELECT 1 FROM pg_namespace n
+                                CROSS JOIN unnest(COALESCE(n.nspacl, acldefault('n', n.nspowner))) acl
+                                WHERE acl::text LIKE current_user || '=%'
+                                  AND NOT (n.nspname = 'public' AND acl::text = current_user || '=U/' || pg_get_userbyid(n.nspowner))
+                            )
+                        ) AS has_direct_schema_grants,
+                        (
+                            SELECT EXISTS (
+                                SELECT 1 FROM pg_database d
+                                CROSS JOIN unnest(COALESCE(d.datacl, acldefault('d', d.datdba))) acl
+                                WHERE d.datname = current_database()
+                                  AND acl::text LIKE current_user || '=%'
+                                  AND NOT (acl::text = current_user || '=c/' || pg_get_userbyid(d.datdba))
+                            )
+                        ) AS has_direct_db_grants,
+                        (
+                            SELECT EXISTS (
+                                SELECT 1 FROM pg_proc p
+                                JOIN pg_namespace n ON p.pronamespace = n.oid
+                                CROSS JOIN unnest(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
+                                WHERE n.nspname = 'public'
+                                  AND acl::text LIKE current_user || '=%'
+                            )
+                        ) AS has_direct_proc_grants,
+                        (
+                            SELECT EXISTS (
+                                SELECT 1 FROM pg_default_acl a
+                                CROSS JOIN unnest(a.defaclacl) acl
+                                WHERE acl::text LIKE current_user || '=%'
+                            )
+                        ) AS has_direct_default_acls
                     FROM pg_roles
                     WHERE rolname = current_user
                     """
@@ -445,15 +526,41 @@ async def get_admin_ops_session() -> AsyncGenerator[AsyncSession, None]:
             )
             row = result.fetchone()
             if row:
-                rolcanlogin, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb, is_member, is_table_owner, has_extra_inherited, is_db_owner, is_schema_owner, has_db_create, has_schema_create, session_user_eq_current_user = row
+                (
+                    rolcanlogin,
+                    rolsuper,
+                    rolbypassrls,
+                    rolcreaterole,
+                    rolcreatedb,
+                    is_member,
+                    is_table_owner,
+                    has_extra_inherited,
+                    is_db_owner,
+                    is_schema_owner,
+                    has_db_create,
+                    has_schema_create,
+                    session_user_eq_current_user,
+                    has_direct_rel_grants,
+                    has_direct_col_grants,
+                    has_direct_schema_grants,
+                    has_direct_db_grants,
+                    has_direct_proc_grants,
+                    has_direct_default_acls,
+                ) = row
                 if not rolcanlogin:
                     raise RuntimeError("Database principal lacks LOGIN privilege.")
                 if rolsuper:
-                    raise RuntimeError("Superuser login is strictly forbidden for admin operations.")
+                    raise RuntimeError(
+                        "Superuser login is strictly forbidden for admin operations."
+                    )
                 if rolbypassrls:
-                    raise RuntimeError("BypassRLS login is strictly forbidden for admin operations.")
+                    raise RuntimeError(
+                        "BypassRLS login is strictly forbidden for admin operations."
+                    )
                 if rolcreaterole:
-                    raise RuntimeError("CreateRole login is strictly forbidden for admin operations.")
+                    raise RuntimeError(
+                        "CreateRole login is strictly forbidden for admin operations."
+                    )
                 if rolcreatedb:
                     raise RuntimeError("CreateDB login is strictly forbidden for admin operations.")
                 if not is_member:
@@ -461,17 +568,47 @@ async def get_admin_ops_session() -> AsyncGenerator[AsyncSession, None]:
                 if is_table_owner:
                     raise RuntimeError("Database principal owns dlq_failed_tasks (bypassing RLS).")
                 if has_extra_inherited:
-                    raise RuntimeError("Database principal possesses unexpected inherited role memberships.")
+                    raise RuntimeError(
+                        "Database principal possesses unexpected inherited role memberships."
+                    )
                 if is_db_owner:
                     raise RuntimeError("Database principal owns the current database.")
                 if is_schema_owner:
                     raise RuntimeError("Database principal owns the public schema.")
                 if has_db_create:
-                    raise RuntimeError("Database principal possesses CREATE privilege on the database.")
+                    raise RuntimeError(
+                        "Database principal possesses CREATE privilege on the database."
+                    )
                 if has_schema_create:
-                    raise RuntimeError("Database principal possesses CREATE privilege on the public schema.")
+                    raise RuntimeError(
+                        "Database principal possesses CREATE privilege on the public schema."
+                    )
                 if not session_user_eq_current_user:
                     raise RuntimeError("session_user and current_user must match exactly.")
+                if has_direct_rel_grants:
+                    raise RuntimeError(
+                        "Database principal possesses unexpected direct relation/table/sequence privileges."
+                    )
+                if has_direct_col_grants:
+                    raise RuntimeError(
+                        "Database principal possesses unexpected direct column privileges."
+                    )
+                if has_direct_schema_grants:
+                    raise RuntimeError(
+                        "Database principal possesses unexpected direct schema privileges."
+                    )
+                if has_direct_db_grants:
+                    raise RuntimeError(
+                        "Database principal possesses unexpected direct database privileges."
+                    )
+                if has_direct_proc_grants:
+                    raise RuntimeError(
+                        "Database principal possesses unexpected direct function/procedure privileges."
+                    )
+                if has_direct_default_acls:
+                    raise RuntimeError(
+                        "Database principal possesses unexpected direct default ACLs."
+                    )
 
         try:
             yield session

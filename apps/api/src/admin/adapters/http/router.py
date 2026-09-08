@@ -14,6 +14,7 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.admin.application.dtos.dlq import (
@@ -59,16 +60,14 @@ class DLQAdminOpsAdapter:
         try:
             async with get_admin_ops_session() as session:
                 yield session
-        except RuntimeError as exc:
+        except (RuntimeError, SQLAlchemyError) as exc:
             _logger.warning("admin_ops_session_unavailable", error=str(exc))
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Admin operations database unavailable",
             ) from exc
 
-    async def list_by_status(
-        self, status: str, *, limit: int, offset: int
-    ) -> list[DLQEntryView]:
+    async def list_by_status(self, status: str, *, limit: int, offset: int) -> list[DLQEntryView]:
         """List DLQ entries across tenants with LIMIT/OFFSET pagination (C2.5)."""
 
         async with self._admin_session() as session:
@@ -97,9 +96,7 @@ class DLQAdminOpsAdapter:
         """Return a DLQ entry by id using the admin ops session (C2.5)."""
 
         async with self._admin_session() as session:
-            result = await session.execute(
-                select(DLQFailedTask).where(DLQFailedTask.id == dlq_id)
-            )
+            result = await session.execute(select(DLQFailedTask).where(DLQFailedTask.id == dlq_id))
             entry = result.scalar_one_or_none()
             return cast(DLQEntryView | None, entry)
 
@@ -108,9 +105,7 @@ class DLQAdminOpsAdapter:
 
         async with self._admin_session() as session:
             # Fetch the record in admin session context
-            result = await session.execute(
-                select(DLQFailedTask).where(DLQFailedTask.id == dlq_id)
-            )
+            result = await session.execute(select(DLQFailedTask).where(DLQFailedTask.id == dlq_id))
             dlq_record = result.scalar_one_or_none()
 
             if dlq_record is None:
@@ -128,7 +123,7 @@ class DLQAdminOpsAdapter:
                 next_retry_at: datetime | None = None
             else:
                 new_status = "retrying"
-                backoff_minutes: int = 2 ** new_retry_count
+                backoff_minutes: int = 2**new_retry_count
                 next_retry_at = now + timedelta(minutes=backoff_minutes)
 
             # Update record (only columns granted to c2pro_admin_ops)
