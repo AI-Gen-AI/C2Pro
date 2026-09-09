@@ -459,6 +459,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+          COVERAGE_FILE: .coverage.c25
         working-directory: apps/api
         run: |
           coverage run --parallel-mode --source=src -m pytest \
@@ -470,7 +471,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: c25-security-coverage
-          path: apps/api/.coverage*
+          path: apps/api/.coverage.c25*
           include-hidden-files: true
           retention-days: 14
 
@@ -724,7 +725,7 @@ jobs:
           cp coverage-data/core/.coverage .coverage.core
           cp coverage-data/coherence/.coverage .coverage.coherence
           cp coverage-data/modules/.coverage .coverage.modules
-          cp coverage-data/c25-security/.coverage* .
+          cp coverage-data/c25-security/.coverage.c25* .
           coverage combine
           coverage report --fail-under=70
           coverage xml -o merged-coverage.xml
