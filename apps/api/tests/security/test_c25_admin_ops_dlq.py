@@ -803,6 +803,8 @@ class TestC25RuntimePrincipalExactContract:
             )
             assert res.scalar() is False
 
+        except AssertionError:
+            raise
         except Exception as e:
             pytest.skip(f"Test database lacks owner privilege to alter role grants: {e}")
 

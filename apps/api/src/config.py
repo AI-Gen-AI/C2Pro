@@ -449,13 +449,17 @@ class Settings(BaseSettings):
         """Tamaño máximo de upload en bytes."""
         return self.max_upload_size_mb * 1024 * 1024
 
-    @property
-    def database_url_async(self) -> str:
-        """URL de base de datos para asyncpg."""
-        url = self.database_url
+    @staticmethod
+    def _normalize_asyncpg_dsn(url: str) -> str:
+        """Normaliza un DSN postgresql:// a postgresql+asyncpg:// para asyncpg."""
         if url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
             return url.replace("postgresql://", "postgresql+asyncpg://", 1)
         return url
+
+    @property
+    def database_url_async(self) -> str:
+        """URL de base de datos para asyncpg."""
+        return self._normalize_asyncpg_dsn(self.database_url)
 
     @property
     def checkpoint_database_url_is_fallback(self) -> bool:
@@ -474,9 +478,7 @@ class Settings(BaseSettings):
         once per process.
         """
         url = self.checkpoint_database_url or self.database_url
-        if url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
-            return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return url
+        return self._normalize_asyncpg_dsn(url)
 
     @property
     def admin_ops_database_url_async(self) -> str:
@@ -493,9 +495,7 @@ class Settings(BaseSettings):
                 "(the c2pro_admin_ops capability role via LOGIN principal member). "
                 "No fallback to DATABASE_URL or owner credential is permitted."
             )
-        if url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
-            return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return url
+        return self._normalize_asyncpg_dsn(url)
 
     # ===========================================
     # VALIDATION
@@ -542,7 +542,11 @@ class Settings(BaseSettings):
         if hostname not in {Settings.C2PRO_ORIGIN, Settings.C2PRO_WWW_ORIGIN}:
             return None
 
-        paired_hostname = Settings.C2PRO_WWW_ORIGIN if hostname == Settings.C2PRO_ORIGIN else Settings.C2PRO_ORIGIN
+        paired_hostname = (
+            Settings.C2PRO_WWW_ORIGIN
+            if hostname == Settings.C2PRO_ORIGIN
+            else Settings.C2PRO_ORIGIN
+        )
         netloc = paired_hostname
         if parts.port:
             netloc = f"{paired_hostname}:{parts.port}"
@@ -607,13 +611,15 @@ class Settings(BaseSettings):
 
         localhost_markers = ("localhost", "127.0.0.1")
         if any(
-            any(marker in origin for marker in localhost_markers)
-            for origin in self.cors_origins
+            any(marker in origin for marker in localhost_markers) for origin in self.cors_origins
         ):
             raise ValueError("localhost origins are not allowed outside development/test")
 
     def _validate_auth_bootstrap_fallback(self) -> None:
-        if self.environment in {"production", "staging"} and self.auth_bootstrap_fallback_mode == "non_production":
+        if (
+            self.environment in {"production", "staging"}
+            and self.auth_bootstrap_fallback_mode == "non_production"
+        ):
             self.auth_bootstrap_fallback_mode = "deny"
 
     @field_validator("ai_budget_monthly_default")
