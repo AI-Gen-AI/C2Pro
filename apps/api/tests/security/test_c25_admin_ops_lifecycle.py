@@ -154,7 +154,7 @@ async def test_red_b_role_provisioning_fails_halfway(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_red_c_restricted_pool_creation_fails(monkeypatch):
+async def test_red_c_restricted_pool_creation_fails(monkeypatch, capsys):
     """RED C: Restricted pool creation fails.
 
     Asserts that all previously created artifacts are cleaned up, and non-zero exit returned.
@@ -178,7 +178,7 @@ async def test_red_c_restricted_pool_creation_fails(monkeypatch):
 
     # Mock migrations & provision to succeed
     monkeypatch.setattr(c25_admin_ops_gate, "_run_alembic_migrations", lambda x: None)
-    monkeypatch.setattr(c25_admin_ops_gate, "_provision_roles", lambda p, r1, r2: None)
+    monkeypatch.setattr(c25_admin_ops_gate, "_provision_roles", AsyncMock())
 
     # Mock connection pool so superuser succeeds but restricted fails
     mock_admin_pool = AsyncMock()
@@ -194,11 +194,12 @@ async def test_red_c_restricted_pool_creation_fails(monkeypatch):
         exit_code = await c25_admin_ops_gate.main()
         assert exit_code == 1
 
-    assert mock_admin_pool.close.called
+    mock_admin_pool.close.assert_awaited_once()
+    assert "Restricted pool connection failed" in capsys.readouterr().out
 
 
 @pytest.mark.asyncio
-async def test_red_d_drop_synthetic_role_fails(monkeypatch):
+async def test_red_d_drop_synthetic_role_fails(monkeypatch, capsys):
     """RED D: DROP synthetic role cleanup operation fails.
 
     Asserts that remaining cleanup is still attempted and final result is non-zero.
@@ -221,7 +222,7 @@ async def test_red_d_drop_synthetic_role_fails(monkeypatch):
     class FailingDropCursor(MockCursor):
         def execute(self, query, params=None):
             query_str = str(query)
-            if "DROP ROLE IF EXISTS c25_gate_admin_" in query_str:
+            if "DROP ROLE" in query_str and "c25_gate_admin_" in query_str:
                 raise RuntimeError("Postgres error dropping synthetic role")
             return super().execute(query, params)
 
@@ -230,7 +231,11 @@ async def test_red_d_drop_synthetic_role_fails(monkeypatch):
 
     # Mock migration, provision and assertions to succeed
     monkeypatch.setattr(c25_admin_ops_gate, "_run_alembic_migrations", lambda x: None)
-    monkeypatch.setattr(c25_admin_ops_gate, "_provision_roles", lambda p, r1, r2: None)
+    async def provision_roles(pool, app_role, admin_role, created_roles):
+        created_roles.extend([app_role, admin_role])
+
+    monkeypatch.setattr(c25_admin_ops_gate, "_provision_roles", provision_roles)
+    monkeypatch.setattr(c25_admin_ops_gate, "_run_gate_assertions", AsyncMock(return_value=True))
 
     mock_admin_pool = AsyncMock()
     mock_app_pool = AsyncMock()
@@ -247,22 +252,22 @@ async def test_red_d_drop_synthetic_role_fails(monkeypatch):
     monkeypatch.setattr(
         c25_admin_ops_gate,
         "_test_direct_login_escalation_proof",
-        lambda p, d, r: True,
+        AsyncMock(return_value=True),
     )
     monkeypatch.setattr(c25_admin_ops_gate, "_run_alembic_downgrade", lambda x: None)
-
-    # Force run_assertions to pass
-    async def mock_run_assertions_selector(*args, **kwargs):
-        return True
 
     with patch_connect:
         exit_code = await c25_admin_ops_gate.main()
         # Should return 1 because cleanup raised an exception
         assert exit_code == 1
 
+    assert "Postgres error dropping synthetic role" in capsys.readouterr().out
+    assert any("DROP ROLE" in q and "c25_gate_app_" in q for q in cursor.executed_queries)
+    assert any("DROP ROLE IF EXISTS c2pro_admin_ops" in q for q in cursor.executed_queries)
+
 
 @pytest.mark.asyncio
-async def test_red_e_hygiene_check_detects_leak(monkeypatch):
+async def test_red_e_hygiene_check_detects_leak(monkeypatch, capsys):
     """RED E: Final hygiene check detects leaked DB/role.
 
     Asserts that final exit code is non-zero (1).
@@ -278,7 +283,7 @@ async def test_red_e_hygiene_check_detects_leak(monkeypatch):
         "rolname = 'c2pro_app'": (False,),
         "rolname = 'c2pro_admin_login'": (False,),
         "rolname = 'c2pro_admin_ops'": (False,),
-        "c25_gate_app_": (True,),  # Leak detected!
+        "c25_gate_app_": iter([(False,), (True,)]).__next__,  # Absent at setup; leaked at hygiene.
         "c25_gate_admin_": (False,),
         "datname = 'c25_admin_ops_gate'": (False,),
     }
@@ -286,7 +291,11 @@ async def test_red_e_hygiene_check_detects_leak(monkeypatch):
     patch_connect = patch("psycopg.connect", return_value=cursor)
 
     monkeypatch.setattr(c25_admin_ops_gate, "_run_alembic_migrations", lambda x: None)
-    monkeypatch.setattr(c25_admin_ops_gate, "_provision_roles", lambda p, r1, r2: None)
+    async def provision_roles(pool, app_role, admin_role, created_roles):
+        created_roles.extend([app_role, admin_role])
+
+    monkeypatch.setattr(c25_admin_ops_gate, "_provision_roles", provision_roles)
+    monkeypatch.setattr(c25_admin_ops_gate, "_run_gate_assertions", AsyncMock(return_value=True))
 
     mock_admin_pool = AsyncMock()
     mock_app_pool = AsyncMock()
@@ -303,13 +312,15 @@ async def test_red_e_hygiene_check_detects_leak(monkeypatch):
     monkeypatch.setattr(
         c25_admin_ops_gate,
         "_test_direct_login_escalation_proof",
-        lambda p, d, r: True,
+        AsyncMock(return_value=True),
     )
     monkeypatch.setattr(c25_admin_ops_gate, "_run_alembic_downgrade", lambda x: None)
 
     with patch_connect:
         exit_code = await c25_admin_ops_gate.main()
         assert exit_code == 1
+
+    assert "Synthetic temporary login roles leaked" in capsys.readouterr().out
 
 
 @pytest.mark.asyncio

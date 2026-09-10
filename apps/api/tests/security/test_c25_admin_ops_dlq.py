@@ -252,9 +252,13 @@ class TestC25AdminSessionFailureSemantics:
             )
         mock_session.execute.return_value = mock_result
 
+        body_entered = False
         with pytest.raises(RuntimeError, match=expected_err):
             async with get_admin_ops_session():
-                pass
+                body_entered = True
+
+        assert body_entered is False
+        mock_session.commit.assert_not_awaited()
 
     @pytest.mark.asyncio
     @patch("src.core.database._admin_ops_session_factory")

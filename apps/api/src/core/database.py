@@ -430,189 +430,187 @@ async def get_admin_ops_session() -> AsyncGenerator[AsyncSession, None]:
         # Validate PostgreSQL principal and privileges dynamically via catalog
         if not session.bind or session.bind.dialect.name != "postgresql":
             raise RuntimeError("Database principal verification failed: missing or unsupported database bind.")
-        if True:
-            result = await session.execute(
-                text(
-                    """
-                    SELECT
-                        rolcanlogin,
-                        rolsuper,
-                        rolbypassrls,
-                        rolcreaterole,
-                        rolcreatedb,
-                        pg_has_role(current_user, 'c2pro_admin_ops', 'member') AS is_member,
-                        EXISTS (
-                            SELECT 1 FROM pg_class c
-                            JOIN pg_roles r ON c.relowner = r.oid
-                            WHERE c.relname = 'dlq_failed_tasks' AND r.rolname = current_user
-                        ) AS is_table_owner,
-                        EXISTS (
-                            SELECT 1 FROM pg_auth_members m
-                            JOIN pg_roles r ON m.roleid = r.oid
-                            WHERE m.member = current_user::regrole
-                            AND r.rolname NOT IN ('c2pro_admin_ops', 'public')
-                        ) AS has_extra_inherited,
-                        EXISTS (
-                            SELECT 1 FROM pg_database d
-                            JOIN pg_roles r ON d.datdba = r.oid
-                            WHERE d.datname = current_database() AND r.rolname = current_user
-                        ) AS is_db_owner,
-                        EXISTS (
-                            SELECT 1 FROM pg_namespace n
-                            JOIN pg_roles r ON n.nspowner = r.oid
-                            WHERE n.nspname = 'public' AND r.rolname = current_user
-                        ) AS is_schema_owner,
-                        has_database_privilege(current_user, current_database(), 'CREATE') AS has_db_create,
-                        has_schema_privilege(current_user, 'public', 'CREATE') AS has_schema_create,
-                        (SELECT session_user = current_user) AS session_user_eq_current_user,
-                        -- Indicators for direct grants to current_user
-                        (
-                            SELECT EXISTS (
-                                SELECT 1 FROM pg_class c
-                                JOIN pg_namespace n ON c.relnamespace = n.oid
-                                CROSS JOIN unnest(COALESCE(c.relacl, acldefault(
-                                    CASE c.relkind WHEN 'S' THEN 's'::"char" ELSE 'r'::"char" END,
-                                    c.relowner
-                                ))) acl
-                                WHERE n.nspname = 'public'
-                                  AND acl::text LIKE current_user || '=%'
-                            )
-                        ) AS has_direct_rel_grants,
-                        (
-                            SELECT EXISTS (
-                                SELECT 1 FROM pg_attribute a
-                                JOIN pg_class c ON a.attrelid = c.oid
-                                JOIN pg_namespace n ON c.relnamespace = n.oid
-                                CROSS JOIN unnest(COALESCE(a.attacl, acldefault('c', c.relowner))) acl
-                                WHERE n.nspname = 'public'
-                                  AND acl::text LIKE current_user || '=%'
-                            )
-                        ) AS has_direct_col_grants,
-                        (
-                            SELECT EXISTS (
-                                SELECT 1 FROM pg_namespace n
-                                CROSS JOIN unnest(COALESCE(n.nspacl, acldefault('n', n.nspowner))) acl
-                                WHERE acl::text LIKE current_user || '=%'
-                                  AND NOT (n.nspname = 'public' AND acl::text = current_user || '=U/' || pg_get_userbyid(n.nspowner))
-                            )
-                        ) AS has_direct_schema_grants,
-                        (
-                            SELECT EXISTS (
-                                SELECT 1 FROM pg_database d
-                                CROSS JOIN unnest(COALESCE(d.datacl, acldefault('d', d.datdba))) acl
-                                WHERE d.datname = current_database()
-                                  AND acl::text LIKE current_user || '=%'
-                                  AND NOT (acl::text = current_user || '=c/' || pg_get_userbyid(d.datdba))
-                            )
-                        ) AS has_direct_db_grants,
-                        (
-                            SELECT EXISTS (
-                                SELECT 1 FROM pg_proc p
-                                JOIN pg_namespace n ON p.pronamespace = n.oid
-                                CROSS JOIN unnest(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
-                                WHERE n.nspname = 'public'
-                                  AND acl::text LIKE current_user || '=%'
-                            )
-                        ) AS has_direct_proc_grants,
-                        (
-                            SELECT EXISTS (
-                                SELECT 1 FROM pg_default_acl a
-                                CROSS JOIN unnest(a.defaclacl) acl
-                                WHERE acl::text LIKE current_user || '=%'
-                            )
-                        ) AS has_direct_default_acls
-                    FROM pg_roles
-                    WHERE rolname = current_user
-                    """
-                )
-            )
-            row = result.fetchone()
-            if not row:
-                raise RuntimeError("Database principal verification failed: current user record not found in pg_roles.")
-            if True:
-                (
+        result = await session.execute(
+            text(
+                """
+                SELECT
                     rolcanlogin,
                     rolsuper,
                     rolbypassrls,
                     rolcreaterole,
                     rolcreatedb,
-                    is_member,
-                    is_table_owner,
-                    has_extra_inherited,
-                    is_db_owner,
-                    is_schema_owner,
-                    has_db_create,
-                    has_schema_create,
-                    session_user_eq_current_user,
-                    has_direct_rel_grants,
-                    has_direct_col_grants,
-                    has_direct_schema_grants,
-                    has_direct_db_grants,
-                    has_direct_proc_grants,
-                    has_direct_default_acls,
-                ) = row
-                if not rolcanlogin:
-                    raise RuntimeError("Database principal lacks LOGIN privilege.")
-                if rolsuper:
-                    raise RuntimeError(
-                        "Superuser login is strictly forbidden for admin operations."
-                    )
-                if rolbypassrls:
-                    raise RuntimeError(
-                        "BypassRLS login is strictly forbidden for admin operations."
-                    )
-                if rolcreaterole:
-                    raise RuntimeError(
-                        "CreateRole login is strictly forbidden for admin operations."
-                    )
-                if rolcreatedb:
-                    raise RuntimeError("CreateDB login is strictly forbidden for admin operations.")
-                if not is_member:
-                    raise RuntimeError("Database principal is not a member of c2pro_admin_ops.")
-                if is_table_owner:
-                    raise RuntimeError("Database principal owns dlq_failed_tasks (bypassing RLS).")
-                if has_extra_inherited:
-                    raise RuntimeError(
-                        "Database principal possesses unexpected inherited role memberships."
-                    )
-                if is_db_owner:
-                    raise RuntimeError("Database principal owns the current database.")
-                if is_schema_owner:
-                    raise RuntimeError("Database principal owns the public schema.")
-                if has_db_create:
-                    raise RuntimeError(
-                        "Database principal possesses CREATE privilege on the database."
-                    )
-                if has_schema_create:
-                    raise RuntimeError(
-                        "Database principal possesses CREATE privilege on the public schema."
-                    )
-                if not session_user_eq_current_user:
-                    raise RuntimeError("session_user and current_user must match exactly.")
-                if has_direct_rel_grants:
-                    raise RuntimeError(
-                        "Database principal possesses unexpected direct relation/table/sequence privileges."
-                    )
-                if has_direct_col_grants:
-                    raise RuntimeError(
-                        "Database principal possesses unexpected direct column privileges."
-                    )
-                if has_direct_schema_grants:
-                    raise RuntimeError(
-                        "Database principal possesses unexpected direct schema privileges."
-                    )
-                if has_direct_db_grants:
-                    raise RuntimeError(
-                        "Database principal possesses unexpected direct database privileges."
-                    )
-                if has_direct_proc_grants:
-                    raise RuntimeError(
-                        "Database principal possesses unexpected direct function/procedure privileges."
-                    )
-                if has_direct_default_acls:
-                    raise RuntimeError(
-                        "Database principal possesses unexpected direct default ACLs."
-                    )
+                    pg_has_role(current_user, 'c2pro_admin_ops', 'member') AS is_member,
+                    EXISTS (
+                        SELECT 1 FROM pg_class c
+                        JOIN pg_roles r ON c.relowner = r.oid
+                        WHERE c.relname = 'dlq_failed_tasks' AND r.rolname = current_user
+                    ) AS is_table_owner,
+                    EXISTS (
+                        SELECT 1 FROM pg_auth_members m
+                        JOIN pg_roles r ON m.roleid = r.oid
+                        WHERE m.member = current_user::regrole
+                        AND r.rolname NOT IN ('c2pro_admin_ops', 'public')
+                    ) AS has_extra_inherited,
+                    EXISTS (
+                        SELECT 1 FROM pg_database d
+                        JOIN pg_roles r ON d.datdba = r.oid
+                        WHERE d.datname = current_database() AND r.rolname = current_user
+                    ) AS is_db_owner,
+                    EXISTS (
+                        SELECT 1 FROM pg_namespace n
+                        JOIN pg_roles r ON n.nspowner = r.oid
+                        WHERE n.nspname = 'public' AND r.rolname = current_user
+                    ) AS is_schema_owner,
+                    has_database_privilege(current_user, current_database(), 'CREATE') AS has_db_create,
+                    has_schema_privilege(current_user, 'public', 'CREATE') AS has_schema_create,
+                    (SELECT session_user = current_user) AS session_user_eq_current_user,
+                    -- Indicators for direct grants to current_user
+                    (
+                        SELECT EXISTS (
+                            SELECT 1 FROM pg_class c
+                            JOIN pg_namespace n ON c.relnamespace = n.oid
+                            CROSS JOIN unnest(COALESCE(c.relacl, acldefault(
+                                CASE c.relkind WHEN 'S' THEN 's'::"char" ELSE 'r'::"char" END,
+                                c.relowner
+                            ))) acl
+                            WHERE n.nspname = 'public'
+                              AND acl::text LIKE current_user || '=%'
+                        )
+                    ) AS has_direct_rel_grants,
+                    (
+                        SELECT EXISTS (
+                            SELECT 1 FROM pg_attribute a
+                            JOIN pg_class c ON a.attrelid = c.oid
+                            JOIN pg_namespace n ON c.relnamespace = n.oid
+                            CROSS JOIN unnest(COALESCE(a.attacl, acldefault('c', c.relowner))) acl
+                            WHERE n.nspname = 'public'
+                              AND acl::text LIKE current_user || '=%'
+                        )
+                    ) AS has_direct_col_grants,
+                    (
+                        SELECT EXISTS (
+                            SELECT 1 FROM pg_namespace n
+                            CROSS JOIN unnest(COALESCE(n.nspacl, acldefault('n', n.nspowner))) acl
+                            WHERE acl::text LIKE current_user || '=%'
+                              AND NOT (n.nspname = 'public' AND acl::text = current_user || '=U/' || pg_get_userbyid(n.nspowner))
+                        )
+                    ) AS has_direct_schema_grants,
+                    (
+                        SELECT EXISTS (
+                            SELECT 1 FROM pg_database d
+                            CROSS JOIN unnest(COALESCE(d.datacl, acldefault('d', d.datdba))) acl
+                            WHERE d.datname = current_database()
+                              AND acl::text LIKE current_user || '=%'
+                              AND NOT (acl::text = current_user || '=c/' || pg_get_userbyid(d.datdba))
+                        )
+                    ) AS has_direct_db_grants,
+                    (
+                        SELECT EXISTS (
+                            SELECT 1 FROM pg_proc p
+                            JOIN pg_namespace n ON p.pronamespace = n.oid
+                            CROSS JOIN unnest(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
+                            WHERE n.nspname = 'public'
+                              AND acl::text LIKE current_user || '=%'
+                        )
+                    ) AS has_direct_proc_grants,
+                    (
+                        SELECT EXISTS (
+                            SELECT 1 FROM pg_default_acl a
+                            CROSS JOIN unnest(a.defaclacl) acl
+                            WHERE acl::text LIKE current_user || '=%'
+                        )
+                    ) AS has_direct_default_acls
+                FROM pg_roles
+                WHERE rolname = current_user
+                """
+            )
+        )
+        row = result.fetchone()
+        if not row:
+            raise RuntimeError("Database principal verification failed: current user record not found in pg_roles.")
+        (
+            rolcanlogin,
+            rolsuper,
+            rolbypassrls,
+            rolcreaterole,
+            rolcreatedb,
+            is_member,
+            is_table_owner,
+            has_extra_inherited,
+            is_db_owner,
+            is_schema_owner,
+            has_db_create,
+            has_schema_create,
+            session_user_eq_current_user,
+            has_direct_rel_grants,
+            has_direct_col_grants,
+            has_direct_schema_grants,
+            has_direct_db_grants,
+            has_direct_proc_grants,
+            has_direct_default_acls,
+        ) = row
+        if not rolcanlogin:
+            raise RuntimeError("Database principal lacks LOGIN privilege.")
+        if rolsuper:
+            raise RuntimeError(
+                "Superuser login is strictly forbidden for admin operations."
+            )
+        if rolbypassrls:
+            raise RuntimeError(
+                "BypassRLS login is strictly forbidden for admin operations."
+            )
+        if rolcreaterole:
+            raise RuntimeError(
+                "CreateRole login is strictly forbidden for admin operations."
+            )
+        if rolcreatedb:
+            raise RuntimeError("CreateDB login is strictly forbidden for admin operations.")
+        if not is_member:
+            raise RuntimeError("Database principal is not a member of c2pro_admin_ops.")
+        if is_table_owner:
+            raise RuntimeError("Database principal owns dlq_failed_tasks (bypassing RLS).")
+        if has_extra_inherited:
+            raise RuntimeError(
+                "Database principal possesses unexpected inherited role memberships."
+            )
+        if is_db_owner:
+            raise RuntimeError("Database principal owns the current database.")
+        if is_schema_owner:
+            raise RuntimeError("Database principal owns the public schema.")
+        if has_db_create:
+            raise RuntimeError(
+                "Database principal possesses CREATE privilege on the database."
+            )
+        if has_schema_create:
+            raise RuntimeError(
+                "Database principal possesses CREATE privilege on the public schema."
+            )
+        if not session_user_eq_current_user:
+            raise RuntimeError("session_user and current_user must match exactly.")
+        if has_direct_rel_grants:
+            raise RuntimeError(
+                "Database principal possesses unexpected direct relation/table/sequence privileges."
+            )
+        if has_direct_col_grants:
+            raise RuntimeError(
+                "Database principal possesses unexpected direct column privileges."
+            )
+        if has_direct_schema_grants:
+            raise RuntimeError(
+                "Database principal possesses unexpected direct schema privileges."
+            )
+        if has_direct_db_grants:
+            raise RuntimeError(
+                "Database principal possesses unexpected direct database privileges."
+            )
+        if has_direct_proc_grants:
+            raise RuntimeError(
+                "Database principal possesses unexpected direct function/procedure privileges."
+            )
+        if has_direct_default_acls:
+            raise RuntimeError(
+                "Database principal possesses unexpected direct default ACLs."
+            )
 
         try:
             yield session
