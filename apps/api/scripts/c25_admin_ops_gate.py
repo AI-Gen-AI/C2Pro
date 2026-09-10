@@ -668,7 +668,7 @@ async def _test_admin_policy_catalog(admin_pool: AsyncConnectionPool) -> bool:
             print("FAIL: dlq_admin_select policy missing")
             return False
         cmd, roles = policies["dlq_admin_select"]
-        if cmd != "r":  # 'r' = SELECT
+        if cmd != "r":  # r indicates select capability
             print(f"FAIL: dlq_admin_select cmd = {cmd}, expected 'r'")
             return False
         if "c2pro_admin_ops" not in roles:
@@ -681,7 +681,7 @@ async def _test_admin_policy_catalog(admin_pool: AsyncConnectionPool) -> bool:
             print("FAIL: dlq_admin_retry policy missing")
             return False
         cmd, roles = policies["dlq_admin_retry"]
-        if cmd != "w":  # 'w' = UPDATE (write in PG catalog)
+        if cmd != "w":  # w indicates update capability
             print(f"FAIL: dlq_admin_retry cmd = {cmd}, expected 'w'")
             return False
         if "c2pro_admin_ops" not in roles:
@@ -865,6 +865,334 @@ async def _test_direct_login_escalation_proof(
     return rejected_successfully and passed_cleanly
 
 
+def _snapshot_and_provision_base_db(
+    admin_base_dsn: str,
+    DB_NAME: str,
+    app_role: str,
+    admin_login_role: str,
+) -> tuple[bool, bool, bool, tuple | None, list[str], bool, bool]:
+    canonical_app_existed = False
+    canonical_admin_login_existed = False
+    admin_role_preexisted = False
+    preexisting_ops_flags = None
+    preexisting_ops_members = []
+    created_by_gate = False
+    database_created_by_gate = False
+
+    print("\n=== Checking and Recording Pre-existing Role Snapshot (Section 5 / hygiene) ===")
+    with psycopg.connect(admin_base_dsn, autocommit=True) as conn:
+        # Check canonical c2pro_app
+        res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_app')")
+        canonical_app_existed = res.fetchone()[0]
+        if canonical_app_existed:
+            print("OK: Found pre-existing canonical role 'c2pro_app'")
+        else:
+            print("INFO: Canonical role 'c2pro_app' does not exist in cluster")
+
+        # Check canonical c2pro_admin_login
+        res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_login')")
+        canonical_admin_login_existed = res.fetchone()[0]
+        if canonical_admin_login_existed:
+            print("OK: Found pre-existing canonical role 'c2pro_admin_login'")
+        else:
+            print("INFO: Canonical role 'c2pro_admin_login' does not exist in cluster")
+
+        # Check c2pro_admin_ops
+        res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_ops')")
+        admin_role_preexisted = res.fetchone()[0]
+
+        if admin_role_preexisted:
+            print("INFO: Capability role 'c2pro_admin_ops' already exists. Validating locked properties...")
+            res_props = conn.execute(
+                """
+                SELECT rolsuper, rolbypassrls, rolcreaterole, rolcanlogin, rolcreatedb
+                FROM pg_roles WHERE rolname = 'c2pro_admin_ops'
+                """
+            )
+            props = res_props.fetchone()
+            if props:
+                rolsuper, rolbypassrls, rolcreaterole, rolcanlogin, rolcreatedb = props
+                preexisting_ops_flags = (rolsuper, rolbypassrls, rolcreaterole, rolcanlogin, rolcreatedb)
+                if rolsuper or rolbypassrls or rolcreaterole or rolcanlogin or rolcreatedb:
+                    raise RuntimeError(
+                        f"SAFETY VIOLATION: Pre-existing c2pro_admin_ops role has invalid properties: "
+                        f"rolsuper={rolsuper}, rolbypassrls={rolbypassrls}, rolcreaterole={rolcreaterole}, "
+                        f"rolcanlogin={rolcanlogin}, rolcreatedb={rolcreatedb}. Expected all to be False."
+                    )
+                print("OK: Pre-existing 'c2pro_admin_ops' properties are valid (locked flags match contract).")
+
+            # Fetch memberships of pre-existing c2pro_admin_ops to preserve them
+            res_m = conn.execute(
+                """
+                SELECT r.rolname FROM pg_auth_members m
+                JOIN pg_roles r ON m.roleid = r.oid
+                WHERE m.member = 'c2pro_admin_ops'::regrole
+                """
+            )
+            preexisting_ops_members = [r[0] for r in res_m.fetchall()]
+            created_by_gate = False
+        else:
+            print("INFO: Capability role 'c2pro_admin_ops' does not exist. Creating it with exact locked flags...")
+            conn.execute(
+                "CREATE ROLE c2pro_admin_ops NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS"
+            )
+            created_by_gate = True
+
+        # Section 6: Check synthetic role collisions to fail closed early rather than repurposing
+        res = conn.execute(sql.SQL("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {role})").format(role=sql.Literal(app_role)))
+        if res.fetchone()[0]:
+            raise RuntimeError(f"SAFETY VIOLATION: Synthetic role '{app_role}' unexpectedly already exists. Failing closed.")
+        res = conn.execute(sql.SQL("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {role})").format(role=sql.Literal(admin_login_role)))
+        if res.fetchone()[0]:
+            raise RuntimeError(f"SAFETY VIOLATION: Synthetic role '{admin_login_role}' unexpectedly already exists. Failing closed.")
+
+        # Ensure clean slate: drop database if exists
+        print(f"\nCleaning up database {DB_NAME} if exists...")
+        conn.execute(f"DROP DATABASE IF EXISTS {DB_NAME}")
+        conn.execute(f"CREATE DATABASE {DB_NAME}")
+        database_created_by_gate = True
+
+    return (
+        canonical_app_existed,
+        canonical_admin_login_existed,
+        admin_role_preexisted,
+        preexisting_ops_flags,
+        preexisting_ops_members,
+        created_by_gate,
+        database_created_by_gate,
+    )
+
+
+async def _run_gate_assertions(
+    admin_pool: AsyncConnectionPool,
+    app_pool: AsyncConnectionPool,
+    admin_login_pool: AsyncConnectionPool,
+) -> bool:
+    passed = True
+    # 1. Role catalog properties
+    print("\n=== Role Catalog Verification ===")
+    passed &= await _check_role_properties(
+        admin_pool,
+        "c2pro_admin_ops",
+        rolsuper=False,
+        rolbypassrls=False,
+        rolcreaterole=False,
+        rolcanlogin=False,
+    )
+
+    # 2. Table ownership
+    passed &= await _check_table_owner(admin_pool, "dlq_failed_tasks", "c2pro_admin_ops")
+
+    # 3. Extended unprivileged check on c2pro_admin_ops
+    passed &= await _test_admin_ops_unprivileged(admin_pool)
+
+    # 4. Extended unprivileged check on admin login role
+    passed &= await _test_admin_login_exact_unprivileged(admin_login_pool)
+
+    # 5. Seed DLQ rows
+    await _seed_dlq_rows(admin_pool)
+
+    # 6. app role tenant isolation
+    passed &= await _test_c2pro_app_tenant_isolation(app_pool)
+
+    # 7. app role cross-tenant denied
+    passed &= await _test_c2pro_app_cross_tenant_denied(app_pool)
+
+    # 8. Admin login cross-tenant SELECT
+    passed &= await _test_admin_login_select_cross_tenant(admin_login_pool)
+
+    # 9. Admin login COUNT cross-tenant
+    passed &= await _test_admin_login_count_cross_tenant(admin_login_pool)
+
+    # 10. Admin login retry UPDATE
+    passed &= await _test_admin_login_retry_update(admin_login_pool)
+
+    # 11. Admin tenant_id UPDATE denied
+    passed &= await _test_admin_tenant_id_update_denied(admin_login_pool)
+
+    # 12. Admin INSERT denied
+    passed &= await _test_admin_insert_denied(admin_login_pool)
+
+    # 13. Admin DELETE denied
+    passed &= await _test_admin_delete_denied(admin_login_pool)
+
+    # 14. Unrelated table access denied
+    passed &= await _test_admin_unrelated_table_denied(admin_login_pool)
+
+    # 15. Admin policy catalog
+    passed &= await _test_admin_policy_catalog(admin_login_pool)
+
+    # 16. Column-level UPDATE grant
+    passed &= await _test_grant_catalog(admin_login_pool)
+
+    # 17. Admin TRUNCATE denied
+    passed &= await _test_admin_truncate_denied(admin_login_pool)
+
+    # 18. No unexpected DML on unrelated public business tables
+    passed &= await _test_catalog_no_unexpected_dml(admin_pool)
+
+    return passed
+
+
+def _execute_teardown_and_hygiene(
+    admin_base_dsn: str,
+    DB_NAME: str,
+    app_role: str,
+    admin_login_role: str,
+    database_created_by_gate: bool,
+    created_synthetic_roles: list[str],
+    created_by_gate: bool,
+    admin_role_preexisted: bool,
+    canonical_app_existed: bool,
+    canonical_admin_login_existed: bool,
+    preexisting_ops_flags: tuple | None,
+    preexisting_ops_members: list[str],
+    cleanup_errors: list[str],
+) -> bool:
+    hygiene_passed = True
+    print("\n=== Executing Outer Fail-Safe Cleanup Lifecycle ===")
+
+    # 2. Connect to postgres as superuser to perform teardown
+    try:
+        with psycopg.connect(admin_base_dsn, autocommit=True) as conn:
+            # Disconnect active connections to DB if we created it
+            if database_created_by_gate:
+                print(f"Terminating active backend connections to {DB_NAME}...")
+                try:
+                    conn.execute(
+                        f"""
+                        SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+                        WHERE datname = '{DB_NAME}' AND pid <> pg_backend_pid()
+                        """
+                    )
+                except Exception as e:
+                    cleanup_errors.append(f"Failed to terminate active connections to {DB_NAME}: {e}")
+
+                print(f"Dropping target database: {DB_NAME}...")
+                try:
+                    conn.execute(f"DROP DATABASE IF EXISTS {DB_NAME}")
+                    print(f"OK: Disposable database {DB_NAME} dropped successfully")
+                except Exception as e:
+                    cleanup_errors.append(f"Failed to drop disposable database {DB_NAME}: {e}")
+
+            # Drop synthetic login roles actually created by this invocation
+            for role_name in reversed(created_synthetic_roles):
+                try:
+                    conn.execute(sql.SQL("DROP ROLE IF EXISTS {role}").format(role=sql.Identifier(role_name)))
+                    print(f"OK: Synthetic login role '{role_name}' dropped cleanly")
+                except Exception as e:
+                    cleanup_errors.append(f"Failed to drop synthetic role {role_name}: {e}")
+
+            # If c2pro_admin_ops was created by the gate, drop it
+            if created_by_gate:
+                print("INFO: Dropping gate-created capability role 'c2pro_admin_ops'...")
+                try:
+                    conn.execute("DROP ROLE IF EXISTS c2pro_admin_ops")
+                    print("OK: Gate-created 'c2pro_admin_ops' dropped cleanly")
+                except Exception as e:
+                    cleanup_errors.append(f"Failed to drop gate-created role c2pro_admin_ops: {e}")
+            else:
+                print("INFO: Preserving pre-existing c2pro_admin_ops capability role.")
+
+            print("\n=== Verifying Cluster Hygiene State (Section 5 / R10) ===")
+            # Prove c2pro_app exists/is untouched if it originally pre-existed
+            try:
+                res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_app')")
+                still_exists = res.fetchone()[0]
+                if still_exists != canonical_app_existed:
+                    hygiene_passed = False
+                    cleanup_errors.append("HYGIENE FAILURE: Canonical role 'c2pro_app' state was altered/mutated")
+                else:
+                    print("OK: Canonical role 'c2pro_app' state remained untouched by gate")
+            except Exception as e:
+                cleanup_errors.append(f"Failed to verify c2pro_app state: {e}")
+
+            # Prove c2pro_admin_login exists/is untouched if it originally pre-existed
+            try:
+                res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_login')")
+                still_exists = res.fetchone()[0]
+                if still_exists != canonical_admin_login_existed:
+                    hygiene_passed = False
+                    cleanup_errors.append("HYGIENE FAILURE: Canonical role 'c2pro_admin_login' state was altered/mutated")
+                else:
+                    print("OK: Canonical role 'c2pro_admin_login' state remained untouched by gate")
+            except Exception as e:
+                cleanup_errors.append(f"Failed to verify c2pro_admin_login state: {e}")
+
+            # Prove c2pro_admin_ops state conforms to pre-existing or created
+            try:
+                res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_ops')")
+                ops_exists = res.fetchone()[0]
+                if admin_role_preexisted:
+                    if not ops_exists:
+                        hygiene_passed = False
+                        cleanup_errors.append("HYGIENE FAILURE: Pre-existing capability role 'c2pro_admin_ops' was deleted")
+                    else:
+                        # Verify flags and memberships unchanged
+                        res_props = conn.execute(
+                            """
+                            SELECT rolsuper, rolbypassrls, rolcreaterole, rolcanlogin, rolcreatedb
+                            FROM pg_roles WHERE rolname = 'c2pro_admin_ops'
+                            """
+                        )
+                        props = res_props.fetchone()
+                        if props != preexisting_ops_flags:
+                            hygiene_passed = False
+                            cleanup_errors.append(f"HYGIENE FAILURE: Pre-existing 'c2pro_admin_ops' flags mutated from {preexisting_ops_flags} to {props}")
+                        else:
+                            print("OK: Pre-existing capability role 'c2pro_admin_ops' flags remained unchanged")
+
+                        res_m = conn.execute(
+                            """
+                            SELECT r.rolname FROM pg_auth_members m
+                            JOIN pg_roles r ON m.roleid = r.oid
+                            WHERE m.member = 'c2pro_admin_ops'::regrole
+                            """
+                        )
+                        members = [r[0] for r in res_m.fetchall()]
+                        if sorted(members) != sorted(preexisting_ops_members):
+                            hygiene_passed = False
+                            cleanup_errors.append(f"HYGIENE FAILURE: Pre-existing 'c2pro_admin_ops' memberships mutated from {preexisting_ops_members} to {members}")
+                        else:
+                            print("OK: Pre-existing capability role 'c2pro_admin_ops' memberships remained unchanged")
+                else:
+                    if ops_exists:
+                        hygiene_passed = False
+                        cleanup_errors.append("HYGIENE FAILURE: Gate-created capability role 'c2pro_admin_ops' was leaked")
+                    else:
+                        print("OK: Gate-created capability role 'c2pro_admin_ops' was cleanly deleted")
+            except Exception as e:
+                cleanup_errors.append(f"Failed to verify c2pro_admin_ops state: {e}")
+
+            # Prove synthetic login roles deleted
+            try:
+                res_admin = conn.execute(sql.SQL("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {role})").format(role=sql.Literal(admin_login_role)))
+                res_app = conn.execute(sql.SQL("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {role})").format(role=sql.Literal(app_role)))
+                if res_admin.fetchone()[0] or res_app.fetchone()[0]:
+                    hygiene_passed = False
+                    cleanup_errors.append("HYGIENE FAILURE: Synthetic temporary login roles leaked in cluster")
+                else:
+                    print("OK: Synthetic temporary login roles cleanly and completely deleted from cluster")
+            except Exception as e:
+                cleanup_errors.append(f"Failed to verify synthetic role deletion: {e}")
+
+            # Prove database deleted
+            try:
+                res = conn.execute(f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = '{DB_NAME}')")
+                if res.fetchone()[0]:
+                    hygiene_passed = False
+                    cleanup_errors.append("HYGIENE FAILURE: Disposable database leaked in cluster")
+                else:
+                    print("OK: Disposable database cleanly and completely deleted from cluster")
+            except Exception as e:
+                cleanup_errors.append(f"Failed to verify database deletion: {e}")
+
+    except Exception as e:
+        cleanup_errors.append(f"Fail-safe cleanup database connection level exception: {e}")
+
+    return hygiene_passed
+
+
 async def main() -> int:
     """Run the C2.5 disposable DB gate with an outer fail-safe lifecycle."""
     import sys
@@ -895,95 +1223,21 @@ async def main() -> int:
     admin_pool = None
     app_pool = None
     admin_login_pool = None
-
-    admin_role_preexisted = False
-    created_by_gate = False
-    database_created_by_gate = False
     created_synthetic_roles: list[str] = []
-
-    canonical_app_existed = False
-    canonical_admin_login_existed = False
-
-    preexisting_ops_flags = None
-    preexisting_ops_members = []
-
-    cleanup_errors = []
-    hygiene_passed = True
+    cleanup_errors: list[str] = []
     all_passed = True
 
+    # Snapshots and setups
     try:
-        print("\n=== Checking and Recording Pre-existing Role Snapshot (Section 5 / hygiene) ===")
-        with psycopg.connect(admin_base_dsn, autocommit=True) as conn:
-            # Check canonical c2pro_app
-            res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_app')")
-            canonical_app_existed = res.fetchone()[0]
-            if canonical_app_existed:
-                print("OK: Found pre-existing canonical role 'c2pro_app'")
-            else:
-                print("INFO: Canonical role 'c2pro_app' does not exist in cluster")
-
-            # Check canonical c2pro_admin_login
-            res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_login')")
-            canonical_admin_login_existed = res.fetchone()[0]
-            if canonical_admin_login_existed:
-                print("OK: Found pre-existing canonical role 'c2pro_admin_login'")
-            else:
-                print("INFO: Canonical role 'c2pro_admin_login' does not exist in cluster")
-
-            # Check c2pro_admin_ops
-            res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_ops')")
-            admin_role_preexisted = res.fetchone()[0]
-
-            if admin_role_preexisted:
-                print("INFO: Capability role 'c2pro_admin_ops' already exists. Validating locked properties...")
-                res_props = conn.execute(
-                    """
-                    SELECT rolsuper, rolbypassrls, rolcreaterole, rolcanlogin, rolcreatedb
-                    FROM pg_roles WHERE rolname = 'c2pro_admin_ops'
-                    """
-                )
-                props = res_props.fetchone()
-                if props:
-                    rolsuper, rolbypassrls, rolcreaterole, rolcanlogin, rolcreatedb = props
-                    preexisting_ops_flags = (rolsuper, rolbypassrls, rolcreaterole, rolcanlogin, rolcreatedb)
-                    if rolsuper or rolbypassrls or rolcreaterole or rolcanlogin or rolcreatedb:
-                        raise RuntimeError(
-                            f"SAFETY VIOLATION: Pre-existing c2pro_admin_ops role has invalid properties: "
-                            f"rolsuper={rolsuper}, rolbypassrls={rolbypassrls}, rolcreaterole={rolcreaterole}, "
-                            f"rolcanlogin={rolcanlogin}, rolcreatedb={rolcreatedb}. Expected all to be False."
-                        )
-                    print("OK: Pre-existing 'c2pro_admin_ops' properties are valid (locked flags match contract).")
-
-                # Fetch memberships of pre-existing c2pro_admin_ops to preserve them
-                res_m = conn.execute(
-                    """
-                    SELECT r.rolname FROM pg_auth_members m
-                    JOIN pg_roles r ON m.roleid = r.oid
-                    WHERE m.member = 'c2pro_admin_ops'::regrole
-                    """
-                )
-                preexisting_ops_members = [r[0] for r in res_m.fetchall()]
-                created_by_gate = False
-            else:
-                print("INFO: Capability role 'c2pro_admin_ops' does not exist. Creating it with exact locked flags...")
-                conn.execute(
-                    "CREATE ROLE c2pro_admin_ops NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS"
-                )
-                created_by_gate = True
-
-            # Section 6: Check synthetic role collisions to fail closed early rather than repurposing
-            res = conn.execute(sql.SQL("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {role})").format(role=sql.Literal(app_role)))
-            if res.fetchone()[0]:
-                raise RuntimeError(f"SAFETY VIOLATION: Synthetic role '{app_role}' unexpectedly already exists. Failing closed.")
-            res = conn.execute(sql.SQL("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {role})").format(role=sql.Literal(admin_login_role)))
-            if res.fetchone()[0]:
-                raise RuntimeError(f"SAFETY VIOLATION: Synthetic role '{admin_login_role}' unexpectedly already exists. Failing closed.")
-
-            # Ensure clean slate: drop database if exists
-            print(f"\nCleaning up database {DB_NAME} if exists...")
-            conn.execute(f"DROP DATABASE IF EXISTS {DB_NAME}")
-            conn.execute(f"CREATE DATABASE {DB_NAME}")
-            database_created_by_gate = True
+        (
+            canonical_app_existed,
+            canonical_admin_login_existed,
+            admin_role_preexisted,
+            preexisting_ops_flags,
+            preexisting_ops_members,
+            created_by_gate,
+            database_created_by_gate,
+        ) = _snapshot_and_provision_base_db(admin_base_dsn, DB_NAME, app_role, admin_login_role)
 
         print(f"Successfully created disposable database: {DB_NAME}")
 
@@ -1006,73 +1260,8 @@ async def main() -> int:
         app_pool = await _connect(app_dsn)
         admin_login_pool = await _connect(admin_login_dsn)
 
-        async def run_assertions():
-            passed = True
-            # 1. Role catalog properties
-            print("\n=== Role Catalog Verification ===")
-            passed &= await _check_role_properties(
-                admin_pool,
-                "c2pro_admin_ops",
-                rolsuper=False,
-                rolbypassrls=False,
-                rolcreaterole=False,
-                rolcanlogin=False,
-            )
-
-            # 2. Table ownership
-            passed &= await _check_table_owner(admin_pool, "dlq_failed_tasks", "c2pro_admin_ops")
-
-            # 3. Extended unprivileged check on c2pro_admin_ops
-            passed &= await _test_admin_ops_unprivileged(admin_pool)
-
-            # 4. Extended unprivileged check on admin login role
-            passed &= await _test_admin_login_exact_unprivileged(admin_login_pool)
-
-            # 5. Seed DLQ rows
-            await _seed_dlq_rows(admin_pool)
-
-            # 6. app role tenant isolation
-            passed &= await _test_c2pro_app_tenant_isolation(app_pool)
-
-            # 7. app role cross-tenant denied
-            passed &= await _test_c2pro_app_cross_tenant_denied(app_pool)
-
-            # 8. Admin login cross-tenant SELECT
-            passed &= await _test_admin_login_select_cross_tenant(admin_login_pool)
-
-            # 9. Admin login COUNT cross-tenant
-            passed &= await _test_admin_login_count_cross_tenant(admin_login_pool)
-
-            # 10. Admin login retry UPDATE
-            passed &= await _test_admin_login_retry_update(admin_login_pool)
-
-            # 11. Admin tenant_id UPDATE denied
-            passed &= await _test_admin_tenant_id_update_denied(admin_login_pool)
-
-            # 12. Admin INSERT denied
-            passed &= await _test_admin_insert_denied(admin_login_pool)
-
-            # 13. Admin DELETE denied
-            passed &= await _test_admin_delete_denied(admin_login_pool)
-
-            # 14. Unrelated table access denied
-            passed &= await _test_admin_unrelated_table_denied(admin_login_pool)
-
-            # 15. Admin policy catalog
-            passed &= await _test_admin_policy_catalog(admin_login_pool)
-
-            # 16. Column-level UPDATE grant
-            passed &= await _test_grant_catalog(admin_login_pool)
-
-            # 17. Admin TRUNCATE denied
-            passed &= await _test_admin_truncate_denied(admin_login_pool)
-
-            # 18. No unexpected DML on unrelated public business tables
-            passed &= await _test_catalog_no_unexpected_dml(admin_pool)
-            return passed
-
         # Execute initial gate checks
-        all_passed &= await run_assertions()
+        all_passed &= await _run_gate_assertions(admin_pool, app_pool, admin_login_pool)
 
         # Run direct-login escalation proof (Blocker 2 / Blocker 5)
         all_passed &= await _test_direct_login_escalation_proof(admin_pool, target_dsn, admin_login_role)
@@ -1091,14 +1280,13 @@ async def main() -> int:
         admin_login_pool = await _connect(admin_login_dsn)
 
         print("\nRe-running all assertions after downgrade/upgrade...")
-        all_passed &= await run_assertions()
+        all_passed &= await _run_gate_assertions(admin_pool, app_pool, admin_login_pool)
 
     except Exception as exc:
         print(f"\n❌ GATE LIFECYCLE EXECUTION FAILURE: {exc}")
         all_passed = False
 
     finally:
-        print("\n=== Executing Outer Fail-Safe Cleanup Lifecycle ===")
         # 1. Gracefully close connection pools if they exist
         if app_pool:
             try:
@@ -1116,143 +1304,21 @@ async def main() -> int:
             except Exception as e:
                 cleanup_errors.append(f"Failed to close admin_pool: {e}")
 
-        # 2. Connect to postgres as superuser to perform teardown
-        try:
-            with psycopg.connect(admin_base_dsn, autocommit=True) as conn:
-                # Disconnect active connections to DB if we created it
-                if database_created_by_gate:
-                    print(f"Terminating active backend connections to {DB_NAME}...")
-                    try:
-                        conn.execute(
-                            f"""
-                            SELECT pg_terminate_backend(pid) FROM pg_stat_activity
-                            WHERE datname = '{DB_NAME}' AND pid <> pg_backend_pid()
-                            """
-                        )
-                    except Exception as e:
-                        cleanup_errors.append(f"Failed to terminate active connections to {DB_NAME}: {e}")
-
-                    print(f"Dropping target database: {DB_NAME}...")
-                    try:
-                        conn.execute(f"DROP DATABASE IF EXISTS {DB_NAME}")
-                        print(f"OK: Disposable database {DB_NAME} dropped successfully")
-                    except Exception as e:
-                        cleanup_errors.append(f"Failed to drop disposable database {DB_NAME}: {e}")
-
-                # Drop synthetic login roles actually created by this invocation
-                for role_name in reversed(created_synthetic_roles):
-                    try:
-                        conn.execute(sql.SQL("DROP ROLE IF EXISTS {role}").format(role=sql.Identifier(role_name)))
-                        print(f"OK: Synthetic login role '{role_name}' dropped cleanly")
-                    except Exception as e:
-                        cleanup_errors.append(f"Failed to drop synthetic role {role_name}: {e}")
-
-                # If c2pro_admin_ops was created by the gate, drop it
-                if created_by_gate:
-                    print("INFO: Dropping gate-created capability role 'c2pro_admin_ops'...")
-                    try:
-                        conn.execute("DROP ROLE IF EXISTS c2pro_admin_ops")
-                        print("OK: Gate-created 'c2pro_admin_ops' dropped cleanly")
-                    except Exception as e:
-                        cleanup_errors.append(f"Failed to drop gate-created role c2pro_admin_ops: {e}")
-                else:
-                    print("INFO: Preserving pre-existing c2pro_admin_ops capability role.")
-
-                print("\n=== Verifying Cluster Hygiene State (Section 5 / R10) ===")
-                # Prove c2pro_app exists/is untouched if it originally pre-existed
-                try:
-                    res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_app')")
-                    still_exists = res.fetchone()[0]
-                    if still_exists != canonical_app_existed:
-                        hygiene_passed = False
-                        cleanup_errors.append("HYGIENE FAILURE: Canonical role 'c2pro_app' state was altered/mutated")
-                    else:
-                        print("OK: Canonical role 'c2pro_app' state remained untouched by gate")
-                except Exception as e:
-                    cleanup_errors.append(f"Failed to verify c2pro_app state: {e}")
-
-                # Prove c2pro_admin_login exists/is untouched if it originally pre-existed
-                try:
-                    res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_login')")
-                    still_exists = res.fetchone()[0]
-                    if still_exists != canonical_admin_login_existed:
-                        hygiene_passed = False
-                        cleanup_errors.append("HYGIENE FAILURE: Canonical role 'c2pro_admin_login' state was altered/mutated")
-                    else:
-                        print("OK: Canonical role 'c2pro_admin_login' state remained untouched by gate")
-                except Exception as e:
-                    cleanup_errors.append(f"Failed to verify c2pro_admin_login state: {e}")
-
-                # Prove c2pro_admin_ops state conforms to pre-existing or created
-                try:
-                    res = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'c2pro_admin_ops')")
-                    ops_exists = res.fetchone()[0]
-                    if admin_role_preexisted:
-                        if not ops_exists:
-                            hygiene_passed = False
-                            cleanup_errors.append("HYGIENE FAILURE: Pre-existing capability role 'c2pro_admin_ops' was deleted")
-                        else:
-                            # Verify flags and memberships unchanged
-                            res_props = conn.execute(
-                                """
-                                SELECT rolsuper, rolbypassrls, rolcreaterole, rolcanlogin, rolcreatedb
-                                FROM pg_roles WHERE rolname = 'c2pro_admin_ops'
-                                """
-                            )
-                            props = res_props.fetchone()
-                            if props != preexisting_ops_flags:
-                                hygiene_passed = False
-                                cleanup_errors.append(f"HYGIENE FAILURE: Pre-existing 'c2pro_admin_ops' flags mutated from {preexisting_ops_flags} to {props}")
-                            else:
-                                print("OK: Pre-existing capability role 'c2pro_admin_ops' flags remained unchanged")
-
-                            res_m = conn.execute(
-                                """
-                                SELECT r.rolname FROM pg_auth_members m
-                                JOIN pg_roles r ON m.roleid = r.oid
-                                WHERE m.member = 'c2pro_admin_ops'::regrole
-                                """
-                            )
-                            members = [r[0] for r in res_m.fetchall()]
-                            if sorted(members) != sorted(preexisting_ops_members):
-                                hygiene_passed = False
-                                cleanup_errors.append(f"HYGIENE FAILURE: Pre-existing 'c2pro_admin_ops' memberships mutated from {preexisting_ops_members} to {members}")
-                            else:
-                                print("OK: Pre-existing capability role 'c2pro_admin_ops' memberships remained unchanged")
-                    else:
-                        if ops_exists:
-                            hygiene_passed = False
-                            cleanup_errors.append("HYGIENE FAILURE: Gate-created capability role 'c2pro_admin_ops' was leaked")
-                        else:
-                            print("OK: Gate-created capability role 'c2pro_admin_ops' was cleanly deleted")
-                except Exception as e:
-                    cleanup_errors.append(f"Failed to verify c2pro_admin_ops state: {e}")
-
-                # Prove synthetic login roles deleted
-                try:
-                    res_admin = conn.execute(sql.SQL("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {role})").format(role=sql.Literal(admin_login_role)))
-                    res_app = conn.execute(sql.SQL("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {role})").format(role=sql.Literal(app_role)))
-                    if res_admin.fetchone()[0] or res_app.fetchone()[0]:
-                        hygiene_passed = False
-                        cleanup_errors.append("HYGIENE FAILURE: Synthetic temporary login roles leaked in cluster")
-                    else:
-                        print("OK: Synthetic temporary login roles cleanly and completely deleted from cluster")
-                except Exception as e:
-                    cleanup_errors.append(f"Failed to verify synthetic role deletion: {e}")
-
-                # Prove database deleted
-                try:
-                    res = conn.execute(f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = '{DB_NAME}')")
-                    if res.fetchone()[0]:
-                        hygiene_passed = False
-                        cleanup_errors.append("HYGIENE FAILURE: Disposable database leaked in cluster")
-                    else:
-                        print("OK: Disposable database cleanly and completely deleted from cluster")
-                except Exception as e:
-                    cleanup_errors.append(f"Failed to verify database deletion: {e}")
-
-        except Exception as e:
-            cleanup_errors.append(f"Fail-safe cleanup database connection level exception: {e}")
+        hygiene_passed = _execute_teardown_and_hygiene(
+            admin_base_dsn,
+            DB_NAME,
+            app_role,
+            admin_login_role,
+            database_created_by_gate,
+            created_synthetic_roles,
+            created_by_gate,
+            admin_role_preexisted,
+            canonical_app_existed,
+            canonical_admin_login_existed,
+            preexisting_ops_flags,
+            preexisting_ops_members,
+            cleanup_errors,
+        )
 
         if cleanup_errors or not hygiene_passed:
             all_passed = False

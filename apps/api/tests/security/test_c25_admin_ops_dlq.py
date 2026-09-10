@@ -212,6 +212,51 @@ class TestC25AdminSessionFailureSemantics:
         assert "admin" in str(exc_info.value.detail).lower()
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "empty_catalog,missing_bind,unsupported_dialect,expected_err",
+        [
+            (True, False, False, "current user record not found in pg_roles"),
+            (False, True, False, "missing or unsupported database bind"),
+            (False, False, True, "missing or unsupported database bind"),
+        ]
+    )
+    @patch("src.core.database._admin_ops_session_factory")
+    async def test_admin_ops_session_rejects_unverifiable_principal(
+        self,
+        mock_session_factory,
+        empty_catalog,
+        missing_bind,
+        unsupported_dialect,
+        expected_err,
+    ):
+        """Test that get_admin_ops_session rejects unverifiable principals, failing closed."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_session = AsyncMock()
+        mock_session_factory.return_value.__aenter__.return_value = mock_session
+
+        if missing_bind:
+            mock_session.bind = None
+        elif unsupported_dialect:
+            mock_session.bind.dialect.name = "sqlite"
+        else:
+            mock_session.bind.dialect.name = "postgresql"
+
+        mock_result = MagicMock()
+        if empty_catalog:
+            mock_result.fetchone.return_value = None
+        else:
+            mock_result.fetchone.return_value = (
+                True, False, False, False, False, True, False, False, False, False,
+                False, False, True, False, False, False, False, False, False
+            )
+        mock_session.execute.return_value = mock_result
+
+        with pytest.raises(RuntimeError, match=expected_err):
+            async with get_admin_ops_session():
+                pass
+
+    @pytest.mark.asyncio
     @patch("src.core.database._admin_ops_session_factory")
     async def test_validation_owner_rejected(self, mock_session_factory):
         """Owner credential (is_table_owner=True) is rejected with RuntimeError."""

@@ -428,7 +428,9 @@ async def get_admin_ops_session() -> AsyncGenerator[AsyncSession, None]:
 
     async with _admin_ops_session_factory() as session:
         # Validate PostgreSQL principal and privileges dynamically via catalog
-        if session.bind and session.bind.dialect.name == "postgresql":
+        if not session.bind or session.bind.dialect.name != "postgresql":
+            raise RuntimeError("Database principal verification failed: missing or unsupported database bind.")
+        if True:
             result = await session.execute(
                 text(
                     """
@@ -525,7 +527,9 @@ async def get_admin_ops_session() -> AsyncGenerator[AsyncSession, None]:
                 )
             )
             row = result.fetchone()
-            if row:
+            if not row:
+                raise RuntimeError("Database principal verification failed: current user record not found in pg_roles.")
+            if True:
                 (
                     rolcanlogin,
                     rolsuper,
