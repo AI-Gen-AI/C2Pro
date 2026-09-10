@@ -188,90 +188,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 # ===========================================
-# CREATE APPLICATION HELPERS
-# ===========================================
-
-
-def _register_feature_gated_routers(app: FastAPI, api_v1_prefix: str) -> None:
-    """Register all feature-gated routers based on configuration settings."""
-    _feature_flags = {
-        "coherence_analysis": settings.feature_coherence_analysis,
-        "stakeholder_extraction": settings.feature_stakeholder_extraction,
-        "raci_generation": settings.feature_raci_generation,
-        "rfq_generation": settings.feature_rfq_generation,
-        "expediting_vision": settings.feature_expediting_vision,
-    }
-
-    logger.info("feature_flags", **_feature_flags)
-
-    # Coherence Analysis (feature_coherence_analysis)
-    if settings.feature_coherence_analysis:
-        from src.coherence.router import (
-            dashboard_router as coherence_dashboard_router,
-        )
-        from src.coherence.router import (
-            router as coherence_router,
-        )
-        app.include_router(coherence_router, prefix=api_v1_prefix)
-        app.include_router(coherence_dashboard_router, prefix=api_v1_prefix)
-        # COMPATIBILITY: Register dashboard without v1 prefix
-        app.include_router(coherence_dashboard_router, prefix="/api")
-        logger.info("router_registered", feature="coherence_analysis")
-    else:
-        logger.info("router_skipped", feature="coherence_analysis", reason="feature_flag_disabled")
-
-    # Stakeholder Extraction (feature_stakeholder_extraction)
-    if settings.feature_stakeholder_extraction:
-        try:
-            from src.stakeholders.adapters.http.router import router as stakeholders_router
-            app.include_router(stakeholders_router, prefix=api_v1_prefix)
-            # COMPATIBILITY: Register stakeholders without v1 prefix
-            app.include_router(stakeholders_router, prefix="/api")
-            logger.info("router_registered", feature="stakeholder_extraction")
-        except ImportError:
-            logger.warning("router_unavailable", feature="stakeholder_extraction", reason="module_not_ready")
-
-        try:
-            from src.stakeholders.adapters.http.approvals_router import router as approvals_router
-            app.include_router(approvals_router, prefix=api_v1_prefix)
-            logger.info("router_registered", feature="stakeholder_approvals")
-        except ImportError:
-            logger.warning("router_unavailable", feature="stakeholder_approvals", reason="module_not_ready")
-    else:
-        logger.info("router_skipped", feature="stakeholder_extraction", reason="feature_flag_disabled")
-
-    # RACI Generation (feature_raci_generation)
-    if settings.feature_raci_generation:
-        try:
-            from src.stakeholders.adapters.http.raci_router import (
-                raci_global_router,
-            )
-            from src.stakeholders.adapters.http.raci_router import (
-                router as raci_router,
-            )
-            app.include_router(raci_global_router, prefix=api_v1_prefix)
-            app.include_router(raci_router, prefix=api_v1_prefix)
-            logger.info("router_registered", feature="raci_generation")
-        except ImportError:
-            logger.warning("router_unavailable", feature="raci_generation", reason="module_not_ready")
-    else:
-        logger.info("router_skipped", feature="raci_generation", reason="feature_flag_disabled")
-
-    # RFQ / Procurement (feature_rfq_generation)
-    if settings.feature_rfq_generation:
-        try:
-            from src.procurement.adapters.http.router import router as procurement_router
-            app.include_router(procurement_router, prefix=api_v1_prefix)
-            logger.info("router_registered", feature="rfq_generation")
-        except ImportError:
-            logger.warning("router_unavailable", feature="rfq_generation", reason="module_not_ready")
-    else:
-        logger.info("router_skipped", feature="rfq_generation", reason="feature_flag_disabled")
-
-    logger.info("application_configured", enabled_features=[k for k, v in _feature_flags.items() if v])
-
-
-# ===========================================
 # CREATE APPLICATION
 # ===========================================
 
@@ -406,7 +322,81 @@ def create_application() -> FastAPI:
         logger.warning("router_unavailable", feature="mcp", reason="module_not_ready")
 
     # --- Feature-gated routers ---
-    _register_feature_gated_routers(app, api_v1_prefix)
+    _feature_flags = {
+        "coherence_analysis": settings.feature_coherence_analysis,
+        "stakeholder_extraction": settings.feature_stakeholder_extraction,
+        "raci_generation": settings.feature_raci_generation,
+        "rfq_generation": settings.feature_rfq_generation,
+        "expediting_vision": settings.feature_expediting_vision,
+    }
+
+    logger.info("feature_flags", **_feature_flags)
+
+    # Coherence Analysis (feature_coherence_analysis)
+    if settings.feature_coherence_analysis:
+        from src.coherence.router import (
+            dashboard_router as coherence_dashboard_router,
+        )
+        from src.coherence.router import (
+            router as coherence_router,
+        )
+        app.include_router(coherence_router, prefix=api_v1_prefix)
+        app.include_router(coherence_dashboard_router, prefix=api_v1_prefix)
+        # COMPATIBILITY: Register dashboard without v1 prefix
+        app.include_router(coherence_dashboard_router, prefix="/api")
+        logger.info("router_registered", feature="coherence_analysis")
+    else:
+        logger.info("router_skipped", feature="coherence_analysis", reason="feature_flag_disabled")
+
+    # Stakeholder Extraction (feature_stakeholder_extraction)
+    if settings.feature_stakeholder_extraction:
+        try:
+            from src.stakeholders.adapters.http.router import router as stakeholders_router
+            app.include_router(stakeholders_router, prefix=api_v1_prefix)
+            # COMPATIBILITY: Register stakeholders without v1 prefix
+            app.include_router(stakeholders_router, prefix="/api")
+            logger.info("router_registered", feature="stakeholder_extraction")
+        except ImportError:
+            logger.warning("router_unavailable", feature="stakeholder_extraction", reason="module_not_ready")
+
+        try:
+            from src.stakeholders.adapters.http.approvals_router import router as approvals_router
+            app.include_router(approvals_router, prefix=api_v1_prefix)
+            logger.info("router_registered", feature="stakeholder_approvals")
+        except ImportError:
+            logger.warning("router_unavailable", feature="stakeholder_approvals", reason="module_not_ready")
+    else:
+        logger.info("router_skipped", feature="stakeholder_extraction", reason="feature_flag_disabled")
+
+    # RACI Generation (feature_raci_generation)
+    if settings.feature_raci_generation:
+        try:
+            from src.stakeholders.adapters.http.raci_router import (
+                raci_global_router,
+            )
+            from src.stakeholders.adapters.http.raci_router import (
+                router as raci_router,
+            )
+            app.include_router(raci_global_router, prefix=api_v1_prefix)
+            app.include_router(raci_router, prefix=api_v1_prefix)
+            logger.info("router_registered", feature="raci_generation")
+        except ImportError:
+            logger.warning("router_unavailable", feature="raci_generation", reason="module_not_ready")
+    else:
+        logger.info("router_skipped", feature="raci_generation", reason="feature_flag_disabled")
+
+    # RFQ / Procurement (feature_rfq_generation)
+    if settings.feature_rfq_generation:
+        try:
+            from src.procurement.adapters.http.router import router as procurement_router
+            app.include_router(procurement_router, prefix=api_v1_prefix)
+            logger.info("router_registered", feature="rfq_generation")
+        except ImportError:
+            logger.warning("router_unavailable", feature="rfq_generation", reason="module_not_ready")
+    else:
+        logger.info("router_skipped", feature="rfq_generation", reason="feature_flag_disabled")
+
+    logger.info("application_configured", enabled_features=[k for k, v in _feature_flags.items() if v])
 
     return app
 
