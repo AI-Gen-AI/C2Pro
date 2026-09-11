@@ -76,6 +76,70 @@ async def test_lifespan_degraded_admin_ops_does_not_break_app() -> None:
 
 
 @pytest.mark.asyncio
+async def test_lifespan_closes_admin_ops_when_later_startup_fails() -> None:
+    """TS-C25-ADMIN-DLQ-001: Startup failure after admin setup must release its engine."""
+    app = FastAPI()
+
+    with (
+        patch("src.main.init_db", new_callable=AsyncMock),
+        patch("src.main.close_db", new_callable=AsyncMock) as mock_close_db,
+        patch("src.core.database.init_admin_ops_db", new_callable=AsyncMock),
+        patch("src.core.database.close_admin_ops_db", new_callable=AsyncMock) as mock_close_admin,
+        patch(
+            "src.main.init_cache",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("cache startup failed"),
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="cache startup failed"):
+            async with lifespan(app):
+                pass
+
+    mock_close_db.assert_awaited_once()
+    mock_close_admin.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_lifespan_closes_admin_ops_when_database_shutdown_fails() -> None:
+    """TS-C25-ADMIN-DLQ-001: Admin cleanup survives an earlier shutdown failure."""
+    app = FastAPI()
+
+    with (
+        patch("src.main.init_db", new_callable=AsyncMock),
+        patch(
+            "src.main.close_db",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("normal database shutdown failed"),
+        ),
+        patch("src.core.database.init_admin_ops_db", new_callable=AsyncMock),
+        patch("src.core.database.close_admin_ops_db", new_callable=AsyncMock) as mock_close_admin,
+        patch("src.main.init_cache", new_callable=AsyncMock),
+        patch("src.main.close_cache", new_callable=AsyncMock),
+        patch("src.main.ensure_checkpointer_ready", new_callable=AsyncMock),
+        patch("src.main.build_event_bus") as mock_build_event_bus,
+        patch("src.main.get_mcp_server"),
+        patch("src.main.build_decision_intelligence_services") as mock_build_di_services,
+    ):
+        event_bus = MagicMock()
+        event_bus.close = AsyncMock()
+        mock_build_event_bus.return_value = event_bus
+
+        services = MagicMock()
+        services.ingestion = MagicMock()
+        services.extraction = MagicMock()
+        services.retrieval = MagicMock()
+        services.coherence = MagicMock()
+        services.hitl = MagicMock()
+        mock_build_di_services.return_value = services
+
+        with pytest.raises(RuntimeError, match="normal database shutdown failed"):
+            async with lifespan(app):
+                pass
+
+    mock_close_admin.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_lifespan_continues_with_degraded_admin_ops() -> None:
     """MEDIUM 1: Prove ordinary lifespan continues when the REAL admin-ops initialization takes its degraded path."""
     app = FastAPI()

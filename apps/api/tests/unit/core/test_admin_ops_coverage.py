@@ -125,6 +125,28 @@ async def test_init_admin_ops_db_normalizes_dsn_and_assigns_engine_and_factory()
 
 
 @pytest.mark.asyncio
+async def test_init_admin_ops_db_disposes_unpublished_engine_when_factory_creation_fails() -> None:
+    """TS-C25-ADMIN-DLQ-001: Do not leak an engine when factory setup fails."""
+    engine = MagicMock()
+    engine.dispose = AsyncMock()
+
+    with (
+        patch.object(
+            settings,
+            "admin_ops_database_url",
+            "postgresql://restricted:fake@db.example/c2pro",
+        ),
+        patch.object(database, "create_async_engine", return_value=engine),
+        patch.object(database, "async_sessionmaker", side_effect=RuntimeError("factory failed")),
+    ):
+        await database.init_admin_ops_db()
+
+    engine.dispose.assert_awaited_once()
+    assert database._admin_ops_engine is None
+    assert database._admin_ops_session_factory is None
+
+
+@pytest.mark.asyncio
 async def test_close_admin_ops_db_disposes_engine_and_clears_globals() -> None:
     engine = MagicMock()
     engine.dispose = AsyncMock()

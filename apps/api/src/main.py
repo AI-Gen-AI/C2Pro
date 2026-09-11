@@ -94,97 +94,98 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_db()
     logger.info("database_initialized")
 
-    # Inicializar admin operations database (C2.5)
-    from src.core.database import init_admin_ops_db
-    await init_admin_ops_db()
-    logger.info("admin_ops_database_initialized")
+    # The admin engine must be released if any later startup step or the
+    # normal database shutdown path fails.
+    from src.core.database import close_admin_ops_db, init_admin_ops_db
 
-    await init_cache()
-    logger.info("cache_initialized")
-
-    app.state.event_bus = build_event_bus(
-        redis_url=settings.redis_url,
-        environment=settings.environment,
-    )
-    logger.info("event_bus_initialized", adapter=type(app.state.event_bus).__name__)
-
-    app.state.mcp_server = get_mcp_server()
-    logger.info("mcp_server_initialized")
-
-    await ensure_checkpointer_ready()
-    logger.info("langgraph_checkpointer_initialized")
-
-    # Refers to Suite ID: TS-I13-E2E-REAL-001.
-    # Wire real Decision Intelligence port adapters into app.state so the
-    # HTTP router can satisfy get_ingestion_service/get_extraction_service/
-    # get_retrieval_service/get_coherence_scoring_service/get_hitl_service
-    # dependencies without falling back to the 503 "requires real port
-    # implementations" fail-closed path.
     try:
-        di_services = build_decision_intelligence_services()
-    except Exception as exc:
-        logger.error(
-            "decision_intelligence_services_init_failed",
-            error=str(exc),
+        await init_admin_ops_db()
+        logger.info("admin_ops_database_initialized")
+
+        await init_cache()
+        logger.info("cache_initialized")
+
+        app.state.event_bus = build_event_bus(
+            redis_url=settings.redis_url,
+            environment=settings.environment,
         )
-    else:
-        app.state.decision_ingestion_service = di_services.ingestion
-        app.state.decision_extraction_service = di_services.extraction
-        app.state.decision_retrieval_service = di_services.retrieval
-        app.state.decision_coherence_scoring_service = di_services.coherence
-        app.state.decision_hitl_service = di_services.hitl
-        logger.info("decision_intelligence_services_initialized")
+        logger.info("event_bus_initialized", adapter=type(app.state.event_bus).__name__)
 
-    sentry_enabled = bool(settings.sentry_dsn)
-    app.state.sentry_enabled = sentry_enabled
-    if sentry_enabled:
+        app.state.mcp_server = get_mcp_server()
+        logger.info("mcp_server_initialized")
+
+        await ensure_checkpointer_ready()
+        logger.info("langgraph_checkpointer_initialized")
+
+        # Refers to Suite ID: TS-I13-E2E-REAL-001.
+        # Wire real Decision Intelligence port adapters into app.state so the
+        # HTTP router can satisfy get_ingestion_service/get_extraction_service/
+        # get_retrieval_service/get_coherence_scoring_service/get_hitl_service
+        # dependencies without falling back to the 503 "requires real port
+        # implementations" fail-closed path.
         try:
-            sentry_sdk.init(
-                dsn=settings.sentry_dsn,
-                environment=settings.sentry_environment or settings.environment,
-                traces_sample_rate=settings.sentry_traces_sample_rate,
+            di_services = build_decision_intelligence_services()
+        except Exception as exc:
+            logger.error(
+                "decision_intelligence_services_init_failed",
+                error=str(exc),
             )
-            logger.info("sentry_initialized")
-        except BadDsn:
-            app.state.sentry_enabled = False
-            logger.warning(
-                "sentry_initialization_skipped",
-                reason="invalid_dsn",
-            )
+        else:
+            app.state.decision_ingestion_service = di_services.ingestion
+            app.state.decision_extraction_service = di_services.extraction
+            app.state.decision_retrieval_service = di_services.retrieval
+            app.state.decision_coherence_scoring_service = di_services.coherence
+            app.state.decision_hitl_service = di_services.hitl
+            logger.info("decision_intelligence_services_initialized")
 
-    logger.info("application_started")
+        sentry_enabled = bool(settings.sentry_dsn)
+        app.state.sentry_enabled = sentry_enabled
+        if sentry_enabled:
+            try:
+                sentry_sdk.init(
+                    dsn=settings.sentry_dsn,
+                    environment=settings.sentry_environment or settings.environment,
+                    traces_sample_rate=settings.sentry_traces_sample_rate,
+                )
+                logger.info("sentry_initialized")
+            except BadDsn:
+                app.state.sentry_enabled = False
+                logger.warning(
+                    "sentry_initialization_skipped",
+                    reason="invalid_dsn",
+                )
 
-    yield
+        logger.info("application_started")
+        yield
+    finally:
+        logger.info("application_shutting_down")
 
-    # SHUTDOWN
-    logger.info("application_shutting_down")
+        # Always release the dedicated admin engine, including when the
+        # standard database shutdown path raises.
+        try:
+            await close_db()
+            logger.info("database_closed")
+        finally:
+            await close_admin_ops_db()
+            logger.info("admin_ops_database_closed")
 
-    # Cerrar base de datos
-    await close_db()
-    logger.info("database_closed")
+        await close_cache()
+        logger.info("cache_closed")
 
-    # Cerrar admin operations database (C2.5)
-    from src.core.database import close_admin_ops_db
-    await close_admin_ops_db()
-    logger.info("admin_ops_database_closed")
+        if hasattr(app.state, "event_bus"):
+            close_event_bus = getattr(app.state.event_bus, "close", None)
+            if callable(close_event_bus):
+                await close_event_bus()
+                logger.info("event_bus_closed")
 
-    await close_cache()
-    logger.info("cache_closed")
+        if getattr(app.state, "sentry_enabled", False):
+            sentry_sdk.flush()
+            logger.info("sentry_flushed")
 
-    if hasattr(app.state, "event_bus"):
-        close_event_bus = getattr(app.state.event_bus, "close", None)
-        if callable(close_event_bus):
-            await close_event_bus()
-            logger.info("event_bus_closed")
+        await close_checkpointer_resources()
+        logger.info("langgraph_checkpointer_closed")
 
-    if getattr(app.state, "sentry_enabled", False):
-        sentry_sdk.flush()
-        logger.info("sentry_flushed")
-
-    await close_checkpointer_resources()
-    logger.info("langgraph_checkpointer_closed")
-
-    logger.info("application_stopped")
+        logger.info("application_stopped")
 
 
 # ===========================================

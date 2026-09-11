@@ -349,6 +349,7 @@ async def init_admin_ops_db() -> None:
     if dsn.startswith("postgresql://") and not dsn.startswith("postgresql+asyncpg://"):
         dsn = dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
 
+    local_engine: AsyncEngine | None = None
     try:
         # Construct engine/factory locally first to prevent partial assignment
         local_engine = create_async_engine(
@@ -376,6 +377,11 @@ async def init_admin_ops_db() -> None:
         logger.info("admin_ops_database_engine_created")
 
     except Exception as exc:
+        if local_engine is not None:
+            # The engine can own a pool even when session-factory creation fails.
+            # It was never published, so dispose it directly before failing closed.
+            with suppress(Exception):
+                await local_engine.dispose()
         _admin_ops_engine = None
         _admin_ops_session_factory = None
         # Log only the exception class name to prevent credential leakage
