@@ -122,3 +122,48 @@ def test_resolve_redis_test_port_rejects_non_integer(monkeypatch) -> None:
     monkeypatch.setenv("C2PRO_REDIS_TEST_PORT", "not-a-port")
     with pytest.raises(ValueError, match="must be an integer"):
         _load_module()
+
+
+def test_bootstrap_exports_test_database_url_and_prevents_redirect(monkeypatch) -> None:
+    """Test that bootstrap_test_infra publishes the canonical TEST_DATABASE_URL to os.environ and prevents arbitrary redirection."""
+    import os
+
+    module = _load_module()
+
+    # Clear from environment initially
+    monkeypatch.delenv("TEST_DATABASE_URL", raising=False)
+
+    # Mock bootstrap_checkpoint_schema to check that os.environ has the correct variable
+    captured_env_url = None
+
+    async def mock_bootstrap_checkpoint_schema(dsn: str):
+        nonlocal captured_env_url
+        captured_env_url = os.environ.get("TEST_DATABASE_URL")
+
+    monkeypatch.setattr(module, "bootstrap_checkpoint_schema", mock_bootstrap_checkpoint_schema)
+
+    # Set up basic arguments and call _ensure_db_ready mocks
+    class FakeArgs:
+        recreate_db = False
+        start_services = False
+        wait_seconds = 1
+
+    monkeypatch.setattr(module, "is_port_open", lambda port: True)
+    monkeypatch.setattr(module, "wait_for_database_ready", lambda url, timeout: None)
+    monkeypatch.setattr(module, "ensure_database_exists", lambda url, name: None)
+
+    async def dummy_bootstrap_admin_role(dsn):
+        pass
+
+    monkeypatch.setattr(module, "bootstrap_admin_ops_role", dummy_bootstrap_admin_role)
+    monkeypatch.setattr(module, "run_alembic_upgrade", lambda api_dir, dsn: None)
+    monkeypatch.setattr(module, "assert_head_revision", lambda dsn, api_dir: "20260907_0001")
+
+    # Run DB preflight
+    module._ensure_db_ready(FakeArgs(), Path("/fake/repo"), Path("/fake/api"))
+
+    # Assert 1: os.environ["TEST_DATABASE_URL"] was correctly published before checkpoint bootstrap run
+    assert captured_env_url == module.TEST_DATABASE_URL
+
+    # Assert 2: Fixed literal constant check. It must match the expected literal, and callers cannot redirect it.
+    assert module.TEST_DATABASE_URL == "postgresql://postgres:postgres@127.0.0.1:5433/c2pro_test"

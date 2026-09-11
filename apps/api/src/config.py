@@ -93,6 +93,22 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Cross-tenant admin operations DSN (C2.5: admin role boundary).
+    #
+    # NO FALLBACK: missing/invalid credential must fail closed.
+    # Points to a LOGIN principal that is a MEMBER OF c2pro_admin_ops capability role.
+    # The capability role is NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, non-owner.
+    # Do not fallback to DATABASE_URL or owner credential.
+    admin_ops_database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ADMIN_OPS_DATABASE_URL"),
+        description=(
+            "Dedicated PostgreSQL DSN for cross-tenant admin operations "
+            "(the c2pro_admin_ops capability role via LOGIN principal member). "
+            "REQUIRED for admin DLQ endpoints — no fallback."
+        ),
+    )
+
     @field_validator("database_url")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
@@ -433,13 +449,17 @@ class Settings(BaseSettings):
         """Tamaño máximo de upload en bytes."""
         return self.max_upload_size_mb * 1024 * 1024
 
-    @property
-    def database_url_async(self) -> str:
-        """URL de base de datos para asyncpg."""
-        url = self.database_url
+    @staticmethod
+    def _normalize_asyncpg_dsn(url: str) -> str:
+        """Normaliza un DSN postgresql:// a postgresql+asyncpg:// para asyncpg."""
         if url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
             return url.replace("postgresql://", "postgresql+asyncpg://", 1)
         return url
+
+    @property
+    def database_url_async(self) -> str:
+        """URL de base de datos para asyncpg."""
+        return self._normalize_asyncpg_dsn(self.database_url)
 
     @property
     def checkpoint_database_url_is_fallback(self) -> bool:
@@ -458,9 +478,24 @@ class Settings(BaseSettings):
         once per process.
         """
         url = self.checkpoint_database_url or self.database_url
-        if url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
-            return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return url
+        return self._normalize_asyncpg_dsn(url)
+
+    @property
+    def admin_ops_database_url_async(self) -> str:
+        """Cross-tenant admin operations DSN, normalized for asyncpg.
+
+        NO FALLBACK: raises if ADMIN_OPS_DATABASE_URL is not configured.
+        This enforces fail-closed for cross-tenant admin operations (C2.5).
+        """
+        url = self.admin_ops_database_url
+        if not url:
+            raise RuntimeError(
+                "ADMIN_OPS_DATABASE_URL is not configured. "
+                "Cross-tenant admin operations require a dedicated credential "
+                "(the c2pro_admin_ops capability role via LOGIN principal member). "
+                "No fallback to DATABASE_URL or owner credential is permitted."
+            )
+        return self._normalize_asyncpg_dsn(url)
 
     # ===========================================
     # VALIDATION
@@ -507,7 +542,11 @@ class Settings(BaseSettings):
         if hostname not in {Settings.C2PRO_ORIGIN, Settings.C2PRO_WWW_ORIGIN}:
             return None
 
-        paired_hostname = Settings.C2PRO_WWW_ORIGIN if hostname == Settings.C2PRO_ORIGIN else Settings.C2PRO_ORIGIN
+        paired_hostname = (
+            Settings.C2PRO_WWW_ORIGIN
+            if hostname == Settings.C2PRO_ORIGIN
+            else Settings.C2PRO_ORIGIN
+        )
         netloc = paired_hostname
         if parts.port:
             netloc = f"{paired_hostname}:{parts.port}"
@@ -572,13 +611,15 @@ class Settings(BaseSettings):
 
         localhost_markers = ("localhost", "127.0.0.1")
         if any(
-            any(marker in origin for marker in localhost_markers)
-            for origin in self.cors_origins
+            any(marker in origin for marker in localhost_markers) for origin in self.cors_origins
         ):
             raise ValueError("localhost origins are not allowed outside development/test")
 
     def _validate_auth_bootstrap_fallback(self) -> None:
-        if self.environment in {"production", "staging"} and self.auth_bootstrap_fallback_mode == "non_production":
+        if (
+            self.environment in {"production", "staging"}
+            and self.auth_bootstrap_fallback_mode == "non_production"
+        ):
             self.auth_bootstrap_fallback_mode = "deny"
 
     @field_validator("ai_budget_monthly_default")

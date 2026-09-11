@@ -17,7 +17,8 @@ def test_unit_workflow_excludes_integration_marked_tests() -> None:
     assert '-m "not integration"' in contents
     assert "--cov-report=xml:coverage.xml" in contents
     assert "backend-coverage:" in contents
-    assert "coverage combine coverage-data/unit/.coverage coverage-data/core/.coverage" in contents
+    assert "cp coverage-data/c25-security/.coverage.c25* ." in contents
+    assert "coverage combine" in contents
     assert "--fail-under=70" in contents
     assert "backend-coverage:$RESULT_BACKEND_COVERAGE" in contents
 
@@ -27,9 +28,7 @@ def test_coverage_policy_uses_current_baselines_and_high_patch_target() -> None:
 
     repo_root = Path(__file__).resolve().parents[4]
     codecov_config = (repo_root / "codecov.yml").read_text(encoding="utf-8")
-    frontend_config = (repo_root / "apps" / "web" / "vitest.config.mts").read_text(
-        encoding="utf-8"
-    )
+    frontend_config = (repo_root / "apps" / "web" / "vitest.config.mts").read_text(encoding="utf-8")
     workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
     assert "target: 70%" in codecov_config
@@ -250,10 +249,14 @@ def test_backend_requirements_has_single_psycopg_constraint() -> None:
     assert requirements.exists()
     lines = requirements.read_text(encoding="utf-8").splitlines()
     psycopg_lines = [ln for ln in lines if "psycopg[binary]" in ln]
-    assert len(psycopg_lines) == 1, f"Found multiple/zero psycopg[binary] constraints: {psycopg_lines}"
+    assert len(psycopg_lines) == 1, (
+        f"Found multiple/zero psycopg[binary] constraints: {psycopg_lines}"
+    )
 
 
-def test_production_contract_drift_repair_migration_restores_alerts_and_stakeholders_columns() -> None:
+def test_production_contract_drift_repair_migration_restores_alerts_and_stakeholders_columns() -> (
+    None
+):
     """Test Suite ID: TS-CI-BACKEND-GUARDS-001, TASK-BCK-051."""
 
     repo_root = Path(__file__).resolve().parents[4]
@@ -563,7 +566,9 @@ def test_backend_lint_has_no_up042_baseline_exemption() -> None:
     """Test Suite ID: TS-CI-BACKEND-GUARDS-001 (TASK-V3-P0-04)."""
     repo_root = Path(__file__).resolve().parents[4]
     workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    pyproject = tomllib.loads((repo_root / "apps" / "api" / "pyproject.toml").read_text(encoding="utf-8"))
+    pyproject = tomllib.loads(
+        (repo_root / "apps" / "api" / "pyproject.toml").read_text(encoding="utf-8")
+    )
 
     ignored_rules = pyproject["tool"]["ruff"]["lint"].get("ignore", [])
     assert "UP042" not in ignored_rules
