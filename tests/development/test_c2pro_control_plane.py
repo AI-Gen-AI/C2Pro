@@ -29,9 +29,41 @@ def test_work_queue_contains_only_open_work() -> None:
     assert all(item["work_id"] != "C2PRO-DEV-01" for item in queue["items"])
 
 
-def test_active_work_identity_is_model_independent() -> None:
-    current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
-    queue = validator.load_yaml(ROOT / ".c2pro" / "control" / "work-queue.yaml")
+def _synthetic_active_work_fixture(monkeypatch: pytest.MonkeyPatch) -> tuple[dict, dict, dict]:
+    """Explicit synthetic active-work fixture, independent of whichever
+    work_id (if any) is live-canonical-active today. These tests exercise a
+    structural property of the work-envelope shape itself (model/provider
+    independence, identity stability across principal reassignment) --
+    that property must hold regardless of what is currently active, and
+    must not silently stop being exercised once active_work is legitimately
+    empty (e.g. right after a legacy closure)."""
+    work = {
+        "work_id": "C2PRO-DEV-SYNTH",
+        "role": "orchestrator",
+        "base_sha": "b" * 40,
+        "scope": ["synthetic"],
+        "out_of_scope": [],
+        "acceptance_criteria": ["synthetic"],
+        "worker_selection": {
+            "selected": None,
+            "eligible_principals": list(validator.PRINCIPAL_WORKERS),
+            "eligible_subordinates": [],
+        },
+    }
+    current = {"baseline": {"main_sha": "b" * 40}, "active_work": ["C2PRO-DEV-SYNTH"]}
+    queue = {"items": [{"work_id": "C2PRO-DEV-SYNTH", "work_ref": "synthetic/work.yaml", "role": "orchestrator"}]}
+
+    def fake_load(path: Path):
+        if str(path).endswith("synthetic/work.yaml"):
+            return work
+        raise AssertionError(f"unexpected load_yaml call in this synthetic fixture: {path}")
+
+    monkeypatch.setattr(validator, "load_yaml", fake_load)
+    return current, queue, work
+
+
+def test_active_work_identity_is_model_independent(monkeypatch: pytest.MonkeyPatch) -> None:
+    current, queue, _work = _synthetic_active_work_fixture(monkeypatch)
     active_id = current["active_work"][0]
     item = next(item for item in queue["items"] if item["work_id"] == active_id)
     work = validator.load_yaml(ROOT / item["work_ref"])
@@ -43,9 +75,8 @@ def test_active_work_identity_is_model_independent() -> None:
     assert "provider" not in work
 
 
-def test_same_work_can_move_between_principals_without_identity_change() -> None:
-    current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
-    queue = validator.load_yaml(ROOT / ".c2pro" / "control" / "work-queue.yaml")
+def test_same_work_can_move_between_principals_without_identity_change(monkeypatch: pytest.MonkeyPatch) -> None:
+    current, queue, _work = _synthetic_active_work_fixture(monkeypatch)
     active_id = current["active_work"][0]
     item = next(item for item in queue["items"] if item["work_id"] == active_id)
     work = validator.load_yaml(ROOT / item["work_ref"])
