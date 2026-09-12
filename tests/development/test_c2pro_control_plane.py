@@ -312,10 +312,20 @@ def test_schema_artifacts_are_closed_draft_2020_12_objects() -> None:
 
 
 # ---------------------------------------------------------------------------
-# --verify-against-git (G2 continuation, Task 4): current.yaml's
-# baseline.main_sha is meant to track the actual origin/main tip EXACTLY --
-# unlike the product-control's reconciled_against_main_sha, being merely an
-# ancestor (i.e. stale) is exactly the drift this check exists to catch.
+# --verify-against-git (G2 continuation, Task 4; corrected post-merge
+# semantics, Gemini-identified self-reference defect fix).
+#
+# baseline.main_sha means "the authoritative main commit consumed as INPUT
+# to the current reconciliation/work cycle" -- NOT "the SHA of the commit
+# containing current.yaml". The two are indistinguishable while active work
+# is in flight (nothing should have advanced main out from under it, so
+# exact equality is the right, tight invariant) but are NECESSARILY
+# different immediately after current.yaml's own change merges to main:
+# the merge commit (or squash commit) that carries current.yaml's new
+# baseline value cannot itself be that value -- it doesn't exist yet at
+# commit time. Once active_work is empty (the legitimate post-merge/idle
+# state), an ancestor relationship is correct and sufficient; divergence
+# (not even an ancestor) is never acceptable in either state.
 # ---------------------------------------------------------------------------
 
 import subprocess  # noqa: E402
@@ -334,26 +344,57 @@ def _fake_git(responses: dict[tuple, object]):
     return _run
 
 
-def test_baseline_matches_git_truth_passes_on_exact_match() -> None:
-    current = {"baseline": {"main_sha": "abc123"}}
+# --- 1. active_work non-empty + exact equality => PASS ---------------------
+def test_baseline_matches_git_truth_passes_on_exact_match_with_active_work() -> None:
+    current = {"baseline": {"main_sha": "abc123"}, "active_work": ["C2PRO-DEV-99"]}
     run_fn = _fake_git({("git", "rev-parse", "origin/main"): "abc123"})
     validator.validate_baseline_matches_git_truth(current, run_fn=run_fn)  # must not raise
 
 
-def test_baseline_matches_git_truth_detects_stale_but_reachable_baseline() -> None:
-    current = {"baseline": {"main_sha": "OLD_SHA"}}
+# --- 2. active_work non-empty + recorded ancestor but stale => FAIL --------
+def test_baseline_matches_git_truth_rejects_stale_baseline_with_active_work() -> None:
+    """Active work requires the baseline to exactly match origin/main -- any
+    advancement of main requires explicit reconciliation before active work
+    may continue."""
+    current = {"baseline": {"main_sha": "OLD_SHA"}, "active_work": ["C2PRO-DEV-99"]}
     run_fn = _fake_git(
         {
             ("git", "rev-parse", "origin/main"): "NEW_SHA",
             ("git", "merge-base", "--is-ancestor", "OLD_SHA", "origin/main"): "",
         }
     )
-    with pytest.raises(ValueError, match="stale"):
+    with pytest.raises(ValueError, match="active work"):
         validator.validate_baseline_matches_git_truth(current, run_fn=run_fn)
 
 
-def test_baseline_matches_git_truth_detects_diverged_baseline() -> None:
-    current = {"baseline": {"main_sha": "OLD_SHA"}}
+# --- 3. active_work empty + exact equality => PASS --------------------------
+def test_baseline_matches_git_truth_passes_on_exact_match_with_no_active_work() -> None:
+    current = {"baseline": {"main_sha": "abc123"}, "active_work": []}
+    run_fn = _fake_git({("git", "rev-parse", "origin/main"): "abc123"})
+    validator.validate_baseline_matches_git_truth(current, run_fn=run_fn)  # must not raise
+
+
+# --- 4. active_work empty + recorded valid ancestor => PASS (the core fix) -
+def test_baseline_matches_git_truth_allows_ancestor_baseline_when_idle() -> None:
+    """The self-reference fix: a legitimate post-merge/idle state (no active
+    work) where the recorded baseline is an ancestor of -- but not equal
+    to -- origin/main must PASS, not fail. This is the exact situation
+    current.yaml is in immediately after its own change merges to main: the
+    merge/squash commit that carries the new baseline value cannot equal
+    that value at commit time."""
+    current = {"baseline": {"main_sha": "OLD_SHA"}, "active_work": []}
+    run_fn = _fake_git(
+        {
+            ("git", "rev-parse", "origin/main"): "NEW_SHA",
+            ("git", "merge-base", "--is-ancestor", "OLD_SHA", "origin/main"): "",
+        }
+    )
+    validator.validate_baseline_matches_git_truth(current, run_fn=run_fn)  # must not raise
+
+
+# --- 5. active_work empty + diverged SHA => FAIL ----------------------------
+def test_baseline_matches_git_truth_rejects_diverged_baseline_when_idle() -> None:
+    current = {"baseline": {"main_sha": "OLD_SHA"}, "active_work": []}
     run_fn = _fake_git(
         {
             ("git", "rev-parse", "origin/main"): "NEW_SHA",
@@ -362,6 +403,94 @@ def test_baseline_matches_git_truth_detects_diverged_baseline() -> None:
     )
     with pytest.raises(ValueError, match="diverged"):
         validator.validate_baseline_matches_git_truth(current, run_fn=run_fn)
+
+
+def test_baseline_matches_git_truth_rejects_diverged_baseline_with_active_work() -> None:
+    """Divergence MUST always fail, independent of active_work state -- it
+    is never a legitimate idle/post-merge condition, only a corrupted or
+    hand-typed value."""
+    current = {"baseline": {"main_sha": "OLD_SHA"}, "active_work": ["C2PRO-DEV-99"]}
+    run_fn = _fake_git(
+        {
+            ("git", "rev-parse", "origin/main"): "NEW_SHA",
+            ("git", "merge-base", "--is-ancestor", "OLD_SHA", "origin/main"): subprocess.CalledProcessError(1, []),
+        }
+    )
+    with pytest.raises(ValueError, match="diverged"):
+        validator.validate_baseline_matches_git_truth(current, run_fn=run_fn)
+
+
+# --- 6. missing/invalid SHA => FAIL -----------------------------------------
+def test_baseline_matches_git_truth_rejects_missing_sha() -> None:
+    """A missing baseline.main_sha must fail fast, before ever shelling out
+    to git -- there is nothing to check reachability for."""
+    current = {"baseline": {}, "active_work": []}
+
+    def _run(cmd: list[str]) -> str:
+        raise AssertionError(f"git must not be invoked for a missing SHA: {cmd}")
+
+    with pytest.raises(ValueError, match="missing"):
+        validator.validate_baseline_matches_git_truth(current, run_fn=_run)
+
+
+def test_baseline_matches_git_truth_rejects_invalid_unreachable_sha() -> None:
+    """A syntactically-present but unreachable/nonexistent SHA (never a real
+    commit in this repository's history) must fail exactly like a genuine
+    divergence -- it is not, and can never become, an ancestor."""
+    current = {"baseline": {"main_sha": "not_a_real_object"}, "active_work": []}
+    run_fn = _fake_git(
+        {
+            ("git", "rev-parse", "origin/main"): "NEW_SHA",
+            (
+                "git",
+                "merge-base",
+                "--is-ancestor",
+                "not_a_real_object",
+                "origin/main",
+            ): subprocess.CalledProcessError(128, []),
+        }
+    )
+    with pytest.raises(ValueError, match="diverged"):
+        validator.validate_baseline_matches_git_truth(current, run_fn=run_fn)
+
+
+# --- 7. simulated squash merge of G2 => PASS after fix ----------------------
+def test_baseline_matches_git_truth_passes_after_simulated_squash_merge() -> None:
+    """Simulates the exact scenario Gemini identified: this branch's
+    baseline.main_sha (the pre-merge origin/main tip it was reconciled
+    against) is committed as part of the branch; a squash merge then
+    creates ONE new commit on origin/main whose sole parent is that
+    pre-merge tip. The recorded baseline is therefore an ancestor, never
+    equal, of the new tip -- and with no active work in flight
+    post-reconciliation, that must be accepted."""
+    pre_merge_main = "32eba9431ddaab198088a09fe9294ae5ecc38318"
+    squash_commit = "f2380b0dec5db7c3768394be1d25ee2c4541683f"
+    current = {"baseline": {"main_sha": pre_merge_main}, "active_work": []}
+    run_fn = _fake_git(
+        {
+            ("git", "rev-parse", "origin/main"): squash_commit,
+            ("git", "merge-base", "--is-ancestor", pre_merge_main, "origin/main"): "",
+        }
+    )
+    validator.validate_baseline_matches_git_truth(current, run_fn=run_fn)  # must not raise
+
+
+# --- 8. simulated normal (two-parent) merge commit => PASS after fix -------
+def test_baseline_matches_git_truth_passes_after_simulated_normal_merge_commit() -> None:
+    """Same self-reference situation, but via a genuine two-parent merge
+    commit rather than a squash -- git merge-base --is-ancestor treats both
+    topologies identically (reachable via first-parent history either way),
+    so the same fix covers both merge strategies without special-casing."""
+    pre_merge_main = "32eba9431ddaab198088a09fe9294ae5ecc38318"
+    merge_commit = "abc000def111abc000def111abc000def111abc"
+    current = {"baseline": {"main_sha": pre_merge_main}, "active_work": []}
+    run_fn = _fake_git(
+        {
+            ("git", "rev-parse", "origin/main"): merge_commit,
+            ("git", "merge-base", "--is-ancestor", pre_merge_main, "origin/main"): "",
+        }
+    )
+    validator.validate_baseline_matches_git_truth(current, run_fn=run_fn)  # must not raise
 
 
 def _real_current_main_sha() -> str:

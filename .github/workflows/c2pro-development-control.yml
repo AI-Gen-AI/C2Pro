@@ -69,10 +69,21 @@ jobs:
       # Runs LAST and deliberately un-gated by the steps above: this is a
       # data-freshness signal (is the canonical ledger caught up with Git),
       # not a code-correctness one, and the two must not be conflated in one
-      # pass/fail. EXPECTED TO FAIL until the pending C2PRO-DEV-02 legacy
-      # closure is applied -- current.yaml's baseline.main_sha is currently
-      # stale relative to origin/main. That is the exact drift G2 exists to
-      # surface, not a regression; it self-resolves once the already-reviewed
-      # dry-run (core.legacy_closure) is applied for real.
+      # pass/fail.
+      #
+      # Semantics (baseline.main_sha means "the main commit consumed as
+      # INPUT to the current work cycle", not "the SHA of the commit
+      # containing current.yaml" -- the two are necessarily different for
+      # one commit immediately after current.yaml's own change merges to
+      # main, since that merge/squash commit cannot equal its own recorded
+      # value at commit time):
+      #   - active_work non-empty  -> baseline.main_sha MUST equal
+      #     origin/main exactly; any advancement of main requires an
+      #     explicit reconciliation before active work continues.
+      #   - active_work empty      -> baseline.main_sha may be an ancestor
+      #     of origin/main (the legitimate post-merge/idle state this very
+      #     job runs in immediately after a G2 reconciliation PR merges).
+      #   - not even an ancestor, or missing entirely -> always fails,
+      #     regardless of active_work.
       - name: Validate canonical baseline against Git truth
         run: python scripts/development/validate_c2pro_control.py --verify-against-git
