@@ -210,6 +210,32 @@ def preview_delta(reconcile_fn: Callable[..., dict[str, Any]], control_dir: Path
 
 
 # ---------------------------------------------------------------------------
+# --result-file containment (pythonsecurity:S8707: the raw CLI value must
+# never be handed to a filesystem read without being proven to resolve inside
+# a trusted root). The trusted root is REPO_ROOT -- a hardcoded constant
+# derived from this file's own location, never from the untrusted
+# --result-file value and never from a CLI-exposed flag. `result_root` exists
+# only as an internal DI seam for tests, mirroring the existing `control_dir`
+# parameter; end users can never influence it via argparse.
+# ---------------------------------------------------------------------------
+
+
+class ResultFileError(ValueError):
+    """Raised when --result-file does not resolve inside the trusted root."""
+
+
+def resolve_result_file(path_str: str, allowed_root: Path) -> Path:
+    allowed_root = allowed_root.resolve()
+    resolved = Path(path_str).resolve()
+    if not resolved.is_relative_to(allowed_root):
+        raise ResultFileError(
+            f"--result-file must resolve inside the trusted root ({allowed_root}); "
+            f"got: {resolved}"
+        )
+    return resolved
+
+
+# ---------------------------------------------------------------------------
 # Subcommands
 # ---------------------------------------------------------------------------
 
@@ -253,13 +279,18 @@ def cmd_legacy_close(
 
 
 def cmd_reconcile(
-    args: argparse.Namespace, run_fn: RunFn = default_run_fn, control_dir: Path | None = None
+    args: argparse.Namespace,
+    run_fn: RunFn = default_run_fn,
+    control_dir: Path | None = None,
+    result_root: Path | None = None,
 ) -> int:
     control_dir = control_dir or DEFAULT_CONTROL_DIR
+    result_root = result_root or REPO_ROOT
 
     try:
-        result_text = Path(args.result_file).read_text(encoding="utf-8")
-    except OSError as e:
+        result_file = resolve_result_file(args.result_file, result_root)
+        result_text = result_file.read_text(encoding="utf-8")
+    except (ResultFileError, OSError) as e:
         print(f"ERROR: failed to read result file: {e}", file=sys.stderr)
         return 1
 

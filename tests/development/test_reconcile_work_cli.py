@@ -448,7 +448,7 @@ def test_reconcile_dry_run_then_apply(control_dir, tmp_path, capsys):
         ]
     )
     exit_code = reconcile_work.cmd_reconcile(
-        args, run_fn=_worker_result_fake_run_fn(), control_dir=control_dir
+        args, run_fn=_worker_result_fake_run_fn(), control_dir=control_dir, result_root=tmp_path
     )
     captured = capsys.readouterr()
     assert exit_code == 0
@@ -459,9 +459,146 @@ def test_reconcile_dry_run_then_apply(control_dir, tmp_path, capsys):
 
     args.apply = True
     exit_code = reconcile_work.cmd_reconcile(
-        args, run_fn=_worker_result_fake_run_fn(), control_dir=control_dir
+        args, run_fn=_worker_result_fake_run_fn(), control_dir=control_dir, result_root=tmp_path
     )
     assert exit_code == 0
     with open(control_dir / "work-queue.yaml", encoding="utf-8") as f:
         wq = yaml.safe_load(f)
     assert wq["items"] == []
+
+
+# ---------------------------------------------------------------------------
+# --result-file path-traversal containment (pythonsecurity:S8707)
+#
+# The trusted allowed root is the repository checkout itself (REPO_ROOT), a
+# hardcoded constant derived from `__file__` -- never from the untrusted
+# --result-file value, and never from a CLI-exposed flag. Tests inject an
+# alternate root via the `result_root` parameter (the same DI seam already
+# used for `control_dir`), never via argparse.
+# ---------------------------------------------------------------------------
+
+
+def _reconcile_args(result_file: Path):
+    return reconcile_work.build_parser().parse_args(
+        [
+            "reconcile",
+            "--work-id",
+            "C2PRO-DEV-02",
+            "--pr",
+            "597",
+            "--result-file",
+            str(result_file),
+        ]
+    )
+
+
+def test_reconcile_rejects_dotdot_traversal_outside_allowed_root(control_dir, tmp_path, capsys):
+    outside = tmp_path.parent / f"outside-secret-{tmp_path.name}.md"
+    outside.write_text("SECRET_OUTSIDE_CONTENT", encoding="utf-8")
+
+    traversal_path = tmp_path / "sub" / ".." / ".." / outside.name
+    args = _reconcile_args(traversal_path)
+
+    exit_code = reconcile_work.cmd_reconcile(
+        args, run_fn=_worker_result_fake_run_fn(), control_dir=control_dir, result_root=tmp_path
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "ERROR" in captured.err
+    assert "SECRET_OUTSIDE_CONTENT" not in captured.out
+    assert "SECRET_OUTSIDE_CONTENT" not in captured.err
+
+
+def test_reconcile_rejects_absolute_path_outside_allowed_root(control_dir, tmp_path, capsys):
+    outside_dir = tmp_path.parent / f"outside-abs-{tmp_path.name}"
+    outside_dir.mkdir()
+    outside = outside_dir / "secret.md"
+    outside.write_text("SECRET_ABSOLUTE_CONTENT", encoding="utf-8")
+
+    args = _reconcile_args(outside)
+
+    exit_code = reconcile_work.cmd_reconcile(
+        args, run_fn=_worker_result_fake_run_fn(), control_dir=control_dir, result_root=tmp_path
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "ERROR" in captured.err
+    assert "SECRET_ABSOLUTE_CONTENT" not in captured.out
+    assert "SECRET_ABSOLUTE_CONTENT" not in captured.err
+
+
+def test_reconcile_rejects_symlink_escaping_allowed_root(control_dir, tmp_path, capsys):
+    outside = tmp_path.parent / f"outside-symlink-target-{tmp_path.name}.md"
+    outside.write_text("SECRET_SYMLINK_CONTENT", encoding="utf-8")
+
+    inside_symlink = tmp_path / "looks_local.md"
+    inside_symlink.symlink_to(outside)
+
+    args = _reconcile_args(inside_symlink)
+
+    exit_code = reconcile_work.cmd_reconcile(
+        args, run_fn=_worker_result_fake_run_fn(), control_dir=control_dir, result_root=tmp_path
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "ERROR" in captured.err
+    assert "SECRET_SYMLINK_CONTENT" not in captured.out
+    assert "SECRET_SYMLINK_CONTENT" not in captured.err
+
+
+def test_reconcile_rejects_directory_as_result_file(control_dir, tmp_path, capsys):
+    a_directory = tmp_path / "not_a_file"
+    a_directory.mkdir()
+
+    args = _reconcile_args(a_directory)
+
+    exit_code = reconcile_work.cmd_reconcile(
+        args, run_fn=_worker_result_fake_run_fn(), control_dir=control_dir, result_root=tmp_path
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "ERROR" in captured.err
+
+
+def test_reconcile_nonexistent_result_file_is_a_controlled_failure(control_dir, tmp_path, capsys):
+    missing = tmp_path / "does_not_exist.md"
+    args = _reconcile_args(missing)
+
+    exit_code = reconcile_work.cmd_reconcile(
+        args, run_fn=_worker_result_fake_run_fn(), control_dir=control_dir, result_root=tmp_path
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "ERROR" in captured.err
+
+
+def test_reconcile_accepts_valid_result_file_inside_allowed_root(control_dir, tmp_path, capsys):
+    result_file = tmp_path / "result.md"
+    result_file.write_text(VALID_WORKER_RESULT, encoding="utf-8")
+
+    args = _reconcile_args(result_file)
+
+    exit_code = reconcile_work.cmd_reconcile(
+        args, run_fn=_worker_result_fake_run_fn(), control_dir=control_dir, result_root=tmp_path
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "DRY RUN" in captured.out
+    assert "RECONCILED" in captured.out
+
+
+def test_reconcile_default_result_root_is_repo_root_not_cli_controlled():
+    # No --result-root flag exists; the trusted root is always REPO_ROOT
+    # unless overridden via the internal `result_root` parameter (tests only).
+    parser = reconcile_work.build_parser()
+    reconcile_args = parser.parse_args(
+        ["reconcile", "--work-id", "X", "--pr", "1", "--result-file", "f.md"]
+    )
+    assert not hasattr(reconcile_args, "result_root")
+    assert not hasattr(reconcile_args, "allowed_root")
