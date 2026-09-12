@@ -254,6 +254,87 @@ def test_legacy_close_apply_mutates_real_control_dir(control_dir, capsys):
     assert history["completed_work"]["C2PRO-DEV-02"]["closure_type"] == "legacy_machine_derived"
 
 
+def test_legacy_close_blocked_by_uncovered_provenance_loss(control_dir, capsys):
+    """A work-queue.yaml comment about to be silently stripped, with no
+    .c2pro/evidence/<id>.yaml coverage, must block the reconciliation --
+    dry-run or apply -- rather than lose it."""
+    wq_path = control_dir / "work-queue.yaml"
+    with open(wq_path, encoding="utf-8") as f:
+        wq = yaml.safe_load(f)
+    wq["items"].append({"work_id": "C2PRO-DEV-99", "status": "ready"})
+    raw = yaml.dump(wq, sort_keys=False)
+    # Inject a hand-written provenance comment ahead of the new item, exactly
+    # like the real DEV-DEBT comments in the live work-queue.yaml.
+    raw = raw.replace(
+        "- work_id: C2PRO-DEV-99\n",
+        "# DEV-DEBT: registered for a reason that lives only in this comment.\n"
+        "- work_id: C2PRO-DEV-99\n",
+    )
+    wq_path.write_text(raw, encoding="utf-8")
+    wq_before = wq_path.read_text(encoding="utf-8")
+
+    args = reconcile_work.build_parser().parse_args(
+        ["legacy-close", "--work-id", "C2PRO-DEV-02", "--pr", "564", "--reason", "n/a"]
+    )
+    exit_code = reconcile_work.cmd_legacy_close(
+        args, run_fn=_dev02_fake_run_fn(), control_dir=control_dir
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "ERROR" in captured.err
+    assert "C2PRO-DEV-99" in captured.err
+    assert wq_path.read_text(encoding="utf-8") == wq_before
+
+
+def test_legacy_close_succeeds_once_provenance_evidence_exists(control_dir, capsys):
+    """The same comment loss is accepted once a c2pro-evidence-reference-v1
+    file with a summary already preserves the meaning."""
+    wq_path = control_dir / "work-queue.yaml"
+    with open(wq_path, encoding="utf-8") as f:
+        wq = yaml.safe_load(f)
+    wq["items"].append({"work_id": "C2PRO-DEV-99", "status": "ready"})
+    raw = yaml.dump(wq, sort_keys=False)
+    raw = raw.replace(
+        "- work_id: C2PRO-DEV-99\n",
+        "# DEV-DEBT: registered for a reason that lives only in this comment.\n"
+        "- work_id: C2PRO-DEV-99\n",
+    )
+    wq_path.write_text(raw, encoding="utf-8")
+
+    evidence_dir = control_dir.parent / "evidence"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    with open(evidence_dir / "C2PRO-DEV-99.yaml", "w", encoding="utf-8") as f:
+        yaml.dump(
+            {
+                "schema": "c2pro-evidence-reference-v1",
+                "schema_version": 1,
+                "work_id": "C2PRO-DEV-99",
+                "status": "collecting",
+                "references": [
+                    {
+                        "kind": "audit",
+                        "locator": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+                        "immutable": True,
+                        "summary": "registered for a reason that lives only in this comment.",
+                    }
+                ],
+            },
+            f,
+        )
+
+    args = reconcile_work.build_parser().parse_args(
+        ["legacy-close", "--work-id", "C2PRO-DEV-02", "--pr", "564", "--reason", "n/a"]
+    )
+    exit_code = reconcile_work.cmd_legacy_close(
+        args, run_fn=_dev02_fake_run_fn(), control_dir=control_dir
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "LEGACY_CLOSED" in captured.out
+
+
 def test_legacy_close_invalid_evidence_exits_nonzero_without_mutation(control_dir, capsys):
     """A PR that is still open must never be legacy-closed -- fail loudly, mutate nothing."""
     open_pr_json = json.dumps(

@@ -1,0 +1,19 @@
+schema: c2pro-evidence-reference-v1
+schema_version: 1
+work_id: C2PRO-DEV-05
+status: collecting
+references:
+- kind: git_commit
+  locator: 2f1443e7fa829a3f9bb84ec25d4192a1e8f646bb
+  immutable: true
+  sha256: null
+  summary: 'PR #575: chore(c2pro): register DEV-05 -- product work-envelope schema-support debt. Commit
+    that introduced this DEV-DEBT registration comment in .c2pro/control/work-queue.yaml.'
+- kind: audit
+  locator: 2f1443e7fa829a3f9bb84ec25d4192a1e8f646bb:.c2pro/control/work-queue.yaml
+  immutable: true
+  sha256: null
+  summary: 'DEV-DEBT (registered 2026-08-28, surfaced by P0b-L4-1/L4-2): extend the work-envelope schema/tooling
+    so canonical PRODUCT slices (e.g. PWBS-ACT-HEALTH P0b-L4-*) get machine- validated .c2pro envelopes
+    without abusing the control-plane C2PRO-DEV-xx namespace (work_id is currently pinned to ^C2PRO-DEV-[0-9]{2}$).
+    Non-blocking; product envelopes are meanwhile recorded transparently in their PR bodies.'

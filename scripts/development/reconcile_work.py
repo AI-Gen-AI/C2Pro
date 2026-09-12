@@ -51,6 +51,10 @@ from core.legacy_closure import (  # noqa: E402
     LegacyClosureError,
     reconcile_legacy_closure,
 )
+from core.provenance_guard import (  # noqa: E402
+    ProvenanceLossError,
+    assert_no_uncovered_comment_loss,
+)
 from core.reconciler import ReconciliationError, reconcile_result  # noqa: E402
 
 
@@ -190,6 +194,15 @@ def preview_delta(reconcile_fn: Callable[..., dict[str, Any]], control_dir: Path
             for name in ("current.yaml", "work-queue.yaml", "reconciliation-history.yaml")
         }
 
+    # Refuse to proceed (dry-run preview or real apply -- both call this
+    # function first) if the rewrite would silently discard a work-queue
+    # provenance comment with no existing .c2pro/evidence/<id>.yaml coverage.
+    # evidence_dir is a sibling of control_dir on the REAL control directory,
+    # never the throwaway copy -- provenance coverage is checked against
+    # canonical state, not the preview.
+    evidence_dir = control_dir.parent / "evidence"
+    assert_no_uncovered_comment_loss(before["work-queue.yaml"], after["work-queue.yaml"], evidence_dir)
+
     diff_text = "".join(
         _render_diff(name, before[name], after[name]) for name in before
     )
@@ -216,7 +229,7 @@ def cmd_legacy_close(
 
     try:
         result, diff_text = preview_delta(reconcile_legacy_closure, control_dir, evidence=evidence)
-    except LegacyClosureError as e:
+    except (LegacyClosureError, ProvenanceLossError) as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
 
@@ -265,7 +278,7 @@ def cmd_reconcile(
             remote_evidence=remote_evidence,
             ci_evidence=ci_evidence,
         )
-    except ReconciliationError as e:
+    except (ReconciliationError, ProvenanceLossError) as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
 
