@@ -26,6 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history + remote-tracking refs: the git-truth drift check
+          # below needs `origin/main` to resolve and `git merge-base
+          # --is-ancestor` to walk real history, which a shallow checkout
+          # cannot provide.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -35,3 +41,7 @@ jobs:
         run: python validation/product/check_control_parity.py
       - name: Positive + negative drift-detection tests
         run: python validation/product/test_control_parity.py
+      - name: Git-truth drift tests (reconciled_against_main_sha)
+        run: python validation/product/test_git_truth_drift.py
+      - name: Git-truth drift guard (reconciled_against_main_sha vs origin/main)
+        run: python validation/product/check_control_parity.py --verify-against-git

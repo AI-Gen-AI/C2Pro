@@ -5,15 +5,25 @@ on:
     branches: [main]
     paths:
       - ".c2pro/**"
+      - "core/**"
       - "scripts/development/**"
       - "tests/development/**"
+      - "tests/test_single_writer_control_plane.py"
+      - "tests/test_g2_reconciler.py"
+      - "tests/test_legacy_closure.py"
+      - "tests/test_provenance_guard.py"
       - ".github/workflows/c2pro-development-control.yml"
   push:
     branches: [main]
     paths:
       - ".c2pro/**"
+      - "core/**"
       - "scripts/development/**"
       - "tests/development/**"
+      - "tests/test_single_writer_control_plane.py"
+      - "tests/test_g2_reconciler.py"
+      - "tests/test_legacy_closure.py"
+      - "tests/test_provenance_guard.py"
       - ".github/workflows/c2pro-development-control.yml"
   workflow_dispatch:
 
@@ -28,6 +38,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history + remote-tracking refs: --verify-against-git needs
+          # `origin/main` to resolve and `git merge-base --is-ancestor` to
+          # walk real history, which a shallow checkout cannot provide.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -35,10 +50,29 @@ jobs:
           python-version: "3.11"
 
       - name: Install minimal validation dependencies
-        run: pip install "pyyaml==6.0.3" "pytest>=9.0.3"
+        run: pip install "pyyaml==6.0.3" "pytest>=9.0.3" "jsonschema>=4.0"
 
       - name: Validate control and context budget
         run: python scripts/development/validate_c2pro_control.py
 
-      - name: Run regression tests
-        run: python -m pytest -q --confcutdir=tests/development tests/development/test_c2pro_control_plane.py
+      - name: Run development-control regression tests
+        run: python -m pytest -q --confcutdir=tests/development tests/development/
+
+      - name: Run G1/G2 governance suites (single-writer control plane, reconciler, legacy closure, provenance guard)
+        run: >
+          python -m pytest -q --noconftest
+          tests/test_single_writer_control_plane.py
+          tests/test_g2_reconciler.py
+          tests/test_legacy_closure.py
+          tests/test_provenance_guard.py
+
+      # Runs LAST and deliberately un-gated by the steps above: this is a
+      # data-freshness signal (is the canonical ledger caught up with Git),
+      # not a code-correctness one, and the two must not be conflated in one
+      # pass/fail. EXPECTED TO FAIL until the pending C2PRO-DEV-02 legacy
+      # closure is applied -- current.yaml's baseline.main_sha is currently
+      # stale relative to origin/main. That is the exact drift G2 exists to
+      # surface, not a regression; it self-resolves once the already-reviewed
+      # dry-run (core.legacy_closure) is applied for real.
+      - name: Validate canonical baseline against Git truth
+        run: python scripts/development/validate_c2pro_control.py --verify-against-git

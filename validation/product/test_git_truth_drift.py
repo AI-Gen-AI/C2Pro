@@ -14,8 +14,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
@@ -101,3 +99,21 @@ def test_real_product_control_sha_is_a_valid_ancestor_of_origin_main():
     doc = c.load_yaml()
     problems = c.validate_reconciled_sha_against_git(doc)
     assert problems == [], problems
+
+
+def _all_tests() -> list:
+    return [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
+
+
+if __name__ == "__main__":
+    failures = 0
+    for t in _all_tests():
+        try:
+            t()
+            print(f"PASS  {t.__name__}")
+        except AssertionError as exc:  # noqa: PERF203
+            failures += 1
+            print(f"FAIL  {t.__name__}: {exc}")
+    total = len(_all_tests())
+    print(f"\n{total - failures}/{total} passed")
+    raise SystemExit(1 if failures else 0)
