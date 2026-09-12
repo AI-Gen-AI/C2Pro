@@ -9,9 +9,10 @@ runtime dependencies.
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -369,7 +370,41 @@ def validate_context_budget(current: dict[str, Any]) -> int:
     return total
 
 
-def validate() -> int:
+RunFn = Callable[[list[str]], str]
+
+
+def default_git_run_fn(cmd: list[str]) -> str:
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=ROOT)
+    return result.stdout.strip()
+
+
+def validate_baseline_matches_git_truth(current: dict[str, Any], run_fn: RunFn = default_git_run_fn) -> None:
+    """Asserts current.yaml's baseline.main_sha is EXACTLY the current tip of
+    origin/main -- not merely reachable from it. Unlike a reconciliation
+    snapshot, this baseline exists specifically to track the tip; a
+    stale-but-ancestor value is exactly the ledger/git-truth drift this check
+    exists to catch (e.g. current.yaml still pointing at a commit several
+    merges behind the real tip after a work item closed)."""
+    recorded_sha = current.get("baseline", {}).get("main_sha")
+    actual_sha = run_fn(["git", "rev-parse", "origin/main"])
+    if recorded_sha == actual_sha:
+        return
+
+    try:
+        run_fn(["git", "merge-base", "--is-ancestor", recorded_sha, "origin/main"])
+        relation = "stale (an ancestor of, but not equal to)"
+    except subprocess.CalledProcessError:
+        relation = "diverged from (not even an ancestor of)"
+
+    raise ValueError(
+        f"current.yaml: baseline.main_sha={recorded_sha!r} is {relation} the actual "
+        f"origin/main tip {actual_sha!r}. Canonical control-plane state has drifted from "
+        "Git truth -- reconcile (see core.reconciler / core.legacy_closure) before trusting "
+        ".c2pro/control/current.yaml."
+    )
+
+
+def validate(verify_against_git: bool = False, run_fn: RunFn = default_git_run_fn) -> int:
     validate_schema_artifacts()
     current = validate_current()
     queue = validate_queue(current)
@@ -381,13 +416,17 @@ def validate() -> int:
     validate_legacy_transition()
     validate_workspace_policy()
     total = validate_context_budget(current)
+    if verify_against_git:
+        validate_baseline_matches_git_truth(current, run_fn=run_fn)
     return total
 
 
-def main() -> int:
+def main(argv: list[str] | None = None, run_fn: RunFn = default_git_run_fn) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    verify_against_git = "--verify-against-git" in argv
     try:
-        total = validate()
-    except (OSError, ValueError, yaml.YAMLError) as exc:
+        total = validate(verify_against_git=verify_against_git, run_fn=run_fn)
+    except (OSError, ValueError, yaml.YAMLError, subprocess.CalledProcessError) as exc:
         print(f"C2PRO_CONTROL_VALIDATION=FAIL: {exc}")
         return 1
     print(f"C2PRO_CONTROL_VALIDATION=PASS bootstrap_hot_bytes={total}")

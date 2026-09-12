@@ -179,3 +179,91 @@ def test_legacy_sources_are_noncanonical_and_not_deleted_early() -> None:
 
 def test_schema_artifacts_are_closed_draft_2020_12_objects() -> None:
     validator.validate_schema_artifacts()
+
+
+# ---------------------------------------------------------------------------
+# --verify-against-git (G2 continuation, Task 4): current.yaml's
+# baseline.main_sha is meant to track the actual origin/main tip EXACTLY --
+# unlike the product-control's reconciled_against_main_sha, being merely an
+# ancestor (i.e. stale) is exactly the drift this check exists to catch.
+# ---------------------------------------------------------------------------
+
+import subprocess  # noqa: E402
+
+
+def _fake_git(responses: dict[tuple, object]):
+    def _run(cmd: list[str]) -> str:
+        key = tuple(cmd)
+        if key not in responses:
+            raise AssertionError(f"Unexpected command: {cmd}")
+        value = responses[key]
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+    return _run
+
+
+def test_baseline_matches_git_truth_passes_on_exact_match() -> None:
+    current = {"baseline": {"main_sha": "abc123"}}
+    run_fn = _fake_git({("git", "rev-parse", "origin/main"): "abc123"})
+    validator.validate_baseline_matches_git_truth(current, run_fn=run_fn)  # must not raise
+
+
+def test_baseline_matches_git_truth_detects_stale_but_reachable_baseline() -> None:
+    current = {"baseline": {"main_sha": "OLD_SHA"}}
+    run_fn = _fake_git(
+        {
+            ("git", "rev-parse", "origin/main"): "NEW_SHA",
+            ("git", "merge-base", "--is-ancestor", "OLD_SHA", "origin/main"): "",
+        }
+    )
+    with pytest.raises(ValueError, match="stale"):
+        validator.validate_baseline_matches_git_truth(current, run_fn=run_fn)
+
+
+def test_baseline_matches_git_truth_detects_diverged_baseline() -> None:
+    current = {"baseline": {"main_sha": "OLD_SHA"}}
+    run_fn = _fake_git(
+        {
+            ("git", "rev-parse", "origin/main"): "NEW_SHA",
+            ("git", "merge-base", "--is-ancestor", "OLD_SHA", "origin/main"): subprocess.CalledProcessError(1, []),
+        }
+    )
+    with pytest.raises(ValueError, match="diverged"):
+        validator.validate_baseline_matches_git_truth(current, run_fn=run_fn)
+
+
+def _real_current_main_sha() -> str:
+    current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
+    return current["baseline"]["main_sha"]
+
+
+def test_validate_accepts_verify_against_git_flag_with_injectable_run_fn() -> None:
+    """validate() must thread verify_against_git + run_fn through without
+    otherwise changing behavior when the flag is False (the default)."""
+    total_without_flag = validator.validate()
+    total_with_matching_git = validator.validate(
+        verify_against_git=True,
+        run_fn=_fake_git({("git", "rev-parse", "origin/main"): _real_current_main_sha()}),
+    )
+    assert total_without_flag == total_with_matching_git
+
+
+def test_main_supports_verify_against_git_cli_flag() -> None:
+    exit_code = validator.main(
+        ["--verify-against-git"],
+        run_fn=_fake_git({("git", "rev-parse", "origin/main"): _real_current_main_sha()}),
+    )
+    assert exit_code == 0
+
+
+def test_main_verify_against_git_fails_closed_on_real_drift() -> None:
+    """Regression against the REAL repository: today's live current.yaml
+    baseline is genuinely stale relative to origin/main (this is exactly the
+    drift the G2 minimum plan exists to fix via the pending DEV-02 legacy
+    closure). Until that closure is applied, this check MUST correctly FAIL.
+    Uses the real default git_run_fn -- no fake -- so this is a true
+    end-to-end proof the CLI wiring works against real git."""
+    exit_code = validator.main(["--verify-against-git"])
+    assert exit_code == 1
