@@ -38,17 +38,16 @@ async def test_platform_operator_denies_unconfigured_org_before_any_lookup(
     )
     monkeypatch.setattr(platform_operator, "operator_org_is_contaminated", _lookup)
 
+    identity = PlatformIdentity(
+        user_id="user_operator",
+        org_id="org_platform",
+        email="operator@example.test",
+        email_verified=True,
+    )
+    request = _request_with_identity(identity)
+
     with pytest.raises(HTTPException) as exc_info:
-        await require_platform_operator(
-            _request_with_identity(
-                PlatformIdentity(
-                    user_id="user_operator",
-                    org_id="org_platform",
-                    email="operator@example.test",
-                    email_verified=True,
-                )
-            )
-        )
+        await require_platform_operator(request)
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Not authorized"
@@ -75,17 +74,16 @@ async def test_platform_operator_g5_is_deny_only_and_never_grants(
 
     monkeypatch.setattr(platform_operator, "operator_org_is_contaminated", _contaminated)
 
+    identity = PlatformIdentity(
+        user_id="user_operator",
+        org_id="org_platform",
+        email="operator@example.test",
+        email_verified=True,
+    )
+    request = _request_with_identity(identity)
+
     with pytest.raises(HTTPException) as exc_info:
-        await require_platform_operator(
-            _request_with_identity(
-                PlatformIdentity(
-                    user_id="user_operator",
-                    org_id="org_platform",
-                    email="operator@example.test",
-                    email_verified=True,
-                )
-            )
-        )
+        await require_platform_operator(request)
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Not authorized"
@@ -114,17 +112,16 @@ async def test_customer_clerk_identity_is_denied_before_integrity_lookup(
     )
     monkeypatch.setattr(platform_operator, "operator_org_is_contaminated", _lookup)
 
+    identity = PlatformIdentity(
+        user_id="user_customer_admin",
+        org_id="org_customer",
+        email="customer-admin@example.test",
+        email_verified=True,
+    )
+    request = _request_with_identity(identity)
+
     with pytest.raises(HTTPException) as exc_info:
-        await require_platform_operator(
-            _request_with_identity(
-                PlatformIdentity(
-                    user_id="user_customer_admin",
-                    org_id="org_customer",
-                    email="customer-admin@example.test",
-                    email_verified=True,
-                )
-            )
-        )
+        await require_platform_operator(request)
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Not authorized"
@@ -196,9 +193,11 @@ async def test_operator_org_bootstrap_is_blocked_before_tenant_lookup(
     monkeypatch.setattr(dependencies, "lookup_tenant_by_clerk_org_id", tenant_lookup)
     monkeypatch.setattr(dependencies, "create_bootstrap_tenant", tenant_create)
 
+    session = AsyncMock()
+
     with pytest.raises(HTTPException) as exc_info:
         await dependencies._provision_clerk_user(
-            AsyncMock(),
+            session,
             clerk_user_id="user_operator",
             clerk_org_id="org_platform",
             email="operator@example.test",
