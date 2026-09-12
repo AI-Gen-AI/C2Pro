@@ -23,8 +23,10 @@ Only dependency beyond stdlib is PyYAML (already a declared project dep).
 from __future__ import annotations
 
 import hashlib
+import subprocess
 import sys
 from pathlib import Path
+from typing import Callable
 
 import yaml
 
@@ -40,6 +42,16 @@ _WBS_IDS = [
     "PWBS-ALERTS-ACTIONS-HITL", "PWBS-PROJECT-CONTROLS", "PWBS-PROCUREMENT",
     "PWBS-EXEC-REPORTING", "PWBS-OPS-TRUST",
 ]
+
+# Sentinel `next_slice` value (MASTER Decision B, G2 continuation R1): once
+# every P0b code slice is genuinely DONE, there is no next *code* slice left
+# to name, but the vertical is still not PROD_VALIDATED. Naming a fake slice
+# id would invent work that does not exist; leaving next_slice empty would
+# violate the "always name what comes next" invariant. This sentinel lets
+# next_slice truthfully say "code complete, production validation is the
+# only outstanding gate" without either. It is deliberately NOT a slice id
+# (never added to `slice_ids`) so it can never satisfy a real slice lookup.
+NEXT_SLICE_PROD_VALIDATION_PENDING = "PROD_VALIDATION_PENDING"
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -181,6 +193,15 @@ def validate_enums(doc: dict) -> list[str]:
     next_slice = _s(p0b.get("next_slice", ""))
     if not next_slice:
         problems.append("p0b_vertical_contract: missing 'next_slice' (the current next authorized product action)")
+    elif next_slice == NEXT_SLICE_PROD_VALIDATION_PENDING:
+        open_slices = [
+            _s(sl.get("id")) for sl in (p0b.get("slices") or []) if _s(sl.get("slice_status")) != "DONE"
+        ]
+        if open_slices:
+            problems.append(
+                f"p0b_vertical_contract: 'next_slice'='{NEXT_SLICE_PROD_VALIDATION_PENDING}' claims no "
+                f"code slice remains, but {open_slices} is/are not DONE"
+            )
     elif next_slice not in slice_ids:
         problems.append(f"p0b_vertical_contract: 'next_slice'='{next_slice}' is not a known P0b slice id")
     else:
@@ -287,6 +308,65 @@ def compare(yaml_canon: dict[str, str], md_canon: dict[str, str]) -> list[str]:
     return problems
 
 
+# ── git-truth drift (Task 4, G2 continuation) ──────────────────────────────────
+# production_position.reconciled_against_main_sha is an explicit point-in-time
+# reconciliation SNAPSHOT, not a live pointer -- being behind the current
+# origin/main tip is expected and NEVER a failure on its own (contrast the
+# .c2pro/control/current.yaml baseline, which IS meant to track the tip
+# exactly; see scripts/development/validate_c2pro_control.py). What genuinely
+# indicates drift/corruption is the recorded SHA being invalid or not even an
+# ancestor of main -- a typo, or history that no longer contains it.
+
+RunFn = Callable[[list[str]], str]
+
+
+def default_git_run_fn(cmd: list[str]) -> str:
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=_ROOT)
+    return result.stdout.strip()
+
+
+def validate_reconciled_sha_against_git(doc: dict, run_fn: RunFn = default_git_run_fn) -> list[str]:
+    """Returns problems with production_position.reconciled_against_main_sha:
+    missing, not a real commit, or not an ancestor of origin/main. Staleness
+    (being behind the tip) is never reported here -- see
+    report_reconciliation_staleness for that, which is informational only."""
+    problems: list[str] = []
+    sha = (doc.get("production_position") or {}).get("reconciled_against_main_sha")
+    if not sha:
+        problems.append("production_position.reconciled_against_main_sha is missing")
+        return problems
+
+    try:
+        run_fn(["git", "cat-file", "-e", f"{sha}^{{commit}}"])
+    except subprocess.CalledProcessError:
+        problems.append(
+            f"production_position.reconciled_against_main_sha={sha!r} does not resolve to a real commit"
+        )
+        return problems
+
+    try:
+        run_fn(["git", "merge-base", "--is-ancestor", sha, "origin/main"])
+    except subprocess.CalledProcessError:
+        problems.append(
+            f"production_position.reconciled_against_main_sha={sha!r} is NOT an ancestor of "
+            "origin/main -- diverged or invalid history reference"
+        )
+    return problems
+
+
+def report_reconciliation_staleness(doc: dict, run_fn: RunFn = default_git_run_fn) -> str:
+    """Informational only, never fails: how many commits main has moved since
+    this reconciliation snapshot was taken."""
+    sha = (doc.get("production_position") or {}).get("reconciled_against_main_sha")
+    if not sha:
+        return "reconciled_against_main_sha missing -- cannot measure staleness"
+    try:
+        count = run_fn(["git", "rev-list", "--count", f"{sha}..origin/main"])
+    except subprocess.CalledProcessError:
+        return "unable to measure staleness (recorded SHA is not an ancestor of origin/main)"
+    return f"{count} commits ahead of the {sha[:8]} reconciliation snapshot"
+
+
 # ── orchestration ─────────────────────────────────────────────────────────────
 def run(yaml_path: Path = _YAML, md_path: Path = _MD) -> list[str]:
     doc = load_yaml(yaml_path)
@@ -298,6 +378,16 @@ def run(yaml_path: Path = _YAML, md_path: Path = _MD) -> list[str]:
 def main(argv: list[str]) -> int:
     if "--emit" in argv:
         print(render_block(extract_canonical(load_yaml())))
+        return 0
+    if "--verify-against-git" in argv:
+        doc = load_yaml()
+        problems = validate_reconciled_sha_against_git(doc)
+        if problems:
+            print("GIT-TRUTH DRIFT — product-control git-truth violations:", file=sys.stderr)
+            for p in problems:
+                print(f"  - {p}", file=sys.stderr)
+            return 1
+        print(f"GIT-TRUTH OK — {report_reconciliation_staleness(doc)}.")
         return 0
     problems = run()
     if problems:

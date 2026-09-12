@@ -6,10 +6,9 @@ canonical_plan:
   id: C2PRO-VPS-DEV-CONTROL-V1
   path: docs/architecture/development/c2pro-vps-development-control-plan-v1.md
 baseline:
-  main_sha: 3fa846d60cecd14239ddb0a953be5e34bede463d
+  main_sha: 32eba9431ddaab198088a09fe9294ae5ecc38318
 active_campaign: null
-active_work:
-  - C2PRO-DEV-02
+active_work: []
 next_eligible_work: C2PRO-DEV-03
 authority:
   direct_main_mutation: false
@@ -20,7 +19,11 @@ authority:
 merge_policy:
   initial_mode: human_merge
 history:
-  primary: [git, github_pr, ci, evidence_refs]
+  primary:
+  - git
+  - github_pr
+  - ci
+  - evidence_refs
   completed_work_in_hot_state: false
 legacy:
   compatibility_policy: .c2pro/control/legacy-compatibility.yaml
@@ -29,10 +32,10 @@ legacy:
 context_budget:
   bootstrap_hot_max_bytes: 16384
   bootstrap_hot_paths:
-    - .c2pro/control/current.yaml
-    - .c2pro/control/work-queue.yaml
-    - .c2pro/control/routing.yaml
-    - .c2pro/control/review-policy.yaml
-    - .c2pro/control/workspace-policy.yaml
-    - .c2pro/roles/orchestrator.yaml
-    - .c2pro/work/C2PRO-DEV-02.yaml
+  - .c2pro/control/current.yaml
+  - .c2pro/control/work-queue.yaml
+  - .c2pro/control/routing.yaml
+  - .c2pro/control/review-policy.yaml
+  - .c2pro/control/workspace-policy.yaml
+  - .c2pro/roles/orchestrator.yaml
+  - .c2pro/work/C2PRO-DEV-02.yaml

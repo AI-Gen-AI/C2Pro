@@ -116,7 +116,7 @@ def test_p0b_slice_statuses_are_canonical_and_parity_checked() -> None:
         "P0b-L4-2": "DONE",
         "P0b-L4-3": "DONE",
         "P0b-L4-4": "DONE",
-        "P0b-L4-5": "ACTIVE",
+        "P0b-L4-5": "DONE",
     }
     canon = c.extract_canonical(c.load_yaml())
     md = c.parse_md_block(_MD_TEXT)
@@ -220,13 +220,15 @@ def test_r1_records_its_resolution_without_erasing_history() -> None:
     assert "DID block P0b-L4-5" in res["historical_truth"]
 
 
-def test_l4_5_is_active_and_carries_no_blocker_field() -> None:
-    """L4-5 is ACTIVE now that L4-4 is DONE, and it carries NO blocker field at all.
+def test_l4_5_is_done_and_carries_no_blocker_field() -> None:
+    """L4-5 is DONE at code/merge level (delivered by #584), and it carries
+    NO blocker field at all.
 
     Same structural principle as schema v5's residual_blocking: something that is not
     blocked must not carry a blocker line, because a blocker line that outlives its
     blocker is exactly how control prose drifts. L4-5 was BLOCKED on L4-4 acceptance;
-    that gate closed with #581, so the field is gone rather than left to rot.
+    that gate closed with #581, and L4-5 itself closed with #584, so the field is gone
+    rather than left to rot.
     """
     doc = c.load_yaml()
     slice_45 = next(
@@ -235,12 +237,12 @@ def test_l4_5_is_active_and_carries_no_blocker_field() -> None:
     slice_44 = next(
         sl for sl in doc["p0b_vertical_contract"]["slices"] if sl["id"] == "P0b-L4-4"
     )
-    assert slice_44["slice_status"] == "DONE", "L4-5 is only ACTIVE because L4-4 closed"
-    assert slice_45["slice_status"] == "ACTIVE"
+    assert slice_44["slice_status"] == "DONE", "L4-5 is only DONE because L4-4 closed first"
+    assert slice_45["slice_status"] == "DONE"
     assert "blocked_by" not in slice_45, "an unblocked slice must not carry a blocker field"
 
 
-def test_resolved_residual_is_not_the_current_blocker_and_l4_5_is_next() -> None:
+def test_resolved_residual_is_not_the_current_blocker_and_prod_validation_is_next() -> None:
     """ANTI-DRIFT: once R1 is RESOLVED, control truth must stop gating on it.
 
     Deliberately structured-field only — no prose parsing. Two things must hold
@@ -249,7 +251,9 @@ def test_resolved_residual_is_not_the_current_blocker_and_l4_5_is_next() -> None
 
       1. no RESOLVED residual still carries a blocking edge, and nothing at all
          currently blocks P0b-L4-5 via the residual registry;
-      2. the current next authorized product action is P0b-L4-5.
+      2. every P0b code slice (including L4-5) is DONE, so the current next
+         authorized action is the PROD_VALIDATION_PENDING sentinel -- never a
+         fake/invented slice, and never a real slice left ACTIVE by mistake.
     """
     doc = c.load_yaml()
     p0b = doc["p0b_vertical_contract"]
@@ -266,17 +270,20 @@ def test_resolved_residual_is_not_the_current_blocker_and_l4_5_is_next() -> None
         res["id"] for res in p0b["residuals"] if res.get("blocks") == "P0b-L4-5"
     ], "P0b-L4-5 is still gated by a residual"
 
-    # 2 — the next authorized action is L4-5, and it is real work (not DONE).
-    assert p0b["next_slice"] == "P0b-L4-5"
-    nxt = next(sl for sl in p0b["slices"] if sl["id"] == p0b["next_slice"])
-    assert nxt["slice_status"] == "ACTIVE"
+    # 2 — every slice is genuinely DONE, and next_slice correctly reflects that
+    # via the sentinel rather than naming a (nonexistent) open slice.
+    assert p0b["next_slice"] == c.NEXT_SLICE_PROD_VALIDATION_PENDING
+    for sl in p0b["slices"]:
+        assert sl["slice_status"] == "DONE", (
+            f"{sl['id']} is not DONE; next_slice=PROD_VALIDATION_PENDING requires every slice DONE"
+        )
 
 
 def test_next_slice_is_parity_checked() -> None:
     """The next authorized action is a canonical value, so MD cannot disagree."""
     canon = c.extract_canonical(c.load_yaml())
     md = c.parse_md_block(_MD_TEXT)
-    assert canon["p0b.next_slice"] == "P0b-L4-5"
+    assert canon["p0b.next_slice"] == "PROD_VALIDATION_PENDING"
     assert md["p0b.next_slice"] == canon["p0b.next_slice"]
 
 
@@ -302,6 +309,55 @@ def test_done_next_slice_detected() -> None:
     doc["p0b_vertical_contract"]["next_slice"] = "P0b-L4-1"
     problems = c.validate_enums(doc)
     assert any("already DONE" in p for p in problems), problems
+
+
+def test_prod_validation_pending_sentinel_name_is_stable() -> None:
+    """The sentinel is a named module constant, never a hand-typed literal,
+    so tooling can reference it without guessing the exact string."""
+    assert c.NEXT_SLICE_PROD_VALIDATION_PENDING == "PROD_VALIDATION_PENDING"
+
+
+def test_prod_validation_pending_sentinel_valid_when_all_slices_done() -> None:
+    """When every P0b code slice is DONE, next_slice may name the explicit
+    PROD_VALIDATION_PENDING sentinel instead of a fake slice id -- the
+    validator can represent 'code complete, production validation
+    outstanding' without inventing a slice that does not exist."""
+    doc = c.load_yaml()
+    for sl in doc["p0b_vertical_contract"]["slices"]:
+        sl["slice_status"] = "DONE"
+    doc["p0b_vertical_contract"]["next_slice"] = c.NEXT_SLICE_PROD_VALIDATION_PENDING
+    problems = c.validate_enums(doc)
+    assert problems == [], problems
+
+
+def test_prod_validation_pending_sentinel_rejected_while_a_slice_is_open() -> None:
+    """The sentinel must not be usable as an escape hatch while real code
+    work remains -- refused unless every slice is genuinely DONE. Forces an
+    explicit synthetic slice open rather than depending on the live YAML
+    always containing one (it does not, once P0b reaches all-DONE)."""
+    doc = c.load_yaml()
+    doc["p0b_vertical_contract"]["slices"][0]["slice_status"] = "ACTIVE"
+    doc["p0b_vertical_contract"]["next_slice"] = c.NEXT_SLICE_PROD_VALIDATION_PENDING
+    problems = c.validate_enums(doc)
+    assert any("claims no code slice remains" in p for p in problems), problems
+
+
+def test_prod_validation_pending_sentinel_names_the_open_slices() -> None:
+    """The rejection must name which slice(s) are still open, for
+    diagnosability. Forces an explicit synthetic slice open rather than
+    depending on the live YAML always containing one."""
+    doc = c.load_yaml()
+    doc["p0b_vertical_contract"]["slices"][0]["slice_status"] = "ACTIVE"
+    forced_open_id = doc["p0b_vertical_contract"]["slices"][0]["id"]
+    doc["p0b_vertical_contract"]["next_slice"] = c.NEXT_SLICE_PROD_VALIDATION_PENDING
+    problems = c.validate_enums(doc)
+    assert any(forced_open_id in p for p in problems), problems
+
+
+def test_pristine_next_slice_is_unaffected_by_sentinel_support() -> None:
+    """Adding sentinel support must not change the outcome for the real,
+    unmodified YAML, whatever its current next_slice/slice_status values are."""
+    assert c.validate_enums(c.load_yaml()) == []
 
 
 def test_missing_residual_detected() -> None:

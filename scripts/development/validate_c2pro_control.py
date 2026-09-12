@@ -9,9 +9,10 @@ runtime dependencies.
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -304,7 +305,12 @@ def validate_review_policy() -> dict[str, Any]:
 
 def validate_identity_preserving_principal_handoff(current: dict[str, Any], queue: dict[str, Any], routing: dict[str, Any]) -> None:
     active_ids = current.get("active_work", [])
-    require(bool(active_ids), "handoff proof: at least one active work item required")
+    if not active_ids:
+        # A legitimate canonical state: immediately after a work item closes
+        # and before the next one is picked up, there is no active work and
+        # therefore no principal handoff to prove. This is not an error --
+        # every other control-plane invariant still runs independently.
+        return
     active_id = active_ids[0]
     item = next(item for item in queue["items"] if item["work_id"] == active_id)
     require(item.get("work_ref") is not None, "handoff proof: active work requires work_ref")
@@ -369,7 +375,70 @@ def validate_context_budget(current: dict[str, Any]) -> int:
     return total
 
 
-def validate() -> int:
+RunFn = Callable[[list[str]], str]
+
+
+def default_git_run_fn(cmd: list[str]) -> str:
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=ROOT)
+    return result.stdout.strip()
+
+
+def validate_baseline_matches_git_truth(current: dict[str, Any], run_fn: RunFn = default_git_run_fn) -> None:
+    """Asserts current.yaml's baseline.main_sha is a truthful record of "the
+    authoritative main commit consumed as INPUT to the current
+    reconciliation/work cycle" -- NOT "the SHA of the commit containing
+    current.yaml". Those two are the same thing while work is active (main
+    must not have moved out from under it, so exact equality is required),
+    but are NECESSARILY different the instant current.yaml's own change
+    merges to main: the merge/squash commit that carries the new baseline
+    value cannot equal that value at commit time -- it doesn't exist yet.
+
+    - Active work in flight (`active_work` non-empty): baseline.main_sha
+      MUST equal origin/main exactly. Any advancement of main requires an
+      explicit reconciliation before active work may continue.
+    - No active work (`active_work` empty): baseline.main_sha may be an
+      ancestor of origin/main -- a legitimate post-merge/idle state.
+    - Either way: a recorded SHA that is not even an ancestor of origin/main
+      (diverged, corrupted, or hand-typed) always fails, and a missing SHA
+      always fails, without ever shelling out to git.
+    """
+    recorded_sha = current.get("baseline", {}).get("main_sha")
+    if not recorded_sha:
+        raise ValueError("current.yaml: baseline.main_sha is missing -- cannot verify against Git truth.")
+
+    actual_sha = run_fn(["git", "rev-parse", "origin/main"])
+    if recorded_sha == actual_sha:
+        return
+
+    try:
+        run_fn(["git", "merge-base", "--is-ancestor", recorded_sha, "origin/main"])
+        is_ancestor = True
+    except subprocess.CalledProcessError:
+        is_ancestor = False
+
+    if not is_ancestor:
+        raise ValueError(
+            f"current.yaml: baseline.main_sha={recorded_sha!r} is diverged from (not even an "
+            f"ancestor of) the actual origin/main tip {actual_sha!r}. Canonical control-plane "
+            "state has drifted from Git truth -- reconcile (see core.reconciler / "
+            "core.legacy_closure) before trusting .c2pro/control/current.yaml."
+        )
+
+    active_work = current.get("active_work", [])
+    if active_work:
+        raise ValueError(
+            f"current.yaml: baseline.main_sha={recorded_sha!r} is stale (an ancestor of, but "
+            f"not equal to) the actual origin/main tip {actual_sha!r}, and active work is in "
+            f"flight ({active_work!r}). Active work requires the baseline to exactly match "
+            "origin/main -- reconcile before continuing active work."
+        )
+
+    # No active work and the recorded SHA is a valid ancestor: this is the
+    # legitimate post-merge/idle state (e.g. immediately after the commit
+    # carrying this very baseline value merged to main), not drift.
+
+
+def validate(verify_against_git: bool = False, run_fn: RunFn = default_git_run_fn) -> int:
     validate_schema_artifacts()
     current = validate_current()
     queue = validate_queue(current)
@@ -381,13 +450,17 @@ def validate() -> int:
     validate_legacy_transition()
     validate_workspace_policy()
     total = validate_context_budget(current)
+    if verify_against_git:
+        validate_baseline_matches_git_truth(current, run_fn=run_fn)
     return total
 
 
-def main() -> int:
+def main(argv: list[str] | None = None, run_fn: RunFn = default_git_run_fn) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    verify_against_git = "--verify-against-git" in argv
     try:
-        total = validate()
-    except (OSError, ValueError, yaml.YAMLError) as exc:
+        total = validate(verify_against_git=verify_against_git, run_fn=run_fn)
+    except (OSError, ValueError, yaml.YAMLError, subprocess.CalledProcessError) as exc:
         print(f"C2PRO_CONTROL_VALIDATION=FAIL: {exc}")
         return 1
     print(f"C2PRO_CONTROL_VALIDATION=PASS bootstrap_hot_bytes={total}")
