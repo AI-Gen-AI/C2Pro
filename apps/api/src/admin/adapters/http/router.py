@@ -32,8 +32,7 @@ from src.admin.application.use_cases.retry_dlq_entry import (
     DLQEntryNotFoundError,
     RetryDLQEntryUseCase,
 )
-from src.core.auth.dependencies import get_current_user
-from src.core.auth.models import User, UserRole
+from src.core.auth.platform_operator import PlatformOperator, require_platform_operator
 from src.core.database import get_admin_ops_session
 from src.core.dlq.dlq_service import DLQService
 from src.core.dlq.models import DLQFailedTask
@@ -154,22 +153,10 @@ def get_retry_dlq_entry_use_case(
     return RetryDLQEntryUseCase(port)
 
 
-async def require_admin_user(
-    current_user: User = Depends(get_current_user),
-) -> User:
-    """TS-BCK-042-001: Reuse existing user role auth for admin-only endpoints."""
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This endpoint requires admin role",
-        )
-    return current_user
-
-
 router = APIRouter(
     prefix="/admin/dlq",
     tags=["Admin", "DLQ"],
-    dependencies=[Depends(security_scheme), Depends(require_admin_user)],
+    dependencies=[Depends(security_scheme), Depends(require_platform_operator)],
 )
 
 
@@ -203,16 +190,9 @@ async def list_dlq_entries(
 async def retry_dlq_entry(
     dlq_id: UUID,
     use_case: RetryDLQEntryUseCase = Depends(get_retry_dlq_entry_use_case),
-    current_user: User = Depends(require_admin_user),
+    current_operator: PlatformOperator = Depends(require_platform_operator),
 ) -> DLQRetryResponse:
-    """TS-BCK-042-001: Retry a DLQ entry for organization administrators."""
-    # Audit log emitted before the call — records the attempt, not the outcome.
-    _logger.info(
-        "admin_dlq_retry",
-        admin_id=str(current_user.id),
-        dlq_id=str(dlq_id),
-        tenant_id=str(current_user.tenant_id),
-    )
+    """Retry a cross-tenant DLQ entry as an authorized platform operator."""
     try:
         entry = await use_case.execute(dlq_id)
     except DLQEntryNotFoundError as exc:
@@ -220,5 +200,13 @@ async def retry_dlq_entry(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="DLQ entry not found",
         ) from exc
+
+    _logger.info(
+        "platform_operator_dlq_retry",
+        operator_id=current_operator.clerk_user_id,
+        org_id=current_operator.clerk_org_id,
+        dlq_id=str(dlq_id),
+        tenant_id=str(entry.tenant_id),
+    )
 
     return DLQRetryResponse(id=entry.id, status="retrying")
