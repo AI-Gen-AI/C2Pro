@@ -15,6 +15,7 @@ from uuid import UUID
 import jwt
 import structlog
 from fastapi import Request, Response
+from fastapi.routing import APIRoute
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.config import settings
@@ -24,7 +25,7 @@ from src.core.auth.bootstrap_lookup import (
     lookup_tenant_by_id,
     lookup_user_by_clerk_user_id,
 )
-from src.core.auth.platform_operator import PlatformIdentity
+from src.core.auth.platform_operator import PlatformIdentity, require_platform_operator
 from src.core.auth.token_revocation import is_token_revoked_async
 from src.core.database import get_raw_session
 from src.core.middleware.clerk_auth import verify_clerk_token
@@ -62,6 +63,63 @@ def normalize_platform_path(method: str, path: str) -> str:
 def is_platform_route(method: str, path: str) -> bool:
     """Classify only an explicit method + normalized route-template identity."""
     return (method, normalize_platform_path(method, path)) in PLATFORM_ROUTE_REGISTRY
+
+
+def active_mounted_routes(app: Any) -> list[Any]:
+    """Flatten FastAPI's mounted route table without using it at request time."""
+    routes: list[Any] = []
+    for route in app.routes:
+        if isinstance(route, APIRoute):
+            routes.append(route)
+            continue
+        effective_route_contexts = getattr(route, "effective_route_contexts", None)
+        if callable(effective_route_contexts):
+            routes.extend(effective_route_contexts())
+    return routes
+
+
+def assert_platform_route_registry(app: Any) -> None:
+    """CI-only active-mount invariant for the reviewed platform-route registry."""
+    errors: list[str] = []
+    active_routes = active_mounted_routes(app)
+
+    for method, normalized_path in PLATFORM_ROUTE_REGISTRY:
+        matches = [
+            route
+            for route in active_routes
+            if route.path == normalized_path and method in route.methods
+        ]
+        if len(matches) != 1:
+            errors.append(
+                f"{method} {normalized_path} must resolve to exactly one mounted route; "
+                f"found {len(matches)}"
+            )
+            continue
+        if matches[0].endpoint.__module__ != "src.admin.adapters.http.router":
+            errors.append(
+                f"{method} {normalized_path} must resolve to the cross-tenant admin router"
+            )
+
+    for route in active_routes:
+        dependency_calls = {dependency.call for dependency in route.dependant.dependencies}
+        if require_platform_operator not in dependency_calls:
+            continue
+        for method in route.methods:
+            if (method, route.path) not in PLATFORM_ROUTE_REGISTRY:
+                errors.append(
+                    f"platform-operator route {method} {route.path} is absent from the registry"
+                )
+
+    legacy_routes = [
+        route
+        for route in active_routes
+        if route.endpoint.__module__ == "src.core.dlq.router"
+    ]
+    if legacy_routes:
+        errors.append("legacy tenant DLQ router must remain unmounted")
+
+    if errors:
+        raise AssertionError("; ".join(errors))
 
 if TYPE_CHECKING:
     RequestType: TypeAlias = Request[Any]
