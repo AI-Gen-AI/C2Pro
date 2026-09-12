@@ -169,6 +169,105 @@ def test_review_policy_rejects_unbounded_debate(monkeypatch: pytest.MonkeyPatch)
         validator.validate_review_policy()
 
 
+def test_handoff_proof_skipped_when_active_work_is_empty() -> None:
+    """A legitimate canonical state exists right after a work item closes and
+    before the next one is picked up: active_work == []. There is no
+    principal to hand work off between, so the proof is inapplicable, not
+    violated -- this must not raise."""
+    current = {"active_work": []}
+    queue = {"items": []}
+    routing = validator.load_yaml(ROOT / ".c2pro" / "control" / "routing.yaml")
+    validator.validate_identity_preserving_principal_handoff(current, queue, routing)
+
+
+def test_handoff_proof_still_enforced_for_invalid_non_empty_active_work() -> None:
+    """The empty-active-work allowance must not become a general escape
+    hatch: a genuinely broken active-work entry must still fail exactly as
+    before."""
+    current = {"active_work": ["C2PRO-DEV-BROKEN"]}
+    queue = {"items": [{"work_id": "C2PRO-DEV-BROKEN", "work_ref": None}]}
+    routing = validator.load_yaml(ROOT / ".c2pro" / "control" / "routing.yaml")
+    with pytest.raises(ValueError, match="active work requires work_ref"):
+        validator.validate_identity_preserving_principal_handoff(current, queue, routing)
+
+
+def test_handoff_proof_passes_for_valid_active_work(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: a genuinely valid single active work item must still pass
+    the full identity-preserving-handoff proof."""
+    work = {
+        "work_id": "C2PRO-DEV-SYNTH",
+        "role": "orchestrator",
+        "base_sha": "a" * 40,
+        "scope": ["synthetic"],
+        "out_of_scope": [],
+        "acceptance_criteria": ["synthetic"],
+        "worker_selection": {
+            "eligible_principals": list(validator.PRINCIPAL_WORKERS),
+            "eligible_subordinates": [],
+            "selected": None,
+        },
+    }
+    current = {"active_work": ["C2PRO-DEV-SYNTH"]}
+    queue = {"items": [{"work_id": "C2PRO-DEV-SYNTH", "work_ref": "synthetic/work.yaml", "role": "orchestrator"}]}
+    routing = validator.load_yaml(ROOT / ".c2pro" / "control" / "routing.yaml")
+
+    def fake_load(path: Path):
+        if str(path).endswith("synthetic/work.yaml"):
+            return work
+        raise AssertionError(f"unexpected load_yaml call in this synthetic fixture: {path}")
+
+    monkeypatch.setattr(validator, "load_yaml", fake_load)
+    validator.validate_identity_preserving_principal_handoff(current, queue, routing)
+
+
+def test_other_invariants_still_enforced_when_active_work_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The empty-active-work skip must be narrowly scoped to the handoff
+    proof ONLY: every other control-plane invariant must keep running, and
+    keep failing, on a genuinely broken input elsewhere in the pipeline."""
+    current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
+    empty_current = dict(current)
+    empty_current["active_work"] = []
+
+    broken_review_policy = copy.deepcopy(
+        validator.load_yaml(ROOT / ".c2pro" / "control" / "review-policy.yaml")
+    )
+    broken_review_policy["challenger_policy"]["open_ended_debate_default"] = True
+
+    real_load = validator.load_yaml
+
+    def fake_load(path: Path):
+        if path == validator.CONTROL / "current.yaml":
+            return empty_current
+        if path == validator.CONTROL / "review-policy.yaml":
+            return broken_review_policy
+        return real_load(path)
+
+    monkeypatch.setattr(validator, "load_yaml", fake_load)
+    with pytest.raises(ValueError, match="open-ended debate must remain disabled"):
+        validator.validate()
+
+
+def test_validate_succeeds_fully_when_active_work_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The full validate() pipeline -- schema, current, queue, work
+    envelopes, roles, routing, review policy, the now-skippable handoff
+    proof, legacy transition, workspace policy, context budget -- must
+    complete successfully end to end when active_work is legitimately
+    empty (e.g. immediately after C2PRO-DEV-02's legacy closure)."""
+    current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
+    empty_current = dict(current)
+    empty_current["active_work"] = []
+    real_load = validator.load_yaml
+
+    def fake_load(path: Path):
+        if path == validator.CONTROL / "current.yaml":
+            return empty_current
+        return real_load(path)
+
+    monkeypatch.setattr(validator, "load_yaml", fake_load)
+    total = validator.validate()
+    assert total > 0
+
+
 def test_legacy_sources_are_noncanonical_and_not_deleted_early() -> None:
     policy = validator.load_yaml(ROOT / ".c2pro" / "control" / "legacy-compatibility.yaml")
     assert policy["canonical_write_target"] == ".c2pro"

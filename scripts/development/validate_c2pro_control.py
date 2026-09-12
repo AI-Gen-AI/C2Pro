@@ -305,7 +305,12 @@ def validate_review_policy() -> dict[str, Any]:
 
 def validate_identity_preserving_principal_handoff(current: dict[str, Any], queue: dict[str, Any], routing: dict[str, Any]) -> None:
     active_ids = current.get("active_work", [])
-    require(bool(active_ids), "handoff proof: at least one active work item required")
+    if not active_ids:
+        # A legitimate canonical state: immediately after a work item closes
+        # and before the next one is picked up, there is no active work and
+        # therefore no principal handoff to prove. This is not an error --
+        # every other control-plane invariant still runs independently.
+        return
     active_id = active_ids[0]
     item = next(item for item in queue["items"] if item["work_id"] == active_id)
     require(item.get("work_ref") is not None, "handoff proof: active work requires work_ref")
