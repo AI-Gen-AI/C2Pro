@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import HTTPException
@@ -150,6 +150,10 @@ async def test_platform_operator_returns_tenantless_principal_only_after_all_gat
         return False
 
     monkeypatch.setattr(platform_operator, "operator_org_is_contaminated", _clean)
+    bind_context = Mock()
+    granted_log = Mock()
+    monkeypatch.setattr(platform_operator.structlog.contextvars, "bind_contextvars", bind_context)
+    monkeypatch.setattr(platform_operator.logger, "info", granted_log)
 
     principal = await require_platform_operator(
         _request_with_identity(
@@ -165,6 +169,15 @@ async def test_platform_operator_returns_tenantless_principal_only_after_all_gat
     assert principal.clerk_user_id == "user_Operator"
     assert principal.clerk_org_id == "org_platform"
     assert not hasattr(principal, "tenant_id")
+    bind_context.assert_called_once_with(
+        platform_operator_id="user_Operator",
+        org_id="org_platform",
+    )
+    granted_log.assert_called_once_with(
+        "platform_operator_granted",
+        clerk_user_id="user_Operator",
+        clerk_org_id="org_platform",
+    )
 
 
 @pytest.mark.asyncio

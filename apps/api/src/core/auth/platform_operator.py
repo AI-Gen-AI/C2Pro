@@ -55,6 +55,7 @@ async def require_platform_operator(request: Request) -> PlatformOperator:
 
     configured_org_id = settings.platform_operator_org_id
     if configured_org_id is None or not configured_org_id.strip():
+        logger.error("platform_operator_unconfigured")
         raise _not_authorized("platform_operator_org_unconfigured")
     if identity.org_id != configured_org_id:
         raise _not_authorized("organization_mismatch")
@@ -67,8 +68,12 @@ async def require_platform_operator(request: Request) -> PlatformOperator:
     if await operator_org_is_contaminated(configured_org_id):
         raise _not_authorized("operator_organization_contaminated")
 
+    structlog.contextvars.bind_contextvars(
+        platform_operator_id=identity.user_id,
+        org_id=configured_org_id,
+    )
     logger.info(
-        "platform_operator_authorized",
+        "platform_operator_granted",
         clerk_user_id=identity.user_id,
         clerk_org_id=configured_org_id,
     )
