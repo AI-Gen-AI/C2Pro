@@ -17,7 +17,7 @@ def test_unit_workflow_excludes_integration_marked_tests() -> None:
     assert '-m "not integration"' in contents
     assert "--cov-report=xml:coverage.xml" in contents
     assert "backend-coverage:" in contents
-    assert "cp coverage-data/c25-security/.coverage.c25* ." in contents
+    assert "cp coverage-data/c25-c26-security/.coverage.c25_c26* ." in contents
     assert "coverage combine" in contents
     assert "--fail-under=70" in contents
     assert "backend-coverage:$RESULT_BACKEND_COVERAGE" in contents

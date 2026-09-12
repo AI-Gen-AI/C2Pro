@@ -15,6 +15,7 @@ from uuid import UUID
 import jwt
 import structlog
 from fastapi import Request, Response
+from fastapi.routing import APIRoute
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.config import settings
@@ -24,12 +25,101 @@ from src.core.auth.bootstrap_lookup import (
     lookup_tenant_by_id,
     lookup_user_by_clerk_user_id,
 )
+from src.core.auth.platform_operator import PlatformIdentity, require_platform_operator
 from src.core.auth.token_revocation import is_token_revoked_async
 from src.core.database import get_raw_session
 from src.core.middleware.clerk_auth import verify_clerk_token
 from src.core.observability.sentry_alerts import record_auth_failure
 
 logger = structlog.get_logger()
+
+
+# C2.6 uses only these reviewed method + normalized-template identities. This
+# is deliberately not a router-prefix or endpoint-provenance decision.
+PLATFORM_ROUTE_REGISTRY = frozenset(
+    {
+        ("GET", "/api/v1/admin/dlq"),
+        ("POST", "/api/v1/admin/dlq/{dlq_id}/retry"),
+    }
+)
+
+
+def normalize_platform_path(method: str, path: str) -> str:
+    """Normalize a concrete request path only to a registered route template."""
+    normalized_path = path.rstrip("/") or "/"
+    if method == "POST":
+        parts = normalized_path.split("/")
+        if (
+            len(parts) == 7
+            and parts[:4] == ["", "api", "v1", "admin"]
+            and parts[4] == "dlq"
+            and parts[5]
+            and parts[6] == "retry"
+        ):
+            return "/api/v1/admin/dlq/{dlq_id}/retry"
+    return normalized_path
+
+
+def is_platform_route(method: str, path: str) -> bool:
+    """Classify only an explicit method + normalized route-template identity."""
+    return (method, normalize_platform_path(method, path)) in PLATFORM_ROUTE_REGISTRY
+
+
+def active_mounted_routes(app: Any) -> list[Any]:
+    """Flatten FastAPI's mounted route table without using it at request time."""
+    routes: list[Any] = []
+    for route in app.routes:
+        if isinstance(route, APIRoute):
+            routes.append(route)
+            continue
+        effective_route_contexts = getattr(route, "effective_route_contexts", None)
+        if callable(effective_route_contexts):
+            routes.extend(effective_route_contexts())
+    return routes
+
+
+def assert_platform_route_registry(app: Any) -> None:
+    """CI-only active-mount invariant for the reviewed platform-route registry."""
+    errors: list[str] = []
+    active_routes = active_mounted_routes(app)
+
+    for method, normalized_path in PLATFORM_ROUTE_REGISTRY:
+        matches = [
+            route
+            for route in active_routes
+            if route.path == normalized_path and method in route.methods
+        ]
+        if len(matches) != 1:
+            errors.append(
+                f"{method} {normalized_path} must resolve to exactly one mounted route; "
+                f"found {len(matches)}"
+            )
+            continue
+        if matches[0].endpoint.__module__ != "src.admin.adapters.http.router":
+            errors.append(
+                f"{method} {normalized_path} must resolve to the cross-tenant admin router"
+            )
+
+    for route in active_routes:
+        dependency_calls = {dependency.call for dependency in route.dependant.dependencies}
+        if require_platform_operator not in dependency_calls:
+            continue
+        for method in route.methods:
+            if (method, route.path) not in PLATFORM_ROUTE_REGISTRY:
+                errors.append(
+                    f"platform-operator route {method} {route.path} is absent from the registry"
+                )
+
+    legacy_routes = [
+        route
+        for route in active_routes
+        if route.endpoint.__module__ == "src.core.dlq.router"
+    ]
+    if legacy_routes:
+        errors.append("legacy tenant DLQ router must remain unmounted")
+
+    if errors:
+        raise AssertionError("; ".join(errors))
 
 if TYPE_CHECKING:
     RequestType: TypeAlias = Request[Any]
@@ -82,6 +172,9 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
         # Allow CORS preflight requests (OPTIONS)
         if request.method == "OPTIONS":
             return await call_next(request)
+
+        if is_platform_route(request.method, request.url.path):
+            return await self._dispatch_platform_route(request, call_next)
 
         # Permitir rutas públicas
         if self._is_public_path(request.url.path):
@@ -161,6 +254,63 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
         )
 
         return await call_next(request)
+
+    async def _dispatch_platform_route(
+        self,
+        request: RequestType,
+        call_next: Callable[[RequestType], Awaitable[Response]],
+    ) -> Response:
+        """Authenticate the tenant-less C2.6 platform route mode exactly once."""
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer ") or not auth_header[7:].strip():
+            return self._platform_unauthorized(request, "missing_or_invalid_token")
+
+        token = auth_header[7:].strip()
+        try:
+            algorithm = jwt.get_unverified_header(token).get("alg")
+        except jwt.PyJWTError:
+            return self._platform_unauthorized(request, "invalid_platform_token")
+
+        if algorithm == "HS256":
+            logger.warning("platform_route_local_jwt_rejected", path=request.url.path)
+            return self._platform_unauthorized(request, "local_jwt_not_accepted")
+
+        try:
+            claims = await verify_clerk_token(token)
+        except Exception:
+            logger.warning("platform_route_identity_unverified", path=request.url.path)
+            return self._platform_unauthorized(request, "invalid_platform_identity")
+
+        clerk_user_id = claims.get("sub")
+        if not isinstance(clerk_user_id, str) or not clerk_user_id:
+            return self._platform_unauthorized(request, "invalid_platform_identity")
+
+        clerk_org_id = claims.get("org_id")
+        if clerk_org_id is not None and not isinstance(clerk_org_id, str):
+            return self._platform_unauthorized(request, "invalid_platform_identity")
+        email = claims.get("email")
+        if email is not None and not isinstance(email, str):
+            return self._platform_unauthorized(request, "invalid_platform_identity")
+
+        # A platform request must never inherit or establish tenant log context.
+        structlog.contextvars.unbind_contextvars("tenant_id", "user_id")
+        request.state.platform_identity = PlatformIdentity(
+            user_id=clerk_user_id,
+            org_id=clerk_org_id,
+            email=email,
+            email_verified=claims.get("email_verified") is True,
+        )
+        return await call_next(request)
+
+    def _platform_unauthorized(self, request: RequestType, reason_code: str) -> Response:
+        logger.warning("authentication_failed", path=request.url.path, reason=reason_code)
+        record_auth_failure(
+            reason_code=reason_code,
+            tenant_id=None,
+            path=request.url.path,
+            ip=request.client.host if request.client else None,
+        )
+        return self._unauthorized_response("Not authenticated", reason_code)
 
     def _is_public_path(self, path: str) -> bool:
         """Verifica si la ruta es pública."""

@@ -185,31 +185,20 @@ class TestC25AdminSessionFailureSemantics:
         assert "unavailable" in str(exc_info.value.detail).lower()
 
     @pytest.mark.asyncio
-    async def test_non_admin_http_rejected_before_db_session(self, test_user):
-        """Non-admin HTTP caller gets 403 before admin DB session is acquired."""
+    async def test_non_operator_http_rejected_before_db_session(self):
+        """A request without a platform identity is rejected before a DB session is acquired."""
         from fastapi import HTTPException
+        from starlette.requests import Request
 
-        from src.admin.adapters.http.router import require_admin_user
-        from src.core.auth.models import User, UserRole
+        from src.core.auth.platform_operator import require_platform_operator
 
-        # Create a non-admin user
-        non_admin_user = User(
-            id=test_user.id,
-            tenant_id=test_user.tenant_id,
-            email=test_user.email,
-            hashed_password="x",
-            first_name="Test",
-            last_name="User",
-            role=UserRole.USER,  # NOT admin
-            is_active=True,
-            is_verified=True,
-        )
+        request = Request({"type": "http", "method": "GET", "path": "/api/v1/admin/dlq"})
 
         with pytest.raises(HTTPException) as exc_info:
-            await require_admin_user(current_user=non_admin_user)
+            await require_platform_operator(request)
 
         assert exc_info.value.status_code == 403
-        assert "admin" in str(exc_info.value.detail).lower()
+        assert exc_info.value.detail == "Not authorized"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
