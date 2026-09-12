@@ -2,12 +2,12 @@ import pytest
 from fastapi import Depends, FastAPI
 
 from src.admin.adapters.http.router import router as cross_tenant_admin_router
+from src.core.auth.platform_operator import require_platform_operator
 from src.core.dlq.router import router as legacy_tenant_router
 from src.core.middleware.tenant_isolation import (
     active_mounted_routes,
     assert_platform_route_registry,
 )
-from src.core.auth.platform_operator import require_platform_operator
 from src.main import app
 
 
