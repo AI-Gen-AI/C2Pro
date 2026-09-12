@@ -7,11 +7,11 @@ Soporta múltiples ambientes (dev, staging, prod).
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, ClassVar, Literal, Self
+from typing import Annotated, Any, ClassVar, Literal, Self
 from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -157,6 +157,20 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="AUTH_BOOTSTRAP_EMIT_METRICS",
         description="Emit structured telemetry for auth bootstrap resolution paths",
+    )
+
+    # C2.6 platform operator authorization boundary. These values are only
+    # authorization configuration; they never enable the C2.5 database
+    # credential or a persistent LOGIN principal.
+    platform_operator_org_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PLATFORM_OPERATOR_ORG_ID"),
+        description="Exact Clerk organization ID permitted for platform operators",
+    )
+    platform_operator_user_ids: Annotated[list[str], NoDecode] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("PLATFORM_OPERATOR_USER_IDS"),
+        description="Optional exact CSV allowlist that can only narrow platform operators",
     )
 
     # ===========================================
@@ -640,6 +654,30 @@ class Settings(BaseSettings):
         if isinstance(v, list):
             return [str(email).strip() for email in v if str(email).strip()]
         return []
+
+    @field_validator("platform_operator_user_ids", mode="before")
+    @classmethod
+    def parse_platform_operator_user_ids(cls, v: Any) -> list[str]:
+        """Accept only the documented comma-separated immutable Clerk user IDs."""
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return []
+        # Pydantic validates the default_factory output too. Accept that one
+        # empty internal representation without accepting a JSON/list env form.
+        if isinstance(v, list) and not v:
+            return []
+        if not isinstance(v, str):
+            raise ValueError("PLATFORM_OPERATOR_USER_IDS must be a CSV of Clerk user IDs")
+
+        user_ids: list[str] = []
+        for raw_user_id in v.split(","):
+            user_id = raw_user_id.strip()
+            if not user_id:
+                continue
+            if not user_id.startswith("user_"):
+                raise ValueError("PLATFORM_OPERATOR_USER_IDS must contain only Clerk user IDs")
+            if user_id not in user_ids:
+                user_ids.append(user_id)
+        return user_ids
 
 
 # ===========================================
