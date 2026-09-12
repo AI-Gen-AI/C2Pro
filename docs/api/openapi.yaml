@@ -2338,7 +2338,7 @@ paths:
       - Admin
       - DLQ
       summary: Retry a DLQ entry
-      description: 'TS-BCK-042-001: Retry a DLQ entry for organization administrators.'
+      description: Retry a cross-tenant DLQ entry as an authorized platform operator.
       operationId: retry_dlq_entry_api_v1_admin_dlq__dlq_id__retry_post
       security:
       - HTTPBearer: []
