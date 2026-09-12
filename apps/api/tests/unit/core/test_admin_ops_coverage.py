@@ -147,12 +147,14 @@ async def test_init_admin_ops_db_disposes_unpublished_engine_when_factory_creati
 
 
 @pytest.mark.asyncio
-async def test_close_admin_ops_db_disposes_engine_and_clears_globals() -> None:
+async def test_close_admin_ops_db_disposes_engine_and_clears_globals(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     engine = MagicMock()
     engine.dispose = AsyncMock()
 
-    database._admin_ops_engine = engine
-    database._admin_ops_session_factory = MagicMock()
+    monkeypatch.setattr(database, "_admin_ops_engine", engine)
+    monkeypatch.setattr(database, "_admin_ops_session_factory", MagicMock())
 
     await database.close_admin_ops_db()
 
@@ -217,10 +219,12 @@ async def test_admin_ops_session_rejects_remaining_elevated_principal_paths(
 ) -> None:
     factory, session = _session_factory_for(_catalog_row(**overrides))
     monkeypatch.setattr(database, "_admin_ops_session_factory", factory)
+    admin_session = database.get_admin_ops_session()
+    protected_body_error = AssertionError("invalid admin principal reached protected body")
 
     with pytest.raises(RuntimeError, match=message):
-        async with database.get_admin_ops_session():
-            pytest.fail("invalid admin principal reached protected body")
+        async with admin_session:
+            raise protected_body_error
 
     session.commit.assert_not_awaited()
 
@@ -231,10 +235,12 @@ async def test_admin_ops_session_rolls_back_when_protected_body_fails(
 ) -> None:
     factory, session = _session_factory_for(_catalog_row())
     monkeypatch.setattr(database, "_admin_ops_session_factory", factory)
+    admin_session = database.get_admin_ops_session()
+    error = ValueError("synthetic body failure")
 
     with pytest.raises(ValueError, match="synthetic body failure"):
-        async with database.get_admin_ops_session():
-            raise ValueError("synthetic body failure")
+        async with admin_session:
+            raise error
 
     session.rollback.assert_awaited_once()
     session.commit.assert_not_awaited()

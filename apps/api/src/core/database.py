@@ -34,6 +34,8 @@ logger = structlog.get_logger()
 
 # Slow query threshold in seconds (100ms)
 SLOW_QUERY_THRESHOLD_MS = 100
+POSTGRESQL_URL_PREFIX = "postgresql://"
+ASYNC_POSTGRESQL_URL_PREFIX = "postgresql+asyncpg://"
 
 # UUID validation pattern (safe for SQL string interpolation)
 _UUID_PATTERN = re.compile(
@@ -154,8 +156,10 @@ async def init_db() -> None:
 
     # Convertir URL a async
     database_url = settings.database_url
-    if database_url.startswith("postgresql://"):
-        database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if database_url.startswith(POSTGRESQL_URL_PREFIX):
+        database_url = database_url.replace(
+            POSTGRESQL_URL_PREFIX, ASYNC_POSTGRESQL_URL_PREFIX, 1
+        )
 
     if database_url.startswith("sqlite"):
         _engine = create_async_engine(
@@ -325,6 +329,43 @@ async def get_raw_session() -> AsyncGenerator[AsyncSession, None]:
 _admin_ops_engine: AsyncEngine | None = None
 _admin_ops_session_factory: async_sessionmaker[AsyncSession] | None = None
 
+_ADMIN_PRINCIPAL_REQUIREMENTS = (
+    (0, True, "Database principal lacks LOGIN privilege."),
+    (1, False, "Superuser login is strictly forbidden for admin operations."),
+    (2, False, "BypassRLS login is strictly forbidden for admin operations."),
+    (3, False, "CreateRole login is strictly forbidden for admin operations."),
+    (4, False, "CreateDB login is strictly forbidden for admin operations."),
+    (5, True, "Database principal is not a member of c2pro_admin_ops."),
+    (6, False, "Database principal owns dlq_failed_tasks (bypassing RLS)."),
+    (7, False, "Database principal possesses unexpected inherited role memberships."),
+    (8, False, "Database principal owns the current database."),
+    (9, False, "Database principal owns the public schema."),
+    (10, False, "Database principal possesses CREATE privilege on the database."),
+    (11, False, "Database principal possesses CREATE privilege on the public schema."),
+    (12, True, "session_user and current_user must match exactly."),
+    (
+        13,
+        False,
+        "Database principal possesses unexpected direct relation/table/sequence privileges.",
+    ),
+    (14, False, "Database principal possesses unexpected direct column privileges."),
+    (15, False, "Database principal possesses unexpected direct schema privileges."),
+    (16, False, "Database principal possesses unexpected direct database privileges."),
+    (
+        17,
+        False,
+        "Database principal possesses unexpected direct function/procedure privileges.",
+    ),
+    (18, False, "Database principal possesses unexpected direct default ACLs."),
+)
+
+
+def _verify_admin_principal(row: Any) -> None:
+    """Reject an admin database principal that violates any security requirement."""
+    for index, expected, message in _ADMIN_PRINCIPAL_REQUIREMENTS:
+        if bool(row[index]) is not expected:
+            raise RuntimeError(message)
+
 
 async def init_admin_ops_db() -> None:
     """
@@ -346,8 +387,10 @@ async def init_admin_ops_db() -> None:
         )
         return
 
-    if dsn.startswith("postgresql://") and not dsn.startswith("postgresql+asyncpg://"):
-        dsn = dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if dsn.startswith(POSTGRESQL_URL_PREFIX) and not dsn.startswith(
+        ASYNC_POSTGRESQL_URL_PREFIX
+    ):
+        dsn = dsn.replace(POSTGRESQL_URL_PREFIX, ASYNC_POSTGRESQL_URL_PREFIX, 1)
 
     local_engine: AsyncEngine | None = None
     try:
@@ -534,89 +577,7 @@ async def get_admin_ops_session() -> AsyncGenerator[AsyncSession, None]:
         row = result.fetchone()
         if not row:
             raise RuntimeError("Database principal verification failed: current user record not found in pg_roles.")
-        (
-            rolcanlogin,
-            rolsuper,
-            rolbypassrls,
-            rolcreaterole,
-            rolcreatedb,
-            is_member,
-            is_table_owner,
-            has_extra_inherited,
-            is_db_owner,
-            is_schema_owner,
-            has_db_create,
-            has_schema_create,
-            session_user_eq_current_user,
-            has_direct_rel_grants,
-            has_direct_col_grants,
-            has_direct_schema_grants,
-            has_direct_db_grants,
-            has_direct_proc_grants,
-            has_direct_default_acls,
-        ) = row
-        if not rolcanlogin:
-            raise RuntimeError("Database principal lacks LOGIN privilege.")
-        if rolsuper:
-            raise RuntimeError(
-                "Superuser login is strictly forbidden for admin operations."
-            )
-        if rolbypassrls:
-            raise RuntimeError(
-                "BypassRLS login is strictly forbidden for admin operations."
-            )
-        if rolcreaterole:
-            raise RuntimeError(
-                "CreateRole login is strictly forbidden for admin operations."
-            )
-        if rolcreatedb:
-            raise RuntimeError("CreateDB login is strictly forbidden for admin operations.")
-        if not is_member:
-            raise RuntimeError("Database principal is not a member of c2pro_admin_ops.")
-        if is_table_owner:
-            raise RuntimeError("Database principal owns dlq_failed_tasks (bypassing RLS).")
-        if has_extra_inherited:
-            raise RuntimeError(
-                "Database principal possesses unexpected inherited role memberships."
-            )
-        if is_db_owner:
-            raise RuntimeError("Database principal owns the current database.")
-        if is_schema_owner:
-            raise RuntimeError("Database principal owns the public schema.")
-        if has_db_create:
-            raise RuntimeError(
-                "Database principal possesses CREATE privilege on the database."
-            )
-        if has_schema_create:
-            raise RuntimeError(
-                "Database principal possesses CREATE privilege on the public schema."
-            )
-        if not session_user_eq_current_user:
-            raise RuntimeError("session_user and current_user must match exactly.")
-        if has_direct_rel_grants:
-            raise RuntimeError(
-                "Database principal possesses unexpected direct relation/table/sequence privileges."
-            )
-        if has_direct_col_grants:
-            raise RuntimeError(
-                "Database principal possesses unexpected direct column privileges."
-            )
-        if has_direct_schema_grants:
-            raise RuntimeError(
-                "Database principal possesses unexpected direct schema privileges."
-            )
-        if has_direct_db_grants:
-            raise RuntimeError(
-                "Database principal possesses unexpected direct database privileges."
-            )
-        if has_direct_proc_grants:
-            raise RuntimeError(
-                "Database principal possesses unexpected direct function/procedure privileges."
-            )
-        if has_direct_default_acls:
-            raise RuntimeError(
-                "Database principal possesses unexpected direct default ACLs."
-            )
+        _verify_admin_principal(row)
 
         try:
             yield session
