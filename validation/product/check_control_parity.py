@@ -41,6 +41,16 @@ _WBS_IDS = [
     "PWBS-EXEC-REPORTING", "PWBS-OPS-TRUST",
 ]
 
+# Sentinel `next_slice` value (MASTER Decision B, G2 continuation R1): once
+# every P0b code slice is genuinely DONE, there is no next *code* slice left
+# to name, but the vertical is still not PROD_VALIDATED. Naming a fake slice
+# id would invent work that does not exist; leaving next_slice empty would
+# violate the "always name what comes next" invariant. This sentinel lets
+# next_slice truthfully say "code complete, production validation is the
+# only outstanding gate" without either. It is deliberately NOT a slice id
+# (never added to `slice_ids`) so it can never satisfy a real slice lookup.
+NEXT_SLICE_PROD_VALIDATION_PENDING = "PROD_VALIDATION_PENDING"
+
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 def _s(v: object) -> str:
@@ -181,6 +191,15 @@ def validate_enums(doc: dict) -> list[str]:
     next_slice = _s(p0b.get("next_slice", ""))
     if not next_slice:
         problems.append("p0b_vertical_contract: missing 'next_slice' (the current next authorized product action)")
+    elif next_slice == NEXT_SLICE_PROD_VALIDATION_PENDING:
+        open_slices = [
+            _s(sl.get("id")) for sl in (p0b.get("slices") or []) if _s(sl.get("slice_status")) != "DONE"
+        ]
+        if open_slices:
+            problems.append(
+                f"p0b_vertical_contract: 'next_slice'='{NEXT_SLICE_PROD_VALIDATION_PENDING}' claims no "
+                f"code slice remains, but {open_slices} is/are not DONE"
+            )
     elif next_slice not in slice_ids:
         problems.append(f"p0b_vertical_contract: 'next_slice'='{next_slice}' is not a known P0b slice id")
     else:

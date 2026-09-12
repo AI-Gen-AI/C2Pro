@@ -304,6 +304,49 @@ def test_done_next_slice_detected() -> None:
     assert any("already DONE" in p for p in problems), problems
 
 
+def test_prod_validation_pending_sentinel_name_is_stable() -> None:
+    """The sentinel is a named module constant, never a hand-typed literal,
+    so tooling can reference it without guessing the exact string."""
+    assert c.NEXT_SLICE_PROD_VALIDATION_PENDING == "PROD_VALIDATION_PENDING"
+
+
+def test_prod_validation_pending_sentinel_valid_when_all_slices_done() -> None:
+    """When every P0b code slice is DONE, next_slice may name the explicit
+    PROD_VALIDATION_PENDING sentinel instead of a fake slice id -- the
+    validator can represent 'code complete, production validation
+    outstanding' without inventing a slice that does not exist."""
+    doc = c.load_yaml()
+    for sl in doc["p0b_vertical_contract"]["slices"]:
+        sl["slice_status"] = "DONE"
+    doc["p0b_vertical_contract"]["next_slice"] = c.NEXT_SLICE_PROD_VALIDATION_PENDING
+    problems = c.validate_enums(doc)
+    assert problems == [], problems
+
+
+def test_prod_validation_pending_sentinel_rejected_while_a_slice_is_open() -> None:
+    """The sentinel must not be usable as an escape hatch while real code
+    work remains -- refused unless every slice is genuinely DONE. On the
+    real (pristine) YAML, L4-5 is ACTIVE, so this must fail."""
+    doc = c.load_yaml()
+    doc["p0b_vertical_contract"]["next_slice"] = c.NEXT_SLICE_PROD_VALIDATION_PENDING
+    problems = c.validate_enums(doc)
+    assert any("claims no code slice remains" in p for p in problems), problems
+
+
+def test_prod_validation_pending_sentinel_names_the_open_slices() -> None:
+    """The rejection must name which slice(s) are still open, for diagnosability."""
+    doc = c.load_yaml()
+    doc["p0b_vertical_contract"]["next_slice"] = c.NEXT_SLICE_PROD_VALIDATION_PENDING
+    problems = c.validate_enums(doc)
+    assert any("P0b-L4-5" in p for p in problems), problems
+
+
+def test_pristine_next_slice_is_unaffected_by_sentinel_support() -> None:
+    """Adding sentinel support must not change the outcome for the real,
+    unmodified YAML (next_slice='P0b-L4-5', still ACTIVE)."""
+    assert c.validate_enums(c.load_yaml()) == []
+
+
 def test_missing_residual_detected() -> None:
     """Negative: dropping the residual registry must FAIL (open residuals stay explicit)."""
     doc = c.load_yaml()
