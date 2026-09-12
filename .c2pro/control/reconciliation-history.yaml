@@ -1,0 +1,21 @@
+schema: c2pro-reconciliation-history-v1
+schema_version: 1
+completed_work:
+  C2PRO-DEV-02:
+    closure_type: legacy_machine_derived
+    head_sha: f633d5ea22fd4f464b290fe36bc4891563efa1ef
+    branch: feat/c2pro-dev-02-role-authority-v1
+    base_sha: 3fa846d60cecd14239ddb0a953be5e34bede463d
+    pr_url: https://github.com/AI-Gen-AI/C2Pro/pull/564
+    merge_commit_sha: 0400c05e8af1458aaa14bc47a8378d9cdd560284
+    main_sha_after_merge: 32eba9431ddaab198088a09fe9294ae5ecc38318
+    ci_status: success
+    provenance:
+      derived_from:
+      - git_merge_base
+      - github_pull_request_api
+      - github_commit_status_api
+      reason: 'PR #564 merged 2026-08-24, predating the c2pro-implementation-result-v1
+        schema introduced with G1 (PR #597, merged 2026-09-06). No worker result block
+        exists or was fabricated for this closure.'
+    reconciled_at: '2026-09-12T15:43:20.357827+00:00'

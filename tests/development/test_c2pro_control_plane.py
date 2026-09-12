@@ -388,12 +388,13 @@ def test_main_supports_verify_against_git_cli_flag() -> None:
     assert exit_code == 0
 
 
-def test_main_verify_against_git_fails_closed_on_real_drift() -> None:
-    """Regression against the REAL repository: today's live current.yaml
-    baseline is genuinely stale relative to origin/main (this is exactly the
-    drift the G2 minimum plan exists to fix via the pending DEV-02 legacy
-    closure). Until that closure is applied, this check MUST correctly FAIL.
-    Uses the real default git_run_fn -- no fake -- so this is a true
-    end-to-end proof the CLI wiring works against real git."""
+def test_main_verify_against_git_passes_now_that_the_drift_is_reconciled() -> None:
+    """Regression against the REAL repository: current.yaml's baseline was
+    genuinely stale relative to origin/main until the C2PRO-DEV-02 legacy
+    closure (core.legacy_closure) reconciled it -- see
+    .c2pro/control/reconciliation-history.yaml. Uses the real default
+    git_run_fn -- no fake -- so this is a true end-to-end proof the CLI
+    wiring works against real git, and that the drift this check exists to
+    catch is now actually resolved, not merely tolerated."""
     exit_code = validator.main(["--verify-against-git"])
-    assert exit_code == 1
+    assert exit_code == 0
