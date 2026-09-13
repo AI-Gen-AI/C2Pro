@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 # Supported difficulty subdirectories
 DIFFICULTY_DIRS = ["easy", "medium", "hard", "expert"]
+JSON_FILE_PATTERN = "*.json"
 
 # Security limits
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50MB
@@ -139,7 +140,7 @@ class GoldenDatasetLoader:
         for difficulty_dir in DIFFICULTY_DIRS:
             subdir = self.cases_dir / difficulty_dir
             if subdir.is_dir():
-                for case_file in subdir.glob("*.json"):
+                for case_file in subdir.glob(JSON_FILE_PATTERN):
                     try:
                         self._validate_path_within_cases_dir(case_file)
                         case_paths[case_file.stem] = case_file
@@ -151,7 +152,7 @@ class GoldenDatasetLoader:
                         )
 
         # Search in root cases directory (flat structure, backwards compatible)
-        for case_file in self.cases_dir.glob("*.json"):
+        for case_file in self.cases_dir.glob(JSON_FILE_PATTERN):
             if case_file.stem not in case_paths:
                 try:
                     self._validate_path_within_cases_dir(case_file)
@@ -410,7 +411,7 @@ class GoldenDatasetLoader:
         if not subdir.is_dir():
             return cases
 
-        for case_file in sorted(subdir.glob("*.json")):
+        for case_file in sorted(subdir.glob(JSON_FILE_PATTERN)):
             case = self.load_case(case_file.stem)
             if case is not None:
                 cases.append(case)
