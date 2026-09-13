@@ -27,7 +27,7 @@ adr.ADR-024.realization=WIRED
 adr.ADR-024.deployment=NONE
 adr.ADR-024.prod_validation=NONE
 adr.ADR-025.realization=PARTIAL
-adr.ADR-025.deployment=PARTIAL
+adr.ADR-025.deployment=NONE
 adr.ADR-025.prod_validation=NONE
 p0b.done_digest=b43576250582d032
 p0b.invariant_ids=INV-1,INV-UX,INV-COH
@@ -114,7 +114,7 @@ The reconciliation adds **ADR-025 Canonical Project Controls / WBS Backbone** wi
 | ADR-022 Contract Clarity | Accepted | WIRED | DEPLOYED | NOT_VALIDATED | findings path exists; not user/prod validated. |
 | ADR-023 Agentic Coherence | Proposed | DESIGNED | NONE | NONE | roadmap/design only. |
 | ADR-024 Single-document Activation | Accepted | WIRED | NONE | NONE | L4-1..L4-4 code/merge complete; L4-5 active. |
-| **ADR-025 Canonical Project Controls WBS Backbone** | **Accepted** | **PARTIAL** | **PARTIAL** | **NONE** | nested-set WBS exists, but one-root invariant and cross-domain links are not proven. |
+| **ADR-025 Canonical Project Controls WBS Backbone** | **Accepted** | **PARTIAL** | **NONE** | **NONE** | nested-set WBS substrate exists in merged code, but the ADR-025 backbone has no deployment/prod-validation proof; one-root invariant and cross-domain links are not proven. |
 
 For ADR-025, the repository already has meaningful partial substrate: a project-scoped nested-set `wbs_nodes` hierarchy with parent/depth, date and budget fields. What does **not** yet exist as proven product truth is the complete Project Controls backbone: exactly one canonical root/tree, baseline/change governance, and linked Budget/Schedule/Stakeholder/Procurement/Alert/Evidence/Change semantics.
 
