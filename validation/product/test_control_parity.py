@@ -105,7 +105,6 @@ def test_invalid_subtrack_enum_detected() -> None:
     assert any("NOT_AN_ENUM" in p for p in problems), problems
 
 
-
 # ── P0b L4 slice lifecycle + residual registry (schema_version 4) ─────────────
 
 
@@ -216,18 +215,11 @@ def test_r1_records_its_resolution_without_erasing_history() -> None:
     assert res["status"] == "RESOLVED"
     assert res["blocking"] == "NON_BLOCKING"
     assert "6d3a19e41f169d974e9a0d4ea73d1aec7c0bc4cc" in res["resolved_by"]
-    # Historical truth preserved, not rewritten.
     assert "DID block P0b-L4-5" in res["historical_truth"]
 
 
 def test_l4_5_is_active_and_carries_no_blocker_field() -> None:
-    """L4-5 is ACTIVE now that L4-4 is DONE, and it carries NO blocker field at all.
-
-    Same structural principle as schema v5's residual_blocking: something that is not
-    blocked must not carry a blocker line, because a blocker line that outlives its
-    blocker is exactly how control prose drifts. L4-5 was BLOCKED on L4-4 acceptance;
-    that gate closed with #581, so the field is gone rather than left to rot.
-    """
+    """L4-5 is ACTIVE now that L4-4 is DONE, and it carries NO blocker field at all."""
     doc = c.load_yaml()
     slice_45 = next(
         sl for sl in doc["p0b_vertical_contract"]["slices"] if sl["id"] == "P0b-L4-5"
@@ -241,23 +233,12 @@ def test_l4_5_is_active_and_carries_no_blocker_field() -> None:
 
 
 def test_resolved_residual_is_not_the_current_blocker_and_l4_5_is_next() -> None:
-    """ANTI-DRIFT: once R1 is RESOLVED, control truth must stop gating on it.
-
-    Deliberately structured-field only — no prose parsing. Two things must hold
-    together, because a stale narrative can otherwise keep citing a closed residual
-    as the live blocker long after its status flipped:
-
-      1. no RESOLVED residual still carries a blocking edge, and nothing at all
-         currently blocks P0b-L4-5 via the residual registry;
-      2. the current next authorized product action is P0b-L4-5.
-    """
+    """ANTI-DRIFT: once R1 is RESOLVED, control truth must stop gating on it."""
     doc = c.load_yaml()
     p0b = doc["p0b_vertical_contract"]
     r1 = _residual(doc, "P0b-R1-EVIDENCE-GRANULARITY")
 
     assert r1["status"] == "RESOLVED", "fixture drifted: this test guards the RESOLVED state"
-
-    # 1 — a RESOLVED residual cannot be anyone's current blocker.
     for res in p0b["residuals"]:
         if res["status"] == "RESOLVED":
             assert res["blocking"] == "NON_BLOCKING", res["id"]
@@ -266,7 +247,6 @@ def test_resolved_residual_is_not_the_current_blocker_and_l4_5_is_next() -> None
         res["id"] for res in p0b["residuals"] if res.get("blocks") == "P0b-L4-5"
     ], "P0b-L4-5 is still gated by a residual"
 
-    # 2 — the next authorized action is L4-5, and it is real work (not DONE).
     assert p0b["next_slice"] == "P0b-L4-5"
     nxt = next(sl for sl in p0b["slices"] if sl["id"] == p0b["next_slice"])
     assert nxt["slice_status"] == "ACTIVE"
@@ -387,6 +367,53 @@ def test_md_blocking_contradiction_detected() -> None:
     canon = c.extract_canonical(c.load_yaml())
     md = c.parse_md_block(broken)
     assert md[key] != canon[key]
+
+
+# ── Schema v6 Project Controls critical parity ────────────────────────────────
+
+
+def test_project_controls_priority_is_parity_checked() -> None:
+    """#619: P1 priority is canonical machine truth, not unguarded prose."""
+    canon = c.extract_canonical(c.load_yaml())
+    md = c.parse_md_block(_MD_TEXT)
+    key = "wbs.PWBS-PROJECT-CONTROLS.priority"
+    assert canon.get(key) == "P1", canon
+    assert md.get(key) == canon.get(key), (md.get(key), canon.get(key))
+
+
+def test_adr025_lifecycle_is_parity_checked() -> None:
+    """#619: ADR-025 lifecycle cannot drift between YAML and human MASTER."""
+    canon = c.extract_canonical(c.load_yaml())
+    md = c.parse_md_block(_MD_TEXT)
+    expected = {
+        "adr.ADR-025.realization": "PARTIAL",
+        "adr.ADR-025.deployment": "NONE",
+        "adr.ADR-025.prod_validation": "NONE",
+    }
+    for key, value in expected.items():
+        assert canon.get(key) == value, (key, canon.get(key))
+        assert md.get(key) == value, (key, md.get(key))
+
+
+def test_project_controls_invariant_is_parity_checked() -> None:
+    """#619: one-project/one-WBS invariant is guarded as an exact canonical value."""
+    canon = c.extract_canonical(c.load_yaml())
+    md = c.parse_md_block(_MD_TEXT)
+    key = "project_controls.invariant"
+    expected = "one_project_one_canonical_hierarchical_wbs"
+    assert canon.get(key) == expected, canon
+    assert md.get(key) == expected, (md.get(key), expected)
+
+
+def test_canonical_dimensions_are_parity_checked() -> None:
+    """#619: the shared six-dimensional taxonomy cannot silently diverge."""
+    canon = c.extract_canonical(c.load_yaml())
+    md = c.parse_md_block(_MD_TEXT)
+    key = "product_semantics.canonical_dimensions"
+    expected = "SCOPE,BUDGET,TIME,TECHNICAL,LEGAL,QUALITY"
+    assert canon.get(key) == expected, canon
+    assert md.get(key) == expected, (md.get(key), expected)
+
 
 def _all_tests() -> list:
     return [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
