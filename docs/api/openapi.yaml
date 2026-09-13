@@ -5824,8 +5824,13 @@ components:
         processing_status:
           type: string
           title: Processing Status
-          description: User-facing processing status, normalized exactly as the Documents
-            tab shows it.
+          description: Polling status as the documents list API normalizes it (its
+            'parsed' includes analyzed).
+        lifecycle_status:
+          type: string
+          title: Lifecycle Status
+          description: 'Lifecycle state as the Documents tab labels it: uploaded,
+            processing, parsed, analysis_pending, analyzed or error.'
         version:
           type: integer
           title: Version
@@ -5849,6 +5854,7 @@ components:
       - document_type
       - upload_status
       - processing_status
+      - lifecycle_status
       - version
       title: DocumentItem
     DocumentLifecycleStatus:
@@ -6205,6 +6211,11 @@ components:
             type: integer
           type: object
           title: By Processing Status
+        by_lifecycle_status:
+          additionalProperties:
+            type: integer
+          type: object
+          title: By Lifecycle Status
         by_type:
           additionalProperties:
             type: integer
@@ -6213,8 +6224,8 @@ components:
         counts_are_partial:
           type: boolean
           title: Counts Are Partial
-          description: True when by_processing_status/by_type cover only the documents
-            that could be loaded, not total.
+          description: True when by_processing_status/by_lifecycle_status/by_type
+            cover only the documents that could be loaded, not total.
           default: false
         items:
           items:
@@ -6230,6 +6241,7 @@ components:
       required:
       - total
       - by_processing_status
+      - by_lifecycle_status
       - by_type
       - items
       title: DocumentsData
@@ -6672,6 +6684,22 @@ components:
           - type: integer
           - type: 'null'
           title: Parsed Document Count
+          description: Documents whose polling status is 'parsed' (includes analyzed
+            documents).
+        analyzed_document_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Analyzed Document Count
+          description: Documents whose analysis completed; null when document counts
+            are partial.
+        awaiting_analysis_document_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Awaiting Analysis Document Count
+          description: Parsed documents not yet analyzed (parsed or analysis_pending);
+            null when counts are partial.
         health_composite_score:
           anyOf:
           - type: number

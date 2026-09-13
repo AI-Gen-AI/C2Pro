@@ -44,8 +44,10 @@ export interface DocumentItem {
   document_type: string;
   /** Raw document lifecycle status as stored. */
   upload_status: string;
-  /** User-facing processing status, normalized exactly as the Documents tab shows it. */
+  /** Polling status as the documents list API normalizes it (its 'parsed' includes analyzed). */
   processing_status: string;
+  /** Lifecycle state as the Documents tab labels it: uploaded, processing, parsed, analysis_pending, analyzed or error. */
+  lifecycle_status: string;
   version: number;
   uploaded_at?: string | null;
   parsed_at?: string | null;

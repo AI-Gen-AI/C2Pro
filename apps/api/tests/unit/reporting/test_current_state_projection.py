@@ -18,6 +18,7 @@ from src.alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
 from src.alerts.domain.models import Alert
 from src.coherence.models import DashboardSummary
 from src.documents.adapters.http.router import _normalize_document_status_for_polling
+from src.documents.application.dtos import document_lifecycle_status
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewItem, ReviewStatus
 from src.procurement.application.budget_use_cases import BudgetItemResponse, BudgetResponse
@@ -400,6 +401,7 @@ def test_documents_counts_by_processing_status_and_type() -> None:
     assert section.data is not None
     assert section.data.total == 2
     assert section.data.by_processing_status == {"parsed": 1, "error": 1}
+    assert section.data.by_lifecycle_status == {"parsed": 1, "error": 1}
     assert section.data.by_type == {"contract": 1, "budget": 1}
     assert [item.filename for item in section.data.items] == ["Budget.xlsx", "Contract.pdf"]
     assert section.source_as_of == GENERATED_AT - timedelta(days=1)
@@ -423,6 +425,62 @@ def test_executive_summary_counts_processed_and_failed_documents_as_the_document
     assert summary.data.parsed_document_count == 1
     failed = [item for item in summary.data.attention_items if item.kind == "documents_failed"]
     assert [item.message for item in failed] == ["1 document(s) failed processing."]
+    # F-DOC-1: the lifecycle keeps analyzed and awaiting-analysis apart.
+    assert documents.data.by_lifecycle_status == {"analyzed": 1, "analysis_pending": 1, "uploaded": 1, "error": 1}
+    assert summary.data.analyzed_document_count == 1
+    assert summary.data.awaiting_analysis_document_count == 1
+    awaiting = [item for item in summary.data.attention_items if item.kind == "documents_awaiting_analysis"]
+    assert [(item.level, item.section_key, item.message) for item in awaiting] == [
+        (
+            "info",
+            "documents",
+            "1 document(s) are parsed but not analyzed; alerts, coherence and health do not reflect their content yet.",
+        )
+    ]
+
+
+def test_executive_summary_lifecycle_counts_are_unknown_when_documents_are_partially_loaded() -> None:
+    docs = [_document(filename="A.pdf", upload_status=DocumentStatus.ANALYZED)]
+    summary = _report(documents=SourceOk(DocumentsInput(documents=docs, total=3))).sections.executive_summary
+    assert summary.data is not None
+    assert summary.data.analyzed_document_count is None
+    assert summary.data.awaiting_analysis_document_count is None
+
+
+def test_no_awaiting_analysis_attention_when_every_document_is_analyzed() -> None:
+    docs = [_document(filename="A.pdf", upload_status=DocumentStatus.ANALYZED)]
+    summary = _report(documents=SourceOk(DocumentsInput(documents=docs, total=1))).sections.executive_summary
+    assert summary.data is not None
+    assert summary.data.awaiting_analysis_document_count == 0
+    assert not [item for item in summary.data.attention_items if item.kind == "documents_awaiting_analysis"]
+
+
+def test_executive_summary_lifecycle_counts_are_zero_for_a_project_without_documents() -> None:
+    summary = _report(documents=SourceOk(DocumentsInput(documents=[], total=0))).sections.executive_summary
+    assert summary.data is not None
+    assert summary.data.analyzed_document_count == 0
+    assert summary.data.awaiting_analysis_document_count == 0
+
+
+def test_document_attention_says_at_least_when_only_some_documents_were_loaded() -> None:
+    docs = [
+        _document(filename="A.pdf", upload_status=DocumentStatus.ERROR),
+        _document(filename="B.pdf", upload_status=DocumentStatus.PARSED_PENDING_ANALYSIS),
+    ]
+    summary = _report(documents=SourceOk(DocumentsInput(documents=docs, total=9))).sections.executive_summary
+    assert summary.data is not None
+    messages = {
+        item.kind: item.message
+        for item in summary.data.attention_items
+        if item.kind in {"documents_failed", "documents_awaiting_analysis"}
+    }
+    assert messages == {
+        "documents_failed": "At least 1 document(s) failed processing.",
+        "documents_awaiting_analysis": (
+            "At least 1 document(s) are parsed but not analyzed; "
+            "alerts, coherence and health do not reflect their content yet."
+        ),
+    }
 
 
 def test_documents_empty_is_empty_not_zero_available() -> None:
@@ -674,6 +732,9 @@ def test_document_processing_status_matches_the_documents_tab(status: DocumentSt
     assert section.data.items[0].processing_status == expected
     assert section.data.items[0].upload_status == status.value
     assert section.data.by_processing_status == {expected: 1}
+    lifecycle = document_lifecycle_status(status).value
+    assert section.data.items[0].lifecycle_status == lifecycle
+    assert section.data.by_lifecycle_status == {lifecycle: 1}
 
 
 def test_stakeholders_evidence_tiers_and_quadrants() -> None:

@@ -43,6 +43,8 @@ export function buildCurrentStateReport(): CurrentStateReport {
           ],
           document_count: 45,
           parsed_document_count: null,
+          analyzed_document_count: null,
+          awaiting_analysis_document_count: null,
           health_composite_score: null,
           health_composite_band: "unknown",
           error_section_keys: ["wbs"],
@@ -60,6 +62,7 @@ export function buildCurrentStateReport(): CurrentStateReport {
         data: {
           total: 45,
           by_processing_status: { parsed: 20 },
+          by_lifecycle_status: { analyzed: 20 },
           by_type: { contract: 20 },
           counts_are_partial: true,
           items: [
@@ -69,6 +72,7 @@ export function buildCurrentStateReport(): CurrentStateReport {
               document_type: "contract",
               upload_status: "analyzed",
               processing_status: "parsed",
+              lifecycle_status: "analyzed",
               version: 2,
               uploaded_at: "2026-09-10T10:00:00Z",
               parsed_at: "2026-09-10T10:05:00Z",

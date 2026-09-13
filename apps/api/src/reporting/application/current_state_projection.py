@@ -19,7 +19,12 @@ from pydantic import ValidationError
 
 from src.alerts.domain.enums import AlertSeverity, AlertStatus
 from src.alerts.domain.models import Alert
-from src.documents.application.dtos import DocumentPollingStatus
+from src.documents.application.dtos import (
+    DocumentLifecycleStatus,
+    DocumentPollingStatus,
+    document_lifecycle_status,
+)
+from src.documents.domain.models import DocumentStatus
 from src.health.domain.health_vector import HealthVector
 from src.reporting.application.ports import (
     CurrentStateInputs,
@@ -223,6 +228,14 @@ def _processing_status(upload_status: object) -> str:
     return _PROCESSING_STATUS_BY_UPLOAD_STATUS.get(_value(upload_status), DocumentPollingStatus.PROCESSING.value)
 
 
+def _lifecycle_status(upload_status: object) -> str:
+    """The Documents tab's lifecycle label key; an unknown stored status is an error, not a guess."""
+    return document_lifecycle_status(DocumentStatus(_value(upload_status))).value
+
+
+_AWAITING_ANALYSIS = (DocumentLifecycleStatus.PARSED.value, DocumentLifecycleStatus.ANALYSIS_PENDING.value)
+
+
 def project_documents(result: Any) -> DocumentsSection:
     domain = "documents"
     if not isinstance(result, SourceOk):
@@ -243,6 +256,7 @@ def project_documents(result: Any) -> DocumentsSection:
             document_type=_value(document.document_type),
             upload_status=_value(document.upload_status),
             processing_status=_processing_status(document.upload_status),
+            lifecycle_status=_lifecycle_status(document.upload_status),
             version=document.version,
             uploaded_at=_as_utc(document.created_at) if document.created_at else None,
             parsed_at=_as_utc(document.parsed_at) if document.parsed_at else None,
@@ -258,6 +272,7 @@ def project_documents(result: Any) -> DocumentsSection:
         data=DocumentsData(
             total=total,
             by_processing_status=dict(Counter(_processing_status(document.upload_status) for document in documents)),
+            by_lifecycle_status=dict(Counter(_lifecycle_status(document.upload_status) for document in documents)),
             by_type=dict(Counter(_value(document.document_type) for document in documents)),
             counts_are_partial=total > len(documents),
             items=items,
@@ -866,13 +881,33 @@ def project_executive_summary(
             )
         )
 
+    # Counts over only the documents that could be loaded are a lower bound, and say so.
+    at_least = "At least " if documents.data is not None and documents.data.counts_are_partial else ""
     failed_documents = documents.data.by_processing_status.get(DocumentPollingStatus.ERROR.value, 0) if documents.data is not None else 0
     if failed_documents:
         attention.append(
             AttentionItem(
                 kind="documents_failed",
                 level=AttentionLevel.WARNING,
-                message=f"{failed_documents} document(s) failed processing.",
+                message=f"{at_least}{failed_documents} document(s) failed processing.",
+                section_key="documents",
+            )
+        )
+
+    awaiting_documents = (
+        sum(documents.data.by_lifecycle_status.get(key, 0) for key in _AWAITING_ANALYSIS)
+        if documents.data is not None
+        else 0
+    )
+    if awaiting_documents:
+        attention.append(
+            AttentionItem(
+                kind="documents_awaiting_analysis",
+                level=AttentionLevel.INFO,
+                message=(
+                    f"{at_least}{awaiting_documents} document(s) are parsed but not analyzed; "
+                    "alerts, coherence and health do not reflect their content yet."
+                ),
                 section_key="documents",
             )
         )
@@ -912,13 +947,19 @@ def project_executive_summary(
 
     document_count: int | None = None
     parsed_count: int | None = None
+    analyzed_count: int | None = None
+    awaiting_count: int | None = None
     if documents.data is not None:
         document_count = documents.data.total
         if not documents.data.counts_are_partial:
             parsed_count = documents.data.by_processing_status.get(DocumentPollingStatus.PARSED.value, 0)
+            analyzed_count = documents.data.by_lifecycle_status.get(DocumentLifecycleStatus.ANALYZED.value, 0)
+            awaiting_count = awaiting_documents
     elif documents.status is SectionStatus.EMPTY:
         document_count = 0
         parsed_count = 0
+        analyzed_count = 0
+        awaiting_count = 0
 
     return ExecutiveSummarySection(
         status=SectionStatus.AVAILABLE,
@@ -929,6 +970,8 @@ def project_executive_summary(
             attention_items=attention,
             document_count=document_count,
             parsed_document_count=parsed_count,
+            analyzed_document_count=analyzed_count,
+            awaiting_analysis_document_count=awaiting_count,
             health_composite_score=health.data.composite_score if health.data is not None else None,
             health_composite_band=health.data.composite_band if health.data is not None else None,
             error_section_keys=error_keys,

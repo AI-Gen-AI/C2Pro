@@ -164,7 +164,10 @@ function detailRows(key: SectionKey, sections: Sections): CsvRow[] {
       if (!data) return [];
       return [
         metric("document_count", data.document_count),
-        metric("parsed_document_count", data.parsed_document_count),
+        // Lifecycle counts only: the polling "parsed" count includes analyzed documents and a
+        // spreadsheet cannot carry that distinction (the JSON export keeps every field).
+        metric("analyzed_document_count", data.analyzed_document_count),
+        metric("awaiting_analysis_document_count", data.awaiting_analysis_document_count),
         metric("health_composite_score", data.health_composite_score),
         metric("health_composite_band", data.health_composite_band),
         ...data.attention_items.map((entry) =>
@@ -179,7 +182,7 @@ function detailRows(key: SectionKey, sections: Sections): CsvRow[] {
         metric("total", data.total),
         metric("counts_are_partial", data.counts_are_partial),
         metric("truncated", data.truncated),
-        ...counts("by_processing_status", data.by_processing_status),
+        ...counts("by_lifecycle_status", data.by_lifecycle_status),
         ...counts("by_type", data.by_type),
         ...data.items.map((document) =>
           item({
@@ -187,7 +190,7 @@ function detailRows(key: SectionKey, sections: Sections): CsvRow[] {
             record_label: document.filename,
             field: "document_type",
             value: document.document_type,
-            record_status: document.processing_status,
+            record_status: document.lifecycle_status,
             record_source_ref: document.id,
           }),
         ),

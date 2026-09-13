@@ -37,18 +37,5 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { DocumentItem } from "./documentItem";
-import type { DocumentsDataByLifecycleStatus } from "./documentsDataByLifecycleStatus";
-import type { DocumentsDataByProcessingStatus } from "./documentsDataByProcessingStatus";
-import type { DocumentsDataByType } from "./documentsDataByType";
 
-export interface DocumentsData {
-  total: number;
-  by_processing_status: DocumentsDataByProcessingStatus;
-  by_lifecycle_status: DocumentsDataByLifecycleStatus;
-  by_type: DocumentsDataByType;
-  /** True when by_processing_status/by_lifecycle_status/by_type cover only the documents that could be loaded, not total. */
-  counts_are_partial?: boolean;
-  items: DocumentItem[];
-  truncated?: boolean;
-}
+export type DocumentsDataByLifecycleStatus = { [key: string]: number };

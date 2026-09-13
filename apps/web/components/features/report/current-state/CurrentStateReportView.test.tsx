@@ -57,7 +57,7 @@ describe("CurrentStateReportView", () => {
   it("explains a document count whose processing status is only partially known", () => {
     renderReport();
     expect(screen.getByTestId("executive-summary")).toHaveTextContent(
-      "45 uploaded (processing status partially loaded)",
+      "45 uploaded (document status partially loaded)",
     );
   });
 
@@ -192,7 +192,7 @@ describe("CurrentStateReportView", () => {
     expect(within(section("health")).getByTestId("section-source")).toHaveTextContent("snapshot 7e1d2c3b");
   });
 
-  it("labels document processing status in the Documents tab's words without claiming analysis", () => {
+  it("labels documents by lifecycle, keeping analyzed, awaiting analysis and parsed apart", () => {
     const report = buildCurrentStateReport();
     const documents = report.sections.documents;
     renderReport({
@@ -202,20 +202,44 @@ describe("CurrentStateReportView", () => {
         documents: {
           ...documents,
           data: documents.data
-            ? { ...documents.data, by_processing_status: { parsed: 20, queued: 3, processing: 1, error: 2 } }
+            ? {
+                ...documents.data,
+                by_lifecycle_status: { analyzed: 12, analysis_pending: 5, parsed: 3, uploaded: 3, processing: 1, error: 2 },
+              }
             : documents.data,
         },
       },
     });
     const card = section("documents");
-    expect(card).toHaveTextContent("Contract · Processed");
-    expect(card).toHaveTextContent("Processed: 20");
+    expect(card).toHaveTextContent("Contract · Analyzed");
+    expect(card).toHaveTextContent("Analyzed: 12");
+    expect(card).toHaveTextContent("Analysis pending: 5");
+    expect(card).toHaveTextContent("Parsed: 3");
     expect(card).toHaveTextContent("Uploaded: 3");
     expect(card).toHaveTextContent("Processing: 1");
     expect(card).toHaveTextContent("Error: 2");
-    expect(card).not.toHaveTextContent("Analyzed");
+    expect(card).not.toHaveTextContent("Processed");
     expect(card).not.toHaveTextContent("Queued");
-    expect(card).not.toHaveTextContent("Parsed");
+  });
+
+  it("states how many documents are analyzed and how many await analysis", () => {
+    const report = buildCurrentStateReport();
+    const summary = report.sections.executive_summary;
+    renderReport({
+      ...report,
+      sections: {
+        ...report.sections,
+        executive_summary: {
+          ...summary,
+          data: summary.data
+            ? { ...summary.data, document_count: 20, analyzed_document_count: 12, awaiting_analysis_document_count: 8 }
+            : summary.data,
+        },
+      },
+    });
+    const card = screen.getByTestId("executive-summary");
+    expect(card).toHaveTextContent("20 uploaded · 12 analyzed · 8 awaiting analysis");
+    expect(card).not.toHaveTextContent("processed");
   });
 
   it("describes the WBS tab's items with coverage and per-item evidence strength", () => {

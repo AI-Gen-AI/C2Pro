@@ -113,14 +113,20 @@ function ExecutiveSummary({ sections }: { sections: Sections }) {
   ].filter((group) => group.keys.length > 0);
 
   const documentCount = summary.document_count;
-  const parsedCount = summary.parsed_document_count;
+  const analyzedCount = summary.analyzed_document_count;
+  const awaitingCount = summary.awaiting_analysis_document_count;
   let documentsFact: string;
   if (documentCount === null || documentCount === undefined) {
     documentsFact = "Unknown";
-  } else if (parsedCount === null || parsedCount === undefined) {
-    documentsFact = `${documentCount} uploaded (processing status partially loaded)`;
+  } else if (
+    analyzedCount === null ||
+    analyzedCount === undefined ||
+    awaitingCount === null ||
+    awaitingCount === undefined
+  ) {
+    documentsFact = `${documentCount} uploaded (document status partially loaded)`;
   } else {
-    documentsFact = `${documentCount} uploaded · ${parsedCount} processed`;
+    documentsFact = `${documentCount} uploaded · ${analyzedCount} analyzed · ${awaitingCount} awaiting analysis`;
   }
 
   return (
@@ -320,7 +326,7 @@ function DocumentsBody({ data }: { data: SectionData<"documents"> }) {
       <p>
         <span className="text-lg font-semibold">{data.total}</span> document(s)
       </p>
-      <Counts counts={data.by_processing_status} label={documentStatusLabel} />
+      <Counts counts={data.by_lifecycle_status} label={documentStatusLabel} />
       {data.counts_are_partial ? (
         <Note testId="partial-note">Counts cover the documents that could be loaded, not all {data.total}.</Note>
       ) : null}
@@ -329,7 +335,7 @@ function DocumentsBody({ data }: { data: SectionData<"documents"> }) {
           <li key={document.id} className="flex flex-wrap justify-between gap-2 py-1.5">
             <span className="font-medium">{document.filename}</span>
             <span className="text-muted-foreground">
-              {humanize(document.document_type)} · {documentStatusLabel(document.processing_status)}
+              {humanize(document.document_type)} · {documentStatusLabel(document.lifecycle_status)}
               {document.version > 1 ? ` · v${document.version}` : ""}
             </span>
           </li>

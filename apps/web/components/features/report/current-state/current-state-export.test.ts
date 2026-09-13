@@ -161,11 +161,16 @@ describe("buildCurrentStateCsv", () => {
     expect(budget?.source_as_of_state).toBe("null");
   });
 
-  it("exports document rows with the user-facing processing status", () => {
+  it("exports document rows with the lifecycle status and lifecycle counts", () => {
     const rows = csvRows();
     const document = rows.find((row) => row.section === "documents" && row.record_type === "item");
-    expect(document?.record_status).toBe("parsed");
-    expect(rows.some((row) => row.section === "documents" && row.field === "by_processing_status.parsed")).toBe(true);
+    expect(document?.record_status).toBe("analyzed");
+    expect(rows.some((row) => row.section === "documents" && row.field === "by_lifecycle_status.analyzed")).toBe(true);
+    const summaryFields = rows.filter((row) => row.section === "executive_summary").map((row) => row.field);
+    expect(summaryFields).toEqual(expect.arrayContaining(["analyzed_document_count", "awaiting_analysis_document_count"]));
+    // A spreadsheet cannot carry the polling-vs-lifecycle distinction: only lifecycle counts are exported.
+    expect(summaryFields).not.toContain("parsed_document_count");
+    expect(rows.some((row) => row.section === "documents" && row.field.startsWith("by_processing_status."))).toBe(false);
   });
 
   it("exports the WBS item summary with per-item evidence tiers", () => {

@@ -42,7 +42,12 @@ import type { AttentionItem } from "./attentionItem";
 export interface ExecutiveSummaryData {
   attention_items: AttentionItem[];
   document_count?: number | null;
+  /** Documents whose polling status is 'parsed' (includes analyzed documents). */
   parsed_document_count?: number | null;
+  /** Documents whose analysis completed; null when document counts are partial. */
+  analyzed_document_count?: number | null;
+  /** Parsed documents not yet analyzed (parsed or analysis_pending); null when counts are partial. */
+  awaiting_analysis_document_count?: number | null;
   health_composite_score?: number | null;
   health_composite_band?: string | null;
   error_section_keys: string[];

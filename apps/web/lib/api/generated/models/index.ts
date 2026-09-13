@@ -144,6 +144,7 @@ export * from "./documentQueuedResponse";
 export * from "./documentRelationshipExplanationResponse";
 export * from "./documentResponse";
 export * from "./documentsData";
+export * from "./documentsDataByLifecycleStatus";
 export * from "./documentsDataByProcessingStatus";
 export * from "./documentsDataByType";
 export * from "./documentsSection";

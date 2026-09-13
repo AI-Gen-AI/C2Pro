@@ -108,7 +108,13 @@ class DocumentItem(BaseModel):
     document_type: str
     upload_status: str = Field(description="Raw document lifecycle status as stored.")
     processing_status: str = Field(
-        description="User-facing processing status, normalized exactly as the Documents tab shows it."
+        description="Polling status as the documents list API normalizes it (its 'parsed' includes analyzed)."
+    )
+    lifecycle_status: str = Field(
+        description=(
+            "Lifecycle state as the Documents tab labels it: uploaded, processing, parsed, "
+            "analysis_pending, analyzed or error."
+        )
     )
     version: int
     uploaded_at: datetime | None = None
@@ -120,10 +126,14 @@ class DocumentsData(BaseModel):
 
     total: int
     by_processing_status: dict[str, int]
+    by_lifecycle_status: dict[str, int]
     by_type: dict[str, int]
     counts_are_partial: bool = Field(
         default=False,
-        description="True when by_processing_status/by_type cover only the documents that could be loaded, not total.",
+        description=(
+            "True when by_processing_status/by_lifecycle_status/by_type cover only the documents "
+            "that could be loaded, not total."
+        ),
     )
     items: list[DocumentItem]
     truncated: bool = False
@@ -476,7 +486,16 @@ class ExecutiveSummaryData(BaseModel):
 
     attention_items: list[AttentionItem]
     document_count: int | None = None
-    parsed_document_count: int | None = None
+    parsed_document_count: int | None = Field(
+        default=None, description="Documents whose polling status is 'parsed' (includes analyzed documents)."
+    )
+    analyzed_document_count: int | None = Field(
+        default=None, description="Documents whose analysis completed; null when document counts are partial."
+    )
+    awaiting_analysis_document_count: int | None = Field(
+        default=None,
+        description="Parsed documents not yet analyzed (parsed or analysis_pending); null when counts are partial.",
+    )
     health_composite_score: float | None = None
     health_composite_band: str | None = None
     error_section_keys: list[str]

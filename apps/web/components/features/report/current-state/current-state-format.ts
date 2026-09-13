@@ -71,14 +71,15 @@ export const LEVEL_CLASSES: Record<string, string> = {
 };
 
 /**
- * Document processing status in the Documents tab's words. The tab calls the parsed bucket
- * "Analyzed", but that bucket includes documents whose analysis has not run, so the report
- * says "Processed" rather than claiming analysis.
+ * Document lifecycle in the Documents tab's words. "Analyzed" is used only for documents whose
+ * analysis completed; parsed and analysis-pending documents are named as such.
  */
 export const DOCUMENT_STATUS_LABELS: Record<string, string> = {
-  queued: "Uploaded",
+  uploaded: "Uploaded",
   processing: "Processing",
-  parsed: "Processed",
+  parsed: "Parsed",
+  analysis_pending: "Analysis pending",
+  analyzed: "Analyzed",
   error: "Error",
 };
 
