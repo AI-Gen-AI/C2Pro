@@ -677,7 +677,7 @@ def project_raci(result: Any) -> RaciSection:
     rows = list(result.value.matrix)
     if not rows:
         return _without_data(
-            RaciSection, domain, SectionStatus.EMPTY, "No WBS tasks with RACI assignments exist yet."
+            RaciSection, domain, SectionStatus.EMPTY, "No WBS tasks exist yet, so there is no RACI matrix."
         )
 
     tasks: list[RaciTaskItem] = []
@@ -823,6 +823,7 @@ def project_executive_summary(
     alerts: AlertsSection,
     hitl: HitlSection,
     missing_evidence: MissingEvidenceSection,
+    raci: RaciSection,
 ) -> ExecutiveSummarySection:
     attention: list[AttentionItem] = []
 
@@ -911,6 +912,33 @@ def project_executive_summary(
                 section_key="documents",
             )
         )
+
+    # An accountability gap on a WBS task is a governance risk; unknown RACI is not a gap.
+    if raci.data is not None and raci.data.tasks_without_accountable:
+        if raci.data.assignment_count == 0:
+            attention.append(
+                AttentionItem(
+                    kind="raci_not_started",
+                    level=AttentionLevel.WARNING,
+                    message=(
+                        "No RACI assignments exist yet; none of the "
+                        f"{raci.data.task_count} WBS task(s) has an accountable party."
+                    ),
+                    section_key="raci",
+                )
+            )
+        else:
+            attention.append(
+                AttentionItem(
+                    kind="raci_tasks_without_accountable",
+                    level=AttentionLevel.WARNING,
+                    message=(
+                        f"{raci.data.tasks_without_accountable} WBS task(s) have no accountable party "
+                        "in the RACI matrix."
+                    ),
+                    section_key="raci",
+                )
+            )
 
     if health.data is not None:
         unknown = sum(1 for dimension in health.data.dimensions if dimension.score is None)
@@ -1045,6 +1073,7 @@ def assemble_current_state_report(
             alerts=alerts,
             hitl=hitl,
             missing_evidence=missing_evidence,
+            raci=raci,
         ),
         documents=documents,
         health=health,
