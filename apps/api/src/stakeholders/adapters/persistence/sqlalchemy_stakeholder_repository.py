@@ -120,8 +120,8 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
             generated_automatically=assignment.generated_automatically,
             manually_verified=assignment.manually_verified,
             verified_by=assignment.verified_by,
-            verified_at=assignment.verified_at,
-            created_at=assignment.created_at,
+            verified_at=self._normalize_naive_utc(assignment.verified_at),
+            created_at=self._normalize_naive_utc(assignment.created_at),
         )
 
     async def add(self, stakeholder: Stakeholder, tenant_id: UUID) -> None:
@@ -327,7 +327,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         orm.generated_automatically = assignment.generated_automatically
         orm.manually_verified = assignment.manually_verified
         orm.verified_by = assignment.verified_by
-        orm.verified_at = assignment.verified_at
+        orm.verified_at = self._normalize_naive_utc(assignment.verified_at)
         await self.session.flush()
 
     async def commit(self) -> None:

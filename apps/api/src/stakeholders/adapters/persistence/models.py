@@ -186,7 +186,11 @@ class StakeholderWBSRaciORM(Base):
     )
 
     # RACI Role
-    raci_role: Mapped[RACIRole] = mapped_column(SQLEnum(RACIRole), nullable=False, index=True)
+    raci_role: Mapped[RACIRole] = mapped_column(
+        SQLEnum(RACIRole, values_callable=lambda obj: [e.value for e in obj]),
+        nullable=False,
+        index=True,
+    )
 
     # Evidence
     evidence_text: Mapped[str | None] = mapped_column(Text, nullable=True)

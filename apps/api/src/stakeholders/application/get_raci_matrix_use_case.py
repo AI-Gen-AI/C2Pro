@@ -3,9 +3,11 @@ Use case for building the RACI matrix view for a project.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from src.core.tenants.types import require_tenant_id
+from src.procurement.domain.models import WBSItem
 from src.procurement.ports.wbs_repository import IWBSRepository
 from src.projects.ports.project_repository import ProjectRepository
 from src.stakeholders.application.dtos import (
@@ -22,6 +24,12 @@ ROLE_LABELS = {
     RACIRole.CONSULTED: "CONSULTED",
     RACIRole.INFORMED: "INFORMED",
 }
+
+
+def _schedule_order(item: WBSItem) -> tuple[bool, datetime | None, str, str]:
+    """Dated tasks first in schedule order; undated tasks follow, ordered by code."""
+    anchor = item.planned_start or item.planned_end or item.actual_start or item.actual_end
+    return (anchor is None, anchor, item.code, item.name)
 
 
 class GetRaciMatrixUseCase:
@@ -67,14 +75,7 @@ class GetRaciMatrixUseCase:
                 )
             )
 
-        ordered_wbs_items = sorted(
-            wbs_items,
-            key=lambda item: (
-                item.planned_start or item.planned_end or item.actual_start or item.actual_end,
-                item.code,
-                item.name,
-            ),
-        )
+        ordered_wbs_items = sorted(wbs_items, key=_schedule_order)
 
         matrix = [
             RaciMatrixTaskRow(
