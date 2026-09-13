@@ -37,16 +37,17 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { BudgetInput } from "./budgetInput";
+import type { ProjectWBSCoverage } from "./projectWBSCoverage";
+import type { ProjectWBSNode } from "./projectWBSNode";
+import type { ProjectWBSResponseAlertsItem } from "./projectWBSResponseAlertsItem";
 
 /**
- * Input model for updating a WBS item.
+ * Authoritative WBS contract: root items with nested children (procurement WBS store).
  */
-export interface UpdateWBSItemInput {
-  name?: string | null;
-  description?: string | null;
-  start_date?: string | null;
-  end_date?: string | null;
-  budget?: BudgetInput | null;
-  completion?: number | null;
+export interface ProjectWBSResponse {
+  project_id: string;
+  items: ProjectWBSNode[];
+  coverage: ProjectWBSCoverage;
+  alerts: ProjectWBSResponseAlertsItem[];
+  total_items: number;
 }

@@ -1136,6 +1136,49 @@ async def get_project_budget(
     }
 
 
+class ProjectWBSNode(BaseModel):
+    """A procurement WBS item as served by GET /projects/{project_id}/wbs, with its subtree."""
+
+    id: str
+    project_id: str
+    code: str
+    name: str
+    level: int
+    description: str | None = None
+    parent_code: str | None = None
+    item_type: str | None = None
+    budget_allocated: float | None = None
+    budget_spent: float
+    planned_start: str | None = Field(None, description="ISO 8601 timestamp as stored")
+    planned_end: str | None = Field(None, description="ISO 8601 timestamp as stored")
+    actual_start: str | None = Field(None, description="ISO 8601 timestamp as stored")
+    actual_end: str | None = Field(None, description="ISO 8601 timestamp as stored")
+    source_clause_id: str | None = None
+    version: int
+    metadata: dict[str, Any]
+    children: list["ProjectWBSNode"]
+
+
+class ProjectWBSCoverage(BaseModel):
+    """Evidence coverage over every WBS item of the project (not only roots)."""
+
+    total_items: int
+    items_with_budget: int
+    items_with_dates: int
+    items_with_alerts: int
+    completion_average: float
+
+
+class ProjectWBSResponse(BaseModel):
+    """Authoritative WBS contract: root items with nested children (procurement WBS store)."""
+
+    project_id: str
+    items: list[ProjectWBSNode]
+    coverage: ProjectWBSCoverage
+    alerts: list[dict[str, Any]]
+    total_items: int
+
+
 def _serialize_wbs_item_tree(item: WBSItem) -> dict[str, object]:
     """TS-E2E-FLW-BLK-001: serialize procurement WBS domain rows as a hierarchy."""
     return {
@@ -1186,6 +1229,7 @@ def _build_wbs_coverage(items: Sequence[object]) -> dict[str, object]:
 
 @router.get(
     "/{project_id}/wbs",
+    response_model=ProjectWBSResponse,
     summary="Get Project WBS Tree",
     description="""
     Returns WBS (Work Breakdown Structure) tree for a project.

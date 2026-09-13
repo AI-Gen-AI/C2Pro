@@ -37,10 +37,32 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { ProjectWBSNodeMetadata } from "./projectWBSNodeMetadata";
 
-export type DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams = {
-  /**
-   * Delete item and all descendants
-   */
-  cascade?: boolean;
-};
+/**
+ * A procurement WBS item as served by GET /projects/{project_id}/wbs, with its subtree.
+ */
+export interface ProjectWBSNode {
+  id: string;
+  project_id: string;
+  code: string;
+  name: string;
+  level: number;
+  description?: string | null;
+  parent_code?: string | null;
+  item_type?: string | null;
+  budget_allocated?: number | null;
+  budget_spent: number;
+  /** ISO 8601 timestamp as stored */
+  planned_start?: string | null;
+  /** ISO 8601 timestamp as stored */
+  planned_end?: string | null;
+  /** ISO 8601 timestamp as stored */
+  actual_start?: string | null;
+  /** ISO 8601 timestamp as stored */
+  actual_end?: string | null;
+  source_clause_id?: string | null;
+  version: number;
+  metadata: ProjectWBSNodeMetadata;
+  children: ProjectWBSNode[];
+}

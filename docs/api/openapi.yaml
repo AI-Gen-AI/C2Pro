@@ -973,13 +973,12 @@ paths:
   /api/v1/projects/{project_id}/wbs:
     get:
       tags:
-      - wbs
-      summary: Get Wbs
-      description: 'Get WBS items for a project.
-
-
-        Returns all WBS items with their hierarchy and coverage information.'
-      operationId: get_wbs_api_v1_projects__project_id__wbs_get
+      - projects
+      summary: Get Project WBS Tree
+      description: "Returns WBS (Work Breakdown Structure) tree for a project.\n\n\
+        \    Uses procurement WBS items for real data.\n\n    Returns:\n    - Hierarchical\
+        \ WBS tree with children"
+      operationId: get_project_wbs_api_v1_projects__project_id__wbs_get
       security:
       - HTTPBearer: []
       parameters:
@@ -988,6 +987,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
           title: Project Id
       responses:
         '200':
@@ -995,7 +995,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WBSOutput'
+                $ref: '#/components/schemas/ProjectWBSResponse'
         '422':
           description: Validation Error
           content:
@@ -3119,218 +3119,6 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
-  /api/v1/projects/{project_id}/wbs/items:
-    post:
-      tags:
-      - wbs
-      summary: Create Wbs Item
-      description: 'Create a new WBS item.
-
-
-        Auto-generates code if not provided.'
-      operationId: create_wbs_item_api_v1_projects__project_id__wbs_items_post
-      security:
-      - HTTPBearer: []
-      parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Project Id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateWBSItemInput'
-      responses:
-        '201':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WBSItemOutput'
-        '404':
-          description: Not Found
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/projects/{project_id}/wbs/items/{item_id}:
-    patch:
-      tags:
-      - wbs
-      summary: Update Wbs Item
-      description: 'Update a WBS item.
-
-
-        Partial update - only provided fields are updated.'
-      operationId: update_wbs_item_api_v1_projects__project_id__wbs_items__item_id__patch
-      security:
-      - HTTPBearer: []
-      parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Project Id
-      - name: item_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Item Id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateWBSItemInput'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WBSItemOutput'
-        '404':
-          description: Not Found
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-    delete:
-      tags:
-      - wbs
-      summary: Delete Wbs Item
-      description: 'Delete a WBS item.
-
-
-        Requires cascade=True if the item has children.'
-      operationId: delete_wbs_item_api_v1_projects__project_id__wbs_items__item_id__delete
-      security:
-      - HTTPBearer: []
-      parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Project Id
-      - name: item_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Item Id
-      - name: cascade
-        in: query
-        required: false
-        schema:
-          type: boolean
-          description: Delete item and all descendants
-          default: false
-          title: Cascade
-        description: Delete item and all descendants
-      responses:
-        '204':
-          description: Successful Response
-        '404':
-          description: Not Found
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-    get:
-      tags:
-      - wbs
-      summary: Get Wbs Item
-      description: Get a single WBS item by ID.
-      operationId: get_wbs_item_api_v1_projects__project_id__wbs_items__item_id__get
-      security:
-      - HTTPBearer: []
-      parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Project Id
-      - name: item_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Item Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WBSItemOutput'
-        '404':
-          description: Not Found
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/projects/{project_id}/wbs/items/{item_id}/move:
-    post:
-      tags:
-      - wbs
-      summary: Move Wbs Item
-      description: 'Move a WBS item to a new parent.
-
-
-        Validates against circular references and maximum depth.'
-      operationId: move_wbs_item_api_v1_projects__project_id__wbs_items__item_id__move_post
-      security:
-      - HTTPBearer: []
-      parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Project Id
-      - name: item_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Item Id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MoveWBSItemInput'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WBSItemOutput'
-        '404':
-          description: Not Found
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/analysis/analyze:
     post:
       tags:
@@ -4710,21 +4498,6 @@ components:
       - notes
       - items
       title: BudgetData
-    BudgetInput:
-      properties:
-        amount:
-          type: number
-          minimum: 0.0
-          title: Amount
-        currency:
-          type: string
-          title: Currency
-          default: EUR
-      type: object
-      required:
-      - amount
-      title: BudgetInput
-      description: Budget input model.
     BudgetLineItem:
       properties:
         id:
@@ -5602,55 +5375,6 @@ components:
       - severity
       - message
       title: CreateAlertRequest
-    CreateWBSItemInput:
-      properties:
-        name:
-          type: string
-          minLength: 1
-          title: Name
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
-        parent_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Parent Id
-        code:
-          anyOf:
-          - type: string
-            pattern: ^\d+(\.\d+){0,3}$
-          - type: 'null'
-          title: Code
-        start_date:
-          anyOf:
-          - type: string
-            format: date
-          - type: 'null'
-          title: Start Date
-        end_date:
-          anyOf:
-          - type: string
-            format: date
-          - type: 'null'
-          title: End Date
-        budget:
-          anyOf:
-          - $ref: '#/components/schemas/BudgetInput'
-          - type: 'null'
-        completion:
-          type: integer
-          maximum: 100.0
-          minimum: 0.0
-          title: Completion
-          default: 0
-      type: object
-      required:
-      - name
-      title: CreateWBSItemInput
-      description: Input model for creating a WBS item.
     CurrentStateReport:
       properties:
         report_schema_version:
@@ -7688,16 +7412,6 @@ components:
       - source_domain
       - evidence_tier
       title: MissingEvidenceSection
-    MoveWBSItemInput:
-      properties:
-        new_parent_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: New Parent Id
-      type: object
-      title: MoveWBSItemInput
-      description: Input model for moving a WBS item.
     NotModeledSection:
       properties:
         status:
@@ -8213,6 +7927,159 @@ components:
       type: object
       title: ProjectUpdateRequest
       description: Update payload for PUT/PATCH.
+    ProjectWBSCoverage:
+      properties:
+        total_items:
+          type: integer
+          title: Total Items
+        items_with_budget:
+          type: integer
+          title: Items With Budget
+        items_with_dates:
+          type: integer
+          title: Items With Dates
+        items_with_alerts:
+          type: integer
+          title: Items With Alerts
+        completion_average:
+          type: number
+          title: Completion Average
+      type: object
+      required:
+      - total_items
+      - items_with_budget
+      - items_with_dates
+      - items_with_alerts
+      - completion_average
+      title: ProjectWBSCoverage
+      description: Evidence coverage over every WBS item of the project (not only
+        roots).
+    ProjectWBSNode:
+      properties:
+        id:
+          type: string
+          title: Id
+        project_id:
+          type: string
+          title: Project Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        level:
+          type: integer
+          title: Level
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        parent_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parent Code
+        item_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Item Type
+        budget_allocated:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Budget Allocated
+        budget_spent:
+          type: number
+          title: Budget Spent
+        planned_start:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Planned Start
+          description: ISO 8601 timestamp as stored
+        planned_end:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Planned End
+          description: ISO 8601 timestamp as stored
+        actual_start:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actual Start
+          description: ISO 8601 timestamp as stored
+        actual_end:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actual End
+          description: ISO 8601 timestamp as stored
+        source_clause_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Clause Id
+        version:
+          type: integer
+          title: Version
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+        children:
+          items:
+            $ref: '#/components/schemas/ProjectWBSNode'
+          type: array
+          title: Children
+      type: object
+      required:
+      - id
+      - project_id
+      - code
+      - name
+      - level
+      - budget_spent
+      - version
+      - metadata
+      - children
+      title: ProjectWBSNode
+      description: A procurement WBS item as served by GET /projects/{project_id}/wbs,
+        with its subtree.
+    ProjectWBSResponse:
+      properties:
+        project_id:
+          type: string
+          title: Project Id
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectWBSNode'
+          type: array
+          title: Items
+        coverage:
+          $ref: '#/components/schemas/ProjectWBSCoverage'
+        alerts:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Alerts
+        total_items:
+          type: integer
+          title: Total Items
+      type: object
+      required:
+      - project_id
+      - items
+      - coverage
+      - alerts
+      - total_items
+      title: ProjectWBSResponse
+      description: 'Authoritative WBS contract: root items with nested children (procurement
+        WBS store).'
     QueryResult:
       properties:
         data:
@@ -9389,45 +9256,6 @@ components:
         expires_in: 86400
         refresh_token: example-refresh-token
         token_type: bearer
-    UpdateWBSItemInput:
-      properties:
-        name:
-          anyOf:
-          - type: string
-            minLength: 1
-          - type: 'null'
-          title: Name
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
-        start_date:
-          anyOf:
-          - type: string
-            format: date
-          - type: 'null'
-          title: Start Date
-        end_date:
-          anyOf:
-          - type: string
-            format: date
-          - type: 'null'
-          title: End Date
-        budget:
-          anyOf:
-          - $ref: '#/components/schemas/BudgetInput'
-          - type: 'null'
-        completion:
-          anyOf:
-          - type: integer
-            maximum: 100.0
-            minimum: 0.0
-          - type: 'null'
-          title: Completion
-      type: object
-      title: UpdateWBSItemInput
-      description: Input model for updating a WBS item.
     UserResponse:
       properties:
         id:
@@ -9631,136 +9459,6 @@ components:
       - view_name
       title: ViewQueryRequest
       description: Request para query de vista.
-    WBSCoverageOutput:
-      properties:
-        total_items:
-          type: integer
-          title: Total Items
-        items_with_budget:
-          type: integer
-          title: Items With Budget
-        items_with_dates:
-          type: integer
-          title: Items With Dates
-        items_with_alerts:
-          type: integer
-          title: Items With Alerts
-        completion_average:
-          type: number
-          title: Completion Average
-      type: object
-      required:
-      - total_items
-      - items_with_budget
-      - items_with_dates
-      - items_with_alerts
-      - completion_average
-      title: WBSCoverageOutput
-      description: Output model for WBS coverage.
-    WBSItemChildOutput:
-      properties:
-        id:
-          type: string
-          title: Id
-        code:
-          type: string
-          title: Code
-        name:
-          type: string
-          title: Name
-        level:
-          type: integer
-          title: Level
-      type: object
-      required:
-      - id
-      - code
-      - name
-      - level
-      title: WBSItemChildOutput
-      description: Output model for child items.
-    WBSItemOutput:
-      properties:
-        id:
-          type: string
-          title: Id
-        code:
-          type: string
-          title: Code
-        name:
-          type: string
-          title: Name
-        level:
-          type: integer
-          title: Level
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
-        parent_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Parent Id
-        start_date:
-          anyOf:
-          - type: string
-            format: date
-          - type: 'null'
-          title: Start Date
-        end_date:
-          anyOf:
-          - type: string
-            format: date
-          - type: 'null'
-          title: End Date
-        budget:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-          title: Budget
-        completion:
-          type: integer
-          title: Completion
-          default: 0
-        children:
-          items:
-            $ref: '#/components/schemas/WBSItemChildOutput'
-          type: array
-          title: Children
-          default: []
-      type: object
-      required:
-      - id
-      - code
-      - name
-      - level
-      title: WBSItemOutput
-      description: Output model for WBS items.
-    WBSOutput:
-      properties:
-        items:
-          items:
-            $ref: '#/components/schemas/WBSItemOutput'
-          type: array
-          title: Items
-        coverage:
-          $ref: '#/components/schemas/WBSCoverageOutput'
-        alerts:
-          items:
-            additionalProperties: true
-            type: object
-          type: array
-          title: Alerts
-      type: object
-      required:
-      - items
-      - coverage
-      - alerts
-      title: WBSOutput
-      description: Output model for WBS endpoint.
     WbsData:
       properties:
         item_count:

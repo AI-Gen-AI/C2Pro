@@ -37,23 +37,5 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { BudgetInput } from "./budgetInput";
 
-/**
- * Input model for creating a WBS item.
- */
-export interface CreateWBSItemInput {
-  /** @minLength 1 */
-  name: string;
-  description?: string | null;
-  parent_id?: string | null;
-  code?: string | null;
-  start_date?: string | null;
-  end_date?: string | null;
-  budget?: BudgetInput | null;
-  /**
-   * @minimum 0
-   * @maximum 100
-   */
-  completion?: number;
-}
+export type ProjectWBSResponseAlertsItem = { [key: string]: unknown };

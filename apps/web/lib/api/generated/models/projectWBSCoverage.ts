@@ -37,15 +37,14 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { WBSCoverageOutput } from "./wBSCoverageOutput";
-import type { WBSItemOutput } from "./wBSItemOutput";
-import type { WBSOutputAlertsItem } from "./wBSOutputAlertsItem";
 
 /**
- * Output model for WBS endpoint.
+ * Evidence coverage over every WBS item of the project (not only roots).
  */
-export interface WBSOutput {
-  items: WBSItemOutput[];
-  coverage: WBSCoverageOutput;
-  alerts: WBSOutputAlertsItem[];
+export interface ProjectWBSCoverage {
+  total_items: number;
+  items_with_budget: number;
+  items_with_dates: number;
+  items_with_alerts: number;
+  completion_average: number;
 }

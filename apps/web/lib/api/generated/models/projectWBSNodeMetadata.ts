@@ -38,13 +38,4 @@
  * OpenAPI spec version: 1.0.0
  */
 
-/**
- * Output model for WBS coverage.
- */
-export interface WBSCoverageOutput {
-  total_items: number;
-  items_with_budget: number;
-  items_with_dates: number;
-  items_with_alerts: number;
-  completion_average: number;
-}
+export type ProjectWBSNodeMetadata = { [key: string]: unknown };
