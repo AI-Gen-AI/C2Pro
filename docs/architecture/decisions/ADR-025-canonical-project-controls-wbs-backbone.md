@@ -82,7 +82,7 @@ Alerts remain categorized using the six canonical project dimensions:
 
 The **trigger** is orthogonal to the category (for example `missing_evidence`, `deadline`, `deviation`, `contradiction`, `material_change`).
 
-Where the alert is work-package-specific it references the corresponding WBS node. Cross-project alerts may remain project-scoped.
+Where the alert is work-package-specific it references the corresponding WBS node. Cross-cutting project alerts may remain project-scoped.
 
 ### 7. Coherence/Health drill-down uses the WBS; aggregation must be honest
 
