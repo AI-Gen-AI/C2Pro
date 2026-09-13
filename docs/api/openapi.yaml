@@ -5851,6 +5851,20 @@ components:
       - processing_status
       - version
       title: DocumentItem
+    DocumentLifecycleStatus:
+      type: string
+      enum:
+      - uploaded
+      - processing
+      - parsed
+      - analysis_pending
+      - analyzed
+      - error
+      title: DocumentLifecycleStatus
+      description: 'User-facing lifecycle state; unlike the polling status it never
+        merges
+
+        "parsed", "analysis pending" and "analyzed".'
     DocumentListItem:
       properties:
         id:
@@ -5870,6 +5884,8 @@ components:
         status_detail:
           type: string
           title: Status Detail
+        lifecycle_status:
+          $ref: '#/components/schemas/DocumentLifecycleStatus'
         error_message:
           anyOf:
           - type: string
@@ -5892,6 +5908,7 @@ components:
       - filename
       - status
       - status_detail
+      - lifecycle_status
       title: DocumentListItem
       description: List item for documents.
     DocumentListResponse:

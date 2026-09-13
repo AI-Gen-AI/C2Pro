@@ -61,6 +61,7 @@ from src.documents.application.dtos import (
     DocumentUploadResponse,
     RagAnswerResponse,
     RagQuestionRequest,
+    document_lifecycle_status,
 )
 from src.documents.application.get_document_history_use_case import GetDocumentHistoryUseCase
 from src.documents.application.get_document_relationship_explanation_use_case import (
@@ -742,6 +743,7 @@ async def list_documents_for_project(
             document_type=doc.document_type.value if doc.document_type is not None else None,
             status=_normalize_document_status_for_polling(doc.upload_status),
             status_detail=_document_status_detail_for_polling(doc.upload_status),
+            lifecycle_status=document_lifecycle_status(doc.upload_status),
             error_message=doc.parsing_error if doc.upload_status == DocumentStatus.ERROR else None,
             uploaded_at=doc.created_at,
             file_size_bytes=doc.file_size_bytes or 0,

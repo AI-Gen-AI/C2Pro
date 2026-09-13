@@ -51,6 +51,7 @@ function transformDocument(doc: DocumentListResponse): DocumentInfo {
     fileSize: doc.file_size_bytes || 0,
     uploadedAt: doc.uploaded_at ? new Date(doc.uploaded_at) : undefined,
     status: doc.status,
+    lifecycleStatus: doc.lifecycle_status,
   };
 }
 

@@ -136,6 +136,7 @@ export * from "./documentEntityResponse";
 export * from "./documentEntityResponseMetadata";
 export * from "./documentHistoryResponse";
 export * from "./documentItem";
+export * from "./documentLifecycleStatus";
 export * from "./documentListItem";
 export * from "./documentListResponse";
 export * from "./documentPollingStatus";

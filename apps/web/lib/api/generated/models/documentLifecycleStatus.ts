@@ -37,20 +37,19 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { DocumentLifecycleStatus } from "./documentLifecycleStatus";
-import type { DocumentPollingStatus } from "./documentPollingStatus";
 
 /**
- * List item for documents.
+ * User-facing lifecycle state; unlike the polling status it never merges
+ * "parsed", "analysis pending" and "analyzed".
  */
-export interface DocumentListItem {
-  id: string;
-  filename: string;
-  document_type?: string | null;
-  status: DocumentPollingStatus;
-  status_detail: string;
-  lifecycle_status: DocumentLifecycleStatus;
-  error_message?: string | null;
-  uploaded_at?: string | null;
-  file_size_bytes?: number | null;
-}
+export type DocumentLifecycleStatus =
+  (typeof DocumentLifecycleStatus)[keyof typeof DocumentLifecycleStatus];
+
+export const DocumentLifecycleStatus = {
+  uploaded: "uploaded",
+  processing: "processing",
+  parsed: "parsed",
+  analysis_pending: "analysis_pending",
+  analyzed: "analyzed",
+  error: "error",
+} as const;

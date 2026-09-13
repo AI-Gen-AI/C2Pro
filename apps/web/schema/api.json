@@ -8452,6 +8452,19 @@
         ],
         "title": "DocumentItem"
       },
+      "DocumentLifecycleStatus": {
+        "type": "string",
+        "enum": [
+          "uploaded",
+          "processing",
+          "parsed",
+          "analysis_pending",
+          "analyzed",
+          "error"
+        ],
+        "title": "DocumentLifecycleStatus",
+        "description": "User-facing lifecycle state; unlike the polling status it never merges\n\"parsed\", \"analysis pending\" and \"analyzed\"."
+      },
       "DocumentListItem": {
         "properties": {
           "id": {
@@ -8480,6 +8493,9 @@
           "status_detail": {
             "type": "string",
             "title": "Status Detail"
+          },
+          "lifecycle_status": {
+            "$ref": "#/components/schemas/DocumentLifecycleStatus"
           },
           "error_message": {
             "anyOf": [
@@ -8517,7 +8533,13 @@
           }
         },
         "type": "object",
-        "required": ["id", "filename", "status", "status_detail"],
+        "required": [
+          "id",
+          "filename",
+          "status",
+          "status_detail",
+          "lifecycle_status"
+        ],
         "title": "DocumentListItem",
         "description": "List item for documents."
       },

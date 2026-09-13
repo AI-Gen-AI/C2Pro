@@ -81,6 +81,8 @@ export interface DocumentListResponse {
   filename: string;
   document_type?: string | null;
   status: 'queued' | 'processing' | 'parsed' | 'error';
+  /** Honest lifecycle state; absent in older payloads. */
+  lifecycle_status?: 'uploaded' | 'processing' | 'parsed' | 'analysis_pending' | 'analyzed' | 'error';
   error_message?: string | null;
   uploaded_at: string;
   file_size_bytes: number;

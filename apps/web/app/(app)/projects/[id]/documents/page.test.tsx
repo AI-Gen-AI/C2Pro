@@ -254,12 +254,77 @@ describe("ProjectDocumentsPage", () => {
     render(<ProjectDocumentsPage />);
 
     expect(screen.getByLabelText("Total Documents")).toHaveTextContent("3");
-    expect(screen.getByLabelText("Analyzed")).toHaveTextContent("1");
-    expect(screen.getByLabelText("Processing")).toHaveTextContent("1");
+    // Without a lifecycle state, a parsed document is never presented as analyzed.
+    expect(screen.getByLabelText("Analyzed")).toHaveTextContent("0");
+    expect(screen.getByLabelText("Awaiting Analysis")).toHaveTextContent("1");
+    expect(screen.getByLabelText("Uploaded Or Processing")).toHaveTextContent("2");
+    expect(screen.getByLabelText("Errors")).toHaveTextContent("0");
     expect(screen.getByText("Showing 3 of 3 documents")).toBeInTheDocument();
-    expect(screen.getAllByText("Analyzed").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Processing").length).toBeGreaterThan(0);
-    expect(screen.getByLabelText("Queued Or Errors")).toHaveTextContent("1");
+    expect(screen.getByTestId("document-row-doc_real_001")).toHaveTextContent("Parsed");
+    expect(screen.getByTestId("document-row-doc_real_001")).not.toHaveTextContent("Analyzed");
+    expect(screen.getByTestId("document-row-doc_real_002")).toHaveTextContent("Processing");
+    expect(screen.getByText("0 analyzed")).toBeInTheDocument();
+  });
+
+  it("labels each document by its lifecycle without conflating parsed, pending and analyzed", () => {
+    const lifecycle = [
+      ["doc_uploaded", "uploaded", "queued", "Uploaded"],
+      ["doc_processing", "processing", "processing", "Processing"],
+      ["doc_parsed", "parsed", "parsed", "Parsed"],
+      ["doc_pending", "analysis_pending", "processing", "Analysis pending"],
+      ["doc_analyzed", "analyzed", "parsed", "Analyzed"],
+      ["doc_error", "error", "error", "Error"],
+    ] as const;
+    useProjectDocumentsMock.mockReturnValue({
+      documents: lifecycle.map(([id, lifecycleStatus, status]) => ({
+        id,
+        name: `${id}.pdf`,
+        type: "contract",
+        fileSize: 10,
+        uploadedAt: new Date("2026-03-18T09:00:00Z"),
+        status,
+        lifecycleStatus,
+      })),
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    for (const [id, , , label] of lifecycle) {
+      expect(screen.getByTestId(`document-row-${id}`)).toHaveTextContent(label);
+    }
+    expect(screen.getByTestId("document-row-doc_parsed")).not.toHaveTextContent("Analyzed");
+    expect(screen.getByTestId("document-row-doc_pending")).not.toHaveTextContent("Analyzed");
+    expect(screen.getByLabelText("Total Documents")).toHaveTextContent("6");
+    expect(screen.getByLabelText("Analyzed")).toHaveTextContent("1");
+    expect(screen.getByLabelText("Awaiting Analysis")).toHaveTextContent("2");
+    expect(screen.getByLabelText("Uploaded Or Processing")).toHaveTextContent("2");
+    expect(screen.getByLabelText("Errors")).toHaveTextContent("1");
+    expect(screen.getByText("1 analyzed")).toBeInTheDocument();
+  });
+
+  it("offers retry only where it did before: not for documents the backend is already processing", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        // Stored "queued": lifecycle says uploaded, polling says processing -> no retry (would duplicate work).
+        { id: "doc_queued", name: "Queued.pdf", type: "contract", fileSize: 1, status: "processing", lifecycleStatus: "uploaded" },
+        { id: "doc_uploaded", name: "Uploaded.pdf", type: "contract", fileSize: 1, status: "queued", lifecycleStatus: "uploaded" },
+        { id: "doc_error", name: "Failed.pdf", type: "contract", fileSize: 1, status: "error", lifecycleStatus: "error" },
+        { id: "doc_pending", name: "Pending.pdf", type: "contract", fileSize: 1, status: "processing", lifecycleStatus: "analysis_pending" },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    expect(screen.queryByRole("button", { name: "Retry processing Queued.pdf" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry processing Uploaded.pdf" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry processing Failed.pdf" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry processing Pending.pdf" })).not.toBeInTheDocument();
   });
 
   it("links each document row to the project evidence view with the selected document id", () => {

@@ -30,43 +30,62 @@ import { useProjectCoherenceActions } from '@/hooks/useProjectCoherenceActions';
 import { apiClient } from '@/lib/api/client';
 import { useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete } from '@/lib/api/generated/documents/documents';
 import { showToast } from '@/lib/ui/toast';
-import { formatFileSize } from '@/types/document';
+import { formatFileSize, type DocumentLifecycleStatus } from '@/types/document';
 import { DocumentUploadDropzone } from '@/components/features/documents/DocumentUploadDropzone';
 import { useProject } from '@/hooks/useProject';
 
-type DocumentStatus = 'Analyzed' | 'Processing' | 'Uploaded' | 'Error';
+const LIFECYCLE_LABELS: Record<DocumentLifecycleStatus, string> = {
+  uploaded: 'Uploaded',
+  processing: 'Processing',
+  parsed: 'Parsed',
+  analysis_pending: 'Analysis pending',
+  analyzed: 'Analyzed',
+  error: 'Error',
+};
 
-function normalizeStatus(status: string): DocumentStatus {
+const LIFECYCLE_ORDER = Object.keys(LIFECYCLE_LABELS) as DocumentLifecycleStatus[];
+
+function isLifecycleStatus(value: string | undefined): value is DocumentLifecycleStatus {
+  return value !== undefined && Object.prototype.hasOwnProperty.call(LIFECYCLE_LABELS, value);
+}
+
+/**
+ * The backend lifecycle state when present. Older payloads only carry the polling status,
+ * whose "parsed" bucket includes documents never analyzed, so they never resolve to "analyzed".
+ */
+function resolveLifecycle(
+  lifecycleStatus: DocumentLifecycleStatus | undefined,
+  status: string,
+): DocumentLifecycleStatus {
+  if (isLifecycleStatus(lifecycleStatus)) {
+    return lifecycleStatus;
+  }
+  switch (status) {
+    case 'processing':
+      return 'processing';
+    case 'parsed':
+      return 'parsed';
+    case 'error':
+      return 'error';
+    default:
+      return 'uploaded';  // queued or unknown → treat as queued, not errored
+  }
+}
+
+function getStatusIcon(status: DocumentLifecycleStatus) {
   switch (status) {
     case 'analyzed':
-    case 'parsed':
-    case 'parsed_pending_analysis':
-      return 'Analyzed';
-    case 'processing':
-      return 'Processing';
-    case 'uploaded':  // Stored, awaiting Celery worker pickup
-    case 'queued':    // Initial enqueue state
-      return 'Uploaded';
-    case 'error':
-      return 'Error';
-    default:
-      return 'Uploaded';  // Unknown → treat as queued, not errored
-  }
-}
-
-function getStatusIcon(status: DocumentStatus) {
-  switch (status) {
-    case 'Analyzed':
       return CheckCircle2;
-    case 'Processing':
-      return Clock;
-    default:
+    case 'error':
       return AlertTriangle;
+    default:
+      return Clock;
   }
 }
 
-function getStatusColor(status: DocumentStatus): string {
-  return statusToToken(status);
+function getStatusColor(status: DocumentLifecycleStatus): string {
+  // Parsed / pending documents are not finished: keep them neutral, not success-green.
+  return statusToToken(status === 'parsed' || status === 'analysis_pending' ? 'uploaded' : status);
 }
 
 function labelType(type: string): string {
@@ -176,7 +195,12 @@ export default function ProjectDocumentsPage() {
         id: doc.id,
         name: doc.name,
         type: labelType(doc.type || 'PDF'),
-        status: normalizeStatus(doc.status ?? 'parsed'),
+        status: resolveLifecycle(doc.lifecycleStatus, doc.status ?? 'parsed'),
+        // Retry follows the polling status exactly as before: a stored "queued" document is
+        // already being processed, and reprocessing it would enqueue a duplicate task.
+        retryable: !(['processing', 'parsed', 'analyzed', 'parsed_pending_analysis'] as string[]).includes(
+          doc.status ?? 'parsed',
+        ),
         uploadedAt: doc.uploadedAt,
         size: formatFileSize(doc.fileSize),
       })),
@@ -199,11 +223,15 @@ export default function ProjectDocumentsPage() {
     [rows, searchQuery, typeFilter, statusFilter]
   );
 
-  const analyzedCount = rows.filter((row) => row.status === 'Analyzed').length;
-  const processingCount = rows.filter((row) => row.status === 'Processing').length;
-  const errorCount = rows.filter((row) => row.status === 'Error').length;
+  const analyzedCount = rows.filter((row) => row.status === 'analyzed').length;
+  const awaitingAnalysisCount = rows.filter(
+    (row) => row.status === 'parsed' || row.status === 'analysis_pending',
+  ).length;
+  const inProgressCount = rows.filter(
+    (row) => row.status === 'uploaded' || row.status === 'processing',
+  ).length;
+  const errorCount = rows.filter((row) => row.status === 'error').length;
   const hasBackendDocuments = rows.length > 0;
-  const uploadedCount = rows.filter((row) => row.status === 'Uploaded').length;
   const hasInFlightDocuments = documents.some((doc) =>
     isInFlightStatus(doc.status),
   );
@@ -374,10 +402,11 @@ export default function ProjectDocumentsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="Analyzed">Analyzed</SelectItem>
-              <SelectItem value="Processing">Processing</SelectItem>
-              <SelectItem value="Uploaded">Uploaded</SelectItem>
-              <SelectItem value="Error">Error</SelectItem>
+              {LIFECYCLE_ORDER.map((lifecycle) => (
+                <SelectItem key={lifecycle} value={lifecycle}>
+                  {LIFECYCLE_LABELS[lifecycle]}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -394,7 +423,7 @@ export default function ProjectDocumentsPage() {
             ) : null}
             {statusFilter !== 'all' ? (
               <span className="rounded-full border bg-background/95 px-3 py-1 text-xs text-foreground shadow-sm">
-                Status: {statusFilter}
+                Status: {isLifecycleStatus(statusFilter) ? LIFECYCLE_LABELS[statusFilter] : statusFilter}
               </span>
             ) : null}
           </div>
@@ -404,7 +433,7 @@ export default function ProjectDocumentsPage() {
         </div>
       </section>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-5">
         <section className="rounded-2xl border bg-background/90 p-4 shadow-sm" aria-label="Total Documents">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Total Documents</p>
           <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground">{rows.length}</p>
@@ -413,13 +442,17 @@ export default function ProjectDocumentsPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-green-800">Analyzed</p>
           <p className="mt-3 text-2xl font-semibold tracking-tight text-green-700">{analyzedCount}</p>
         </section>
-        <section className="rounded-2xl border border-blue-200 bg-blue-50/40 p-4 shadow-sm" aria-label="Processing">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-800">Processing</p>
-          <p className="mt-3 text-2xl font-semibold tracking-tight text-blue-700">{processingCount}</p>
+        <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 shadow-sm" aria-label="Awaiting Analysis">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">Awaiting Analysis</p>
+          <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">{awaitingAnalysisCount}</p>
         </section>
-        <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 shadow-sm" aria-label="Queued Or Errors">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">Queued / Errors</p>
-          <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">{uploadedCount + errorCount}</p>
+        <section className="rounded-2xl border border-blue-200 bg-blue-50/40 p-4 shadow-sm" aria-label="Uploaded Or Processing">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-800">Uploaded / Processing</p>
+          <p className="mt-3 text-2xl font-semibold tracking-tight text-blue-700">{inProgressCount}</p>
+        </section>
+        <section className="rounded-2xl border border-red-200 bg-red-50/40 p-4 shadow-sm" aria-label="Errors">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-800">Errors</p>
+          <p className="mt-3 text-2xl font-semibold tracking-tight text-red-700">{errorCount}</p>
         </section>
       </div>
 
@@ -468,7 +501,7 @@ export default function ProjectDocumentsPage() {
                       <td className="px-4 py-4">
                         <Badge variant="outline" className={`rounded-full shadow-sm ${getStatusColor(doc.status)}`}>
                           <StatusIcon className="mr-1 h-3 w-3" />
-                          {doc.status}
+                          {LIFECYCLE_LABELS[doc.status]}
                         </Badge>
                       </td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">{doc.size}</td>
@@ -477,7 +510,7 @@ export default function ProjectDocumentsPage() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-end gap-2">
-                          {(doc.status === 'Error' || doc.status === 'Uploaded') && (
+                          {doc.retryable && (
                             <Button
                               variant="outline"
                               size="sm"
