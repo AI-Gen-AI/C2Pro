@@ -367,8 +367,15 @@ class StakeholdersData(BaseModel):
     model_config = _CONTRACT
 
     total: int
-    key_player_count: int
+    key_player_count: int | None = Field(
+        default=None,
+        description="Null when not every stakeholder could be loaded, so the count is unknown.",
+    )
     by_quadrant: dict[str, int]
+    counts_are_partial: bool = Field(
+        default=False,
+        description="True when by_quadrant covers only the stakeholders that could be loaded, not total.",
+    )
     items: list[StakeholderItem]
     truncated: bool = False
     evidence_breakdown: EvidenceBreakdown

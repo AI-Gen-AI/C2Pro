@@ -452,7 +452,7 @@ def project_hitl(result: Any, *, generated_at: datetime) -> HitlSection:
         source_domain=domain,
         source_as_of=_latest(item.created_at for item in loaded),
         evidence_tier=ReportEvidenceTier.UNLINKED,
-        evidence_note="Review items carry no structured source reference.",
+        evidence_note="Review items carry no structured source reference. Pending counts include escalated items.",
         data=HitlData(
             pending_count=pending_count,
             overdue_count=(
@@ -555,11 +555,13 @@ def project_stakeholders(result: Any) -> StakeholdersSection:
     if not isinstance(result, SourceOk):
         return _not_ok(StakeholdersSection, domain, result)
 
-    stakeholders = list(result.value)
-    if not stakeholders:
+    stakeholders = list(result.value.stakeholders)
+    total = max(result.value.total, len(stakeholders))
+    if total == 0:
         return _without_data(
             StakeholdersSection, domain, SectionStatus.EMPTY, "No stakeholders have been identified."
         )
+    counts_are_partial = total > len(stakeholders)
 
     def quadrant_of(stakeholder: Any) -> str | None:
         return _value(stakeholder.quadrant) if stakeholder.quadrant is not None else None
@@ -597,11 +599,16 @@ def project_stakeholders(result: Any) -> StakeholdersSection:
             unlinked="Some stakeholders record no source document or clause.",
         ),
         data=StakeholdersData(
-            total=len(stakeholders),
-            key_player_count=sum(1 for stakeholder in stakeholders if quadrant_of(stakeholder) == "key_player"),
+            total=total,
+            key_player_count=(
+                None
+                if counts_are_partial
+                else sum(1 for stakeholder in stakeholders if quadrant_of(stakeholder) == "key_player")
+            ),
             by_quadrant=dict(Counter(quadrant_of(stakeholder) or "unclassified" for stakeholder in stakeholders)),
+            counts_are_partial=counts_are_partial,
             items=items,
-            truncated=len(stakeholders) > len(items),
+            truncated=total > len(items),
             evidence_breakdown=breakdown,
         ),
     )

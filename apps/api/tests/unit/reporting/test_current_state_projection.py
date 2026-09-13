@@ -31,6 +31,7 @@ from src.reporting.application.ports import (
     SourceFailed,
     SourceOk,
     SourceUnavailable,
+    StakeholdersInput,
 )
 from src.reporting.domain.current_state_report import (
     REPORT_SCHEMA_VERSION,
@@ -308,7 +309,7 @@ def _full_inputs(**overrides: object) -> CurrentStateInputs:
         "hitl": SourceOk(HitlInput(items=[], pending_count=0)),
         "budget": SourceOk(_budget([("Civil works", "B-01", "1000.00")])),
         "wbs": SourceOk([_wbs_node(code="1", depth=0, lft=1, rgt=2, status=WBSNodeStatus.IN_PROGRESS)]),
-        "stakeholders": SourceOk([_stakeholder(name="Ana")]),
+        "stakeholders": SourceOk(StakeholdersInput(stakeholders=[_stakeholder(name="Ana")], total=1)),
         "raci": SourceOk(_raci()),
     }
     base.update(overrides)
@@ -604,9 +605,10 @@ def test_stakeholders_evidence_tiers_and_quadrants() -> None:
         _stakeholder(name="Luis", extracted_from_document_id=uuid4(), power=PowerLevel.LOW),
         _stakeholder(name="Marta", power=PowerLevel.LOW, interest=InterestLevel.LOW),
     ]
-    section = _report(stakeholders=SourceOk(stakeholders)).sections.stakeholders
+    section = _report(stakeholders=SourceOk(StakeholdersInput(stakeholders=stakeholders, total=3))).sections.stakeholders
     assert section.data is not None
     assert section.data.total == 3
+    assert section.data.counts_are_partial is False
     assert section.data.key_player_count == 1
     assert section.data.by_quadrant == {"key_player": 1, "keep_informed": 1, "monitor": 1}
     assert section.data.evidence_breakdown.strong_linked == 1
@@ -626,6 +628,28 @@ def test_raci_accountability_gaps() -> None:
 
 def test_raci_empty_matrix_is_empty() -> None:
     assert _report(raci=SourceOk(RaciMatrixViewResponse(matrix=[]))).sections.raci.status is SectionStatus.EMPTY
+
+
+def test_stakeholder_counts_are_partial_when_repository_total_exceeds_loaded() -> None:
+    section = _report(
+        stakeholders=SourceOk(StakeholdersInput(stakeholders=[_stakeholder(name="Ana")], total=800))
+    ).sections.stakeholders
+    assert section.data is not None
+    assert section.data.total == 800
+    assert section.data.counts_are_partial is True
+    assert section.data.key_player_count is None
+    assert section.data.truncated is True
+
+
+def test_stakeholders_empty_uses_repository_total() -> None:
+    section = _report(stakeholders=SourceOk(StakeholdersInput(stakeholders=[], total=0))).sections.stakeholders
+    assert section.status is SectionStatus.EMPTY
+
+
+def test_hitl_section_discloses_that_escalated_items_count_as_pending() -> None:
+    items = [_review_item(sla_due=GENERATED_AT + timedelta(days=1), status=ReviewStatus.ESCALATED)]
+    section = _report(hitl=SourceOk(HitlInput(items=items, pending_count=1))).sections.hitl
+    assert "escalated" in (section.evidence_note or "").lower()
 
 
 # ---------------------------------------------------------------------------

@@ -11,7 +11,12 @@ from uuid import UUID, uuid4
 
 from src.procurement.application.budget_use_cases import BudgetResponse
 from src.reporting.application.build_current_state_report import BuildCurrentStateReportUseCase
-from src.reporting.application.ports import DocumentsInput, HitlInput, SourceUnavailableError
+from src.reporting.application.ports import (
+    DocumentsInput,
+    HitlInput,
+    SourceUnavailableError,
+    StakeholdersInput,
+)
 from src.reporting.domain.current_state_report import ProjectIdentity, SectionStatus
 from src.stakeholders.application.dtos import RaciMatrixViewResponse
 
@@ -62,9 +67,9 @@ class _Sources:
         await self._guard("wbs", project_id, tenant_id)
         return []
 
-    async def load_stakeholders(self, project_id: UUID, tenant_id: UUID):  # noqa: ANN201
+    async def load_stakeholders(self, project_id: UUID, tenant_id: UUID) -> StakeholdersInput:
         await self._guard("stakeholders", project_id, tenant_id)
-        return []
+        return StakeholdersInput(stakeholders=[], total=0)
 
     async def load_raci(self, project_id: UUID, tenant_id: UUID) -> RaciMatrixViewResponse:
         await self._guard("raci", project_id, tenant_id)

@@ -59,6 +59,7 @@ from src.modules.hitl.adapters.http.notification_settings_router import (
 )
 from src.modules.hitl.adapters.http.router import router as hitl_router
 from src.projects.adapters.http.router import router as projects_router
+from src.reporting.adapters.http.router import router as project_reports_router
 from src.wbs.adapters.http.router import router as wbs_router  # GREEN phase - TS-CT-WBS-API-001
 
 logger = structlog.get_logger()
@@ -298,6 +299,7 @@ def create_application() -> FastAPI:
     app.include_router(auth_router, prefix=api_v1_prefix)
     app.include_router(projects_router, prefix=api_v1_prefix)
     app.include_router(project_health_router, prefix=api_v1_prefix)
+    app.include_router(project_reports_router, prefix=api_v1_prefix)
     app.include_router(documents_router, prefix=api_v1_prefix)
     app.include_router(alerts_router, prefix=api_v1_prefix)
     app.include_router(project_alerts_router, prefix=api_v1_prefix)

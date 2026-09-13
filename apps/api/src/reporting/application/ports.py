@@ -50,7 +50,17 @@ class SourceFailed:
 
 @dataclass(frozen=True)
 class DocumentsInput:
+    """Documents that could be read, plus the repository's true total."""
+
     documents: list[Document]
+    total: int
+
+
+@dataclass(frozen=True)
+class StakeholdersInput:
+    """Stakeholders that could be read, plus the repository's true total."""
+
+    stakeholders: list[Stakeholder]
     total: int
 
 
@@ -69,7 +79,7 @@ class CurrentStateInputs:
     hitl: SourceOk[HitlInput] | SourceUnavailable | SourceFailed
     budget: SourceOk[BudgetResponse] | SourceUnavailable | SourceFailed
     wbs: SourceOk[list[WBSNode]] | SourceUnavailable | SourceFailed
-    stakeholders: SourceOk[list[Stakeholder]] | SourceUnavailable | SourceFailed
+    stakeholders: SourceOk[StakeholdersInput] | SourceUnavailable | SourceFailed
     raci: SourceOk[RaciMatrixViewResponse] | SourceUnavailable | SourceFailed
 
 
@@ -88,7 +98,7 @@ class CurrentStateSources(Protocol):
 
     async def load_wbs(self, project_id: UUID, tenant_id: UUID) -> list[WBSNode]: ...
 
-    async def load_stakeholders(self, project_id: UUID, tenant_id: UUID) -> list[Stakeholder]: ...
+    async def load_stakeholders(self, project_id: UUID, tenant_id: UUID) -> StakeholdersInput: ...
 
     async def load_raci(self, project_id: UUID, tenant_id: UUID) -> RaciMatrixViewResponse: ...
 
@@ -102,4 +112,5 @@ __all__ = [
     "SourceOk",
     "SourceUnavailable",
     "SourceUnavailableError",
+    "StakeholdersInput",
 ]
