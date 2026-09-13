@@ -206,10 +206,15 @@ def validate_enums(doc: dict) -> list[str]:
 def extract_canonical(doc: dict) -> dict[str, str]:
     pp = doc["production_position"]
     ns = doc["north_star"]
+    ps = doc["product_semantics"]
+    pcm = doc["project_controls_model"]
     cr = doc["coherence_runtime_reconciliation"]
     lc = doc["legacy_coverage"]
     p0b = doc["p0b_vertical_contract"]
-    a018, a024 = _adr_row(doc, "ADR-018"), _adr_row(doc, "ADR-024")
+    a018 = _adr_row(doc, "ADR-018")
+    a024 = _adr_row(doc, "ADR-024")
+    a025 = _adr_row(doc, "ADR-025")
+    pc_wbs = _wbs_row(doc, "PWBS-PROJECT-CONTROLS")
 
     canon: dict[str, str] = {
         "reconciled_against_main_sha": _s(pp["reconciled_against_main_sha"]),
@@ -219,12 +224,18 @@ def extract_canonical(doc: dict) -> dict[str, str]:
         "current_product_wedge_id": _s(ns["current_product_wedge_id"]),
         "coherence.global_authoritative_cutover": _s(cr["global_authoritative_cutover"]),
         "legacy_coverage.unmapped_open_legacy_items": _s(lc["unmapped_open_legacy_items"]),
+        "project_controls.invariant": _s(pcm["invariant"]),
+        "product_semantics.canonical_dimensions": ",".join(_s(x) for x in ps["canonical_dimensions"]),
+        "wbs.PWBS-PROJECT-CONTROLS.priority": _s(pc_wbs["priority"]),
         "adr.ADR-018.realization": _s(a018["realization_status"]),
         "adr.ADR-018.deployment": _s(a018["deployment_status"]),
         "adr.ADR-018.prod_validation": _s(a018["prod_validation_status"]),
         "adr.ADR-024.realization": _s(a024["realization_status"]),
         "adr.ADR-024.deployment": _s(a024["deployment_status"]),
         "adr.ADR-024.prod_validation": _s(a024["prod_validation_status"]),
+        "adr.ADR-025.realization": _s(a025["realization_status"]),
+        "adr.ADR-025.deployment": _s(a025["deployment_status"]),
+        "adr.ADR-025.prod_validation": _s(a025["prod_validation_status"]),
         "p0b.done_digest": hashlib.sha256(_norm(p0b["done_definition"]).encode()).hexdigest()[:16],
         "p0b.invariant_ids": ",".join(_s(x) for x in p0b["invariant_ids"]),
         "p0b.next_slice": _s(p0b["next_slice"]),
