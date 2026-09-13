@@ -25,6 +25,7 @@ const tabs = [
   { href: "/review", label: "Review", icon: ClipboardCheck },
   { href: "/stakeholders", label: "Stakeholders", icon: Users },
   { href: "/wbs", label: "WBS", icon: ListTree },
+  { href: "/analysis", label: "Health", icon: ClipboardCheck },
   { href: "/budget", label: "Budget", icon: Gauge },
   { href: "/report", label: "Report", icon: ScrollText },
   { href: "/settings", label: "Settings", icon: Settings },
