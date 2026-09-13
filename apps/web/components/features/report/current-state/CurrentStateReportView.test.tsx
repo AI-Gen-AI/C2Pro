@@ -166,6 +166,32 @@ describe("CurrentStateReportView", () => {
     expect(within(table).getAllByRole("columnheader")).toHaveLength(4);
   });
 
+  it("shows recorded spend from the explicit flag, not from whether remaining is present", () => {
+    const report = buildCurrentStateReport();
+    const budget = report.sections.budget;
+    renderReport({
+      ...report,
+      sections: {
+        ...report.sections,
+        budget: {
+          ...budget,
+          data: budget.data
+            ? { ...budget.data, spent_amount: "400", spend_recorded: true, remaining_budget: null }
+            : budget.data,
+        },
+      },
+    });
+    const spend = within(section("budget")).getByTestId("budget-spend");
+    expect(spend).toHaveTextContent("€400.00");
+    expect(spend).not.toHaveTextContent("No spend recorded");
+    expect(within(section("budget")).getByTestId("budget-remaining")).toHaveTextContent("Not shown");
+  });
+
+  it("cites the health snapshot the section was projected from", () => {
+    renderReport();
+    expect(within(section("health")).getByTestId("section-source")).toHaveTextContent("snapshot 7e1d2c3b");
+  });
+
   it("renders an empty section with its reason", () => {
     const report = buildCurrentStateReport();
     const emptyAlerts: CurrentStateReport = {

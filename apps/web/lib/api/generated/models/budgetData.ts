@@ -45,6 +45,8 @@ export interface BudgetData {
   total_budget: string;
   /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
   spent_amount: string;
+  /** False when no spend has been recorded, so a zero spent_amount is not a confirmed zero. */
+  spend_recorded: boolean;
   /** Null when no spend has been recorded, because remaining would merely restate total. */
   remaining_budget?: string | null;
   currency: string;

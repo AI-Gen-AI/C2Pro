@@ -81,6 +81,7 @@ export function buildCurrentStateReport(): CurrentStateReport {
         status_reason: null,
         source_domain: "health",
         source_as_of: "2026-09-12T09:00:00Z",
+        source_ref: "project_snapshot:7e1d2c3b-4a5f-4e6d-8c7b-9a0f1e2d3c4b",
         evidence_tier: "unlinked",
         evidence_note: "No dimension cites supporting evidence.",
         data: {
@@ -214,6 +215,7 @@ export function buildCurrentStateReport(): CurrentStateReport {
           item_count: 1,
           total_budget: "1250.50",
           spent_amount: "0",
+          spend_recorded: false,
           remaining_budget: null,
           currency: "EUR",
           notes: [

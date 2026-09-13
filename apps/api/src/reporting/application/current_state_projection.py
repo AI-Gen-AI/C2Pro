@@ -291,6 +291,7 @@ def project_health(result: Any) -> HealthSection:
         status=SectionStatus.AVAILABLE,
         source_domain=domain,
         source_as_of=_as_utc(snapshot.captured_at),
+        source_ref=f"project_snapshot:{snapshot.snapshot_id}",
         evidence_tier=tier,
         evidence_note=(
             "Scored dimensions cite evidence references, but those references carry "
@@ -491,6 +492,7 @@ def project_budget(result: Any) -> BudgetSection:
             item_count=len(budget.items),
             total_budget=budget.total_budget,
             spent_amount=budget.spent_amount,
+            spend_recorded=spend_recorded,
             remaining_budget=budget.remaining_budget if spend_recorded else None,
             currency=budget.currency,
             notes=notes,

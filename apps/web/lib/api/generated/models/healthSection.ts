@@ -46,6 +46,8 @@ export interface HealthSection {
   status_reason?: string | null;
   source_domain: string;
   source_as_of?: string | null;
+  /** Identifier of the single versioned record this section was projected from, when one exists. */
+  source_ref?: string | null;
   evidence_tier: ReportEvidenceTier;
   evidence_note?: string | null;
   data?: HealthData | null;

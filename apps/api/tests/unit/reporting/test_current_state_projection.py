@@ -874,3 +874,48 @@ def test_listing_order_is_stable_when_sort_keys_tie() -> None:
     reverse = _report(alerts=SourceOk([second, first])).sections.alerts
     assert forward.data is not None and reverse.data is not None
     assert [item.id for item in forward.data.items] == [item.id for item in reverse.data.items]
+
+
+# ---------------------------------------------------------------------------
+# Reproducibility references and explicit spend state
+# ---------------------------------------------------------------------------
+
+
+def test_budget_states_explicitly_whether_spend_was_recorded() -> None:
+    no_spend = _report(budget=SourceOk(_budget([("Civil works", "B-01", "1000.00")]))).sections.budget
+    assert no_spend.data is not None
+    assert no_spend.data.spend_recorded is False
+
+    rows = [BudgetItemResponse(id=uuid4(), project_id=PROJECT_ID, name="Civil", code="B-01", amount=Decimal("1000"))]
+    spent = BudgetResponse(
+        project_id=PROJECT_ID,
+        items=rows,
+        total_budget=Decimal("1000"),
+        spent_amount=Decimal("400"),
+        remaining_budget=Decimal("600"),
+    )
+    with_spend = _report(budget=SourceOk(spent)).sections.budget
+    assert with_spend.data is not None
+    assert with_spend.data.spend_recorded is True
+
+
+def test_health_section_references_the_snapshot_it_was_projected_from() -> None:
+    snapshot = _snapshot(contract_score=70.0)
+    section = _report(health=SourceOk(snapshot)).sections.health
+    assert section.source_ref == f"project_snapshot:{snapshot.snapshot_id}"
+
+
+def test_sections_without_a_single_versioned_source_carry_no_source_ref() -> None:
+    report = _report()
+    assert report.sections.budget.source_ref is None
+    assert report.sections.alerts.source_ref is None
+    assert report.sections.risks.source_ref is None
+    assert _report(health=SourceOk(None)).sections.health.source_ref is None
+
+
+def test_source_ref_participates_in_the_fingerprint() -> None:
+    inputs = _full_inputs()
+    report = assemble_current_state_report(PROJECT, inputs, generated_at=GENERATED_AT)
+    other_snapshot = _report(health=SourceOk(_snapshot(contract_score=70.0))).sections.health
+    changed = report.sections.model_copy(update={"health": other_snapshot})
+    assert compute_content_fingerprint(report.project, changed) != report.content_fingerprint

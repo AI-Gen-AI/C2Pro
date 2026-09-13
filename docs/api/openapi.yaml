@@ -4368,6 +4368,13 @@ components:
             format: date-time
           - type: 'null'
           title: Source As Of
+        source_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Ref
+          description: Identifier of the single versioned record this section was
+            projected from, when one exists.
         evidence_tier:
           $ref: '#/components/schemas/ReportEvidenceTier'
         evidence_note:
@@ -4662,6 +4669,11 @@ components:
           type: string
           pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           title: Spent Amount
+        spend_recorded:
+          type: boolean
+          title: Spend Recorded
+          description: False when no spend has been recorded, so a zero spent_amount
+            is not a confirmed zero.
         remaining_budget:
           anyOf:
           - type: string
@@ -4693,6 +4705,7 @@ components:
       - item_count
       - total_budget
       - spent_amount
+      - spend_recorded
       - currency
       - notes
       - items
@@ -4792,6 +4805,13 @@ components:
             format: date-time
           - type: 'null'
           title: Source As Of
+        source_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Ref
+          description: Identifier of the single versioned record this section was
+            projected from, when one exists.
         evidence_tier:
           $ref: '#/components/schemas/ReportEvidenceTier'
         evidence_note:
@@ -5390,6 +5410,13 @@ components:
             format: date-time
           - type: 'null'
           title: Source As Of
+        source_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Ref
+          description: Identifier of the single versioned record this section was
+            projected from, when one exists.
         evidence_tier:
           $ref: '#/components/schemas/ReportEvidenceTier'
         evidence_note:
@@ -6476,6 +6503,13 @@ components:
             format: date-time
           - type: 'null'
           title: Source As Of
+        source_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Ref
+          description: Identifier of the single versioned record this section was
+            projected from, when one exists.
         evidence_tier:
           $ref: '#/components/schemas/ReportEvidenceTier'
         evidence_note:
@@ -6747,6 +6781,13 @@ components:
             format: date-time
           - type: 'null'
           title: Source As Of
+        source_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Ref
+          description: Identifier of the single versioned record this section was
+            projected from, when one exists.
         evidence_tier:
           $ref: '#/components/schemas/ReportEvidenceTier'
         evidence_note:
@@ -6934,6 +6975,13 @@ components:
             format: date-time
           - type: 'null'
           title: Source As Of
+        source_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Ref
+          description: Identifier of the single versioned record this section was
+            projected from, when one exists.
         evidence_tier:
           $ref: '#/components/schemas/ReportEvidenceTier'
         evidence_note:
@@ -7208,6 +7256,13 @@ components:
             format: date-time
           - type: 'null'
           title: Source As Of
+        source_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Ref
+          description: Identifier of the single versioned record this section was
+            projected from, when one exists.
         evidence_tier:
           $ref: '#/components/schemas/ReportEvidenceTier'
         evidence_note:
@@ -7422,6 +7477,13 @@ components:
             format: date-time
           - type: 'null'
           title: Source As Of
+        source_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Ref
+          description: Identifier of the single versioned record this section was
+            projected from, when one exists.
         evidence_tier:
           $ref: '#/components/schemas/ReportEvidenceTier'
         evidence_note:
@@ -7594,6 +7656,13 @@ components:
             format: date-time
           - type: 'null'
           title: Source As Of
+        source_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Ref
+          description: Identifier of the single versioned record this section was
+            projected from, when one exists.
         evidence_tier:
           $ref: '#/components/schemas/ReportEvidenceTier'
         evidence_note:
@@ -7640,6 +7709,13 @@ components:
             format: date-time
           - type: 'null'
           title: Source As Of
+        source_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Ref
+          description: Identifier of the single versioned record this section was
+            projected from, when one exists.
         evidence_tier:
           $ref: '#/components/schemas/ReportEvidenceTier'
         evidence_note:
@@ -8215,6 +8291,13 @@ components:
             format: date-time
           - type: 'null'
           title: Source As Of
+        source_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Ref
+          description: Identifier of the single versioned record this section was
+            projected from, when one exists.
         evidence_tier:
           $ref: '#/components/schemas/ReportEvidenceTier'
         evidence_note:
@@ -9140,6 +9223,13 @@ components:
             format: date-time
           - type: 'null'
           title: Source As Of
+        source_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Ref
+          description: Identifier of the single versioned record this section was
+            projected from, when one exists.
         evidence_tier:
           $ref: '#/components/schemas/ReportEvidenceTier'
         evidence_note:
@@ -9768,6 +9858,13 @@ components:
             format: date-time
           - type: 'null'
           title: Source As Of
+        source_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Ref
+          description: Identifier of the single versioned record this section was
+            projected from, when one exists.
         evidence_tier:
           $ref: '#/components/schemas/ReportEvidenceTier'
         evidence_note:

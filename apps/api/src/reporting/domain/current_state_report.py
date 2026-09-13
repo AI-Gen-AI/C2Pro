@@ -70,6 +70,10 @@ class ReportSectionBase(BaseModel):
     status_reason: str | None = None
     source_domain: str
     source_as_of: datetime | None = None
+    source_ref: str | None = Field(
+        default=None,
+        description="Identifier of the single versioned record this section was projected from, when one exists.",
+    )
     evidence_tier: ReportEvidenceTier
     evidence_note: str | None = None
 
@@ -298,6 +302,9 @@ class BudgetData(BaseModel):
     item_count: int
     total_budget: Decimal
     spent_amount: Decimal
+    spend_recorded: bool = Field(
+        description="False when no spend has been recorded, so a zero spent_amount is not a confirmed zero."
+    )
     remaining_budget: Decimal | None = Field(
         default=None,
         description="Null when no spend has been recorded, because remaining would merely restate total.",

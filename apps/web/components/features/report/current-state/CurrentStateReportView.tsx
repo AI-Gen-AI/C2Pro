@@ -34,7 +34,7 @@ type Sections = CurrentStateReport["sections"];
 
 type SectionEnvelope = Pick<
   Sections["documents"],
-  "status" | "status_reason" | "source_domain" | "source_as_of" | "evidence_tier" | "evidence_note"
+  "status" | "status_reason" | "source_domain" | "source_as_of" | "source_ref" | "evidence_tier" | "evidence_note"
 >;
 
 const CONTENT_SECTION_ORDER = [
@@ -185,6 +185,19 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 // Section shell
 // ---------------------------------------------------------------------------
 
+const SNAPSHOT_REF_PREFIX = "project_snapshot:";
+
+function sourceLine(section: SectionEnvelope): string {
+  const asOf = section.source_as_of
+    ? `As of ${formatDateTime(section.source_as_of)}`
+    : "Source records carry no timestamp";
+  const ref = section.source_ref;
+  if (ref && ref.startsWith(SNAPSHOT_REF_PREFIX)) {
+    return `${asOf} · snapshot ${ref.slice(SNAPSHOT_REF_PREFIX.length, SNAPSHOT_REF_PREFIX.length + 8)}`;
+  }
+  return asOf;
+}
+
 function SectionCard({
   sectionKey,
   section,
@@ -214,7 +227,7 @@ function SectionCard({
         </div>
         {available ? (
           <p data-testid="section-source" className="text-xs text-muted-foreground">
-            {section.source_as_of ? `As of ${formatDateTime(section.source_as_of)}` : "Source records carry no timestamp"}
+            {sourceLine(section)}
           </p>
         ) : null}
       </CardHeader>
@@ -471,19 +484,20 @@ function HitlBody({ data }: { data: SectionData<"hitl"> }) {
 
 function BudgetBody({ data }: { data: SectionData<"budget"> }) {
   if (!data) return null;
-  const spendRecorded = data.remaining_budget !== null && data.remaining_budget !== undefined;
   return (
     <>
       <dl className="grid grid-cols-3 gap-2">
         <Fact label="Total">{formatMoney(data.total_budget, data.currency)}</Fact>
         <div data-testid="budget-spend">
-          <Fact label="Spend">{spendRecorded ? formatMoney(data.spent_amount, data.currency) : "No spend recorded"}</Fact>
+          <Fact label="Spend">
+            {data.spend_recorded ? formatMoney(data.spent_amount, data.currency) : "No spend recorded"}
+          </Fact>
         </div>
         <div data-testid="budget-remaining">
           <Fact label="Remaining">
-            {spendRecorded && data.remaining_budget !== null && data.remaining_budget !== undefined
-              ? formatMoney(data.remaining_budget, data.currency)
-              : "Not shown"}
+            {data.remaining_budget === null || data.remaining_budget === undefined
+              ? "Not shown"
+              : formatMoney(data.remaining_budget, data.currency)}
           </Fact>
         </div>
       </dl>
