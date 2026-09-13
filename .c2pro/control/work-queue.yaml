@@ -5,21 +5,14 @@ queue_policy:
   completed_items_forbidden: true
   historical_source: git_pr_ci_evidence
 items:
-  - work_id: C2PRO-DEV-02
+  - work_id: C2PRO-DEV-03
     status: in_progress
     role: orchestrator
-    work_ref: .c2pro/work/C2PRO-DEV-02.yaml
-    priority: P0
-    depends_on:
-      - C2PRO-DEV-01
-    review_policy: principal_and_challenger
-  - work_id: C2PRO-DEV-03
-    status: ready
-    role: orchestrator
-    work_ref: null
+    work_ref: .c2pro/work/C2PRO-DEV-03.yaml
     priority: P0
     depends_on:
       - C2PRO-DEV-00
+      - C2PRO-DEV-02
     review_policy: independent_principal
   - work_id: C2PRO-DEV-04
     status: blocked
