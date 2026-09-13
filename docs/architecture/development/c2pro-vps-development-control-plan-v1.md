@@ -397,6 +397,22 @@ bounded auto-merge for pre-authorized low/medium risk classes
 
 The LLM should not itself be the final mechanical enforcement boundary for merging.
 
+### Repository-policy CI classification
+
+The canonical reconciler freezes the active ruleset or branch-protection policy for the
+integration target before evaluating CI. Required status contexts retain their GitHub
+integration identity and are classified as `REQUIRED_GATE`. Explicit quality checks that
+are not required by policy are `ADVISORY_CHECK`; execution telemetry is
+`OBSERVABILITY_SIGNAL`. Unknown signals remain visible and fail closed until classified,
+but are not reported as failed required gates.
+
+Only the sealed head SHA and selected workflow run/attempt may satisfy a required gate.
+Pending, missing, cancelled, and failed are separate blocking states. Advisory failures
+are archived without blocking. Reconciliation evidence records the target/base SHA,
+sealed head, policy snapshot hash, required gates, classified signals, workflow attempts,
+gate matrix, and decision reason. Repository mergeability and any package-specific gates
+remain additional requirements.
+
 ---
 
 ## 10. Worker authority hierarchy

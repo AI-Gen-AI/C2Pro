@@ -10,6 +10,37 @@ import yaml
 from core.reconciler import ReconciliationError, ValidationError, reconcile_result
 
 
+def policy_ci_evidence(head_sha, *, build_status="success"):
+    """TS-G2-CI-GATES-618: build policy-aware CI evidence for reconciler tests."""
+    return {
+        "ci_sha": head_sha,
+        "ci_status": "success",
+        "policy": {
+            "target_branch": "main",
+            "rulesets": [{
+                "id": 18843913,
+                "name": "test dynamic policy",
+                "enforcement": "active",
+                "rules": [{
+                    "type": "required_status_checks",
+                    "parameters": {"required_status_checks": [
+                        {"context": "build", "integration_id": 15368},
+                        {"context": "secrets", "integration_id": 15368},
+                    ]},
+                }],
+            }],
+        },
+        "signals": [
+            {"name": "build", "status": build_status, "sha": head_sha, "run_id": 10, "attempt": 2, "integration_id": 15368},
+            {"name": "secrets", "status": "success", "sha": head_sha, "run_id": 10, "attempt": 2, "integration_id": 15368},
+            {"name": "codecov/patch", "status": "failure", "sha": head_sha, "run_id": 10, "attempt": 2,
+             "classification": "ADVISORY_CHECK"},
+        ],
+        "current_run_id": 10,
+        "current_attempt": 2,
+    }
+
+
 @pytest.fixture
 def mock_control_plane(tmp_path):
     """Fixture to provision a complete mocked .c2pro control directory."""
@@ -146,6 +177,55 @@ def test_reconciliation_happy_path(mock_control_plane, valid_worker_result):
     assert record["reconciled_at"] == mock_time
 
 
+def test_policy_gate_evidence_is_enforced_and_archived(mock_control_plane, valid_worker_result):
+    """TS-G2-CI-GATES-618: advisory failure permits merge and the frozen matrix is archived."""
+    head = "7c3a8347a5bea0c28f2e540559bd515f9afd282a"
+    remote_evidence = {
+        "remote_head_sha": head, "pr_head_sha": head,
+        "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
+        "pr_base_branch": "main", "pr_state": "merged",
+        "merge_commit_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "authoritative_main_sha": "f00baaf00baaf00baaf00baaf00baaf00baaf00b",
+        "main_contains_merge_commit": True,
+    }
+
+    outcome = reconcile_result(
+        valid_worker_result, remote_evidence, policy_ci_evidence(head), mock_control_plane
+    )
+
+    assert outcome["status"] == "RECONCILED"
+    with open(mock_control_plane / "reconciliation-history.yaml", encoding="utf-8") as stream:
+        record = yaml.safe_load(stream)["completed_work"]["C2PRO-DEV-02"]
+    evidence = record["merge_gate_evidence"]
+    assert evidence["decision"] == "MERGE_ALLOWED"
+    assert evidence["policy_snapshot"]["snapshot_hash"]
+    assert evidence["target_branch"] == "main"
+    assert evidence["base_sha"] == remote_evidence["pr_base_sha"]
+    assert {item["classification"] for item in evidence["signals"]} == {
+        "REQUIRED_GATE", "ADVISORY_CHECK"
+    }
+
+
+def test_failed_policy_required_gate_prevents_reconciliation(mock_control_plane, valid_worker_result):
+    """TS-G2-CI-GATES-618: aggregate success cannot mask a failed repository-required gate."""
+    head = "7c3a8347a5bea0c28f2e540559bd515f9afd282a"
+    remote_evidence = {
+        "remote_head_sha": head, "pr_head_sha": head,
+        "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
+        "pr_base_branch": "main", "pr_state": "merged",
+    }
+
+    with pytest.raises(ValidationError, match="required gates failed"):
+        reconcile_result(
+            valid_worker_result,
+            remote_evidence,
+            policy_ci_evidence(head, build_status="failure"),
+            mock_control_plane,
+        )
+
+
 def test_red_a_remote_head_mismatch(mock_control_plane, valid_worker_result):
     """Test RED A: actual remote HEAD mismatch with the result's head_sha fails."""
     remote_evidence = {
@@ -241,7 +321,10 @@ recommendation: approve
         "ci_status": "success",
     }
 
-    with pytest.raises(ValidationError, match="Result schema validation failed.*'pr_url' is a required property"):
+    with pytest.raises(
+        ValidationError,
+        match="(?:Result schema validation failed.*'pr_url' is a required property|Invalid or missing pr_url)",
+    ):
         reconcile_result(
             malformed_result,
             remote_evidence=remote_evidence,
