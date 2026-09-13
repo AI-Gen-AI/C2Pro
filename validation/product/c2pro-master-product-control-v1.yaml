@@ -18,8 +18,11 @@ parity:
     - north_star.current_product_wedge_id
     - coherence_runtime_reconciliation.global_authoritative_cutover
     - legacy_coverage.unmapped_open_legacy_items
+    - project_controls_model.invariant
+    - product_semantics.canonical_dimensions
+    - PWBS-PROJECT-CONTROLS.priority
     - "product_wbs[*].id + realization_status + work_status (canonical 8-plane set)"
-    - "adr(ADR-018,ADR-024).{realization_status,deployment_status,prod_validation_status}"
+    - "adr(ADR-018,ADR-024,ADR-025).{realization_status,deployment_status,prod_validation_status}"
     - p0b_vertical_contract.done_definition (sha256-16 digest)
     - p0b_vertical_contract.invariant_ids
 
@@ -182,7 +185,7 @@ adr_realization:
   - {adr: "ADR-022-contract-clarity", ns: v3_canon, priority: P2, design_status: Accepted, realization_status: WIRED, deployment_status: DEPLOYED, prod_validation_status: NOT_VALIDATED, evidence: "contract clarity findings path", gap: "not user/prod validated"}
   - {adr: "ADR-023-agentic-coherence", ns: v3_canon, priority: P1, design_status: Proposed, realization_status: DESIGNED, deployment_status: NONE, prod_validation_status: NONE, evidence: "ADR + roadmap", gap: "not built"}
   - {adr: "ADR-024-single-doc-activation", ns: v3_canon, priority: P0b, design_status: Accepted, realization_status: WIRED, deployment_status: NONE, prod_validation_status: NONE, evidence: "L4-1..L4-4 merged; L4-5 remains active", gap: "user-visible UI/report + production validation"}
-  - {adr: "ADR-025-canonical-project-controls-wbs-backbone", ns: v3_canon, priority: P1, design_status: Accepted, realization_status: PARTIAL, deployment_status: PARTIAL, prod_validation_status: NONE, evidence: "project-scoped nested-set WBS exists with parent/depth/date/budget fields", gap: "one-root invariant and cross-domain linkage not proven; no production backbone journey"}
+  - {adr: "ADR-025-canonical-project-controls-wbs-backbone", ns: v3_canon, priority: P1, design_status: Accepted, realization_status: PARTIAL, deployment_status: NONE, prod_validation_status: NONE, evidence: "project-scoped nested-set WBS exists with parent/depth/date/budget fields in merged code; no production evidence proves the ADR-025 backbone", gap: "one-root invariant and cross-domain linkage not proven; no deployment/prod-validation evidence for the backbone"}
 
 coherence_runtime_reconciliation:
   status: COMPLETE
@@ -371,7 +374,7 @@ phase_roadmap:
   - {phase: "P0b", name: "Single-document Health activation", status: "ACTIVE / PARTIAL", plane: ACT-HEALTH, adrs: [ADR-024, ADR-018, ADR-022], notes: "L4-1..L4-4 DONE at code/merge level; L4-5 ACTIVE; not PROD_VALIDATED."}
   - {phase: "P0c", name: "What Changed / Temporal Change", status: "CANDIDATE_UNMERGED", planes: [TEMPORAL-CHANGE], adrs: [ADR-015, ADR-016], notes: "candidate branch exists; main realization remains SCAFFOLDED."}
   - {phase: "P0d", name: "Current State Reporting", status: "CANDIDATE_UNMERGED", planes: [EXEC-REPORTING], adrs: [ADR-021], notes: "candidate branch exists; canonical EXEC-REPORTING remains SCAFFOLDED/DEFERRED until merge and validation."}
-  - {phase: "P1", name: "Project Controls Backbone + Coherence + alert visibility", status: PLANNED, planes: [PROJECT-CONTROLS, COHERENCE-XDOC, TEMPORAL-CHANGE], adrs: [ADR-025, ADR-018, ADR-009, ADR-015, ADR-016, ADR-017, ADR-023], notes: "one WBS per project; link budget/schedule/stakeholders/evidence/change/alerts; alert visibility is P1 cross-cutting, full Action/HITL remains P2."}
+  - {phase: "P1", name: "Project Controls Backbone + Coherence + alert visibility", status: PLANNED, planes: [PROJECT-CONTROLS, COHERENCE-XDOC], adrs: [ADR-025, ADR-018, ADR-009, ADR-017, ADR-023], notes: "one WBS per project; link budget/schedule/stakeholders/evidence/change/alerts; consumes P0c temporal/change outputs rather than duplicating that phase; alert visibility is P1 cross-cutting, full Action/HITL remains P2."}
   - {phase: "P2", name: "Procurement execution + richer Actions/HITL + governed communications", status: PLANNED, planes: [PROCUREMENT, ALERTS-ACTIONS-HITL], adrs: [ADR-025, ADR-019, ADR-020], notes: "Procurement packages derive from canonical WBS; Plan/BoQ/RFQ/bid/award/comms; action ownership/escalation/HITL."}
   - {phase: "P3", name: "Executive/PMO briefing + portfolio intelligence", status: DEFERRED, planes: [EXEC-REPORTING], adrs: [ADR-021], notes: "build on validated Current State + Evolution + Project Controls."}
 
@@ -437,7 +440,7 @@ risks:
 pr_disposition:
   "571": {action: HOLD_then_amend, reason: "historical product-closure-adjacent framing; retain only as corrected history"}
   "572": {action: REBUILT_clean, reason: "historical product-control reconciliation"}
-  "620": {action: DRAFT_RECONCILIATION, reason: "ADR-025 + governing amendments + MASTER #619 reconciliation; human merge required"}
+  "620": {action: HUMAN_REVIEW_REQUIRED, reason: "ADR-025 + governing amendments + MASTER #619 reconciliation; ready-state does not authorize merge; human merge required"}
 
 next_authorized_action:
   - "Immediate P0: complete P0b-L4-5 and obtain production evidence for the single-document Health journey."
