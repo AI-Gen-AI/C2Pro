@@ -1,152 +1,40 @@
 /**
- * Test Suite ID: TASK-FRT-188
- * Route Coverage: project audit report export route.
+ * Test Suite ID: TS-P0D-REPORT-UI-003
+ * Report page: Current state is the default mode; the Audit export stays available.
+ * Audit composition coverage (TASK-FRT-188) lives in AuditReportMode.test.tsx.
  */
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { renderWithProviders, screen, waitFor } from "@/src/tests/test-utils";
+import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { renderWithProviders, screen } from "@/src/tests/test-utils";
 import ProjectReportPage from "./page";
 
-const useParamsMock = vi.fn();
-const useProjectMock = vi.fn();
-const getDashboardSummaryMock = vi.fn();
-const useProjectAlertsMock = vi.fn();
-const useProjectDocumentsMock = vi.fn();
-const useReviewQueueMock = vi.fn();
+vi.mock("next/navigation", () => ({ useParams: () => ({ id: "proj-report-9" }) }));
 
-vi.mock("next/navigation", () => ({
-  useParams: () => useParamsMock(),
+vi.mock("@/components/features/report/current-state/CurrentStateReportMode", () => ({
+  CurrentStateReportMode: ({ projectId }: { projectId: string }) => (
+    <div data-testid="current-state-mode">current state for {projectId}</div>
+  ),
 }));
 
-vi.mock("@/hooks/useProject", () => ({
-  useProject: (...args: unknown[]) => useProjectMock(...args),
-}));
-
-vi.mock("@/hooks/useProjectDocuments", () => ({
-  useProjectDocuments: (...args: unknown[]) => useProjectDocumentsMock(...args),
-}));
-
-vi.mock("@/lib/api/services/dashboard", () => ({
-  getDashboardSummary: (...args: unknown[]) => getDashboardSummaryMock(...args),
-}));
-
-vi.mock("@/lib/api/generated/alerts/alerts", () => ({
-  useListProjectAlertsApiV1AlertsProjectsProjectIdGet: (...args: unknown[]) =>
-    useProjectAlertsMock(...args),
-}));
-
-vi.mock("@/lib/api/generated/hitl/hitl", () => ({
-  useListReviewQueueApiV1HitlQueueGet: (...args: unknown[]) =>
-    useReviewQueueMock(...args),
+vi.mock("@/components/features/report/AuditReportMode", () => ({
+  AuditReportMode: ({ projectId }: { projectId: string }) => (
+    <div data-testid="audit-mode">audit for {projectId}</div>
+  ),
 }));
 
 describe("ProjectReportPage", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    useParamsMock.mockReturnValue({ id: "proj-188" });
-    useProjectMock.mockReturnValue({
-      data: {
-        id: "proj-188",
-        name: "Hospital North",
-        code: "HN-01",
-        status: "active",
-        created_at: "2026-07-01T00:00:00Z",
-        updated_at: "2026-07-10T00:00:00Z",
-      },
-      isLoading: false,
-      error: null,
-    });
-    getDashboardSummaryMock.mockResolvedValue({
-      project_id: "proj-188",
-      tenant_id: "tenant-188",
-      coherence_score: 88,
-      global_score: 88,
-      sub_scores: {},
-      weights_used: {},
-      alert_count: 1,
-      document_count: 1,
-      methodology_version: "v2",
-      score_version: "coherence-v2",
-      score_reason: null,
-      score_missing_dimensions: [],
-      last_updated: "2026-07-10T10:00:00Z",
-    });
-    useProjectAlertsMock.mockReturnValue({
-      data: {
-        items: [
-          {
-            id: "alert-1",
-            project_id: "proj-188",
-            tenant_id: "tenant-188",
-            rule_code: "DET-BUD-SUM",
-            category: "BUDGET",
-            severity: "high",
-            message: "Budget mismatch requires review.",
-            status: "open",
-            created_at: "2026-07-10T09:00:00Z",
-          },
-        ],
-        total: 1,
-      },
-      isLoading: false,
-      error: null,
-    });
-    useProjectDocumentsMock.mockReturnValue({
-      documents: [
-        {
-          id: "doc-budget",
-          name: "Budget.xlsx",
-          type: "budget",
-          extension: "xlsx",
-          url: "",
-          status: "parsed",
-        },
-      ],
-      loading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
-    useReviewQueueMock.mockReturnValue({
-      data: {
-        items: [
-          {
-            item_id: "review-1",
-            item_type: "final_decision_package",
-            current_status: "approved",
-            confidence: 0.95,
-            impact_level: "high",
-            approved_by: "Rosa Reviewer",
-            approved_at: "2026-07-11T10:00:00Z",
-            sla_due_date: "2026-07-12T10:00:00Z",
-            created_at: "2026-07-10T10:00:00Z",
-            item_data: { summary: "Decision package approved for release." },
-          },
-        ],
-        total: 1,
-      },
-      isLoading: false,
-      error: null,
-    });
+  it("opens on the current state report for the project", () => {
+    renderWithProviders(<ProjectReportPage />);
+    expect(screen.getByRole("tab", { name: "Current state" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("current-state-mode")).toHaveTextContent("current state for proj-report-9");
+    expect(screen.queryByTestId("audit-mode")).toBeNull();
   });
 
-  it("composes the audit report from project, dashboard, alerts, and document sources", async () => {
+  it("keeps the audit export reachable as a second mode", async () => {
+    const user = userEvent.setup();
     renderWithProviders(<ProjectReportPage />);
-
-    await waitFor(() => {
-      expect(getDashboardSummaryMock).toHaveBeenCalledWith("proj-188");
-    });
-
-    expect(useProjectMock).toHaveBeenCalledWith("proj-188");
-    expect(useProjectAlertsMock).toHaveBeenCalledWith("proj-188", undefined);
-    expect(useProjectDocumentsMock).toHaveBeenCalledWith("proj-188");
-    expect(useReviewQueueMock).toHaveBeenCalledWith(
-      { project_id: "proj-188", limit: 200 },
-      { query: { enabled: true } },
-    );
-    expect(
-      await screen.findByRole("heading", { name: /audit report/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Hospital North")).toBeInTheDocument();
-    expect(screen.getByText("Budget mismatch requires review.")).toBeInTheDocument();
-    expect(screen.getByText("Decision package approved for release.")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Audit export" }));
+    expect(screen.getByTestId("audit-mode")).toHaveTextContent("audit for proj-report-9");
+    expect(screen.queryByTestId("current-state-mode")).toBeNull();
   });
 });

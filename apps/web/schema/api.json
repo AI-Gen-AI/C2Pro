@@ -1462,6 +1462,56 @@
         }
       }
     },
+    "/api/v1/projects/{project_id}/reports/current-state": {
+      "get": {
+        "tags": ["project-reports"],
+        "summary": "Get the current state report for a project",
+        "description": "Project the current state of a project the caller owns.\n\nNo domain source is read until project ownership is confirmed, so a foreign\nor unknown project id costs nothing and reveals nothing.",
+        "operationId": "get_current_state_report_api_v1_projects__project_id__reports_current_state_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentStateReport"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found, or it belongs to another tenant. The two are deliberately indistinguishable."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{project_id}/documents": {
       "post": {
         "tags": ["Documents"],
@@ -3443,7 +3493,7 @@
       "post": {
         "tags": ["Admin", "DLQ"],
         "summary": "Retry a DLQ entry",
-        "description": "TS-BCK-042-001: Retry a DLQ entry for organization administrators.",
+        "description": "Retry a cross-tenant DLQ entry as an authorized platform operator.",
         "operationId": "retry_dlq_entry_api_v1_admin_dlq__dlq_id__retry_post",
         "security": [
           {
@@ -5985,6 +6035,80 @@
         "required": ["alert_id", "items"],
         "title": "AlertHistoryResponse"
       },
+      "AlertItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "sla_due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sla Due At"
+          },
+          "overdue": {
+            "type": "boolean",
+            "title": "Overdue"
+          },
+          "source_clause_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Clause Id"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "severity",
+          "category",
+          "status",
+          "created_at",
+          "overdue",
+          "evidence_tier"
+        ],
+        "title": "AlertItem"
+      },
       "AlertListResponse": {
         "properties": {
           "items": {
@@ -6209,6 +6333,117 @@
         },
         "type": "object",
         "title": "AlertWorkspaceSettingsPayload"
+      },
+      "AlertsData": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "open_count": {
+            "type": "integer",
+            "title": "Open Count"
+          },
+          "open_by_severity": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Open By Severity"
+          },
+          "overdue_open_count": {
+            "type": "integer",
+            "title": "Overdue Open Count"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlertItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "evidence_breakdown": {
+            "$ref": "#/components/schemas/EvidenceBreakdown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "open_count",
+          "open_by_severity",
+          "overdue_open_count",
+          "items",
+          "evidence_breakdown"
+        ],
+        "title": "AlertsData"
+      },
+      "AlertsSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AlertsData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "AlertsSection"
       },
       "AnalysisStatus": {
         "properties": {
@@ -6462,6 +6697,34 @@
         "title": "ApproveRequest",
         "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is never\naccepted from the client \u2014 it is derived server-side from the\nauthenticated session (Depends(get_current_user)). A client-supplied\nreviewer field here would let any authenticated user forge a review as\nanother user, corrupting the HITL audit trail. This body is currently\nempty by design; do not add a reviewer identity field back."
       },
+      "AttentionItem": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "level": {
+            "$ref": "#/components/schemas/AttentionLevel"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["kind", "level", "message", "section_key"],
+        "title": "AttentionItem"
+      },
+      "AttentionLevel": {
+        "type": "string",
+        "enum": ["critical", "warning", "info"],
+        "title": "AttentionLevel"
+      },
       "AuthErrorResponse": {
         "properties": {
           "detail": {
@@ -6516,6 +6779,71 @@
         "required": ["document_type", "file"],
         "title": "Body_upload_document_for_processing_api_v1_projects__project_id__documents_post"
       },
+      "BudgetData": {
+        "properties": {
+          "item_count": {
+            "type": "integer",
+            "title": "Item Count"
+          },
+          "total_budget": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Budget"
+          },
+          "spent_amount": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Spent Amount"
+          },
+          "remaining_budget": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Budget",
+            "description": "Null when no spend has been recorded, because remaining would merely restate total."
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetLineItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "item_count",
+          "total_budget",
+          "spent_amount",
+          "currency",
+          "notes",
+          "items"
+        ],
+        "title": "BudgetData"
+      },
       "BudgetInput": {
         "properties": {
           "amount": {
@@ -6533,6 +6861,32 @@
         "required": ["amount"],
         "title": "BudgetInput",
         "description": "Budget input model."
+      },
+      "BudgetLineItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "name", "code", "amount"],
+        "title": "BudgetLineItem"
       },
       "BudgetReconciliation": {
         "properties": {
@@ -6593,6 +6947,68 @@
         "required": ["items_sum", "deviation_pct", "direction"],
         "title": "BudgetReconciliation",
         "description": "TASK-BCK-093: Typed reconciliation fields from DET-BUD FindingSignal.raw_data."
+      },
+      "BudgetSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BudgetData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "BudgetSection"
       },
       "BulkDocumentItem": {
         "properties": {
@@ -7158,6 +7574,86 @@
         "title": "CoherenceCategory",
         "description": "Canonical coherence categories used by score calculators."
       },
+      "CoherenceData": {
+        "properties": {
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "score_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Version"
+          },
+          "score_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Reason"
+          },
+          "missing_dimensions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Dimensions"
+          },
+          "sub_scores": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Sub Scores"
+          },
+          "evaluation_alert_count": {
+            "type": "integer",
+            "title": "Evaluation Alert Count",
+            "description": "Alerts counted by the coherence evaluation that produced the score. This can differ from the Alerts section, which lists the project alert register."
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At",
+            "description": "Latest project activity considered by the coherence dashboard; not the evaluation time."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["evaluation_alert_count"],
+        "title": "CoherenceData"
+      },
       "CoherenceEvaluateRequest": {
         "properties": {
           "project_id": {
@@ -7298,6 +7794,68 @@
         "required": ["overall_score", "alerts"],
         "title": "CoherenceResult",
         "description": "Represents the complete result of a coherence evaluation, including alerts and the final score."
+      },
+      "CoherenceSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoherenceData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "CoherenceSection"
       },
       "CoherenceV2Payload": {
         "properties": {
@@ -7581,6 +8139,110 @@
         "required": ["name"],
         "title": "CreateWBSItemInput",
         "description": "Input model for creating a WBS item."
+      },
+      "CurrentStateReport": {
+        "properties": {
+          "report_schema_version": {
+            "type": "string",
+            "title": "Report Schema Version",
+            "default": "current-state-report/v1"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "project": {
+            "$ref": "#/components/schemas/ProjectIdentity"
+          },
+          "content_fingerprint": {
+            "type": "string",
+            "title": "Content Fingerprint",
+            "description": "sha256 over project identity and section content, excluding generated_at. Two reports with the same fingerprint describe the same state."
+          },
+          "sections": {
+            "$ref": "#/components/schemas/CurrentStateSections"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "generated_at",
+          "project",
+          "content_fingerprint",
+          "sections"
+        ],
+        "title": "CurrentStateReport",
+        "description": "Current project state, projected at ``generated_at`` from authoritative reads."
+      },
+      "CurrentStateSections": {
+        "properties": {
+          "executive_summary": {
+            "$ref": "#/components/schemas/ExecutiveSummarySection"
+          },
+          "documents": {
+            "$ref": "#/components/schemas/DocumentsSection"
+          },
+          "health": {
+            "$ref": "#/components/schemas/HealthSection"
+          },
+          "missing_evidence": {
+            "$ref": "#/components/schemas/MissingEvidenceSection"
+          },
+          "coherence": {
+            "$ref": "#/components/schemas/CoherenceSection"
+          },
+          "alerts": {
+            "$ref": "#/components/schemas/AlertsSection"
+          },
+          "hitl": {
+            "$ref": "#/components/schemas/HitlSection"
+          },
+          "budget": {
+            "$ref": "#/components/schemas/BudgetSection"
+          },
+          "wbs": {
+            "$ref": "#/components/schemas/WbsSection"
+          },
+          "stakeholders": {
+            "$ref": "#/components/schemas/StakeholdersSection"
+          },
+          "raci": {
+            "$ref": "#/components/schemas/RaciSection"
+          },
+          "risks": {
+            "$ref": "#/components/schemas/NotModeledSection"
+          },
+          "obligations": {
+            "$ref": "#/components/schemas/NotModeledSection"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/NotModeledSection"
+          },
+          "evidence_quality": {
+            "$ref": "#/components/schemas/EvidenceQualitySection"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "executive_summary",
+          "documents",
+          "health",
+          "missing_evidence",
+          "coherence",
+          "alerts",
+          "hitl",
+          "budget",
+          "wbs",
+          "stakeholders",
+          "raci",
+          "risks",
+          "obligations",
+          "schedule",
+          "evidence_quality"
+        ],
+        "title": "CurrentStateSections"
       },
       "DLQEntryResponse": {
         "properties": {
@@ -8099,6 +8761,65 @@
         "title": "DocumentHistoryResponse",
         "description": "Ordered history events for a single document."
       },
+      "DocumentItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "document_type": {
+            "type": "string",
+            "title": "Document Type"
+          },
+          "upload_status": {
+            "type": "string",
+            "title": "Upload Status"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "uploaded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploaded At"
+          },
+          "parsed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parsed At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "filename",
+          "document_type",
+          "upload_status",
+          "version"
+        ],
+        "title": "DocumentItem"
+      },
       "DocumentListItem": {
         "properties": {
           "id": {
@@ -8594,6 +9315,112 @@
         "title": "DocumentUploadResponse",
         "description": "Response for parse endpoints."
       },
+      "DocumentsData": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Status"
+          },
+          "by_type": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Type"
+          },
+          "counts_are_partial": {
+            "type": "boolean",
+            "title": "Counts Are Partial",
+            "description": "True when by_status/by_type cover only the documents that could be loaded, not total.",
+            "default": false
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["total", "by_status", "by_type", "items"],
+        "title": "DocumentsData"
+      },
+      "DocumentsSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentsData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "DocumentsSection"
+      },
       "EnrichedCoherenceResult": {
         "properties": {
           "overall_score": {
@@ -8751,6 +9578,28 @@
         "title": "Evidence",
         "description": "Represents the specific evidence supporting an alert."
       },
+      "EvidenceBreakdown": {
+        "properties": {
+          "strong_linked": {
+            "type": "integer",
+            "title": "Strong Linked",
+            "default": 0
+          },
+          "weak_linked": {
+            "type": "integer",
+            "title": "Weak Linked",
+            "default": 0
+          },
+          "unlinked": {
+            "type": "integer",
+            "title": "Unlinked",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "EvidenceBreakdown"
+      },
       "EvidenceGranularity": {
         "type": "string",
         "enum": ["clause", "document"],
@@ -8803,6 +9652,115 @@
         "required": ["id", "title", "detail", "occurred_at"],
         "title": "EvidenceHistoryEventResponse",
         "description": "A persisted evidence-history event for a document timeline."
+      },
+      "EvidenceQualityData": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceQualityRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "available_section_tiers": {
+            "$ref": "#/components/schemas/EvidenceBreakdown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["rows", "available_section_tiers"],
+        "title": "EvidenceQualityData"
+      },
+      "EvidenceQualityRow": {
+        "properties": {
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["section_key", "status", "evidence_tier"],
+        "title": "EvidenceQualityRow"
+      },
+      "EvidenceQualitySection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceQualityData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "EvidenceQualitySection"
       },
       "EvidenceRef": {
         "properties": {
@@ -8942,6 +9900,153 @@
         "required": ["coherence_score", "risks", "evidence_links", "citations"],
         "title": "ExecuteDecisionResponseDTO",
         "description": "Refers to Suite ID: TS-I13-E2E-REAL-001."
+      },
+      "ExecutiveSummaryData": {
+        "properties": {
+          "attention_items": {
+            "items": {
+              "$ref": "#/components/schemas/AttentionItem"
+            },
+            "type": "array",
+            "title": "Attention Items"
+          },
+          "document_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Count"
+          },
+          "parsed_document_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parsed Document Count"
+          },
+          "health_composite_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Composite Score"
+          },
+          "health_composite_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Composite Band"
+          },
+          "error_section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Error Section Keys"
+          },
+          "unavailable_section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unavailable Section Keys"
+          },
+          "not_modeled_section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Not Modeled Section Keys"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "attention_items",
+          "error_section_keys",
+          "unavailable_section_keys",
+          "not_modeled_section_keys"
+        ],
+        "title": "ExecutiveSummaryData"
+      },
+      "ExecutiveSummarySection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutiveSummaryData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "ExecutiveSummarySection"
       },
       "FindingSignal": {
         "properties": {
@@ -9112,6 +10217,41 @@
         "enum": ["healthy", "watch", "at_risk", "critical", "unknown"],
         "title": "HealthBand"
       },
+      "HealthData": {
+        "properties": {
+          "composite_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composite Score"
+          },
+          "composite_band": {
+            "type": "string",
+            "title": "Composite Band"
+          },
+          "computed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Computed At"
+          },
+          "dimensions": {
+            "items": {
+              "$ref": "#/components/schemas/HealthDimensionItem"
+            },
+            "type": "array",
+            "title": "Dimensions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["composite_band", "computed_at", "dimensions"],
+        "title": "HealthData"
+      },
       "HealthDimension": {
         "type": "string",
         "enum": [
@@ -9125,10 +10265,125 @@
         ],
         "title": "HealthDimension"
       },
+      "HealthDimensionItem": {
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "title": "Dimension"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "band": {
+            "type": "string",
+            "title": "Band"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "null_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Null Reason"
+          },
+          "missing_data": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Data"
+          },
+          "evidence_count": {
+            "type": "integer",
+            "title": "Evidence Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["dimension", "band", "confidence", "evidence_count"],
+        "title": "HealthDimensionItem"
+      },
       "HealthNullReason": {
         "type": "string",
         "enum": ["insufficient_evidence", "not_applicable", "budget_exhausted"],
         "title": "HealthNullReason"
+      },
+      "HealthSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HealthData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "HealthSection"
       },
       "HealthSignal": {
         "properties": {
@@ -9276,6 +10531,156 @@
         "title": "HealthVector",
         "description": "Project-level health vector across supported dimensions."
       },
+      "HitlData": {
+        "properties": {
+          "pending_count": {
+            "type": "integer",
+            "title": "Pending Count"
+          },
+          "overdue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overdue Count",
+            "description": "Null when not every pending item could be loaded, so the overdue count is unknown."
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HitlItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["pending_count", "items"],
+        "title": "HitlData"
+      },
+      "HitlItem": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "item_type": {
+            "type": "string",
+            "title": "Item Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "impact_level": {
+            "type": "string",
+            "title": "Impact Level"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "sla_due_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Sla Due Date"
+          },
+          "overdue": {
+            "type": "boolean",
+            "title": "Overdue"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "item_id",
+          "item_type",
+          "status",
+          "impact_level",
+          "confidence",
+          "created_at",
+          "sla_due_date",
+          "overdue"
+        ],
+        "title": "HitlItem"
+      },
+      "HitlSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HitlData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "HitlSection"
+      },
       "ImpactLevel": {
         "type": "string",
         "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
@@ -9400,6 +10805,103 @@
         "title": "MeResponse",
         "description": "Response para endpoint /me."
       },
+      "MissingEvidenceData": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MissingEvidenceItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["items"],
+        "title": "MissingEvidenceData"
+      },
+      "MissingEvidenceItem": {
+        "properties": {
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["source_domain", "subject", "description"],
+        "title": "MissingEvidenceItem"
+      },
+      "MissingEvidenceSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MissingEvidenceData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "MissingEvidenceSection"
+      },
       "MoveWBSItemInput": {
         "properties": {
           "new_parent_id": {
@@ -9417,6 +10919,62 @@
         "type": "object",
         "title": "MoveWBSItemInput",
         "description": "Input model for moving a WBS item."
+      },
+      "NotModeledSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "type": "null",
+            "title": "Data"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "NotModeledSection"
       },
       "NotificationChannel": {
         "type": "string",
@@ -9735,6 +11293,45 @@
         "required": ["name"],
         "title": "ProjectCreateRequest",
         "description": "Create project payload."
+      },
+      "ProjectIdentity": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "name"],
+        "title": "ProjectIdentity"
       },
       "ProjectListResponse": {
         "properties": {
@@ -10201,6 +11798,155 @@
         "title": "QueryResult",
         "description": "Resultado de query."
       },
+      "RaciData": {
+        "properties": {
+          "task_count": {
+            "type": "integer",
+            "title": "Task Count"
+          },
+          "assignment_count": {
+            "type": "integer",
+            "title": "Assignment Count"
+          },
+          "verified_assignment_count": {
+            "type": "integer",
+            "title": "Verified Assignment Count"
+          },
+          "tasks_without_accountable": {
+            "type": "integer",
+            "title": "Tasks Without Accountable"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/RaciTaskItem"
+            },
+            "type": "array",
+            "title": "Tasks"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "task_count",
+          "assignment_count",
+          "verified_assignment_count",
+          "tasks_without_accountable",
+          "tasks"
+        ],
+        "title": "RaciData"
+      },
+      "RaciSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RaciData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "RaciSection"
+      },
+      "RaciTaskItem": {
+        "properties": {
+          "task_code": {
+            "type": "string",
+            "title": "Task Code"
+          },
+          "task_name": {
+            "type": "string",
+            "title": "Task Name"
+          },
+          "accountable": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Accountable"
+          },
+          "responsible": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Responsible"
+          },
+          "assignment_count": {
+            "type": "integer",
+            "title": "Assignment Count"
+          },
+          "verified_count": {
+            "type": "integer",
+            "title": "Verified Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "task_code",
+          "task_name",
+          "accountable",
+          "responsible",
+          "assignment_count",
+          "verified_count"
+        ],
+        "title": "RaciTaskItem"
+      },
       "RagAnswerResponse": {
         "properties": {
           "answer": {
@@ -10446,6 +12192,12 @@
         "required": ["clause_id", "clause_code", "label", "reason"],
         "title": "RelationshipExplanationCitationResponse",
         "description": "Citation payload for a relationship explanation."
+      },
+      "ReportEvidenceTier": {
+        "type": "string",
+        "enum": ["strong_linked", "weak_linked", "unlinked", "unavailable"],
+        "title": "ReportEvidenceTier",
+        "description": "How well a section's facts trace back to source evidence."
       },
       "ResolveAlertRequest": {
         "properties": {
@@ -10745,6 +12497,11 @@
         "required": ["bundle_version", "values"],
         "title": "SecretChannelClerkResponse"
       },
+      "SectionStatus": {
+        "type": "string",
+        "enum": ["available", "empty", "unavailable", "not_modeled", "error"],
+        "title": "SectionStatus"
+      },
       "SeverityCount": {
         "properties": {
           "critical": {
@@ -10952,6 +12709,66 @@
         "type": "object",
         "required": ["name"],
         "title": "StakeholderCreateRequest"
+      },
+      "StakeholderItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "organization": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization"
+          },
+          "quadrant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quadrant"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "evidence_tier"],
+        "title": "StakeholderItem"
       },
       "StakeholderQuadrant": {
         "type": "string",
@@ -11260,6 +13077,120 @@
         "additionalProperties": false,
         "type": "object",
         "title": "StakeholderUpdateRequest"
+      },
+      "StakeholdersData": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "key_player_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Player Count",
+            "description": "Null when not every stakeholder could be loaded, so the count is unknown."
+          },
+          "by_quadrant": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Quadrant"
+          },
+          "counts_are_partial": {
+            "type": "boolean",
+            "title": "Counts Are Partial",
+            "description": "True when by_quadrant covers only the stakeholders that could be loaded, not total.",
+            "default": false
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StakeholderItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "evidence_breakdown": {
+            "$ref": "#/components/schemas/EvidenceBreakdown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["total", "by_quadrant", "items", "evidence_breakdown"],
+        "title": "StakeholdersData"
+      },
+      "StakeholdersSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StakeholdersData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "StakeholdersSection"
       },
       "SubscriptionPlan": {
         "type": "string",
@@ -11985,6 +13916,193 @@
         "required": ["items", "coverage", "alerts"],
         "title": "WBSOutput",
         "description": "Output model for WBS endpoint."
+      },
+      "WbsData": {
+        "properties": {
+          "node_count": {
+            "type": "integer",
+            "title": "Node Count"
+          },
+          "root_count": {
+            "type": "integer",
+            "title": "Root Count"
+          },
+          "leaf_count": {
+            "type": "integer",
+            "title": "Leaf Count"
+          },
+          "max_depth": {
+            "type": "integer",
+            "title": "Max Depth"
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Status"
+          },
+          "roots": {
+            "items": {
+              "$ref": "#/components/schemas/WbsNodeItem"
+            },
+            "type": "array",
+            "title": "Roots"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "node_count",
+          "root_count",
+          "leaf_count",
+          "max_depth",
+          "by_status",
+          "roots"
+        ],
+        "title": "WbsData"
+      },
+      "WbsNodeItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "node_type": {
+            "type": "string",
+            "title": "Node Type"
+          },
+          "planned_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Start"
+          },
+          "planned_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned End"
+          },
+          "budget_allocated": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Allocated"
+          },
+          "budget_spent": {
+            "type": "number",
+            "title": "Budget Spent"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name",
+          "status",
+          "node_type",
+          "budget_spent"
+        ],
+        "title": "WbsNodeItem"
+      },
+      "WbsSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WbsData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "WbsSection"
       }
     },
     "securitySchemes": {
