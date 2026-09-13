@@ -56,7 +56,9 @@ class TestRoutingPolicy:
             p.high_impact_threshold = 0.7  # type: ignore[misc]
 
     def test_equality(self) -> None:
-        assert RoutingPolicy() == RoutingPolicy()
+        policy = RoutingPolicy()
+        equivalent_policy = RoutingPolicy()
+        assert policy == equivalent_policy
         assert RoutingPolicy(high_impact_threshold=0.6) != RoutingPolicy(high_impact_threshold=0.7)
 
 
