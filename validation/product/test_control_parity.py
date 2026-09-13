@@ -388,6 +388,53 @@ def test_md_blocking_contradiction_detected() -> None:
     md = c.parse_md_block(broken)
     assert md[key] != canon[key]
 
+
+# ── Schema v6 Project Controls critical parity ────────────────────────────────
+
+
+def test_project_controls_priority_is_parity_checked() -> None:
+    """#619: P1 priority is canonical machine truth, not unguarded prose."""
+    canon = c.extract_canonical(c.load_yaml())
+    md = c.parse_md_block(_MD_TEXT)
+    key = "wbs.PWBS-PROJECT-CONTROLS.priority"
+    assert canon.get(key) == "P1", canon
+    assert md.get(key) == canon.get(key), (md.get(key), canon.get(key))
+
+
+def test_adr025_lifecycle_is_parity_checked() -> None:
+    """#619: ADR-025 lifecycle cannot drift between YAML and human MASTER."""
+    canon = c.extract_canonical(c.load_yaml())
+    md = c.parse_md_block(_MD_TEXT)
+    expected = {
+        "adr.ADR-025.realization": "PARTIAL",
+        "adr.ADR-025.deployment": "PARTIAL",
+        "adr.ADR-025.prod_validation": "NONE",
+    }
+    for key, value in expected.items():
+        assert canon.get(key) == value, (key, canon.get(key))
+        assert md.get(key) == value, (key, md.get(key))
+
+
+def test_project_controls_invariant_is_parity_checked() -> None:
+    """#619: one-project/one-WBS invariant is guarded as an exact canonical value."""
+    canon = c.extract_canonical(c.load_yaml())
+    md = c.parse_md_block(_MD_TEXT)
+    key = "project_controls.invariant"
+    expected = "one_project_one_canonical_hierarchical_wbs"
+    assert canon.get(key) == expected, canon
+    assert md.get(key) == expected, (md.get(key), expected)
+
+
+def test_canonical_dimensions_are_parity_checked() -> None:
+    """#619: the shared six-dimensional taxonomy cannot silently diverge."""
+    canon = c.extract_canonical(c.load_yaml())
+    md = c.parse_md_block(_MD_TEXT)
+    key = "product_semantics.canonical_dimensions"
+    expected = "SCOPE,BUDGET,TIME,TECHNICAL,LEGAL,QUALITY"
+    assert canon.get(key) == expected, canon
+    assert md.get(key) == expected, (md.get(key), expected)
+
+
 def _all_tests() -> list:
     return [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
 
