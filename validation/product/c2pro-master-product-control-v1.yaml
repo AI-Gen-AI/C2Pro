@@ -408,6 +408,7 @@ legacy_coverage:
     - {legacy: "EPIC-ECOA-V2-HOTFIX-AND-CUTOVER", maps_to: PWBS-COHERENCE-XDOC, disposition: "P1 decision/cutover; not demonstrated globally"}
     - {legacy: "EPIC-V3-019-020", maps_to: PWBS-ALERTS-ACTIONS-HITL, disposition: "P2 correlation/action/HITL; alert visibility pulled forward cross-cutting"}
     - {legacy: "EPIC-V3-021", maps_to: PWBS-EXEC-REPORTING, disposition: "P0d candidate current-state reporting first; P3 briefing/portfolio later"}
+    - {legacy: "TASK-V3-013-07/08/09 residuals (INV-1 / consolidated findings)", maps_to: "DEV/OPS", disposition: "DEV residual — absorbed into thin-spine-complete; verify closed under ADR-013"}
     - {legacy: "P1-OPS temporal scheduler gap", maps_to: PWBS-OPS-TRUST, disposition: "ops residual affecting temporal capture"}
     - {legacy: "TASK-DOC-REUPLOAD-005", maps_to: PWBS-OPS-TRUST, disposition: "reliability residual"}
     - {legacy: "TASK-COH-BUD-RECON-006", maps_to: PWBS-COHERENCE-XDOC, disposition: "P1 coherence residual"}
