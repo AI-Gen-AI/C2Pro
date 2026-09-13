@@ -1,15 +1,15 @@
 # C2Pro Product Programme — P1 Project Controls Addendum
 
-**Status:** Approved product direction; implementation/master-reconciliation pending
+**Status:** Approved product direction; MASTER reconciliation implemented in PR #620; product implementation pending
 **Date:** 2026-09-13
-**Authority:** Supplements `00-c2pro-master-product-control-v1.md` until the machine YAML is reconciled under Issue #619.
-**Related:** ADR-018, ADR-019, ADR-025, Issue #619.
+**Authority:** Design rationale and sequencing companion to `00-c2pro-master-product-control-v1.md`. The machine YAML remains authoritative for lifecycle/current-state fields.
+**Related:** ADR-018, ADR-019, ADR-025, Issue #619, PR #620.
 
 ## Why this addendum exists
 
-The current machine master still records `PWBS-PROJECT-CONTROLS` as P2 and describes it narrowly as Health-v1 schedule/cost/deliverables/WBS/BOM. The approved product model is broader and more structurally important: Project Controls is the backbone that makes Health, Coherence, Alerts, Change, Reporting, Stakeholders and Procurement operate on one consistent project structure.
+Before Issue #619, the machine master recorded `PWBS-PROJECT-CONTROLS` as P2 and described it narrowly as Health-v1 schedule/cost/deliverables/WBS/BOM. The approved product model is broader and more structurally important: Project Controls is the backbone that makes Health, Coherence, Alerts, Change, Reporting, Stakeholders and Procurement operate on one consistent project structure.
 
-This addendum records the approved target without fabricating implementation/deployment state. The canonical YAML remains authoritative for machine lifecycle fields until Issue #619 reconciles it and the parity/git-truth gates pass.
+PR #620 reconciles that planning drift in the machine MASTER and human projection without fabricating implementation/deployment state. This addendum preserves the product rationale and sequencing behind that reconciliation. The canonical YAML remains authoritative for machine lifecycle fields; this document does not independently advance realization, deployment or production validation.
 
 ## Product North Star — clarified
 
@@ -119,7 +119,7 @@ Candidate branch work does not become canonical realization until merged/deploye
 
 ### P1 — Project Controls Backbone
 
-Promote `PWBS-PROJECT-CONTROLS` from **P2 to P1** in the canonical master reconciliation.
+The MASTER reconciliation in PR #620 promotes `PWBS-PROJECT-CONTROLS` from **P2 to P1** while keeping realization honestly `PARTIAL` and work status `PLANNED`.
 
 P1 target is **not** “build every Project Controls feature now.” It establishes the structural backbone and prevents incompatible future implementations.
 
@@ -156,20 +156,20 @@ Do not make the following prerequisites for product value:
 - automatic external communications without HITL;
 - sophisticated score aggregation before evidence/materiality rules are validated.
 
-## Master reconciliation required
+## MASTER reconciliation status
 
-Issue #619 is the P1 task to update the canonical machine master safely.
+Issue #619 defines the P1 canonical reconciliation. PR #620 implements that reconciliation in branch form; it is not merged product truth until the human merge gate is crossed.
 
-Required reconciliation includes:
+The PR reconciles:
 
-- `north_star.full_product` clarification;
-- add ADR-025 to the v3 canon/realization matrix;
-- map ADR-025 to `PROJECT-CONTROLS`;
+- `north_star.full_product` and the one-WBS invariant;
+- ADR-025 in the v3 canon/realization matrix;
+- ADR-025 mapping to `PROJECT-CONTROLS`;
 - `PWBS-PROJECT-CONTROLS.priority: P1`;
-- update Project Controls name/user value/exit gate to the canonical WBS backbone;
-- move Project Controls from P2 into P1 roadmap planning;
-- keep full Action/HITL automation later while treating alert visibility as cross-cutting;
-- preserve Procurement dependency on Project Controls;
-- preserve all existing realization/deployment/prod-validation truth unless separately evidenced.
+- Project Controls name/user value/exit gate around the canonical WBS backbone;
+- Project Controls into P1 roadmap planning;
+- alert visibility as cross-cutting while full Action/HITL automation remains later;
+- Procurement dependency on Project Controls;
+- existing realization/deployment/prod-validation truth without advancing candidate branches.
 
-The YAML must be edited first, then the human projection regenerated/reconciled, and parity + git-truth gates must pass before merge.
+The YAML was reconciled before the human projection, and parity/CI gates must remain green on the final PR head before readiness/merge. No direct `main` or production mutation is authorized by this addendum.
