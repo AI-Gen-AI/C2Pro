@@ -4,7 +4,60 @@
 **Date:** 2026-06-07
 **Deciders:** Jesús Camacho (VP Engineering)
 **Basis:** Multi-model arbitration — DeepSeek / Codex / Claude / Gemini v3.0 ADR blueprints + Architecture Challenger verdict.
-**Related:** ADR-016 (change impact), ADR-018 (health deltas), ADR-020 (HITL). Shares the **"Action & Review" bounded context** and org/role model with ADR-020.
+**Related:** ADR-016 (change impact), ADR-018 (health/coherence project surface), ADR-020 (HITL), ADR-025 (canonical WBS Project Controls backbone). Shares the **"Action & Review" bounded context** and org/role model with ADR-020.
+
+## 2026-09-13 Amendment — Alert category taxonomy and Project Controls attachment (GOVERNING)
+
+**Status:** Accepted product decision, 2026-09-13.
+
+Alerts are already a product capability and must remain aligned with the same six project dimensions used by the user-facing project surface:
+
+- `SCOPE`
+- `BUDGET`
+- `TIME`
+- `TECHNICAL`
+- `LEGAL`
+- `QUALITY`
+
+### Category and trigger are separate
+
+The alert **category** answers *which project dimension is affected*. The alert **trigger** answers *why the alert exists*.
+
+Typical triggers include, without becoming a second top-level taxonomy:
+
+- `missing_evidence`;
+- `deadline`;
+- `deviation`;
+- `contradiction`;
+- `material_change`.
+
+Examples:
+
+- a penalized delivery milestone with no confirming delivery evidence is primarily `TIME`, potentially with a linked legal consequence;
+- a forecast above the currently approved budget is `BUDGET`;
+- conflicting technical requirements are `TECHNICAL` even when the trigger is `contradiction`.
+
+### Expected vs observed
+
+Where applicable, an alert should retain an auditable comparison:
+
+- expected state;
+- observed state;
+- source evidence for the expectation;
+- source evidence for the observation;
+- severity/status and temporal evolution.
+
+Alerts may open, update, escalate, resolve or be dismissed as new project evidence arrives. Re-running an unchanged input must not fabricate a new alert.
+
+### WBS attachment
+
+Where an alert is specific to a work package, milestone, budget package or procurement package, it should reference the corresponding node in the **single canonical hierarchical WBS** defined by ADR-025. Truly cross-cutting findings remain project-scoped.
+
+Stakeholder/RACI relationships linked to that WBS node become the future routing seam for ownership, review and governed communications. External communication remains HITL-governed.
+
+### Priority distinction
+
+This amendment does **not** automatically promote the entire Action/HITL workflow to P1. Alert visibility and six-dimension integration are cross-cutting product requirements now; full ActionItem ownership/automation/HITL remains sequenced separately according to evidence of user value.
 
 ## Context
 
@@ -33,6 +86,8 @@ Transform findings → a small number of correlated, owned **`ActionItem`s** (te
   ```
 - **Org/role model:** a **minimal** role model is built here (owners/escalation need it). This is the shared seam the future Stakeholder-Intelligence domain extends (ADR-014 reservation).
 
+> **Compatibility note:** the historical `impact_area` field above predates the governing six-dimension product taxonomy. Implementations should migrate/adapter-map user-facing alert category to `SCOPE/BUDGET/TIME/TECHNICAL/LEGAL/QUALITY` rather than expose the old `contract/schedule/cost/risk/governance` list as the primary product taxonomy.
+
 ## Alternatives considered
 
 | Option | Verdict | Reason |
@@ -53,12 +108,14 @@ Transform findings → a small number of correlated, owned **`ActionItem`s** (te
 The "Decision object" abstraction; full correlation taxonomy; owner auto-assignment before org model matures; multi-persona breadth (see ADR-020).
 
 ## Dependencies
-ADR-016, ADR-018.
+ADR-016, ADR-018, ADR-025.
 
 ## Success criteria
 - One contract revision generates **one** change-impact `ActionItem`, not 50 findings.
 - Top-N daily ranking is stable across re-runs (dedupe/suppression verified).
 - Critical items without evidence are withheld (`needs_review`), per INV-1.
+- User-facing alert category is one of `SCOPE/BUDGET/TIME/TECHNICAL/LEGAL/QUALITY`; trigger is a separate field/concept.
+- Work-package-specific alerts can resolve to the canonical WBS node and evidence that caused them.
 
 ## Implementation note
 **Month 6**, gated behind the Month-3 pilot signal. Launches scoped to the Contract-Manager persona alongside ADR-020.
