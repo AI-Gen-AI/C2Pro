@@ -9,6 +9,7 @@ from typing import Any
 
 import yaml
 
+from core.merge_gate_policy import evaluate_merge_gates
 from core.result_parser import extract_result_block, parse_result_yaml, validate_result
 
 
@@ -149,11 +150,31 @@ def reconcile_result(
     # C. Prove CI freshness
     ci_sha = ci_evidence.get("ci_sha")
     ci_status = ci_evidence.get("ci_status")
-
     if ci_sha != worker_head_sha:
         raise ValidationError(f"Stale CI SHA: CI verified '{ci_sha}', but verified HEAD is '{worker_head_sha}'")
-    if ci_status not in ["success", "passed"]:
+    merge_gate_evidence = None
+    if "policy" in ci_evidence:
+        merge_gate_evidence = evaluate_merge_gates(
+            ci_evidence["policy"],
+            ci_evidence.get("signals", []),
+            worker_head_sha,
+            current_run_id=ci_evidence.get("current_run_id"),
+            current_attempt=ci_evidence.get("current_attempt"),
+            workflow_runs=ci_evidence.get("workflow_runs"),
+        )
+        merge_gate_evidence.update({
+            "target_branch": remote_evidence.get("pr_base_branch"),
+            "base_sha": remote_evidence.get("pr_base_sha"),
+        })
+        if merge_gate_evidence["decision"] != "MERGE_ALLOWED":
+            raise ValidationError(f"Merge blocked: {merge_gate_evidence['reason']}")
+    elif ci_status not in ["success", "passed"]:
         raise ValidationError(f"CI status check failed: CI run on verified SHA '{worker_head_sha}' must be 'success' or 'passed', got '{ci_status}'")
+
+    if remote_evidence.get("mergeable") is False or remote_evidence.get("policy_permits_merge") is False:
+        raise ValidationError("Repository mergeability/policy does not permit merge.")
+    if ci_evidence.get("package_gates_satisfied") is False:
+        raise ValidationError("Additional package-specific gates are not satisfied.")
 
     # PR base branch must be 'main'
     pr_base_branch = remote_evidence.get("pr_base_branch")
@@ -271,6 +292,8 @@ def reconcile_result(
         "new_findings": new_findings,
         "reconciled_at": now_fn(),
     }
+    if merge_gate_evidence is not None:
+        new_completed_work[work_id]["merge_gate_evidence"] = merge_gate_evidence
     new_history_content = {
         "schema": "c2pro-reconciliation-history-v1",
         "schema_version": 1,

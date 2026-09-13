@@ -326,6 +326,14 @@ Instead, after successfully completing any task, workers **MUST** return a struc
 
 The master/planner remains the sole writer allowed to reconcile this returned evidence back into canonical control state.
 
+### CI merge-gate policy
+
+- Discover required status checks from the active ruleset or branch protection for the target branch; never use a permanent hard-coded gate list.
+- Classify signals as `REQUIRED_GATE`, `ADVISORY_CHECK`, or `OBSERVABILITY_SIGNAL`; unresolved signals remain visible and conservatively block authorization without being mislabeled as failures.
+- Evaluate only the sealed head SHA and current workflow run/attempt. Pending is not failed, and earlier attempts cannot satisfy the current attempt.
+- Archive the frozen policy hash, classified signals, run/attempt identities, final gate matrix, and decision reason in reconciliation evidence.
+- Advisory failures do not block when every policy-required and package-specific gate succeeds and repository mergeability permits the merge.
+
 ### Category-specific Backlogs & Support Docs
 - Category-specific backlog files in `backlogs/` (such as `backlogs/BCK_BACKEND.md`, `backlogs/FRT_FRONTEND.md`, etc.) are read-only cold references for workers during the transition.
 - Any suggested specifications or technical debt findings must be reported in the `findings` field of the returned structured result block.
