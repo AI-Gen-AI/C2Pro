@@ -4,7 +4,54 @@
 **Date:** 2026-06-07
 **Deciders:** Jesús Camacho (VP Engineering)
 **Basis:** Multi-model arbitration — DeepSeek / Codex / Claude / Gemini v3.0 ADR blueprints + Architecture Challenger verdict.
-**Related:** ADR-009 (honest nulls — reused); ADR-014 (entities), ADR-015 (snapshots/trends), ADR-017 (coherence input). Hosts INV-1 honest-null discipline.
+**Related:** ADR-009 (honest nulls — reused); ADR-014 (entities), ADR-015 (snapshots/trends), ADR-017 (coherence input), ADR-025 (canonical WBS Project Controls backbone). Hosts INV-1 honest-null discipline.
+
+## 2026-09-13 Amendment — Six-dimension project surface, Coherence Score and Alerts separation (GOVERNING)
+
+**Status:** Accepted product decision, 2026-09-13. This amendment clarifies the user-facing Project Controls model without erasing the historical v0 Health design below.
+
+### Canonical six project dimensions
+
+The user-facing project intelligence taxonomy is shared across Health/coverage, Coherence decomposition and Alerts:
+
+- `SCOPE`
+- `BUDGET`
+- `TIME`
+- `TECHNICAL`
+- `LEGAL`
+- `QUALITY`
+
+The earlier Contract / Risk / Documentation / Governance v0 dimensions below remain historical/internal Health inputs where useful; they are **not** a competing user-facing taxonomy.
+
+### Health, Coherence and Alerts answer different questions
+
+They are related but MUST NOT be collapsed into one concept:
+
+1. **Health / evidence coverage — “Do we have enough evidence to assess this dimension?”**
+   - `PRESENT` / evidence-backed values where supported.
+   - `INSUFFICIENT_EVIDENCE` / `Unknown` where evidence is missing.
+   - `Unknown` is never converted to `0` merely to complete a chart or aggregate.
+
+2. **Coherence Score — “Given the available evidence, how consistent is the project state?”**
+   - It is a visual project-control signal with dimensional breakdown over the six canonical dimensions where evidence is reconcilable.
+   - Relational Coherence remains unavailable as a valid single-document headline; the project surface must disclose the evidence/coverage basis of any overall score.
+   - A high Coherence Score does **not** imply the project is healthy in the business sense. Example: all sources may consistently show a seven-day delay (high coherence) while a `TIME` alert is `CRITICAL`.
+   - Overall/project roll-up must expose coverage and exclude unsupported dimensions rather than silently scoring them as zero.
+
+3. **Alerts — “What concrete situation requires attention?”**
+   - Alerts use the same six canonical dimensions as their **category**.
+   - Their **trigger** is a separate concept (`missing_evidence`, `deadline`, `deviation`, `contradiction`, `material_change`, etc.).
+   - Alerts compare an expected state with an observed state and retain evidence for both when available.
+
+### WBS drill-down
+
+Project-level Health/Coherence/Alerts may drill down through the **single canonical hierarchical WBS** defined by ADR-025. Discipline branches are not separate WBS structures.
+
+Where evidence supports it, a user may navigate conceptually:
+
+`Project -> WBS branch -> Work Package -> six-dimension state -> alert/change -> source evidence`.
+
+No WBS-level or project-level score may use a blind arithmetic average or convert unknown children to zero. Future roll-up rules must explicitly account for evidence coverage/materiality/criticality.
 
 ## 2026-08-22 Amendment — PROMOTED to P0-now; this is the product surface (GOVERNING)
 
@@ -60,12 +107,14 @@ Health Vector; **v0 dimensions Risk / Contract / Documentation / Governance** wi
 Schedule / Cost / Deliverables scoring before baseline ingestion (ADR-018 v1, gated on P6/MSP/Excel ingestion); a single composite score without dimensional breakdown.
 
 ## Dependencies
-ADR-014, ADR-015; coherence input from ADR-017.
+ADR-014, ADR-015; coherence input from ADR-017; ADR-025 for the canonical WBS backbone.
 
 ## Success criteria
 - Dashboard renders the v0 vector with per-dimension score, confidence, trend arrow, and explicit `insufficient_data`.
 - A "green" is structurally impossible without supporting evidence (INV-1).
 - Health trend over the last *N* snapshots is queryable.
+- User-facing project intelligence preserves the six canonical dimensions (`SCOPE/BUDGET/TIME/TECHNICAL/LEGAL/QUALITY`) across Health/Coherence/Alerts.
+- Coherence Score, when available, discloses the evaluated coverage and never turns unknown dimensions into zero.
 
 ## Implementation note
 Thin-Spine, **Month 3** (v0 dimensions on existing data). v1 dimensions gated behind the pilot and schedule/cost ingestion (Month 6).
