@@ -192,6 +192,82 @@ describe("CurrentStateReportView", () => {
     expect(within(section("health")).getByTestId("section-source")).toHaveTextContent("snapshot 7e1d2c3b");
   });
 
+  it("labels document processing status in the Documents tab's words without claiming analysis", () => {
+    const report = buildCurrentStateReport();
+    const documents = report.sections.documents;
+    renderReport({
+      ...report,
+      sections: {
+        ...report.sections,
+        documents: {
+          ...documents,
+          data: documents.data
+            ? { ...documents.data, by_processing_status: { parsed: 20, queued: 3, processing: 1, error: 2 } }
+            : documents.data,
+        },
+      },
+    });
+    const card = section("documents");
+    expect(card).toHaveTextContent("Contract · Processed");
+    expect(card).toHaveTextContent("Processed: 20");
+    expect(card).toHaveTextContent("Uploaded: 3");
+    expect(card).toHaveTextContent("Processing: 1");
+    expect(card).toHaveTextContent("Error: 2");
+    expect(card).not.toHaveTextContent("Analyzed");
+    expect(card).not.toHaveTextContent("Queued");
+    expect(card).not.toHaveTextContent("Parsed");
+  });
+
+  it("describes the WBS tab's items with coverage and per-item evidence strength", () => {
+    const report = buildCurrentStateReport();
+    renderReport({
+      ...report,
+      sections: {
+        ...report.sections,
+        wbs: {
+          status: "available",
+          status_reason: null,
+          source_domain: "wbs",
+          source_as_of: null,
+          evidence_tier: "unlinked",
+          evidence_note: "Some WBS items record no source document or clause. WBS items record no timestamps.",
+          data: {
+            item_count: 3,
+            root_count: 1,
+            leaf_count: 2,
+            max_level: 2,
+            by_item_type: { deliverable: 1, work_package: 2 },
+            items_with_budget: 1,
+            items_with_planned_dates: 0,
+            roots: [
+              {
+                id: "e5e5e5e5-0000-4000-8000-000000000001",
+                code: "1",
+                name: "Harbour Extension",
+                level: 1,
+                item_type: "deliverable",
+                planned_start: null,
+                planned_end: null,
+                budget_allocated: null,
+                evidence_tier: "strong_linked",
+              },
+            ],
+            truncated: false,
+            evidence_breakdown: { strong_linked: 1, weak_linked: 0, unlinked: 2 },
+          },
+        },
+      },
+    });
+    const card = section("wbs");
+    expect(card).toHaveTextContent("3 item(s) · 1 top-level · 2 leaf · deepest level 2");
+    expect(within(card).getByTestId("wbs-coverage")).toHaveTextContent(
+      "1 of 3 with a budget · 0 of 3 with planned start and end",
+    );
+    expect(card).toHaveTextContent("Harbour Extension");
+    expect(card).toHaveTextContent("Deliverable · Strong source link");
+    expect(within(card).getByTestId("section-source")).toHaveTextContent("Source records carry no timestamp");
+  });
+
   it("renders an empty section with its reason", () => {
     const report = buildCurrentStateReport();
     const emptyAlerts: CurrentStateReport = {

@@ -38,14 +38,14 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { DocumentItem } from "./documentItem";
-import type { DocumentsDataByStatus } from "./documentsDataByStatus";
+import type { DocumentsDataByProcessingStatus } from "./documentsDataByProcessingStatus";
 import type { DocumentsDataByType } from "./documentsDataByType";
 
 export interface DocumentsData {
   total: number;
-  by_status: DocumentsDataByStatus;
+  by_processing_status: DocumentsDataByProcessingStatus;
   by_type: DocumentsDataByType;
-  /** True when by_status/by_type cover only the documents that could be loaded, not total. */
+  /** True when by_processing_status/by_type cover only the documents that could be loaded, not total. */
   counts_are_partial?: boolean;
   items: DocumentItem[];
   truncated?: boolean;

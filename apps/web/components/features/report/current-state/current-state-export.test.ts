@@ -161,6 +161,61 @@ describe("buildCurrentStateCsv", () => {
     expect(budget?.source_as_of_state).toBe("null");
   });
 
+  it("exports document rows with the user-facing processing status", () => {
+    const rows = csvRows();
+    const document = rows.find((row) => row.section === "documents" && row.record_type === "item");
+    expect(document?.record_status).toBe("parsed");
+    expect(rows.some((row) => row.section === "documents" && row.field === "by_processing_status.parsed")).toBe(true);
+  });
+
+  it("exports the WBS item summary with per-item evidence tiers", () => {
+    const report = buildCurrentStateReport();
+    const rows = csvRows({
+      ...report,
+      sections: {
+        ...report.sections,
+        wbs: {
+          status: "available",
+          status_reason: null,
+          source_domain: "wbs",
+          source_as_of: null,
+          evidence_tier: "weak_linked",
+          evidence_note: "Some WBS items reference only their source document. WBS items record no timestamps.",
+          data: {
+            item_count: 2,
+            root_count: 1,
+            leaf_count: 1,
+            max_level: 2,
+            by_item_type: { unclassified: 2 },
+            items_with_budget: 0,
+            items_with_planned_dates: 0,
+            roots: [
+              {
+                id: "e5e5e5e5-0000-4000-8000-000000000001",
+                code: "1",
+                name: "Quay wall",
+                level: 1,
+                item_type: "deliverable",
+                evidence_tier: "weak_linked",
+              },
+            ],
+            truncated: false,
+            evidence_breakdown: { strong_linked: 0, weak_linked: 2, unlinked: 0 },
+          },
+        },
+      },
+    });
+    const wbs = rows.filter((row) => row.section === "wbs");
+    expect(wbs.find((row) => row.field === "item_count")?.value).toBe("2");
+    expect(wbs.find((row) => row.field === "max_level")?.value).toBe("2");
+    expect(wbs.find((row) => row.field === "items_with_budget")?.value_state).toBe("known");
+    expect(wbs.find((row) => row.field === "by_item_type.unclassified")?.value).toBe("2");
+    const root = wbs.find((row) => row.record_type === "item");
+    expect(root?.value).toBe("1");
+    expect(root?.record_status).toBe("");
+    expect(root?.record_evidence_tier).toBe("weak_linked");
+  });
+
   it("keeps unknown metrics distinguishable from zero", () => {
     const rows = csvRows();
     const remaining = rows.find((row) => row.section === "budget" && row.field === "remaining_budget");

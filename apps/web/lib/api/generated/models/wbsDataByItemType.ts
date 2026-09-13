@@ -38,14 +38,4 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface WbsNodeItem {
-  id: string;
-  code: string;
-  name: string;
-  status: string;
-  node_type: string;
-  planned_start?: string | null;
-  planned_end?: string | null;
-  budget_allocated?: number | null;
-  budget_spent: number;
-}
+export type WbsDataByItemType = { [key: string]: number };

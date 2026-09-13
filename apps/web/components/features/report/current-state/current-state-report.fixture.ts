@@ -59,7 +59,7 @@ export function buildCurrentStateReport(): CurrentStateReport {
         evidence_note: "Each entry is a source document record.",
         data: {
           total: 45,
-          by_status: { parsed: 20 },
+          by_processing_status: { parsed: 20 },
           by_type: { contract: 20 },
           counts_are_partial: true,
           items: [
@@ -67,7 +67,8 @@ export function buildCurrentStateReport(): CurrentStateReport {
               id: "d0c1a8f6-8e2a-4f7b-a8a9-5a6b7c8d9e01",
               filename: "Main Contract.pdf",
               document_type: "contract",
-              upload_status: "parsed",
+              upload_status: "analyzed",
+              processing_status: "parsed",
               version: 2,
               uploaded_at: "2026-09-10T10:00:00Z",
               parsed_at: "2026-09-10T10:05:00Z",

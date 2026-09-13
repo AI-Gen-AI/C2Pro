@@ -179,7 +179,7 @@ function detailRows(key: SectionKey, sections: Sections): CsvRow[] {
         metric("total", data.total),
         metric("counts_are_partial", data.counts_are_partial),
         metric("truncated", data.truncated),
-        ...counts("by_status", data.by_status),
+        ...counts("by_processing_status", data.by_processing_status),
         ...counts("by_type", data.by_type),
         ...data.items.map((document) =>
           item({
@@ -187,7 +187,7 @@ function detailRows(key: SectionKey, sections: Sections): CsvRow[] {
             record_label: document.filename,
             field: "document_type",
             value: document.document_type,
-            record_status: document.upload_status,
+            record_status: document.processing_status,
             record_source_ref: document.id,
           }),
         ),
@@ -305,13 +305,22 @@ function detailRows(key: SectionKey, sections: Sections): CsvRow[] {
       const data = sections.wbs.data;
       if (!data) return [];
       return [
-        metric("node_count", data.node_count),
+        metric("item_count", data.item_count),
         metric("root_count", data.root_count),
         metric("leaf_count", data.leaf_count),
-        metric("max_depth", data.max_depth),
-        ...counts("by_status", data.by_status),
+        metric("max_level", data.max_level),
+        metric("items_with_budget", data.items_with_budget),
+        metric("items_with_planned_dates", data.items_with_planned_dates),
+        metric("truncated", data.truncated),
+        ...counts("by_item_type", data.by_item_type),
         ...data.roots.map((node) =>
-          item({ record_id: node.id, record_label: node.name, field: "code", value: node.code, record_status: node.status }),
+          item({
+            record_id: node.id,
+            record_label: node.name,
+            field: "code",
+            value: node.code,
+            record_evidence_tier: node.evidence_tier,
+          }),
         ),
       ];
     }

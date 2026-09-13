@@ -21,6 +21,7 @@ import {
   TIER_CLASSES,
   TIER_LABELS,
   UNKNOWN_LABEL,
+  documentStatusLabel,
   formatDate,
   formatDateTime,
   formatMoney,
@@ -276,7 +277,13 @@ function SectionBody({ sectionKey, sections }: { sectionKey: ContentSectionKey; 
   }
 }
 
-function Counts({ counts }: { counts: Record<string, number> }) {
+function Counts({
+  counts,
+  label = humanize,
+}: {
+  counts: Record<string, number>;
+  label?: (key: string) => string;
+}) {
   const entries = Object.entries(counts);
   if (entries.length === 0) {
     return null;
@@ -285,7 +292,7 @@ function Counts({ counts }: { counts: Record<string, number> }) {
     <div className="flex flex-wrap gap-1.5">
       {entries.map(([key, count]) => (
         <Badge key={key} variant="secondary">
-          {humanize(key)}: {count}
+          {label(key)}: {count}
         </Badge>
       ))}
     </div>
@@ -313,7 +320,7 @@ function DocumentsBody({ data }: { data: SectionData<"documents"> }) {
       <p>
         <span className="text-lg font-semibold">{data.total}</span> document(s)
       </p>
-      <Counts counts={data.by_status} />
+      <Counts counts={data.by_processing_status} label={documentStatusLabel} />
       {data.counts_are_partial ? (
         <Note testId="partial-note">Counts cover the documents that could be loaded, not all {data.total}.</Note>
       ) : null}
@@ -322,7 +329,7 @@ function DocumentsBody({ data }: { data: SectionData<"documents"> }) {
           <li key={document.id} className="flex flex-wrap justify-between gap-2 py-1.5">
             <span className="font-medium">{document.filename}</span>
             <span className="text-muted-foreground">
-              {humanize(document.document_type)} · {humanize(document.upload_status)}
+              {humanize(document.document_type)} · {documentStatusLabel(document.processing_status)}
               {document.version > 1 ? ` · v${document.version}` : ""}
             </span>
           </li>
@@ -523,20 +530,28 @@ function WbsBody({ data }: { data: SectionData<"wbs"> }) {
   return (
     <>
       <p>
-        <span className="text-lg font-semibold">{data.node_count}</span> node(s) · {data.leaf_count} leaf ·{" "}
-        {data.max_depth + 1} level(s)
+        <span className="text-lg font-semibold">{data.item_count}</span> item(s) · {data.root_count} top-level ·{" "}
+        {data.leaf_count} leaf · deepest level {data.max_level}
       </p>
-      <Counts counts={data.by_status} />
+      <p data-testid="wbs-coverage" className="text-muted-foreground">
+        {data.items_with_budget} of {data.item_count} with a budget · {data.items_with_planned_dates} of{" "}
+        {data.item_count} with planned start and end
+      </p>
+      <Counts counts={data.by_item_type} />
       <ul className="divide-y">
         {data.roots.map((node) => (
           <li key={node.id} className="flex flex-wrap justify-between gap-2 py-1.5">
             <span>
               <span className="text-muted-foreground">{node.code}</span> {node.name}
             </span>
-            <span className="text-muted-foreground">{humanize(node.status)}</span>
+            <span className="text-xs text-muted-foreground">
+              {node.item_type ? `${humanize(node.item_type)} · ` : ""}
+              {TIER_LABELS[node.evidence_tier] ?? node.evidence_tier}
+            </span>
           </li>
         ))}
       </ul>
+      {data.truncated ? <Note>Showing the first {data.roots.length} top-level items.</Note> : null}
     </>
   );
 }

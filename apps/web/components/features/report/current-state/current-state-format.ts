@@ -70,6 +70,22 @@ export const LEVEL_CLASSES: Record<string, string> = {
   info: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300",
 };
 
+/**
+ * Document processing status in the Documents tab's words. The tab calls the parsed bucket
+ * "Analyzed", but that bucket includes documents whose analysis has not run, so the report
+ * says "Processed" rather than claiming analysis.
+ */
+export const DOCUMENT_STATUS_LABELS: Record<string, string> = {
+  queued: "Uploaded",
+  processing: "Processing",
+  parsed: "Processed",
+  error: "Error",
+};
+
+export function documentStatusLabel(status: string): string {
+  return DOCUMENT_STATUS_LABELS[status] ?? humanize(status);
+}
+
 export function sectionLabel(key: string): string {
   return SECTION_LABELS[key] ?? key;
 }

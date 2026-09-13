@@ -28,6 +28,7 @@ from src.modules.hitl.domain.entities import ReviewStatus
 from src.procurement.adapters.persistence.budget_repository import SQLAlchemyBudgetRepository
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.application.budget_use_cases import BudgetResponse, GetBudgetUseCase
+from src.procurement.domain.models import WBSItem
 from src.projects.adapters.persistence.project_repository import SQLAlchemyProjectRepository
 from src.reporting.application.ports import (
     DocumentsInput,
@@ -47,9 +48,6 @@ from src.temporal.adapters.persistence.project_snapshot_repository import (
     SqlAlchemyProjectSnapshotRepository,
 )
 from src.temporal.domain.project_snapshot import ProjectSnapshot
-from src.wbs.adapters.persistence.wbs_node_repository import WBSNodeRepository
-from src.wbs.application.use_cases.get_wbs_tree import GetWBSTreeRequest, GetWBSTreeUseCase
-from src.wbs.domain.models import WBSNode
 
 # The document and stakeholder repositories page with OFFSET/LIMIT and no ORDER BY,
 # so a multi-page read could repeat or skip rows. Each is read once, bounded, and
@@ -146,12 +144,12 @@ class SqlAlchemyCurrentStateSources:
         async with self._session_scope(tenant_id) as session:
             return await GetBudgetUseCase(SQLAlchemyBudgetRepository(session)).execute(project_id, scoped)
 
-    async def load_wbs(self, project_id: UUID, tenant_id: UUID) -> list[WBSNode]:
+    async def load_wbs(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
+        # GET /projects/{id}/wbs is served at runtime by the projects router (registered before the
+        # in-memory wbs router it shadows), which reads procurement WBS items; RACI rows use the same store.
         scoped = require_tenant_id(tenant_id)
         async with self._session_scope(tenant_id) as session:
-            return await GetWBSTreeUseCase(WBSNodeRepository(session)).execute(
-                GetWBSTreeRequest(project_id=project_id, tenant_id=scoped)
-            )
+            return await SQLAlchemyWBSRepository(session).get_by_project(project_id, scoped)
 
     async def load_stakeholders(self, project_id: UUID, tenant_id: UUID) -> StakeholdersInput:
         scoped = require_tenant_id(tenant_id)

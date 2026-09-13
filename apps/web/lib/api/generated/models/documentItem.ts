@@ -42,7 +42,10 @@ export interface DocumentItem {
   id: string;
   filename: string;
   document_type: string;
+  /** Raw document lifecycle status as stored. */
   upload_status: string;
+  /** User-facing processing status, normalized exactly as the Documents tab shows it. */
+  processing_status: string;
   version: number;
   uploaded_at?: string | null;
   parsed_at?: string | null;

@@ -37,15 +37,23 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { WbsDataByStatus } from "./wbsDataByStatus";
-import type { WbsNodeItem } from "./wbsNodeItem";
+import type { EvidenceBreakdown } from "./evidenceBreakdown";
+import type { WbsDataByItemType } from "./wbsDataByItemType";
+import type { WbsItemSummary } from "./wbsItemSummary";
 
+/**
+ * The persisted procurement WBS items: served by GET /projects/{id}/wbs and used as RACI rows.
+ */
 export interface WbsData {
-  node_count: number;
+  item_count: number;
   root_count: number;
   leaf_count: number;
-  max_depth: number;
-  by_status: WbsDataByStatus;
-  roots: WbsNodeItem[];
+  max_level: number;
+  by_item_type: WbsDataByItemType;
+  items_with_budget: number;
+  /** Items with both a planned start and a planned end. */
+  items_with_planned_dates: number;
+  roots: WbsItemSummary[];
   truncated?: boolean;
+  evidence_breakdown: EvidenceBreakdown;
 }

@@ -19,6 +19,7 @@ from pydantic import ValidationError
 
 from src.alerts.domain.enums import AlertSeverity, AlertStatus
 from src.alerts.domain.models import Alert
+from src.documents.application.dtos import DocumentPollingStatus
 from src.health.domain.health_vector import HealthVector
 from src.reporting.application.ports import (
     CurrentStateInputs,
@@ -69,7 +70,7 @@ from src.reporting.domain.current_state_report import (
     StakeholdersData,
     StakeholdersSection,
     WbsData,
-    WbsNodeItem,
+    WbsItemSummary,
     WbsSection,
 )
 
@@ -83,7 +84,15 @@ _SEVERITY_RANK = {
     AlertSeverity.MEDIUM.value: 2,
     AlertSeverity.LOW.value: 3,
 }
-_PARSED_DOCUMENT_STATUSES = frozenset({"parsed", "parsed_pending_analysis", "analyzed"})
+# Mirrors the Documents tab's status normalization so the report shows the same state;
+# a parity test pins this mapping to the documents router.
+_PROCESSING_STATUS_BY_UPLOAD_STATUS = {
+    "uploaded": DocumentPollingStatus.QUEUED.value,
+    "processing": DocumentPollingStatus.PROCESSING.value,
+    "parsed": DocumentPollingStatus.PARSED.value,
+    "analyzed": DocumentPollingStatus.PARSED.value,
+    "error": DocumentPollingStatus.ERROR.value,
+}
 _LEVEL_RANK = {AttentionLevel.CRITICAL: 0, AttentionLevel.WARNING: 1, AttentionLevel.INFO: 2}
 
 NOT_MODELED_REASONS = {
@@ -210,6 +219,10 @@ def _tier_note(tier: ReportEvidenceTier, strong: str, weak: str, unlinked: str) 
 # ---------------------------------------------------------------------------
 
 
+def _processing_status(upload_status: object) -> str:
+    return _PROCESSING_STATUS_BY_UPLOAD_STATUS.get(_value(upload_status), DocumentPollingStatus.PROCESSING.value)
+
+
 def project_documents(result: Any) -> DocumentsSection:
     domain = "documents"
     if not isinstance(result, SourceOk):
@@ -229,6 +242,7 @@ def project_documents(result: Any) -> DocumentsSection:
             filename=document.filename,
             document_type=_value(document.document_type),
             upload_status=_value(document.upload_status),
+            processing_status=_processing_status(document.upload_status),
             version=document.version,
             uploaded_at=_as_utc(document.created_at) if document.created_at else None,
             parsed_at=_as_utc(document.parsed_at) if document.parsed_at else None,
@@ -243,7 +257,7 @@ def project_documents(result: Any) -> DocumentsSection:
         evidence_note="Each entry is a source document record.",
         data=DocumentsData(
             total=total,
-            by_status=dict(Counter(_value(document.upload_status) for document in documents)),
+            by_processing_status=dict(Counter(_processing_status(document.upload_status) for document in documents)),
             by_type=dict(Counter(_value(document.document_type) for document in documents)),
             counts_are_partial=total > len(documents),
             items=items,
@@ -507,41 +521,65 @@ def project_wbs(result: Any) -> WbsSection:
     if not isinstance(result, SourceOk):
         return _not_ok(WbsSection, domain, result)
 
-    nodes = list(result.value)
-    if not nodes:
-        return _without_data(WbsSection, domain, SectionStatus.EMPTY, "No WBS nodes have been defined.")
+    items = list(result.value)
+    if not items:
+        return _without_data(WbsSection, domain, SectionStatus.EMPTY, "No WBS items have been defined.")
 
-    roots = sorted((node for node in nodes if node.depth == 0), key=lambda node: (node.lft, str(node.id)))
+    parent_codes = {item.parent_code for item in items if item.parent_code is not None}
+    roots = sorted((item for item in items if item.parent_code is None), key=lambda item: (item.code, str(item.id)))
     listed_roots = [
-        WbsNodeItem(
-            id=node.id,
-            code=node.code,
-            name=node.name,
-            status=_value(node.status),
-            node_type=_value(node.node_type),
-            planned_start=_as_utc(node.planned_start) if node.planned_start else None,
-            planned_end=_as_utc(node.planned_end) if node.planned_end else None,
-            budget_allocated=node.budget_allocated,
-            budget_spent=node.budget_spent,
+        WbsItemSummary(
+            id=item.id,
+            code=item.code,
+            name=item.name,
+            level=item.level,
+            item_type=_value(item.item_type) if item.item_type is not None else None,
+            planned_start=_as_utc(item.planned_start) if item.planned_start else None,
+            planned_end=_as_utc(item.planned_end) if item.planned_end else None,
+            budget_allocated=item.budget_allocated,
+            evidence_tier=_wbs_item_tier(item),
         )
-        for node in roots[:MAX_LISTED_ITEMS]
+        for item in roots[:MAX_LISTED_ITEMS]
     ]
+    breakdown = _breakdown(_wbs_item_tier(item) for item in items)
+    tier = _weakest_tier(breakdown)
     return WbsSection(
         status=SectionStatus.AVAILABLE,
         source_domain=domain,
-        source_as_of=_latest(node.updated_at for node in nodes),
-        evidence_tier=ReportEvidenceTier.UNLINKED,
-        evidence_note="WBS nodes record no source document or clause reference.",
+        # WBS items record no timestamps, so freshness is not claimed.
+        source_as_of=None,
+        evidence_tier=tier,
+        evidence_note=_tier_note(
+            tier,
+            strong="Every WBS item links to its source clause. WBS items record no timestamps.",
+            weak="Some WBS items reference only their source document. WBS items record no timestamps.",
+            unlinked="Some WBS items record no source document or clause. WBS items record no timestamps.",
+        ),
         data=WbsData(
-            node_count=len(nodes),
+            item_count=len(items),
             root_count=len(roots),
-            leaf_count=sum(1 for node in nodes if node.rgt == node.lft + 1),
-            max_depth=max(node.depth for node in nodes),
-            by_status=dict(Counter(_value(node.status) for node in nodes)),
+            leaf_count=sum(1 for item in items if item.code not in parent_codes),
+            max_level=max(item.level for item in items),
+            by_item_type=dict(
+                Counter(_value(item.item_type) if item.item_type is not None else "unclassified" for item in items)
+            ),
+            items_with_budget=sum(1 for item in items if item.budget_allocated is not None),
+            items_with_planned_dates=sum(
+                1 for item in items if item.planned_start is not None and item.planned_end is not None
+            ),
             roots=listed_roots,
             truncated=len(roots) > len(listed_roots),
+            evidence_breakdown=breakdown,
         ),
     )
+
+
+def _wbs_item_tier(item: Any) -> ReportEvidenceTier:
+    if item.source_clause_id is not None:
+        return ReportEvidenceTier.STRONG_LINKED
+    if item.source_document_id is not None:
+        return ReportEvidenceTier.WEAK_LINKED
+    return ReportEvidenceTier.UNLINKED
 
 
 def _stakeholder_tier(stakeholder: Any) -> ReportEvidenceTier:
@@ -828,7 +866,7 @@ def project_executive_summary(
             )
         )
 
-    failed_documents = documents.data.by_status.get("error", 0) if documents.data is not None else 0
+    failed_documents = documents.data.by_processing_status.get(DocumentPollingStatus.ERROR.value, 0) if documents.data is not None else 0
     if failed_documents:
         attention.append(
             AttentionItem(
@@ -877,9 +915,7 @@ def project_executive_summary(
     if documents.data is not None:
         document_count = documents.data.total
         if not documents.data.counts_are_partial:
-            parsed_count = sum(
-                count for status, count in documents.data.by_status.items() if status in _PARSED_DOCUMENT_STATUSES
-            )
+            parsed_count = documents.data.by_processing_status.get(DocumentPollingStatus.PARSED.value, 0)
     elif documents.status is SectionStatus.EMPTY:
         document_count = 0
         parsed_count = 0

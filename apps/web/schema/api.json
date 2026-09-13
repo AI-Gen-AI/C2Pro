@@ -8820,7 +8820,13 @@
           },
           "upload_status": {
             "type": "string",
-            "title": "Upload Status"
+            "title": "Upload Status",
+            "description": "Raw document lifecycle status as stored."
+          },
+          "processing_status": {
+            "type": "string",
+            "title": "Processing Status",
+            "description": "User-facing processing status, normalized exactly as the Documents tab shows it."
           },
           "version": {
             "type": "integer",
@@ -8858,6 +8864,7 @@
           "filename",
           "document_type",
           "upload_status",
+          "processing_status",
           "version"
         ],
         "title": "DocumentItem"
@@ -9363,12 +9370,12 @@
             "type": "integer",
             "title": "Total"
           },
-          "by_status": {
+          "by_processing_status": {
             "additionalProperties": {
               "type": "integer"
             },
             "type": "object",
-            "title": "By Status"
+            "title": "By Processing Status"
           },
           "by_type": {
             "additionalProperties": {
@@ -9380,7 +9387,7 @@
           "counts_are_partial": {
             "type": "boolean",
             "title": "Counts Are Partial",
-            "description": "True when by_status/by_type cover only the documents that could be loaded, not total.",
+            "description": "True when by_processing_status/by_type cover only the documents that could be loaded, not total.",
             "default": false
           },
           "items": {
@@ -9398,7 +9405,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["total", "by_status", "by_type", "items"],
+        "required": ["total", "by_processing_status", "by_type", "items"],
         "title": "DocumentsData"
       },
       "DocumentsSection": {
@@ -14069,9 +14076,9 @@
       },
       "WbsData": {
         "properties": {
-          "node_count": {
+          "item_count": {
             "type": "integer",
-            "title": "Node Count"
+            "title": "Item Count"
           },
           "root_count": {
             "type": "integer",
@@ -14081,20 +14088,29 @@
             "type": "integer",
             "title": "Leaf Count"
           },
-          "max_depth": {
+          "max_level": {
             "type": "integer",
-            "title": "Max Depth"
+            "title": "Max Level"
           },
-          "by_status": {
+          "by_item_type": {
             "additionalProperties": {
               "type": "integer"
             },
             "type": "object",
-            "title": "By Status"
+            "title": "By Item Type"
+          },
+          "items_with_budget": {
+            "type": "integer",
+            "title": "Items With Budget"
+          },
+          "items_with_planned_dates": {
+            "type": "integer",
+            "title": "Items With Planned Dates",
+            "description": "Items with both a planned start and a planned end."
           },
           "roots": {
             "items": {
-              "$ref": "#/components/schemas/WbsNodeItem"
+              "$ref": "#/components/schemas/WbsItemSummary"
             },
             "type": "array",
             "title": "Roots"
@@ -14103,21 +14119,28 @@
             "type": "boolean",
             "title": "Truncated",
             "default": false
+          },
+          "evidence_breakdown": {
+            "$ref": "#/components/schemas/EvidenceBreakdown"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "node_count",
+          "item_count",
           "root_count",
           "leaf_count",
-          "max_depth",
-          "by_status",
-          "roots"
+          "max_level",
+          "by_item_type",
+          "items_with_budget",
+          "items_with_planned_dates",
+          "roots",
+          "evidence_breakdown"
         ],
-        "title": "WbsData"
+        "title": "WbsData",
+        "description": "The persisted procurement WBS items: served by GET /projects/{id}/wbs and used as RACI rows."
       },
-      "WbsNodeItem": {
+      "WbsItemSummary": {
         "properties": {
           "id": {
             "type": "string",
@@ -14132,13 +14155,20 @@
             "type": "string",
             "title": "Name"
           },
-          "status": {
-            "type": "string",
-            "title": "Status"
+          "level": {
+            "type": "integer",
+            "title": "Level"
           },
-          "node_type": {
-            "type": "string",
-            "title": "Node Type"
+          "item_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Type"
           },
           "planned_start": {
             "anyOf": [
@@ -14167,7 +14197,8 @@
           "budget_allocated": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
               },
               {
                 "type": "null"
@@ -14175,22 +14206,14 @@
             ],
             "title": "Budget Allocated"
           },
-          "budget_spent": {
-            "type": "number",
-            "title": "Budget Spent"
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "id",
-          "code",
-          "name",
-          "status",
-          "node_type",
-          "budget_spent"
-        ],
-        "title": "WbsNodeItem"
+        "required": ["id", "code", "name", "level", "evidence_tier"],
+        "title": "WbsItemSummary"
       },
       "WbsSection": {
         "properties": {

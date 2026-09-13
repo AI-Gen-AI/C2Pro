@@ -17,9 +17,11 @@ from pydantic import ValidationError
 from src.alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
 from src.alerts.domain.models import Alert
 from src.coherence.models import DashboardSummary
+from src.documents.adapters.http.router import _normalize_document_status_for_polling
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewItem, ReviewStatus
 from src.procurement.application.budget_use_cases import BudgetItemResponse, BudgetResponse
+from src.procurement.domain.models import WBSItem, WBSItemType
 from src.reporting.application.current_state_projection import (
     assemble_current_state_report,
     compute_content_fingerprint,
@@ -48,8 +50,6 @@ from src.stakeholders.application.dtos import (
 )
 from src.stakeholders.domain.models import InterestLevel, PowerLevel, Stakeholder
 from src.temporal.domain.project_snapshot import ProjectSnapshot, SnapshotTrigger
-from src.wbs.domain.enums import WBSNodeStatus, WBSNodeType
-from src.wbs.domain.models import WBSNode
 
 GENERATED_AT = datetime(2026, 9, 13, 12, 0, tzinfo=UTC)
 PROJECT_ID = uuid4()
@@ -218,29 +218,29 @@ def _budget(items: list[tuple[str, str, str]]) -> BudgetResponse:
     )
 
 
-def _wbs_node(*, code: str, depth: int, lft: int, rgt: int, status: WBSNodeStatus) -> WBSNode:
-    return WBSNode(
-        id=uuid4(),
+def _wbs_item(
+    *,
+    code: str,
+    level: int,
+    parent_code: str | None = None,
+    item_type: WBSItemType | None = WBSItemType.WORK_PACKAGE,
+    budget_allocated: Decimal | None = None,
+    planned: bool = False,
+    source_clause_id: UUID | None = None,
+    source_document_id: UUID | None = None,
+) -> WBSItem:
+    return WBSItem(
         project_id=PROJECT_ID,
-        tenant_id=TENANT_ID,
         code=code,
-        name=f"Node {code}",
-        description=None,
-        lft=lft,
-        rgt=rgt,
-        depth=depth,
-        parent_id=None,
-        node_type=WBSNodeType.WORK_PACKAGE,
-        status=status,
-        planned_start=None,
-        planned_end=None,
-        actual_start=None,
-        actual_end=None,
-        budget_allocated=None,
-        budget_spent=0.0,
-        metadata={},
-        created_at=GENERATED_AT - timedelta(days=3),
-        updated_at=GENERATED_AT - timedelta(days=2),
+        name=f"Item {code}",
+        level=level,
+        parent_code=parent_code,
+        item_type=item_type,
+        budget_allocated=budget_allocated,
+        planned_start=GENERATED_AT + timedelta(days=10) if planned else None,
+        planned_end=GENERATED_AT + timedelta(days=90) if planned else None,
+        source_clause_id=source_clause_id,
+        source_document_id=source_document_id,
     )
 
 
@@ -308,7 +308,7 @@ def _full_inputs(**overrides: object) -> CurrentStateInputs:
         "alerts": SourceOk([_alert()]),
         "hitl": SourceOk(HitlInput(items=[], pending_count=0)),
         "budget": SourceOk(_budget([("Civil works", "B-01", "1000.00")])),
-        "wbs": SourceOk([_wbs_node(code="1", depth=0, lft=1, rgt=2, status=WBSNodeStatus.IN_PROGRESS)]),
+        "wbs": SourceOk([_wbs_item(code="1", level=1)]),
         "stakeholders": SourceOk(StakeholdersInput(stakeholders=[_stakeholder(name="Ana")], total=1)),
         "raci": SourceOk(_raci()),
     }
@@ -389,7 +389,7 @@ def test_not_modeled_domains_are_explicit(key: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_documents_counts_by_status_and_type() -> None:
+def test_documents_counts_by_processing_status_and_type() -> None:
     docs = [
         _document(filename="Contract.pdf"),
         _document(filename="Budget.xlsx", document_type=DocumentType.BUDGET, upload_status=DocumentStatus.ERROR),
@@ -399,10 +399,30 @@ def test_documents_counts_by_status_and_type() -> None:
     assert section.evidence_tier is ReportEvidenceTier.STRONG_LINKED
     assert section.data is not None
     assert section.data.total == 2
-    assert section.data.by_status == {"parsed": 1, "error": 1}
+    assert section.data.by_processing_status == {"parsed": 1, "error": 1}
     assert section.data.by_type == {"contract": 1, "budget": 1}
     assert [item.filename for item in section.data.items] == ["Budget.xlsx", "Contract.pdf"]
     assert section.source_as_of == GENERATED_AT - timedelta(days=1)
+
+
+def test_executive_summary_counts_processed_and_failed_documents_as_the_documents_tab_does() -> None:
+    docs = [
+        _document(filename="A.pdf", upload_status=DocumentStatus.ANALYZED),
+        _document(filename="B.pdf", upload_status=DocumentStatus.PARSED_PENDING_ANALYSIS),
+        _document(filename="C.pdf", upload_status=DocumentStatus.UPLOADED),
+        _document(filename="D.pdf", upload_status=DocumentStatus.ERROR),
+    ]
+    report = _report(documents=SourceOk(DocumentsInput(documents=docs, total=4)))
+    documents = report.sections.documents
+    assert documents.data is not None
+    assert documents.data.by_processing_status == {"parsed": 1, "processing": 1, "queued": 1, "error": 1}
+    summary = report.sections.executive_summary
+    assert summary.data is not None
+    assert summary.data.document_count == 4
+    # Pending analysis is still processing in the Documents tab's normalization.
+    assert summary.data.parsed_document_count == 1
+    failed = [item for item in summary.data.attention_items if item.kind == "documents_failed"]
+    assert [item.message for item in failed] == ["1 document(s) failed processing."]
 
 
 def test_documents_empty_is_empty_not_zero_available() -> None:
@@ -579,24 +599,81 @@ def test_budget_with_items_reports_totals_and_caveats() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_wbs_structure_summary() -> None:
-    nodes = [
-        _wbs_node(code="1", depth=0, lft=1, rgt=6, status=WBSNodeStatus.IN_PROGRESS),
-        _wbs_node(code="1.1", depth=1, lft=2, rgt=3, status=WBSNodeStatus.COMPLETED),
-        _wbs_node(code="1.2", depth=1, lft=4, rgt=5, status=WBSNodeStatus.NOT_STARTED),
+def test_wbs_structure_summary_uses_the_parent_codes_of_the_wbs_tab_items() -> None:
+    items = [
+        _wbs_item(code="1.2", level=2, parent_code="1", budget_allocated=Decimal("250.00"), planned=True),
+        _wbs_item(code="1", level=1, item_type=WBSItemType.DELIVERABLE),
+        _wbs_item(code="1.1", level=2, parent_code="1", item_type=None),
     ]
-    section = _report(wbs=SourceOk(nodes)).sections.wbs
+    section = _report(wbs=SourceOk(items)).sections.wbs
+    assert section.status is SectionStatus.AVAILABLE
+    assert section.source_domain == "wbs"
     assert section.data is not None
-    assert section.data.node_count == 3
+    assert section.data.item_count == 3
     assert section.data.root_count == 1
     assert section.data.leaf_count == 2
-    assert section.data.max_depth == 1
-    assert section.data.by_status == {"in_progress": 1, "completed": 1, "not_started": 1}
+    assert section.data.max_level == 2
+    assert section.data.by_item_type == {"deliverable": 1, "work_package": 1, "unclassified": 1}
+    assert section.data.items_with_budget == 1
+    assert section.data.items_with_planned_dates == 1
     assert [root.code for root in section.data.roots] == ["1"]
+    assert section.data.truncated is False
+    # WBS items carry no timestamps; freshness is unknown rather than invented.
+    assert section.source_as_of is None
+
+
+def test_wbs_evidence_tier_follows_clause_and_document_links() -> None:
+    items = [
+        _wbs_item(code="1", level=1, source_clause_id=uuid4()),
+        _wbs_item(code="1.1", level=2, parent_code="1", source_document_id=uuid4()),
+    ]
+    section = _report(wbs=SourceOk(items)).sections.wbs
+    assert section.data is not None
+    assert section.data.evidence_breakdown.strong_linked == 1
+    assert section.data.evidence_breakdown.weak_linked == 1
+    assert section.data.evidence_breakdown.unlinked == 0
+    assert section.evidence_tier is ReportEvidenceTier.WEAK_LINKED
+    assert section.data.roots[0].evidence_tier is ReportEvidenceTier.STRONG_LINKED
+
+
+def test_wbs_fully_clause_linked_is_strong_and_still_says_items_carry_no_timestamps() -> None:
+    items = [
+        _wbs_item(code="1", level=1, source_clause_id=uuid4()),
+        _wbs_item(code="1.1", level=2, parent_code="1", source_clause_id=uuid4()),
+    ]
+    section = _report(wbs=SourceOk(items)).sections.wbs
+    assert section.evidence_tier is ReportEvidenceTier.STRONG_LINKED
+    assert section.evidence_note is not None
+    assert "record no timestamps" in section.evidence_note
+    assert "contract clause" not in section.evidence_note
+
+
+def test_wbs_roots_are_listed_in_code_order_and_truncated() -> None:
+    items = [_wbs_item(code=f"{index:03d}", level=1) for index in range(60, 0, -1)]
+    section = _report(wbs=SourceOk(items)).sections.wbs
+    assert section.data is not None
+    assert section.data.root_count == 60
+    assert [root.code for root in section.data.roots][:2] == ["001", "002"]
+    assert len(section.data.roots) == 50
+    assert section.data.truncated is True
 
 
 def test_wbs_empty() -> None:
-    assert _report(wbs=SourceOk([])).sections.wbs.status is SectionStatus.EMPTY
+    section = _report(wbs=SourceOk([])).sections.wbs
+    assert section.status is SectionStatus.EMPTY
+    assert section.data is None
+
+
+@pytest.mark.parametrize("status", list(DocumentStatus))
+def test_document_processing_status_matches_the_documents_tab(status: DocumentStatus) -> None:
+    section = _report(
+        documents=SourceOk(DocumentsInput(documents=[_document(upload_status=status)], total=1))
+    ).sections.documents
+    assert section.data is not None
+    expected = _normalize_document_status_for_polling(status).value
+    assert section.data.items[0].processing_status == expected
+    assert section.data.items[0].upload_status == status.value
+    assert section.data.by_processing_status == {expected: 1}
 
 
 def test_stakeholders_evidence_tiers_and_quadrants() -> None:

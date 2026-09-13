@@ -106,7 +106,10 @@ class DocumentItem(BaseModel):
     id: UUID
     filename: str
     document_type: str
-    upload_status: str
+    upload_status: str = Field(description="Raw document lifecycle status as stored.")
+    processing_status: str = Field(
+        description="User-facing processing status, normalized exactly as the Documents tab shows it."
+    )
     version: int
     uploaded_at: datetime | None = None
     parsed_at: datetime | None = None
@@ -116,11 +119,11 @@ class DocumentsData(BaseModel):
     model_config = _CONTRACT
 
     total: int
-    by_status: dict[str, int]
+    by_processing_status: dict[str, int]
     by_type: dict[str, int]
     counts_are_partial: bool = Field(
         default=False,
-        description="True when by_status/by_type cover only the documents that could be loaded, not total.",
+        description="True when by_processing_status/by_type cover only the documents that could be loaded, not total.",
     )
     items: list[DocumentItem]
     truncated: bool = False
@@ -324,30 +327,35 @@ class BudgetSection(ReportSectionBase):
 # ---------------------------------------------------------------------------
 
 
-class WbsNodeItem(BaseModel):
+class WbsItemSummary(BaseModel):
     model_config = _CONTRACT
 
     id: UUID
     code: str
     name: str
-    status: str
-    node_type: str
+    level: int
+    item_type: str | None = None
     planned_start: datetime | None = None
     planned_end: datetime | None = None
-    budget_allocated: float | None = None
-    budget_spent: float
+    budget_allocated: Decimal | None = None
+    evidence_tier: ReportEvidenceTier
 
 
 class WbsData(BaseModel):
+    """The persisted procurement WBS items: served by GET /projects/{id}/wbs and used as RACI rows."""
+
     model_config = _CONTRACT
 
-    node_count: int
+    item_count: int
     root_count: int
     leaf_count: int
-    max_depth: int
-    by_status: dict[str, int]
-    roots: list[WbsNodeItem]
+    max_level: int
+    by_item_type: dict[str, int]
+    items_with_budget: int
+    items_with_planned_dates: int = Field(description="Items with both a planned start and a planned end.")
+    roots: list[WbsItemSummary]
     truncated: bool = False
+    evidence_breakdown: EvidenceBreakdown
 
 
 class WbsSection(ReportSectionBase):
@@ -568,6 +576,6 @@ __all__ = [
     "StakeholdersData",
     "StakeholdersSection",
     "WbsData",
-    "WbsNodeItem",
+    "WbsItemSummary",
     "WbsSection",
 ]

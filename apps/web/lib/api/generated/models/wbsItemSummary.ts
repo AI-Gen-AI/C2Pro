@@ -37,5 +37,16 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { ReportEvidenceTier } from "./reportEvidenceTier";
 
-export type WbsDataByStatus = { [key: string]: number };
+export interface WbsItemSummary {
+  id: string;
+  code: string;
+  name: string;
+  level: number;
+  item_type?: string | null;
+  planned_start?: string | null;
+  planned_end?: string | null;
+  budget_allocated?: string | null;
+  evidence_tier: ReportEvidenceTier;
+}

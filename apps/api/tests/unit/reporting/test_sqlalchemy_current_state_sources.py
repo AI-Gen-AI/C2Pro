@@ -198,23 +198,25 @@ async def test_budget_is_read_through_the_budget_use_case(monkeypatch: pytest.Mo
     assert seen == [(PROJECT_ID, TENANT_ID)]
 
 
-async def test_wbs_is_read_as_the_whole_project_tree(monkeypatch: pytest.MonkeyPatch) -> None:
-    requests: list[Any] = []
+async def test_wbs_is_read_from_the_persisted_procurement_items_served_to_the_wbs_tab(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # At runtime GET /projects/{id}/wbs is the projects router's handler (it shadows the in-memory wbs
+    # router) and reads procurement_wbs_items via SQLAlchemyWBSRepository, as RACI does; not wbs_nodes.
+    seen: list[tuple[UUID, UUID]] = []
 
-    class _UseCase:
-        def __init__(self, repository: object) -> None:
+    class _Repository:
+        def __init__(self, session: object) -> None:
             pass
 
-        async def execute(self, request: Any) -> list[str]:
-            requests.append(request)
-            return ["n1"]
+        async def get_by_project(self, project_id: UUID, tenant_id: UUID) -> list[str]:
+            seen.append((project_id, tenant_id))
+            return ["i1"]
 
-    monkeypatch.setattr(module, "WBSNodeRepository", lambda session: object())
-    monkeypatch.setattr(module, "GetWBSTreeUseCase", _UseCase)
-    assert await _sources(_SessionLog()).load_wbs(PROJECT_ID, TENANT_ID) == ["n1"]
-    assert requests[0].project_id == PROJECT_ID
-    assert requests[0].tenant_id == TENANT_ID
-    assert requests[0].node_id is None
+    monkeypatch.setattr(module, "SQLAlchemyWBSRepository", _Repository)
+    assert await _sources(_SessionLog()).load_wbs(PROJECT_ID, TENANT_ID) == ["i1"]
+    assert seen == [(PROJECT_ID, TENANT_ID)]
+    assert not hasattr(module, "WBSNodeRepository")
 
 
 async def test_raci_matrix_is_read_through_the_raci_use_case(monkeypatch: pytest.MonkeyPatch) -> None:
