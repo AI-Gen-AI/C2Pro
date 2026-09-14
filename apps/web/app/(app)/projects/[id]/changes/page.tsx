@@ -30,6 +30,17 @@ function stateBadge(item: ChangeItem) {
   return <Badge variant="outline"><CheckCircle2 className="mr-1 h-3 w-3" />No change</Badge>;
 }
 
+// An error, a pending review or an unfinished comparison is never "no material change":
+// that title is reserved for a completed comparison that found no change cause.
+function itemTitle(item: ChangeItem): string {
+  if (item.state === "error") return "Revision analysis failed";
+  if (item.state === "needs_review") return "Change needs review";
+  if (item.state === "processing") return "Revision is being compared";
+  if (item.change_cause === "NEWLY_DISCOVERED") return "C2Pro learned something new";
+  if (item.change_cause === "BUSINESS_STATE_CHANGED") return "Project evidence changed";
+  return "No material change found";
+}
+
 export default function ProjectChangesPage() {
   const { id: projectId } = useParams<{ id: string }>();
   const { data, isLoading, error } = useQuery({
@@ -57,10 +68,10 @@ export default function ProjectChangesPage() {
             ? `/projects/${projectId}/changes/${item.document_id}/${item.provenance.target_revision_id}`
             : null;
           return (
-            <Card key={item.event_id}>
+            <Card key={item.event_id} data-testid={`change-item-${item.event_id}`}>
               <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <CardTitle className="text-base">{item.change_cause === "NEWLY_DISCOVERED" ? "C2Pro learned something new" : item.change_cause === "BUSINESS_STATE_CHANGED" ? "Project evidence changed" : item.state === "processing" ? "Revision is being compared" : "No material change found"}</CardTitle>
+                  <CardTitle className="text-base">{itemTitle(item)}</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">{new Date(item.occurred_at).toLocaleString()} · {item.provenance.diff_engine_version ?? "analysis pending"}</p>
                 </div>
                 {stateBadge(item)}
