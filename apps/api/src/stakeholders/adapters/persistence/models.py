@@ -178,9 +178,10 @@ class StakeholderWBSRaciORM(Base):
         nullable=False,
         index=True,
     )
+    # ADR-025: RACI assigns accountability on the canonical Project Controls WBS.
     wbs_item_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        ForeignKey("procurement_wbs_items.id", ondelete="CASCADE"),
+        ForeignKey("wbs_nodes.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )

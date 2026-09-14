@@ -152,6 +152,9 @@ async def init_db() -> None:
     from src.projects.adapters.persistence import models as project_models  # noqa: F401
     from src.stakeholders.adapters.persistence import models as stakeholder_models  # noqa: F401
 
+    # ADR-025: the canonical WBS that RACI and procurement BOM rows reference
+    from src.wbs.adapters.persistence import models as wbs_models  # noqa: F401
+
     logger.debug("models_imported")
 
     # Convertir URL a async
