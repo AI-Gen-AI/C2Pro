@@ -133,12 +133,15 @@ async def test_revision_change_is_append_only_evidence_linked_and_tenant_scoped(
     assert provenance["target_blob_hash"] == revision_b.blob_hash
     assert change.payload["changeset"]["changes"], "a modified clause is a real L1 change"
 
-    # Append-only: revision A's analysis snapshot still states A's evidence after B.
-    page = await events.page_for_project(project_a, tenant_a, after=None, limit=50)
-    snapshots = {event.payload["revision_id"]: event for event in page if event.event_type == "revision.analyzed"}
+    # Append-only: revision A's analysis snapshot still states A's evidence after B (full log).
+    log = await events.list_for_project(project_a, tenant_a)
+    snapshots = {event.payload["revision_id"]: event for event in log if event.event_type == "revision.analyzed"}
     assert "1% per week" in snapshots[str(revision_a.revision_id)].payload["clauses"][0]["full_text"]
     assert "2% per week" in snapshots[str(revision_b.revision_id)].payload["clauses"][0]["full_text"]
-    assert [event.event_type for event in page].count("revision.ingested") == 2
+    assert [event.event_type for event in log].count("revision.ingested") == 2
+    # The user-facing timeline shows the outcome, not the bookkeeping behind it.
+    page = await events.page_for_project(project_a, tenant_a, after=None, limit=50)
+    assert [event.event_type for event in page] == ["revision.changed"]
     # Re-running the worker for an analysed revision appends nothing (idempotent history).
     assert await build_revision_analysis_events(
         revision=revision_b, clauses=[_penalty_clause(revision_b, "anything")],

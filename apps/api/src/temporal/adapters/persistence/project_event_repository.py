@@ -8,14 +8,48 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import ColumnElement, and_, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
+from src.documents.adapters.persistence.models import DocumentORM
+from src.documents.domain.models import DocumentType
 from src.evidence.domain.runtime_trust import EvidenceRef
 from src.temporal.adapters.persistence.models import DocumentRevisionORM, ProjectEventORM
 from src.temporal.application.timeline import TimelineKey
 from src.temporal.domain.project_event import ProjectEvent
 from src.temporal.ports.project_event_repository import IProjectEventRepository
+
+# Revision outcomes a user can act on. Bookkeeping events (every upload's
+# ``revision.ingested`` and every ready ``revision.analyzed`` snapshot) stay in the append-only
+# log but are not timeline results: shown as items they claimed "being compared" forever and
+# "No material change found" for revisions that were never compared.
+_OUTCOME_EVENT_TYPES = ("revision.changed", "revision.reinterpreted", "revision.analysis_failed")
+_REVISION_SETTLED_EVENT_TYPES = ("revision.analyzed", *_OUTCOME_EVENT_TYPES)
+
+
+def _timeline_visible() -> ColumnElement[bool]:
+    """Per revision, only honest outcomes: a result, an error, a needed review, or processing."""
+    later = aliased(ProjectEventORM)
+    needs_review = and_(
+        ProjectEventORM.event_type == "revision.analyzed",
+        ProjectEventORM.payload["state"].astext == "needs_review",
+    )
+    # An upload is "being compared" only for a contract revision (the only kind compared) that
+    # has not settled yet; once any analysis/outcome event exists it stops being shown.
+    contract_revision = exists().where(
+        DocumentRevisionORM.revision_id == ProjectEventORM.source_revision_id,
+        DocumentRevisionORM.tenant_id == ProjectEventORM.tenant_id,
+        DocumentORM.id == DocumentRevisionORM.document_id,
+        DocumentORM.document_type == DocumentType.CONTRACT,
+    )
+    settled = exists().where(
+        later.source_revision_id == ProjectEventORM.source_revision_id,
+        later.tenant_id == ProjectEventORM.tenant_id,
+        later.event_type.in_(_REVISION_SETTLED_EVENT_TYPES),
+    )
+    pending_upload = and_(ProjectEventORM.event_type == "revision.ingested", contract_revision, ~settled)
+    return or_(ProjectEventORM.event_type.in_(_OUTCOME_EVENT_TYPES), needs_review, pending_upload)
 
 
 class SqlAlchemyProjectEventRepository(IProjectEventRepository):
@@ -102,6 +136,7 @@ class SqlAlchemyProjectEventRepository(IProjectEventRepository):
             .where(
                 ProjectEventORM.project_id == project_id,
                 ProjectEventORM.tenant_id == tenant_id,
+                _timeline_visible(),
             )
             .order_by(ProjectEventORM.occurred_at.asc(), ProjectEventORM.event_id.asc())
             .limit(limit + 1)
