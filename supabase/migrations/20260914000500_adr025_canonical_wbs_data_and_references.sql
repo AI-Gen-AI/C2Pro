@@ -1,5 +1,5 @@
 -- ADR-025 (2/2): one canonical WBS per project; RACI, BOM and MCP views reference it.
--- Mirror of apps/api/alembic/versions/20260915_0002_adr025_canonical_wbs_data_and_references.py (rendered from UPGRADE_STATEMENTS; do not edit by hand).
+-- Mirror of apps/api/alembic/versions/20260914_0005_adr025_canonical_wbs_data_and_references.py (rendered from UPGRADE_STATEMENTS; do not edit by hand).
 
 DO $$
 DECLARE

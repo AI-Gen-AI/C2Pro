@@ -1,8 +1,8 @@
 """ADR-025 (2/2): one canonical WBS per project; RACI, BOM and MCP views reference it.
 
-Revision ID: 20260915_0002
-Revises: 20260915_0001
-Create Date: 2026-09-15
+Revision ID: 20260914_0005
+Revises: 20260914_0004
+Create Date: 2026-09-14
 
 ADR-025 / MASTER ``project_controls.invariant=one_project_one_canonical_hierarchical_wbs``: the
 canonical Project Controls WBS is ``wbs_nodes``. Before this revision the database carried three
@@ -13,7 +13,7 @@ DATA MAPPING (no silent row loss)
 ---------------------------------
 Every legacy row is classified, and the classification is recorded on the legacy row itself
 (``canonical_mapping`` / ``canonical_mapping_reason`` / ``canonical_wbs_node_id``, added by
-20260915_0001). Ids are preserved, so existing RACI and BOM references stay meaningful.
+20260914_0004). Ids are preserved, so existing RACI and BOM references stay meaningful.
 
 - A project that already owns canonical nodes keeps them untouched (two hierarchies are never
   merged): a legacy row with the same id is ``DIRECT_MAP`` (already canonical); any other row is
@@ -64,7 +64,7 @@ rows deleted are removed from the legacy stores), references and views return to
 targets, and a managed node is removed from ``wbs_nodes`` only once a legacy store holds it.
 Pre-existing canonical nodes are never touched.
 
-Supabase CLI mirror: supabase/migrations/20260915000200_adr025_canonical_wbs_data_and_references.sql,
+Supabase CLI mirror: supabase/migrations/20260914000500_adr025_canonical_wbs_data_and_references.sql,
 rendered from ``UPGRADE_STATEMENTS`` by ``supabase_sql()`` (parity is tested).
 """
 
@@ -72,12 +72,12 @@ from __future__ import annotations
 
 from alembic import op
 
-revision = "20260915_0002"
-down_revision = "20260915_0001"
+revision = "20260914_0005"
+down_revision = "20260914_0004"
 branch_labels = None
 depends_on = None
 
-SUPABASE_MIRROR = "20260915000200_adr025_canonical_wbs_data_and_references.sql"
+SUPABASE_MIRROR = "20260914000500_adr025_canonical_wbs_data_and_references.sql"
 LEGACY_WBS_TABLES = ("procurement_wbs_items", "wbs_items")
 
 _TENANT_SCOPE = "NULLIF(current_setting('app.current_tenant', true), '')::uuid"
@@ -795,7 +795,7 @@ def supabase_sql() -> str:
     """The Supabase CLI mirror: the same upgrade statements, in order."""
     header = (
         "-- ADR-025 (2/2): one canonical WBS per project; RACI, BOM and MCP views reference it.\n"
-        "-- Mirror of apps/api/alembic/versions/20260915_0002_adr025_canonical_wbs_data_and_references.py "
+        "-- Mirror of apps/api/alembic/versions/20260914_0005_adr025_canonical_wbs_data_and_references.py "
         "(rendered from UPGRADE_STATEMENTS; do not edit by hand).\n"
     )
     return header + "\n" + "\n\n".join(statement.strip() + ";" for statement in UPGRADE_STATEMENTS) + "\n"

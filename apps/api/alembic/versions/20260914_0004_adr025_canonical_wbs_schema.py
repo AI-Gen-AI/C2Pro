@@ -1,8 +1,8 @@
 """ADR-025 (1/2): the canonical Project Controls WBS can hold every application WBS node.
 
-Revision ID: 20260915_0001
+Revision ID: 20260914_0004
 Revises: 20260914_0003
-Create Date: 2026-09-15
+Create Date: 2026-09-14
 
 ADR-025 / MASTER: one project owns ONE canonical hierarchical WBS, persisted in ``wbs_nodes``
 (nested set). The application WBS adapter now writes there, so the table gains what WBS consumers
@@ -14,12 +14,12 @@ previously read from ``procurement_wbs_items``:
   (same precision as 20260627_0001), so migrated rows are never truncated.
 
 The legacy stores (``procurement_wbs_items`` and, on Alembic-managed databases, ``wbs_items``)
-gain lineage columns filled by 20260915_0002: ``canonical_wbs_node_id``, ``canonical_mapping``
+gain lineage columns filled by 20260914_0005: ``canonical_wbs_node_id``, ``canonical_mapping``
 (DIRECT_MAP / DERIVED_MAP / AMBIGUOUS / ORPHAN) and ``canonical_mapping_reason``. No row is
 created, copied or deleted here; RLS, policies and grants are untouched (``ALTER TABLE`` keeps
 them).
 
-Supabase CLI mirror: supabase/migrations/20260915000100_adr025_canonical_wbs_schema.sql, rendered
+Supabase CLI mirror: supabase/migrations/20260914000400_adr025_canonical_wbs_schema.sql, rendered
 from ``UPGRADE_STATEMENTS`` by ``supabase_sql()`` (parity is tested).
 """
 
@@ -27,12 +27,12 @@ from __future__ import annotations
 
 from alembic import op
 
-revision = "20260915_0001"
+revision = "20260914_0004"
 down_revision = "20260914_0003"
 branch_labels = None
 depends_on = None
 
-SUPABASE_MIRROR = "20260915000100_adr025_canonical_wbs_schema.sql"
+SUPABASE_MIRROR = "20260914000400_adr025_canonical_wbs_schema.sql"
 MAPPING_CLASSES = ("DIRECT_MAP", "DERIVED_MAP", "AMBIGUOUS", "ORPHAN")
 
 _MAPPING_LIST = ", ".join(f"''{name}''" for name in MAPPING_CLASSES)
@@ -159,7 +159,7 @@ def supabase_sql() -> str:
     """The Supabase CLI mirror: the same upgrade statements, in order."""
     header = (
         "-- ADR-025 (1/2): the canonical Project Controls WBS can hold every application WBS node.\n"
-        "-- Mirror of apps/api/alembic/versions/20260915_0001_adr025_canonical_wbs_schema.py "
+        "-- Mirror of apps/api/alembic/versions/20260914_0004_adr025_canonical_wbs_schema.py "
         "(rendered from UPGRADE_STATEMENTS; do not edit by hand).\n"
     )
     return header + "\n" + "\n\n".join(statement.strip() + ";" for statement in UPGRADE_STATEMENTS) + "\n"

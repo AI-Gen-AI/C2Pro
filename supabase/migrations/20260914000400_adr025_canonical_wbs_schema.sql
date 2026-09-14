@@ -1,5 +1,5 @@
 -- ADR-025 (1/2): the canonical Project Controls WBS can hold every application WBS node.
--- Mirror of apps/api/alembic/versions/20260915_0001_adr025_canonical_wbs_schema.py (rendered from UPGRADE_STATEMENTS; do not edit by hand).
+-- Mirror of apps/api/alembic/versions/20260914_0004_adr025_canonical_wbs_schema.py (rendered from UPGRADE_STATEMENTS; do not edit by hand).
 
 ALTER TABLE public.wbs_nodes
     ALTER COLUMN code TYPE varchar,

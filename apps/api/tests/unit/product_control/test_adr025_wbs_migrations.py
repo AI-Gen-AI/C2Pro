@@ -18,8 +18,8 @@ API_ROOT = Path(__file__).resolve().parents[3]
 REPO_ROOT = API_ROOT.parents[1]
 VERSIONS = API_ROOT / "alembic" / "versions"
 SUPABASE = REPO_ROOT / "supabase" / "migrations"
-SCHEMA = VERSIONS / "20260915_0001_adr025_canonical_wbs_schema.py"
-DATA = VERSIONS / "20260915_0002_adr025_canonical_wbs_data_and_references.py"
+SCHEMA = VERSIONS / "20260914_0004_adr025_canonical_wbs_schema.py"
+DATA = VERSIONS / "20260914_0005_adr025_canonical_wbs_data_and_references.py"
 
 
 def _load(path: Path) -> ModuleType:
@@ -36,8 +36,8 @@ def _sql(*fragments: str) -> str:
 
 def test_migrations_extend_the_single_linear_chain_after_the_p0c_and_ir6_revisions() -> None:
     schema, data = _load(SCHEMA), _load(DATA)
-    assert (schema.revision, schema.down_revision) == ("20260915_0001", "20260914_0003")
-    assert (data.revision, data.down_revision) == ("20260915_0002", "20260915_0001")
+    assert (schema.revision, schema.down_revision) == ("20260914_0004", "20260914_0003")
+    assert (data.revision, data.down_revision) == ("20260914_0005", "20260914_0004")
 
 
 @pytest.mark.parametrize("path", [SCHEMA, DATA])

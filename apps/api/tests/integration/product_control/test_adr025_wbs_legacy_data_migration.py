@@ -383,7 +383,7 @@ async def test_legacy_wbs_data_reaches_one_canonical_wbs_and_round_trips() -> No
         _alembic("upgrade", "head")
         conn = await asyncpg.connect(SCRATCH_DSN)
         try:
-            assert await conn.fetchval("SELECT version_num FROM alembic_version") == "20260915_0002"
+            assert await conn.fetchval("SELECT version_num FROM alembic_version") == "20260914_0005"
             assert await conn.fetchval("SELECT count(*) FROM wbs_nodes WHERE project_id = $1", ids["project_A"]) == 8
             await _assert_nested_set(conn, ids["project_A"])
         finally:
