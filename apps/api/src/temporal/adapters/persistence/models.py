@@ -84,7 +84,14 @@ class ProjectEventORM(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
 
     __table_args__ = (
-        Index("ix_project_events_project_occurred", "project_id", "occurred_at"),
+        Index("ix_project_events_project_occurred", "project_id", "occurred_at", "event_id"),
+        Index(
+            "ix_project_events_tenant_project_occurred_event",
+            "tenant_id",
+            "project_id",
+            "occurred_at",
+            "event_id",
+        ),
         {"info": {"rls_policy": "tenant_isolation"}},
     )
 

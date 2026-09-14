@@ -14,6 +14,10 @@ from src.temporal.domain.document_revision import DocumentRevision
 
 
 class IDocumentRevisionRepository(ABC):
+    async def lock_lineage(self, document_id: UUID, tenant_id: UUID) -> None:  # noqa: ARG002 — no-op default for non-SQL adapters
+        """Serialize competing lineage writers; non-SQL adapters may no-op."""
+        return None
+
     @abstractmethod
     async def get_by_id(
         self, revision_id: UUID, tenant_id: UUID

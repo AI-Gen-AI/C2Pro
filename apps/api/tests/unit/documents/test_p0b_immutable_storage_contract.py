@@ -146,6 +146,9 @@ class _RevisionRepo:
     def __init__(self) -> None:
         self.revisions: list[DocumentRevision] = []
 
+    async def lock_lineage(self, _document_id: UUID, _tenant_id: UUID) -> None:
+        return None
+
     async def append_revision(self, revision: DocumentRevision) -> DocumentRevision:
         self.revisions.append(revision)
         return revision

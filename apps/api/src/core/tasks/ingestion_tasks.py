@@ -38,6 +38,8 @@ from src.documents.adapters.storage.local_file_storage_service import (
     LocalFileStorageService,
 )
 from src.documents.application.document_source import (
+    REVISION_HASH_MISMATCH,
+    RevisionSourceError,
     fetch_source_file,
     resolve_source_revision,
 )
@@ -57,10 +59,25 @@ from src.stakeholders.application.create_stakeholder_use_case import CreateStake
 from src.temporal.adapters.persistence.document_revision_repository import (
     SqlAlchemyDocumentRevisionRepository,
 )
+from src.temporal.adapters.persistence.project_event_repository import (
+    SqlAlchemyProjectEventRepository,
+)
+from src.temporal.application.change_projection import build_revision_processing_failed_event
+from src.temporal.application.revision_change_orchestrator import (
+    build_revision_analysis_events,
+)
+from src.temporal.domain.document_revision import DocumentRevision
 
 logger = logging.getLogger(__name__)
 
 RAG_READINESS_MAX_RETRIES = 3
+
+
+def _temporal_failure_code(error: Exception) -> str:
+    """Return a stable safe code; raw errors can contain storage/provider data."""
+    if isinstance(error, RevisionSourceError) and str(error) == REVISION_HASH_MISMATCH:
+        return "immutable_blob_hash_mismatch"
+    return "analysis_processing_failed"
 
 
 class RagChunksUnavailableError(RuntimeError):
@@ -790,6 +807,7 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
         await repo.update_status(tenant_id, document_id, DocumentStatus.PARSING)
         await session.commit()
 
+        source_revision: DocumentRevision | None = None
         try:
             source_revision = await resolve_source_revision(
                 revision_repository=SqlAlchemyDocumentRevisionRepository(session),
@@ -831,17 +849,32 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
                 metadata["parsed_text"] = parsed_text
                 if document.document_type == DocumentType.CONTRACT:
                     existing_clauses = await repo.list_clauses_for_document(tenant_id, document_id)
+                    revision_clauses = _extract_contract_clauses(
+                        document_id=document_id,
+                        project_id=document.project_id,
+                        tenant_id=tenant_id,
+                        parsed_text=parsed_text,
+                    )
                     if not existing_clauses:
-                        extracted_clauses = _extract_contract_clauses(
-                            document_id=document_id,
-                            project_id=document.project_id,
-                            tenant_id=tenant_id,
-                            parsed_text=parsed_text,
-                        )
-                        for clause in extracted_clauses:
+                        for clause in revision_clauses:
                             await repo.add_clause(tenant_id, clause)
-                        contract_clause_count = len(extracted_clauses)
+                        contract_clause_count = len(revision_clauses)
                         metadata["contract_clause_count"] = contract_clause_count
+                    # P0c deliberately snapshots every revision's extraction even when the
+                    # mutable legacy clause rows already contain the prior revision.
+                    # Historical comparisons never read those mutable rows, and the events
+                    # are bound to the immutable revision this task pinned.
+                    if source_revision is not None:
+                        event_repository = SqlAlchemyProjectEventRepository(session)
+                        prior_events = await event_repository.list_for_project(
+                            document.project_id, tenant_id
+                        )
+                        for temporal_event in await build_revision_analysis_events(
+                            revision=source_revision,
+                            clauses=revision_clauses,
+                            existing_events=prior_events,
+                        ):
+                            await event_repository.append(temporal_event)
             await repo.update_metadata(tenant_id, document_id, metadata)
             from datetime import UTC, datetime
 
@@ -911,6 +944,23 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
         except Exception as error:
             logger.error("Error processing document %s: %s", document_id, error, exc_info=True)
             await session.rollback()
+            if source_revision is not None:
+                # A retry must not hide this failure behind a mutable document status:
+                # persist the revision-bound failure projection before re-raising.
+                try:
+                    await SqlAlchemyProjectEventRepository(session).append(
+                        build_revision_processing_failed_event(
+                            revision=source_revision,
+                            failure_code=_temporal_failure_code(error),
+                        )
+                    )
+                except Exception as projection_error:  # pragma: no cover - preserves primary failure
+                    logger.error(
+                        "temporal_failure_projection_append_failed document_id=%s revision_id=%s error=%s",
+                        document_id,
+                        source_revision.revision_id,
+                        projection_error,
+                    )
             await repo.update_status(
                 tenant_id, document_id, DocumentStatus.ERROR, parsing_error=str(error)
             )

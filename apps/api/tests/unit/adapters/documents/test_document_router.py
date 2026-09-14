@@ -122,6 +122,8 @@ class TestDocumentUpload:
 
         mock_upload_use_case = MagicMock()
         mock_upload_use_case.execute = AsyncMock(return_value=sample_document)
+        created_revision_id = uuid4()
+        mock_upload_use_case.created_revision_id = created_revision_id
         app.dependency_overrides[get_upload_use_case] = lambda: mock_upload_use_case
 
         mock_task = MagicMock(id="task-123")
@@ -131,7 +133,7 @@ class TestDocumentUpload:
         with patch(
             "src.core.tasks.ingestion_tasks.process_document_async.delay",
             return_value=mock_task,
-        ):
+        ) as task_delay:
             response = client.post(f"/projects/{sample_document.project_id}/documents", files=files, data=data)
 
         assert response.status_code == status.HTTP_202_ACCEPTED
@@ -140,6 +142,10 @@ class TestDocumentUpload:
         assert body["task_id"] == "task-123"
         assert body["processing_status"] == "queued"
         assert "queued" in body["status_detail"].lower()
+
+        task_delay.assert_called_once_with(
+            document_id=str(sample_document.id), revision_id=str(created_revision_id)
+        )
 
     def test_doc_http_000a_upload_rejects_oversized_file(self, client, sample_document):
         """
