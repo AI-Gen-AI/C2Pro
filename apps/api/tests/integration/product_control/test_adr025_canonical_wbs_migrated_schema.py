@@ -182,8 +182,13 @@ async def test_schedule_and_spend_are_derived_from_the_canonical_wbs(session: As
         sa.text("UPDATE wbs_nodes SET budget_spent = 125.25 WHERE project_id = :pid AND code = '1.1'"), {"pid": project_id}
     )
 
+    node_id = (
+        await session.execute(sa.text("SELECT id FROM wbs_nodes WHERE project_id = :pid AND code = '1.1'"), {"pid": project_id})
+    ).scalar_one()
     clauses = await build_schedule_clauses(session, project_id, tenant_id)
-    assert [clause.text for clause in clauses] and all("Quay wall" in clause.text or "1.1" in clause.text for clause in clauses)
+    assert "Quay wall: 2026-10-01 to 2027-06-30" in [clause.text for clause in clauses]
+    timeline = next(clause for clause in clauses if clause.id == f"schedule-timeline-{project_id}")
+    assert [item["wbs_node_id"] for item in timeline.data["schedule_items"]] == [str(node_id)]
     spent = await SQLAlchemyBudgetRepository(session).get_total_spent_by_project(project_id, tenant_id)
     assert float(spent) == 125.25
 
