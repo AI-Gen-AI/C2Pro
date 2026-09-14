@@ -42,6 +42,25 @@ def _parsed_payload() -> dict:
     return {"text_blocks": [{"text": "parsed contract text with delay penalty"}]}
 
 
+class _NoRevisionLineage:
+    """These contracts exercise legacy documents: no revision rows, bytes at ``{id}{ext}``."""
+
+    def __init__(self, _session: object) -> None:
+        pass
+
+    async def get_current(self, _document_id: object, _tenant_id: object) -> None:
+        return None
+
+    async def get_by_id(self, _revision_id: object, _tenant_id: object) -> None:
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _legacy_documents_without_revisions():
+    with patch("src.core.tasks.ingestion_tasks.SqlAlchemyDocumentRevisionRepository", _NoRevisionLineage):
+        yield
+
+
 class TestDocumentStatusEnumExtension:
     """Test new DocumentStatus enum values for analysis flow."""
 

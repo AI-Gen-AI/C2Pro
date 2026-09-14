@@ -22,6 +22,7 @@ from src.core.tasks.snapshot_tasks import enqueue_project_snapshot
 from src.core.tenants.types import require_tenant_id
 from src.documents.application.dtos import DocumentDTO
 from src.documents.domain.models import DocumentStatus, DocumentType
+from src.documents.domain.storage_keys import legacy_document_object_key, revision_object_key
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
 from src.temporal.domain.document_revision import DocumentRevision
@@ -54,13 +55,6 @@ class ReuploadDocumentUseCase:
         self.storage_service = storage_service
         self.event_repository = event_repository
 
-    @staticmethod
-    def _blob_key(blob_hash: str, filename: str | None = None) -> str:
-        ext = ""
-        if filename and "." in filename:
-            ext = filename[filename.rindex(".") :]
-        return f"revisions/{blob_hash}{ext}"
-
     async def _store_blob(self, blob_key: str, file_content: bytes) -> None:
         if not await self.storage_service.file_exists(blob_key):
             await self.storage_service.upload_bytes(file_content, blob_key)
@@ -73,9 +67,10 @@ class ReuploadDocumentUseCase:
         file_hash: str,
         filename: str | None,
     ) -> DocumentRevision:
-        # Legacy backfilled genesis is metadata-only — the original bytes are
-        # unavailable at reupload time, so the blob_key is not retrievable.
-        blob_key = self._blob_key(file_hash, filename)
+        # A document uploaded before revision lineage keeps its original bytes at the
+        # legacy ``{id}{ext}`` object, which is never written again (P0b) — so the
+        # synthesised genesis points at those real bytes.
+        blob_key = legacy_document_object_key(document_id, filename)
         now = _now_naive()
         genesis = DocumentRevision(
             revision_id=uuid4(),
@@ -130,7 +125,14 @@ class ReuploadDocumentUseCase:
         parent_id = current_rev.revision_id if current_rev else None
         now = _now_naive()
         resolved_filename = filename or document.filename
-        blob_key = self._blob_key(new_file_hash, resolved_filename)
+        # P0b: revision B gets its own immutable object; revision A's object is untouched.
+        blob_key = revision_object_key(
+            tenant_id=scoped_tenant_id,
+            project_id=document.project_id,
+            document_id=document_id,
+            blob_hash=new_file_hash,
+            filename=resolved_filename,
+        )
 
         await self._store_blob(blob_key, file_content)
 
@@ -171,6 +173,8 @@ class ReuploadDocumentUseCase:
             filename=resolved_filename,
             status=DocumentStatus.UPLOADED,
         )
+        # The mutable pointer follows the current revision; history is read from revisions.
+        await self.document_repository.update_storage_path(scoped_tenant_id, document_id, blob_key)
 
         # REVISION + PROJECT_EVENT commit atomically here, before the enqueue.
         await self.document_repository.commit()

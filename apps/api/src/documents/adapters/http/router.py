@@ -192,7 +192,7 @@ def _validate_upload_extension(
         )
 
 
-def _enqueue_document_processing(document_id: UUID) -> str | None:
+def _enqueue_document_processing(document_id: UUID, revision_id: UUID | None = None) -> str | None:
     try:
         from src.core.tasks.ingestion_tasks import process_document_async
 
@@ -200,7 +200,12 @@ def _enqueue_document_processing(document_id: UUID) -> str | None:
             logger.warning("document_processing_task_unavailable", document_id=str(document_id))
             return None
 
-        task = process_document_async.delay(document_id=str(document_id))
+        # P0b: a pinned revision_id makes the worker read that immutable object even if a
+        # newer revision is uploaded before the task runs.
+        task = process_document_async.delay(
+            document_id=str(document_id),
+            revision_id=str(revision_id) if revision_id is not None else None,
+        )
         return getattr(task, "id", None)
     except Exception as exc:  # pragma: no cover - runtime infra failure path
         logger.warning(
@@ -349,11 +354,13 @@ def get_download_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
     storage: LocalFileStorageService = Depends(get_storage_service),
     get_document: GetDocumentUseCase = Depends(get_get_document_use_case),
+    rev_repo: SqlAlchemyDocumentRevisionRepository = Depends(get_document_revision_repository),
 ) -> DownloadDocumentUseCase:
     return DownloadDocumentUseCase(
         document_repository=repo,
         storage_service=storage,
         get_document_use_case=get_document,
+        revision_repository=rev_repo,
     )
 
 
@@ -388,6 +395,7 @@ def get_parse_document_use_case(
     file_parser: CompositeFileParser = Depends(get_file_parser_service),
     entity_extraction: DocumentsEntityExtractionService = Depends(get_entity_extraction_service),
     rag_ingestion: SqlAlchemyRagIngestionService = Depends(get_rag_ingestion_service),
+    rev_repo: SqlAlchemyDocumentRevisionRepository = Depends(get_document_revision_repository),
 ) -> ParseDocumentUseCase:
     return ParseDocumentUseCase(
         document_repository=repo,
@@ -395,6 +403,7 @@ def get_parse_document_use_case(
         file_parser_service=file_parser,
         entity_extraction_service=entity_extraction,
         rag_ingestion_service=rag_ingestion,
+        revision_repository=rev_repo,
     )
 
 
@@ -471,7 +480,10 @@ async def upload_document_for_processing(
         tenant_id=tenant_id,
     )
     response_data = DocumentResponse.model_validate(document).model_dump()
-    response_data["task_id"] = _enqueue_document_processing(document.id)
+    created_revision_id = getattr(upload_use_case, "created_revision_id", None)
+    response_data["task_id"] = _enqueue_document_processing(
+        document.id, created_revision_id if isinstance(created_revision_id, UUID) else None
+    )
     response_data["processing_status"] = DocumentPollingStatus.QUEUED
     response_data["status_detail"] = (
         "Upload accepted. File stored successfully. Background processing will start when the worker is available."

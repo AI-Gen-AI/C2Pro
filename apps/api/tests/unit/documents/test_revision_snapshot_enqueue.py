@@ -116,6 +116,9 @@ class _ReuploadDocRepo:
         self.current_doc.upload_status = DocumentStatus.UPLOADED
         return self.current_doc
 
+    async def update_storage_path(self, _tenant_id, _document_id, storage_url):
+        self.current_doc.storage_url = storage_url
+
     async def commit(self):
         self.commit_calls += 1
         self.order.append("commit")

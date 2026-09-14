@@ -15,6 +15,13 @@ from src.temporal.domain.document_revision import DocumentRevision
 
 class IDocumentRevisionRepository(ABC):
     @abstractmethod
+    async def get_by_id(
+        self, revision_id: UUID, tenant_id: UUID
+    ) -> DocumentRevision | None:
+        """Return one immutable revision inside its tenant boundary."""
+        ...
+
+    @abstractmethod
     async def get_current(
         self, document_id: UUID, tenant_id: UUID
     ) -> DocumentRevision | None: ...

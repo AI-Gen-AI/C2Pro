@@ -40,6 +40,18 @@ class SqlAlchemyDocumentRevisionRepository(IDocumentRevisionRepository):
             created_at=orm.created_at,
         )
 
+    async def get_by_id(
+        self, revision_id: UUID, tenant_id: UUID
+    ) -> DocumentRevision | None:
+        result = await self._session.execute(
+            select(DocumentRevisionORM).where(
+                DocumentRevisionORM.revision_id == revision_id,
+                DocumentRevisionORM.tenant_id == tenant_id,
+            )
+        )
+        orm = result.scalar_one_or_none()
+        return self._to_domain(orm) if orm else None
+
     async def get_current(
         self, document_id: UUID, tenant_id: UUID
     ) -> DocumentRevision | None:

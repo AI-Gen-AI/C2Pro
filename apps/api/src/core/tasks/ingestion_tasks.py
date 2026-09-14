@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -38,6 +37,10 @@ from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
 from src.documents.adapters.storage.local_file_storage_service import (
     LocalFileStorageService,
 )
+from src.documents.application.document_source import (
+    fetch_source_file,
+    resolve_source_revision,
+)
 from src.documents.application.trigger_document_analysis_use_case import (
     TriggerDocumentAnalysisUseCase,
 )
@@ -51,6 +54,9 @@ from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository imp
     SqlAlchemyStakeholderRepository,
 )
 from src.stakeholders.application.create_stakeholder_use_case import CreateStakeholderUseCase
+from src.temporal.adapters.persistence.document_revision_repository import (
+    SqlAlchemyDocumentRevisionRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -737,8 +743,12 @@ async def _run_document_analysis(
     return result
 
 
-async def _process(document_id: UUID) -> dict[str, Any]:
-    """Fetch, parse, update, and trigger analysis for a document."""
+async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[str, Any]:
+    """Fetch, parse, update, and trigger analysis for a document.
+
+    P0b: the bytes come from the pinned revision's immutable object (or the current
+    revision for messages without ``revision_id``), never from a mutable document path.
+    """
     await init_db()
 
     async with get_raw_session() as session:
@@ -781,8 +791,15 @@ async def _process(document_id: UUID) -> dict[str, Any]:
         await session.commit()
 
         try:
-            file_name = f"{document.id}{Path(document.filename).suffix}"
-            file_path = await storage.download_file(file_name)
+            source_revision = await resolve_source_revision(
+                revision_repository=SqlAlchemyDocumentRevisionRepository(session),
+                document_id=document_id,
+                tenant_id=tenant_id,
+                revision_id=revision_id,
+            )
+            file_path = await fetch_source_file(
+                storage=storage, document=document, revision=source_revision
+            )
 
             parsed_payload = await file_parser.parse_document_file(document, file_path)
             logger.info("Document parsing successful for document %s.", document_id)
@@ -909,20 +926,27 @@ async def _process(document_id: UUID) -> dict[str, Any]:
     retry_backoff_max=60,
     task_track_started=True,
 )
-def process_document_async(self: Any, document_id: str) -> dict[str, Any]:
+def process_document_async(
+    self: Any, document_id: str, revision_id: str | None = None
+) -> dict[str, Any]:
     """
     Asynchronously processes a document using the appropriate parser.
 
     Args:
         document_id: The unique ID of the document to process. The task
                      retrieves the file path and other info from the database.
+        revision_id: The immutable revision to read. Messages without it (legacy
+                     producers, reprocess) read the document's current revision.
     """
     logger.info(
-        "Starting document processing for task_id: %s, document_id: %s",
+        "Starting document processing for task_id: %s, document_id: %s, revision_id: %s",
         self.request.id,
         document_id,
+        revision_id,
     )
-    return asyncio.run(_process(UUID(document_id)))
+    return asyncio.run(
+        _process(UUID(document_id), UUID(revision_id) if revision_id is not None else None)
+    )
 
 
 @celery_app.task(
