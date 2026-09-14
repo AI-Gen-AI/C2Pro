@@ -33,6 +33,7 @@ from src.reporting.application.ports import (
     SourceUnavailable,
 )
 from src.reporting.domain.current_state_report import (
+    CANONICAL_HEALTH_CATEGORIES,
     AlertItem,
     AlertsData,
     AlertsSection,
@@ -54,8 +55,8 @@ from src.reporting.domain.current_state_report import (
     EvidenceQualitySection,
     ExecutiveSummaryData,
     ExecutiveSummarySection,
+    HealthCategoryItem,
     HealthData,
-    HealthDimensionItem,
     HealthSection,
     HitlData,
     HitlItem,
@@ -302,37 +303,57 @@ def project_health(result: Any) -> HealthSection:
             HealthSection, domain, SectionStatus.ERROR, "The stored health snapshot could not be read."
         )
 
-    dimensions = [
-        HealthDimensionItem(
-            dimension=_value(signal.dimension),
-            score=signal.score,
-            band=_value(signal.band),
-            confidence=signal.confidence,
-            null_reason=_value(signal.null_reason) if signal.null_reason is not None else None,
-            missing_data=list(signal.missing_data),
-            evidence_count=len(signal.evidence),
+    # User-facing Health is the canonical six-category single-document coverage (MASTER / ADR-018
+    # 2026-09-13 amendment / ADR-024). The legacy ADR-018 v0 `vector.dimensions` and composite stay
+    # internal Health inputs and are deliberately not projected; nothing is renamed onto a category.
+    coverage = vector.single_document_coverage
+    if coverage is None:
+        return _without_data(
+            HealthSection,
+            domain,
+            SectionStatus.UNAVAILABLE,
+            "The six Health categories have not been evaluated for this project yet.",
+            source_as_of=_as_utc(snapshot.captured_at),
         )
-        for signal in vector.dimensions
-    ]
-    has_evidence = any(item.evidence_count > 0 for item in dimensions)
-    tier = ReportEvidenceTier.WEAK_LINKED if has_evidence else ReportEvidenceTier.UNLINKED
+
+    assessments = {_value(assessment.category): assessment for assessment in coverage.assessments}
+    categories: list[HealthCategoryItem] = []
+    for name in CANONICAL_HEALTH_CATEGORIES:
+        assessment = assessments[name]
+        gap = assessment.gap
+        categories.append(
+            HealthCategoryItem(
+                category=name,
+                state=_value(assessment.state),
+                evidence_count=assessment.evidence_count,
+                missing_data=list(assessment.missing_data),
+                gap=gap.action if gap is not None else None,
+            )
+        )
+    granularity = _value(vector.single_document_evidence_granularity)
+    evidence_total = sum(item.evidence_count for item in categories)
+    if not evidence_total:
+        evidence_note = "No Health category cites supporting evidence."
+    elif granularity == "clause":
+        evidence_note = (
+            f"{evidence_total} category evidence reference(s) identify persisted document clauses "
+            "(clause-level granularity)."
+        )
+    else:
+        evidence_note = (
+            f"{evidence_total} category evidence reference(s) identify whole documents, not specific clauses."
+        )
     return HealthSection(
         status=SectionStatus.AVAILABLE,
         source_domain=domain,
         source_as_of=_as_utc(snapshot.captured_at),
         source_ref=f"project_snapshot:{snapshot.snapshot_id}",
-        evidence_tier=tier,
-        evidence_note=(
-            "Scored dimensions cite evidence references, but those references carry "
-            "unstructured locators rather than clause-level links."
-            if has_evidence
-            else "No dimension cites supporting evidence."
-        ),
+        evidence_tier=ReportEvidenceTier.WEAK_LINKED if evidence_total else ReportEvidenceTier.UNLINKED,
+        evidence_note=evidence_note,
         data=HealthData(
-            composite_score=vector.composite_score,
-            composite_band=_value(vector.composite_band),
             computed_at=_as_utc(vector.computed_at),
-            dimensions=dimensions,
+            evidence_granularity=granularity,
+            categories=categories,
         ),
     )
 
@@ -759,10 +780,10 @@ def project_missing_evidence(health: HealthSection, coherence: CoherenceSection)
 
     items: list[MissingEvidenceItem] = []
     if health.data is not None:
-        for dimension in health.data.dimensions:
+        for category in health.data.categories:
             items.extend(
-                MissingEvidenceItem(source_domain="health", subject=dimension.dimension, description=gap)
-                for gap in dimension.missing_data
+                MissingEvidenceItem(source_domain="health", subject=category.category, description=gap)
+                for gap in category.missing_data
             )
     if coherence.data is not None:
         items.extend(
@@ -941,13 +962,16 @@ def project_executive_summary(
             )
 
     if health.data is not None:
-        unknown = sum(1 for dimension in health.data.dimensions if dimension.score is None)
-        if unknown:
+        lacking = [item.category for item in health.data.categories if item.state != "present"]
+        if lacking:
             attention.append(
                 AttentionItem(
-                    kind="health_unknown_dimensions",
+                    kind="health_insufficient_evidence_categories",
                     level=AttentionLevel.INFO,
-                    message=f"{unknown} health dimension(s) have insufficient evidence to score.",
+                    message=(
+                        f"{len(lacking)} of {len(CANONICAL_HEALTH_CATEGORIES)} Health categories have "
+                        f"insufficient evidence: {', '.join(lacking)}."
+                    ),
                     section_key="health",
                 )
             )
@@ -1000,8 +1024,6 @@ def project_executive_summary(
             parsed_document_count=parsed_count,
             analyzed_document_count=analyzed_count,
             awaiting_analysis_document_count=awaiting_count,
-            health_composite_score=health.data.composite_score if health.data is not None else None,
-            health_composite_band=health.data.composite_band if health.data is not None else None,
             error_section_keys=error_keys,
             unavailable_section_keys=[
                 key for key, section in sections.items() if section.status is SectionStatus.UNAVAILABLE

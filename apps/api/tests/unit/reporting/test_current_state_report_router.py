@@ -113,7 +113,7 @@ async def test_owned_project_returns_current_state_report() -> None:
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["report_schema_version"] == "current-state-report/v1"
+    assert body["report_schema_version"] == "current-state-report/v2"
     assert body["project"] == {"id": str(project_id), "name": "Hospital North", "code": "HN-01", "status": "active"}
     assert body["sections"]["risks"]["status"] == "not_modeled"
     assert body["sections"]["health"]["status"] == "unavailable"

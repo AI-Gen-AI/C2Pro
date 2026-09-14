@@ -16,10 +16,13 @@ from pydantic import ValidationError
 
 from src.alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
 from src.alerts.domain.models import Alert
-from src.coherence.models import DashboardSummary
+from src.coherence.domain.category_weights import CoherenceCategory
+from src.coherence.models import DashboardSummary, FindingSignal
 from src.documents.adapters.http.router import _normalize_document_status_for_polling
 from src.documents.application.dtos import document_lifecycle_status
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
+from src.health.domain.category_coverage import CategoryCoverageState, CategoryGapAlert
+from src.health.domain.single_document_coverage import CategoryAssessment, SingleDocumentCoverage
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewItem, ReviewStatus
 from src.procurement.application.budget_use_cases import BudgetItemResponse, BudgetResponse
 from src.procurement.domain.models import WBSItem, WBSItemType
@@ -37,9 +40,12 @@ from src.reporting.application.ports import (
     StakeholdersInput,
 )
 from src.reporting.domain.current_state_report import (
+    CANONICAL_HEALTH_CATEGORIES,
     REPORT_SCHEMA_VERSION,
     AttentionLevel,
+    CurrentStateReport,
     DocumentsSection,
+    HealthData,
     ProjectIdentity,
     ReportEvidenceTier,
     SectionStatus,
@@ -82,7 +88,65 @@ def _document(
     )
 
 
-def _snapshot(*, contract_score: float | None, with_unknown_risk: bool = True) -> ProjectSnapshot:
+LEGACY_HEALTH_DIMENSIONS = ("contract", "risk", "documentation", "governance", "schedule", "cost", "deliverables")
+_DEFAULT_COVERAGE = object()
+
+
+def _coverage(
+    present: dict[CoherenceCategory, list[str]] | None = None, *, with_cross_finding: bool = False
+) -> SingleDocumentCoverage:
+    """Six-category single-document coverage (the canonical Health surface, ADR-024)."""
+    evidence = (
+        present
+        if present is not None
+        else {CoherenceCategory.SCOPE: [str(uuid4())], CoherenceCategory.LEGAL: [str(uuid4()), str(uuid4())]}
+    )
+    assessments = []
+    for category in CoherenceCategory:
+        ids = evidence.get(category, [])
+        if ids:
+            assessments.append(
+                CategoryAssessment(
+                    category=category,
+                    state=CategoryCoverageState.PRESENT,
+                    evidence_count=len(ids),
+                    evidence_clause_ids=tuple(ids),
+                )
+            )
+        else:
+            assessments.append(
+                CategoryAssessment(
+                    category=category,
+                    state=CategoryCoverageState.INSUFFICIENT_EVIDENCE,
+                    missing_data=(f"{category.value.lower()} evidence not detected",),
+                    gap=CategoryGapAlert(category=category, action=f"Upload evidence to assess {category.value}."),
+                )
+            )
+    cross = (
+        (
+            FindingSignal(
+                rule_id="CROSS-BUDGET-SCOPE",
+                clause_id="clause-a|clause-b",
+                impact_score=0.5,
+                category="CROSS",
+                evidence_summary="Coherence cross finding between budget and scope clauses",
+            ),
+        )
+        if with_cross_finding
+        else ()
+    )
+    return SingleDocumentCoverage(assessments=tuple(assessments), cross_findings=cross)
+
+
+def _snapshot(
+    *,
+    contract_score: float | None,
+    with_unknown_risk: bool = True,
+    coverage: SingleDocumentCoverage | None | object = _DEFAULT_COVERAGE,
+    coherence_subscore_ref: bool = False,
+) -> ProjectSnapshot:
+    """A persisted snapshot: legacy ADR-018 internal dimensions + the canonical six-category coverage."""
+    resolved_coverage = _coverage() if coverage is _DEFAULT_COVERAGE else coverage
     dimensions: list[dict[str, object]] = []
     if contract_score is None:
         dimensions.append(
@@ -105,7 +169,19 @@ def _snapshot(*, contract_score: float | None, with_unknown_risk: bool = True) -
                 "band": "healthy" if contract_score >= 80 else "watch",
                 "confidence": 0.9,
                 "evidence": [
-                    {"ref_id": "clause-1", "source": "contract_clause", "tier": "verified", "locator": "p=3"}
+                    {"ref_id": "clause-1", "source": "contract_clause", "tier": "verified", "locator": "p=3"},
+                    *(
+                        [
+                            {
+                                "ref_id": "project-coherence-subscore",
+                                "source": "coherence",
+                                "tier": "verified",
+                                "locator": "coherence_subscore=0.55",
+                            }
+                        ]
+                        if coherence_subscore_ref
+                        else []
+                    ),
                 ],
                 "trend": "unknown",
                 "missing_data": [],
@@ -139,6 +215,14 @@ def _snapshot(*, contract_score: float | None, with_unknown_risk: bool = True) -
             "composite_band": "unknown" if contract_score is None else "watch",
             "composite_trend": "unknown",
             "computed_at": (GENERATED_AT - timedelta(hours=3)).isoformat(),
+            **(
+                {
+                    "single_document_coverage": resolved_coverage.model_dump(mode="json"),
+                    "single_document_evidence_granularity": "clause",
+                }
+                if isinstance(resolved_coverage, SingleDocumentCoverage)
+                else {}
+            ),
         },
         created_at=GENERATED_AT - timedelta(hours=3),
     )
@@ -491,7 +575,7 @@ def test_documents_empty_is_empty_not_zero_available() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Health — passthrough, honest null, weak-linked evidence
+# Health — the canonical six categories (MASTER / ADR-018 2026-09-13 amendment / ADR-024)
 # ---------------------------------------------------------------------------
 
 
@@ -502,28 +586,54 @@ def test_health_without_snapshot_is_unavailable_never_zero() -> None:
     assert "snapshot" in (section.status_reason or "").lower()
 
 
-def test_health_passes_through_null_scores_and_composite() -> None:
+def test_health_lists_exactly_the_six_canonical_categories_in_master_order() -> None:
     section = _report(health=SourceOk(_snapshot(contract_score=70.0))).sections.health
     assert section.status is SectionStatus.AVAILABLE
     assert section.data is not None
-    assert section.data.composite_score == 70.0
-    risk = next(d for d in section.data.dimensions if d.dimension == "risk")
-    assert risk.score is None
-    assert risk.band == "unknown"
-    assert risk.null_reason == "insufficient_evidence"
-    assert risk.missing_data == ["upload the risk register"]
-    contract = next(d for d in section.data.dimensions if d.dimension == "contract")
-    assert contract.evidence_count == 1
+    assert [item.category for item in section.data.categories] == [
+        "SCOPE",
+        "BUDGET",
+        "TIME",
+        "TECHNICAL",
+        "LEGAL",
+        "QUALITY",
+    ]
+    assert list(CANONICAL_HEALTH_CATEGORIES) == ["SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"]
+
+
+def test_health_preserves_state_evidence_count_missing_data_gap_and_granularity() -> None:
+    section = _report(health=SourceOk(_snapshot(contract_score=70.0))).sections.health
+    assert section.data is not None
+    by_category = {item.category: item for item in section.data.categories}
+    assert (by_category["SCOPE"].state, by_category["SCOPE"].evidence_count) == ("present", 1)
+    assert (by_category["LEGAL"].state, by_category["LEGAL"].evidence_count) == ("present", 2)
+    assert by_category["SCOPE"].missing_data == [] and by_category["SCOPE"].gap is None
+    time = by_category["TIME"]
+    assert time.state == "insufficient_evidence"
+    assert time.evidence_count == 0
+    assert time.missing_data == ["time evidence not detected"]
+    assert time.gap == "Upload evidence to assess TIME."
+    assert section.data.evidence_granularity == "clause"
     assert section.evidence_tier is ReportEvidenceTier.WEAK_LINKED
     assert section.source_as_of == GENERATED_AT - timedelta(hours=3)
 
 
-def test_health_with_no_evidence_refs_is_unlinked() -> None:
-    section = _report(health=SourceOk(_snapshot(contract_score=None))).sections.health
-    assert section.status is SectionStatus.AVAILABLE
+def test_health_category_without_evidence_is_named_unknown_not_scored_zero() -> None:
+    section = _report(health=SourceOk(_snapshot(contract_score=None, coverage=_coverage({})))).sections.health
     assert section.data is not None
-    assert section.data.composite_score is None
+    assert {item.state for item in section.data.categories} == {"insufficient_evidence"}
+    dumped = section.data.model_dump(mode="json")
+    assert not any("score" in key or "composite" in key for key in dumped)
+    assert all(set(item) == {"category", "state", "evidence_count", "missing_data", "gap"} for item in dumped["categories"])
     assert section.evidence_tier is ReportEvidenceTier.UNLINKED
+
+
+def test_snapshot_without_single_document_coverage_is_not_evaluated_never_six_unknowns() -> None:
+    section = _report(health=SourceOk(_snapshot(contract_score=70.0, coverage=None))).sections.health
+    assert section.status is SectionStatus.UNAVAILABLE
+    assert section.data is None
+    assert "not been evaluated" in (section.status_reason or "")
+    assert section.evidence_tier is not ReportEvidenceTier.WEAK_LINKED
 
 
 # ---------------------------------------------------------------------------
@@ -816,8 +926,12 @@ def test_missing_evidence_collects_health_and_coherence_gaps() -> None:
     assert section.status is SectionStatus.AVAILABLE
     assert section.data is not None
     described = {(item.source_domain, item.subject, item.description) for item in section.data.items}
-    assert ("health", "risk", "upload the risk register") in described
+    assert ("health", "TIME", "time evidence not detected") in described
+    assert ("health", "QUALITY", "quality evidence not detected") in described
     assert ("coherence", "budget", "No evidence for this coherence dimension.") in described
+    health_subjects = {item.subject for item in section.data.items if item.source_domain == "health"}
+    assert health_subjects <= set(CANONICAL_HEALTH_CATEGORIES)
+    assert not health_subjects & set(LEGACY_HEALTH_DIMENSIONS)
 
 
 def test_missing_evidence_unavailable_when_no_gap_sources_have_data() -> None:
@@ -860,13 +974,13 @@ def test_executive_summary_uses_only_authorized_score_and_surfaces_attention() -
     summary = report.sections.executive_summary
     assert summary.status is SectionStatus.AVAILABLE
     assert summary.data is not None
-    assert summary.data.health_composite_score == 70.0
     kinds = [item.kind for item in summary.data.attention_items]
     assert "alerts_high_severity" in kinds
     assert "alerts_overdue" in kinds
     assert "hitl_overdue" in kinds
     assert "section_error" in kinds
-    assert "health_unknown_dimensions" in kinds
+    assert "health_insufficient_evidence_categories" in kinds
+    assert "health_unknown_dimensions" not in kinds
     assert summary.data.attention_items[0].level is AttentionLevel.CRITICAL
     assert summary.data.not_modeled_section_keys == ["risks", "obligations", "schedule"]
     assert summary.data.error_section_keys == ["budget"]
@@ -874,10 +988,21 @@ def test_executive_summary_uses_only_authorized_score_and_surfaces_attention() -
     assert not any(key in dumped for key in ("overall_score", "overall_percentage", "project_score"))
 
 
-def test_executive_summary_health_score_is_null_when_health_unavailable() -> None:
-    summary = _report(health=SourceOk(None)).sections.executive_summary
+def test_executive_summary_carries_no_health_composite_headline() -> None:
+    for health in (SourceOk(None), SourceOk(_snapshot(contract_score=70.0))):
+        summary = _report(health=health).sections.executive_summary
+        assert summary.data is not None
+        assert not any("composite" in key for key in summary.data.model_dump())
+
+
+def test_attention_names_the_canonical_categories_that_lack_evidence() -> None:
+    summary = _report(health=SourceOk(_snapshot(contract_score=70.0))).sections.executive_summary
     assert summary.data is not None
-    assert summary.data.health_composite_score is None
+    health_items = [item for item in summary.data.attention_items if item.section_key == "health"]
+    assert [item.kind for item in health_items] == ["health_insufficient_evidence_categories"]
+    message = health_items[0].message
+    assert message == "4 of 6 Health categories have insufficient evidence: BUDGET, TIME, TECHNICAL, QUALITY."
+    assert not any(legacy in message.lower() for legacy in LEGACY_HEALTH_DIMENSIONS)
 
 
 # ---------------------------------------------------------------------------
@@ -1057,3 +1182,90 @@ def test_source_ref_participates_in_the_fingerprint() -> None:
     other_snapshot = _report(health=SourceOk(_snapshot(contract_score=70.0))).sections.health
     changed = report.sections.model_copy(update={"health": other_snapshot})
     assert compute_content_fingerprint(report.project, changed) != report.content_fingerprint
+
+
+# ---------------------------------------------------------------------------
+# Health contract: legacy taxonomy stays internal, JSON parity, Coherence separation
+# ---------------------------------------------------------------------------
+
+
+def _health_identifiers(report: CurrentStateReport) -> set[str]:
+    """Every identifier the report uses to NAME a Health dimension (not free-text gap wording)."""
+    sections = report.sections
+    names: set[str] = set()
+    if sections.health.data is not None:
+        names.update(item.category for item in sections.health.data.categories)
+    if sections.missing_evidence.data is not None:
+        names.update(item.subject for item in sections.missing_evidence.data.items if item.source_domain == "health")
+    return names
+
+
+def test_legacy_internal_dimensions_never_surface_as_user_facing_health() -> None:
+    report = _report(health=SourceOk(_snapshot(contract_score=70.0, coherence_subscore_ref=True)))
+    assert _health_identifiers(report) <= set(CANONICAL_HEALTH_CATEGORIES)
+    health_json = report.sections.health.model_dump(mode="json")
+    assert "dimensions" not in (health_json["data"] or {})
+    assert not any(key.startswith("composite") for key in (health_json["data"] or {}))
+    assert health_json["evidence_note"] is None or not any(
+        legacy in health_json["evidence_note"].lower() for legacy in LEGACY_HEALTH_DIMENSIONS
+    )
+    summary = report.sections.executive_summary.data
+    assert summary is not None
+    for item in summary.attention_items:
+        if item.section_key == "health":
+            assert "dimension" not in item.kind and "dimension" not in item.message
+
+
+def test_health_json_payload_round_trips_the_canonical_categories() -> None:
+    report = _report(health=SourceOk(_snapshot(contract_score=70.0)))
+    payload = report.model_dump(mode="json")
+    categories = payload["sections"]["health"]["data"]["categories"]
+    assert [item["category"] for item in categories] == list(CANONICAL_HEALTH_CATEGORIES)
+    assert CurrentStateReport.model_validate(payload) == report
+    assert payload["report_schema_version"] == REPORT_SCHEMA_VERSION == "current-state-report/v2"
+
+
+def test_coherence_signals_do_not_contaminate_health() -> None:
+    coverage = _coverage({CoherenceCategory.BUDGET: [str(uuid4())]}, with_cross_finding=True)
+    report = _report(
+        health=SourceOk(_snapshot(contract_score=70.0, coverage=coverage, coherence_subscore_ref=True)),
+        coherence=SourceOk(_coherence(score=None, score_version="coherence-v2", missing=["time"])),
+    )
+    health = report.sections.health
+    assert health.data is not None
+    assert [(item.category, item.state, item.evidence_count) for item in health.data.categories] == [
+        ("SCOPE", "insufficient_evidence", 0),
+        ("BUDGET", "present", 1),
+        ("TIME", "insufficient_evidence", 0),
+        ("TECHNICAL", "insufficient_evidence", 0),
+        ("LEGAL", "insufficient_evidence", 0),
+        ("QUALITY", "insufficient_evidence", 0),
+    ]
+    serialized = health.model_dump_json().lower()
+    assert "coherence" not in serialized
+    assert "cross" not in serialized
+    missing = report.sections.missing_evidence.data
+    assert missing is not None
+    assert ("coherence", "time") in {(item.source_domain, item.subject) for item in missing.items}
+    assert all(item.subject in CANONICAL_HEALTH_CATEGORIES for item in missing.items if item.source_domain == "health")
+
+
+@pytest.mark.parametrize(
+    "categories",
+    [
+        ["SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL"],
+        ["SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY", "RISK"],
+        ["contract", "risk", "documentation", "governance", "schedule", "cost"],
+        ["BUDGET", "SCOPE", "TIME", "TECHNICAL", "LEGAL", "QUALITY"],
+    ],
+)
+def test_health_data_rejects_anything_but_the_six_canonical_categories_in_order(categories: list[str]) -> None:
+    with pytest.raises(ValidationError):
+        HealthData(
+            computed_at=GENERATED_AT,
+            evidence_granularity="clause",
+            categories=[
+                {"category": name, "state": "insufficient_evidence", "evidence_count": 0, "missing_data": [], "gap": None}
+                for name in categories
+            ],
+        )

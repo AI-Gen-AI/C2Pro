@@ -15,7 +15,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-REPORT_SCHEMA_VERSION = "current-state-report/v1"
+# v2: Health is the canonical six-category contract (MASTER / ADR-018 2026-09-13 amendment);
+# the legacy ADR-018 v0 dimensions and their composite are no longer part of the report.
+REPORT_SCHEMA_VERSION = "current-state-report/v2"
+
+# The one user-facing Health vocabulary, in MASTER order.
+CANONICAL_HEALTH_CATEGORIES: tuple[str, ...] = ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY")
 
 _CONTRACT = ConfigDict(extra="forbid", frozen=True)
 
@@ -148,25 +153,37 @@ class DocumentsSection(ReportSectionBase):
 # ---------------------------------------------------------------------------
 
 
-class HealthDimensionItem(BaseModel):
+class HealthCategoryItem(BaseModel):
+    """One canonical Health category, from the single-document coverage (ADR-024)."""
+
     model_config = _CONTRACT
 
-    dimension: str
-    score: float | None = None
-    band: str
-    confidence: float
-    null_reason: str | None = None
+    category: str
+    state: str = Field(description="present | insufficient_evidence. There is no numeric score.")
+    evidence_count: int = Field(ge=0)
     missing_data: list[str] = Field(default_factory=list)
-    evidence_count: int
+    gap: str | None = Field(default=None, description="Actionable next step for a category without evidence.")
 
 
 class HealthData(BaseModel):
+    """User-facing Health: exactly the six canonical categories, in MASTER order.
+
+    The legacy ADR-018 v0 dimensions (contract/risk/documentation/governance) and their composite
+    stay internal Health inputs; they are not a competing user-facing taxonomy, and no composite is
+    reported until a canonical six-category roll-up exists.
+    """
+
     model_config = _CONTRACT
 
-    composite_score: float | None = None
-    composite_band: str
     computed_at: datetime
-    dimensions: list[HealthDimensionItem]
+    evidence_granularity: str = Field(description="clause | document: what the evidence counts identify.")
+    categories: list[HealthCategoryItem]
+
+    @model_validator(mode="after")
+    def _exactly_the_canonical_categories(self) -> HealthData:
+        if tuple(item.category for item in self.categories) != CANONICAL_HEALTH_CATEGORIES:
+            raise ValueError(f"Health categories must be exactly {', '.join(CANONICAL_HEALTH_CATEGORIES)}, in order")
+        return self
 
 
 class HealthSection(ReportSectionBase):
@@ -496,8 +513,6 @@ class ExecutiveSummaryData(BaseModel):
         default=None,
         description="Parsed documents not yet analyzed (parsed or analysis_pending); null when counts are partial.",
     )
-    health_composite_score: float | None = None
-    health_composite_band: str | None = None
     error_section_keys: list[str]
     unavailable_section_keys: list[str]
     not_modeled_section_keys: list[str]
@@ -552,6 +567,7 @@ class CurrentStateReport(BaseModel):
 
 
 __all__ = [
+    "CANONICAL_HEALTH_CATEGORIES",
     "REPORT_SCHEMA_VERSION",
     "AlertItem",
     "AlertsData",
@@ -574,8 +590,8 @@ __all__ = [
     "EvidenceQualitySection",
     "ExecutiveSummaryData",
     "ExecutiveSummarySection",
+    "HealthCategoryItem",
     "HealthData",
-    "HealthDimensionItem",
     "HealthSection",
     "HitlData",
     "HitlItem",

@@ -129,4 +129,4 @@ async def test_empty_project_report_is_honest() -> None:
     assert sections.alerts.status is SectionStatus.EMPTY
     assert sections.risks.status is SectionStatus.NOT_MODELED
     assert sections.executive_summary.data is not None
-    assert sections.executive_summary.data.health_composite_score is None
+    assert not any("composite" in key for key in sections.executive_summary.data.model_dump())
