@@ -29,8 +29,9 @@ from src.procurement.domain.models import (
     ProcurementStatus,
     WBSItemType,
 )
+from src.wbs.adapters.persistence.models import WBSNodeORM
 
-__all__ = ["BOMCategory", "ProcurementStatus", "WBSItemType"]
+__all__ =["BOMCategory", "ProcurementStatus", "WBSItemType"]
 
 from typing import Any
 
@@ -55,7 +56,14 @@ class BudgetItemORM(Base):
 
 
 class WBSItemORM(Base):
-    """SQLAlchemy model for WBSItem domain entity."""
+    """LEGACY procurement WBS table mapping — not authoritative (ADR-025).
+
+    The canonical Project Controls WBS is ``wbs_nodes`` (``WBSNodeORM``), reached through
+    ``SQLAlchemyWBSRepository``. This mapping only keeps historical rows readable for
+    migration lineage; runtime code must not read or write it (guarded by
+    ``tests/unit/product_control/test_adr025_canonical_wbs_invariants.py``), and the database
+    rejects new writes.
+    """
 
     __tablename__ = "procurement_wbs_items"
     __table_args__ = (
@@ -130,8 +138,10 @@ class BOMItemORM(Base):
     )
     item_name: Mapped[str] = mapped_column(String, nullable=False)
     quantity: Mapped[Decimal] = mapped_column(DECIMAL(18, 4), nullable=False)
+    # ADR-025: procurement is downstream of the canonical WBS; a BOM line points at a
+    # canonical node and never defines a WBS hierarchy of its own.
     wbs_item_id: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("procurement_wbs_items.id"), nullable=True
+        PGUUID(as_uuid=True), ForeignKey("wbs_nodes.id", ondelete="SET NULL"), nullable=True
     )
     item_code: Mapped[str | None] = mapped_column(String, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -163,7 +173,7 @@ class BOMItemORM(Base):
     bom_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default={}, nullable=False)
 
     # Relationships
-    wbs_item: Mapped[Any] = relationship("WBSItemORM", backref="bom_items")
+    wbs_item: Mapped[Any] = relationship(WBSNodeORM, foreign_keys=[wbs_item_id])
     budget_item: Mapped[Any] = relationship("BudgetItemORM", backref="bom_items")
     source_document: Mapped[Any] = relationship("DocumentORM", backref="bom_items")
 

@@ -28,9 +28,8 @@ from testcontainers.postgres import PostgresContainer
 @pytest_asyncio.fixture(scope="session")
 async def pg_engine():
     from src.core.database import Base
-    from src.procurement.adapters.persistence.models import Base as ProcurementBase
-    from src.procurement.adapters.persistence.models import WBSItemORM
     from src.projects.adapters.persistence.models import ProjectORM
+    from src.wbs.adapters.persistence.models import WBSNodeORM
 
     engine = None
     container = None
@@ -46,14 +45,18 @@ async def pg_engine():
         engine = create_async_engine(url, echo=False, poolclass=NullPool)
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all, tables=[ProjectORM.__table__])
-            # Minimal FK-target stub for WBSItemORM.source_document_id -> documents.id.
+            # Minimal FK-target stubs for the canonical WBS (ADR-025): tenants and documents.
+            await conn.execute(text("CREATE TABLE IF NOT EXISTS tenants (id uuid PRIMARY KEY)"))
             await conn.execute(text("CREATE TABLE IF NOT EXISTS documents (id uuid PRIMARY KEY)"))
-            await conn.run_sync(ProcurementBase.metadata.create_all, tables=[WBSItemORM.__table__])
+            await conn.run_sync(Base.metadata.create_all, tables=[WBSNodeORM.__table__])
         yield engine
     finally:
         if engine is not None:
             async with engine.begin() as conn:
-                await conn.execute(text("DROP TABLE IF EXISTS procurement_wbs_items CASCADE"))
+                await conn.execute(text("DROP TABLE IF EXISTS wbs_nodes CASCADE"))
+                await conn.execute(text("DROP TYPE IF EXISTS wbsnodetype"))
+                await conn.execute(text("DROP TYPE IF EXISTS wbsnodestatus"))
+                await conn.execute(text("DROP TABLE IF EXISTS tenants CASCADE"))
                 await conn.execute(text("DROP TABLE IF EXISTS documents CASCADE"))
                 await conn.run_sync(Base.metadata.drop_all, tables=[ProjectORM.__table__])
             await engine.dispose()
@@ -133,13 +136,15 @@ async def test_optimistic_locking_on_wbs_item(session: AsyncSession):
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
+        created_at=datetime.now(UTC).replace(tzinfo=None),
+        updated_at=datetime.now(UTC).replace(tzinfo=None),
     )
+    await session.execute(text("INSERT INTO tenants (id) VALUES (:id)"), {"id": tenant_id})
     session.add(project)
     await session.commit()
 
     seeded = await repo.create(
+        tenant_id,
         WBSItem(
             id=wbs_id,
             project_id=project_id,

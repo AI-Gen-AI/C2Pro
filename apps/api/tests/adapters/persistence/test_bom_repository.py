@@ -2,6 +2,8 @@
 """
 BOM Repository Integration Tests (TDD - RED Phase)
 
+BOM lines are downstream of the canonical Project Controls WBS (``wbs_nodes``, ADR-025).
+
 Refers to Suite ID: TS-INT-DB-BOM-001.
 """
 
@@ -14,8 +16,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from docker.errors import DockerException
-from sqlalchemy import Column, Table
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
@@ -23,20 +24,10 @@ from testcontainers.postgres import PostgresContainer
 from src.core import database as core_database
 from src.core.database import Base, get_session_with_tenant
 from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
-from src.procurement.adapters.persistence.models import Base as ProcurementBase
-from src.procurement.adapters.persistence.models import BOMItemORM, BudgetItemORM, WBSItemORM
+from src.procurement.adapters.persistence.models import BOMItemORM, BudgetItemORM
 from src.procurement.domain.models import BOMCategory, BOMItem, ProcurementStatus
 from src.projects.adapters.persistence.models import ProjectORM
-
-
-def _ensure_test_fk_stub_tables() -> None:
-    if "wbs_items" not in Base.metadata.tables:
-        Table(
-            "wbs_items",
-            Base.metadata,
-            Column("id", PGUUID(as_uuid=True), primary_key=True),
-            extend_existing=True,
-        )
+from src.wbs.adapters.persistence.models import WBSNodeORM
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -66,13 +57,15 @@ async def pg_engine():
             autoflush=False,
         )
         async with engine.begin() as conn:
-            _ensure_test_fk_stub_tables()
             await conn.run_sync(Base.metadata.create_all, tables=[ProjectORM.__table__])
+            # Minimal FK-target stubs (tenants for the canonical WBS, documents for source lineage).
+            await conn.execute(text("CREATE TABLE IF NOT EXISTS tenants (id uuid PRIMARY KEY)"))
+            await conn.execute(text("CREATE TABLE IF NOT EXISTS documents (id uuid PRIMARY KEY)"))
             await conn.run_sync(
-                ProcurementBase.metadata.create_all,
+                Base.metadata.create_all,
                 tables=[
                     BudgetItemORM.__table__,
-                    WBSItemORM.__table__,
+                    WBSNodeORM.__table__,
                     BOMItemORM.__table__,
                 ],
             )
@@ -93,20 +86,13 @@ async def session(pg_engine) -> AsyncSession:
         yield db
 
 
-@pytest.mark.asyncio
-async def test_bom_repository_filters_by_project_wbs_and_tenant(session: AsyncSession):
-    """
-    BOM repository should persist items and enforce tenant filtering.
-    """
-    tenant_a = uuid4()
-    tenant_b = uuid4()
-
-    project_a = ProjectORM(
+def _project(tenant_id, code: str) -> ProjectORM:
+    return ProjectORM(
         id=uuid4(),
-        tenant_id=tenant_a,
+        tenant_id=tenant_id,
         name="Tenant A Project",
         description=None,
-        code="A-1",
+        code=code,
         project_type="construction",
         status="draft",
         estimated_budget=5000.0,
@@ -116,22 +102,41 @@ async def test_bom_repository_filters_by_project_wbs_and_tenant(session: AsyncSe
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
+        created_at=datetime.now(UTC).replace(tzinfo=None),
+        updated_at=datetime.now(UTC).replace(tzinfo=None),
     )
+
+
+async def _canonical_node(session: AsyncSession, project: ProjectORM, code: str) -> WBSNodeORM:
+    await session.execute(text("INSERT INTO tenants (id) VALUES (:id) ON CONFLICT DO NOTHING"), {"id": project.tenant_id})
+    node = WBSNodeORM(
+        id=uuid4(),
+        project_id=project.id,
+        tenant_id=project.tenant_id,
+        code=code,
+        name="Root",
+        lft=1,
+        rgt=2,
+        depth=0,
+    )
+    session.add(node)
+    await session.commit()
+    return node
+
+
+@pytest.mark.asyncio
+async def test_bom_repository_filters_by_project_wbs_and_tenant(session: AsyncSession):
+    """
+    BOM repository should persist items and enforce tenant filtering.
+    """
+    tenant_a = uuid4()
+    tenant_b = uuid4()
+
+    project_a = _project(tenant_a, f"A-{uuid4().hex[:6]}")
     session.add(project_a)
     await session.commit()
 
-    wbs_code = f"1-{uuid4().hex[:6]}"
-    wbs_item = WBSItemORM(
-        id=uuid4(),
-        project_id=project_a.id,
-        code=wbs_code,
-        name="Root",
-        level=1,
-    )
-    session.add(wbs_item)
-    await session.commit()
+    wbs_item = await _canonical_node(session, project_a, f"1-{uuid4().hex[:6]}")
 
     repo = SQLAlchemyBOMRepository(session)
     bom_item = BOMItem(
@@ -183,36 +188,11 @@ async def test_bom_repository_create_rejects_project_outside_tenant(session: Asy
     tenant_a = uuid4()
     tenant_b = uuid4()
 
-    project_a = ProjectORM(
-        id=uuid4(),
-        tenant_id=tenant_a,
-        name="Tenant A Project",
-        description=None,
-        code="A-2",
-        project_type="construction",
-        status="draft",
-        estimated_budget=5000.0,
-        currency="EUR",
-        start_date=None,
-        end_date=None,
-        coherence_score=None,
-        last_analysis_at=None,
-        metadata_json={},
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
-    )
+    project_a = _project(tenant_a, f"A-{uuid4().hex[:6]}")
     session.add(project_a)
     await session.commit()
 
-    wbs_item = WBSItemORM(
-        id=uuid4(),
-        project_id=project_a.id,
-        code=f"2-{uuid4().hex[:6]}",
-        name="Root",
-        level=1,
-    )
-    session.add(wbs_item)
-    await session.commit()
+    wbs_item = await _canonical_node(session, project_a, f"2-{uuid4().hex[:6]}")
 
     repo = SQLAlchemyBOMRepository(session)
     bom_item = BOMItem(
