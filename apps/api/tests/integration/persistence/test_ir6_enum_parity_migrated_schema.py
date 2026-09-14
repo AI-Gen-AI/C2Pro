@@ -18,6 +18,11 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 DSN = os.environ.get("C2PRO_MIGRATED_TEST_DSN")
+REQUIRED = os.environ.get("C2PRO_REQUIRE_MIGRATED_TEST_DSN") == "1"
+
+if REQUIRED and not DSN:
+    pytest.fail("C2PRO_REQUIRE_MIGRATED_TEST_DSN=1 but C2PRO_MIGRATED_TEST_DSN is not set", pytrace=False)
+
 pytestmark = [
     pytest.mark.asyncio,
     pytest.mark.skipif(not DSN, reason="requires C2PRO_MIGRATED_TEST_DSN (a database migrated with alembic)"),
