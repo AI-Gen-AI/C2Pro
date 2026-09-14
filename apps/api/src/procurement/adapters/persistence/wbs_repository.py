@@ -20,6 +20,7 @@ Refers to Suite ID: TS-INT-DB-WBS-001.
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, cast
 from uuid import UUID
@@ -490,6 +491,15 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             except Exception:
                 return None
 
+        def _parse_datetime(value: Any) -> datetime | None:
+            # Extraction payloads carry ISO-8601 strings; the canonical WBS stores timestamptz.
+            if value is None or isinstance(value, datetime):
+                return value
+            try:
+                return datetime.fromisoformat(str(value))
+            except ValueError:
+                return None
+
         wbs_items: list[WBSItem] = []
         for item in items:
             code = str(item.get("code") or "").strip() or f"T{len(wbs_items) + 1}"
@@ -511,8 +521,8 @@ class SQLAlchemyWBSRepository(IWBSRepository):
                     parent_code=cast("str | None", item.get("parent_code")),
                     item_type=item_type,
                     budget_allocated=_parse_decimal(item.get("budget_allocated")),
-                    planned_start=cast(Any, item.get("planned_start")),
-                    planned_end=cast(Any, item.get("planned_end")),
+                    planned_start=_parse_datetime(item.get("planned_start")),
+                    planned_end=_parse_datetime(item.get("planned_end")),
                     wbs_metadata={"confidence": item.get("confidence"), "raw": item},
                 )
             )
