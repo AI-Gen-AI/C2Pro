@@ -20,12 +20,12 @@ import {
   STATUS_LABELS,
   TIER_CLASSES,
   TIER_LABELS,
-  UNKNOWN_LABEL,
   documentStatusLabel,
   formatDate,
   formatDateTime,
   formatMoney,
   formatScore,
+  healthStateLabel,
   humanize,
   sectionLabel,
   tierLabel,
@@ -157,11 +157,6 @@ function ExecutiveSummary({ sections }: { sections: Sections }) {
 
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
           <Fact label="Documents">{documentsFact}</Fact>
-          <Fact label="Health composite">
-            {summary.health_composite_score === null || summary.health_composite_score === undefined
-              ? UNKNOWN_LABEL
-              : `${formatScore(summary.health_composite_score)} (${humanize(summary.health_composite_band ?? "unknown")})`}
-          </Fact>
         </dl>
 
         {notCovered.length > 0 ? (
@@ -346,39 +341,47 @@ function DocumentsBody({ data }: { data: SectionData<"documents"> }) {
   );
 }
 
+/**
+ * The six canonical Health categories (MASTER). No composite: there is no canonical six-category
+ * roll-up yet, and an unknown category is named as unknown, never scored.
+ */
 function HealthBody({ data }: { data: SectionData<"health"> }) {
   if (!data) return null;
   return (
     <>
-      <p>
-        Composite:{" "}
-        <span className="font-semibold">
-          {data.composite_score === null || data.composite_score === undefined
-            ? UNKNOWN_LABEL
-            : `${formatScore(data.composite_score)} (${humanize(data.composite_band)})`}
-        </span>
+      <p data-testid="health-granularity" className="text-xs text-muted-foreground">
+        {data.evidence_granularity === "clause"
+          ? "Evidence is clause-level: each count refers to specific clauses of the analysed documents."
+          : data.evidence_granularity === "document"
+            ? "Evidence is whole-document only: counts refer to documents, not to specific clauses."
+            : `Evidence granularity: ${data.evidence_granularity}`}
       </p>
       <ul className="space-y-2">
-        {data.dimensions.map((dimension) => (
-          <li key={dimension.dimension} className="rounded-md border p-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-medium">{humanize(dimension.dimension)}</span>
-              <span>
-                {dimension.score === null || dimension.score === undefined
-                  ? UNKNOWN_LABEL
-                  : `${formatScore(dimension.score)} · ${humanize(dimension.band)} · confidence ${Math.round(
-                      dimension.confidence * 100,
-                    )}%`}
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {dimension.evidence_count > 0 ? `${dimension.evidence_count} evidence reference(s)` : "No evidence cited"}
-            </p>
-            {(dimension.missing_data ?? []).length > 0 ? (
-              <p className="text-xs text-muted-foreground">Missing: {(dimension.missing_data ?? []).join("; ")}</p>
-            ) : null}
-          </li>
-        ))}
+        {data.categories.map((category) => {
+          const missing = (category.missing_data ?? []).join("; ");
+          return (
+            <li
+              key={category.category}
+              data-testid="health-category"
+              data-category={category.category}
+              data-state={category.state}
+              data-evidence-count={String(category.evidence_count)}
+              data-missing-data={missing}
+              data-gap={category.gap ?? ""}
+              className="rounded-md border p-2"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-medium">{category.category}</span>
+                <span>{healthStateLabel(category.state)}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {category.evidence_count > 0 ? `${category.evidence_count} evidence reference(s)` : "No evidence cited"}
+              </p>
+              {missing ? <p className="text-xs text-muted-foreground">Missing: {missing}</p> : null}
+              {category.gap ? <p className="text-xs text-muted-foreground">Next step: {category.gap}</p> : null}
+            </li>
+          );
+        })}
       </ul>
     </>
   );

@@ -38,12 +38,16 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface HealthDimensionItem {
-  dimension: string;
-  score?: number | null;
-  band: string;
-  confidence: number;
-  null_reason?: string | null;
-  missing_data?: string[];
+/**
+ * One canonical Health category, from the single-document coverage (ADR-024).
+ */
+export interface HealthCategoryItem {
+  category: string;
+  /** present | insufficient_evidence. There is no numeric score. */
+  state: string;
+  /** @minimum 0 */
   evidence_count: number;
+  missing_data?: string[];
+  /** Actionable next step for a category without evidence. */
+  gap?: string | null;
 }

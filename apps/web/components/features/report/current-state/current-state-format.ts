@@ -6,6 +6,16 @@
 /** Shared honest-null wording: unknown is never rendered as 0 or 0%. */
 export const UNKNOWN_LABEL = "Unknown / Insufficient evidence";
 
+/** Canonical Health category states; anything unrecognised is shown as unknown, never as evidence. */
+export const HEALTH_STATE_LABELS: Record<string, string> = {
+  present: "Evidence found",
+  insufficient_evidence: UNKNOWN_LABEL,
+};
+
+export function healthStateLabel(state: string): string {
+  return HEALTH_STATE_LABELS[state] ?? UNKNOWN_LABEL;
+}
+
 export const SECTION_LABELS: Record<string, string> = {
   executive_summary: "Summary",
   documents: "Documents",

@@ -48,8 +48,6 @@ export interface ExecutiveSummaryData {
   analyzed_document_count?: number | null;
   /** Parsed documents not yet analyzed (parsed or analysis_pending); null when counts are partial. */
   awaiting_analysis_document_count?: number | null;
-  health_composite_score?: number | null;
-  health_composite_band?: string | null;
   error_section_keys: string[];
   unavailable_section_keys: string[];
   not_modeled_section_keys: string[];

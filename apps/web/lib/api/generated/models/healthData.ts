@@ -37,11 +37,18 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { HealthDimensionItem } from "./healthDimensionItem";
+import type { HealthCategoryItem } from "./healthCategoryItem";
 
+/**
+ * User-facing Health: exactly the six canonical categories, in MASTER order.
+ *
+ * The legacy ADR-018 v0 dimensions (contract/risk/documentation/governance) and their composite
+ * stay internal Health inputs; they are not a competing user-facing taxonomy, and no composite is
+ * reported until a canonical six-category roll-up exists.
+ */
 export interface HealthData {
-  composite_score?: number | null;
-  composite_band: string;
   computed_at: string;
-  dimensions: HealthDimensionItem[];
+  /** clause | document: what the evidence counts identify. */
+  evidence_granularity: string;
+  categories: HealthCategoryItem[];
 }

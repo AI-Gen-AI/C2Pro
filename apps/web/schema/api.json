@@ -7770,7 +7770,7 @@
           "report_schema_version": {
             "type": "string",
             "title": "Report Schema Version",
-            "default": "current-state-report/v1"
+            "default": "current-state-report/v2"
           },
           "generated_at": {
             "type": "string",
@@ -9654,28 +9654,6 @@
             "title": "Awaiting Analysis Document Count",
             "description": "Parsed documents not yet analyzed (parsed or analysis_pending); null when counts are partial."
           },
-          "health_composite_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Health Composite Score"
-          },
-          "health_composite_band": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Health Composite Band"
-          },
           "error_section_keys": {
             "items": {
               "type": "string"
@@ -9951,40 +9929,73 @@
         "enum": ["healthy", "watch", "at_risk", "critical", "unknown"],
         "title": "HealthBand"
       },
-      "HealthData": {
+      "HealthCategoryItem": {
         "properties": {
-          "composite_score": {
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "state": {
+            "type": "string",
+            "title": "State",
+            "description": "present | insufficient_evidence. There is no numeric score."
+          },
+          "evidence_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Evidence Count"
+          },
+          "missing_data": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Data"
+          },
+          "gap": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Composite Score"
-          },
-          "composite_band": {
-            "type": "string",
-            "title": "Composite Band"
-          },
+            "title": "Gap",
+            "description": "Actionable next step for a category without evidence."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["category", "state", "evidence_count"],
+        "title": "HealthCategoryItem",
+        "description": "One canonical Health category, from the single-document coverage (ADR-024)."
+      },
+      "HealthData": {
+        "properties": {
           "computed_at": {
             "type": "string",
             "format": "date-time",
             "title": "Computed At"
           },
-          "dimensions": {
+          "evidence_granularity": {
+            "type": "string",
+            "title": "Evidence Granularity",
+            "description": "clause | document: what the evidence counts identify."
+          },
+          "categories": {
             "items": {
-              "$ref": "#/components/schemas/HealthDimensionItem"
+              "$ref": "#/components/schemas/HealthCategoryItem"
             },
             "type": "array",
-            "title": "Dimensions"
+            "title": "Categories"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["composite_band", "computed_at", "dimensions"],
-        "title": "HealthData"
+        "required": ["computed_at", "evidence_granularity", "categories"],
+        "title": "HealthData",
+        "description": "User-facing Health: exactly the six canonical categories, in MASTER order.\n\nThe legacy ADR-018 v0 dimensions (contract/risk/documentation/governance) and their composite\nstay internal Health inputs; they are not a competing user-facing taxonomy, and no composite is\nreported until a canonical six-category roll-up exists."
       },
       "HealthDimension": {
         "type": "string",
@@ -9998,59 +10009,6 @@
           "deliverables"
         ],
         "title": "HealthDimension"
-      },
-      "HealthDimensionItem": {
-        "properties": {
-          "dimension": {
-            "type": "string",
-            "title": "Dimension"
-          },
-          "score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Score"
-          },
-          "band": {
-            "type": "string",
-            "title": "Band"
-          },
-          "confidence": {
-            "type": "number",
-            "title": "Confidence"
-          },
-          "null_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Null Reason"
-          },
-          "missing_data": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Missing Data"
-          },
-          "evidence_count": {
-            "type": "integer",
-            "title": "Evidence Count"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": ["dimension", "band", "confidence", "evidence_count"],
-        "title": "HealthDimensionItem"
       },
       "HealthNullReason": {
         "type": "string",

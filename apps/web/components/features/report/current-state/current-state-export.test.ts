@@ -123,7 +123,7 @@ describe("buildCurrentStateCsv", () => {
     const rows = csvRows();
     expect(rows.length).toBeGreaterThan(20);
     for (const row of rows) {
-      expect(row.report_schema_version).toBe("current-state-report/v1");
+      expect(row.report_schema_version).toBe("current-state-report/v2");
       expect(row.generated_at).toBe("2026-09-13T12:00:00Z");
       expect(row.project_id).toBe("5d5c2a3e-1f7e-4c4a-9a51-2d9a7b0c1e11");
       expect(row.project_name).toBe("Hospital North");
@@ -233,8 +233,11 @@ describe("buildCurrentStateCsv", () => {
     expect(keyPlayers?.value_state).toBe("null");
     const overdue = rows.find((row) => row.section === "hitl" && row.field === "overdue_count");
     expect(overdue?.value_state).toBe("null");
-    const composite = rows.find((row) => row.section === "health" && row.field === "composite_score");
-    expect(composite?.value_state).toBe("null");
+    expect(rows.some((row) => row.section === "health" && /composite/.test(row.field))).toBe(false);
+    const budgetGap = rows.find((row) => row.section === "health" && row.record_id === "BUDGET" && row.field === "gap");
+    expect(budgetGap?.value).toBe("Upload the budget or bill of quantities (BoQ) to assess BUDGET.");
+    const scopeGap = rows.find((row) => row.section === "health" && row.record_id === "SCOPE" && row.field === "gap");
+    expect(scopeGap?.value_state).toBe("null");
   });
 
   it("marks unknown item values as null rather than known-empty", () => {
@@ -278,7 +281,8 @@ describe("buildCurrentStateCsv", () => {
   it("exports missing-evidence gaps and attention items", () => {
     const rows = csvRows();
     const gaps = rows.filter((row) => row.section === "missing_evidence" && row.record_type === "item");
-    expect(gaps.map((row) => row.record_label)).toContain("upload the risk register");
+    expect(gaps.map((row) => row.record_label)).toContain("budget / bill of quantities (BoQ) not detected");
+    expect(gaps.find((row) => row.field === "health")?.value).toBe("BUDGET");
     const attention = rows.filter((row) => row.section === "executive_summary" && row.record_type === "item");
     expect(attention[0].field).toBe("critical");
   });

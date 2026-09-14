@@ -8,7 +8,7 @@ const PROJECT_ID = "5d5c2a3e-1f7e-4c4a-9a51-2d9a7b0c1e11";
 
 export function buildCurrentStateReport(): CurrentStateReport {
   return {
-    report_schema_version: "current-state-report/v1",
+    report_schema_version: "current-state-report/v2",
     generated_at: "2026-09-13T12:00:00Z",
     project: { id: PROJECT_ID, name: "Hospital North", code: "HN-01", status: "active" },
     content_fingerprint: "a3f1c9d2e4b5a6978877665544332211ffeeddccbbaa99887766554433221100",
@@ -45,8 +45,6 @@ export function buildCurrentStateReport(): CurrentStateReport {
           parsed_document_count: null,
           analyzed_document_count: null,
           awaiting_analysis_document_count: null,
-          health_composite_score: null,
-          health_composite_band: "unknown",
           error_section_keys: ["wbs"],
           unavailable_section_keys: [],
           not_modeled_section_keys: ["risks", "obligations", "schedule"],
@@ -87,21 +85,35 @@ export function buildCurrentStateReport(): CurrentStateReport {
         source_domain: "health",
         source_as_of: "2026-09-12T09:00:00Z",
         source_ref: "project_snapshot:7e1d2c3b-4a5f-4e6d-8c7b-9a0f1e2d3c4b",
-        evidence_tier: "unlinked",
-        evidence_note: "No dimension cites supporting evidence.",
+        evidence_tier: "weak_linked",
+        evidence_note: "4 category evidence reference(s) identify persisted contract clauses (clause-level granularity).",
         data: {
-          composite_score: null,
-          composite_band: "unknown",
           computed_at: "2026-09-12T09:00:00Z",
-          dimensions: [
+          evidence_granularity: "clause",
+          categories: [
+            { category: "SCOPE", state: "present", evidence_count: 1, missing_data: [], gap: null },
             {
-              dimension: "risk",
-              score: null,
-              band: "unknown",
-              confidence: 0,
-              null_reason: "insufficient_evidence",
-              missing_data: ["upload the risk register"],
+              category: "BUDGET",
+              state: "insufficient_evidence",
               evidence_count: 0,
+              missing_data: ["budget / bill of quantities (BoQ) not detected"],
+              gap: "Upload the budget or bill of quantities (BoQ) to assess BUDGET.",
+            },
+            {
+              category: "TIME",
+              state: "insufficient_evidence",
+              evidence_count: 0,
+              missing_data: ["project schedule / cronograma not detected"],
+              gap: "Upload the project schedule (cronograma) to assess TIME.",
+            },
+            { category: "TECHNICAL", state: "present", evidence_count: 2, missing_data: [], gap: null },
+            { category: "LEGAL", state: "present", evidence_count: 1, missing_data: [], gap: null },
+            {
+              category: "QUALITY",
+              state: "insufficient_evidence",
+              evidence_count: 0,
+              missing_data: ["quality plan / acceptance criteria not detected"],
+              gap: "Upload the quality plan / acceptance criteria to assess QUALITY.",
             },
           ],
         },
@@ -115,7 +127,11 @@ export function buildCurrentStateReport(): CurrentStateReport {
         evidence_note: "Gap statements describe what is absent; they are not tied to source locations.",
         data: {
           items: [
-            { source_domain: "health", subject: "risk", description: "upload the risk register" },
+            {
+              source_domain: "health",
+              subject: "BUDGET",
+              description: "budget / bill of quantities (BoQ) not detected",
+            },
             {
               source_domain: "coherence",
               subject: "budget",

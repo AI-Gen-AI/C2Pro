@@ -94,13 +94,23 @@ describe("CurrentStateReportView", () => {
     expect(card).toHaveTextContent("This source could not be read when the report was generated.");
   });
 
-  it("never renders an unknown health score as zero", () => {
+  it("shows the six canonical Health categories honestly, never an unknown as zero", () => {
     renderReport();
     const card = section("health");
+    const rows = within(card).getAllByTestId("health-category");
+    expect(rows.map((row) => row.getAttribute("data-category"))).toEqual([
+      "SCOPE",
+      "BUDGET",
+      "TIME",
+      "TECHNICAL",
+      "LEGAL",
+      "QUALITY",
+    ]);
     expect(card).toHaveTextContent("Unknown / Insufficient evidence");
     expect(card).not.toHaveTextContent("0%");
-    expect(card).toHaveTextContent("No evidence cited");
-    expect(card).toHaveTextContent("upload the risk register");
+    expect(card).toHaveTextContent("budget / bill of quantities (BoQ) not detected");
+    expect(card).toHaveTextContent("Upload the budget or bill of quantities (BoQ) to assess BUDGET.");
+    expect(card).not.toHaveTextContent(/composite/i);
   });
 
   it("shows every section's evidence tier visibly", () => {

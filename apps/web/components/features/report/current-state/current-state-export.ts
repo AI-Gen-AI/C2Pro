@@ -168,8 +168,6 @@ function detailRows(key: SectionKey, sections: Sections): CsvRow[] {
         // spreadsheet cannot carry that distinction (the JSON export keeps every field).
         metric("analyzed_document_count", data.analyzed_document_count),
         metric("awaiting_analysis_document_count", data.awaiting_analysis_document_count),
-        metric("health_composite_score", data.health_composite_score),
-        metric("health_composite_band", data.health_composite_band),
         ...data.attention_items.map((entry) =>
           item({ record_id: entry.kind, record_label: entry.message, field: entry.level, value: entry.section_key }),
         ),
@@ -199,19 +197,19 @@ function detailRows(key: SectionKey, sections: Sections): CsvRow[] {
     case "health": {
       const data = sections.health.data;
       if (!data) return [];
+      // The six canonical categories with the same facts the screen shows; no composite.
       return [
-        metric("composite_score", data.composite_score),
-        metric("composite_band", data.composite_band),
         metric("computed_at", data.computed_at),
-        ...data.dimensions.map((dimension) =>
-          item({
-            record_id: dimension.dimension,
-            record_label: dimension.dimension,
-            field: "score",
-            value: dimension.score ?? null,
-            record_status: dimension.band,
-          }),
-        ),
+        metric("evidence_granularity", data.evidence_granularity),
+        ...data.categories.flatMap((category) => {
+          const record = { record_id: category.category, record_label: category.category, record_status: category.state };
+          return [
+            item({ ...record, field: "state", value: category.state }),
+            item({ ...record, field: "evidence_count", value: category.evidence_count }),
+            item({ ...record, field: "missing_data", value: (category.missing_data ?? []).join("; ") }),
+            item({ ...record, field: "gap", value: category.gap ?? null }),
+          ];
+        }),
       ];
     }
     case "missing_evidence": {
