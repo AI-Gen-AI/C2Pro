@@ -28,8 +28,12 @@ import fitz
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_DIR = REPO_ROOT / "apps" / "web" / "src" / "tests" / "e2e" / "test-data" / "pj01"
-SOURCE_TEXT = FIXTURE_DIR / "contract-a.source.txt"
-PDF_OUTPUT = FIXTURE_DIR / "contract-a.pdf"
+# Contract A and its revision B share one renderer, so their parser-visible structure matches.
+FIXTURES = {
+    "a": (FIXTURE_DIR / "contract-a.source.txt", FIXTURE_DIR / "contract-a.pdf"),
+    "b": (FIXTURE_DIR / "contract-b.source.txt", FIXTURE_DIR / "contract-b.pdf"),
+}
+SOURCE_TEXT, PDF_OUTPUT = FIXTURES["a"]
 
 PAGE_WIDTH = 595  # A4, points
 PAGE_HEIGHT = 842
@@ -87,19 +91,24 @@ def text_blocks(pdf_bytes: bytes) -> list[tuple[int, str]]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true", help="fail if the committed PDF drifted from the source")
+    parser.add_argument("--fixture", choices=[*FIXTURES, "all"], default="all", help="which fixture to render")
     args = parser.parse_args(argv)
 
-    rendered = render_contract_pdf(SOURCE_TEXT.read_text(encoding="utf-8"))
-    if args.check:
-        if not PDF_OUTPUT.exists() or text_blocks(PDF_OUTPUT.read_bytes()) != text_blocks(rendered):
-            print(f"FIXTURE DRIFT: {PDF_OUTPUT} does not match {SOURCE_TEXT}; regenerate it.", file=sys.stderr)
-            return 1
-        print("PJ-01 Contract A fixture is up to date.")
-        return 0
-
-    PDF_OUTPUT.write_bytes(rendered)
-    print(f"wrote {PDF_OUTPUT} ({len(rendered)} bytes)")
-    return 0
+    selected = list(FIXTURES) if args.fixture == "all" else [args.fixture]
+    drift = False
+    for name in selected:
+        source_text, pdf_output = FIXTURES[name]
+        rendered = render_contract_pdf(source_text.read_text(encoding="utf-8"))
+        if args.check:
+            if not pdf_output.exists() or text_blocks(pdf_output.read_bytes()) != text_blocks(rendered):
+                print(f"FIXTURE DRIFT: {pdf_output} does not match {source_text}; regenerate it.", file=sys.stderr)
+                drift = True
+            else:
+                print(f"PJ-01 Contract {name.upper()} fixture is up to date.")
+            continue
+        pdf_output.write_bytes(rendered)
+        print(f"wrote {pdf_output} ({len(rendered)} bytes)")
+    return 1 if drift else 0
 
 
 if __name__ == "__main__":
