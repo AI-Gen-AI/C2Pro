@@ -28,12 +28,14 @@ async def build_schedule_clauses(
     *,
     max_items: int = 50,
 ) -> list[Clause]:
-    """Build bounded TIME clauses from canonical or legacy tenant-scoped WBS rows."""
+    """Build bounded TIME clauses from the canonical tenant-scoped project WBS (ADR-025)."""
     params = {
         "project_id": str(project_id),
         "tenant_id": str(tenant_id),
         "limit": max(0, max_items),
     }
+    # The canonical Project Controls WBS is the only schedule source: application WBS writes land
+    # in wbs_nodes, so there is no fallback to procurement_wbs_items or legacy wbs_items.
     wbs_nodes_stmt = text("""
         SELECT
             id,
@@ -53,30 +55,6 @@ async def build_schedule_clauses(
     """)
     result = await db.execute(wbs_nodes_stmt, params)
     rows = result.fetchall()
-    if not rows:
-        # Existing document ingestion writes procurement WBS items. The
-        # project tenant join preserves tenant isolation until that path is
-        # migrated to the canonical RLS-protected wbs_nodes table.
-        legacy_stmt = text("""
-            SELECT
-                w.id,
-                w.code,
-                w.name,
-                w.planned_start,
-                w.planned_end,
-                COALESCE(w.wbs_metadata->>'status', 'not_started')::text AS status,
-                w.wbs_metadata->>'predecessor_id' AS predecessor_id,
-                'procurement_wbs_items'::text AS source
-            FROM procurement_wbs_items w
-            JOIN projects p ON p.id = w.project_id
-            WHERE w.project_id = CAST(:project_id AS uuid)
-              AND p.tenant_id = CAST(:tenant_id AS uuid)
-              AND (w.planned_start IS NOT NULL OR w.planned_end IS NOT NULL)
-            ORDER BY w.planned_start ASC NULLS LAST, w.code ASC
-            LIMIT :limit
-        """)
-        result = await db.execute(legacy_stmt, params)
-        rows = result.fetchall()
     if not rows:
         return []
 

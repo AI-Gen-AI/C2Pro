@@ -69,9 +69,9 @@ class WBSNodeORM(Base):
         nullable=True,
     )
 
-    # Node identity
-    code: Mapped[str] = mapped_column(String(50), nullable=False)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Node identity (unbounded, like the procurement WBS rows migrated into this table by ADR-025)
+    code: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Nested Set Model fields
@@ -97,9 +97,19 @@ class WBSNodeORM(Base):
     actual_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     actual_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Budget
-    budget_allocated: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
-    budget_spent: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, server_default="0")
+    # Budget (18,2: same precision as procurement budgets, see 20260627_0001)
+    budget_allocated: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
+    budget_spent: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, server_default="0")
+
+    # Evidence lineage and optimistic locking (ADR-025: the canonical WBS carries what WBS
+    # consumers previously read from procurement_wbs_items)
+    source_clause_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    source_document_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1", default=1)
 
     # Metadata
     metadata_json: Mapped[dict[str, Any]] = mapped_column(
@@ -138,6 +148,7 @@ class WBSNodeORM(Base):
         Index("ix_wbs_nodes_depth", "depth"),
         Index("ix_wbs_nodes_status", "status"),
         Index("ix_wbs_nodes_node_type", "node_type"),
+        Index("ix_wbs_nodes_project_source_document", "project_id", "source_document_id"),
         Index(
             "ix_wbs_nodes_project_lft_rgt", "project_id", "lft", "rgt"
         ),  # Composite for tree queries
