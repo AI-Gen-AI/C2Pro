@@ -36,12 +36,32 @@ export default defineConfig({
       // The P0b specs sign in live in their own context; restoring a session
       // under them would both mask the variable under investigation and collide
       // with the ticket sign-in.
-      testIgnore: [/p0b-single-document-health\.spec\.ts/, /auth-continuity\.spec\.ts/],
+      testIgnore: [
+        /p0b-single-document-health\.spec\.ts/,
+        /auth-continuity\.spec\.ts/,
+        // Anchored to the file name: matching runs against the absolute path, and a checkout
+        // directory may itself contain "pj01-".
+        /(^|[\\/])pj01-[^\\/]*\.spec\.ts$/,
+      ],
       use: {
         ...devices["Desktop Chrome"],
         storageState: "playwright/.auth/user.json",
       },
       dependencies: ["setup"],
+    },
+    {
+      // PJ-01 First Real User Journey. Like P0b: NO storageState — the journey performs the
+      // documented Clerk bootstrap itself and needs global-setup for the testing token.
+      name: "pj01-acceptance",
+      testMatch: [/(^|[\\/])pj01-[^\\/]*\.spec\.ts$/],
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
+      metadata: {
+        suite: "TS-E2E-PJ01-001",
+        type: "e2e",
+        priority: "p0",
+        description: "PJ-01 first real user journey (shared harness, first half)",
+      },
     },
     {
       // Canonical P0b acceptance. NO storageState: the journey performs the

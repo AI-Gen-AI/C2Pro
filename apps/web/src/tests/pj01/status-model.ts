@@ -26,8 +26,34 @@ export interface PolledDocument {
 }
 
 const SUCCESS_LABEL = /^analy[sz]ed$/i;
-const IN_FLIGHT_LABEL = /^(uploaded|queued|processing|parsing|awaiting analysis|analysis pending)$/i;
+// "Parsed" (honest lifecycle labels) is not finished: analysis has not completed yet.
+const IN_FLIGHT_LABEL = /^(uploaded|queued|processing|parsing|parsed|awaiting analysis|analysis pending)$/i;
 const ERROR_LABEL = /^(error|failed)$/i;
+
+/** Every document status label the Documents UI renders (polling and lifecycle variants). */
+const KNOWN_STATUS_LABELS = [
+  "Awaiting Analysis",
+  "Analysis pending",
+  "Processing",
+  "Analyzed",
+  "Analysed",
+  "Uploaded",
+  "Parsing",
+  "Queued",
+  "Parsed",
+  "Failed",
+  "Error",
+].sort((a, b) => b.length - a.length);
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Find the status label a user reads inside a whole documents-table row. */
+export function extractStatusLabel(rowText: string): string | null {
+  for (const label of KNOWN_STATUS_LABELS) {
+    if (new RegExp(`(^|\\W)${escapeRegExp(label)}(?=\\W|$)`, "i").test(rowText)) return label;
+  }
+  return null;
+}
 
 export function classifyUiDocumentLabel(label: string): UiDocumentState {
   const text = label.trim();

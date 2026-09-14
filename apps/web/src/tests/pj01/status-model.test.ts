@@ -8,7 +8,28 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { classifyBackendDocument, classifyUiDocumentLabel, isTerminalStage } from "./status-model";
+import {
+  classifyBackendDocument,
+  classifyUiDocumentLabel,
+  extractStatusLabel,
+  isTerminalStage,
+} from "./status-model";
+
+describe("extractStatusLabel", () => {
+  it("finds the status label inside a whole documents-table row", () => {
+    expect(extractStatusLabel("contract-a.pdf 5f0c… Contract Processing 3.9 KB 14/09/2026")).toBe("Processing");
+    expect(extractStatusLabel("contract-a.pdf Contract Analysis pending 3.9 KB")).toBe("Analysis pending");
+    expect(extractStatusLabel("contract-a.pdf\nContract\nAnalyzed\n3.9 KB")).toBe("Analyzed");
+  });
+
+  it("prefers the longest label so 'Analysis pending' is not read as something shorter", () => {
+    expect(extractStatusLabel("Awaiting Analysis")).toBe("Awaiting Analysis");
+  });
+
+  it("returns null when the row carries no known status label", () => {
+    expect(extractStatusLabel("contract-a.pdf Contract 3.9 KB")).toBeNull();
+  });
+});
 
 describe("classifyUiDocumentLabel", () => {
   it.each([
@@ -18,6 +39,8 @@ describe("classifyUiDocumentLabel", () => {
     ["Queued", "in_flight"],
     ["Processing", "in_flight"],
     ["Awaiting Analysis", "in_flight"],
+    ["Analysis pending", "in_flight"],
+    ["Parsed", "in_flight"],
     ["Error", "error"],
     ["Failed", "error"],
     ["", "unknown"],
