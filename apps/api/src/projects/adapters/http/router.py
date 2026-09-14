@@ -39,6 +39,7 @@ from src.procurement.application.budget_use_cases import GetBudgetUseCase
 from src.procurement.application.use_cases import GetWBSTreeUseCase, ListWBSItemsUseCase
 from src.procurement.domain.models import WBSItem
 from src.projects.adapters.persistence.models import ProjectORM
+from src.projects.domain.models import ProjectType
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -125,13 +126,8 @@ class ProjectQuickViewSummaryResponse(BaseModel):
     updated_at: datetime
 
 
-VALID_PROJECT_TYPES = {
-    # Legacy values (kept for backward compatibility)
-    "construction", "engineering", "industrial", "infrastructure", "other",
-    # Extended values matching the frontend wizard
-    "epc", "civil", "building", "maritime", "chemical",
-    "energy", "municipal", "oil_gas", "mining",
-}
+# One vocabulary with the projecttype enum and the ORM column (IR-6).
+VALID_PROJECT_TYPES = frozenset(member.value for member in ProjectType)
 
 
 class ProjectCreateRequest(BaseModel):
