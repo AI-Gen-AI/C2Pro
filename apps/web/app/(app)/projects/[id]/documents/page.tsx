@@ -145,6 +145,29 @@ export default function ProjectDocumentsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [retryingDocumentId, setRetryingDocumentId] = useState<string | null>(null);
   const [defaultUploadType, setDefaultUploadType] = useState<TripletSlotType | null>(null);
+  const [versionTarget, setVersionTarget] = useState<{ id: string; name: string } | null>(null);
+  const [versionFile, setVersionFile] = useState<File | null>(null);
+  const [isUploadingVersion, setIsUploadingVersion] = useState(false);
+
+  // A new version keeps the same logical document: the backend appends an immutable revision
+  // and re-processes it. Uploading through "Upload Document" instead would create a second
+  // document and break the revision history.
+  const handleUploadNewVersion = async () => {
+    if (!versionTarget || !versionFile) return;
+    setIsUploadingVersion(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', versionFile);
+      await apiClient.patch(`/documents/${versionTarget.id}/file`, formData);
+      setVersionTarget(null);
+      setVersionFile(null);
+      await refetch();
+    } catch (error) {
+      showToast(mutationFailureMessage(error, 'Failed to upload the new version.'));
+    } finally {
+      setIsUploadingVersion(false);
+    }
+  };
 
   const handleRetryProcessing = async (docId: string) => {
     setRetryingDocumentId(docId);
@@ -315,6 +338,57 @@ export default function ProjectDocumentsPage() {
             defaultType={defaultUploadType ?? undefined}
             onUploadComplete={handleUploadComplete}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Upload New Version Dialog */}
+      <Dialog
+        open={versionTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !isUploadingVersion) {
+            setVersionTarget(null);
+            setVersionFile(null);
+          }
+        }}
+      >
+        <DialogContent className="bg-card p-6 text-card-foreground sm:max-w-[480px] sm:rounded-2xl" data-testid="document-new-version-dialog">
+          <DialogHeader className="rounded-2xl border bg-muted/70 px-4 py-4">
+            <DialogTitle>Upload a new version of {versionTarget?.name}</DialogTitle>
+            <DialogDescription>
+              The document keeps its identity. Previous versions are kept as immutable revisions, and the new
+              version is processed again before its changes appear in What Changed?.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-sm font-medium" htmlFor="document-new-version-file">
+              New version file
+            </label>
+            <Input
+              id="document-new-version-file"
+              type="file"
+              data-testid="document-new-version-input"
+              onChange={(event) => setVersionFile(event.target.files?.[0] ?? null)}
+            />
+          </div>
+          <DialogFooter className="gap-2 rounded-2xl border bg-background/80 px-4 py-4">
+            <Button
+              variant="outline"
+              disabled={isUploadingVersion}
+              onClick={() => {
+                setVersionTarget(null);
+                setVersionFile(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={!versionFile || isUploadingVersion}
+              onClick={() => void handleUploadNewVersion()}
+            >
+              {isUploadingVersion ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Upload new version
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -526,6 +600,18 @@ export default function ProjectDocumentsPage() {
                               )}
                             </Button>
                           )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            aria-label={`Upload new version of ${doc.name}`}
+                            className="rounded-xl bg-background/95 shadow-sm"
+                            onClick={() => {
+                              setVersionFile(null);
+                              setVersionTarget({ id: doc.id, name: doc.name });
+                            }}
+                          >
+                            <Upload className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"

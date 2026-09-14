@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@/src/tests/test-utils";
+import { fireEvent, render, screen, waitFor, within } from "@/src/tests/test-utils";
 
 const pushMock = vi.fn();
 const useProjectDocumentsMock = vi.fn();
@@ -7,6 +7,7 @@ const useProjectMock = vi.fn();
 const mutateAsyncMock = vi.fn();
 const useDeleteDocumentMock = vi.fn();
 const apiClientPostMock = vi.fn();
+const apiClientPatchMock = vi.fn();
 const showToastMock = vi.fn();
 const evaluateCoherenceMock = vi.fn();
 
@@ -42,6 +43,7 @@ vi.mock("@/lib/api/generated/documents/documents", () => ({
 vi.mock("@/lib/api/client", () => ({
   apiClient: {
     post: (...args: unknown[]) => apiClientPostMock(...args),
+    patch: (...args: unknown[]) => apiClientPatchMock(...args),
   },
 }));
 
@@ -83,6 +85,7 @@ describe("ProjectDocumentsPage", () => {
     mutateAsyncMock.mockReset();
     useDeleteDocumentMock.mockReset();
     apiClientPostMock.mockReset();
+    apiClientPatchMock.mockReset();
     showToastMock.mockReset();
     evaluateCoherenceMock.mockReset();
     useProjectMock.mockReturnValue({
@@ -651,5 +654,95 @@ describe("ProjectDocumentsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /retry processing budget\.xlsx/i }));
 
     await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("worker unavailable"));
+  });
+
+  // PJ-01 G1: a revision of an existing document must be uploadable from the browser. The
+  // backend (PATCH /documents/{id}/file) keeps the same logical document and appends an
+  // immutable revision; the UI must not create a second document.
+  const analyzedContract = {
+    id: "doc_real_001",
+    name: "Contract.pdf",
+    type: "contract",
+    fileSize: 1024,
+    uploadedAt: new Date("2026-03-18T09:00:00Z"),
+    status: "parsed",
+    lifecycleStatus: "analyzed",
+  };
+
+  it("offers a new-version upload on every document row", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [analyzedContract],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    expect(
+      screen.getByRole("button", { name: /upload new version of contract\.pdf/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("uploads a new version of the same document, keeps history and refetches", async () => {
+    const refetch = vi.fn();
+    apiClientPatchMock.mockResolvedValueOnce({ status: 200, data: { id: "doc_real_001", version: 2 } });
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [analyzedContract],
+      loading: false,
+      error: null,
+      refetch,
+    });
+
+    render(<ProjectDocumentsPage />);
+    fireEvent.click(screen.getByRole("button", { name: /upload new version of contract\.pdf/i }));
+
+    const dialog = await screen.findByRole("dialog", { name: /upload a new version of contract\.pdf/i });
+    expect(within(dialog).getByText(/previous versions are kept/i)).toBeInTheDocument();
+    const submit = within(dialog).getByRole("button", { name: /^upload new version$/i });
+    expect(submit).toBeDisabled();
+
+    const file = new File(["%PDF revision B"], "contract-b.pdf", { type: "application/pdf" });
+    fireEvent.change(within(dialog).getByLabelText(/new version file/i), { target: { files: [file] } });
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(apiClientPatchMock).toHaveBeenCalledTimes(1));
+    const [url, body] = apiClientPatchMock.mock.calls[0] as [string, FormData];
+    expect(url).toBe("/documents/doc_real_001/file");
+    expect(body).toBeInstanceOf(FormData);
+    expect(body.get("file")).toBe(file);
+    expect(apiClientPostMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: /upload a new version of contract\.pdf/i }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("keeps the new-version dialog open and shows the backend reason when the upload fails", async () => {
+    const refetch = vi.fn();
+    apiClientPatchMock.mockRejectedValueOnce({
+      response: { data: { detail: "budget/schedule require .xlsx/.bc3" } },
+    });
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [analyzedContract],
+      loading: false,
+      error: null,
+      refetch,
+    });
+
+    render(<ProjectDocumentsPage />);
+    fireEvent.click(screen.getByRole("button", { name: /upload new version of contract\.pdf/i }));
+    const dialog = await screen.findByRole("dialog", { name: /upload a new version of contract\.pdf/i });
+    fireEvent.change(within(dialog).getByLabelText(/new version file/i), {
+      target: { files: [new File(["x"], "contract-b.docx")] },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^upload new version$/i }));
+
+    await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("budget/schedule require .xlsx/.bc3"));
+    expect(screen.getByRole("dialog", { name: /upload a new version of contract\.pdf/i })).toBeInTheDocument();
+    expect(refetch).not.toHaveBeenCalled();
   });
 });
