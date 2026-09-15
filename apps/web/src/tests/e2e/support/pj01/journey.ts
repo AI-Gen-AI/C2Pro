@@ -19,7 +19,7 @@ import {
   loadContractAManifest,
   type Pj01ContractFixtureManifest,
 } from "../../../pj01/fixture-contract";
-import type { HealthVectorPayload } from "../../../pj01/health-evaluator";
+import { evaluateHealthSourceDocument, type HealthVectorPayload } from "../../../pj01/health-evaluator";
 import { contractBPdfPath, loadContractBManifest } from "../../../pj01/revision-fixture";
 import { assertCurrentStateThroughNavigation } from "./current-state";
 import { navigateTowardEvidence } from "./evidence";
@@ -92,10 +92,15 @@ export async function runPj01FirstHalf(
 
   await recorder.step("PJ01-S6", "Assert six Health dimensions", async () => {
     await assertSixHealthDimensions(page, recorder, health, healthExpectationsFromManifest(manifest));
+    // Health → Evidence authority: the assessment must name the uploaded document itself.
+    for (const violation of evaluateHealthSourceDocument(health, documentId)) {
+      recorder.violation(`HEALTH_${violation.code}`, violation.detail);
+    }
+    recorder.record("healthSourceDocumentId", health.single_document_coverage?.document_id ?? null);
   });
 
-  await recorder.step("PJ01-S7", "Navigate toward Evidence", async () => {
-    await navigateTowardEvidence(page, recorder, { projectId, documentId });
+  await recorder.step("PJ01-S7", "Follow Health supporting clause into Evidence", async () => {
+    await navigateTowardEvidence(page, recorder, { projectId, documentId, health });
     await recorder.screenshot(page, "s7-evidence");
   });
 

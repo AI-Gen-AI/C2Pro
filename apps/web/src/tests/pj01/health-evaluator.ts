@@ -20,7 +20,7 @@ export interface CategoryAssessmentPayload {
 
 /** `GET /api/v1/projects/{id}/health`, as far as PJ-01 reads it. */
 export interface HealthVectorPayload {
-  single_document_coverage?: { assessments?: CategoryAssessmentPayload[] | null } | null;
+  single_document_coverage?: { document_id?: string | null; assessments?: CategoryAssessmentPayload[] | null } | null;
   single_document_evidence_granularity?: string | null;
 }
 
@@ -170,6 +170,45 @@ export function evaluateHealthVector(
     }
   }
 
+  return violations;
+}
+
+export interface JourneyViolation {
+  code: string;
+  detail: string;
+}
+
+/** The Health assessment must name the uploaded document as its source (never inferred). */
+export function evaluateHealthSourceDocument(vector: HealthVectorPayload, documentId: string): JourneyViolation[] {
+  const source = vector.single_document_coverage?.document_id ?? null;
+  if (!source) {
+    return [{ code: "SOURCE_DOCUMENT_MISSING", detail: "the Health assessment does not name its source document" }];
+  }
+  if (source !== documentId) {
+    return [{ code: "SOURCE_DOCUMENT_MISMATCH", detail: `Health source ${source} is not the uploaded document ${documentId}` }];
+  }
+  return [];
+}
+
+/** Where a Health supporting-evidence link landed: exact document, exact clause, active. */
+export function evaluateEvidenceLanding(
+  observed: { url: string; activeEntityId: string | null; unavailableNotice: string | null },
+  expected: { documentId: string; clauseId: string },
+): JourneyViolation[] {
+  const violations: JourneyViolation[] = [];
+  const params = new URL(observed.url).searchParams;
+  if (params.get("documentId") !== expected.documentId) {
+    violations.push({ code: "EVIDENCE_WRONG_DOCUMENT", detail: `opened ${params.get("documentId")} instead of ${expected.documentId}` });
+  }
+  if (params.get("highlightId") !== expected.clauseId) {
+    violations.push({ code: "EVIDENCE_WRONG_CLAUSE", detail: `linked ${params.get("highlightId")} instead of ${expected.clauseId}` });
+  }
+  if (observed.activeEntityId !== expected.clauseId) {
+    violations.push({ code: "EVIDENCE_CLAUSE_NOT_ACTIVE", detail: `active evidence is ${observed.activeEntityId ?? "none"}` });
+  }
+  if (observed.unavailableNotice) {
+    violations.push({ code: "EVIDENCE_LINK_UNAVAILABLE", detail: observed.unavailableNotice });
+  }
   return violations;
 }
 
