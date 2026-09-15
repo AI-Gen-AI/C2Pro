@@ -22,9 +22,13 @@ export async function navigateTowardEvidence(
   const linkedFromHealth = (await healthRegion.count()) > 0 && (await evidenceLinks.count()) > 0;
   recorder.record("healthLinksToEvidence", linkedFromHealth);
   if (!linkedFromHealth) {
+    // HEALTH_TO_EVIDENCE=BLOCKED_PENDING_QUALIFIED_DELTA: the only candidate (Gemini 11d4ddc5) is
+    // rejected because it guesses the source document; a first-contract heuristic is never
+    // accepted here. The assertion is recorded, not weakened into a pass.
+    recorder.record("healthToEvidence", "BLOCKED_PENDING_QUALIFIED_DELTA");
     recorder.gap(
       "G5_HEALTH_TO_EVIDENCE_NOT_LINKED",
-      "Health evidence is not clickable into the Evidence viewer (owned by the Health → Evidence traceability lane)",
+      "Health evidence is not clickable into the Evidence viewer with an authoritative source document (BLOCKED_PENDING_QUALIFIED_DELTA)",
       { blocking: false },
     );
   }

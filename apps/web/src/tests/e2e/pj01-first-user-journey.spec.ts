@@ -20,21 +20,22 @@
 import { expect, test } from "@playwright/test";
 
 import { collectAttributableConsoleErrors } from "./support/pj01/console";
-import { runPj01FirstHalf } from "./support/pj01/journey";
+import { runPj01FirstHalf, runPj01SecondHalf } from "./support/pj01/journey";
 import { ANALYSIS_BUDGET_MS } from "./support/pj01/processing";
 import { Pj01RunRecorder } from "./support/pj01/run-recorder";
 
-test.describe("TS-E2E-PJ01-001: PJ-01 first real user journey — first half", () => {
-  test.describe.configure({ mode: "serial", timeout: ANALYSIS_BUDGET_MS + 300_000 });
+test.describe("TS-E2E-PJ01-001: PJ-01 first real user journey", () => {
+  test.describe.configure({ mode: "serial", timeout: 2 * ANALYSIS_BUDGET_MS + 600_000 });
 
-  test("login, create project, upload Contract A, processing, Health, six dimensions, toward Evidence", async ({
+  test("login, project, Contract A, processing, Health, Evidence, revision B, What Changed?, Current State", async ({
     baseURL,
     page,
   }, testInfo) => {
     const recorder = Pj01RunRecorder.fromEnv();
     const consoleErrors = collectAttributableConsoleErrors(page);
     try {
-      await runPj01FirstHalf(page, { baseURL: baseURL ?? "http://localhost:3100", recorder });
+      const first = await runPj01FirstHalf(page, { baseURL: baseURL ?? "http://localhost:3100", recorder });
+      await runPj01SecondHalf(page, { recorder, first });
       recorder.record("attributableConsoleErrors", consoleErrors.length);
       expect(consoleErrors, "no attributable console errors").toEqual([]);
       expect(recorder.blockingFindings(), "no blocking PJ-01 findings").toEqual([]);
