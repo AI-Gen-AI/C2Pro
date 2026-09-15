@@ -287,6 +287,74 @@ describe("EvidencePage highlight mapping", () => {
     );
   });
 
+  describe("Health → Evidence deep link", () => {
+    const documents = [
+      { id: "doc-a", name: "Contract A.pdf", type: "contract", created_at: "2026-01-20T09:00:00Z", updated_at: "2026-01-21T09:00:00Z" },
+      { id: "doc-b", name: "Contract B.pdf", type: "contract", created_at: "2026-01-22T09:00:00Z", updated_at: "2026-01-23T09:00:00Z" },
+    ];
+
+    function linkTo(params: Record<string, string>) {
+      useSearchParamsMock.mockReturnValue({ get: (key: string) => params[key] ?? null });
+      useProjectDocumentsMock.mockReturnValue({ documents, loading: false, error: null, refetch: vi.fn() });
+      // Stable objects per document, like the real hooks: a fresh array on every render would
+      // re-trigger the page's derived-state effects without end.
+      const perDocument = new Map(
+        [null, "doc-a", "doc-b"].map((documentId) => {
+          const clause = documentId === "doc-b" ? "clause-b" : documentId === "doc-a" ? "clause-a" : null;
+          return [
+            documentId,
+            {
+              entities: clause ? [{ id: clause, type: "stakeholder", text: `Clause of ${documentId}`, confidence: 95, page: 1 }] : [],
+              highlights: clause
+                ? [{ id: `highlight-${clause}`, entityId: clause, page: 1, color: "green", label: `Clause of ${documentId}`, rects: [] }]
+                : [],
+              loading: false,
+              error: null,
+              refetch: vi.fn(),
+            },
+          ] as const;
+        }),
+      );
+      useDocumentEntitiesMock.mockImplementation((documentId: string | null) => perDocument.get(documentId) ?? perDocument.get(null));
+      const noAlerts = { alerts: [], loading: false, error: null, refetch: vi.fn() };
+      useDocumentAlertsMock.mockReturnValue(noAlerts);
+    }
+
+    it("selects the linked document B and activates its exact clause", () => {
+      linkTo({ documentId: "doc-b", highlightId: "clause-b" });
+
+      render(<EvidencePage />);
+
+      const requestedDocuments = useDocumentEntitiesMock.mock.calls.map(([documentId]) => documentId);
+      expect(requestedDocuments).toContain("doc-b");
+      expect(requestedDocuments).not.toContain("doc-a");
+      expect(screen.getByTestId("active-entity-id")).toHaveTextContent("clause-b");
+      expect(screen.getByTestId("viewer-active-highlight")).toHaveTextContent("highlight-clause-b");
+    });
+
+    it("fails closed when the linked document is not in the project: no other document is opened", () => {
+      linkTo({ documentId: "doc-missing", highlightId: "clause-b" });
+
+      render(<EvidencePage />);
+
+      const requestedDocuments = useDocumentEntitiesMock.mock.calls.map(([documentId]) => documentId);
+      expect(requestedDocuments).not.toContain("doc-a");
+      expect(requestedDocuments).not.toContain("doc-b");
+      expect(screen.getByTestId("evidence-link-unavailable")).toHaveTextContent(/linked document is not available/i);
+      expect(screen.getByTestId("active-entity-id")).toHaveTextContent("none");
+    });
+
+    it("states that the linked evidence is missing instead of activating something else", () => {
+      linkTo({ documentId: "doc-b", highlightId: "clause-unknown" });
+
+      render(<EvidencePage />);
+
+      expect(screen.getByTestId("evidence-link-unavailable")).toHaveTextContent(/linked evidence was not found in this document/i);
+      expect(screen.getByTestId("active-entity-id")).toHaveTextContent("none");
+      expect(useDocumentEntitiesMock.mock.calls.map(([documentId]) => documentId)).not.toContain("doc-a");
+    });
+  });
+
   it("maps viewer highlight clicks back to the entity id", () => {
     render(<EvidencePage />);
 

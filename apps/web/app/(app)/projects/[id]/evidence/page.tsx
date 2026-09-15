@@ -42,6 +42,7 @@ export default function EvidencePage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const requestedDocumentId = searchParams.get("documentId");
+  const requestedHighlightId = searchParams.get("highlightId");
   const { isLoaded: isUserLoaded, user } = useUser();
   const reviewerName = user?.primaryEmailAddress?.emailAddress ?? user?.id;
   const reviewerIdentityReady = isUserLoaded && Boolean(reviewerName);
@@ -80,11 +81,12 @@ export default function EvidencePage() {
       return;
     }
 
-    if (
-      requestedDocumentId &&
-      documents.some((doc) => doc.id === requestedDocumentId)
-    ) {
-      setSelectedDocumentId(requestedDocumentId);
+    if (requestedDocumentId) {
+      // A deep link names its document. If that document is not in this project, nothing else
+      // is opened in its place: showing another document's evidence would be a wrong answer.
+      setSelectedDocumentId(
+        documents.some((doc) => doc.id === requestedDocumentId) ? requestedDocumentId : null,
+      );
       return;
     }
 
@@ -245,6 +247,47 @@ export default function EvidencePage() {
     },
     [alertsState, entities],
   );
+
+  // Health → Evidence: activate the linked clause once its document's evidence has loaded.
+  const requestedHighlightKey =
+    requestedDocumentId && requestedHighlightId
+      ? `${requestedDocumentId}:${requestedHighlightId}`
+      : null;
+  const [appliedHighlightKey, setAppliedHighlightKey] = useState<string | null>(null);
+  const requestedHighlightFound =
+    Boolean(requestedHighlightId) &&
+    (entities.some((entity) => entity.id === requestedHighlightId) ||
+      alertsState.some((alert) => alert.id === requestedHighlightId));
+
+  useEffect(() => {
+    if (!requestedHighlightKey || appliedHighlightKey === requestedHighlightKey) return;
+    if (selectedDocumentId !== requestedDocumentId || entitiesLoading) return;
+    if (requestedHighlightFound && requestedHighlightId) {
+      syncPanelSelection(requestedHighlightId);
+      setAppliedHighlightKey(requestedHighlightKey);
+    }
+  }, [
+    appliedHighlightKey,
+    entitiesLoading,
+    requestedDocumentId,
+    requestedHighlightFound,
+    requestedHighlightId,
+    requestedHighlightKey,
+    selectedDocumentId,
+    syncPanelSelection,
+  ]);
+
+  const requestedDocumentUnavailable =
+    Boolean(requestedDocumentId) &&
+    !documentsLoading &&
+    !documents.some((doc) => doc.id === requestedDocumentId);
+  const requestedHighlightUnavailable =
+    Boolean(requestedHighlightKey) &&
+    !requestedDocumentUnavailable &&
+    selectedDocumentId === requestedDocumentId &&
+    !entitiesLoading &&
+    !alertsLoading &&
+    !requestedHighlightFound;
 
   const handleApproveEntity = useCallback(
     async (entityId: string, note?: string) => {
@@ -658,6 +701,20 @@ export default function EvidencePage() {
       {actionError ? (
         <Alert variant="destructive">
           <AlertDescription>{actionError}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {requestedDocumentUnavailable ? (
+        <Alert data-testid="evidence-link-unavailable">
+          <AlertDescription>
+            The linked document is not available in this project, so no other document was opened.
+          </AlertDescription>
+        </Alert>
+      ) : requestedHighlightUnavailable ? (
+        <Alert data-testid="evidence-link-unavailable">
+          <AlertDescription>
+            The linked evidence was not found in this document. Nothing else was selected.
+          </AlertDescription>
         </Alert>
       ) : null}
 

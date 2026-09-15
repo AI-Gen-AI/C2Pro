@@ -27,7 +27,8 @@
  * which one it is holding and never implies clause-level precision it does not have.
  */
 
-import { AlertTriangle, FileQuestion, Loader2 } from "lucide-react";
+import { AlertTriangle, FileQuestion, FileText, Loader2 } from "lucide-react";
+import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -114,7 +115,85 @@ function GranularityDisclosure({
   );
 }
 
-function CategoryTile({ assessment }: { assessment: CategoryAssessment }) {
+const EVIDENCE_LINK_CLASS =
+  "flex items-center gap-1.5 text-xs text-primary underline transition-colors hover:text-primary/80";
+const EVIDENCE_UNAVAILABLE_CLASS = "flex items-center gap-1.5 text-xs text-muted-foreground";
+
+/**
+ * Health → Evidence. The target document is ONLY the one the assessment names
+ * (`single_document_coverage.document_id`); it is never guessed from the project's documents.
+ * Clause-level evidence links to the exact clause; anything else links to the document without
+ * inventing a clause. Without a named document the evidence is shown as unavailable, not linked.
+ */
+function EvidenceLinks({
+  projectId,
+  documentId,
+  granularity,
+  evidenceIds,
+}: {
+  projectId: string;
+  documentId: string | null;
+  granularity?: EvidenceGranularity | null;
+  evidenceIds: string[];
+}) {
+  if (granularity !== EvidenceGranularity.clause) {
+    return (
+      <div data-testid="health-evidence-links" className="mt-2 space-y-1">
+        {documentId ? (
+          <Link
+            data-testid="health-evidence-link"
+            href={`/projects/${projectId}/evidence?documentId=${documentId}`}
+            className={EVIDENCE_LINK_CLASS}
+          >
+            <FileText className="h-3 w-3" aria-hidden="true" />
+            View document evidence
+          </Link>
+        ) : (
+          <span className={EVIDENCE_UNAVAILABLE_CLASS}>
+            <FileText className="h-3 w-3" aria-hidden="true" />
+            Document evidence (unavailable)
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid="health-evidence-links" className="mt-2 space-y-1">
+      {evidenceIds.map((clauseId, index) =>
+        documentId ? (
+          <Link
+            key={clauseId}
+            data-testid="health-evidence-link"
+            data-clause-id={clauseId}
+            href={`/projects/${projectId}/evidence?documentId=${documentId}&highlightId=${clauseId}`}
+            className={EVIDENCE_LINK_CLASS}
+          >
+            <FileText className="h-3 w-3" aria-hidden="true" />
+            View supporting clause #{index + 1}
+          </Link>
+        ) : (
+          <span key={clauseId} className={EVIDENCE_UNAVAILABLE_CLASS}>
+            <FileText className="h-3 w-3" aria-hidden="true" />
+            Supporting clause #{index + 1} (unavailable)
+          </span>
+        ),
+      )}
+    </div>
+  );
+}
+
+function CategoryTile({
+  assessment,
+  projectId,
+  documentId,
+  granularity,
+}: {
+  assessment: CategoryAssessment;
+  projectId: string;
+  documentId: string | null;
+  granularity?: EvidenceGranularity | null;
+}) {
   const isPresent = assessment.state === CategoryCoverageState.present;
   const evidenceIds = assessment.evidence_clause_ids ?? [];
   const missingData = assessment.missing_data ?? [];
@@ -148,13 +227,12 @@ function CategoryTile({ assessment }: { assessment: CategoryAssessment }) {
       </p>
 
       {evidenceIds.length > 0 && (
-        <ul data-testid="health-evidence-ids" className="mt-1 space-y-0.5">
-          {evidenceIds.map((id) => (
-            <li key={id} className="truncate font-mono text-[11px] text-muted-foreground">
-              {id}
-            </li>
-          ))}
-        </ul>
+        <EvidenceLinks
+          projectId={projectId}
+          documentId={documentId}
+          granularity={granularity}
+          evidenceIds={evidenceIds}
+        />
       )}
 
       {findings.length > 0 && (
@@ -273,6 +351,7 @@ export function SingleDocumentHealth({ projectId }: { projectId: string }) {
 
   const assessments = coverage.assessments ?? [];
   const crossFindings = coverage.cross_findings ?? [];
+  const sourceDocumentId = coverage.document_id ?? null;
 
   return (
     <Shell>
@@ -285,6 +364,9 @@ export function SingleDocumentHealth({ projectId }: { projectId: string }) {
           <CategoryTile
             key={category}
             assessment={assessmentFor(category, assessments)}
+            projectId={projectId}
+            documentId={sourceDocumentId}
+            granularity={data?.single_document_evidence_granularity}
           />
         ))}
       </div>
