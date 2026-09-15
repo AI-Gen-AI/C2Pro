@@ -12736,6 +12736,18 @@
       },
       "SingleDocumentCoverage": {
         "properties": {
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
           "assessments": {
             "items": {
               "$ref": "#/components/schemas/CategoryAssessment"

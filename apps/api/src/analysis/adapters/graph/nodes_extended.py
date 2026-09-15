@@ -502,6 +502,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
             result.finding_signals,
             granularity=evidence.granularity,
             degradation_reason=evidence.degradation_reason,
+            document_id=coverage_source_document_id(state),
         )
 
         quality_note = derivation.quality_note
@@ -563,6 +564,24 @@ def _document_identity(state: ProjectState) -> tuple[str, str]:
     """
     doc_type = state.get("doc_type") or state.get("document_category") or CONTRACT_DOC_TYPE
     return str(doc_type), str(state.get("document_id") or "document")
+
+
+def coverage_source_document_id(state: Any) -> UUID | None:
+    """The document a single-document assessment belongs to, or ``None`` when unknown.
+
+    Only the graph's own ``document_id`` counts. The ``"document"`` placeholder of
+    ``_document_identity`` or any malformed value yields ``None`` — the assessment is then
+    unattributed and Health → Evidence fails closed instead of guessing a document.
+    """
+    raw = state.get("document_id")
+    if isinstance(raw, UUID):
+        return raw
+    if not raw:
+        return None
+    try:
+        return UUID(str(raw))
+    except ValueError:
+        return None
 
 
 def _legacy_whole_document_evidence(

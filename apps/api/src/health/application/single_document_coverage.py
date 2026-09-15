@@ -35,6 +35,7 @@ no numeric Health score are produced here.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from uuid import UUID
 
 from src.coherence.application.services.category_router import CategoryRouter, ChunkSignal
 from src.coherence.category_registry import CanonicalCategory
@@ -105,6 +106,7 @@ def assess_single_document_coverage(
     findings: Sequence[FindingSignal],
     *,
     qualifier: QualifyingCategoriesFn | None = None,
+    document_id: UUID | None = None,
 ) -> SingleDocumentCoverage:
     """Assess single-document category coverage from extracted clauses + findings.
 
@@ -133,6 +135,7 @@ def assess_single_document_coverage(
     findings_by_category, cross_findings = _partition_findings(findings)
 
     return SingleDocumentCoverage(
+        document_id=document_id,
         assessments=tuple(
             CategoryAssessment(
                 category=item.category,

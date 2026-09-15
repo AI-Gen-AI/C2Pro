@@ -52,6 +52,7 @@ import type { FindingSignal } from "./findingSignal";
  * evidence (INV-1).
  */
 export interface SingleDocumentCoverage {
+  document_id?: string | null;
   assessments: CategoryAssessment[];
   cross_findings?: FindingSignal[];
 }
