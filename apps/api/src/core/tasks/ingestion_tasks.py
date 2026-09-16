@@ -16,8 +16,9 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import text
 
+from src.analysis.adapters.graph.workflow import close_checkpointer_resources
 from src.analysis.factories.orchestrator_factory import AnalysisOrchestratorFactory
-from src.core.database import get_raw_session, init_db
+from src.core.database import close_db, get_raw_session, init_db
 from src.core.dlq.dlq_service import DLQService
 from src.core.tasks.celery_app import celery_app
 from src.core.tenants.types import TenantId, require_tenant_id
@@ -999,6 +1000,80 @@ def process_document_async(
     )
 
 
+async def _close_document_analysis_task_resources(*, primary_error: Exception | None) -> None:
+    """Close task-owned async resources before the task event loop terminates."""
+    cleanup_error: Exception | None = None
+    for resource_name, close_resource in (
+        ("checkpointer", close_checkpointer_resources),
+        ("database", close_db),
+    ):
+        try:
+            await close_resource()
+        except Exception as error:  # pragma: no cover - exercised at runtime boundaries
+            logger.exception(
+                "document_analysis_task_resource_cleanup_failed",
+                extra={"resource": resource_name},
+            )
+            if cleanup_error is None:
+                cleanup_error = error
+
+    if cleanup_error is not None and primary_error is None:
+        raise cleanup_error
+
+
+async def _run_document_analysis_task_lifecycle(
+    *,
+    tenant_id: TenantId,
+    document_id: UUID,
+    route_rag_unavailable_to_dlq: bool,
+) -> dict[str, Any]:
+    """Own every loop-bound analysis resource for one Celery task invocation."""
+    primary_error: Exception | None = None
+    try:
+        return await _run_document_analysis(tenant_id=tenant_id, document_id=document_id)
+    except RagChunksUnavailableError as error:
+        if not route_rag_unavailable_to_dlq:
+            primary_error = error
+            raise
+
+        logger.error(
+            "document_analysis_rag_chunks_unavailable",
+            extra={"tenant_id": str(tenant_id), "document_id": str(document_id)},
+        )
+        await _push_trigger_failure_to_dlq(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            error=error,
+        )
+        return {
+            "status": "routed_to_dlq",
+            "document_id": str(document_id),
+            "reason": "rag_chunks_unavailable",
+        }
+    except Exception as error:
+        primary_error = error
+        logger.exception(
+            "document_analysis_task_failed",
+            extra={"tenant_id": str(tenant_id), "document_id": str(document_id)},
+        )
+        try:
+            await _push_trigger_failure_to_dlq(
+                tenant_id=tenant_id,
+                document_id=document_id,
+                error=error,
+            )
+        except Exception:
+            # The graph/analysis error is the primary outcome; DLQ failure is observable
+            # but must not replace it while the task-owned loop is still being unwound.
+            logger.exception(
+                "document_analysis_failure_dlq_persistence_failed",
+                extra={"tenant_id": str(tenant_id), "document_id": str(document_id)},
+            )
+        raise
+    finally:
+        await _close_document_analysis_task_resources(primary_error=primary_error)
+
+
 @celery_app.task(
     name="documents.analyze_document",
     bind=True,
@@ -1014,70 +1089,32 @@ def process_document_analysis_async(self: Any, tenant_id: str, document_id: str)
         document_id,
     )
     normalized_tenant_id = require_tenant_id(tenant_id)
+    retries = int(getattr(self.request, "retries", 0))
     try:
         return asyncio.run(
-            _run_document_analysis(
+            _run_document_analysis_task_lifecycle(
                 tenant_id=normalized_tenant_id,
                 document_id=UUID(document_id),
+                route_rag_unavailable_to_dlq=retries >= RAG_READINESS_MAX_RETRIES,
             )
         )
     except RagChunksUnavailableError as error:
-        retries = int(getattr(self.request, "retries", 0))
-        if retries < RAG_READINESS_MAX_RETRIES:
-            countdown = 2**retries
-            logger.warning(
-                "document_analysis_rag_chunks_retrying",
-                extra={
-                    "tenant_id": tenant_id,
-                    "document_id": document_id,
-                    "task_id": self.request.id,
-                    "retry": retries + 1,
-                    "countdown_seconds": countdown,
-                },
-            )
-            raise self.retry(
-                exc=error,
-                countdown=countdown,
-                max_retries=RAG_READINESS_MAX_RETRIES,
-            )
-
-        logger.error(
-            "document_analysis_rag_chunks_unavailable",
+        countdown = 2**retries
+        logger.warning(
+            "document_analysis_rag_chunks_retrying",
             extra={
                 "tenant_id": tenant_id,
                 "document_id": document_id,
                 "task_id": self.request.id,
+                "retry": retries + 1,
+                "countdown_seconds": countdown,
             },
         )
-        asyncio.run(
-            _push_trigger_failure_to_dlq(
-                tenant_id=normalized_tenant_id,
-                document_id=UUID(document_id),
-                error=error,
-            )
+        raise self.retry(
+            exc=error,
+            countdown=countdown,
+            max_retries=RAG_READINESS_MAX_RETRIES,
         )
-        return {
-            "status": "routed_to_dlq",
-            "document_id": document_id,
-            "reason": "rag_chunks_unavailable",
-        }
-    except Exception as error:
-        logger.exception(
-            "document_analysis_task_failed",
-            extra={
-                "tenant_id": tenant_id,
-                "document_id": document_id,
-                "task_id": self.request.id,
-            },
-        )
-        asyncio.run(
-            _push_trigger_failure_to_dlq(
-                tenant_id=normalized_tenant_id,
-                document_id=UUID(document_id),
-                error=error,
-            )
-        )
-        raise
 
 
 process_document_analysis_async.queue = "document_parsing"
