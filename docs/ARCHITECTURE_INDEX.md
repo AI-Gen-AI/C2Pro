@@ -1,8 +1,8 @@
 # C2Pro Architecture Documentation Index
 
-> **Version:** 1.1.0
+> **Version:** 1.2.0
 > **Created:** 2026-03-22
-> **Last Updated:** 2026-03-29
+> **Last Updated:** 2026-09-16
 > **Status:** Current
 > **Purpose:** Single entry point for all architecture documentation
 
@@ -28,12 +28,15 @@ Architecture decisions for C2Pro should be read in this order:
    - System and product flow references.
 7. `docs/testing/PHASE4_TDD_IMPLEMENTATION_ROADMAP.md` and `docs/testing/C2PRO_TEST_SUITES_INDEX_v1.1.md`
    - TDD execution and test-traceability baseline.
+8. `docs/ACCESS_SESSION_AUTH_REGISTRY.md`
+   - Sanitized public companion for execution identity, session, authentication and mutation-boundary invariants. Detailed operational credential/session state remains in the private AI-Gen Agent OS registry.
 
-Current executive view as of 2026-03-29:
+Current executive view as of 2026-09-16:
 
 - C2Pro is an API-first, multi-tenant SaaS platform with `apps/api` and `apps/web`.
 - `C2PRO_MASTER_BACKLOG.md` is the canonical task register.
 - Remaining production blockers are concentrated in release evidence, governance, and final security hardening rather than foundational architecture creation.
+- Operational execution identity/authentication state is governed cross-project by AI-Gen Agent OS, while this public repository contains only product-safe invariants.
 
 ---
 
@@ -49,6 +52,15 @@ Current executive view as of 2026-03-29:
 | LangGraph Checkpointing | `docs/architecture/LANGGRAPH_CHECKPOINTING.md`              | 2026-03-21 | AI state persistence                       |
 | Architecture README     | `docs/architecture/README.md`                               | -          | Architecture section index                 |
 | ADR-006 Post-Reorg      | `docs/architecture/decisions/006-post-reorganization-architecture.md` | 2026-02-24 | Canonical repo architecture after restructuring |
+
+### Governance & Operational Security
+
+| Document | Path | Updated | Purpose |
+| --- | --- | --- | --- |
+| Access / Session / Authentication Companion | `docs/ACCESS_SESSION_AUTH_REGISTRY.md` | 2026-09-16 | Public-safe execution identity, authentication-class and mutation-boundary invariants |
+| Platform Operator Authorization Boundary | `docs/C2_6_PLATFORM_OPERATOR_AUTHORIZATION_BOUNDARY.md` | 2026-09 | Canonical product/runtime authorization boundary for platform-operator capability |
+
+> Detailed identity, provider-authentication and credential-state metadata is intentionally excluded from this public repository and maintained in the private AI-Gen Agent OS operational registry.
 
 ### Planning & Roadmaps
 
@@ -115,5 +127,6 @@ Current executive view as of 2026-03-29:
 
 | Version | Date       | Changes                                                                                                                                     | Author       |
 | ------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 1.2.0   | 2026-09-16 | Added the public-safe Access/Session/Authentication companion, cross-project AI-Gen governance reference, and operational-security section. | AI-Gen governance |
 | 1.1.0   | 2026-03-29 | Added governance baseline, promoted `C2PRO_MASTER_BACKLOG.md` as the canonical task register, introduced the v4.1 platform technical design, and clarified the role of the v4.0 technical design. | CIO review |
 | 1.0.0   | 2026-03-22 | Initial creation. Consolidated architecture documentation, created decision log, deleted experimental duplicates, updated agent references. | SDD Pipeline |
