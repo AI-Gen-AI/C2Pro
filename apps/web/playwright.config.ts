@@ -54,7 +54,13 @@ export default defineConfig({
       // PJ-01 First Real User Journey. Like P0b: NO storageState — the journey performs the
       // documented Clerk bootstrap itself and needs global-setup for the testing token.
       name: "pj01-acceptance",
-      testMatch: [/(^|[\\/])pj01-[^\\/]*\.spec\.ts$/],
+      // Keep the canonical journey isolated from focused diagnostics.  Those
+      // diagnostics create their own tenant-A projects and must be selected
+      // explicitly, never run beside TS-E2E-PJ01-001 under fullyParallel.
+      testMatch: [
+        /(^|[\\/])pj01-first-user-journey\.spec\.ts$/,
+        /(^|[\\/])pj01-tenant-isolation\.spec\.ts$/,
+      ],
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["global-setup"],
       metadata: {
@@ -63,6 +69,17 @@ export default defineConfig({
         priority: "p0",
         description: "PJ-01 first real user journey (Login → Create → Upload A → Processing → Health → Evidence → Revision B → What Changed → Current State)",
       },
+    },
+    {
+      // Explicit-only focused diagnostics.  They retain their environment
+      // guards, but are deliberately outside the canonical PJ-01 selection.
+      name: "pj01-focal",
+      testMatch: [
+        /(^|[\\/])pj01-create-project-observer\.spec\.ts$/,
+        /(^|[\\/])pj01-processing-a-focal\.spec\.ts$/,
+      ],
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
     },
     {
       // P0c What Changed? PRESENTATION acceptance over SEEDED canonical projections

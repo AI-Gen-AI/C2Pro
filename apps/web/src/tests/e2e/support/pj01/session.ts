@@ -6,7 +6,7 @@
  * typed navigation in PJ-01 is the Clerk testing bootstrap inside `signInWithClerk`; from
  * `/projects` onwards every step is reached by clicking.
  */
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type Response } from "@playwright/test";
 
 import {
   assertProjectEntryContinuity,
@@ -16,6 +16,16 @@ import {
 } from "../p0b-auth";
 
 const PROJECT_URL = /\/projects\/([0-9a-f-]{36})\/documents/;
+
+export function isBrowserVisibleProjectCreateResponse(
+  response: Pick<Response, "url" | "request" | "ok">,
+): boolean {
+  return (
+    response.request().method() === "POST" &&
+    new URL(response.url()).pathname === "/api/projects" &&
+    response.ok()
+  );
+}
 
 export async function signInAsJourneyUser(page: Page, baseURL: string): Promise<AuthObservation> {
   const observation = observeAuth(page, baseURL);
@@ -39,7 +49,7 @@ export async function createProjectThroughUi(
   await expect(createButton).toBeEnabled({ timeout: 15_000 });
 
   const created = page.waitForResponse(
-    (response) => response.request().method() === "POST" && /\/v1\/projects\/?$/.test(new URL(response.url()).pathname),
+    isBrowserVisibleProjectCreateResponse,
     { timeout: 60_000 },
   );
   await createButton.click();
