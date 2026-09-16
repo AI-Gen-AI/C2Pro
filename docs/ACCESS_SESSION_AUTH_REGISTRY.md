@@ -1,8 +1,9 @@
 # C2Pro — Access, Session & Authentication Companion
 
 **Status:** Current governance companion  
-**Version:** 1.0.0  
+**Version:** 1.1.0  
 **Created:** 2026-09-16  
+**Last Updated:** 2026-09-16  
 **Scope:** Public C2Pro repository  
 
 > This is the **sanitized C2Pro companion** to the internal AI-Gen operational access/session/authentication registry. It intentionally excludes internal account details, credential metadata, provider scopes, private filesystem topology and secret-adjacent operational data.
@@ -22,12 +23,19 @@ The internal cross-project source of truth is maintained by AI-Gen Agent OS. Thi
 ## 2. Core invariant
 
 ```text
-documented capability != policy permission != current authorization
+technical capability != profile role != policy permission != current authorization
 ```
 
 A tool, user, session or agent being technically capable of performing an action does not authorize that action.
 
-Before any mutation, the effective identity, target, repository state, authentication mode and applicable approval gate must all be established independently.
+Before any mutation, the effective identity, active profile role, target, repository state, authentication mode and applicable approval gate must all be established independently.
+
+An action may proceed only when it lies inside the intersection of:
+
+1. the profile's verified technical capability;
+2. the profile's assigned operational role;
+3. the applicable governance/policy permission;
+4. explicit authorization for the current task.
 
 ---
 
@@ -37,13 +45,39 @@ C2Pro operations SHOULD preserve these conceptual roles even when implementation
 
 | Role | Responsibility | Default posture |
 |---|---|---|
-| Custodian / administrator | Holds or authorizes privileged provider access | Human-controlled; not a generic worker |
-| Code worker | Performs bounded repository work | Least privilege; task-scoped |
-| Independent reviewer | Reviews evidence/diffs independently | Read-only by default |
+| Custodian / administrator | Holds or authorizes privileged provider access and brokers bounded delegation | Human-controlled; not a generic worker |
+| Code worker | Performs bounded repository implementation and local qualification | Least privilege; task/worktree-scoped |
+| Independent reviewer | Reviews frozen evidence/diffs independently | Read-only by default |
 | Merger / release authority | Accepts and integrates approved work | Separate explicit gate |
 | Runtime / deployment principal | Operates product infrastructure | Separate from developer/reviewer identity |
 
-A role change must be explicit. Reviewer identity must not silently become author/worker identity.
+A role change must be explicit. Reviewer identity must not silently become author/worker identity, and worker identity must not silently become merger/release authority.
+
+### 3.1 Profile contract versus Unix/provider capability
+
+A Unix account, CLI login or provider token does not define the role by itself.
+
+Examples of the intended separation:
+
+- an administrator may technically be able to edit code but SHOULD route implementation through the bounded worker profile;
+- a code worker may be allowed to edit/test/commit locally while having no persistent remote GitHub authentication;
+- a reviewer may have a valid model/provider login but remain prohibited from changing the worker's code or pushing it;
+- a merger/release authority may accept work but should not be treated as its independent reviewer merely because it can access the repository.
+
+The exact internal OS usernames, credential state and provider mapping are maintained only in the private AI-Gen registry. This public repository documents the invariant, not the internal inventory.
+
+### 3.2 Role switching
+
+Switching execution identity is a security boundary. It does not automatically transfer:
+
+- HOME;
+- provider authentication;
+- repository/worktree access;
+- secrets;
+- policy authority;
+- task authorization.
+
+Every role transition must re-establish the target profile's own execution and authentication context.
 
 ---
 
@@ -52,6 +86,7 @@ A role change must be explicit. Reviewer identity must not silently become autho
 Every privileged or long-running C2Pro session must be able to establish, at minimum:
 
 - effective execution identity;
+- active profile role;
 - effective HOME/runtime domain;
 - current working directory;
 - repository/worktree;
@@ -73,7 +108,7 @@ Do not solve an identity-boundary failure by broadly weakening filesystem permis
 
 Preferred response to a boundary mismatch:
 
-1. classify the effective identity;
+1. classify the effective identity and role;
 2. classify worktree ownership/access;
 3. run the operation under the correct identity or use a bounded evidence-transfer pattern;
 4. preserve least privilege.
@@ -88,6 +123,8 @@ Reusable provider/session authentication intentionally stored under an approved 
 
 It requires explicit ownership, least-privilege review, protected storage and a known revoke/rotate path.
 
+Persistent authentication belonging to one profile must not be copied into another profile merely to make an operation convenient.
+
 ### 6.2 Ephemeral delegation
 
 A credential or authorization capability is made available only for one bounded operation and then removed.
@@ -96,13 +133,15 @@ Any ephemeral delegation must satisfy all of the following:
 
 - explicit authorization;
 - known source/custodian;
-- known target identity;
+- known target identity and role;
 - frozen destination/action;
 - no secret printed or logged;
 - no persistence in Git config, remote URL, shell profile, evidence file or repository;
 - post-action verification;
 - credential cleared immediately after use;
 - persistent safety barriers remain unchanged unless their modification was separately approved.
+
+Ephemeral delegation transfers only the minimum technical capability required for that action. It does **not** transfer the custodian's broader role or authority.
 
 ### 6.3 Session-only authentication
 
@@ -118,13 +157,14 @@ Such a barrier is a security control, not a defect.
 
 A controlled push must be fail-closed and SHOULD establish:
 
+- exact worker identity/profile;
 - exact local commit/ref;
 - clean/frozen local state;
 - remote base/CAS state;
 - destination branch/ref;
 - lease/precondition semantics;
 - one bounded push attempt where specified;
-- explicit authentication source;
+- explicit authentication source and persistence class;
 - post-push remote SHA verification;
 - unchanged/restored persistent push barrier.
 
@@ -148,6 +188,8 @@ Review evidence should bind, where applicable:
 - immutable verdict gate.
 
 A reviewer `PASS` only satisfies the review gate defined for that task. It does not independently authorize commit, push, PR, merge, deployment or Sonar mutation.
+
+The reviewer must not silently mutate the worker's artefact as part of the same independent-review session.
 
 ---
 
@@ -187,6 +229,7 @@ Before a privileged repository operation, a session SHOULD establish equivalent 
 
 ```bash
 whoami
+id
 printf 'HOME=%s\nPWD=%s\n' "$HOME" "$PWD"
 git rev-parse --show-toplevel 2>/dev/null || true
 git branch --show-current 2>/dev/null || true
@@ -204,6 +247,7 @@ Provider authentication should be verified with status/account metadata commands
 Stop the mutation and classify the gap when any of these is unknown or inconsistent:
 
 - effective identity;
+- active profile role;
 - target worktree/repository;
 - branch/ref;
 - expected local state;
@@ -223,6 +267,7 @@ Stop the mutation and classify the gap when any of these is unknown or inconsist
 Reverify and update the internal AI-Gen registry when:
 
 - execution identities change;
+- a profile role changes;
 - HOME/CWD/worktree ownership changes;
 - authentication mechanism changes;
 - credentials rotate or are revoked;
@@ -238,12 +283,12 @@ This public companion should change only when the **product-safe invariant or op
 
 ## 14. Cross-project governance
 
-AI-Gen Agent OS owns the detailed internal registry of operational identities, credential classes and session capabilities. C2Pro owns product-local authorization, repository and release gates.
+AI-Gen Agent OS owns the detailed internal registry of operational identities, profile roles, credential classes and session capabilities. C2Pro owns product-local authorization, repository and release gates.
 
 Cross-project execution must preserve:
 
 - least privilege;
-- separation of worker/reviewer/merger responsibilities;
+- separation of administrator/custodian, worker, reviewer and merger responsibilities;
 - explicit HITL for high-risk actions;
 - product-specific authorization boundaries;
 - fail-closed mutation gates;
