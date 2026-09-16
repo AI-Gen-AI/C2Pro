@@ -12,6 +12,11 @@ import { EvidenceTemplateDialog } from "@/components/features/evidence/EvidenceT
 import { EvidenceWorkspace } from "@/components/features/evidence/EvidenceWorkspace";
 import { type PdfHighlight } from "@/components/features/evidence/PdfEvidenceViewer";
 import {
+  resolveEvidenceAddress,
+  sourceEvidenceClausesFromDocumentDetail,
+  type EvidenceTargetType,
+} from "@/components/features/evidence/evidence-addressability";
+import {
   EVIDENCE_TEMPLATES,
   downloadBlob,
   escapeXml,
@@ -36,7 +41,25 @@ import {
   useResolveAlertApiV1AlertsAlertIdResolvePost,
   useReviewAlertApiV1AlertsAlertIdReviewPost,
 } from "@/lib/api/generated/alerts/alerts";
+import { useGetDocumentEndpointApiV1DocumentsDocumentIdGet } from "@/lib/api/generated/documents/documents";
 import type { AlertResponse as BackendAlertResponse } from "@/types/backend";
+
+function semanticTargetType(entityType: string): EvidenceTargetType {
+  switch (entityType.toLowerCase()) {
+    case "stakeholder":
+      return "STAKEHOLDER";
+    case "raci":
+      return "RACI";
+    case "wbs":
+      return "WBS";
+    case "clause":
+      return "CLAUSE";
+    case "change":
+      return "CHANGE";
+    default:
+      return "OTHER";
+  }
+}
 
 export default function EvidencePage() {
   const { id } = useParams<{ id: string }>();
@@ -122,11 +145,67 @@ export default function EvidencePage() {
   const {
     explanation: relationshipExplanation,
   } = useDocumentRelationshipExplanation(selectedDocumentId);
+  const shouldResolveSourceEvidence = Boolean(
+    selectedDocumentId &&
+      requestedDocumentId === selectedDocumentId &&
+      requestedHighlightId,
+  );
+  const {
+    data: documentDetail,
+    isLoading: documentDetailLoading,
+  } = useGetDocumentEndpointApiV1DocumentsDocumentIdGet(
+    selectedDocumentId ?? "",
+    { query: { enabled: shouldResolveSourceEvidence } },
+  );
   const [alertsState, setAlertsState] = useState(alerts);
   const [actionError, setActionError] = useState<string | null>(null);
   const reviewResource = useReviewResourceApiV1ApprovalsResourceTypeResourceIdPatch();
   const reviewProjectAlert = useReviewAlertApiV1AlertsAlertIdReviewPost();
   const resolveProjectAlert = useResolveAlertApiV1AlertsAlertIdResolvePost();
+
+  const sourceClauses = useMemo(
+    () => sourceEvidenceClausesFromDocumentDetail(documentDetail?.clauses),
+    [documentDetail?.clauses],
+  );
+  const semanticEvidenceTargets = useMemo(
+    () => [
+      ...apiEntities.map((entity) => ({
+        id: entity.id,
+        label: entity.text,
+        type: semanticTargetType(entity.type),
+      })),
+      ...alertsState.map((alert) => ({
+        id: alert.id,
+        label: alert.title,
+        type: "ALERT" as const,
+      })),
+    ],
+    [alertsState, apiEntities],
+  );
+  const requestedHighlightKey =
+    requestedDocumentId && requestedHighlightId
+      ? `${requestedDocumentId}:${requestedHighlightId}`
+      : null;
+  const requestedEvidenceResolution = useMemo(() => {
+    if (
+      !requestedHighlightId ||
+      selectedDocumentId !== requestedDocumentId
+    ) {
+      return null;
+    }
+
+    return resolveEvidenceAddress({
+      evidenceId: requestedHighlightId,
+      semanticTargets: semanticEvidenceTargets,
+      sourceClauses,
+    });
+  }, [
+    requestedDocumentId,
+    requestedHighlightId,
+    selectedDocumentId,
+    semanticEvidenceTargets,
+    sourceClauses,
+  ]);
 
   const highlights = useMemo<PdfHighlight[]>(() => {
     const mappedEntityHighlights: PdfHighlight[] = entityHighlights.map(
@@ -162,8 +241,26 @@ export default function EvidencePage() {
       ];
     });
 
-    return [...mappedEntityHighlights, ...alertHighlights];
-  }, [apiEntities, entityHighlights, alertsState]);
+    const sourceClauseHighlight =
+      requestedEvidenceResolution?.kind === "raw-clause"
+        ? [
+            {
+              id: `source-clause-${requestedEvidenceResolution.target.id}`,
+              clauseId: requestedEvidenceResolution.target.id,
+              page: requestedEvidenceResolution.target.page ?? 1,
+              text: requestedEvidenceResolution.target.label,
+              severity: "low" as const,
+            },
+          ]
+        : [];
+
+    return [...mappedEntityHighlights, ...alertHighlights, ...sourceClauseHighlight];
+  }, [
+    apiEntities,
+    entityHighlights,
+    alertsState,
+    requestedEvidenceResolution,
+  ]);
 
   const activeHighlightId = useMemo(() => {
     if (!activeEntityId) {
@@ -248,31 +345,38 @@ export default function EvidencePage() {
     [alertsState, entities],
   );
 
-  // Health → Evidence: activate the linked clause once its document's evidence has loaded.
-  const requestedHighlightKey =
-    requestedDocumentId && requestedHighlightId
-      ? `${requestedDocumentId}:${requestedHighlightId}`
-      : null;
+  // Health → Evidence: activate the linked target once semantic and source evidence load.
   const [appliedHighlightKey, setAppliedHighlightKey] = useState<string | null>(null);
-  const requestedHighlightFound =
-    Boolean(requestedHighlightId) &&
-    (entities.some((entity) => entity.id === requestedHighlightId) ||
-      alertsState.some((alert) => alert.id === requestedHighlightId));
-
   useEffect(() => {
     if (!requestedHighlightKey || appliedHighlightKey === requestedHighlightKey) return;
-    if (selectedDocumentId !== requestedDocumentId || entitiesLoading) return;
-    if (requestedHighlightFound && requestedHighlightId) {
+    if (
+      selectedDocumentId !== requestedDocumentId ||
+      entitiesLoading ||
+      alertsLoading ||
+      documentDetailLoading
+    ) {
+      return;
+    }
+    if (requestedEvidenceResolution?.kind === "semantic" && requestedHighlightId) {
       syncPanelSelection(requestedHighlightId);
+      setAppliedHighlightKey(requestedHighlightKey);
+    } else if (requestedEvidenceResolution?.kind === "raw-clause") {
+      setActiveEntityId(requestedEvidenceResolution.target.id);
+      setActivePanelTab("search");
+      setAppliedHighlightKey(requestedHighlightKey);
+    } else if (requestedEvidenceResolution?.kind === "document-fallback") {
+      setActiveEntityId(null);
       setAppliedHighlightKey(requestedHighlightKey);
     }
   }, [
     appliedHighlightKey,
+    alertsLoading,
+    documentDetailLoading,
     entitiesLoading,
     requestedDocumentId,
-    requestedHighlightFound,
     requestedHighlightId,
     requestedHighlightKey,
+    requestedEvidenceResolution,
     selectedDocumentId,
     syncPanelSelection,
   ]);
@@ -287,7 +391,16 @@ export default function EvidencePage() {
     selectedDocumentId === requestedDocumentId &&
     !entitiesLoading &&
     !alertsLoading &&
-    !requestedHighlightFound;
+    !documentDetailLoading &&
+    requestedEvidenceResolution?.kind === "unresolved";
+  const requestedSourceClause =
+    requestedEvidenceResolution?.kind === "raw-clause"
+      ? requestedEvidenceResolution.target
+      : null;
+  const requestedDocumentFallback =
+    requestedEvidenceResolution?.kind === "document-fallback"
+      ? requestedEvidenceResolution.target
+      : null;
 
   const handleApproveEntity = useCallback(
     async (entityId: string, note?: string) => {
@@ -714,6 +827,18 @@ export default function EvidencePage() {
         <Alert data-testid="evidence-link-unavailable">
           <AlertDescription>
             The linked evidence was not found in this document. Nothing else was selected.
+          </AlertDescription>
+        </Alert>
+      ) : requestedSourceClause ? (
+        <Alert data-testid="evidence-link-source-clause">
+          <AlertDescription>
+            Showing source clause {requestedSourceClause.clauseCode ?? requestedSourceClause.id} from the linked document.
+          </AlertDescription>
+        </Alert>
+      ) : requestedDocumentFallback ? (
+        <Alert data-testid="evidence-link-document-fallback">
+          <AlertDescription>
+            The linked source evidence has no resolvable page span. Showing its source document instead.
           </AlertDescription>
         </Alert>
       ) : null}
