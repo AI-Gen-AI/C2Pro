@@ -62,22 +62,29 @@ Inspection of current `main` identified the local storage fallback and revision 
 - `upload_bytes()` creates parent directories and uses `Path.write_bytes(data)`, which replaces/truncates the destination rather than appending to it.
 - Current upload/re-upload use cases generate revision blob names from a SHA-256 of `file_content`, using keys of the form `revisions/<sha256>.<ext>`.
 
-This narrows the investigation:
+The September 13 `overnight-20260912-gemini` worktree was then inspected. Its document use cases implement the exact scoped namespace observed on disk:
 
-1. The oversized artifacts cannot be explained by the current `upload_bytes()` implementation simply appending the same payload repeatedly.
-2. The observed artifact paths were tenant/project/document-scoped (`tenants/.../projects/.../documents/.../revisions/...`), while the current `main` use cases pass a relative `revisions/<sha256>.<ext>` key to the local storage adapter.
-3. Therefore the artifacts may have been produced by a different code revision, a test/verification harness, or a scoped-storage wrapper active in the September 13 development worktree rather than by the exact current `main` path.
+`tenants/<tenant_id>/projects/<project_id>/documents/<document_id>/revisions/<sha256>.<ext>`
 
-These are evidence-backed constraints, not yet a root-cause conclusion.
+In that worktree, initial upload computes `file_hash = sha256(content_bytes)`, builds the scoped `blob_key`, resets the upload stream to position zero, and passes the stream plus that key to `storage_service.upload_file(...)`. The re-upload path builds the same scoped form and persists through `upload_bytes(...)` when the blob does not already exist.
+
+This materially narrows the investigation:
+
+1. The path shape of the oversized artifacts is no longer unexplained: it is directly implemented in the September 13 development worktree.
+2. The current `main` storage path is therefore not representative of the code family active when the files were created.
+3. The two different files sharing the same digest-like filename while having different byte sizes remains inconsistent with a normal immutable content-addressed write. Assuming no SHA-256 collision, either the destination was mutated after the digest was chosen, the writer did not truncate/replace as expected, or a test/harness supplied or modified data in a way that broke the hash-to-bytes invariant.
+4. This still does not prove which process or exact storage implementation performed the growth; the producer must be tied to the 2026-09-13 19:06–19:15 UTC execution window before repair.
+
+The retained shell history also points to a Codex session from 2026-09-13 and earlier forensic commands targeting the exact digest, the two tenant IDs, the durability-verification script, and the test payload text `Revision A content - Durable document plane verification`. Those references are useful provenance leads, but shell history alone is not proof that the referenced session created the artifacts.
 
 ## Engineering follow-up
 
 Proceed with root-cause investigation before making a code change:
 
-- Identify the exact commit/worktree/process that created the two files on 2026-09-13 around 19:06–19:15 UTC.
-- Inspect the P0b durability verification path and any scoped-storage implementation that builds tenant/project/document revision paths.
-- Reconstruct the write loop and establish whether the size growth came from generated test payload size, repeated concatenation before `upload_bytes()`, mutation of an already named content-addressed artifact, or another producer.
-- Compare the producer's storage implementation with current `main`.
+- Identify the exact process/session and storage adapter that wrote the two files on 2026-09-13 around 19:06–19:15 UTC.
+- Inspect the September 13 worktree's `LocalFileStorageService`/storage implementation and determine whether `upload_file` truncates, replaces, appends, or otherwise reuses an existing destination.
+- Inspect the P0b durability verification path and the Codex session records around the file mtimes, with bounded line-by-line searches rather than recursive full-tree scans.
+- Reconstruct the data flow from test payload -> `UploadFile`/bytes -> hash -> scoped key -> storage writer, and establish where the hash-to-bytes invariant can diverge.
 - Once the producer is known, reproduce the behaviour with the smallest failing test or controlled script possible.
 - Apply one root-cause fix at a time and add regression coverage before introducing cleanup/monitoring mechanisms.
 - Treat retention or temporary-storage limits as defence-in-depth, not as a substitute for fixing an unbounded write path if one is confirmed.
