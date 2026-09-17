@@ -109,6 +109,21 @@ Consequences:
 
 A bounded search of the previously suspected Codex session returned `MATCHES=0` for the exact digest, tenant IDs, payload text and durability script name. That specific Codex session is therefore not supported as the producer by the retained session evidence checked so far. The `overnight-20260912-gemini` worktree name and local Gemini state remain relevant provenance leads.
 
+## Strong repeated-payload signature
+
+The two anomalous file sizes are not merely large; both are exact integer multiples of the 56-byte Revision A payload size:
+
+- `27,334,097,224 / 56 = 488,108,879`
+- `26,389,299,104 / 56 = 471,237,484`
+
+The remainders are zero in both cases.
+
+This is highly unlikely to be an incidental size relationship. Together with the filename being the SHA-256 of that same 56-byte payload, it strongly supports a runaway repeated-read/repeated-write mechanism involving Revision A rather than arbitrary later corruption.
+
+One concrete mechanism capable of producing this signature is a stream-like test double whose `read()` returns the same 56-byte payload on every call and never returns `b""` at EOF, when consumed by a loop such as `shutil.copyfileobj(...)`. The current script avoids that failure because `storage_service.upload_file(...)` receives `fake_file.file`, an `io.BytesIO(content_a)` that reaches EOF normally. However, because the script is untracked, an earlier version could have wired the fake object or another non-terminating reader directly into the storage copy path.
+
+This remains a strong hypothesis rather than final proof because the oversized files were deleted before their complete byte pattern could be inspected. The next forensic step should therefore look specifically for historical script/test-double variants in which the storage source's `read()` did not terminate at EOF.
+
 ## Gemini execution evidence and script provenance
 
 The worktree was confirmed at:
@@ -141,8 +156,9 @@ This is a useful debugging pattern: when an untracked harness later passes, pres
 
 Proceed with root-cause investigation before making a code change:
 
-- Recover bounded Gemini/agent records specifically around 2026-09-13 18:55–19:20 UTC and extract only commands/file edits involving the durability verifier, local storage, upload/reupload paths or `/tmp/c2pro-uploads`.
+- Recover bounded Gemini/agent records specifically around 2026-09-13 18:55–19:20 UTC and extract only commands/file edits involving the durability verifier, local storage, upload/reupload paths, `FakeFile`, `_async_read`, `copyfileobj`, or `/tmp/c2pro-uploads`.
 - Capture the untracked script's filesystem birth/mtime/ctime. If its birth or modification time is later than the anomalous mtimes, the current script is definitively not the producer version.
+- Look specifically for an earlier fake stream/test double whose `read()` can return Revision A indefinitely instead of reaching EOF.
 - Inspect `get_storage_service()` and any wrapper/dependency-injection path active in that worktree to prove which concrete storage implementation the earlier execution received.
 - Check Git/worktree state and file history for `local_file_storage_service.py` at the artifact creation window rather than assuming today's worktree contents are historical truth.
 - Reconstruct the data flow from test payload -> `UploadFile`/bytes -> hash -> scoped key -> concrete storage writer -> later mutations.
