@@ -109,14 +109,41 @@ Consequences:
 
 A bounded search of the previously suspected Codex session returned `MATCHES=0` for the exact digest, tenant IDs, payload text and durability script name. That specific Codex session is therefore not supported as the producer by the retained session evidence checked so far. The `overnight-20260912-gemini` worktree name and local Gemini state remain relevant provenance leads.
 
+## Gemini execution evidence and script provenance
+
+The worktree was confirmed at:
+
+- HEAD `09a2e58bd744c06f41ee49a53ad9af31190fdd17`
+- branch `feat/product-durable-document-plane`
+- `apps/api/scripts/verify_p0b_durability_revisions.py` is **untracked** in the worktree.
+
+This is an important evidence limitation: Git cannot establish which version of that script existed at the 19:06–19:15 UTC oversized-file creation window. The current untracked file must not be treated as historical execution truth.
+
+A retained Gemini session does prove a later execution of the durability verifier. Gemini invoked:
+
+`STORAGE_PROVIDER=local apps/api/.venv/bin/python3 apps/api/scripts/verify_p0b_durability_revisions.py`
+
+The later run logged the local-storage fallback to `/tmp/c2pro-uploads`, created a normal Revision A object named with the same digest `43fb0c...7106.pdf`, then created Revision B and C objects under their respective content hashes. All three hash/content durability assertions passed.
+
+The command output timestamps place this successful run around `2026-09-13 22:30 UTC`, more than three hours after the two anomalous files' mtimes (`19:06` and `19:14 UTC`). Its tenant/project/document identifiers also differ from the anomalous artifact paths.
+
+Therefore:
+
+1. The later Gemini run is a **working control example**, not the producer of the two oversized artifacts.
+2. It demonstrates that the then-current visible script + local-storage path could complete normally and preserve the hash-to-bytes invariant.
+3. It does not prove that the same untracked script contents were present during the earlier anomalous executions.
+4. The forensic target is now specifically the earlier Gemini/agent activity around `18:55–19:20 UTC`, not the later 22:30 successful verification.
+5. A subsequent broad pytest run in the same Gemini session produced database/test-environment failures (missing `nonsuperuser` role and tests targeting PostgreSQL on 5432 while the disposable test database was on 5433). Those failures are separate from the oversized-file creation unless new evidence links them.
+
+This is a useful debugging pattern: when an untracked harness later passes, preserve it as a control but do not retroactively assume it matches the failing historical harness.
+
 ## Engineering follow-up
 
 Proceed with root-cause investigation before making a code change:
 
-- Determine whether `verify_p0b_durability_revisions.py` was tracked or generated/untracked at execution time; if untracked, the current file must not be assumed to equal the version executed on September 13.
-- Capture the script's `birth`, `mtime`, `ctime`, Git tracking state and any Gemini/session references to the exact payload, digest or script path.
-- Search the bounded Gemini session/state around 2026-09-13 19:00–19:20 UTC for creation or execution of the durability script and storage changes.
-- Inspect `get_storage_service()` and any wrapper/dependency-injection path active in that worktree to prove which concrete storage implementation the script actually received.
+- Recover bounded Gemini/agent records specifically around 2026-09-13 18:55–19:20 UTC and extract only commands/file edits involving the durability verifier, local storage, upload/reupload paths or `/tmp/c2pro-uploads`.
+- Capture the untracked script's filesystem birth/mtime/ctime. If its birth or modification time is later than the anomalous mtimes, the current script is definitively not the producer version.
+- Inspect `get_storage_service()` and any wrapper/dependency-injection path active in that worktree to prove which concrete storage implementation the earlier execution received.
 - Check Git/worktree state and file history for `local_file_storage_service.py` at the artifact creation window rather than assuming today's worktree contents are historical truth.
 - Reconstruct the data flow from test payload -> `UploadFile`/bytes -> hash -> scoped key -> concrete storage writer -> later mutations.
 - Once the producer is known, reproduce the behaviour with the smallest failing test or controlled script possible.
