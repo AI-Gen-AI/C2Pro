@@ -72,19 +72,53 @@ This materially narrows the investigation:
 
 1. The path shape of the oversized artifacts is no longer unexplained: it is directly implemented in the September 13 development worktree.
 2. The current `main` storage path is therefore not representative of the code family active when the files were created.
-3. The two different files sharing the same digest-like filename while having different byte sizes remains inconsistent with a normal immutable content-addressed write. Assuming no SHA-256 collision, either the destination was mutated after the digest was chosen, the writer did not truncate/replace as expected, or a test/harness supplied or modified data in a way that broke the hash-to-bytes invariant.
-4. This still does not prove which process or exact storage implementation performed the growth; the producer must be tied to the 2026-09-13 19:06–19:15 UTC execution window before repair.
+3. The two different files sharing the same digest-like filename while having different byte sizes remains inconsistent with a normal immutable content-addressed write.
+4. This still does not prove which process or exact execution-time code produced the growth; the producer must be tied to the 2026-09-13 19:06–19:15 UTC execution window before repair.
 
-The retained shell history also points to a Codex session from 2026-09-13 and earlier forensic commands targeting the exact digest, the two tenant IDs, the durability-verification script, and the test payload text `Revision A content - Durable document plane verification`. Those references are useful provenance leads, but shell history alone is not proof that the referenced session created the artifacts.
+## Critical narrowing: Revision A hash and local writer
+
+Further inspection of `apps/api/scripts/verify_p0b_durability_revisions.py` and the September 13 local storage adapter produced a stronger constraint.
+
+The durability script defines:
+
+`content_a = b"Revision A content - Durable document plane verification"`
+
+This payload is exactly 56 bytes. Its SHA-256 is:
+
+`43fb0c19d2f86d42b22d794d03062a6cfbd3a6592ada26bbb05aae52d12a7106`
+
+That digest is exactly the filename shared by both oversized artifacts. Therefore the revision key was derived from the small synthetic Revision A payload, not from the final 25–26 GiB file contents.
+
+The same worktree's `LocalFileStorageService` implements initial upload as:
+
+- `with open(dest, "wb") as f:`
+- `shutil.copyfileobj(file_content, f)`
+
+and re-upload as `dest.write_bytes(data)`.
+
+Both mechanisms replace/truncate the destination rather than append. In the currently inspected durability script, the initial upload passes `fake_file.file = io.BytesIO(content_a)`, so the source stream for Revision A is also only 56 bytes.
+
+Consequences:
+
+1. A normal execution of the currently inspected durability script together with the currently inspected local storage adapter cannot by itself produce a 25–26 GiB Revision A object.
+2. Simple repeated append in `LocalFileStorageService` is ruled out for this code state.
+3. The hash-to-bytes invariant definitely diverged: a key naming the SHA-256 of a 56-byte payload ended up associated with tens of gigabytes of bytes.
+4. Because two different tenant/project/document paths contain the same Revision A digest, the evidence is consistent with at least two separate synthetic durability runs or equivalent producers, but the exact process is not yet proven.
+5. Remaining plausible classes of explanation are now narrower: execution-time code differed from the currently inspected files, another writer mutated the destination after creation, or a different storage/service wrapper intercepted the operation.
+6. `path_a.read_bytes()` in the durability verifier is read-only and may explain severe memory pressure if invoked after a file had already become huge, but it cannot explain creation of the oversized file.
+
+A bounded search of the previously suspected Codex session returned `MATCHES=0` for the exact digest, tenant IDs, payload text and durability script name. That specific Codex session is therefore not supported as the producer by the retained session evidence checked so far. The `overnight-20260912-gemini` worktree name and local Gemini state remain relevant provenance leads.
 
 ## Engineering follow-up
 
 Proceed with root-cause investigation before making a code change:
 
-- Identify the exact process/session and storage adapter that wrote the two files on 2026-09-13 around 19:06–19:15 UTC.
-- Inspect the September 13 worktree's `LocalFileStorageService`/storage implementation and determine whether `upload_file` truncates, replaces, appends, or otherwise reuses an existing destination.
-- Inspect the P0b durability verification path and the Codex session records around the file mtimes, with bounded line-by-line searches rather than recursive full-tree scans.
-- Reconstruct the data flow from test payload -> `UploadFile`/bytes -> hash -> scoped key -> storage writer, and establish where the hash-to-bytes invariant can diverge.
+- Determine whether `verify_p0b_durability_revisions.py` was tracked or generated/untracked at execution time; if untracked, the current file must not be assumed to equal the version executed on September 13.
+- Capture the script's `birth`, `mtime`, `ctime`, Git tracking state and any Gemini/session references to the exact payload, digest or script path.
+- Search the bounded Gemini session/state around 2026-09-13 19:00–19:20 UTC for creation or execution of the durability script and storage changes.
+- Inspect `get_storage_service()` and any wrapper/dependency-injection path active in that worktree to prove which concrete storage implementation the script actually received.
+- Check Git/worktree state and file history for `local_file_storage_service.py` at the artifact creation window rather than assuming today's worktree contents are historical truth.
+- Reconstruct the data flow from test payload -> `UploadFile`/bytes -> hash -> scoped key -> concrete storage writer -> later mutations.
 - Once the producer is known, reproduce the behaviour with the smallest failing test or controlled script possible.
 - Apply one root-cause fix at a time and add regression coverage before introducing cleanup/monitoring mechanisms.
 - Treat retention or temporary-storage limits as defence-in-depth, not as a substitute for fixing an unbounded write path if one is confirmed.
