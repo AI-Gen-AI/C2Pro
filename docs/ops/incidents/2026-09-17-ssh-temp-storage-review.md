@@ -35,24 +35,50 @@ A key must not be deleted solely because it has no recent hit in retained authen
 
 ## Temporary-storage anomaly discovered during the review
 
-A size audit on 2026-09-17 found two temporary C2Pro revision artifacts under `/tmp/c2pro-uploads` with apparent sizes of approximately 26 GiB and 25 GiB. They belonged to different tenant/project/document paths but shared the same SHA-256-like revision filename:
+A size audit on 2026-09-17 found two temporary C2Pro revision artifacts under `/tmp/c2pro-uploads`:
+
+- 27,334,097,224 bytes (reported as ~26 GiB), mtime `2026-09-13 19:06:06 UTC`
+- 26,389,299,104 bytes (reported as ~25 GiB), mtime `2026-09-13 19:14:53 UTC`
+
+They belonged to different tenant/project/document paths but shared the same SHA-256-like revision filename:
 
 `43fb0c19d2f86d42b22d794d03062a6cfbd3a6592ada26bbb05aae52d12a7106.pdf`
 
-The two artifacts were timestamped only minutes apart on 2026-09-13.
+`du` and `du --apparent-size` both reported approximately the same sizes for each file, while `stat` showed allocated block counts consistent with the files consuming real disk blocks. This rules out the simple explanation that they were merely large sparse files.
 
-If the filename is intended to identify immutable final content, the same digest-like name combined with different apparent sizes is anomalous. This observation is evidence, not a proven root cause. Possible explanations such as repeated writes/appends, sparse-file behaviour, mutation after revision naming, or a test harness defect must be verified from the write path rather than assumed.
+No open handle was reported by the bounded `lsof` check. The two exact files were then removed successfully. Post-cleanup verification showed:
 
-Because the artifacts are under `/tmp`, cleanup should target the exact files after confirming that no process still has them open. A broad purge of `/tmp/c2pro-uploads` is not justified by this finding.
+- both target paths absent;
+- `/tmp/c2pro-uploads` reduced to approximately 748 KiB;
+- root filesystem usage reduced to approximately 90 GiB used / 297 GiB available (24%).
+
+This cleanup removed the immediate storage pressure but does not establish root cause.
+
+## Code-path evidence after cleanup
+
+Inspection of current `main` identified the local storage fallback and revision write path:
+
+- `LocalFileStorageService` falls back from `/app/uploads` to `${TMPDIR}/c2pro-uploads` when the preferred directory cannot be used.
+- `upload_bytes()` creates parent directories and uses `Path.write_bytes(data)`, which replaces/truncates the destination rather than appending to it.
+- Current upload/re-upload use cases generate revision blob names from a SHA-256 of `file_content`, using keys of the form `revisions/<sha256>.<ext>`.
+
+This narrows the investigation:
+
+1. The oversized artifacts cannot be explained by the current `upload_bytes()` implementation simply appending the same payload repeatedly.
+2. The observed artifact paths were tenant/project/document-scoped (`tenants/.../projects/.../documents/.../revisions/...`), while the current `main` use cases pass a relative `revisions/<sha256>.<ext>` key to the local storage adapter.
+3. Therefore the artifacts may have been produced by a different code revision, a test/verification harness, or a scoped-storage wrapper active in the September 13 development worktree rather than by the exact current `main` path.
+
+These are evidence-backed constraints, not yet a root-cause conclusion.
 
 ## Engineering follow-up
 
-The development investigation should proceed from the write path rather than from the symptom:
+Proceed with root-cause investigation before making a code change:
 
-- Reproduce the oversized-revision behaviour with the smallest failing test or controlled script possible.
-- Trace revision creation/writing and the durability verification path, including `apps/api/scripts/verify_p0b_durability_revisions.py` where relevant.
-- Verify whether the revision filename is defined as a content digest and whether revision objects are expected to be immutable after finalisation.
-- Assert bounded final size and, if applicable, digest/content consistency at the point a revision becomes durable.
+- Identify the exact commit/worktree/process that created the two files on 2026-09-13 around 19:06–19:15 UTC.
+- Inspect the P0b durability verification path and any scoped-storage implementation that builds tenant/project/document revision paths.
+- Reconstruct the write loop and establish whether the size growth came from generated test payload size, repeated concatenation before `upload_bytes()`, mutation of an already named content-addressed artifact, or another producer.
+- Compare the producer's storage implementation with current `main`.
+- Once the producer is known, reproduce the behaviour with the smallest failing test or controlled script possible.
 - Apply one root-cause fix at a time and add regression coverage before introducing cleanup/monitoring mechanisms.
 - Treat retention or temporary-storage limits as defence-in-depth, not as a substitute for fixing an unbounded write path if one is confirmed.
 
