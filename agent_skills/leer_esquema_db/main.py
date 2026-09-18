@@ -58,18 +58,30 @@ def _extraer_de_migracion(filepath: Path) -> list[dict]:
     tablas = []
     try:
         content = filepath.read_text(encoding="utf-8")
-        create_pattern = re.compile(r"CREATE TABLE\s+(?:IF NOT EXISTS\s+)?(\w+)\s*\(([^;]*)\);")
+        create_pattern = re.compile(r"CREATE TABLE\s+(?:IF NOT EXISTS\s+)?(\w+)\s*\(")
 
-        for match in create_pattern.finditer(content):
+        for statement in content.split(";"):
+            match = create_pattern.search(statement)
+            if not match:
+                continue
+
+            body_and_close = statement[match.end():]
+            if not body_and_close.endswith(")"):
+                continue
+
             nombre = match.group(1)
-            columnas_raw = match.group(2)
+            columnas_raw = body_and_close[:-1]
             columnas = []
             for linea in columnas_raw.split("\n"):
                 linea = linea.strip().rstrip(",")
-                if linea and not linea.startswith(("--", "PRIMARY", "FOREIGN", "CONSTRAINT", "UNIQUE")):
-                    col_name = linea.split()[0].strip('"')
-                    if col_name:
-                        columnas.append(col_name)
+                if not linea or linea.startswith(
+                    ("--", "PRIMARY", "FOREIGN", "CONSTRAINT", "UNIQUE")
+                ):
+                    continue
+
+                col_name = linea.split()[0].strip('"')
+                if col_name:
+                    columnas.append(col_name)
             tablas.append({"nombre": nombre, "columnas": columnas})
     except Exception:
         pass
