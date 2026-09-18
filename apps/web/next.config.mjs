@@ -15,6 +15,10 @@ const nextConfig = {
   transpilePackages: ["react-pdf", "pdfjs-dist"],
   webpack: (config) => {
     config.resolve.alias.canvas = false;
+    config.resolve.alias["pdfjs-dist$"] = resolve(
+      __dirname,
+      "node_modules/pdfjs-dist/legacy/build/pdf.mjs",
+    );
     config.plugins.push(
       new webpack.IgnorePlugin({
         resourceRegExp: /__mocks__/,
