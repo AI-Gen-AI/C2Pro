@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import { Button } from '@/components/ui/button';
@@ -21,15 +20,7 @@ import {
   FileText,
 } from 'lucide-react';
 
-// Configure PDF.js worker (local mjs build for Next.js).
-// This resolves the worker from the app's own `pdfjs-dist`, so that package MUST
-// stay pinned to the exact version react-pdf imports as its API — PDF.js throws
-// on any API/worker version skew when a document opens (see TASK-QA-340 and
-// PDFViewer.worker-version.test.ts).
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+type ReactPdfModule = typeof import('react-pdf');
 
 export interface PDFViewerProps {
   /** URL or file path to the PDF document */
@@ -91,6 +82,7 @@ export function PDFViewer({
   maxScale = 3.0,
   zoomStep = 0.1,
 }: PDFViewerProps) {
+  const [reactPdfModule, setReactPdfModule] = useState<ReactPdfModule | null>(null);
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(initialPage);
   const [scale, setScale] = useState<number>(initialScale);
@@ -114,6 +106,35 @@ export function PDFViewer({
         : file,
     [file, httpHeaders],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void import('react-pdf')
+      .then((module) => {
+        // Configure the same local PDF.js worker before Document can render.
+        module.pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          'pdfjs-dist/build/pdf.worker.min.mjs',
+          import.meta.url,
+        ).toString();
+
+        if (!cancelled) {
+          setReactPdfModule(module);
+        }
+      })
+      .catch((loadError: unknown) => {
+        if (!cancelled) {
+          setError(
+            loadError instanceof Error ? loadError : new Error(String(loadError)),
+          );
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Reset to initial page when file changes
   useEffect(() => {
@@ -343,8 +364,17 @@ export function PDFViewer({
                 Documento no disponible.
               </p>
             </div>
+          ) : !reactPdfModule ? (
+            <div className="flex flex-col items-center gap-4 p-8">
+              <FileText className="h-16 w-16 text-muted-foreground animate-pulse" />
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-64" />
+                <Skeleton className="h-96 w-[600px]" />
+              </div>
+              <p className="text-sm text-muted-foreground">Loading PDF document...</p>
+            </div>
           ) : (
-            <Document
+            <reactPdfModule.Document
               file={documentFile}
               onLoadSuccess={onDocumentLoad}
               onLoadError={onDocumentError}
@@ -370,7 +400,7 @@ export function PDFViewer({
               className="pdf-document"
             >
               <div className="relative">
-                <Page
+                <reactPdfModule.Page
                   pageNumber={pageNumber}
                   scale={scale}
                   rotate={rotation}
@@ -411,7 +441,7 @@ export function PDFViewer({
                   />
                 )}
               </div>
-            </Document>
+            </reactPdfModule.Document>
           )}
         </div>
       </div>
