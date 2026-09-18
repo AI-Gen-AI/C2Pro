@@ -1332,7 +1332,7 @@ jobs:
               .replace(/([?&](?:token|key|secret|cookie|authorization)=)[^&\s]+/gi, "$1[REDACTED]");
           const writeEvidence = (name: string, value: unknown) => {
             mkdirSync(evidenceDir, { recursive: true });
-            writeFileSync(path.join(evidenceDir, name), `${JSON.stringify(value, null, 2)}\\n`, "utf8");
+            writeFileSync(path.join(evidenceDir, name), `${JSON.stringify(value, null, 2)}\n`, "utf8");
           };
           const relativePath = (url: string) => {
             const parsed = new URL(url);
@@ -1340,7 +1340,10 @@ jobs:
           };
 
           test.describe("D1F CI native product PDF viewer", () => {
-            test.describe.configure({ mode: "serial", timeout: 120_000 });
+            // Budget must exceed the sum of the inner waits (90s response +
+            // 30s viewer mount + 90s canvas raster), or the finally-block
+            // evidence is aborted before it is ever written.
+            test.describe.configure({ mode: "serial", timeout: 240_000 });
 
             test("reuses P0b's uploaded PDF through the native evidence viewer", async ({ page, baseURL }) => {
               const consoleErrors: string[] = [];
@@ -1399,7 +1402,7 @@ jobs:
                   completed: true,
                 };
                 expect(pdfResponse.status()).toBe(200);
-                expect(headers["content-type"] ?? "").toMatch(/application\\/pdf/i);
+                expect(headers["content-type"] ?? "").toMatch(/application\/pdf/i);
                 expect(body.byteLength).toBeGreaterThan(0);
 
                 await expect(page.locator(".pdf-document")).toBeVisible({ timeout: 30_000 });
@@ -1455,21 +1458,51 @@ jobs:
         run: |
           set -uo pipefail
           temp_spec="src/tests/e2e/d1f-p0b-single-document-health.spec.ts"
+          # Traces are deliberately NOT enabled. playwright.config.ts uses
+          # trace: "on-first-retry" with retries: 0, so none are produced.
+          # A trace captures raw network, including the live Clerk bearer and
+          # session cookies, and test-results/ is uploaded on failure.
           set +e
-          ./node_modules/.bin/playwright test "$temp_spec" --project=p0b-acceptance --trace=on
+          ./node_modules/.bin/playwright test "$temp_spec" --project=p0b-acceptance
           test_rc=$?
           set -e
           find test-results -type f -print 2>/dev/null | while read -r artifact; do
             cp --parents "$artifact" "$D1F_EVIDENCE_DIR" || true
           done
+          # Removed BEFORE the status snapshot, so repository-status-after.txt
+          # is real evidence that the runner tree is clean.  The always() step
+          # below is the safety net for a cancelled or aborted run.
           rm -f "$temp_spec"
           git status --porcelain=v1 > "$D1F_EVIDENCE_DIR/repository-status-after.txt"
+          # Never let evidence bookkeeping mask the qualification result.
           (
             cd "$D1F_EVIDENCE_DIR"
             find . -type f ! -name sha256sum.txt ! -name sha256sum-check.txt -print0 | sort -z | xargs -0 sha256sum > sha256sum.txt
             sha256sum -c sha256sum.txt > sha256sum-check.txt
-          )
+          ) || echo "::warning::D1F evidence checksum bookkeeping failed"
           exit "$test_rc"
+
+      # The generated spec is named so that the UNANCHORED p0b-acceptance
+      # testMatch selects it. That is also why it must never survive the job:
+      # a leftover copy would silently join the canonical P0b gate.
+      - name: Remove temporary D1F spec
+        if: always()
+        working-directory: apps/web
+        run: |
+          set -uo pipefail
+          rm -f src/tests/e2e/d1f-p0b-single-document-health.spec.ts
+          git status --porcelain=v1 -- src/tests/e2e
+
+      # Must be always(): on the success path nothing else uploads this
+      # directory, and the rendering evidence is the entire point of D1F.
+      - name: Upload D1F native PDF viewer evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: d1f-native-pdf-viewer-evidence
+          path: ${{ runner.temp }}/d1f-native-product-pdf-viewer-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
 
       # Diagnostic only -- never gates. When the journey fails, this says WHICH
       # link of the chain is missing (document / clauses / chunks / analysis /
