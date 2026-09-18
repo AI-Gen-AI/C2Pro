@@ -1,0 +1,115 @@
+schema: c2pro-evidence-reference-v1
+schema_version: 1
+work_id: C2PRO-DEV-03
+status: collecting
+references:
+  - kind: audit
+    locator: docs/architecture/development/c2pro-dev-03-principal-worker-readiness-runbook-v1.md
+    immutable: false
+    sha256: null
+    summary: DEV-03 qualification runbook and gated sequence.
+  - kind: audit
+    locator: validation/development/c2pro-dev-03-principal-worker-readiness-v1.yaml
+    immutable: false
+    sha256: null
+    summary: Machine-readable readiness state updated from normalized VPS evidence.
+  - kind: audit
+    locator: AI-Gen-AI/2SB@357029a580e360de4e92046bd7aa295b54d9c113:ai-gen-agent-os/docs/sdd/af-dev-01-governed-development-worker-execution-plane-v1.md
+    immutable: true
+    sha256: null
+    summary: AI-Gen AF-DEV execution-plane dependency and authority boundary.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24T10:58:57+00:00:C2PRO_DEV_03A1_A2
+    immutable: false
+    sha256: null
+    summary: Owner-executed non-secret host inventory: Ubuntu 24.04; 23 GiB RAM; 348 GiB free; git/bwrap/timeout/prlimit/python3/tmux present; node/npm/claude/codex absent from operator PATH; dedicated aigen-claude and aigen-codex identities exist.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:C2PRO_DEV_03A3_A4
+    immutable: false
+    sha256: null
+    summary: Dedicated-identity inspection: aigen-claude has private node/npm/npx and claude under ~/.local/bin plus ~/.claude state; aigen-codex has private codex under ~/.local/bin plus ~/.codex state and no Node runtime in PATH; both homes are mode 700 and principals have no observed shared supplementary aigen group.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:C2PRO_DEV_03A4_A5_1
+    immutable: false
+    sha256: null
+    summary: Provenance probe: Claude Code 2.1.237 resolves to the per-identity @anthropic-ai/claude-code native ELF binary with Node v24.19.0/npm 11.17.0; Codex CLI 0.148.0 resolves to its per-identity standalone static-pie binary. Exact binary hashes are normalized in the DEV-03 readiness record. Existing installations retained; no reinstall/update performed.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:C2PRO_DEV_03A4_AUTH_STATUS
+    immutable: false
+    sha256: null
+    summary: Non-secret auth status probe: Claude Code reports logged in through claude.ai/firstParty with Pro subscription; Codex reports logged in using ChatGPT. Email, organization identifiers and credential/session payloads are intentionally not recorded.
+  - kind: dependency
+    locator: AI-Gen-AI/2SB:MR-DEV-01C
+    immutable: false
+    sha256: null
+    summary: Remote authority check found no published MR-DEV-01C implementation/activation PR; AI-Gen main still records MR-DEV-01C as NEXT with live Development provider invocation closed. DEV-03B remains blocked until that gate explicitly opens.
+  - kind: dependency
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_LOCAL_INSPECTION
+    immutable: false
+    sha256: null
+    summary: AI-Gen local worktree feat/mr-dev-01c-direct-route-baseline-v1 is cleanly based on main 357029a with uncommitted MR-DEV-01C authorization/control changes. Local control marks MR-DEV-01C IN_PROGRESS, owner-authorized bounded direct-route qualification and one-shot live baseline conditionally authorized, max live provider invocations 1, selected_route_id null, and activation CLOSED_PENDING_EXACT_ROUTE_PREFLIGHT. No live provider invocation authority is inferred until that exact-route preflight closes.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_AUTH_VALIDATION
+    immutable: false
+    sha256: null
+    summary: Canonical unittest validation of the local MR-DEV-01C owner-qualification contract passed 7/7 tests and git diff --check passed. The contract authorizes one bounded read-only direct-route baseline only after exact-route preflight; provider invocation remains closed before that machine transition.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_PREFLIGHT_MATRIX
+    immutable: false
+    sha256: null
+    summary: Deterministic candidate matrix kept both routes fail-closed. Codex is blocked by PARTIAL qualification plus unresolved cost semantics; Claude is blocked by stale/degraded availability evidence plus unresolved cost semantics. No route was selected or activated.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_CLAUDE_NONINFERENCE_PREFLIGHT
+    immutable: false
+    sha256: null
+    summary: Claude non-inference preflight passed local health checks: authenticated first-party subscription session, Claude Code doctor returned rc=0 with no installation issues, no custom Anthropic base URL or model environment override was present, and no Claude settings model override was found. Sensitive account identifiers are intentionally excluded.
+  - kind: decision
+    locator: owner_decision:2026-08-24:C2PRO_CLAUDE_MODEL_PROFILE_POLICY_V1
+    immutable: false
+    sha256: null
+    summary: Owner approved role-and-risk-based Claude model profiles: Opus as default Orchestrator and material Claude review profile; Sonnet as normal implementation profile; Haiku for low-risk mechanical work only; Fable as exceptional long-horizon/escalation tier. File extension alone never selects a weaker model; governance, architecture and security documentation remains high-risk. Claude/Codex remain the two PRINCIPAL workers, material independent review must cross principal workers, and qualification of one Claude model profile never implicitly qualifies the other Claude profiles. Canonical machine-readable implementation is deferred to C2PRO-DEV-04 to avoid inflating the DEV-03 hot context.
+  - kind: decision
+    locator: owner_decision:2026-08-24:C2PRO_CODEX_MODEL_PROFILE_POLICY_V1
+    immutable: false
+    sha256: null
+    summary: Owner approved equivalent governed model profiling for Codex while preserving provider-specific semantics: Sol for principal independent review, architecture/security and highest-complexity work; Terra for normal implementation and routine review; Luna for low-risk mechanical/high-volume work. Reasoning effort is a separate routing dimension and model-profile qualification is independent; no Codex profile inherits qualification from another. Claude Opus remains the default Orchestrator; Codex Sol is the principal cross-provider reviewer/challenger. Canonical machine-readable implementation is deferred to C2PRO-DEV-04.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24T17:08:42Z:MR_DEV_01C_CLAUDE_SERVICE_PREFLIGHT
+    immutable: false
+    sha256: null
+    summary: Fresh external service preflight returned HTTP 200 and All Systems Operational; claude.ai, Claude API and Claude Code components were operational. No provider invocation occurred.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_EXACT_ROUTE_FREEZE
+    immutable: false
+    sha256: null
+    summary: Exact-route freeze selected CLAUDE_CODE/aigen-claude, DIRECT Anthropic first-party surface, frozen selector alias sonnet, no fallback, read-only analysis, no incremental spend authority and max one live provider invocation. Freeze validation passed 8/8 tests and git diff --check; live invocation remained closed.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_NEGATIVE_GATE_QUALIFICATION
+    immutable: false
+    sha256: null
+    summary: Non-operational route-authority qualification passed 20/20 MR-DEV-01C tests. The frozen Claude/Sonnet fixture passed all 16 hard gates only in fixture mode while remaining non-live; deliberate ineligible route, unregistered worker, budget violation and kill-switch probes were denied at G05, G02, G12 and G14 respectively. git diff --check passed.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_MINIMAL_LIVE_SANDBOX_PREFLIGHT
+    immutable: false
+    sha256: null
+    summary: Minimal Bubblewrap preflight under aigen-claude passed without model inference: claude auth status remained authenticated first-party, HTTPS/TLS to the Claude status endpoint returned 200, and .gitconfig, .npm, .cache, Claude backups/projects/sessions remained hidden. Only the Claude executable plus minimal read-only auth/state inputs were exposed; no prompt/provider inference was executed.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_ONE_SHOT_LIVE_EXECUTION_SEAM
+    immutable: false
+    sha256: null
+    summary: Additive MR-DEV-01C one-shot seam passed 28/28 tests and diff hygiene. Lease consumption is durable before subprocess spawn, workspace is required pristine/read-only, fallback/metered API/runtime/deploy authority remain false, and spawn/timeout failure cannot create an automatic retry. Final pre-arm review identified remaining provenance hardening: evidence artifact hashes must be verified against files, executed Claude binary hash must equal frozen provenance, and live session inputs must be canonical owner/mode constrained before any real lease is armed.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_PREARM_PROVENANCE_SNAPSHOT
+    immutable: false
+    sha256: null
+    summary: Pre-arm provenance snapshot passed with 28/28 MR-DEV-01C tests and git diff hygiene. Repository HEAD and origin/main both remained 357029a580e360de4e92046bd7aa295b54d9c113; authorization, exact-route freeze, live seam and qualification-test artifacts were SHA-256 captured, the seam compiled successfully, and live invocation remained unarmed. These hashes are an intermediate snapshot only because provenance hardening will intentionally change the seam before final arming.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_PREARM_PROVENANCE_HARDENING
+    immutable: false
+    sha256: null
+    summary: Provenance hardening passed 34/34 MR-DEV-01C tests, py_compile and diff hygiene. The one-shot seam now fail-closes on mutation of owner authorization, exact-route freeze, pre-arm decision or Claude binary, and on non-canonical/symlinked or incorrectly permissioned session inputs. Updated live seam SHA-256 is 2ed95b7f50052f1f8254201034e0b5ffd7f16e5e1cfb6f1bf6a57417147d2758; invocation remains unarmed.
+  - kind: audit
+    locator: owner_terminal_capture:2026-08-24:MR_DEV_01C_CLEAN_CLAUDE_WORKSPACE
+    immutable: false
+    sha256: null
+    summary: Dedicated Claude qualification workspace materialized at exact base 357029a580e360de4e92046bd7aa295b54d9c113 under the pre-existing canonical /srv/aigen/dev/claude/workspace root. Final verification passed: owner/group aigen-claude, mode 0700, no special directory bits, clean Git status, no remotes, no persistent safe.directory trust, sparse materialization exposes ai-gen-agent-os while unrelated 2SB top-level areas remain absent. Live Bubblewrap scope will be further minimized to ai-gen-agent-os only; no lease is armed and no provider inference has occurred.
