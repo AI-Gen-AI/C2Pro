@@ -19,6 +19,7 @@ def policy_ci_evidence(head_sha, *, build_status="success"):
             "target_branch": "main",
             "rulesets": [{
                 "id": 18843913,
+                "target": "branch",
                 "name": "test dynamic policy",
                 "enforcement": "active",
                 "rules": [{
@@ -35,6 +36,9 @@ def policy_ci_evidence(head_sha, *, build_status="success"):
             {"name": "secrets", "status": "success", "sha": head_sha, "run_id": 10, "attempt": 2, "integration_id": 15368},
             {"name": "codecov/patch", "status": "failure", "sha": head_sha, "run_id": 10, "attempt": 2,
              "classification": "ADVISORY_CHECK"},
+        ],
+        "workflow_runs": [
+            {"sha": head_sha, "run_id": 10, "attempt": 2, "status": "completed"},
         ],
         "current_run_id": 10,
         "current_attempt": 2,
@@ -1075,3 +1079,22 @@ def test_legacy_write_full_path_guard(mock_control_plane, valid_worker_result, m
         ci_evidence=ci_evidence,
         control_dir=mock_control_plane,
     )
+
+
+@pytest.mark.parametrize("workflow_runs", [None, [], [
+    {"sha": "old-head", "run_id": 10, "attempt": 2, "status": "completed"},
+]])
+def test_policy_requires_workflow_authority(mock_control_plane, valid_worker_result, workflow_runs):
+    """Green signals cannot replace matching authoritative workflow evidence."""
+    head = "7c3a8347a5bea0c28f2e540559bd515f9afd282a"
+    remote_evidence = {
+        "remote_head_sha": head, "pr_head_sha": head,
+        "branch": "feat/c2pro-dev-02-role-authority-v1",
+        "pr_base_sha": "3fa846d60cecd14239ddb0a953be5e34bede463d",
+        "pr_base_branch": "main", "pr_state": "merged",
+    }
+    ci_evidence = policy_ci_evidence(head)
+    ci_evidence["workflow_runs"] = workflow_runs
+    with pytest.raises(ValidationError, match="authoritative workflow missing or unresolved"):
+        reconcile_result(valid_worker_result, remote_evidence, ci_evidence, mock_control_plane)
+    assert not (mock_control_plane / "reconciliation-history.yaml").exists()

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from fnmatch import fnmatchcase
 from typing import Any
 
 REQUIRED_GATE = "REQUIRED_GATE"
@@ -16,27 +17,72 @@ _PENDING = {"queued", "pending", "in_progress", "requested", "waiting"}
 _CANCELLED = {"cancelled", "canceled", "stale"}
 
 
+def _ruleset_applies(ruleset: dict[str, Any], policy: dict[str, Any]) -> bool:
+    """Match branch refs case-sensitively, with exclusions taking precedence."""
+    branch = policy.get("target_branch")
+    if ruleset.get("target", "branch") != "branch" or not branch:
+        return False
+    ref = branch if branch.startswith("refs/") else f"refs/heads/{branch}"
+    if not ref.startswith("refs/heads/"):
+        return False
+    conditions = ruleset.get("conditions", {}).get("ref_name")
+    if conditions is None:
+        return True
+
+    def matches(pattern: str) -> bool:
+        if pattern == "~ALL":
+            return True
+        if pattern == "~DEFAULT_BRANCH":
+            default = policy.get("default_branch")
+            return bool(default) and ref == (
+                default if default.startswith("refs/") else f"refs/heads/{default}"
+            )
+        candidate = ref if pattern.startswith("refs/") else ref.removeprefix("refs/heads/")
+        return fnmatchcase(candidate, pattern)
+
+    return (
+        any(matches(pattern) for pattern in conditions.get("include", []))
+        and not any(matches(pattern) for pattern in conditions.get("exclude", []))
+    )
+
+
 def freeze_policy(policy: dict[str, Any]) -> dict[str, Any]:
     """Discover required contexts from active rulesets, falling back to protection."""
     required: list[dict[str, Any]] = []
     active_rulesets: list[dict[str, Any]] = []
+    has_required_status_policy = False
     for ruleset in policy.get("rulesets", []):
-        if ruleset.get("enforcement") != "active":
+        if ruleset.get("enforcement") != "active" or not _ruleset_applies(ruleset, policy):
             continue
         active_rulesets.append(ruleset)
         for rule in ruleset.get("rules", []):
             if rule.get("type") == "required_status_checks":
+                has_required_status_policy = True
                 required.extend(rule.get("parameters", {}).get("required_status_checks", []))
 
     source = "rulesets"
-    if not active_rulesets:
+    if not has_required_status_policy:
         source = "branch_protection"
-        contexts = policy.get("branch_protection", {}).get("required_status_checks", {}).get("contexts", [])
-        required.extend({"context": context, "integration_id": None} for context in contexts)
+        protection = policy.get("branch_protection", {}).get("required_status_checks", {})
+        required.extend(
+            {"context": check["context"], "integration_id": check.get("app_id")}
+            for check in protection.get("checks", [])
+        )
+        check_contexts = {gate["context"] for gate in required}
+        required.extend(
+            {"context": context, "integration_id": None}
+            for context in protection.get("contexts", []) if context not in check_contexts
+        )
 
     normalized = [
         {"context": gate["context"], "integration_id": gate.get("integration_id")}
         for gate in required
+    ]
+    normalized = [
+        {"context": context, "integration_id": integration_id}
+        for context, integration_id in dict.fromkeys(
+            (gate["context"], gate["integration_id"]) for gate in normalized
+        )
     ]
     frozen = {
         "target_branch": policy.get("target_branch"),
@@ -127,12 +173,15 @@ def evaluate_merge_gates(
     unknown = any(item["classification"] == UNCLASSIFIED for item in classified)
     authoritative_workflows = [
         run for run in (workflow_runs or [])
-        if run.get("sha") == head_sha
-        and (current_run_id is None or run.get("run_id") == current_run_id)
-        and (current_attempt is None or run.get("attempt") == current_attempt)
+        if current_run_id is not None and current_attempt is not None
+        and run.get("sha") == head_sha
+        and run.get("run_id") == current_run_id
+        and run.get("attempt") == current_attempt
     ]
     workflow_pending = any(str(run.get("status", "")).lower() != "completed" for run in authoritative_workflows)
-    if workflow_pending:
+    if not authoritative_workflows:
+        reason = "authoritative workflow missing or unresolved"
+    elif workflow_pending:
         for row in matrix:
             if row["state"] == "SUCCESS":
                 row["state"] = "PENDING"
@@ -159,11 +208,6 @@ def evaluate_merge_gates(
         "policy_snapshot": snapshot,
         "required_gates": snapshot["required_gates"],
         "signals": classified,
-        "workflow_runs": authoritative_workflows or [
-            {"run_id": run_id, "attempt": attempt}
-            for run_id, attempt in sorted({
-                (item.get("run_id"), item.get("attempt")) for item in classified
-            })
-        ],
+        "workflow_runs": authoritative_workflows,
         "gate_matrix": matrix,
     }
