@@ -12,7 +12,7 @@ const nextConfig = {
   turbopack: {
     root: repoRoot,
   },
-  transpilePackages: ["react-pdf", "pdfjs-dist"],
+  transpilePackages: ["react-pdf"],
   webpack: (config) => {
     config.resolve.alias.canvas = false;
     config.plugins.push(
