@@ -160,17 +160,57 @@ BEGIN
     LEFT JOIN public.projects p ON p.id = w.project_id;
 
     IF has_wbs_items THEN
-        INSERT INTO adr025_wbs_candidates (
-            source_table, id, project_id, tenant_id, code, name, description, legacy_level, item_type,
-            legacy_parent_id, budget_allocated, budget_spent, planned_start, planned_end, actual_start,
-            actual_end, source_clause_id, version, metadata, created_at, updated_at
-        )
-        SELECT 'wbs_items', w.id, w.project_id, p.tenant_id, w.code, w.name, w.description, w.level,
-            w.item_type::text, w.parent_id, w.budget_allocated, w.budget_spent, w.planned_start,
-            w.planned_end, w.actual_start, w.actual_end, w.source_clause_id, w.version, w.wbs_metadata,
-            w.created_at, w.updated_at
-        FROM public.wbs_items w
-        LEFT JOIN public.projects p ON p.id = w.project_id;
+        DECLARE
+            wbs_items_code_expr text;
+            wbs_items_version_expr text;
+        BEGIN
+            -- wbs_items predates the rename to `code`; some deployments still carry the
+            -- original `wbs_code` column (and this codebase's own 20260319_0002 and
+            -- 20260403_0003 already handle that exact variance for their own views). A
+            -- `version` column was added later still and may be entirely absent. These are
+            -- static references inside a DO block, so PostgreSQL resolves them against the
+            -- real table at parse time regardless of the has_wbs_items branch -- a column
+            -- that does not exist must never appear as a literal reference here; EXECUTE
+            -- format(...) defers resolution to runtime, after the column is known to exist.
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'wbs_items' AND column_name = 'wbs_code'
+            ) THEN
+                wbs_items_code_expr := 'w.wbs_code';
+            ELSE
+                wbs_items_code_expr := 'w.code';
+            END IF;
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'wbs_items' AND column_name = 'version'
+            ) THEN
+                wbs_items_version_expr := 'w.version';
+            ELSE
+                -- No fabricated historical version: NULL here, same as any other source row
+                -- with an absent version, and the existing COALESCE(c.version, 1) at the
+                -- canonical-row INSERT (step 7 below) is what actually assigns a starting
+                -- version -- unchanged, and identical to how a NULL from procurement_wbs_items
+                -- would already be handled.
+                wbs_items_version_expr := 'NULL::integer';
+            END IF;
+
+            EXECUTE format(
+                $sql$
+                INSERT INTO adr025_wbs_candidates (
+                    source_table, id, project_id, tenant_id, code, name, description, legacy_level, item_type,
+                    legacy_parent_id, budget_allocated, budget_spent, planned_start, planned_end, actual_start,
+                    actual_end, source_clause_id, version, metadata, created_at, updated_at
+                )
+                SELECT 'wbs_items', w.id, w.project_id, p.tenant_id, %s, w.name, w.description, w.level,
+                    w.item_type::text, w.parent_id, w.budget_allocated, w.budget_spent, w.planned_start,
+                    w.planned_end, w.actual_start, w.actual_end, w.source_clause_id, %s, w.wbs_metadata,
+                    w.created_at, w.updated_at
+                FROM public.wbs_items w
+                LEFT JOIN public.projects p ON p.id = w.project_id
+                $sql$,
+                wbs_items_code_expr, wbs_items_version_expr
+            );
+        END;
     END IF;
 
     -- 1. A project that already owns a canonical WBS keeps it; hierarchies are never merged.
