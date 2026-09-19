@@ -1,0 +1,50 @@
+{
+  "schema": "c2pro-pj01-contract-fixture/v1",
+  "fixture_id": "PJ01-CONTRACT-B",
+  "revision_of": "PJ01-CONTRACT-A",
+  "derived_from": "contract-a.source.txt under contract-a.manifest.json revision_contract: same headings, ordinals and sentences; only the wording of two declared mutable facts changes",
+  "document_type": "contract",
+  "files": {
+    "pdf": "contract-b.pdf",
+    "source_text": "contract-b.source.txt"
+  },
+  "generator": "apps/api/scripts/generate_pj01_contract_fixture.py --fixture b",
+  "expected_health": {
+    "granularity": "clause",
+    "categories": {
+      "SCOPE": { "state": "present", "evidence_clause_ordinals": [1] },
+      "BUDGET": { "state": "present", "evidence_clause_ordinals": [2] },
+      "TIME": { "state": "present", "evidence_clause_ordinals": [3] },
+      "TECHNICAL": { "state": "present", "evidence_clause_ordinals": [4] },
+      "QUALITY": { "state": "present", "evidence_clause_ordinals": [5] },
+      "LEGAL": { "state": "present", "evidence_clause_ordinals": [6] }
+    }
+  },
+  "expected_revision_change": {
+    "change_cause": "BUSINESS_STATE_CHANGED",
+    "modified_clause_ordinals": [2, 3],
+    "unchanged_clause_ordinals": [0, 1, 4, 5, 6],
+    "changed_facts": [
+      {
+        "key": "contract_price",
+        "clause_ordinal": 2,
+        "before_text": "The total contract price is 2,400,000.00 EUR",
+        "after_text": "The total contract price is 2,650,000.00 EUR",
+        "after_value": { "amount": 2650000.0, "currency": "EUR" }
+      },
+      {
+        "key": "practical_completion_date",
+        "clause_ordinal": 3,
+        "before_text": "no later than 31/12/2025",
+        "after_text": "no later than 31/03/2026",
+        "after_value": "2026-03-31"
+      }
+    ],
+    "no_change_control_fact_keys": ["governing_law", "steel_execution_standard", "quality_certification"],
+    "identical_reupload": {
+      "change_cause": null,
+      "browser_label": "No material change found",
+      "note": "Re-analysing identical content yields an empty changeset: NO_CHANGE is change_cause null, never a business change."
+    }
+  }
+}

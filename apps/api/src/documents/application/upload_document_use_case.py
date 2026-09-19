@@ -18,6 +18,7 @@ from src.core.json_types import JsonDict
 from src.core.tasks.snapshot_tasks import enqueue_project_snapshot
 from src.core.tenants.types import require_tenant_id
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
+from src.documents.domain.storage_keys import revision_object_key
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
 from src.projects.ports.project_repository import ProjectRepository
@@ -51,6 +52,9 @@ class UploadDocumentUseCase:
         self.project_repository = project_repository
         self.revision_repository = revision_repository
         self.event_repository = event_repository
+        # HTTP dispatch pins the worker to this revision after a successful execute. It is
+        # reset per execution so a reused instance can never enqueue a stale revision.
+        self.created_revision_id: UUID | None = None
 
         # Dependency invariant: a revision without its material ProjectEvent must
         # never be silently persisted. Legacy/test construction may omit BOTH, but
@@ -59,11 +63,6 @@ class UploadDocumentUseCase:
             raise ValueError(
                 "event_repository is required when revision_repository is provided"
             )
-
-    @staticmethod
-    def _blob_key(blob_hash: str, filename: str) -> str:
-        ext = os.path.splitext(filename)[1].lower()
-        return f"revisions/{blob_hash}{ext}"
 
     async def execute(
         self,
@@ -74,6 +73,7 @@ class UploadDocumentUseCase:
         tenant_id: UUID,
         metadata: JsonDict | None = None,
     ) -> Document:
+        self.created_revision_id = None
         if not metadata:
             metadata = {}
 
@@ -129,13 +129,22 @@ class UploadDocumentUseCase:
         file.file.seek(0)
         content_bytes = await file.read()
         file.file.seek(0)
-        storage_path = await self.storage_service.upload_file(
-            file_content=file.file, file_id=new_document.id, file_extension=file_extension
-        )
         file_hash = hashlib.sha256(content_bytes).hexdigest()
 
+        # P0b: the bytes live only at the immutable revision object (the same key a
+        # re-upload uses); storage_url is a pointer to it, never a mutable document path.
+        blob_key = revision_object_key(
+            tenant_id=scoped_tenant_id,
+            project_id=project_id,
+            document_id=new_document.id,
+            blob_hash=file_hash,
+            filename=filename,
+        )
+        if not await self.storage_service.file_exists(blob_key):
+            await self.storage_service.upload_bytes(content_bytes, blob_key)
+
         await self.document_repository.update_storage_path(
-            scoped_tenant_id, new_document.id, storage_path
+            scoped_tenant_id, new_document.id, blob_key
         )
         await self.document_repository.update_status(
             scoped_tenant_id, new_document.id, DocumentStatus.UPLOADED
@@ -148,9 +157,6 @@ class UploadDocumentUseCase:
         # H1: genesis revision at initial upload, content-addressed
         if self.revision_repository:
             assert self.event_repository is not None  # guaranteed by __init__ invariant
-            blob_key = self._blob_key(file_hash, filename)
-            if not await self.storage_service.file_exists(blob_key):
-                await self.storage_service.upload_bytes(content_bytes, blob_key)
             now = _now_naive()
             genesis = DocumentRevision(
                 revision_id=uuid4(),
@@ -165,6 +171,7 @@ class UploadDocumentUseCase:
                 created_at=now,
             )
             await self.revision_repository.append_revision(genesis)
+            self.created_revision_id = genesis.revision_id
 
             event = build_revision_ingested_event(
                 document_id=new_document.id,

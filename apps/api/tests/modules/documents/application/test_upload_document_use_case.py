@@ -106,7 +106,7 @@ class TestUploadDocumentUseCase:
 
         repo = AsyncMock()
         storage = AsyncMock()
-        storage.upload_file.return_value = "/local-storage/contract.pdf"
+        storage.file_exists.return_value = False
         project_repository = AsyncMock()
         project_repository.exists_by_id.return_value = True
 
@@ -128,14 +128,23 @@ class TestUploadDocumentUseCase:
         assert added_doc.filename == "contract.pdf"
         assert added_doc.upload_status == DocumentStatus.QUEUED
 
-        storage.upload_file.assert_awaited_once()
-        upload_kwargs = storage.upload_file.call_args.kwargs
-        assert upload_kwargs["file_id"] == added_doc.id
-        assert upload_kwargs["file_extension"] == ".pdf"
+        # P0b: bytes go only to the immutable, tenant-scoped revision object.
+        import hashlib
 
-        repo.update_storage_path.assert_awaited_once_with(
-            tenant_id, added_doc.id, "/local-storage/contract.pdf"
+        from src.documents.domain.storage_keys import revision_object_key
+
+        storage.upload_file.assert_not_awaited()
+        storage.upload_bytes.assert_awaited_once()
+        data, key = storage.upload_bytes.call_args.args
+        assert key == revision_object_key(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            document_id=added_doc.id,
+            blob_hash=hashlib.sha256(data).hexdigest(),
+            filename="contract.pdf",
         )
+
+        repo.update_storage_path.assert_awaited_once_with(tenant_id, added_doc.id, key)
         repo.update_status.assert_awaited_once_with(
             tenant_id, added_doc.id, DocumentStatus.UPLOADED
         )
@@ -201,7 +210,7 @@ class TestUploadDocumentUseCase:
 
         repo = AsyncMock()
         storage = AsyncMock()
-        storage.upload_file.return_value = "/local-storage/contract.docx"
+        storage.file_exists.return_value = False
         project_repository = AsyncMock()
         project_repository.exists_by_id.return_value = True
 
@@ -216,8 +225,9 @@ class TestUploadDocumentUseCase:
         )
 
         assert document.file_format == ".docx"
-        storage.upload_file.assert_awaited_once()
-        assert storage.upload_file.call_args.kwargs["file_extension"] == ".docx"
+        storage.upload_bytes.assert_awaited_once()
+        _data, key = storage.upload_bytes.call_args.args
+        assert key.endswith(".docx")
 
     @pytest.mark.asyncio
     async def test_006_budget_docx_upload_is_rejected(self, monkeypatch):

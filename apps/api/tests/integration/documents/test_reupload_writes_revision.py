@@ -213,7 +213,11 @@ async def test_blob_key_is_retrievable(db: AsyncSession):
 
     current = await rev_repo.get_current(doc_id, tid)
     assert current is not None
-    expected_key = f"revisions/{new_hash}.pdf"
+    from src.documents.domain.storage_keys import revision_object_key
+
+    expected_key = revision_object_key(
+        tenant_id=tid, project_id=proj_id, document_id=doc_id, blob_hash=new_hash, filename="test.pdf"
+    )
     assert current.blob_key == expected_key
 
     storage.file_exists.assert_called_with(expected_key)
@@ -342,12 +346,10 @@ async def test_upload_creates_genesis_revision_with_storage(db: AsyncSession):
 
     content = b"upload genesis test content"
     content_hash = hashlib.sha256(content).hexdigest()
-    expected_key = f"revisions/{content_hash}.pdf"
-
     storage = AsyncMock()
     storage.file_exists = AsyncMock(return_value=False)
-    storage.upload_bytes = AsyncMock(return_value=f"mock://{expected_key}")
-    storage.upload_file = AsyncMock(return_value="/fake/path.pdf")
+    storage.upload_bytes = AsyncMock(return_value="mock://revision-object")
+    storage.upload_file = AsyncMock(side_effect=AssertionError("no mutable per-document object is written"))
 
     class _FakeProjectRepo:
         async def exists_by_id(self, pid, _tid):
@@ -387,6 +389,11 @@ async def test_upload_creates_genesis_revision_with_storage(db: AsyncSession):
     )
 
     assert result is not None
+    from src.documents.domain.storage_keys import revision_object_key
+
+    expected_key = revision_object_key(
+        tenant_id=tid, project_id=proj_id, document_id=result.id, blob_hash=content_hash, filename="test.pdf"
+    )
 
     current = await rev_repo.get_current(result.id, tid)
     assert current is not None, "Genesis revision must exist after upload"

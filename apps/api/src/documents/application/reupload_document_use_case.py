@@ -22,6 +22,7 @@ from src.core.tasks.snapshot_tasks import enqueue_project_snapshot
 from src.core.tenants.types import require_tenant_id
 from src.documents.application.dtos import DocumentDTO
 from src.documents.domain.models import DocumentStatus, DocumentType
+from src.documents.domain.storage_keys import legacy_document_object_key, revision_object_key
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
 from src.temporal.domain.document_revision import DocumentRevision
@@ -41,6 +42,21 @@ STRUCTURED_DOCUMENT_TYPES = {DocumentType.BUDGET, DocumentType.SCHEDULE}
 STRUCTURED_DOCX_ERROR = "budget/schedule require .xlsx/.bc3"
 
 
+def _enqueue_document_processing(document_id: UUID, revision_id: UUID | None = None) -> str | None:
+    """Best-effort post-commit analysis dispatch pinned to the new immutable revision."""
+    try:
+        from src.core.tasks.ingestion_tasks import process_document_async
+
+        task = process_document_async.delay(
+            document_id=str(document_id),
+            revision_id=str(revision_id) if revision_id is not None else None,
+        )
+        return getattr(task, "id", None)
+    except Exception as exc:  # pragma: no cover - broker availability is runtime-only.
+        logger.warning("reupload_processing_enqueue_failed", document_id=str(document_id), error=str(exc))
+        return None
+
+
 class ReuploadDocumentUseCase:
     def __init__(
         self,
@@ -54,13 +70,6 @@ class ReuploadDocumentUseCase:
         self.storage_service = storage_service
         self.event_repository = event_repository
 
-    @staticmethod
-    def _blob_key(blob_hash: str, filename: str | None = None) -> str:
-        ext = ""
-        if filename and "." in filename:
-            ext = filename[filename.rindex(".") :]
-        return f"revisions/{blob_hash}{ext}"
-
     async def _store_blob(self, blob_key: str, file_content: bytes) -> None:
         if not await self.storage_service.file_exists(blob_key):
             await self.storage_service.upload_bytes(file_content, blob_key)
@@ -73,9 +82,10 @@ class ReuploadDocumentUseCase:
         file_hash: str,
         filename: str | None,
     ) -> DocumentRevision:
-        # Legacy backfilled genesis is metadata-only — the original bytes are
-        # unavailable at reupload time, so the blob_key is not retrievable.
-        blob_key = self._blob_key(file_hash, filename)
+        # A document uploaded before revision lineage keeps its original bytes at the
+        # legacy ``{id}{ext}`` object, which is never written again (P0b) — so the
+        # synthesised genesis points at those real bytes.
+        blob_key = legacy_document_object_key(document_id, filename)
         now = _now_naive()
         genesis = DocumentRevision(
             revision_id=uuid4(),
@@ -113,6 +123,10 @@ class ReuploadDocumentUseCase:
         if document.file_hash == new_file_hash:
             return DocumentDTO.from_domain(document)
 
+        # Serialise the read-close-append sequence. The lock is held by the surrounding
+        # transaction until the commit below, so a concurrent re-upload observes the
+        # just-created revision rather than reusing its revision number or parent.
+        await self.revision_repository.lock_lineage(document_id, scoped_tenant_id)
         current_rev = await self.revision_repository.get_current(document_id, scoped_tenant_id)
 
         # H1: lazy genesis synthesis — if no revision row exists for this document
@@ -130,7 +144,14 @@ class ReuploadDocumentUseCase:
         parent_id = current_rev.revision_id if current_rev else None
         now = _now_naive()
         resolved_filename = filename or document.filename
-        blob_key = self._blob_key(new_file_hash, resolved_filename)
+        # P0b: revision B gets its own immutable object; revision A's object is untouched.
+        blob_key = revision_object_key(
+            tenant_id=scoped_tenant_id,
+            project_id=document.project_id,
+            document_id=document_id,
+            blob_hash=new_file_hash,
+            filename=resolved_filename,
+        )
 
         await self._store_blob(blob_key, file_content)
 
@@ -171,9 +192,15 @@ class ReuploadDocumentUseCase:
             filename=resolved_filename,
             status=DocumentStatus.UPLOADED,
         )
+        # The mutable pointer follows the current revision; history is read from revisions.
+        await self.document_repository.update_storage_path(scoped_tenant_id, document_id, blob_key)
 
         # REVISION + PROJECT_EVENT commit atomically here, before the enqueue.
         await self.document_repository.commit()
+
+        # A revision is not useful temporal evidence until the worker parses it. The durable
+        # write has already committed, so a broker outage cannot roll back the lineage.
+        _enqueue_document_processing(document_id, new_revision.revision_id)
 
         # Best-effort: the snapshot enqueue hits the Celery broker synchronously.
         # A broker outage must NOT fail the reupload — revision, event, and the

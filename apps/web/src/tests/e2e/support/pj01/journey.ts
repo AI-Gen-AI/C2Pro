@@ -1,0 +1,171 @@
+/**
+ * PJ-01 shared browser harness — first half of the journey.
+ *
+ * Login → Create Project → Upload Contract A → Processing → Health → six dimensions →
+ * toward Evidence, on the deterministic PJ-01 Contract A fixture.
+ *
+ * Consumers (the What Changed spec, the Health → Evidence spec, the integrated PJ-01
+ * acceptance run) call `runPj01FirstHalf` and continue from the returned project and
+ * document, instead of re-implementing sign-in, upload and processing.
+ */
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
+import type { Page } from "@playwright/test";
+
+import {
+  contractAPdfPath,
+  healthExpectationsFromManifest,
+  loadContractAManifest,
+  type Pj01ContractFixtureManifest,
+} from "../../../pj01/fixture-contract";
+import { evaluateHealthSourceDocument, type HealthVectorPayload } from "../../../pj01/health-evaluator";
+import { contractBPdfPath, loadContractBManifest } from "../../../pj01/revision-fixture";
+import { assertCurrentStateThroughNavigation } from "./current-state";
+import { navigateTowardEvidence } from "./evidence";
+import { assertSixHealthDimensions, openHealthThroughNavigation } from "./health";
+import { observeProcessingWithoutReload, type ProcessingObservation } from "./processing";
+import { uploadNewVersionThroughUi, type RevisionUploadResult } from "./revision";
+import type { Pj01RunRecorder } from "./run-recorder";
+import { createProjectThroughUi, signInAsJourneyUser } from "./session";
+import { uploadDocumentThroughUi } from "./upload";
+import { assertWhatChangedThroughNavigation, type WhatChangedResult } from "./what-changed";
+
+export const PJ01_PROJECT_ID_FILE = path.join(process.cwd(), "playwright", ".pj01", "project-id.txt");
+
+export interface Pj01FirstHalfResult {
+  projectId: string;
+  documentId: string;
+  manifest: Pj01ContractFixtureManifest;
+  processing: ProcessingObservation;
+  health: HealthVectorPayload;
+}
+
+export async function runPj01FirstHalf(
+  page: Page,
+  options: { baseURL: string; recorder: Pj01RunRecorder; projectName?: string },
+): Promise<Pj01FirstHalfResult> {
+  const { recorder } = options;
+  const manifest = loadContractAManifest();
+  recorder.record("fixture", manifest.fixture_id);
+
+  const observation = await recorder.step("PJ01-S1", "Login", async () => {
+    const auth = await signInAsJourneyUser(page, options.baseURL);
+    await recorder.screenshot(page, "s1-projects");
+    return auth;
+  });
+
+  const projectId = await recorder.step("PJ01-S2", "Create project", async () => {
+    const id = await createProjectThroughUi(page, observation, options.projectName ?? `PJ-01 ${recorder.runId}`);
+    mkdirSync(path.dirname(PJ01_PROJECT_ID_FILE), { recursive: true });
+    writeFileSync(PJ01_PROJECT_ID_FILE, id, "utf8");
+    recorder.record("projectId", id);
+    await recorder.screenshot(page, "s2-documents-empty");
+    return id;
+  });
+
+  const { documentId } = await recorder.step("PJ01-S3", "Upload Contract A", async () => {
+    const result = await uploadDocumentThroughUi(page, recorder, {
+      projectId,
+      filePath: contractAPdfPath(manifest),
+      documentType: manifest.document_type,
+    });
+    await recorder.screenshot(page, "s3-upload-accepted");
+    return result;
+  });
+
+  const processing = await recorder.step("PJ01-S4", "Processing", async () => {
+    const observed = await observeProcessingWithoutReload(page, recorder, { projectId, documentId });
+    await recorder.screenshot(page, "s4-processing-settled");
+    if (observed.evaluation.outcome !== "analyzed" || observed.evaluation.violations.length > 0) {
+      const codes = observed.evaluation.violations.map((violation) => violation.code).join(", ");
+      throw new Error(`PJ01_PROCESSING: outcome=${observed.evaluation.outcome} violations=[${codes}]`);
+    }
+    return observed;
+  });
+
+  const health = await recorder.step("PJ01-S5", "Reach Health through navigation", async () => {
+    const vector = await openHealthThroughNavigation(page, recorder, { projectId });
+    await recorder.screenshot(page, "s5-health");
+    return vector;
+  });
+
+  await recorder.step("PJ01-S6", "Assert six Health dimensions", async () => {
+    await assertSixHealthDimensions(page, recorder, health, healthExpectationsFromManifest(manifest));
+    // Health → Evidence authority: the assessment must name the uploaded document itself.
+    for (const violation of evaluateHealthSourceDocument(health, documentId)) {
+      recorder.violation(`HEALTH_${violation.code}`, violation.detail);
+    }
+    recorder.record("healthSourceDocumentId", health.single_document_coverage?.document_id ?? null);
+  });
+
+  await recorder.step("PJ01-S7", "Follow Health supporting clause into Evidence", async () => {
+    await navigateTowardEvidence(page, recorder, { projectId, documentId, health });
+    await recorder.screenshot(page, "s7-evidence");
+  });
+
+  return { projectId, documentId, manifest, processing, health };
+}
+
+export interface Pj01SecondHalfResult {
+  revision: RevisionUploadResult;
+  revisionProcessing: ProcessingObservation;
+  whatChanged: WhatChangedResult;
+}
+
+/**
+ * Second half: Upload revision B → its processing → What Changed? → Current State, continuing from
+ * `runPj01FirstHalf` in the same authenticated page. Revision B is the deterministic Contract B
+ * fixture; every revision, event and report is generated by the application itself.
+ */
+export async function runPj01SecondHalf(
+  page: Page,
+  options: { recorder: Pj01RunRecorder; first: Pj01FirstHalfResult },
+): Promise<Pj01SecondHalfResult> {
+  const { recorder, first } = options;
+  const revisionManifest = loadContractBManifest();
+  recorder.record("revisionFixture", revisionManifest.fixture_id);
+
+  const revision = await recorder.step("PJ01-S8", "Upload revision B of the same document", async () => {
+    const result = await uploadNewVersionThroughUi(page, recorder, {
+      projectId: first.projectId,
+      documentId: first.documentId,
+      filePath: contractBPdfPath(revisionManifest),
+    });
+    await recorder.screenshot(page, "s8-revision-accepted");
+    return result;
+  });
+
+  const revisionProcessing = await recorder.step("PJ01-S9", "Revision B processing", async () => {
+    const observed = await observeProcessingWithoutReload(page, recorder, {
+      projectId: first.projectId,
+      documentId: first.documentId,
+    });
+    await recorder.screenshot(page, "s9-revision-processing-settled");
+    if (observed.evaluation.outcome !== "analyzed" || observed.evaluation.violations.length > 0) {
+      const codes = observed.evaluation.violations.map((violation) => violation.code).join(", ");
+      throw new Error(`PJ01_REVISION_PROCESSING: outcome=${observed.evaluation.outcome} violations=[${codes}]`);
+    }
+    return observed;
+  });
+
+  const whatChanged = await recorder.step("PJ01-S10", "What Changed? for revision B", async () =>
+    assertWhatChangedThroughNavigation(page, recorder, {
+      projectId: first.projectId,
+      documentId: first.documentId,
+      contractAPdf: contractAPdfPath(first.manifest),
+      contractBPdf: contractBPdfPath(revisionManifest),
+      base: first.manifest,
+      revision: revisionManifest,
+    }),
+  );
+
+  await recorder.step("PJ01-S11", "Current State after revision B", async () => {
+    await assertCurrentStateThroughNavigation(page, recorder, {
+      projectId: first.projectId,
+      latestRevisionAnalyzedAt: whatChanged.occurredAt,
+    });
+  });
+
+  return { revision, revisionProcessing, whatChanged };
+}

@@ -244,7 +244,7 @@ export function useListDlqEntriesApiV1AdminDlqGet<
 }
 
 /**
- * TS-BCK-042-001: Retry a DLQ entry for organization administrators.
+ * Retry a cross-tenant DLQ entry as an authorized platform operator.
  * @summary Retry a DLQ entry
  */
 export const retryDlqEntryApiV1AdminDlqDlqIdRetryPost = (

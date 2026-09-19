@@ -234,6 +234,28 @@ The following are now product red lines:
 - **Unknown/null ≠ zero.** No blind averaging or synthetic green at WBS/project/portfolio level.
 - **Candidate branch ≠ delivered product.** Lifecycle fields move only on evidence.
 
+### Causal failure hierarchy gate
+
+Qualification records failures in execution chronology: the first user-visible
+or product-causal failure is **PRIMARY**; later failures are classified as
+**SECONDARY**, **CASCADE**, or **INCIDENTAL**. A later, more severe-looking
+error must not replace the primary boundary without evidence that it caused
+that earlier failure.
+
+### Evidence addressability contract
+
+Every user-visible evidence reference must resolve end-to-end: Finding →
+Evidence Reference → stable Evidence ID → Evidence Resolver → representable UI
+target → observable active/highlighted state. Target types are extensible and
+include **CLAUSE**, **DOCUMENT_SPAN**, **STAKEHOLDER**, **RACI**, **WBS**,
+**ALERT**, **CHANGE**, and **OTHER**. Resolution degrades only in this order:
+exact semantic target, raw clause/span, source document with an explanation,
+then an explicit unresolved state; it must never silently select nothing.
+
+`EVIDENCE_REFERENCE_EMITTED ⇒ EVIDENCE_TARGET_RESOLVABLE`
+
+`EVIDENCE_TARGET_RESOLVABLE ⇒ UI_ACTIVE_TARGET_OBSERVABLE`
+
 ## 11. Remaining product defects / risks
 
 The reconciliation closes the **planning ambiguity** around Project Controls, but not its implementation. Important open risks remain:

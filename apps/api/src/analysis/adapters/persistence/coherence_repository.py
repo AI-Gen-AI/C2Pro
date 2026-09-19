@@ -15,8 +15,18 @@ from src.analysis.ports.coherence_repository import ICoherenceRepository
 from src.core.database import get_session_with_tenant
 from src.core.json_types import JsonDict, JsonValue
 from src.documents.adapters.persistence.models import DocumentORM
-from src.procurement.adapters.persistence.models import BOMItemORM, WBSItemORM
+from src.procurement.adapters.persistence.models import BOMItemORM
+from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
+from src.procurement.domain.models import WBSItem
 from src.projects.adapters.persistence.models import ProjectORM
+from src.shared_kernel.enums import WBSItemType
+
+
+def _wbs_item_type(value: object) -> WBSItemType | None:
+    try:
+        return WBSItemType(str(value).lower()) if value else None
+    except ValueError:
+        return None
 
 
 class SqlAlchemyCoherenceRepository(ICoherenceRepository):
@@ -57,37 +67,41 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
         wbs_items: list[JsonDict],
         bom_items: list[JsonDict],
         tenant_id: UUID | None = None,
-    ) -> tuple[list[WBSItemORM], list[BOMItemORM]]:
+    ) -> tuple[list[WBSItem], list[BOMItemORM]]:
         effective_tenant_id = tenant_id or self._tenant_id
         project = await self._load_project(project_id, effective_tenant_id)
         if not project:
             return [], []
 
-        created_wbs: list[WBSItemORM] = []
+        created_wbs: list[WBSItem] = []
         created_bom: list[BOMItemORM] = []
 
         async with get_session_with_tenant(project.tenant_id) as tenant_db:
+            # WBS items go through the canonical Project Controls WBS repository (ADR-025).
+            wbs_repository = SQLAlchemyWBSRepository(tenant_db)
+            known_codes = {
+                existing.code for existing in await wbs_repository.get_by_project(project_id, project.tenant_id)
+            }
+            new_wbs: list[WBSItem] = []
             for item in wbs_items:
-                existing_wbs = await tenant_db.scalar(
-                    select(WBSItemORM).where(
-                        WBSItemORM.project_id == project_id,
-                        WBSItemORM.code == item["wbs_code"],
+                code = cast(str, item["wbs_code"])
+                if code in known_codes:
+                    continue
+                known_codes.add(code)
+                new_wbs.append(
+                    WBSItem(
+                        project_id=project_id,
+                        code=code,
+                        name=cast(str, item["name"]),
+                        description=cast(str | None, item.get("description")),
+                        level=cast(int, item.get("level", 1)),
+                        item_type=_wbs_item_type(item.get("item_type")),
+                        source_clause_id=cast(UUID | None, item.get("funded_by_clause_id")),
+                        wbs_metadata={"source_document_id": str(item.get("source_document_id"))},
                     )
                 )
-                if existing_wbs:
-                    continue
-                wbs = WBSItemORM(
-                    project_id=project_id,
-                    code=cast(str, item["wbs_code"]),
-                    name=cast(str, item["name"]),
-                    description=cast(str | None, item.get("description")),
-                    level=cast(int, item.get("level", 1)),
-                    item_type=cast(Any, item.get("item_type")),
-                    source_clause_id=cast(UUID | None, item.get("funded_by_clause_id")),
-                    wbs_metadata={"source_document_id": str(item.get("source_document_id"))},
-                )
-                tenant_db.add(wbs)
-                created_wbs.append(wbs)
+            if new_wbs:
+                created_wbs = await wbs_repository.bulk_create(new_wbs, project.tenant_id)
 
             for item in bom_items:
                 existing_bom = await tenant_db.scalar(
@@ -117,8 +131,6 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
 
             await tenant_db.commit()
 
-            for wbs_record in created_wbs:
-                await tenant_db.refresh(wbs_record)
             for bom_record in created_bom:
                 await tenant_db.refresh(bom_record)
 

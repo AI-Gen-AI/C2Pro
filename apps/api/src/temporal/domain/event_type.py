@@ -9,6 +9,10 @@ from __future__ import annotations
 KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
     {
         "revision.ingested",
+        "revision.changed",
+        "revision.analyzed",
+        "revision.analysis_failed",
+        "revision.reinterpreted",
         "graph.completed",
         "hitl.correction",
         "baseline.changed",

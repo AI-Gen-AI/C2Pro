@@ -19,6 +19,7 @@ Invariants (unchanged from L4-2):
 from __future__ import annotations
 
 from enum import StrEnum
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -109,6 +110,10 @@ class SingleDocumentCoverage(BaseModel):
 
     model_config = _FROZEN_CONTRACT
 
+    #: The document this assessment was computed from, as the analysis graph knew it. It is the
+    #: ONLY authority for Health → Evidence; ``None`` means the source is unattributed (e.g. an
+    #: artifact persisted before propagation) and consumers must fail closed, never guess.
+    document_id: UUID | None = None
     assessments: tuple[CategoryAssessment, ...]
     cross_findings: tuple[FindingSignal, ...] = ()
 

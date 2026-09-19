@@ -10,7 +10,7 @@ from datetime import datetime
 from uuid import UUID
 
 import structlog
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.temporal.adapters.persistence.models import DocumentRevisionORM
@@ -39,6 +39,30 @@ class SqlAlchemyDocumentRevisionRepository(IDocumentRevisionRepository):
             valid_to=orm.valid_to,
             created_at=orm.created_at,
         )
+
+    async def lock_lineage(self, document_id: UUID, tenant_id: UUID) -> None:
+        """Take a transaction-scoped PostgreSQL advisory lock for one document.
+
+        The unique open-revision and revision-number constraints remain the final guard;
+        this lock makes normal concurrent re-uploads serialize before either computes the
+        next revision number.
+        """
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(CAST(:lineage AS text), 0))"),
+            {"lineage": f"document_revision_lineage:{tenant_id}:{document_id}"},
+        )
+
+    async def get_by_id(
+        self, revision_id: UUID, tenant_id: UUID
+    ) -> DocumentRevision | None:
+        result = await self._session.execute(
+            select(DocumentRevisionORM).where(
+                DocumentRevisionORM.revision_id == revision_id,
+                DocumentRevisionORM.tenant_id == tenant_id,
+            )
+        )
+        orm = result.scalar_one_or_none()
+        return self._to_domain(orm) if orm else None
 
     async def get_current(
         self, document_id: UUID, tenant_id: UUID

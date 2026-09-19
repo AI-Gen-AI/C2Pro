@@ -27,6 +27,15 @@ from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.temporal.domain.project_snapshot import SnapshotTrigger
 
 
+@pytest.fixture(autouse=True)
+def _no_processing_broker(monkeypatch):
+    """Re-upload dispatches revision processing post-commit; never reach a broker here."""
+    monkeypatch.setattr(
+        "src.documents.application.reupload_document_use_case._enqueue_document_processing",
+        lambda _document_id, _revision_id=None: None,
+    )
+
+
 class _Storage:
     async def upload_file(self, **_kwargs):
         return "documents/file.pdf"
@@ -77,6 +86,9 @@ class _RevisionRepo:
     def __init__(self) -> None:
         self.appended = []
 
+    async def lock_lineage(self, _document_id, _tenant_id):
+        return None
+
     async def append_revision(self, revision):
         self.appended.append(revision)
 
@@ -115,6 +127,9 @@ class _ReuploadDocRepo:
         self.current_doc.filename = kwargs["filename"]
         self.current_doc.upload_status = DocumentStatus.UPLOADED
         return self.current_doc
+
+    async def update_storage_path(self, _tenant_id, _document_id, storage_url):
+        self.current_doc.storage_url = storage_url
 
     async def commit(self):
         self.commit_calls += 1
@@ -317,6 +332,10 @@ async def test_reupload_enqueues_after_successful_commit(monkeypatch) -> None:
         "src.documents.application.reupload_document_use_case.enqueue_project_snapshot",
         lambda **kwargs: order.append("enqueue"),
     )
+    monkeypatch.setattr(
+        "src.documents.application.reupload_document_use_case._enqueue_document_processing",
+        lambda _document_id, _revision_id=None: order.append("processing"),
+    )
 
     await ReuploadDocumentUseCase(
         document_repository=doc_repo,
@@ -331,7 +350,7 @@ async def test_reupload_enqueues_after_successful_commit(monkeypatch) -> None:
         user_id=uuid4(),
     )
 
-    assert order == ["commit", "enqueue"]
+    assert order == ["commit", "processing", "enqueue"]
 
 
 @pytest.mark.asyncio

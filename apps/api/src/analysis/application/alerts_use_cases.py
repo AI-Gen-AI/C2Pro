@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
+from src.analysis.application.schemas import AlertResponse
 from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType
 from src.analysis.ports.alert_repository import AlertRepository
 from src.analysis.ports.types import AlertRecord
@@ -24,8 +25,8 @@ class ListAlertsUseCase:
         category: str | None = None,
         cursor: str | None = None,
         limit: int = 20,
-    ) -> Page[AlertRecord]:
-        return await self.repository.list_for_project(
+    ) -> Page[AlertResponse]:
+        source_page = await self.repository.list_for_project(
             project_id=project_id,
             tenant_id=tenant_id,
             alert_type=alert_type,
@@ -34,6 +35,14 @@ class ListAlertsUseCase:
             category=category,
             cursor=cursor,
             limit=limit,
+        )
+        return Page[AlertResponse](
+            items=[
+                AlertResponse.model_validate(alert, from_attributes=True)
+                for alert in source_page.items
+            ],
+            next_cursor=source_page.next_cursor,
+            has_more=source_page.has_more,
         )
 
 

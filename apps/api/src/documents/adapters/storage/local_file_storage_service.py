@@ -15,6 +15,8 @@ from uuid import UUID
 
 import structlog
 
+from src.core.exceptions import StorageError
+from src.documents.domain.storage_keys import is_document_object_prefix
 from src.documents.ports.storage_service import IStorageService
 
 logger = structlog.get_logger()
@@ -78,13 +80,36 @@ class LocalFileStorageService(IStorageService):
             return path
         return self._base_dir / file_name_in_storage
 
+    def _resolve_key(self, key: str) -> Path:
+        """Map an object key to a path inside the store; refuse keys that escape it."""
+        if not key or key.startswith(("/", "\\")) or Path(key).is_absolute():
+            raise StorageError("Invalid storage key")
+        base = self._base_dir.resolve()
+        resolved = (base / key).resolve()
+        if resolved == base or base not in resolved.parents:
+            raise StorageError("Invalid storage key")
+        return self._base_dir / key
+
     async def file_exists(self, key: str) -> bool:
-        path = self._base_dir / key
-        return path.exists()
+        return self._resolve_key(key).exists()
 
     async def upload_bytes(self, data: bytes, key: str) -> str:
-        dest = self._base_dir / key
+        dest = self._resolve_key(key)
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
         logger.info("bytes_uploaded", path=str(dest))
         return str(dest)
+
+    async def download_object(self, key: str) -> Path:
+        path = self._resolve_key(key)
+        if not path.is_file():
+            raise FileNotFoundError(f"File not found: {key}")
+        return path
+
+    async def delete_prefix(self, prefix: str) -> None:
+        if not is_document_object_prefix(prefix):
+            raise StorageError("delete_prefix requires a single document prefix")
+        path = self._resolve_key(prefix)
+        if path.is_dir():
+            shutil.rmtree(path)
+            logger.info("document_objects_deleted", prefix=prefix)

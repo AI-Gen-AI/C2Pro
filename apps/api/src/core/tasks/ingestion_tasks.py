@@ -11,14 +11,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import text
 
+from src.analysis.adapters.graph.workflow import close_checkpointer_resources
 from src.analysis.factories.orchestrator_factory import AnalysisOrchestratorFactory
-from src.core.database import get_raw_session, init_db
+from src.core.database import close_db, get_raw_session, init_db
 from src.core.dlq.dlq_service import DLQService
 from src.core.tasks.celery_app import celery_app
 from src.core.tenants.types import TenantId, require_tenant_id
@@ -38,6 +38,12 @@ from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
 from src.documents.adapters.storage.local_file_storage_service import (
     LocalFileStorageService,
 )
+from src.documents.application.document_source import (
+    REVISION_HASH_MISMATCH,
+    RevisionSourceError,
+    fetch_source_file,
+    resolve_source_revision,
+)
 from src.documents.application.trigger_document_analysis_use_case import (
     TriggerDocumentAnalysisUseCase,
 )
@@ -51,10 +57,28 @@ from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository imp
     SqlAlchemyStakeholderRepository,
 )
 from src.stakeholders.application.create_stakeholder_use_case import CreateStakeholderUseCase
+from src.temporal.adapters.persistence.document_revision_repository import (
+    SqlAlchemyDocumentRevisionRepository,
+)
+from src.temporal.adapters.persistence.project_event_repository import (
+    SqlAlchemyProjectEventRepository,
+)
+from src.temporal.application.change_projection import build_revision_processing_failed_event
+from src.temporal.application.revision_change_orchestrator import (
+    build_revision_analysis_events,
+)
+from src.temporal.domain.document_revision import DocumentRevision
 
 logger = logging.getLogger(__name__)
 
 RAG_READINESS_MAX_RETRIES = 3
+
+
+def _temporal_failure_code(error: Exception) -> str:
+    """Return a stable safe code; raw errors can contain storage/provider data."""
+    if isinstance(error, RevisionSourceError) and str(error) == REVISION_HASH_MISMATCH:
+        return "immutable_blob_hash_mismatch"
+    return "analysis_processing_failed"
 
 
 class RagChunksUnavailableError(RuntimeError):
@@ -737,8 +761,12 @@ async def _run_document_analysis(
     return result
 
 
-async def _process(document_id: UUID) -> dict[str, Any]:
-    """Fetch, parse, update, and trigger analysis for a document."""
+async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[str, Any]:
+    """Fetch, parse, update, and trigger analysis for a document.
+
+    P0b: the bytes come from the pinned revision's immutable object (or the current
+    revision for messages without ``revision_id``), never from a mutable document path.
+    """
     await init_db()
 
     async with get_raw_session() as session:
@@ -780,9 +808,17 @@ async def _process(document_id: UUID) -> dict[str, Any]:
         await repo.update_status(tenant_id, document_id, DocumentStatus.PARSING)
         await session.commit()
 
+        source_revision: DocumentRevision | None = None
         try:
-            file_name = f"{document.id}{Path(document.filename).suffix}"
-            file_path = await storage.download_file(file_name)
+            source_revision = await resolve_source_revision(
+                revision_repository=SqlAlchemyDocumentRevisionRepository(session),
+                document_id=document_id,
+                tenant_id=tenant_id,
+                revision_id=revision_id,
+            )
+            file_path = await fetch_source_file(
+                storage=storage, document=document, revision=source_revision
+            )
 
             parsed_payload = await file_parser.parse_document_file(document, file_path)
             logger.info("Document parsing successful for document %s.", document_id)
@@ -814,17 +850,32 @@ async def _process(document_id: UUID) -> dict[str, Any]:
                 metadata["parsed_text"] = parsed_text
                 if document.document_type == DocumentType.CONTRACT:
                     existing_clauses = await repo.list_clauses_for_document(tenant_id, document_id)
+                    revision_clauses = _extract_contract_clauses(
+                        document_id=document_id,
+                        project_id=document.project_id,
+                        tenant_id=tenant_id,
+                        parsed_text=parsed_text,
+                    )
                     if not existing_clauses:
-                        extracted_clauses = _extract_contract_clauses(
-                            document_id=document_id,
-                            project_id=document.project_id,
-                            tenant_id=tenant_id,
-                            parsed_text=parsed_text,
-                        )
-                        for clause in extracted_clauses:
+                        for clause in revision_clauses:
                             await repo.add_clause(tenant_id, clause)
-                        contract_clause_count = len(extracted_clauses)
+                        contract_clause_count = len(revision_clauses)
                         metadata["contract_clause_count"] = contract_clause_count
+                    # P0c deliberately snapshots every revision's extraction even when the
+                    # mutable legacy clause rows already contain the prior revision.
+                    # Historical comparisons never read those mutable rows, and the events
+                    # are bound to the immutable revision this task pinned.
+                    if source_revision is not None:
+                        event_repository = SqlAlchemyProjectEventRepository(session)
+                        prior_events = await event_repository.list_for_project(
+                            document.project_id, tenant_id
+                        )
+                        for temporal_event in await build_revision_analysis_events(
+                            revision=source_revision,
+                            clauses=revision_clauses,
+                            existing_events=prior_events,
+                        ):
+                            await event_repository.append(temporal_event)
             await repo.update_metadata(tenant_id, document_id, metadata)
             from datetime import UTC, datetime
 
@@ -894,6 +945,23 @@ async def _process(document_id: UUID) -> dict[str, Any]:
         except Exception as error:
             logger.error("Error processing document %s: %s", document_id, error, exc_info=True)
             await session.rollback()
+            if source_revision is not None:
+                # A retry must not hide this failure behind a mutable document status:
+                # persist the revision-bound failure projection before re-raising.
+                try:
+                    await SqlAlchemyProjectEventRepository(session).append(
+                        build_revision_processing_failed_event(
+                            revision=source_revision,
+                            failure_code=_temporal_failure_code(error),
+                        )
+                    )
+                except Exception as projection_error:  # pragma: no cover - preserves primary failure
+                    logger.error(
+                        "temporal_failure_projection_append_failed document_id=%s revision_id=%s error=%s",
+                        document_id,
+                        source_revision.revision_id,
+                        projection_error,
+                    )
             await repo.update_status(
                 tenant_id, document_id, DocumentStatus.ERROR, parsing_error=str(error)
             )
@@ -909,20 +977,101 @@ async def _process(document_id: UUID) -> dict[str, Any]:
     retry_backoff_max=60,
     task_track_started=True,
 )
-def process_document_async(self: Any, document_id: str) -> dict[str, Any]:
+def process_document_async(
+    self: Any, document_id: str, revision_id: str | None = None
+) -> dict[str, Any]:
     """
     Asynchronously processes a document using the appropriate parser.
 
     Args:
         document_id: The unique ID of the document to process. The task
                      retrieves the file path and other info from the database.
+        revision_id: The immutable revision to read. Messages without it (legacy
+                     producers, reprocess) read the document's current revision.
     """
     logger.info(
-        "Starting document processing for task_id: %s, document_id: %s",
+        "Starting document processing for task_id: %s, document_id: %s, revision_id: %s",
         self.request.id,
         document_id,
+        revision_id,
     )
-    return asyncio.run(_process(UUID(document_id)))
+    return asyncio.run(
+        _process(UUID(document_id), UUID(revision_id) if revision_id is not None else None)
+    )
+
+
+async def _close_document_analysis_task_resources(*, primary_error: Exception | None) -> None:
+    """Close task-owned async resources before the task event loop terminates."""
+    cleanup_error: Exception | None = None
+    for resource_name, close_resource in (
+        ("checkpointer", close_checkpointer_resources),
+        ("database", close_db),
+    ):
+        try:
+            await close_resource()
+        except Exception as error:  # pragma: no cover - exercised at runtime boundaries
+            logger.exception(
+                "document_analysis_task_resource_cleanup_failed",
+                extra={"resource": resource_name},
+            )
+            if cleanup_error is None:
+                cleanup_error = error
+
+    if cleanup_error is not None and primary_error is None:
+        raise cleanup_error
+
+
+async def _run_document_analysis_task_lifecycle(
+    *,
+    tenant_id: TenantId,
+    document_id: UUID,
+    route_rag_unavailable_to_dlq: bool,
+) -> dict[str, Any]:
+    """Own every loop-bound analysis resource for one Celery task invocation."""
+    primary_error: Exception | None = None
+    try:
+        return await _run_document_analysis(tenant_id=tenant_id, document_id=document_id)
+    except RagChunksUnavailableError as error:
+        if not route_rag_unavailable_to_dlq:
+            primary_error = error
+            raise
+
+        logger.error(
+            "document_analysis_rag_chunks_unavailable",
+            extra={"tenant_id": str(tenant_id), "document_id": str(document_id)},
+        )
+        await _push_trigger_failure_to_dlq(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            error=error,
+        )
+        return {
+            "status": "routed_to_dlq",
+            "document_id": str(document_id),
+            "reason": "rag_chunks_unavailable",
+        }
+    except Exception as error:
+        primary_error = error
+        logger.exception(
+            "document_analysis_task_failed",
+            extra={"tenant_id": str(tenant_id), "document_id": str(document_id)},
+        )
+        try:
+            await _push_trigger_failure_to_dlq(
+                tenant_id=tenant_id,
+                document_id=document_id,
+                error=error,
+            )
+        except Exception:
+            # The graph/analysis error is the primary outcome; DLQ failure is observable
+            # but must not replace it while the task-owned loop is still being unwound.
+            logger.exception(
+                "document_analysis_failure_dlq_persistence_failed",
+                extra={"tenant_id": str(tenant_id), "document_id": str(document_id)},
+            )
+        raise
+    finally:
+        await _close_document_analysis_task_resources(primary_error=primary_error)
 
 
 @celery_app.task(
@@ -940,70 +1089,32 @@ def process_document_analysis_async(self: Any, tenant_id: str, document_id: str)
         document_id,
     )
     normalized_tenant_id = require_tenant_id(tenant_id)
+    retries = int(getattr(self.request, "retries", 0))
     try:
         return asyncio.run(
-            _run_document_analysis(
+            _run_document_analysis_task_lifecycle(
                 tenant_id=normalized_tenant_id,
                 document_id=UUID(document_id),
+                route_rag_unavailable_to_dlq=retries >= RAG_READINESS_MAX_RETRIES,
             )
         )
     except RagChunksUnavailableError as error:
-        retries = int(getattr(self.request, "retries", 0))
-        if retries < RAG_READINESS_MAX_RETRIES:
-            countdown = 2**retries
-            logger.warning(
-                "document_analysis_rag_chunks_retrying",
-                extra={
-                    "tenant_id": tenant_id,
-                    "document_id": document_id,
-                    "task_id": self.request.id,
-                    "retry": retries + 1,
-                    "countdown_seconds": countdown,
-                },
-            )
-            raise self.retry(
-                exc=error,
-                countdown=countdown,
-                max_retries=RAG_READINESS_MAX_RETRIES,
-            )
-
-        logger.error(
-            "document_analysis_rag_chunks_unavailable",
+        countdown = 2**retries
+        logger.warning(
+            "document_analysis_rag_chunks_retrying",
             extra={
                 "tenant_id": tenant_id,
                 "document_id": document_id,
                 "task_id": self.request.id,
+                "retry": retries + 1,
+                "countdown_seconds": countdown,
             },
         )
-        asyncio.run(
-            _push_trigger_failure_to_dlq(
-                tenant_id=normalized_tenant_id,
-                document_id=UUID(document_id),
-                error=error,
-            )
+        raise self.retry(
+            exc=error,
+            countdown=countdown,
+            max_retries=RAG_READINESS_MAX_RETRIES,
         )
-        return {
-            "status": "routed_to_dlq",
-            "document_id": document_id,
-            "reason": "rag_chunks_unavailable",
-        }
-    except Exception as error:
-        logger.exception(
-            "document_analysis_task_failed",
-            extra={
-                "tenant_id": tenant_id,
-                "document_id": document_id,
-                "task_id": self.request.id,
-            },
-        )
-        asyncio.run(
-            _push_trigger_failure_to_dlq(
-                tenant_id=normalized_tenant_id,
-                document_id=UUID(document_id),
-                error=error,
-            )
-        )
-        raise
 
 
 process_document_analysis_async.queue = "document_parsing"

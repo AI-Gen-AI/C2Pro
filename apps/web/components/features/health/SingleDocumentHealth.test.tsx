@@ -282,19 +282,90 @@ describe("4 — honest null", () => {
 // ── 5 — clause UUID evidence is surfaced traceably ────────────────────────────
 
 describe("5 — evidence traceability", () => {
-  it("surfaces the persisted clause UUIDs for a PRESENT category", () => {
-    healthQueryMock.mockReturnValue(resolved(vector()));
+  // The assessment names its source document (single_document_coverage.document_id). The link
+  // targets exactly that document; nothing is inferred from the project's document list.
+  const DOCUMENT_B = "bbbbbbbb-0000-4000-8000-00000000000b";
+
+  function attributed(granularity: EvidenceGranularity = EvidenceGranularity.clause, documentId: string | null = DOCUMENT_B) {
+    return vector({
+      single_document_coverage: { ...COVERAGE, document_id: documentId },
+      single_document_evidence_granularity: granularity,
+    });
+  }
+
+  it("links each supporting clause to the Evidence workspace of the assessed document", () => {
+    healthQueryMock.mockReturnValue(resolved(attributed()));
 
     renderHealth();
 
     const budget = screen.getByTestId(`health-category-${CoherenceCategory.BUDGET}`);
-    expect(within(budget).getByTestId("health-evidence-ids")).toHaveTextContent(
-      BUDGET_CLAUSE,
+    const link = within(within(budget).getByTestId("health-evidence-links")).getByRole("link", {
+      name: /view supporting clause #1/i,
+    });
+    expect(link).toHaveAttribute(
+      "href",
+      `/projects/proj-1/evidence?documentId=${DOCUMENT_B}&highlightId=${BUDGET_CLAUSE}`,
     );
     const legal = screen.getByTestId(`health-category-${CoherenceCategory.LEGAL}`);
-    expect(within(legal).getByTestId("health-evidence-ids")).toHaveTextContent(
-      LEGAL_CLAUSE,
+    expect(within(legal).getByRole("link", { name: /view supporting clause #1/i })).toHaveAttribute(
+      "href",
+      `/projects/proj-1/evidence?documentId=${DOCUMENT_B}&highlightId=${LEGAL_CLAUSE}`,
     );
+  });
+
+  it("uses human-readable labels, not raw clause UUIDs", () => {
+    healthQueryMock.mockReturnValue(resolved(attributed()));
+
+    renderHealth();
+
+    const budget = screen.getByTestId(`health-category-${CoherenceCategory.BUDGET}`);
+    expect(budget).not.toHaveTextContent(BUDGET_CLAUSE);
+  });
+
+  it("targets the assessed document even when another contract is listed first in the project", () => {
+    healthQueryMock.mockReturnValue(resolved(attributed()));
+
+    renderHealth();
+
+    for (const link of screen.getAllByRole("link", { name: /view supporting clause/i })) {
+      expect(link.getAttribute("href")).toContain(`documentId=${DOCUMENT_B}`);
+      expect(link.getAttribute("href")).not.toContain("documentId=aaaaaaaa");
+    }
+  });
+
+  it("links document-level evidence to the document without fabricating a clause locator", () => {
+    healthQueryMock.mockReturnValue(resolved(attributed(EvidenceGranularity.document)));
+
+    renderHealth();
+
+    const budget = screen.getByTestId(`health-category-${CoherenceCategory.BUDGET}`);
+    const links = within(budget).getByTestId("health-evidence-links");
+    expect(within(links).getByRole("link", { name: /view document evidence/i })).toHaveAttribute(
+      "href",
+      `/projects/proj-1/evidence?documentId=${DOCUMENT_B}`,
+    );
+    expect(within(links).queryByRole("link", { name: /supporting clause/i })).not.toBeInTheDocument();
+  });
+
+  it("fails closed when the assessment does not name its document: no link, no fallback", () => {
+    healthQueryMock.mockReturnValue(resolved(attributed(EvidenceGranularity.clause, null)));
+
+    renderHealth();
+
+    const budget = screen.getByTestId(`health-category-${CoherenceCategory.BUDGET}`);
+    const links = within(budget).getByTestId("health-evidence-links");
+    expect(within(links).queryByRole("link")).not.toBeInTheDocument();
+    expect(links).toHaveTextContent(/supporting clause #1 \(unavailable\)/i);
+  });
+
+  it("offers no evidence link for a category without evidence", () => {
+    healthQueryMock.mockReturnValue(resolved(attributed()));
+
+    renderHealth();
+
+    const scope = screen.getByTestId(`health-category-${CoherenceCategory.SCOPE}`);
+    expect(within(scope).queryByTestId("health-evidence-links")).not.toBeInTheDocument();
+    expect(within(scope).queryByRole("link")).not.toBeInTheDocument();
   });
 });
 

@@ -59,7 +59,8 @@ from src.modules.hitl.adapters.http.notification_settings_router import (
 )
 from src.modules.hitl.adapters.http.router import router as hitl_router
 from src.projects.adapters.http.router import router as projects_router
-from src.wbs.adapters.http.router import router as wbs_router  # GREEN phase - TS-CT-WBS-API-001
+from src.reporting.adapters.http.router import router as project_reports_router
+from src.temporal.adapters.http.router import router as temporal_router
 
 logger = structlog.get_logger()
 
@@ -298,7 +299,9 @@ def create_application() -> FastAPI:
     app.include_router(auth_router, prefix=api_v1_prefix)
     app.include_router(projects_router, prefix=api_v1_prefix)
     app.include_router(project_health_router, prefix=api_v1_prefix)
+    app.include_router(project_reports_router, prefix=api_v1_prefix)
     app.include_router(documents_router, prefix=api_v1_prefix)
+    app.include_router(temporal_router, prefix=api_v1_prefix)
     app.include_router(alerts_router, prefix=api_v1_prefix)
     app.include_router(project_alerts_router, prefix=api_v1_prefix)
     # COMPATIBILITY: Register project alerts without v1 prefix for legacy frontend calls
@@ -313,7 +316,6 @@ def create_application() -> FastAPI:
     app.include_router(decision_intelligence_router, prefix=api_v1_prefix)
     app.include_router(hitl_router, prefix=api_v1_prefix)
     app.include_router(notification_settings_router, prefix=api_v1_prefix)  # TASK-BCK-025
-    app.include_router(wbs_router, prefix=api_v1_prefix)
     app.include_router(analysis_router, prefix=api_v1_prefix)  # LangGraph orchestration
 
     try:

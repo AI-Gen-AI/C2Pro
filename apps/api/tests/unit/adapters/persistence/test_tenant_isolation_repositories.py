@@ -41,7 +41,7 @@ from src.stakeholders.domain.models import (
 async def test_coherence_repository_maps_wbs_payload_to_current_orm_fields(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """TS-UT-ANA-PER-001: Map legacy extraction keys to the current WBS ORM."""
+    """TS-UT-ANA-PER-001: Map legacy extraction keys onto the canonical WBS repository (ADR-025)."""
     tenant_id = uuid4()
     project_id = uuid4()
     db = AsyncMock()
@@ -49,6 +49,24 @@ async def test_coherence_repository_maps_wbs_payload_to_current_orm_fields(
     tenant_db.scalar = AsyncMock(return_value=None)
     tenant_db.commit = AsyncMock()
     tenant_db.refresh = AsyncMock()
+
+    class _CanonicalWBSRepository:
+        created: list = []
+
+        def __init__(self, session: object) -> None:
+            assert session is tenant_db
+
+        async def get_by_project(self, _project_id: object, _tenant_id: object) -> list:
+            return []
+
+        async def bulk_create(self, items: list, _tenant_id: object) -> list:
+            _CanonicalWBSRepository.created = items
+            return items
+
+    monkeypatch.setattr(
+        "src.analysis.adapters.persistence.coherence_repository.SQLAlchemyWBSRepository",
+        _CanonicalWBSRepository,
+    )
 
     @asynccontextmanager
     async def tenant_session(_tenant_id: object):

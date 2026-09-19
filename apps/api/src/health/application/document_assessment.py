@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from typing import Any
+from uuid import UUID
 
 from src.coherence.models import Clause, FindingSignal
 from src.health.application.single_document_coverage import assess_single_document_coverage
@@ -23,6 +24,7 @@ def build_document_assessment_artifact(
     finding_signals: Sequence[FindingSignal],
     granularity: EvidenceGranularity = EvidenceGranularity.DOCUMENT,
     degradation_reason: str | None = None,
+    document_id: UUID | None = None,
 ) -> dict[str, Any]:
     """Run L4-2 exactly once and return the additive ``result_json`` fragment.
 
@@ -32,7 +34,7 @@ def build_document_assessment_artifact(
     that could have been clause-granular was not, so the reason survives into
     ``result_json`` instead of living only in a log line.
     """
-    coverage = assess_single_document_coverage(clauses, finding_signals)
+    coverage = assess_single_document_coverage(clauses, finding_signals, document_id=document_id)
     return encode_single_document_assessment(
         coverage, finding_signals, granularity, degradation_reason
     )

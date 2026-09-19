@@ -19,11 +19,16 @@ from testcontainers.postgres import PostgresContainer
 from src.config import settings
 from src.core import database as database_module
 from src.core.database import Base, get_session_with_tenant
-from src.procurement.adapters.persistence.models import Base as ProcurementBase
-from src.procurement.adapters.persistence.models import WBSItemORM
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.domain.models import WBSItem
 from src.projects.adapters.persistence.models import ProjectORM
+from src.wbs.adapters.persistence.models import WBSNodeORM
+
+
+async def _seed_tenants(session: AsyncSession, *tenant_ids) -> None:
+    """The canonical WBS (ADR-025) references tenants; seed the stub FK targets."""
+    for tenant_id in tenant_ids:
+        await session.execute(text("INSERT INTO tenants (id) VALUES (:id)"), {"id": tenant_id})
 
 
 @pytest_asyncio.fixture
@@ -36,6 +41,7 @@ async def pg_engine():
     except DockerException:
         container = None
     engine = None
+    created_tenant_stub = False
     try:
         if container is not None:
             url = container.get_connection_url()
@@ -50,11 +56,14 @@ async def pg_engine():
         engine = create_async_engine(url, echo=False)
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all, tables=[ProjectORM.__table__])
-            # Minimal FK-target stub for WBSItemORM.source_document_id -> documents.id.
-            # The full DocumentORM table needs the document_type enum + more tables,
-            # which this subset schema deliberately does not build.
+            # Minimal FK-target stubs for WBSNodeORM.source_document_id -> documents.id and
+            # WBSNodeORM.tenant_id -> tenants.id. The full DocumentORM/Tenant tables need enums
+            # and more tables, which this subset schema deliberately does not build.
             await conn.execute(text("CREATE TABLE IF NOT EXISTS documents (id uuid PRIMARY KEY)"))
-            await conn.run_sync(ProcurementBase.metadata.create_all, tables=[WBSItemORM.__table__])
+            created_tenant_stub = (await conn.execute(text("SELECT to_regclass('public.tenants')"))).scalar() is None
+            if created_tenant_stub:
+                await conn.execute(text("CREATE TABLE tenants (id uuid PRIMARY KEY)"))
+            await conn.run_sync(Base.metadata.create_all, tables=[WBSNodeORM.__table__])
         database_module._session_factory = async_sessionmaker(
             bind=engine,
             expire_on_commit=False,
@@ -65,9 +74,14 @@ async def pg_engine():
         if engine is not None:
             try:
                 async with engine.begin() as conn:
-                    await conn.execute(text("DROP TABLE IF EXISTS procurement_bom_items CASCADE"))
-                    await conn.execute(text("DROP TABLE IF EXISTS procurement_wbs_items CASCADE"))
+                    # Explicit drops: metadata.drop_all on a table subset also tries to drop
+                    # enum types still used by projects.
+                    await conn.execute(text("DROP TABLE IF EXISTS wbs_nodes CASCADE"))
+                    await conn.execute(text("DROP TYPE IF EXISTS wbsnodetype"))
+                    await conn.execute(text("DROP TYPE IF EXISTS wbsnodestatus"))
                     await conn.execute(text("DROP TABLE IF EXISTS documents CASCADE"))
+                    if created_tenant_stub:
+                        await conn.execute(text("DROP TABLE IF EXISTS tenants CASCADE"))
                     await conn.run_sync(Base.metadata.drop_all, tables=[ProjectORM.__table__])
             except OperationalError:
                 pass
@@ -112,6 +126,7 @@ class TestWBSRepositoryIntegration:
             created_at=datetime.now(UTC).replace(tzinfo=None),
             updated_at=datetime.now(UTC).replace(tzinfo=None),
         )
+        await _seed_tenants(session, tenant_a, tenant_b)
         session.add(project_a)
         await session.commit()
 
@@ -195,6 +210,7 @@ class TestWBSRepositoryIntegration:
             created_at=datetime.now(UTC).replace(tzinfo=None),
             updated_at=datetime.now(UTC).replace(tzinfo=None),
         )
+        await _seed_tenants(session, tenant_id)
         session.add_all([project_a, project_b])
         await session.commit()
 

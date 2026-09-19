@@ -111,3 +111,15 @@ async def test_download_strips_path_prefix(service: R2StorageService, client: As
 
     args = client.get_object.call_args.kwargs
     assert args["Key"] == "file-5.pdf"
+
+
+@pytest.mark.asyncio
+async def test_download_object_preserves_immutable_revision_key(
+    service: R2StorageService, client: AsyncMock
+) -> None:
+    """P0c workers must retrieve the exact content-addressed revision object."""
+    client.get_object = AsyncMock(return_value={"Body": _Body(b"revision-bytes")})
+
+    await service.download_object("revisions/abc123/contract.pdf")
+
+    assert client.get_object.call_args.kwargs["Key"] == "revisions/abc123/contract.pdf"

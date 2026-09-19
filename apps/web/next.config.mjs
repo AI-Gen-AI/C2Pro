@@ -13,7 +13,28 @@ const nextConfig = {
     root: repoRoot,
   },
   transpilePackages: ["react-pdf", "pdfjs-dist"],
-  webpack: (config) => {
+  webpack: (config, { dev, isServer }) => {
+    if (dev && !isServer) {
+      // pdfjs-dist ships prebuilt, self-bundled Webpack output (build/pdf.mjs
+      // embeds its own nested __webpack_require__). Under Next's dev-mode
+      // eval-source-map devtool, webpack's harmony-namespace runtime throws
+      // "TypeError: Object.defineProperty called on non-object" evaluating
+      // that nested module -- this is webpack/webpack#20095, fixed upstream
+      // by webpack/webpack#20097 ("rename nested webpack export"). Next's
+      // bundled webpack does not yet include that fix, so the client dev
+      // bundle here substitutes a plain SourceMapDevToolPlugin for Next's
+      // eval-based one to avoid exercising the broken code path. Re-evaluate
+      // and remove this once Next's vendored webpack contains #20097.
+      config.plugins = config.plugins.filter(
+        (plugin) => plugin?.constructor?.name !== "EvalSourceMapDevToolPlugin",
+      );
+      config.plugins.push(
+        new webpack.SourceMapDevToolPlugin({
+          filename: "[file].map",
+          moduleFilenameTemplate: config.output?.devtoolModuleFilenameTemplate,
+        }),
+      );
+    }
     config.resolve.alias.canvas = false;
     config.plugins.push(
       new webpack.IgnorePlugin({

@@ -188,7 +188,7 @@ export default function AnalysisPage() {
       tone: "text-warning",
     },
     {
-      label: "Documents Analyzed",
+      label: "Documents",
       value: String(documentCount),
       icon: RadioTower,
       tone: "text-chart-quality",

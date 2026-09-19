@@ -69,6 +69,7 @@ import type {
   ProjectQuickViewSummaryResponse,
   ProjectResponse,
   ProjectUpdateRequest,
+  ProjectWBSResponse,
   UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchParams,
 } from "../models";
 
@@ -1944,6 +1945,181 @@ export function useGetProjectBudgetApiV1ProjectsProjectIdBudgetGet<
       projectId,
       options,
     );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * Returns WBS (Work Breakdown Structure) tree for a project.
+ *
+ *     Uses procurement WBS items for real data.
+ *
+ *     Returns:
+ *     - Hierarchical WBS tree with children
+ * @summary Get Project WBS Tree
+ */
+export const getProjectWbsApiV1ProjectsProjectIdWbsGet = (
+  projectId: string,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<ProjectWBSResponse>({
+    url: `/api/v1/projects/${projectId}/wbs`,
+    method: "GET",
+    signal,
+  });
+};
+
+export const getGetProjectWbsApiV1ProjectsProjectIdWbsGetQueryKey = (
+  projectId: string,
+) => {
+  return [`/api/v1/projects/${projectId}/wbs`] as const;
+};
+
+export const getGetProjectWbsApiV1ProjectsProjectIdWbsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetProjectWbsApiV1ProjectsProjectIdWbsGetQueryKey(projectId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>
+  > = ({ signal }) =>
+    getProjectWbsApiV1ProjectsProjectIdWbsGet(projectId, signal);
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: projectId !== null && projectId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetProjectWbsApiV1ProjectsProjectIdWbsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>
+>;
+export type GetProjectWbsApiV1ProjectsProjectIdWbsGetQueryError =
+  HTTPValidationError;
+
+export function useGetProjectWbsApiV1ProjectsProjectIdWbsGet<
+  TData = Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>,
+          TError,
+          Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetProjectWbsApiV1ProjectsProjectIdWbsGet<
+  TData = Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>,
+          TError,
+          Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetProjectWbsApiV1ProjectsProjectIdWbsGet<
+  TData = Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get Project WBS Tree
+ */
+
+export function useGetProjectWbsApiV1ProjectsProjectIdWbsGet<
+  TData = Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProjectWbsApiV1ProjectsProjectIdWbsGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getGetProjectWbsApiV1ProjectsProjectIdWbsGetQueryOptions(
+    projectId,
+    options,
+  );
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<
     TData,
