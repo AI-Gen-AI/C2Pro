@@ -215,6 +215,60 @@ async def test_happy_path_reject_records_attempt_with_rejected_status(
     assert resp.status == "rejected"
 
 
+async def test_resume_succeeds_without_checkpoint_id_using_thread_id_only(
+    use_case, review_queue_repo, checkpoint_service, monkeypatch
+):
+    """C2PRO P0b HITL resume hotfix: checkpoint_id is optional.
+
+    thread_id alone must be sufficient to resume -- CheckpointService.
+    load_checkpoint already falls back to the latest checkpoint for a thread
+    when checkpoint_id is omitted, which for a freshly-interrupted thread IS
+    the interrupt point. A review that never had a real checkpoint_id
+    captured (e.g. the capture step failed, or hasn't run yet) must not be
+    permanently blocked from resuming.
+    """
+    item = _make_review_item(checkpoint_id=None, thread_id="thr-no-checkpoint")
+    review_queue_repo.get_review_item.return_value = item
+    checkpoint_service.load_checkpoint.return_value = {
+        "id": "latest",
+        "channel_values": {"__root__": {"foo": "bar"}},
+    }
+
+    spy_warning = MagicMock()
+    monkeypatch.setattr(
+        "src.modules.hitl.application.resume_workflow_use_case.logger.warning",
+        spy_warning,
+    )
+
+    resp = await use_case.execute(
+        review_id=item.item_id,
+        request=ResumeWorkflowRequest(
+            decision=WorkflowDecision.APPROVE, feedback="thread_id alone suffices"
+        ),
+    )
+
+    assert resp.status == "resumed"
+    checkpoint_service.load_checkpoint.assert_called_once_with(
+        thread_id="thr-no-checkpoint", checkpoint_id=None
+    )
+    spy_warning.assert_called_once()
+    assert spy_warning.call_args.args[0] == "resuming_without_explicit_checkpoint_id"
+
+
+async def test_resume_raises_when_thread_id_missing_even_without_checkpoint_id(
+    use_case, review_queue_repo
+):
+    """thread_id remains hard-required: absence must still fail fast."""
+    item = _make_review_item(checkpoint_id=None, thread_id=None)
+    review_queue_repo.get_review_item.return_value = item
+
+    with pytest.raises(ValueError, match="missing thread_id"):
+        await use_case.execute(
+            review_id=item.item_id,
+            request=ResumeWorkflowRequest(decision=WorkflowDecision.APPROVE, feedback="x"),
+        )
+
+
 def test_use_case_imports_new_recorders():
     """Smoke assertion: the use case module must wire the new recorders."""
     from src.modules.hitl.application import resume_workflow_use_case as mod

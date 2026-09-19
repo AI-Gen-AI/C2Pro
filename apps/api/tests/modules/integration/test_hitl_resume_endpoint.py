@@ -424,6 +424,53 @@ class TestCheckpointRestoration:
 
         assert response.status_code in [400, 500], "Should fail without checkpoint_id"
 
+    async def test_resume_succeeds_with_thread_id_but_no_checkpoint_id(
+        self,
+        authenticated_client: AsyncClient,
+        db,
+        test_project,
+        test_document,
+        test_tenant,
+        hitl_resume_override,
+    ):
+        """C2PRO P0b HITL resume hotfix (section 2/5): thread_id alone must
+        be sufficient to resume. checkpoint_id, when never captured for any
+        reason, must never permanently block a legitimate pending review --
+        CheckpointService.load_checkpoint already falls back to the latest
+        checkpoint for a thread, which for a freshly-interrupted thread IS
+        the interrupt point.
+        """
+        item_id = uuid4()
+        review = ReviewItemORM(
+            id=item_id,
+            item_id=item_id,
+            item_type="test_review",
+            tenant_id=test_tenant.id,
+            current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+            impact_level=ImpactLevel.HIGH,
+            confidence=0.2,
+            sla_due_date=datetime.now(UTC).replace(tzinfo=None),
+            item_data={},
+            review_metadata={},
+            project_id=test_project.id,
+            document_id=test_document.id,
+            review_type="analysis_critique",
+            checkpoint_id=None,  # never captured -- must not be fatal
+            thread_id=f"document:{test_document.id}:analysis",
+        )
+        db.add(review)
+        await db.commit()
+
+        response = await authenticated_client.post(
+            f"/api/v1/hitl/resume/{review.id}",
+            json={"decision": "approve", "feedback": "thread_id alone is sufficient"},
+        )
+
+        assert response.status_code == 200, (
+            f"Resume must succeed on thread_id alone: {response.text}"
+        )
+        assert response.json()["status"] in {"resumed", "APPROVED"}
+
 
 class TestStateInjection:
     """Test approval/rejection data injection into workflow state."""

@@ -173,6 +173,34 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         orm.updated_at = datetime.now(UTC).replace(tzinfo=None)
         await self.session.flush()
 
+    async def find_active_review(
+        self,
+        document_id: UUID,
+        review_type: str,
+    ) -> ReviewItem | None:
+        """TASK P0b HITL resume hotfix: idempotency lookup for HITL routing.
+
+        Finds the single active (pending) review for a document+review_type,
+        if any, so callers never create a second one for a document that is
+        already awaiting human review (e.g. a duplicate graph re-run/retry).
+        """
+        stmt = select(ReviewItemORM).where(
+            ReviewItemORM.document_id == document_id,
+            ReviewItemORM.review_type == review_type,
+            ReviewItemORM.current_status.in_(
+                [
+                    ReviewStatus.PENDING_REVIEW_REQUIRED,
+                    ReviewStatus.PENDING_REVIEW_CONDITIONAL,
+                ]
+            ),
+        )
+        if self.tenant_id is not None:
+            stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
+        stmt = stmt.order_by(ReviewItemORM.created_at.desc())
+        result = await self.session.execute(stmt)
+        orm = result.scalars().first()
+        return self._to_domain(orm) if orm else None
+
     async def get_overdue_items(self) -> list[ReviewItem]:
         now: datetime = datetime.now(UTC).replace(tzinfo=None)
         stmt = select(ReviewItemORM).where(

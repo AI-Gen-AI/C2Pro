@@ -480,7 +480,65 @@ class TestDocumentAnalysisTask:
         )
 
     @pytest.mark.asyncio
-    async def test_run_document_analysis_uses_distinct_thread_id_per_run(self):
+    async def test_run_document_analysis_graph_exception_degrades_to_no_enrichment(self):
+        """A hard orchestrator failure must degrade to "no enrichment", not
+        propagate and not be confused with a HITL pause: analysis_id=None,
+        human_approval_required=False, document stays retryable.
+        """
+        from src.core.tasks.ingestion_tasks import _run_document_analysis
+
+        document_id = uuid4()
+        tenant_id = uuid4()
+        document = _make_document()
+        document.id = document_id
+        document.tenant_id = tenant_id
+        document.upload_status = DocumentStatus.PARSED_PENDING_ANALYSIS
+        document.document_metadata = {"parsed_text": "parsed contract text"}
+
+        class ExplodingOrchestrator:
+            async def run(self, initial_state: dict, thread_id: str) -> dict:
+                raise RuntimeError("graph orchestrator crashed")
+
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch("src.core.tasks.ingestion_tasks.init_db", new=AsyncMock())
+            )
+            stack.enter_context(
+                patch(
+                    "src.core.tasks.ingestion_tasks.get_raw_session",
+                    return_value=_make_session(),
+                )
+            )
+            mock_repo = stack.enter_context(
+                patch("src.core.tasks.ingestion_tasks.SqlAlchemyDocumentRepository")
+            )
+            mock_repo_instance = mock_repo.return_value
+            mock_repo_instance.get_by_id = AsyncMock(return_value=document)
+            mock_repo_instance.update_status = AsyncMock()
+
+            with pytest.raises(Exception):  # AnalysisIncompleteRetryableError
+                await _run_document_analysis(
+                    tenant_id=tenant_id,
+                    document_id=document_id,
+                    orchestrator=ExplodingOrchestrator(),
+                )
+
+        mock_repo_instance.update_status.assert_called_once_with(
+            tenant_id,
+            document_id,
+            DocumentStatus.PARSED_PENDING_ANALYSIS,
+        )
+
+    @pytest.mark.asyncio
+    async def test_run_document_analysis_uses_stable_thread_id_per_document(self):
+        """C2PRO P0b HITL resume hotfix: thread_id must be STABLE per document.
+
+        A fresh random thread_id on every run/retry orphans the LangGraph
+        checkpoint from the prior run and breaks resumability -- this was the
+        root cause of production HITL reviews with thread_id=NULL and
+        duplicate review items on Celery retry. One document has exactly one
+        analysis thread across repeated invocations (initial run + retries).
+        """
         from src.core.tasks.ingestion_tasks import _run_document_analysis
 
         document_id = uuid4()
@@ -497,6 +555,7 @@ class TestDocumentAnalysisTask:
 
             async def run(self, initial_state: dict, thread_id: str) -> dict:
                 assert initial_state["document_id"] == str(document_id)
+                assert initial_state["thread_id"] == thread_id
                 self.thread_ids.append(thread_id)
                 return {"analysis_id": "analysis-123"}
 
@@ -531,7 +590,7 @@ class TestDocumentAnalysisTask:
             )
 
         assert len(orchestrator.thread_ids) == 2
-        assert len(set(orchestrator.thread_ids)) == 2
+        assert len(set(orchestrator.thread_ids)) == 1
         assert all(str(document_id) in thread_id for thread_id in orchestrator.thread_ids)
         assert all(
             thread_id != str(document.project_id)
