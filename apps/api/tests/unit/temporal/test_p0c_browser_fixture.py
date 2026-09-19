@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from tests.e2e_seed.p0c_temporal import build_p0c_browser_fixture
 
 
@@ -34,14 +38,26 @@ def test_fixture_exposes_immutable_temporal_journey_for_browser_consumers() -> N
 # `-m "not integration"` over tests/unit/. It belongs on the CI surface that has one.
 
 
-def test_browser_manifest_writer_keeps_ids_and_evidence_json_serializable(tmp_path) -> None:  # noqa: ANN001
+def test_browser_manifest_writer_keeps_ids_and_evidence_json_serializable(tmp_path, monkeypatch) -> None:  # noqa: ANN001
     """A provisioner that loses revision/event identity would make browser evidence unverifiable."""
     from scripts.seed_p0c_browser_journey import write_manifest
 
-    path = tmp_path / "pj01.json"
+    # write_manifest resolves --output against the invocation directory and refuses one
+    # that escapes it (CWE-22); exercise it the way the CLI actually runs, in its cwd.
+    monkeypatch.chdir(tmp_path)
+    path = Path("pj01.json")
     write_manifest(path, {"project_id": "project", "events": {"C": {"change_cause": "NEWLY_DISCOVERED"}}})
 
-    assert path.read_text(encoding="utf-8") == (
+    assert (tmp_path / "pj01.json").read_text(encoding="utf-8") == (
         '{\n  "events": {\n    "C": {\n      "change_cause": "NEWLY_DISCOVERED"\n    }\n  },\n'
         '  "project_id": "project"\n}\n'
     )
+
+
+def test_browser_manifest_writer_rejects_output_path_that_escapes_its_own_base(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    """CWE-22 regression guard: --output must not resolve outside the invocation directory."""
+    from scripts.seed_p0c_browser_journey import write_manifest
+
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="must resolve inside"):
+        write_manifest(Path("../escaped.json"), {})

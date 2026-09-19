@@ -19,17 +19,19 @@ from tests.e2e_seed.p0c_temporal import seed_p0c_browser_fixture
 
 
 def _resolve_output_path(path: Path) -> Path:
-    """Resolve ``--output`` and refuse a relative path that escapes its own base via
-    ``..`` segments (CWE-22). This is a local CI/dev seed script, never a
-    network-facing endpoint, and callers may legitimately pass any absolute
-    destination (Playwright's own artifact directories, pytest's ``tmp_path``, ...);
-    what is never legitimate is a *relative* path that walks back out of wherever the
-    caller anchored it, so that specific case is rejected before the write sink
-    rather than trusted implicitly.
+    """Resolve ``--output`` against the invocation directory and refuse one that
+    would write outside it (CWE-22). This is a local CI/dev seed script, never a
+    network-facing endpoint, but the destination still comes from argv, so it is
+    validated -- resolved to an absolute path and checked against the base it must
+    stay under -- before the write sink, rather than trusted implicitly. Run it from
+    wherever the manifest should land (a Playwright artifact directory, pytest's
+    ``tmp_path``, ...); ``--output`` is always relative to that.
     """
-    if not path.is_absolute() and ".." in path.parts:
-        raise ValueError(f"--output must not contain '..' path segments, got {path}")
-    return path
+    root = Path.cwd().resolve()
+    resolved = (root / path).resolve()
+    if resolved != root and root not in resolved.parents:
+        raise ValueError(f"--output must resolve inside {root}, got {resolved}")
+    return resolved
 
 
 def write_manifest(path: Path, manifest: dict[str, Any]) -> None:
