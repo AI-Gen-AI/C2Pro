@@ -113,6 +113,67 @@ class ResumeWorkflowUseCase:
             self._graph_app = _gga()
         return self._graph_app
 
+    async def _mark_document_analyzed_after_resume(
+        self,
+        *,
+        review_id: UUID,
+        review_item: Any,
+        resumed_state: Any,
+    ) -> None:
+        """Transition the document to ANALYZED once the resumed graph
+        actually persisted an analysis (N17 ran to completion).
+
+        Best-effort and isolated in its own session: a failure here must
+        never undo the HITL decision that was already recorded, and must
+        never mark a document ANALYZED when the resumed run did not
+        genuinely persist an analysis (e.g. it re-paused, or N17 itself
+        degraded -- see save_to_db_node's own best-effort persistence).
+        """
+        if not isinstance(resumed_state, dict):
+            return
+        analysis_id = resumed_state.get("analysis_id")
+        if not analysis_id:
+            return
+
+        document_id_raw = review_item.metadata.get("document_id")
+        tenant_id_raw = review_item.metadata.get("tenant_id")
+        if not document_id_raw or not tenant_id_raw:
+            logger.warning(
+                "resume_document_status_update_skipped_missing_ids",
+                review_id=str(review_id),
+            )
+            return
+
+        try:
+            from src.core.database import get_raw_session
+            from src.documents.adapters.persistence.sqlalchemy_document_repository import (
+                SqlAlchemyDocumentRepository,
+            )
+            from src.documents.domain.models import DocumentStatus
+
+            async with get_raw_session() as session:
+                document_repo = SqlAlchemyDocumentRepository(session)
+                await document_repo.update_status(
+                    UUID(str(tenant_id_raw)),
+                    UUID(str(document_id_raw)),
+                    DocumentStatus.ANALYZED,
+                )
+                await session.commit()
+
+            logger.info(
+                "resume_document_marked_analyzed",
+                review_id=str(review_id),
+                document_id=str(document_id_raw),
+                analysis_id=str(analysis_id),
+            )
+        except Exception:
+            logger.warning(
+                "resume_document_status_update_failed",
+                review_id=str(review_id),
+                document_id=str(document_id_raw),
+                exc_info=True,
+            )
+
     async def execute(
         self,
         review_id: UUID,
@@ -259,13 +320,28 @@ class ResumeWorkflowUseCase:
                     # Use update_state to inject the modified state back into the checkpoint
                     # This will resume from the interrupt point (human_interrupt_node)
                     await graph_app.aupdate_state(config, state)
-                    await graph_app.ainvoke(None, config)
+                    resumed_state = await graph_app.ainvoke(None, config)
 
                     logger.info(
                         "workflow_resumed",
                         review_id=str(review_id),
                         thread_id=thread_id,
                         status=status_message,
+                    )
+
+                    # C2PRO P0b HITL resume hotfix: resuming to completion runs
+                    # N17 (save_to_db), which persists the analysis and sets
+                    # resumed_state["analysis_id"] -- but N17 never touches
+                    # Document.upload_status (that transition normally happens
+                    # in _run_document_analysis, a code path this resume never
+                    # goes through). Without this, an approved, fully-analyzed
+                    # document stayed parsed_pending_analysis forever and
+                    # Health/Evidence never became readable. Best-effort: a
+                    # failure here must not undo the recorded HITL decision.
+                    await self._mark_document_analyzed_after_resume(
+                        review_id=review_id,
+                        review_item=review_item,
+                        resumed_state=resumed_state,
                     )
 
                 else:  # REJECT

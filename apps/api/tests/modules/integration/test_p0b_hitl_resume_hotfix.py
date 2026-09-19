@@ -40,7 +40,7 @@ from src.core.tasks import ingestion_tasks
 from src.documents.adapters.persistence.models import DocumentORM
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
-from src.modules.hitl.domain.entities import ImpactLevel
+from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
 
 pytestmark = pytest.mark.asyncio
@@ -310,3 +310,208 @@ async def test_hitl_interrupt_is_durable_resumable_and_non_duplicating(
     assert review.checkpoint_id, "checkpoint_id must be captured for real (section 2), never NULL"
     assert review.thread_id == next(iter(thread_ids))
     assert review.checkpoint_id.startswith("real-checkpoint-")
+
+
+class _FakeResumingGraphApp:
+    """Simulates the compiled LangGraph app being resumed after HITL approval.
+
+    aupdate_state captures the (human-feedback-injected) checkpoint state
+    exactly as the real graph_app would receive it; ainvoke(None, config)
+    then resumes from that state by invoking the REAL N17 save_to_db_node --
+    the actual production node function, not a stand-in -- so persisted
+    analysis rows, the emitted graph.completed event, and the returned
+    analysis_id are all genuine.
+    """
+
+    def __init__(self) -> None:
+        self.last_state: dict | None = None
+        self.update_calls: list[tuple[dict, dict]] = []
+
+    async def aupdate_state(self, config: dict, state: dict) -> None:
+        self.update_calls.append((config, dict(state)))
+        self.last_state = state
+
+    async def ainvoke(self, _resume_signal: None, config: dict) -> dict:
+        from src.analysis.adapters.graph.nodes import save_to_db_node
+
+        assert self.last_state is not None, "aupdate_state must run before ainvoke(None, ...)"
+        return await save_to_db_node(self.last_state)
+
+
+class _FakeResumeCheckpointService:
+    """Deterministic stand-in for CheckpointService: the LangGraph checkpoint
+    read/write path itself is out of scope here (proven separately against
+    real Postgres in the interrupt-creation test above and in
+    test_checkpoint_service.py); what this test proves is what happens once
+    a checkpoint IS loaded -- the full resume-to-N17-to-ANALYZED lifecycle.
+    """
+
+    def __init__(self, state: dict) -> None:
+        self._state = state
+        self.loaded: list[tuple[str, str | None]] = []
+
+    async def load_checkpoint(self, thread_id: str, checkpoint_id: str | None) -> dict:
+        self.loaded.append((thread_id, checkpoint_id))
+        return {"id": checkpoint_id or "latest", "channel_values": {"__root__": dict(self._state)}}
+
+    def extract_state(self, checkpoint: dict) -> dict:
+        return dict(checkpoint["channel_values"]["__root__"])
+
+
+async def test_full_hitl_lifecycle_resume_to_n17_to_analyzed_and_health_readable(
+    monkeypatch: pytest.MonkeyPatch,
+    db: AsyncSession,
+) -> None:
+    """Section 5 + Section 1 full lifecycle proof, end to end:
+
+    contract -> graph interrupt -> exactly one pending review -> real
+    thread_id -> real persisted checkpoint -> approve through
+    ResumeWorkflowUseCase -> same LangGraph thread resumes -> N17 (the real
+    save_to_db_node) executes -> an ``analyses`` row persists -> a real
+    ``graph.completed`` ProjectEvent is emitted -> the document becomes
+    ANALYZED -> the persisted ``single_document_assessment`` fragment
+    (Health's read model) is present and readable in ``analyses.result_json``.
+
+    Only the LangGraph pregel/checkpoint boundary is faked; every other step
+    -- HITL routing, review persistence, ResumeWorkflowUseCase, the N17 node,
+    PersistAnalysisUseCase, the document status transition, and the
+    graph.completed event -- is the real production code, against the real
+    local test database.
+    """
+    from src.analysis.adapters.persistence.models import Analysis
+    from src.modules.hitl.adapters.persistence.repository import (
+        SqlAlchemyReviewQueueRepository,
+    )
+    from src.modules.hitl.application.resume_workflow_use_case import (
+        ResumeWorkflowRequest,
+        ResumeWorkflowUseCase,
+        WorkflowDecision,
+    )
+    from src.temporal.adapters.persistence.models import ProjectEventORM
+
+    document, fake_app, _repo = await _install_real_hitl_path_with_interrupting_graph(
+        monkeypatch, db
+    )
+
+    # 1-4: contract -> interrupt -> exactly one pending review with a real
+    # thread_id and a real persisted checkpoint id (same mechanism proven in
+    # the reproduction test above).
+    first = await ingestion_tasks._run_document_analysis(
+        tenant_id=document.tenant_id, document_id=document.id
+    )
+    assert first["status"] == "waiting_for_review"
+
+    from src.core.database import get_session_with_tenant
+
+    async with get_session_with_tenant(document.tenant_id) as verify_session:
+        rows = (
+            await verify_session.execute(
+                select(ReviewItemORM).where(
+                    ReviewItemORM.document_id == document.id,
+                    ReviewItemORM.review_type == "analysis_critique",
+                )
+            )
+        ).scalars().all()
+    assert len(rows) == 1
+    review_orm = rows[0]
+    assert review_orm.thread_id and review_orm.checkpoint_id
+
+    # 5. Approve through ResumeWorkflowUseCase -- the real use case, a real
+    # tenant-scoped repository, and a graph_app that resumes into the real
+    # N17 node.
+    review_repo = SqlAlchemyReviewQueueRepository(session=db, tenant_id=document.tenant_id)
+
+    resume_state = {
+        "project_id": str(document.project_id),
+        "tenant_id": str(document.tenant_id),
+        "document_id": str(document.id),
+        "extracted_risks": [],
+        "extracted_wbs": [],
+        "coherence_score": 82,
+        "coherence_breakdown": {"overall": 82},
+        "single_document_assessment": {
+            "single_document_assessment": {
+                "evidence_granularity": "document",
+                "proof_marker": "p0b-hitl-hotfix-health-readable",
+            }
+        },
+        "messages": [],
+        "node_results": [],
+    }
+    resuming_app = _FakeResumingGraphApp()
+    checkpoint_service = _FakeResumeCheckpointService(resume_state)
+    use_case = ResumeWorkflowUseCase(
+        review_queue_repo=review_repo,
+        checkpoint_service=checkpoint_service,
+        graph_app=resuming_app,
+    )
+
+    response = await use_case.execute(
+        review_id=review_orm.item_id,
+        request=ResumeWorkflowRequest(
+            decision=WorkflowDecision.APPROVE,
+            feedback="Approved: contract review complete.",
+        ),
+    )
+
+    assert response.status == "resumed"
+    assert checkpoint_service.loaded == [(review_orm.thread_id, review_orm.checkpoint_id)]
+    # review_repo uses the `db` fixture session, which only flushes (per-test
+    # rollback isolation); commit so the separate verification sessions below
+    # (opened via get_session_with_tenant, a different connection) see it.
+    await db.commit()
+
+    # 6. Same LangGraph thread resumed (proven by the checkpoint load above
+    # using this review's own thread_id/checkpoint_id) and N17 executed for
+    # real -- an analyses row persisted with the real analysis_id N17 wrote
+    # into state.
+    async with get_session_with_tenant(document.tenant_id) as verify_session:
+        analyses = (
+            await verify_session.execute(
+                select(Analysis).where(Analysis.project_id == document.project_id)
+            )
+        ).scalars().all()
+    assert len(analyses) == 1, "N17 must persist exactly one analysis row"
+    analysis_row = analyses[0]
+
+    # 7. Health becomes readable: the single_document_assessment fragment
+    # N17 wrote is exactly what Health/SnapshotWriter reads back from
+    # analyses.result_json (see src/health/application/document_assessment.py).
+    assert analysis_row.result_json is not None
+    assert (
+        analysis_row.result_json.get("single_document_assessment", {}).get("proof_marker")
+        == "p0b-hitl-hotfix-health-readable"
+    )
+
+    # 8. graph.completed emitted for real.
+    async with get_session_with_tenant(document.tenant_id) as verify_session:
+        events = (
+            await verify_session.execute(
+                select(ProjectEventORM).where(
+                    ProjectEventORM.project_id == document.project_id,
+                    ProjectEventORM.event_type == "graph.completed",
+                )
+            )
+        ).scalars().all()
+    assert len(events) == 1
+    assert events[0].payload["analysis_id"] == str(analysis_row.id)
+    assert events[0].payload["document_id"] == str(document.id)
+
+    # 9. Document becomes ANALYZED (the gap this hotfix closes: N17 alone
+    # never touched Document.upload_status -- ResumeWorkflowUseCase must).
+    async with get_session_with_tenant(document.tenant_id) as verify_session:
+        refreshed_document = (
+            await verify_session.execute(
+                select(DocumentORM).where(DocumentORM.id == document.id)
+            )
+        ).scalar_one()
+    assert refreshed_document.upload_status == DocumentStatus.ANALYZED.value
+
+    # Review itself is APPROVED, not left dangling.
+    async with get_session_with_tenant(document.tenant_id) as verify_session:
+        refreshed_review = (
+            await verify_session.execute(
+                select(ReviewItemORM).where(ReviewItemORM.item_id == review_orm.item_id)
+            )
+        ).scalar_one()
+    assert refreshed_review.current_status == ReviewStatus.APPROVED.value
