@@ -390,3 +390,142 @@ async def test_legacy_wbs_data_reaches_one_canonical_wbs_and_round_trips() -> No
             await conn.close()
     finally:
         await _drop_scratch_database()
+
+
+async def test_production_predecessor_schema_wbs_code_no_version_migrates_cleanly() -> None:
+    """Reproduces the exact schema a real deployment had at alembic_version=20260914_0002:
+    ``wbs_items`` with a ``wbs_code`` column (never renamed to ``code``) and no ``version``
+    column at all -- the shape that broke a real production deploy of 20260914_0005 with
+    ``UndefinedColumnError: column w.code does not exist``. Nothing in the current Alembic
+    history produces this shape from scratch (20260318_0001 already creates ``code`` +
+    ``version``), so it is reproduced explicitly here rather than assumed away. Production
+    currently has zero ``wbs_items`` rows, but the migration must still be correct if rows
+    exist, so this seeds a representative ``wbs_items`` hierarchy anyway.
+    """
+    await _recreate_scratch_database()
+    try:
+        _alembic("upgrade", BEFORE_ADR025)
+        conn = await asyncpg.connect(SCRATCH_DSN)
+        try:
+            # Mutate wbs_items to the exact production predecessor shape.
+            await conn.execute("ALTER TABLE wbs_items RENAME COLUMN code TO wbs_code")
+            await conn.execute("ALTER TABLE wbs_items DROP COLUMN version")
+            assert await conn.fetchval(
+                "SELECT count(*) FROM information_schema.columns "
+                "WHERE table_name = 'wbs_items' AND column_name = 'code'"
+            ) == 0
+            assert await conn.fetchval(
+                "SELECT count(*) FROM information_schema.columns "
+                "WHERE table_name = 'wbs_items' AND column_name = 'version'"
+            ) == 0
+
+            ids: dict[str, UUID] = {}
+
+            def new(name: str) -> UUID:
+                ids[name] = uuid4()
+                return ids[name]
+
+            await conn.execute(
+                "INSERT INTO tenants (id, name, slug, subscription_plan) VALUES ($1, 'ADR025 prod repro', $2, 'free')",
+                new("tenant"),
+                f"adr025-prod-repro-{ids['tenant']}",
+            )
+            for project in ("E", "F"):
+                await conn.execute(
+                    "INSERT INTO projects (id, tenant_id, name, code, project_type, status, currency) "
+                    "VALUES ($1, $2, $3, $4, 'construction', 'active', 'EUR')",
+                    new(f"project_{project}"),
+                    ids["tenant"],
+                    f"ADR025 prod repro project {project}",
+                    f"PR25{project}-{str(ids[f'project_{project}'])[:8]}",
+                )
+
+            # Project E: procurement_wbs_items rows only -- matches production today (23
+            # procurement rows, 0 wbs_items rows); confirms that path is unaffected.
+            await conn.execute(
+                "INSERT INTO procurement_wbs_items (id, project_id, code, name, level, item_type, parent_code, "
+                "budget_spent, version, source_document_id, wbs_metadata) "
+                "VALUES ($1, $2, '1', 'Procurement root', 1, 'deliverable'::wbsitemtype, NULL, 0, 1, NULL, '{}'::jsonb)",
+                new("E_1"),
+                ids["project_E"],
+            )
+
+            # Project F: legacy wbs_items rows only, in the production wbs_code/no-version shape --
+            # the case that must migrate even though production currently has zero such rows.
+            legacy = (
+                "INSERT INTO wbs_items (id, project_id, wbs_code, name, level, item_type, parent_id) "
+                "VALUES ($1, $2, $3, $4, $5, $6::wbsitemtype, $7)"
+            )
+            await conn.execute(legacy, new("F_1"), ids["project_F"], "1", "Legacy root", 1, "deliverable", None)
+            await conn.execute(
+                legacy, new("F_1_1"), ids["project_F"], "1.1", "Legacy child", 2, "work_package", ids["F_1"]
+            )
+
+            before_counts = {
+                table: await conn.fetchval(f"SELECT count(*) FROM {table}")
+                for table in ("procurement_wbs_items", "wbs_items")
+            }
+        finally:
+            await conn.close()
+
+        _alembic("upgrade", "head")
+
+        conn = await asyncpg.connect(SCRATCH_DSN)
+        try:
+            assert await conn.fetchval("SELECT version_num FROM alembic_version") == "20260914_0005"
+
+            # --- no silent row loss, every legacy row classified ------------------------------
+            for table, count in before_counts.items():
+                assert await conn.fetchval(f"SELECT count(*) FROM {table}") == count, table
+            for table in ("procurement_wbs_items", "wbs_items"):
+                assert await conn.fetchval(f"SELECT count(*) FROM {table} WHERE canonical_mapping IS NULL") == 0
+
+            mapping = {
+                r["id"]: (r["canonical_mapping"], r["canonical_mapping_reason"], r["canonical_wbs_node_id"])
+                for r in await conn.fetch(
+                    "SELECT id, canonical_mapping, canonical_mapping_reason, canonical_wbs_node_id "
+                    "FROM wbs_items WHERE project_id = $1",
+                    ids["project_F"],
+                )
+            }
+            assert mapping[ids["F_1"]] == ("DIRECT_MAP", None, ids["F_1"])
+            assert mapping[ids["F_1_1"]] == ("DIRECT_MAP", None, ids["F_1_1"])
+
+            # --- wbs_code truthfully maps to the canonical `code`, hierarchy holds -----------
+            nodes = {
+                r["code"]: r
+                for r in await conn.fetch(
+                    "SELECT n.id, n.code, n.depth, n.version, n.source_document_id, p.code AS parent_code "
+                    "FROM wbs_nodes n LEFT JOIN wbs_nodes p ON p.id = n.parent_id WHERE n.project_id = $1",
+                    ids["project_F"],
+                )
+            }
+            assert set(nodes) == {"1", "1.1"}
+            assert nodes["1"]["id"] == ids["F_1"]
+            assert nodes["1.1"]["id"] == ids["F_1_1"] and nodes["1.1"]["parent_code"] == "1"
+            await _assert_nested_set(conn, ids["project_F"])
+
+            # --- no fabricated historical version: the canonical row gets the same starting
+            # version (1) any other source with no version data already gets -- never a value
+            # implying real edit history that never happened.
+            assert nodes["1"]["version"] == 1
+            assert nodes["1.1"]["version"] == 1
+
+            # --- no fabricated source_document_id: wbs_items never had that column, in either
+            # schema shape, so the canonical row must not acquire one from nowhere.
+            assert nodes["1"]["source_document_id"] is None
+            assert nodes["1.1"]["source_document_id"] is None
+
+            # --- project E: the procurement-only path is unaffected by the wbs_items shape ---
+            assert await conn.fetchval("SELECT count(*) FROM wbs_nodes WHERE project_id = $1", ids["project_E"]) == 1
+
+            # --- one-project-one-canonical-WBS invariant: exactly one canonical node per
+            # legacy row, never merged or duplicated -----------------------------------------
+            assert await conn.fetchval(
+                "SELECT count(DISTINCT canonical_wbs_node_id) FROM wbs_items WHERE project_id = $1",
+                ids["project_F"],
+            ) == 2
+        finally:
+            await conn.close()
+    finally:
+        await _drop_scratch_database()
