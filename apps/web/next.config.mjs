@@ -13,7 +13,18 @@ const nextConfig = {
     root: repoRoot,
   },
   transpilePackages: ["react-pdf", "pdfjs-dist"],
-  webpack: (config) => {
+  webpack: (config, { dev, isServer }) => {
+    if (dev && !isServer) {
+      config.plugins = config.plugins.filter(
+        (plugin) => plugin?.constructor?.name !== "EvalSourceMapDevToolPlugin",
+      );
+      config.plugins.push(
+        new webpack.SourceMapDevToolPlugin({
+          filename: "[file].map",
+          moduleFilenameTemplate: config.output?.devtoolModuleFilenameTemplate,
+        }),
+      );
+    }
     config.resolve.alias.canvas = false;
     config.plugins.push(
       new webpack.IgnorePlugin({
