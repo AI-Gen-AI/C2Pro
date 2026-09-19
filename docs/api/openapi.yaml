@@ -6015,6 +6015,26 @@ components:
           title: Evaluation Mode
           description: low_budget_mode or standard
           default: standard
+        category_scores:
+          anyOf:
+          - additionalProperties:
+              anyOf:
+              - type: number
+              - type: 'null'
+            type: object
+          - type: 'null'
+          title: Category Scores
+          description: Per-category coherence scores keyed by canonical category (null
+            when UNASSESSED).
+        audit_coverage:
+          anyOf:
+          - additionalProperties:
+              type: number
+            type: object
+          - type: 'null'
+          title: Audit Coverage
+          description: 'Audit dimension coverage: assessed / total / pct of the 6
+            canonical categories.'
       type: object
       required:
       - overall_score
