@@ -24,7 +24,12 @@ async def test_upload_response_exposes_non_terminal_processing_state(
     generate_token,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(document_router, "_enqueue_document_processing", lambda _document_id: None)
+    # _enqueue_document_processing(document_id, revision_id=None) -- the router now
+    # threads the immutable revision id through to task enqueueing; the double must
+    # accept it too or a real call at the router's call site (line ~484) raises.
+    monkeypatch.setattr(
+        document_router, "_enqueue_document_processing", lambda _document_id, _revision_id=None: None
+    )
 
     project = ProjectORM(
         id=uuid4(),

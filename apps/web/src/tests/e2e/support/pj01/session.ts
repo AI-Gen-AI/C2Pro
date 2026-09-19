@@ -6,7 +6,7 @@
  * typed navigation in PJ-01 is the Clerk testing bootstrap inside `signInWithClerk`; from
  * `/projects` onwards every step is reached by clicking.
  */
-import { expect, type Page, type Response } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 import {
   assertProjectEntryContinuity,
@@ -17,8 +17,22 @@ import {
 
 const PROJECT_URL = /\/projects\/([0-9a-f-]{36})\/documents/;
 
+/**
+ * Exactly what {@link isBrowserVisibleProjectCreateResponse} consumes from a Playwright
+ * `Response` -- not `Pick<Response, "url" | "request" | "ok">`, which drags in the full
+ * `Request` return type of `.request()` (headers, frame, timing, ...) even though only
+ * `.method()` is ever read. A real Playwright `Response` still satisfies this structurally,
+ * so `page.waitForResponse(isBrowserVisibleProjectCreateResponse, ...)` is unaffected; a
+ * test double only needs to shape up to this, not build a full `Request` mock.
+ */
+export interface BrowserVisibleResponseLike {
+  url(): string;
+  ok(): boolean;
+  request(): { method(): string };
+}
+
 export function isBrowserVisibleProjectCreateResponse(
-  response: Pick<Response, "url" | "request" | "ok">,
+  response: BrowserVisibleResponseLike,
 ): boolean {
   return (
     response.request().method() === "POST" &&

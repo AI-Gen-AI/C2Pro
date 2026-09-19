@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from tests.e2e_seed.p0c_temporal import build_p0c_browser_fixture
 
 
@@ -30,19 +28,10 @@ def test_fixture_exposes_immutable_temporal_journey_for_browser_consumers() -> N
     assert fixture.timeline == [fixture.business_change, fixture.newly_discovered, fixture.no_change]
 
 
-@pytest.mark.asyncio
-async def test_fixture_persists_only_append_only_events_and_returns_browser_manifest(db) -> None:  # noqa: ANN001
-    """Removing a real repository append or exposing mutable evidence must fail fixture setup."""
-    from tests.e2e_seed.p0c_temporal import seed_p0c_browser_fixture
-
-    manifest = await seed_p0c_browser_fixture(db)
-
-    assert manifest["project_id"]
-    assert manifest["document_id"]
-    assert manifest["revisions"]["A"]["blob_hash"] != manifest["revisions"]["B"]["blob_hash"]
-    assert manifest["events"]["B"]["change_cause"] == "BUSINESS_STATE_CHANGED"
-    assert manifest["events"]["C"]["change_cause"] == "NEWLY_DISCOVERED"
-    assert manifest["events"]["D"]["change_cause"] is None
+# test_fixture_persists_only_append_only_events_and_returns_browser_manifest moved to
+# tests/integration/temporal/test_p0c_browser_fixture_persistence.py -- it needs a real
+# `db` (live PostgreSQL) and the Unit Tests CI job runs with no database service, only
+# `-m "not integration"` over tests/unit/. It belongs on the CI surface that has one.
 
 
 def test_browser_manifest_writer_keeps_ids_and_evidence_json_serializable(tmp_path) -> None:  # noqa: ANN001

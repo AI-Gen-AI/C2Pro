@@ -18,10 +18,25 @@ from src.core.database import close_db, get_raw_session, init_db
 from tests.e2e_seed.p0c_temporal import seed_p0c_browser_fixture
 
 
+def _resolve_output_path(path: Path) -> Path:
+    """Resolve ``--output`` and refuse a relative path that escapes its own base via
+    ``..`` segments (CWE-22). This is a local CI/dev seed script, never a
+    network-facing endpoint, and callers may legitimately pass any absolute
+    destination (Playwright's own artifact directories, pytest's ``tmp_path``, ...);
+    what is never legitimate is a *relative* path that walks back out of wherever the
+    caller anchored it, so that specific case is rejected before the write sink
+    rather than trusted implicitly.
+    """
+    if not path.is_absolute() and ".." in path.parts:
+        raise ValueError(f"--output must not contain '..' path segments, got {path}")
+    return path
+
+
 def write_manifest(path: Path, manifest: dict[str, Any]) -> None:
     """Write a stable, non-secret fixture manifest for the Playwright process."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    resolved = _resolve_output_path(path)
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    resolved.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 async def provision(output: Path) -> dict[str, Any]:
