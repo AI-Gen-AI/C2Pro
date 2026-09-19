@@ -640,6 +640,68 @@ def get_graph_app() -> ProjectGraph:
     return _graph_app
 
 
+async def _persist_real_checkpoint_id(
+    app: ProjectGraph,
+    config: RunnableConfig,
+    *,
+    thread_id: str,
+    document_id: str | None,
+    tenant_id: str | None,
+) -> None:
+    """Attach the REAL LangGraph checkpoint id to the pending ReviewItem.
+
+    Must run strictly AFTER ``app.ainvoke`` returns: the checkpointer only
+    persists the interrupt checkpoint as part of that call, so querying
+    state any earlier would read a stale (pre-interrupt) or empty snapshot.
+    ``aget_state`` returns a ``StateSnapshot`` whose
+    ``config["configurable"]["checkpoint_id"]`` is the checkpointer's own,
+    durable, resumable identifier -- never fabricated here (C2PRO P0b HITL
+    resume hotfix, section 2).
+
+    Best-effort: human_interrupt_node already created the pending review
+    with a stable thread_id, which alone is sufficient for
+    CheckpointService.load_checkpoint (it loads the latest checkpoint for a
+    thread when no checkpoint_id is given). A failure here must not fail the
+    graph run -- it only means checkpoint_id stays unset and resume falls
+    back to thread_id-only.
+    """
+    if not document_id or not tenant_id:
+        return
+    try:
+        snapshot = await app.aget_state(config)
+        checkpoint_id = (snapshot.config or {}).get("configurable", {}).get("checkpoint_id")
+    except Exception:
+        logger.warning("checkpoint_id_capture_failed", thread_id=thread_id, exc_info=True)
+        return
+    if not checkpoint_id:
+        return
+
+    try:
+        from uuid import UUID
+
+        from src.analysis.adapters.graph.dependencies import get_hitl_service_for_graph
+        from src.core.database import get_session_with_tenant
+
+        async with get_session_with_tenant(UUID(tenant_id)) as session:
+            service = get_hitl_service_for_graph(session=session, tenant_id=UUID(tenant_id))
+            review = await service.review_queue_repo.find_active_review(
+                document_id=UUID(document_id),
+                review_type="analysis_critique",
+            )
+            if review is not None and not review.metadata.get("checkpoint_id"):
+                review.metadata["checkpoint_id"] = checkpoint_id
+                review.metadata.setdefault("thread_id", thread_id)
+                await service.review_queue_repo.update_review_item(review)
+                logger.info(
+                    "checkpoint_id_persisted",
+                    thread_id=thread_id,
+                    checkpoint_id=checkpoint_id,
+                    document_id=document_id,
+                )
+    except Exception:
+        logger.warning("checkpoint_id_persist_failed", thread_id=thread_id, exc_info=True)
+
+
 async def run_orchestration(initial_state: dict[str, Any], thread_id: str) -> dict[str, Any]:
     """
     Run the LangGraph orchestration workflow with the given initial state.
@@ -685,5 +747,14 @@ async def run_orchestration(initial_state: dict[str, Any], thread_id: str) -> di
         doc_type=result.get("doc_type"),
         human_approval_required=result.get("human_approval_required", False),
     )
+
+    if result.get("human_approval_required"):
+        await _persist_real_checkpoint_id(
+            app,
+            config,
+            thread_id=thread_id,
+            document_id=result.get("document_id"),
+            tenant_id=result.get("tenant_id"),
+        )
 
     return cast(dict[str, Any], result)

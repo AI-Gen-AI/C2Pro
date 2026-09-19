@@ -68,7 +68,6 @@ class ResumeWorkflowUseCase:
 
     _ERR_NOT_FOUND = "Review item {review_id} not found"
     _ERR_NOT_PENDING = "Review item {review_id} is not in pending status (current: {status})"
-    _ERR_MISSING_CHECKPOINT = "Review item {review_id} missing checkpoint_id for workflow resumption"
     _ERR_MISSING_THREAD_ID = "Review item {review_id} missing thread_id for workflow resumption"
     _ERR_ALREADY_PROCESSED = "Review item {review_id} already processed (status: {status})"
     _ERR_CHECKPOINT_NOT_FOUND = "Checkpoint not found for thread_id {thread_id}"
@@ -171,18 +170,28 @@ class ResumeWorkflowUseCase:
                     )
                 )
 
-            # 3. Validate checkpoint tracking fields exist
+            # 3. Validate checkpoint tracking fields exist.
+            # thread_id is the authoritative, hard-required resume key --
+            # CheckpointService.load_checkpoint keys its query on thread_id
+            # alone. checkpoint_id, when present, pins the exact interrupted
+            # checkpoint (captured for real via LangGraph's own aget_state in
+            # run_orchestration -- never fabricated); when absent it is NOT
+            # fatal, since load_checkpoint falls back to the latest
+            # checkpoint for the thread, which for a freshly-interrupted
+            # thread IS the interrupt point (C2PRO P0b HITL resume hotfix).
             checkpoint_id = review_item.metadata.get("checkpoint_id")
             thread_id = review_item.metadata.get("thread_id")
 
-            if not checkpoint_id:
-                record_hitl_checkpoint_load_error("missing_checkpoint")
-                record_hitl_resume_error("missing_checkpoint")
-                raise ValueError(self._ERR_MISSING_CHECKPOINT.format(review_id=review_id))
             if not thread_id:
                 record_hitl_checkpoint_load_error("missing_thread")
                 record_hitl_resume_error("missing_thread")
                 raise ValueError(self._ERR_MISSING_THREAD_ID.format(review_id=review_id))
+            if not checkpoint_id:
+                logger.warning(
+                    "resuming_without_explicit_checkpoint_id",
+                    review_id=str(review_id),
+                    thread_id=thread_id,
+                )
 
             # 4. Load checkpoint from PostgreSQL (TASK-BCK-031)
             logger.info(

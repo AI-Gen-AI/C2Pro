@@ -20,6 +20,19 @@ class IReviewQueueRepository(Protocol):
 
     async def get_overdue_items(self) -> list[ReviewItem]: ...
 
+    async def find_active_review(
+        self,
+        document_id: UUID,
+        review_type: str,
+    ) -> ReviewItem | None:
+        """Return the single active (pending) review for a document+type, if any.
+
+        Backs HITL idempotency: at most one active review per
+        tenant+document+review_type must exist at a time (TASK P0b HITL resume
+        hotfix). Returns None when there is no active review.
+        """
+        ...
+
     async def list_by_status(
         self,
         status: ReviewStatus | None = None,

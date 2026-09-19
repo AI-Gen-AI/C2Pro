@@ -489,21 +489,37 @@ async def _run_analysis_graph_best_effort(
     parsed_text: str,
     tenant_id: TenantId,
     document_id: UUID,
-) -> str | None:
-    """Run the N1-N17 enrichment graph and return its analysis_id, or None.
+) -> dict[str, Any]:
+    """Run the N1-N17 enrichment graph and report its outcome.
 
     Best-effort by design: a graph failure must not block the document from being
     marked ANALYZED, since its structured extraction already succeeded during
     parsing. The broad catch is intentional — any orchestrator error degrades to
     "no enrichment", never a stuck document.
+
+    Returns a dict with ``analysis_id`` (str | None) and
+    ``human_approval_required`` (bool). A LangGraph HITL interrupt is NOT a
+    failure: it must be reported distinctly from "graph raised" or "graph ran
+    but produced nothing" so the caller never auto-retries a legitimate,
+    durably-checkpointed pause (see ``_run_document_analysis``).
     """
     graph_orchestrator = orchestrator or AnalysisOrchestratorFactory.create()
+    # Stable, deterministic thread_id: one document has exactly one analysis
+    # thread. Must NOT be re-randomized per call/retry -- a fresh thread_id on
+    # every retry orphans the checkpoint from the prior run, breaks
+    # LangGraph's own "resume this thread" semantics, and re-triggers a brand
+    # new HITL interrupt (and, previously, a brand new duplicate ReviewItem)
+    # every time the worker retries. Injected into initial_state too, since
+    # human_interrupt_node reads thread_id from state, not from the run()
+    # kwarg alone.
+    thread_id = f"document:{document_id}:analysis"
     initial_state: dict[str, Any] = {
         "document_text": parsed_text,
         "project_id": str(document.project_id),
         "document_id": str(document.id),
         "doc_type": getattr(document.document_type, "value", "") if document.document_type else "",
         "tenant_id": str(tenant_id),
+        "thread_id": thread_id,
         "messages": [],
         "extracted_risks": [],
         "extracted_wbs": [],
@@ -519,7 +535,6 @@ async def _run_analysis_graph_best_effort(
         "document_analysis_task_started",
         extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
     )
-    thread_id = f"document:{document_id}:analysis:{uuid4()}"
     try:
         result = await graph_orchestrator.run(initial_state, thread_id=thread_id)
     except Exception:
@@ -527,9 +542,13 @@ async def _run_analysis_graph_best_effort(
             "document_analysis_graph_failed_nonfatal",
             extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
         )
-        return None
+        return {"analysis_id": None, "human_approval_required": False}
     analysis_id = result.get("analysis_id")
-    return analysis_id if isinstance(analysis_id, str) else None
+    human_approval_required = bool(result.get("human_approval_required", False))
+    return {
+        "analysis_id": analysis_id if isinstance(analysis_id, str) else None,
+        "human_approval_required": human_approval_required,
+    }
 
 
 # Retry policy for ``documents.analyze_document``, declared once so the task and
@@ -681,14 +700,17 @@ async def _run_document_analysis(
         # a hard gate. This is what previously stranded documents in
         # parsed_pending_analysis and the DLQ ("parsed_text not available" /
         # "RAG chunks were not committed").
+        human_approval_required = False
         if parsed_text and chunk_count > 0:
-            analysis_id = await _run_analysis_graph_best_effort(
+            graph_result = await _run_analysis_graph_best_effort(
                 orchestrator=orchestrator,
                 document=document,
                 parsed_text=parsed_text,
                 tenant_id=tenant_id,
                 document_id=document_id,
             )
+            analysis_id = graph_result["analysis_id"]
+            human_approval_required = graph_result["human_approval_required"]
         else:
             analysis_id = None
             logger.info(
@@ -729,8 +751,27 @@ async def _run_document_analysis(
             if document.document_metadata
             else None
         )
-        retry = should_retry_analysis(status=status, rag_outcome=rag_outcome)
-        if not completed:
+        # A LangGraph HITL interrupt is a legitimate, durably-checkpointed
+        # pause -- not a failure, and not "incomplete" in the retryable
+        # sense. Auto-retrying it would re-run the whole graph, orphan the
+        # pending review, and (pre-fix) mint a duplicate one. The document
+        # stays honestly PARSED_PENDING_ANALYSIS until a human approves and
+        # ResumeWorkflowUseCase resumes the SAME checkpoint -- it must never
+        # be auto-retried and never be retried via C2PRO_SKIP_HITL.
+        retry = (
+            should_retry_analysis(status=status, rag_outcome=rag_outcome)
+            and not human_approval_required
+        )
+        if human_approval_required:
+            logger.info(
+                "document_analysis_waiting_for_review",
+                extra={
+                    "document_id": str(document_id),
+                    "tenant_id": str(tenant_id),
+                    "will_retry": False,
+                },
+            )
+        elif not completed:
             logger.warning(
                 "document_analysis_incomplete",
                 extra={
@@ -743,11 +784,16 @@ async def _run_document_analysis(
             )
 
         result = {
-            "status": "completed" if completed else "incomplete",
+            "status": (
+                "waiting_for_review"
+                if human_approval_required
+                else ("completed" if completed else "incomplete")
+            ),
             "document_id": str(document_id),
             "analysis_id": analysis_id,
             "persisted": bool(analysis_id),
             "document_status": status.value,
+            "human_approval_required": human_approval_required,
             "will_retry": retry,
         }
 

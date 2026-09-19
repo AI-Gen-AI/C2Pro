@@ -480,7 +480,15 @@ class TestDocumentAnalysisTask:
         )
 
     @pytest.mark.asyncio
-    async def test_run_document_analysis_uses_distinct_thread_id_per_run(self):
+    async def test_run_document_analysis_uses_stable_thread_id_per_document(self):
+        """C2PRO P0b HITL resume hotfix: thread_id must be STABLE per document.
+
+        A fresh random thread_id on every run/retry orphans the LangGraph
+        checkpoint from the prior run and breaks resumability -- this was the
+        root cause of production HITL reviews with thread_id=NULL and
+        duplicate review items on Celery retry. One document has exactly one
+        analysis thread across repeated invocations (initial run + retries).
+        """
         from src.core.tasks.ingestion_tasks import _run_document_analysis
 
         document_id = uuid4()
@@ -497,6 +505,7 @@ class TestDocumentAnalysisTask:
 
             async def run(self, initial_state: dict, thread_id: str) -> dict:
                 assert initial_state["document_id"] == str(document_id)
+                assert initial_state["thread_id"] == thread_id
                 self.thread_ids.append(thread_id)
                 return {"analysis_id": "analysis-123"}
 
@@ -531,7 +540,7 @@ class TestDocumentAnalysisTask:
             )
 
         assert len(orchestrator.thread_ids) == 2
-        assert len(set(orchestrator.thread_ids)) == 2
+        assert len(set(orchestrator.thread_ids)) == 1
         assert all(str(document_id) in thread_id for thread_id in orchestrator.thread_ids)
         assert all(
             thread_id != str(document.project_id)
