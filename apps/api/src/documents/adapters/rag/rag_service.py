@@ -5,7 +5,7 @@ import json
 import math
 import os
 import re
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import httpx
@@ -89,6 +89,9 @@ class RagService:
         if not chunks:
             return 0
 
+        # Embed before touching any existing row: a failed/unavailable
+        # provider must leave the document's current chunks untouched
+        # rather than deleting a working RAG index and inserting nothing.
         embeddings: list[list[float]] = await _embed_texts(chunks)
         chunk_metadata = metadata or {}
 
@@ -106,7 +109,21 @@ class RagService:
                 }
             )
 
-        await _insert_chunks(self.db_session, rows)
+        # C2PRO P0b RAG reprocess idempotency: replace, not append. Ingestion
+        # for a given document is idempotent by design -- reprocessing the
+        # same immutable document must leave document_chunks reflecting only
+        # the latest ingestion, never accumulating a second copy of every
+        # chunk per reprocess (production went 23 -> 46 chunks on a single
+        # reprocess before this fix). document_chunks carries no revision
+        # lineage of its own (unlike document_revisions/project_events) --
+        # it is a derived search index, not a historical record, so
+        # replacing it here weakens no revision/history semantics.
+        await _replace_chunks(
+            self.db_session,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            rows=rows,
+        )
         return len(rows)
 
     async def answer_question(
@@ -255,9 +272,25 @@ async def _embed_texts(texts: list[str]) -> list[list[float]]:
     return embeddings
 
 
-async def _insert_chunks(db_session: AsyncSession, rows: list[dict[str, Any]]) -> None:
-    if not rows:
-        return
+async def _replace_chunks(
+    db_session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    rows: list[dict[str, Any]],
+) -> None:
+    """Delete this document's existing chunks, then insert the new batch,
+    as one transaction. Reprocessing an immutable document must be
+    idempotent on the chunk count -- the old chunks are superseded, not
+    accumulated alongside the new ones.
+    """
+    delete_stmt = text(
+        "DELETE FROM document_chunks WHERE tenant_id = CAST(:tenant_id AS uuid) "
+        "AND document_id = CAST(:document_id AS uuid)"
+    )
+    deleted = await db_session.execute(
+        delete_stmt, {"tenant_id": tenant_id, "document_id": document_id}
+    )
 
     # Use raw SQL with CAST syntax instead of :: to avoid asyncpg parser issues
     for row in rows:
@@ -277,7 +310,12 @@ async def _insert_chunks(db_session: AsyncSession, rows: list[dict[str, Any]]) -
         )
         await db_session.execute(stmt, row)
     await db_session.commit()
-    logger.info("rag_chunks_inserted", count=len(rows))
+    logger.info(
+        "rag_chunks_replaced",
+        inserted=len(rows),
+        deleted=cast(Any, deleted).rowcount or 0,
+        document_id=str(document_id),
+    )
 
 
 async def _retrieve_chunks(

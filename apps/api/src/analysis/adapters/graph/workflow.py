@@ -691,6 +691,14 @@ async def _persist_real_checkpoint_id(
             if review is not None and not review.metadata.get("checkpoint_id"):
                 review.metadata["checkpoint_id"] = checkpoint_id
                 review.metadata.setdefault("thread_id", thread_id)
+                # C2PRO P0b reprocess/persist hotfix: a LEGACY row being
+                # adopted here (created before thread_id/checkpoint_id
+                # existed, or by a dedup hit on an even older row) may never
+                # have had tenant_id embedded in its metadata either --
+                # ResumeWorkflowUseCase needs it after approval to mark the
+                # document ANALYZED. Backfill it from what this function
+                # already knows to be true, never fabricated.
+                review.metadata.setdefault("tenant_id", tenant_id)
                 await service.review_queue_repo.update_review_item(review)
                 logger.info(
                     "checkpoint_id_persisted",

@@ -36,6 +36,16 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
     def _to_domain(orm: ReviewItemORM) -> ReviewItem:
         # TASK-BCK-024: Include checkpoint tracking fields in metadata
         metadata = dict(orm.review_metadata or {})
+        # C2PRO P0b HITL persist hotfix: carry the actual persistent row
+        # identity (the primary key) through the domain layer. item_id is a
+        # BUSINESS identifier (for review_type="analysis_critique" it is set
+        # to the document_id, see human_interrupt_node) -- NOT unique, by
+        # design, since a document can legitimately have had more than one
+        # review row over time (retries before this hotfix, re-reviews after
+        # rejection). update_review_item() must key off this real row id, or
+        # it either updates the wrong row among duplicates or raises
+        # MultipleResultsFound on one that item_id alone cannot resolve.
+        metadata["row_id"] = str(orm.id)
         if orm.checkpoint_id:
             metadata["checkpoint_id"] = orm.checkpoint_id
         if orm.thread_id:
@@ -70,6 +80,10 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
     def _to_orm(self, item: ReviewItem) -> ReviewItemORM:
         # TASK-BCK-024: Extract checkpoint fields from metadata
         metadata = dict(item.metadata)
+        # row_id is a read-only artifact of _to_domain (the PK is already a
+        # first-class column); never persist it back into review_metadata,
+        # and never let it influence a fresh INSERT's generated id.
+        metadata.pop("row_id", None)
         checkpoint_id = metadata.pop("checkpoint_id", None)
         thread_id = metadata.pop("thread_id", None)
         project_id_str = metadata.pop("project_id", None)
@@ -116,21 +130,48 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         stmt = select(ReviewItemORM).where(ReviewItemORM.item_id == item_id)
         if self.tenant_id is not None:
             stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
+        # C2PRO P0b HITL persist hotfix: item_id is a business identifier,
+        # not guaranteed unique -- review_type="analysis_critique" sets it
+        # to document_id, and pre-hotfix duplicate creation left several
+        # rows sharing one item_id in production. A bare scalar_one_or_none
+        # raises MultipleResultsFound on that legacy shape; resolve
+        # deterministically instead (most recently created), matching
+        # find_active_review's own precedence so the two never disagree
+        # about which row is "the" active one.
+        stmt = stmt.order_by(ReviewItemORM.created_at.desc())
         result = await self.session.execute(stmt)
-        orm = result.scalar_one_or_none()
+        orm = result.scalars().first()
         return self._to_domain(orm) if orm else None
 
     async def update_review_item(self, item: ReviewItem) -> None:
-        stmt = select(ReviewItemORM).where(ReviewItemORM.item_id == item.item_id)
+        row_id_raw = item.metadata.get("row_id")
+        stmt = select(ReviewItemORM)
+        if row_id_raw:
+            # Authoritative: update the EXACT row find_active_review /
+            # get_review_item returned, by primary key. Never ambiguous,
+            # even when other rows share this item's item_id (see
+            # _to_domain's row_id note) -- this is the fix for
+            # "find_active_review succeeds, update_review_item can't update
+            # that same row" (C2PRO P0b HITL persist hotfix).
+            stmt = stmt.where(ReviewItemORM.id == UUID(str(row_id_raw)))
+        else:
+            # Defensive fallback for a ReviewItem never round-tripped
+            # through _to_domain (no current caller does this -- every
+            # update_review_item call site fetches first). Deterministic
+            # tie-break instead of raising, consistent with get_review_item.
+            stmt = stmt.where(ReviewItemORM.item_id == item.item_id).order_by(
+                ReviewItemORM.created_at.desc()
+            )
         if self.tenant_id is not None:
             stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
         result = await self.session.execute(stmt)
-        orm = result.scalar_one_or_none()
+        orm = result.scalars().first()
         if orm is None:
             raise ValueError(f"Review item {item.item_id} not found.")
 
         # TASK-BCK-024: Extract checkpoint fields from metadata before storing
         metadata = dict(item.metadata)
+        metadata.pop("row_id", None)
         checkpoint_id = metadata.pop("checkpoint_id", None)
         thread_id = metadata.pop("thread_id", None)
         project_id_str = metadata.pop("project_id", None)
