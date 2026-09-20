@@ -32,6 +32,9 @@ from src.modules.hitl.adapters.persistence.repository import (
 )
 from src.modules.hitl.application.ports import HumanInTheLoopService
 from src.modules.hitl.application.resume_workflow_use_case import (  # TASK-BCK-024
+    ResumeWorkflowRequest as UseCaseResumeRequest,
+)
+from src.modules.hitl.application.resume_workflow_use_case import (
     ResumeWorkflowUseCase,
     WorkflowDecision,
 )
@@ -218,14 +221,10 @@ async def _approve_and_resume_workflow(
     tells the caller the workflow itself did not resume and needs
     operator/retry attention.
     """
-    from src.modules.hitl.application.resume_workflow_use_case import (
-        ResumeWorkflowRequest as UseCaseRequest,
-    )
-
     try:
         result = await resume_use_case.execute(
             review_id=item_id,
-            request=UseCaseRequest(
+            request=UseCaseResumeRequest(
                 decision=WorkflowDecision.APPROVE,
                 feedback="",
                 approved_by=reviewer_name,
@@ -327,14 +326,10 @@ async def reject_item(
         # Graph-gated review: rejection must also terminate the SAME
         # LangGraph thread/checkpoint (state.workflow_terminated), not just
         # flip a status flag, for the same reason approval must resume it.
-        from src.modules.hitl.application.resume_workflow_use_case import (
-            ResumeWorkflowRequest as UseCaseRequest,
-        )
-
         try:
             await resume_use_case.execute(
                 review_id=item_id,
-                request=UseCaseRequest(
+                request=UseCaseResumeRequest(
                     decision=WorkflowDecision.REJECT,
                     feedback=payload.reason,
                     approved_by=current_user.full_name,

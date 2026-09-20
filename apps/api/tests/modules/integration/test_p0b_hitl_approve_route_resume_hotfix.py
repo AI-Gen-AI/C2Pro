@@ -496,3 +496,395 @@ async def test_tenant_isolation_remains_intact(
     refreshed = await db.get(ReviewItemORM, other_review.id)
     await db.refresh(refreshed)
     assert refreshed.current_status == ReviewStatus.PENDING_REVIEW_REQUIRED.value
+
+
+async def test_row_id_fallback_cannot_bypass_tenant_isolation(
+    authenticated_client: AsyncClient,
+    db: AsyncSession,
+    test_user: User,
+    test_tenant_2: Tenant,
+) -> None:
+    """get_review_item()'s row-id-first lookup must stay tenant-scoped --
+    knowing another tenant's row_id must not let it resolve or be approved.
+    """
+    document = await _seed_project_and_document(db, test_tenant_2)
+    other_review = _make_review_row(
+        tenant_id=test_tenant_2.id,
+        project_id=document.project_id,
+        document_id=document.id,
+        thread_id=f"document:{document.id}:analysis",
+        checkpoint_id="real-checkpoint-1",
+    )
+    db.add(other_review)
+    await db.commit()
+    await db.refresh(other_review)
+
+    # Address the row directly by its own primary key (row_id), not item_id.
+    get_by_row_id = await authenticated_client.get(f"/api/v1/hitl/queue/{other_review.id}")
+    assert get_by_row_id.status_code == 404
+
+    approve_by_row_id = await authenticated_client.post(
+        f"/api/v1/hitl/queue/{other_review.id}/approve", json={}
+    )
+    assert approve_by_row_id.status_code == 404
+
+    refreshed = await db.get(ReviewItemORM, other_review.id)
+    await db.refresh(refreshed)
+    assert refreshed.current_status == ReviewStatus.PENDING_REVIEW_REQUIRED.value
+
+
+async def test_reject_tenant_isolation_remains_intact(
+    authenticated_client: AsyncClient,
+    db: AsyncSession,
+    test_user: User,
+    test_tenant_2: Tenant,
+) -> None:
+    document = await _seed_project_and_document(db, test_tenant_2)
+    other_review = _make_review_row(
+        tenant_id=test_tenant_2.id,
+        project_id=document.project_id,
+        document_id=document.id,
+        thread_id=None,
+        checkpoint_id=None,
+    )
+    db.add(other_review)
+    await db.commit()
+    await db.refresh(other_review)
+
+    reject_response = await authenticated_client.post(
+        f"/api/v1/hitl/queue/{other_review.item_id}/reject", json={"reason": "not mine"}
+    )
+    assert reject_response.status_code == 404
+
+    refreshed = await db.get(ReviewItemORM, other_review.id)
+    await db.refresh(refreshed)
+    assert refreshed.current_status == ReviewStatus.PENDING_REVIEW_REQUIRED.value
+
+
+async def test_route_for_review_endpoint_still_works(
+    authenticated_client: AsyncClient,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """POST /route is untouched behaviorally by this hotfix (only its
+    response construction was refactored through _to_review_item_response)
+    -- prove it still returns full review context, including the new
+    row_id/resumable fields.
+    """
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    document = await _seed_project_and_document(db, tenant)
+    item_id = uuid4()
+
+    response = await authenticated_client.post(
+        "/api/v1/hitl/route",
+        json={
+            "item_id": str(item_id),
+            "item_type": "coherence_alert",
+            "confidence": 0.4,
+            "impact_level": "HIGH",
+            "item_data": {"document_id": str(document.id)},
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["item_id"] == str(item_id)
+    assert body["current_status"] == "PENDING_REVIEW_REQUIRED"
+    assert body["resumable"] is False
+    assert body["row_id"] is not None
+
+
+async def test_approve_nonexistent_review_returns_404(
+    authenticated_client: AsyncClient,
+) -> None:
+    response = await authenticated_client.post(
+        f"/api/v1/hitl/queue/{uuid4()}/approve", json={}
+    )
+    assert response.status_code == 404
+
+
+async def test_approve_non_resumable_review_does_not_invoke_resume(
+    authenticated_client: AsyncClient,
+    app,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """A review with no thread_id must take the plain status-flip path and
+    never touch ResumeWorkflowUseCase at all -- proves the else branch, and
+    that graph-resume machinery isn't invoked for reviews that have no
+    workflow to resume.
+    """
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    document = await _seed_project_and_document(db, tenant)
+    review = _make_review_row(
+        tenant_id=tenant.id,
+        project_id=document.project_id,
+        document_id=document.id,
+        thread_id=None,
+        checkpoint_id=None,
+    )
+    db.add(review)
+    await db.commit()
+    await db.refresh(review)
+
+    class _ExplodingUseCase:
+        async def execute(self, *args, **kwargs):
+            raise AssertionError("ResumeWorkflowUseCase must not be invoked for a non-resumable review")
+
+    app.dependency_overrides[get_resume_workflow_use_case] = lambda: _ExplodingUseCase()
+
+    response = await authenticated_client.post(
+        f"/api/v1/hitl/queue/{review.item_id}/approve", json={}
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["current_status"] == "APPROVED"
+    assert body["resumable"] is False
+
+
+async def test_reject_graph_gated_review_terminates_without_running_n17(
+    authenticated_client: AsyncClient,
+    app,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """Objective D.5: rejecting a graph-gated review must be durable and
+    truthful, and must NEVER run N17 / persist an analysis / mark the
+    document ANALYZED -- rejection terminates the workflow, it does not
+    complete it.
+    """
+    from src.analysis.adapters.persistence.models import Analysis
+
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    document = await _seed_project_and_document(db, tenant)
+    thread_id = f"document:{document.id}:analysis"
+
+    review = _make_review_row(
+        tenant_id=tenant.id,
+        project_id=document.project_id,
+        document_id=document.id,
+        thread_id=thread_id,
+        checkpoint_id="real-checkpoint-1",
+    )
+    db.add(review)
+    await db.commit()
+    await db.refresh(review)
+
+    resume_state = {
+        "project_id": str(document.project_id),
+        "tenant_id": str(tenant.id),
+        "document_id": str(document.id),
+        "messages": [],
+        "node_results": [],
+    }
+
+    class _RejectOnlyGraphApp:
+        def __init__(self) -> None:
+            self.update_calls: list[dict] = []
+            self.invoked = False
+
+        async def aupdate_state(self, config: dict, state: dict) -> None:
+            self.update_calls.append(dict(state))
+
+        async def ainvoke(self, *args, **kwargs) -> dict:
+            self.invoked = True
+            raise AssertionError("reject must never call ainvoke -- that would resume, not terminate")
+
+    checkpoint_service = _FakeResumeCheckpointService(resume_state)
+    reject_graph_app = _RejectOnlyGraphApp()
+
+    def _use_case() -> ResumeWorkflowUseCase:
+        repo = SqlAlchemyReviewQueueRepository(session=db, tenant_id=tenant.id)
+        return ResumeWorkflowUseCase(
+            review_queue_repo=repo,
+            checkpoint_service=checkpoint_service,
+            graph_app=reject_graph_app,
+        )
+
+    app.dependency_overrides[get_resume_workflow_use_case] = _use_case
+
+    response = await authenticated_client.post(
+        f"/api/v1/hitl/queue/{review.item_id}/reject",
+        json={"reason": "Clause is ambiguous, needs correction."},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["current_status"] == "REJECTED"
+    assert not reject_graph_app.invoked, "reject must not resume (ainvoke) the workflow"
+    assert reject_graph_app.update_calls, "reject must still persist termination state on the checkpoint"
+    assert reject_graph_app.update_calls[-1]["workflow_terminated"] is True
+
+    # No analysis persisted, document not ANALYZED -- rejection never
+    # completes the pipeline.
+    analyses = (
+        await db.execute(select(Analysis).where(Analysis.project_id == document.project_id))
+    ).scalars().all()
+    assert len(analyses) == 0
+
+    refreshed_document = await db.get(DocumentORM, document.id)
+    await db.refresh(refreshed_document)
+    assert refreshed_document.upload_status == "parsed_pending_analysis"
+
+    refreshed_review = await db.get(ReviewItemORM, review.id)
+    await db.refresh(refreshed_review)
+    assert refreshed_review.approved_by == test_user.full_name
+    assert refreshed_review.review_metadata.get("rejection_reason") == "Clause is ambiguous, needs correction."
+
+
+async def test_reject_nonexistent_review_returns_404(
+    authenticated_client: AsyncClient,
+) -> None:
+    response = await authenticated_client.post(
+        f"/api/v1/hitl/queue/{uuid4()}/reject", json={"reason": "n/a"}
+    )
+    assert response.status_code == 404
+
+
+async def test_reject_non_resumable_review_does_not_invoke_resume(
+    authenticated_client: AsyncClient,
+    app,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    document = await _seed_project_and_document(db, tenant)
+    review = _make_review_row(
+        tenant_id=tenant.id,
+        project_id=document.project_id,
+        document_id=document.id,
+        thread_id=None,
+        checkpoint_id=None,
+    )
+    db.add(review)
+    await db.commit()
+    await db.refresh(review)
+
+    class _ExplodingUseCase:
+        async def execute(self, *args, **kwargs):
+            raise AssertionError("ResumeWorkflowUseCase must not be invoked for a non-resumable review")
+
+    app.dependency_overrides[get_resume_workflow_use_case] = lambda: _ExplodingUseCase()
+
+    response = await authenticated_client.post(
+        f"/api/v1/hitl/queue/{review.item_id}/reject", json={"reason": "bad extraction"}
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["current_status"] == "REJECTED"
+
+
+async def test_reject_already_processed_graph_gated_review_returns_400_not_502(
+    authenticated_client: AsyncClient,
+    app,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """A resume-side ValueError that is NOT the "_with_errors" workflow
+    failure (e.g. the review is in a genuinely invalid status for a
+    decision) must surface as 400, not 502 -- 502 is reserved for a resume
+    that was attempted and failed, not for a request that never should
+    have been attempted.
+    """
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    document = await _seed_project_and_document(db, tenant)
+    review = _make_review_row(
+        tenant_id=tenant.id,
+        project_id=document.project_id,
+        document_id=document.id,
+        thread_id=f"document:{document.id}:analysis",
+        checkpoint_id="real-checkpoint-1",
+        status=ReviewStatus.CLOSED,
+    )
+    db.add(review)
+    await db.commit()
+    await db.refresh(review)
+
+    checkpoint_service = _FakeResumeCheckpointService({})
+
+    def _use_case() -> ResumeWorkflowUseCase:
+        repo = SqlAlchemyReviewQueueRepository(session=db, tenant_id=tenant.id)
+        return ResumeWorkflowUseCase(
+            review_queue_repo=repo,
+            checkpoint_service=checkpoint_service,
+            graph_app=_FakeResumingGraphApp(),
+        )
+
+    app.dependency_overrides[get_resume_workflow_use_case] = _use_case
+
+    response = await authenticated_client.post(
+        f"/api/v1/hitl/queue/{review.item_id}/reject", json={"reason": "n/a"}
+    )
+    assert response.status_code == 400, response.text
+
+
+async def test_approve_and_resume_workflow_maps_not_found_to_404() -> None:
+    """Direct unit coverage for _approve_and_resume_workflow's ValueError
+    branches: a "not found" message maps to 404.
+    """
+    from src.modules.hitl.adapters.http.router import _approve_and_resume_workflow
+
+    class _NotFoundUseCase:
+        async def execute(self, *args, **kwargs):
+            raise ValueError("Review item deadbeef-0000-0000-0000-000000000000 not found")
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _approve_and_resume_workflow(
+            item_id=uuid4(),
+            reviewer_name="Reviewer",
+            resume_use_case=_NotFoundUseCase(),
+        )
+    assert exc_info.value.status_code == 404
+
+
+async def test_approve_and_resume_workflow_maps_other_value_error_to_400() -> None:
+    """Direct unit coverage: any other ValueError (e.g. not-pending) maps
+    to 400, not 404 or 502.
+    """
+    from fastapi import HTTPException
+
+    from src.modules.hitl.adapters.http.router import _approve_and_resume_workflow
+
+    class _NotPendingUseCase:
+        async def execute(self, *args, **kwargs):
+            raise ValueError("Review item ... is not in pending status (current: CLOSED)")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _approve_and_resume_workflow(
+            item_id=uuid4(),
+            reviewer_name="Reviewer",
+            resume_use_case=_NotPendingUseCase(),
+        )
+    assert exc_info.value.status_code == 400
+
+
+async def test_approve_non_resumable_already_approved_review_returns_400(
+    authenticated_client: AsyncClient,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """The plain (non-resumable) approve_item() path's own ValueError ->
+    400 mapping, for a review with no thread_id that is not in a pending
+    status (e.g. already approved).
+    """
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    document = await _seed_project_and_document(db, tenant)
+    review = _make_review_row(
+        tenant_id=tenant.id,
+        project_id=document.project_id,
+        document_id=document.id,
+        thread_id=None,
+        checkpoint_id=None,
+        status=ReviewStatus.APPROVED,
+    )
+    db.add(review)
+    await db.commit()
+    await db.refresh(review)
+
+    response = await authenticated_client.post(
+        f"/api/v1/hitl/queue/{review.item_id}/approve", json={}
+    )
+    assert response.status_code == 400, response.text
