@@ -201,6 +201,7 @@ async def _approve_and_resume_workflow(
     item_id: UUID,
     reviewer_name: str,
     resume_use_case: ResumeWorkflowUseCase,
+    row_id: str | None = None,
 ) -> ReviewItem:
     """Approve a graph-gated review (one carrying a real thread_id) by
     resuming its actual LangGraph workflow -- C2PRO P0b HITL approve/resume
@@ -248,7 +249,15 @@ async def _approve_and_resume_workflow(
             f"Review approved, but resuming the analysis workflow failed: {result.message}",
         )
 
-    item = await resume_use_case.review_queue_repo.get_review_item(item_id)
+    # C2PRO P0b legacy canonical-selection hotfix: re-fetch by the EXACT
+    # row primary key the caller already resolved (existing.metadata
+    # ["row_id"] at the call site), not by item_id again. Once resume
+    # flips this row to APPROVED, it can now tie on status with an older
+    # historical row that shares item_id and was already APPROVED --
+    # re-resolving by the ambiguous business key can then silently return
+    # that OTHER row's data instead of the one this request just acted on.
+    lookup_id = UUID(row_id) if row_id else item_id
+    item = await resume_use_case.review_queue_repo.get_review_item(lookup_id)
     if item is None:  # pragma: no cover - execute() above already confirmed the row exists
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
     return item
@@ -282,6 +291,7 @@ async def approve_item(
             item_id=item_id,
             reviewer_name=current_user.full_name,
             resume_use_case=resume_use_case,
+            row_id=existing.metadata.get("row_id"),
         )
     else:
         try:
@@ -340,7 +350,14 @@ async def reject_item(
             if "not found" in error_msg:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, error_msg) from exc
             raise HTTPException(status.HTTP_400_BAD_REQUEST, error_msg) from exc
-        item = await service.review_queue_repo.get_review_item(item_id)
+        # C2PRO P0b legacy canonical-selection hotfix: re-fetch by the same
+        # row primary key `existing` was already resolved to, not item_id
+        # again -- see _approve_and_resume_workflow's matching comment for
+        # why re-resolving by item_id after the status flip can return a
+        # different, historical row sharing this item_id.
+        existing_row_id = existing.metadata.get("row_id")
+        lookup_id = UUID(existing_row_id) if existing_row_id else item_id
+        item = await service.review_queue_repo.get_review_item(lookup_id)
         if item is None:  # pragma: no cover - execute() above already confirmed the row exists
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
         item.metadata["rejection_reason"] = payload.reason
