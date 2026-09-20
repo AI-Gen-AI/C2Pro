@@ -106,6 +106,13 @@ function hasData(data: ReviewItemResponse['item_data']): boolean {
   return Boolean(data && Object.keys(data).length > 0);
 }
 
+// Default outcome copy, used only when the backend didn't supply
+// item_data.approve_meaning / reject_meaning (older review rows created
+// before this field existed). Never shown for a graph-resumable review,
+// whose approve/reject meanings always come from the backend.
+const DEFAULT_APPROVE_MEANING = 'Mark this item as approved.';
+const DEFAULT_REJECT_MEANING = 'Mark this item as rejected and record the reason given.';
+
 export function ReviewItemCard({
   item,
   projectId,
@@ -119,11 +126,32 @@ export function ReviewItemCard({
   const isPending =
     item.current_status === ReviewStatus.PENDING_REVIEW_REQUIRED ||
     item.current_status === ReviewStatus.PENDING_REVIEW_CONDITIONAL;
-  const title =
-    firstString(item.item_data, ['title', 'summary', 'message', 'description', 'category']) ??
-    item.item_type;
+
+  // C2PRO P0b HITL review UX hotfix: a reviewer needs a real decision
+  // title, the reason a human is in the loop at all, what the model
+  // actually concluded, and what each action does -- not a bare item_id.
+  // These fields come from item_data when the backend supplied them
+  // (human_interrupt_node, for graph-gated reviews); firstString/getString
+  // return null when absent, so nothing here is invented -- the card falls
+  // back to the generic item_type/summary fields other review producers
+  // already populate.
+  const documentFilename = getString(item.item_data, 'document_filename');
   const summary = firstString(item.item_data, ['summary', 'message', 'description']);
   const category = getString(item.item_data, 'category');
+  const reason = getString(item.item_data, 'reason');
+  const modelConclusion = getString(item.item_data, 'critique_notes');
+  const approveMeaning =
+    getString(item.item_data, 'approve_meaning') ??
+    (item.resumable ? null : DEFAULT_APPROVE_MEANING);
+  const rejectMeaning =
+    getString(item.item_data, 'reject_meaning') ??
+    (item.resumable ? null : DEFAULT_REJECT_MEANING);
+
+  const title = documentFilename
+    ? `Approve analysis of ${documentFilename}`
+    : (firstString(item.item_data, ['title', 'summary', 'message', 'description', 'category']) ??
+      item.item_type);
+
   const documentId = firstString(item.item_data, [
     'document_id',
     'documentId',
@@ -133,6 +161,11 @@ export function ReviewItemCard({
   const createdAt = formatDate(item.created_at);
   const slaDueDate = formatDate(item.sla_due_date);
   const reviewedAt = formatDate(item.approved_at);
+
+  // A literal, exact 0% is far more likely to mean "never evaluated for
+  // this review type" than a genuine zero out of a continuous confidence
+  // distribution -- showing it as a real score would misrepresent it.
+  const confidenceIsMeaningful = item.confidence > 0;
 
   return (
     <div className="rounded-lg border bg-card" data-testid={`review-item-${item.item_id}`}>
@@ -145,13 +178,29 @@ export function ReviewItemCard({
             <Badge className={statusColor(item.current_status)}>
               {statusLabel(item.current_status)}
             </Badge>
-            <Badge className={impactColor(item.impact_level)}>{item.impact_level}</Badge>
-            <Badge variant="outline">Confidence {(item.confidence * 100).toFixed(0)}%</Badge>
+            {item.impact_level ? (
+              <Badge className={impactColor(item.impact_level)}>{item.impact_level}</Badge>
+            ) : null}
+            {confidenceIsMeaningful ? (
+              <Badge variant="outline">Confidence {(item.confidence * 100).toFixed(0)}%</Badge>
+            ) : (
+              <Badge variant="outline" title="Not evaluated for this review type">
+                Confidence: not evaluated
+              </Badge>
+            )}
             {overdue && isPending ? <Badge variant="destructive">Overdue</Badge> : null}
           </div>
 
+          {reason ? <p className="mt-1 text-sm">{reason}</p> : null}
           {summary && summary !== title ? (
             <p className="mt-1 text-sm text-muted-foreground">{summary}</p>
+          ) : null}
+
+          {modelConclusion ? (
+            <div className="mt-2 rounded-md bg-muted/50 p-2 text-sm">
+              <span className="font-medium text-muted-foreground">Model conclusion: </span>
+              {modelConclusion}
+            </div>
           ) : null}
 
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -169,6 +218,21 @@ export function ReviewItemCard({
               </Link>
             ) : null}
           </div>
+
+          {isPending && (approveMeaning || rejectMeaning) ? (
+            <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+              {approveMeaning ? (
+                <p>
+                  <span className="font-medium text-green-700">Approve:</span> {approveMeaning}
+                </p>
+              ) : null}
+              {rejectMeaning ? (
+                <p>
+                  <span className="font-medium text-red-700">Reject:</span> {rejectMeaning}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -212,11 +276,20 @@ export function ReviewItemCard({
 
       {expanded ? (
         <div className="border-t px-4 py-3 text-sm" data-testid={`detail-${item.item_id}`}>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Technical details
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <span className="font-medium text-muted-foreground">Item ID:</span>{' '}
               <code className="text-xs">{item.item_id}</code>
             </div>
+            {item.row_id ? (
+              <div>
+                <span className="font-medium text-muted-foreground">Review row ID:</span>{' '}
+                <code className="text-xs">{item.row_id}</code>
+              </div>
+            ) : null}
             <div>
               <span className="font-medium text-muted-foreground">Item Type:</span> {item.item_type}
             </div>
@@ -225,7 +298,11 @@ export function ReviewItemCard({
             </div>
             <div>
               <span className="font-medium text-muted-foreground">Confidence:</span>{' '}
-              {(item.confidence * 100).toFixed(1)}%
+              {confidenceIsMeaningful ? `${(item.confidence * 100).toFixed(1)}%` : 'Not evaluated'}
+            </div>
+            <div>
+              <span className="font-medium text-muted-foreground">Resumable workflow:</span>{' '}
+              {item.resumable ? 'Yes' : 'No'}
             </div>
           </div>
 
@@ -250,4 +327,3 @@ export function ReviewItemCard({
     </div>
   );
 }
-

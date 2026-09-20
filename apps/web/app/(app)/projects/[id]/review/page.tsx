@@ -125,7 +125,12 @@ export default function ReviewPage() {
     setActionError(null);
     try {
       await approveMutation.mutateAsync({
-        itemId: modal.item.item_id,
+        // C2PRO P0b HITL review UX hotfix: target the exact review row when
+        // the backend supplied its real identity (row_id) -- item_id alone
+        // is a business identifier, not guaranteed unique, so it must never
+        // be the primary way one specific decision is targeted. Falls back
+        // to item_id only for older cached rows that predate row_id.
+        itemId: modal.item.row_id ?? modal.item.item_id,
         data: {},
       });
       closeModal();
@@ -142,7 +147,7 @@ export default function ReviewPage() {
     setActionError(null);
     try {
       await rejectMutation.mutateAsync({
-        itemId: modal.item.item_id,
+        itemId: modal.item.row_id ?? modal.item.item_id,
         data: {
           reason: rejectReason.trim(),
         },
@@ -276,7 +281,9 @@ export default function ReviewPage() {
             <DialogTitle>Approve Review Item</DialogTitle>
             <DialogDescription>
               Confirm approval for this {modal.kind === 'approve' ? modal.item.item_type : ''} item.
-              This will resume the analysis workflow with an approved state.
+              {modal.kind === 'approve' && modal.item.resumable
+                ? ' This will resume the analysis workflow with an approved state.'
+                : ' This will mark the item as approved.'}
             </DialogDescription>
           </DialogHeader>
           {modal.kind === 'approve' && (
@@ -326,7 +333,10 @@ export default function ReviewPage() {
           <DialogHeader>
             <DialogTitle>Reject Review Item</DialogTitle>
             <DialogDescription>
-              Provide a reason for rejecting this item. This will terminate the analysis workflow.
+              Provide a reason for rejecting this item.
+              {modal.kind === 'reject' && modal.item.resumable
+                ? ' This will terminate the analysis workflow.'
+                : ' This will mark the item as rejected.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

@@ -8768,6 +8768,16 @@ components:
           type: object
           title: Item Data
           default: {}
+        row_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Row Id
+        resumable:
+          type: boolean
+          title: Resumable
+          default: false
       type: object
       required:
       - item_id

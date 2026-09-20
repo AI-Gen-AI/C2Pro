@@ -46,6 +46,17 @@ class ReviewItemResponse(BaseModel):
     sla_due_date: datetime
     created_at: datetime
     item_data: dict[str, Any] = {}
+    # C2PRO P0b HITL approve/resume + review UX hotfix: the review ROW's own
+    # persistent identity (ReviewItemORM.id), distinct from item_id -- a
+    # business identifier that is NOT guaranteed unique (review_type=
+    # "analysis_critique" sets it to document_id; a document can legitimately
+    # have had more than one review row over time). Clients that need to act
+    # on ONE EXACT row (approve/reject) should target row_id when present.
+    row_id: UUID | None = None
+    # True when this review is gated by a resumable LangGraph workflow
+    # (carries a real thread_id) -- approving it resumes that workflow
+    # rather than only flipping a status flag.
+    resumable: bool = False
 
     class Config:
         from_attributes = True

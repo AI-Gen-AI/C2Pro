@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
@@ -127,17 +127,31 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         return orm.id
 
     async def get_review_item(self, item_id: UUID) -> ReviewItem | None:
+        # C2PRO P0b HITL approve/resume + review UX hotfix: try the actual
+        # row primary key FIRST. This is how a caller that already has a
+        # domain ReviewItem (its metadata["row_id"], now also exposed over
+        # the API as ReviewItemResponse.row_id) targets ONE EXACT row,
+        # unambiguously -- "id" is globally unique, so this can never raise
+        # or resolve to a sibling. Falls back to item_id -- a BUSINESS
+        # identifier, not guaranteed unique (review_type="analysis_critique"
+        # sets it to document_id, and pre-hotfix duplicate creation left
+        # several rows sharing one item_id in production) -- for legacy
+        # callers that only ever knew item_id. A bare scalar_one_or_none on
+        # that fallback raises MultipleResultsFound on the legacy shape;
+        # resolve deterministically instead (most recently created),
+        # matching find_active_review's own precedence so the two never
+        # disagree about which row is "the" active one.
+        stmt = select(ReviewItemORM).where(ReviewItemORM.id == item_id)
+        if self.tenant_id is not None:
+            stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
+        result = await self.session.execute(stmt)
+        orm = result.scalar_one_or_none()
+        if orm is not None:
+            return self._to_domain(orm)
+
         stmt = select(ReviewItemORM).where(ReviewItemORM.item_id == item_id)
         if self.tenant_id is not None:
             stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
-        # C2PRO P0b HITL persist hotfix: item_id is a business identifier,
-        # not guaranteed unique -- review_type="analysis_critique" sets it
-        # to document_id, and pre-hotfix duplicate creation left several
-        # rows sharing one item_id in production. A bare scalar_one_or_none
-        # raises MultipleResultsFound on that legacy shape; resolve
-        # deterministically instead (most recently created), matching
-        # find_active_review's own precedence so the two never disagree
-        # about which row is "the" active one.
         stmt = stmt.order_by(ReviewItemORM.created_at.desc())
         result = await self.session.execute(stmt)
         orm = result.scalars().first()
@@ -258,6 +272,38 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         result = await self.session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
 
+    def _canonical_rows_subquery(
+        self,
+        *,
+        status: ReviewStatus | None,
+        project_id: UUID | None,
+    ) -> Select[tuple[ReviewItemORM]]:
+        """One row per item_id: the canonical, actionable review.
+
+        C2PRO P0b review UX hotfix: item_id is a business identifier, not
+        guaranteed unique (see _to_domain's row_id note) -- historical
+        duplicate rows for the same item_id (pre-hotfix retries) must not
+        render as separate actionable decisions in the review queue.
+        Collapse to one row per item_id via Postgres DISTINCT ON, preferring
+        the row carrying a real thread_id (the adopted, resumable row), then
+        the most recently created -- the exact same precedence
+        get_review_item/find_active_review already use, so the queue never
+        shows a row other than the one approve/reject would actually act on.
+        """
+        stmt = select(ReviewItemORM).distinct(ReviewItemORM.item_id)
+        if self.tenant_id is not None:
+            stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
+        if project_id is not None:
+            stmt = stmt.where(ReviewItemORM.project_id == project_id)
+        if status is not None:
+            stmt = stmt.where(ReviewItemORM.current_status == status)
+        # DISTINCT ON requires its expression(s) as the leading ORDER BY.
+        return stmt.order_by(
+            ReviewItemORM.item_id,
+            ReviewItemORM.thread_id.isnot(None).desc(),
+            ReviewItemORM.created_at.desc(),
+        )
+
     async def list_by_status(
         self,
         status: ReviewStatus | None = None,
@@ -266,14 +312,14 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         limit: int = 50,
         project_id: UUID | None = None,
     ) -> list[ReviewItem]:
-        stmt = select(ReviewItemORM)
-        if self.tenant_id is not None:
-            stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
-        if project_id is not None:
-            stmt = stmt.where(ReviewItemORM.project_id == project_id)
-        if status is not None:
-            stmt = stmt.where(ReviewItemORM.current_status == status)
-        stmt = stmt.order_by(ReviewItemORM.created_at.desc()).offset(skip).limit(limit)
+        canonical = self._canonical_rows_subquery(status=status, project_id=project_id).subquery()
+        stmt = (
+            select(ReviewItemORM)
+            .join(canonical, ReviewItemORM.id == canonical.c.id)
+            .order_by(ReviewItemORM.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
         result = await self.session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
 
@@ -283,15 +329,15 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         *,
         project_id: UUID | None = None,
     ) -> int:
-        """TASK-BCK-092: Return true filtered count, not page size."""
+        """TASK-BCK-092: Return true filtered count, not page size.
+
+        Counts canonical (deduplicated) rows, consistent with list_by_status
+        -- otherwise the queue's reported total would outnumber the items it
+        actually renders.
+        """
         from sqlalchemy import func
 
-        stmt = select(func.count()).select_from(ReviewItemORM)
-        if self.tenant_id is not None:
-            stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
-        if project_id is not None:
-            stmt = stmt.where(ReviewItemORM.project_id == project_id)
-        if status is not None:
-            stmt = stmt.where(ReviewItemORM.current_status == status)
+        canonical = self._canonical_rows_subquery(status=status, project_id=project_id).subquery()
+        stmt = select(func.count()).select_from(canonical)
         result = await self.session.execute(stmt)
         return result.scalar() or 0

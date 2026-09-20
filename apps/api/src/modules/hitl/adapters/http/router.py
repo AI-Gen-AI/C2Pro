@@ -35,7 +35,7 @@ from src.modules.hitl.application.resume_workflow_use_case import (  # TASK-BCK-
     ResumeWorkflowUseCase,
     WorkflowDecision,
 )
-from src.modules.hitl.domain.entities import ReviewStatus
+from src.modules.hitl.domain.entities import ReviewItem, ReviewStatus
 from src.temporal.application.project_snapshot_trigger import (
     record_project_event_and_enqueue_snapshot,
 )
@@ -98,6 +98,24 @@ async def _record_hitl_correction_snapshot(
         )
 
 
+def _to_review_item_response(item: ReviewItem) -> ReviewItemResponse:
+    row_id_raw = item.metadata.get("row_id")
+    return ReviewItemResponse(
+        item_id=item.item_id,
+        item_type=item.item_type,
+        current_status=item.current_status,
+        confidence=item.confidence,
+        impact_level=item.impact_level,
+        approved_by=item.approved_by,
+        approved_at=item.approved_at,
+        sla_due_date=item.sla_due_date,
+        created_at=item.created_at,
+        item_data=item.item_data,
+        row_id=UUID(str(row_id_raw)) if row_id_raw else None,
+        resumable=bool(item.metadata.get("thread_id")),
+    )
+
+
 # -- Endpoints ----------------------------------------------------------------
 
 
@@ -127,18 +145,7 @@ async def route_for_review(
         item_id=str(payload.item_id),
         status=result_status.value,
     )
-    return ReviewItemResponse(
-        item_id=item.item_id,
-        item_type=item.item_type,
-        current_status=item.current_status,
-        confidence=item.confidence,
-        impact_level=item.impact_level,
-        approved_by=item.approved_by,
-        approved_at=item.approved_at,
-        sla_due_date=item.sla_due_date,
-        created_at=item.created_at,
-        item_data=item.item_data,
-    )
+    return _to_review_item_response(item)
 
 
 @router.get(
@@ -165,21 +172,7 @@ async def list_review_queue(
         project_id=project_id,
     )
     return ReviewQueueResponse(
-        items=[
-            ReviewItemResponse(
-                item_id=i.item_id,
-                item_type=i.item_type,
-                current_status=i.current_status,
-                confidence=i.confidence,
-                impact_level=i.impact_level,
-                approved_by=i.approved_by,
-                approved_at=i.approved_at,
-                sla_due_date=i.sla_due_date,
-                created_at=i.created_at,
-                item_data=i.item_data,
-            )
-            for i in items
-        ],
+        items=[_to_review_item_response(i) for i in items],
         total=total,
     )
 
@@ -197,18 +190,69 @@ async def get_review_item(
     item = await repo.get_review_item(item_id)
     if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
-    return ReviewItemResponse(
-        item_id=item.item_id,
-        item_type=item.item_type,
-        current_status=item.current_status,
-        confidence=item.confidence,
-        impact_level=item.impact_level,
-        approved_by=item.approved_by,
-        approved_at=item.approved_at,
-        sla_due_date=item.sla_due_date,
-        created_at=item.created_at,
-        item_data=item.item_data,
+    return _to_review_item_response(item)
+
+
+async def _approve_and_resume_workflow(
+    *,
+    item_id: UUID,
+    reviewer_name: str,
+    resume_use_case: ResumeWorkflowUseCase,
+) -> ReviewItem:
+    """Approve a graph-gated review (one carrying a real thread_id) by
+    resuming its actual LangGraph workflow -- C2PRO P0b HITL approve/resume
+    hotfix.
+
+    Production evidence: POST /queue/{item_id}/approve returned 200 and the
+    row flipped to APPROVED, but ResumeWorkflowUseCase was never invoked --
+    no analyses row, no graph.completed, document stuck at
+    parsed_pending_analysis, Health never readable. approve_item() only
+    ever flipped a status flag; it has no notion of a workflow to resume.
+
+    Raises HTTPException(502) on a genuine resume failure -- see the
+    "_with_errors" branch below -- so the caller never reports a workflow
+    resume as if it were a clean success. The review's APPROVED status is
+    NOT rolled back on that path: ResumeWorkflowUseCase durably records the
+    human decision before attempting resume, by design, so a mechanical
+    resume failure never erases an audit trail entry. The explicit 502
+    tells the caller the workflow itself did not resume and needs
+    operator/retry attention.
+    """
+    from src.modules.hitl.application.resume_workflow_use_case import (
+        ResumeWorkflowRequest as UseCaseRequest,
     )
+
+    try:
+        result = await resume_use_case.execute(
+            review_id=item_id,
+            request=UseCaseRequest(
+                decision=WorkflowDecision.APPROVE,
+                feedback="",
+                approved_by=reviewer_name,
+            ),
+        )
+    except ValueError as exc:
+        error_msg = str(exc)
+        if "not found" in error_msg:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, error_msg) from exc
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, error_msg) from exc
+
+    if result.status.endswith("_with_errors"):
+        logger.error(
+            "hitl_approve_resume_failed",
+            item_id=str(item_id),
+            resume_status=result.status,
+            message=result.message,
+        )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            f"Review approved, but resuming the analysis workflow failed: {result.message}",
+        )
+
+    item = await resume_use_case.review_queue_repo.get_review_item(item_id)
+    if item is None:  # pragma: no cover - execute() above already confirmed the row exists
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
+    return item
 
 
 @router.post(
@@ -222,19 +266,34 @@ async def approve_item(
     _tenant_id: CurrentTenantId,
     current_user: Annotated[User, Depends(get_current_user)],
     service: HumanInTheLoopService = Depends(get_hitl_service),
+    resume_use_case: ResumeWorkflowUseCase = Depends(get_resume_workflow_use_case),
 ) -> ReviewItemResponse:
     # SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is bound to the
     # authenticated session, never to client-supplied values — otherwise any
     # authenticated user could forge a review as another user. ApproveRequest
     # carries no reviewer fields by design.
-    try:
-        item = await service.approve_item(
+    existing = await service.review_queue_repo.get_review_item(item_id)
+    if existing is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
+
+    if existing.metadata.get("thread_id"):
+        # Graph-gated review (analysis_critique): approval must resume the
+        # SAME LangGraph thread/checkpoint this review was created from.
+        item = await _approve_and_resume_workflow(
             item_id=item_id,
-            reviewer_id=current_user.id,
             reviewer_name=current_user.full_name,
+            resume_use_case=resume_use_case,
         )
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    else:
+        try:
+            item = await service.approve_item(
+                item_id=item_id,
+                reviewer_id=current_user.id,
+                reviewer_name=current_user.full_name,
+            )
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+
     await _record_hitl_correction_snapshot(
         item_id=item.item_id,
         item_data=item.item_data,
@@ -244,18 +303,7 @@ async def approve_item(
         reviewer=item.approved_by,
     )
     logger.info("hitl_item_approved", item_id=str(item_id), reviewer=current_user.full_name)
-    return ReviewItemResponse(
-        item_id=item.item_id,
-        item_type=item.item_type,
-        current_status=item.current_status,
-        confidence=item.confidence,
-        impact_level=item.impact_level,
-        approved_by=item.approved_by,
-        approved_at=item.approved_at,
-        sla_due_date=item.sla_due_date,
-        created_at=item.created_at,
-        item_data=item.item_data,
-    )
+    return _to_review_item_response(item)
 
 
 @router.post(
@@ -269,26 +317,59 @@ async def reject_item(
     _tenant_id: CurrentTenantId,
     current_user: Annotated[User, Depends(get_current_user)],
     service: HumanInTheLoopService = Depends(get_hitl_service),
+    resume_use_case: ResumeWorkflowUseCase = Depends(get_resume_workflow_use_case),
 ) -> ReviewItemResponse:
-    item = await service.review_queue_repo.get_review_item(item_id)
-    if item is None:
+    existing = await service.review_queue_repo.get_review_item(item_id)
+    if existing is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
-    if item.current_status not in {
-        ReviewStatus.PENDING_REVIEW_REQUIRED,
-        ReviewStatus.PENDING_REVIEW_CONDITIONAL,
-    }:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"Item {item_id} cannot be rejected from status {item.current_status.value}.",
+
+    if existing.metadata.get("thread_id"):
+        # Graph-gated review: rejection must also terminate the SAME
+        # LangGraph thread/checkpoint (state.workflow_terminated), not just
+        # flip a status flag, for the same reason approval must resume it.
+        from src.modules.hitl.application.resume_workflow_use_case import (
+            ResumeWorkflowRequest as UseCaseRequest,
         )
-    item.current_status = ReviewStatus.REJECTED
-    # SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is bound to the
-    # authenticated session, never to client-supplied values — otherwise any
-    # authenticated user could forge a rejection as another user.
-    item.approved_by = current_user.full_name
-    item.approved_at = datetime.now(UTC)
-    item.metadata["rejection_reason"] = payload.reason
-    await service.review_queue_repo.update_review_item(item)
+
+        try:
+            await resume_use_case.execute(
+                review_id=item_id,
+                request=UseCaseRequest(
+                    decision=WorkflowDecision.REJECT,
+                    feedback=payload.reason,
+                    approved_by=current_user.full_name,
+                ),
+            )
+        except ValueError as exc:
+            error_msg = str(exc)
+            if "not found" in error_msg:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, error_msg) from exc
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, error_msg) from exc
+        item = await service.review_queue_repo.get_review_item(item_id)
+        if item is None:  # pragma: no cover - execute() above already confirmed the row exists
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
+        item.metadata["rejection_reason"] = payload.reason
+        await service.review_queue_repo.update_review_item(item)
+    else:
+        if existing.current_status not in {
+            ReviewStatus.PENDING_REVIEW_REQUIRED,
+            ReviewStatus.PENDING_REVIEW_CONDITIONAL,
+        }:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Item {item_id} cannot be rejected from status {existing.current_status.value}.",
+            )
+        item = existing
+        item.current_status = ReviewStatus.REJECTED
+        # SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is bound to
+        # the authenticated session, never to client-supplied values —
+        # otherwise any authenticated user could forge a rejection as
+        # another user.
+        item.approved_by = current_user.full_name
+        item.approved_at = datetime.now(UTC)
+        item.metadata["rejection_reason"] = payload.reason
+        await service.review_queue_repo.update_review_item(item)
+
     await _record_hitl_correction_snapshot(
         item_id=item.item_id,
         item_data=item.item_data,
@@ -298,18 +379,7 @@ async def reject_item(
         reviewer=item.approved_by,
     )
     logger.info("hitl_item_rejected", item_id=str(item_id), reviewer=current_user.full_name)
-    return ReviewItemResponse(
-        item_id=item.item_id,
-        item_type=item.item_type,
-        current_status=item.current_status,
-        confidence=item.confidence,
-        impact_level=item.impact_level,
-        approved_by=item.approved_by,
-        approved_at=item.approved_at,
-        sla_due_date=item.sla_due_date,
-        created_at=item.created_at,
-        item_data=item.item_data,
-    )
+    return _to_review_item_response(item)
 
 
 @router.post(
@@ -328,18 +398,7 @@ async def release_item(
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     logger.info("hitl_item_released", item_id=str(item_id))
-    return ReviewItemResponse(
-        item_id=item.item_id,
-        item_type=item.item_type,
-        current_status=item.current_status,
-        confidence=item.confidence,
-        impact_level=item.impact_level,
-        approved_by=item.approved_by,
-        approved_at=item.approved_at,
-        sla_due_date=item.sla_due_date,
-        created_at=item.created_at,
-        item_data=item.item_data,
-    )
+    return _to_review_item_response(item)
 
 
 @router.post(
