@@ -125,12 +125,14 @@ export default function ReviewPage() {
     setActionError(null);
     try {
       await approveMutation.mutateAsync({
-        // C2PRO P0b HITL review UX hotfix: target the exact review row when
-        // the backend supplied its real identity (row_id) -- item_id alone
-        // is a business identifier, not guaranteed unique, so it must never
-        // be the primary way one specific decision is targeted. Falls back
-        // to item_id only for older cached rows that predate row_id.
-        itemId: modal.item.row_id ?? modal.item.item_id,
+        // The queue list already collapses legacy item_id duplicates to one
+        // canonical (resumable, most-recent) row -- see
+        // SqlAlchemyReviewQueueRepository.list_by_status -- so the card the
+        // user is looking at and the row item_id resolves to on the backend
+        // are always the same one. Keep the URL contract as item_id (not
+        // row_id): callers/tests outside this page still address reviews by
+        // item_id, and get_review_item() already resolves it exactly.
+        itemId: modal.item.item_id,
         data: {},
       });
       closeModal();
@@ -147,7 +149,7 @@ export default function ReviewPage() {
     setActionError(null);
     try {
       await rejectMutation.mutateAsync({
-        itemId: modal.item.row_id ?? modal.item.item_id,
+        itemId: modal.item.item_id,
         data: {
           reason: rejectReason.trim(),
         },
