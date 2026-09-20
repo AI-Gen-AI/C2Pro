@@ -35,15 +35,21 @@ def _extraer_de_modelo(filepath: Path) -> list[dict]:
     try:
         content = filepath.read_text(encoding="utf-8")
         # Buscar clases que hereden de Base
-        class_pattern = re.compile(r"class\s+(\w+)\(.*Base.*\):")
+        class_pattern = re.compile(r"class\s+(\w+)\(([^)\r\n]*)\):")
         col_pattern = re.compile(r"Column\(['\"](\w+)['\"]")
+        class_matches = [
+            match for match in class_pattern.finditer(content) if "Base" in match.group(2)
+        ]
 
-        for match in class_pattern.finditer(content):
+        for index, match in enumerate(class_matches):
             clase = match.group(1)
             start = match.end()
-            # Buscar siguiente clase o fin del archivo
-            next_match = class_pattern.search(content, start)
-            end = next_match.start() if next_match else len(content)
+            # Buscar siguiente clase Base o fin del archivo
+            end = (
+                class_matches[index + 1].start()
+                if index + 1 < len(class_matches)
+                else len(content)
+            )
             bloque = content[start:end]
 
             columnas = [m.group(1) for m in col_pattern.finditer(bloque)]
