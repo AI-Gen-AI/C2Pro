@@ -6,9 +6,10 @@ Test Suite ID: TS-I11-HITL-HTTP-002
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, select
+from sqlalchemy import ColumnElement, Select, case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
@@ -120,6 +121,49 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
 
     # -- port implementation --------------------------------------------------
 
+    @staticmethod
+    def _canonical_priority() -> ColumnElement[int]:
+        """Rank a row's lifecycle stage for canonical selection among
+        duplicates sharing one item_id.
+
+        C2PRO P0b legacy review canonical-selection hotfix: an ACTIVE row
+        awaiting a human decision (PENDING_REVIEW_REQUIRED /
+        PENDING_REVIEW_CONDITIONAL) must always outrank a HISTORICAL row
+        that has already been decided (APPROVED/REJECTED/CLOSED/ESCALATED),
+        regardless of which was created more recently or which happens to
+        carry a thread_id. Without this, an old APPROVED row created after
+        (in wall-clock time) a still-active PENDING row -- e.g. a stale
+        audit entry from a prior reprocess -- silently outranks the row the
+        user actually needs to act on, hiding it from the queue and, worse,
+        letting approve/reject resolve and mutate the wrong row entirely.
+        """
+        return case(
+            (
+                ReviewItemORM.current_status.in_(
+                    [
+                        ReviewStatus.PENDING_REVIEW_REQUIRED,
+                        ReviewStatus.PENDING_REVIEW_CONDITIONAL,
+                    ]
+                ),
+                0,
+            ),
+            else_=1,
+        )
+
+    @classmethod
+    def _canonical_tiebreakers(cls) -> tuple[Any, ...]:
+        """Ordering to apply *within* a `_canonical_priority()` tier: prefer
+        the resumable (real thread_id) row, then the most recently created.
+        Shared by every call site that must resolve "the" canonical row for
+        an item_id, so the queue list, single-item lookup, and mutation
+        targeting can never disagree about which row that is.
+        """
+        return (
+            cls._canonical_priority(),
+            ReviewItemORM.thread_id.isnot(None).desc(),
+            ReviewItemORM.created_at.desc(),
+        )
+
     async def add_review_item(self, item: ReviewItem) -> UUID:
         orm = self._to_orm(item)
         self.session.add(orm)
@@ -152,7 +196,7 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         stmt = select(ReviewItemORM).where(ReviewItemORM.item_id == item_id)
         if self.tenant_id is not None:
             stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
-        stmt = stmt.order_by(ReviewItemORM.created_at.desc())
+        stmt = stmt.order_by(*self._canonical_tiebreakers())
         result = await self.session.execute(stmt)
         orm = result.scalars().first()
         return self._to_domain(orm) if orm else None
@@ -174,7 +218,7 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
             # update_review_item call site fetches first). Deterministic
             # tie-break instead of raising, consistent with get_review_item.
             stmt = stmt.where(ReviewItemORM.item_id == item.item_id).order_by(
-                ReviewItemORM.created_at.desc()
+                *self._canonical_tiebreakers()
             )
         if self.tenant_id is not None:
             stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
@@ -284,11 +328,18 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         guaranteed unique (see _to_domain's row_id note) -- historical
         duplicate rows for the same item_id (pre-hotfix retries) must not
         render as separate actionable decisions in the review queue.
-        Collapse to one row per item_id via Postgres DISTINCT ON, preferring
-        the row carrying a real thread_id (the adopted, resumable row), then
-        the most recently created -- the exact same precedence
-        get_review_item/find_active_review already use, so the queue never
-        shows a row other than the one approve/reject would actually act on.
+        Collapse to one row per item_id via Postgres DISTINCT ON.
+
+        C2PRO P0b legacy review canonical-selection hotfix: an ACTIVE row
+        (PENDING_REVIEW_REQUIRED/PENDING_REVIEW_CONDITIONAL) must always be
+        preferred over a HISTORICAL, already-decided row for the same
+        item_id -- see _canonical_priority(). Only once rows tie on that
+        (e.g. an explicit status=APPROVED filter, where every candidate is
+        already historical) do thread_id presence and recency break the
+        tie. This is the exact same precedence get_review_item's item_id
+        fallback and update_review_item's fallback use, so the queue never
+        shows a row other than the one approve/reject would actually act
+        on.
         """
         stmt = select(ReviewItemORM).distinct(ReviewItemORM.item_id)
         if self.tenant_id is not None:
@@ -298,11 +349,7 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         if status is not None:
             stmt = stmt.where(ReviewItemORM.current_status == status)
         # DISTINCT ON requires its expression(s) as the leading ORDER BY.
-        return stmt.order_by(
-            ReviewItemORM.item_id,
-            ReviewItemORM.thread_id.isnot(None).desc(),
-            ReviewItemORM.created_at.desc(),
-        )
+        return stmt.order_by(ReviewItemORM.item_id, *self._canonical_tiebreakers())
 
     async def list_by_status(
         self,
