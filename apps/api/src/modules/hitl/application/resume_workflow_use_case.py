@@ -42,6 +42,12 @@ class ResumeWorkflowRequest:
     """Request to resume a workflow after HITL review."""
     decision: WorkflowDecision
     feedback: str
+    # C2PRO P0b HITL approve/resume hotfix: the authenticated reviewer's
+    # display name, when the caller has one (e.g. the /queue/{item_id}/approve
+    # route, which requires a signed-in user). Optional and defaulted so the
+    # pre-existing /resume/{review_id} route (which has no user identity
+    # today) keeps working unchanged.
+    approved_by: str | None = None
 
 
 @dataclass(frozen=True)
@@ -293,9 +299,14 @@ class ResumeWorkflowUseCase:
             if request.decision == WorkflowDecision.APPROVE:
                 review_item.current_status = ReviewStatus.APPROVED
                 review_item.approved_at = datetime.now(UTC)
+                if request.approved_by:
+                    review_item.approved_by = request.approved_by
                 status_message = "resumed"
             else:  # REJECT
                 review_item.current_status = ReviewStatus.REJECTED
+                review_item.approved_at = datetime.now(UTC)
+                if request.approved_by:
+                    review_item.approved_by = request.approved_by
                 status_message = "rejected"
 
             # Store feedback/reason in review_decision field

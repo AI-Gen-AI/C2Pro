@@ -501,18 +501,41 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                 if thread_id:
                     metadata["thread_id"] = thread_id
 
+                # C2PRO P0b HITL review UX hotfix: a reviewer deciding
+                # Approve/Reject needs more than a bare item_id -- these
+                # fields are all derived from data this node already has
+                # (never fabricated) so the review queue can render a real
+                # decision title, reason, and outcome explanation instead of
+                # raw technical metadata. See ReviewItemCard.tsx.
+                doc_type = state.get("doc_type") or "unknown"
+                reason = (
+                    "This document was flagged as high impact and requires "
+                    "human review before the analysis can complete."
+                    if impact == ImpactLevel.HIGH
+                    else "This analysis requires human confirmation before it can complete."
+                )
                 review_status = await service.route_for_review(
                     item_id=UUID(state["document_id"]),
-                    item_type=state.get("doc_type") or "unknown",
+                    item_type=doc_type,
                     confidence=state.get("confidence_score", 0.0),
                     impact_level=impact,
                     item_data={
                         "project_id": state["project_id"],
                         "document_id": state["document_id"],
-                        "doc_type": state.get("doc_type"),
+                        "doc_type": doc_type,
+                        "document_filename": state.get("document_filename"),
                         "retry_count": state.get("retry_count", 0),
                         "critique_notes": state.get("critique_notes", ""),
                         "thread_id": state.get("thread_id"),
+                        "reason": reason,
+                        "approve_meaning": (
+                            "Continue the analysis using this reviewed result. "
+                            "The document will be marked ANALYZED once processing completes."
+                        ),
+                        "reject_meaning": (
+                            "Reject this result. The document will require correction "
+                            "or re-analysis before it can be marked ANALYZED."
+                        ),
                     },
                     metadata=metadata,
                 )

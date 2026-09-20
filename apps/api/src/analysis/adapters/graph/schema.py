@@ -32,6 +32,12 @@ class ProjectState(TypedDict):
     retry_count: int
     tenant_id: str | None
     thread_id: str | None
+    # C2PRO P0b HITL review UX hotfix: the document's own filename, already
+    # available on the Document row _run_analysis_graph_best_effort reads --
+    # threaded through so human_interrupt_node can give a HITL reviewer a
+    # real decision title ("Approve analysis of contract.pdf") instead of a
+    # bare document_id. Never fabricated; absent (None) if unknown.
+    document_filename: str | None
     analysis_id: str | None
     human_approval_required: bool
     force_full_pipeline: bool

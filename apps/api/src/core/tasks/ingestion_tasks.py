@@ -520,6 +520,7 @@ async def _run_analysis_graph_best_effort(
         "doc_type": getattr(document.document_type, "value", "") if document.document_type else "",
         "tenant_id": str(tenant_id),
         "thread_id": thread_id,
+        "document_filename": getattr(document, "filename", None),
         "messages": [],
         "extracted_risks": [],
         "extracted_wbs": [],

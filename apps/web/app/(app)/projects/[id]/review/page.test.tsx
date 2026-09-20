@@ -251,4 +251,126 @@ describe('ReviewPage', () => {
 
     expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument();
   });
+
+  it('expands the page limit when load more is clicked', async () => {
+    const fullPage = Array.from({ length: 50 }, (_, index) => ({
+      ...MOCK_ITEMS[0],
+      item_id: `item-${index}`,
+    }));
+    setupMock({ data: { items: fullPage, total: 50 } });
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Load more' }));
+
+    await waitFor(() => {
+      expect(mockUseQueue).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 100 }),
+      );
+    });
+  });
+
+  it('targets item_id (not row_id) on approve even when a distinct row_id is present -- guards the journey-3-wedge URL contract', async () => {
+    setupMock({
+      data: {
+        items: [
+          { ...MOCK_ITEMS[0], row_id: 'row-distinct-999', resumable: true },
+        ],
+        total: 1,
+      },
+    });
+    mockApproveMutate.mockResolvedValue({});
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    await userEvent.click(screen.getByText('Confirm Approve'));
+
+    await waitFor(() => {
+      expect(mockApproveMutate).toHaveBeenCalledWith({
+        itemId: 'item-1',
+        data: {},
+      });
+    });
+    expect(mockApproveMutate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ itemId: 'row-distinct-999' }),
+    );
+  });
+
+  it('describes a resumable item approval as resuming the analysis workflow', async () => {
+    setupMock({
+      data: {
+        items: [{ ...MOCK_ITEMS[0], resumable: true }],
+        total: 1,
+      },
+    });
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    expect(
+      screen.getByText(/this will resume the analysis workflow/i),
+    ).toBeInTheDocument();
+  });
+
+  it('describes a non-resumable item approval as a plain status change', async () => {
+    setupMock({
+      data: {
+        items: [{ ...MOCK_ITEMS[0], resumable: false }],
+        total: 1,
+      },
+    });
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    expect(screen.getByText(/this will mark the item as approved/i)).toBeInTheDocument();
+  });
+
+  it('describes a resumable item rejection as terminating the workflow', async () => {
+    setupMock({
+      data: {
+        items: [{ ...MOCK_ITEMS[0], resumable: true }],
+        total: 1,
+      },
+    });
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('reject-item-1'));
+    expect(
+      screen.getByText(/this will terminate the analysis workflow/i),
+    ).toBeInTheDocument();
+  });
+
+  it('describes a non-resumable item rejection as a plain status change', async () => {
+    setupMock({
+      data: {
+        items: [{ ...MOCK_ITEMS[0], resumable: false }],
+        total: 1,
+      },
+    });
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('reject-item-1'));
+    expect(screen.getByText(/this will mark the item as rejected/i)).toBeInTheDocument();
+  });
+
+  it('keeps reject dialog open and surfaces the 502 resume-failure message', async () => {
+    setupMock();
+    mockRejectMutate.mockRejectedValue(new Error('Resume failed: workflow error (502)'));
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('reject-item-1'));
+    await userEvent.type(screen.getByPlaceholderText(/explain why/i), 'Bad extraction');
+    await userEvent.click(screen.getByText('Confirm Reject'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Resume failed: workflow error (502)');
+    expect(screen.getByText('Reject Review Item')).toBeInTheDocument();
+    expect(mockShowToast).toHaveBeenCalledWith('Resume failed: workflow error (502)');
+  });
+
+  it('renders one card per deduped queue item (no duplicate legacy rows shown)', () => {
+    setupMock();
+    render(<ReviewPage />);
+    // MOCK_ITEMS has 3 distinct item_ids; the backend queue list already
+    // dedups legacy duplicates, so the page must render exactly one card
+    // per item_id it receives, never more.
+    expect(screen.getAllByTestId(/^review-item-/)).toHaveLength(3);
+  });
 });
