@@ -33,7 +33,7 @@ load_dotenv(env_path)
 print(f"[DEBUG] Loading .env from: {env_path}")
 
 
-async def generate_simple_trace():
+def generate_simple_trace():
     """Generate a simple trace using LangSmith client directly."""
     from langsmith.run_trees import RunTree
 
@@ -174,7 +174,7 @@ async def main():
     # Method 1: Direct LangSmith client
     print("[1/2] Generating direct LangSmith trace...")
     try:
-        run_id = await generate_simple_trace()
+        run_id = generate_simple_trace()
         print(f"[1/2] Direct trace completed: {run_id}\n")
     except Exception as e:
         print(f"[1/2] Direct trace failed: {e}\n")
