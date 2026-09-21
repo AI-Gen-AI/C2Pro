@@ -64,7 +64,6 @@ def main():
 
     if command == "help":
         show_help()
-        return
 
     elif command == "upgrade":
         run_command(["alembic", "upgrade", "head"], "Aplicando migraciones")
