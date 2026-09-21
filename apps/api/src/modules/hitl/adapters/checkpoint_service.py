@@ -43,7 +43,21 @@ class CheckpointService:
             ValueError: If checkpoint not found or invalid
         """
         try:
-            config = {"configurable": {"thread_id": thread_id}}
+            # C2PRO P0b checkpoint tuple restore hotfix: forward checkpoint_id
+            # into `configurable` when the caller supplied one. Both
+            # AsyncPostgresSaver.aget_tuple (langgraph-checkpoint-postgres
+            # 3.1.2) and MemorySaver read the exact checkpoint via
+            # get_checkpoint_id(config), i.e. config["configurable"].get(
+            # "checkpoint_id") -- omitting it here (the prior bug) silently
+            # discarded the requested checkpoint and always resolved the
+            # LATEST checkpoint for the thread instead. Omitting the key
+            # entirely (not just passing None) preserves the deliberate
+            # thread-only-fallback-to-latest behavior when checkpoint_id is
+            # genuinely absent.
+            configurable: dict[str, Any] = {"thread_id": thread_id}
+            if checkpoint_id:
+                configurable["checkpoint_id"] = checkpoint_id
+            config = {"configurable": configurable}
 
             # Load checkpoint using LangGraph API
             checkpoint_tuple = await self.checkpointer.aget_tuple(config)
@@ -52,16 +66,35 @@ class CheckpointService:
                 logger.warning("checkpoint_not_found", thread_id=thread_id, checkpoint_id=checkpoint_id)
                 return None
 
-            checkpoint, metadata, _ = checkpoint_tuple
+            # CheckpointTuple (langgraph.checkpoint.base) is a 5-field
+            # NamedTuple: config, checkpoint, metadata, parent_config,
+            # pending_writes. Positional `a, b, c = checkpoint_tuple`
+            # unpacking against 5 values raises "too many values to unpack"
+            # -- access the field we need by name instead, so this never
+            # breaks again if the library adds another field.
+            checkpoint = checkpoint_tuple.checkpoint
 
             if not checkpoint:
                 logger.warning("checkpoint_empty", thread_id=thread_id)
                 return None
 
+            loaded_checkpoint_id = checkpoint.get("id")
+            if checkpoint_id and loaded_checkpoint_id != checkpoint_id:
+                # Fail closed: an explicit checkpoint_id was requested but
+                # the saver returned a different one. Never silently resume
+                # against a stale/sibling/latest-by-accident checkpoint.
+                logger.error(
+                    "checkpoint_identity_mismatch",
+                    thread_id=thread_id,
+                    requested_checkpoint_id=checkpoint_id,
+                    loaded_checkpoint_id=loaded_checkpoint_id,
+                )
+                return None
+
             logger.info(
                 "checkpoint_loaded",
                 thread_id=thread_id,
-                checkpoint_id=checkpoint.get("id"),
+                checkpoint_id=loaded_checkpoint_id,
                 channel_values_keys=list(checkpoint.get("channel_values", {}).keys()),
             )
 
