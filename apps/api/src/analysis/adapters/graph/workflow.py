@@ -20,6 +20,7 @@ from src.analysis.adapters.graph.nodes import (
     critique_node,
     human_interrupt_node,
     risk_extractor_node,
+    route_after_human_interrupt,
     router_node,
     save_to_db_node,
     wbs_extractor_node,
@@ -292,7 +293,22 @@ def build_workflow() -> ProjectWorkflow:
     # ── HITL exit converges on the same dispatch node ───────────────────
     # (Mutually exclusive with the direct critique→dispatch path; only one
     # of these two edges fires per execution, so this is *not* a join.)
-    workflow.add_edge("human_interrupt", "enrichment_dispatch")
+    #
+    # C2PRO P0b true-resume hotfix: this used to be an UNCONDITIONAL edge,
+    # so once N13 returned the run continued into enrichment and on to N17
+    # regardless of what the human actually decided -- a rejection was
+    # indistinguishable from an approval. Route on the decision N13 now
+    # consumes from Command(resume=...). Rejection terminates at END; it
+    # must never enter the fan-out below, because the list-valued join into
+    # knowledge_graph would then wait on branches that never run.
+    workflow.add_conditional_edges(
+        "human_interrupt",
+        route_after_human_interrupt,
+        {
+            "enrichment_dispatch": "enrichment_dispatch",
+            "terminated": END,
+        },
+    )
 
     # ── Parallel fan-out from dispatch ──────────────────────────────────
     # Multiple unconditional outgoing edges from a single node = static

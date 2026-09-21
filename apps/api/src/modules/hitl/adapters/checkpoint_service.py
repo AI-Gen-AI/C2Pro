@@ -4,11 +4,38 @@ Part of TASK-BCK-031: Implement LangGraph checkpoint restoration for HITL resume
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, cast
 
 import structlog
 
 logger = structlog.get_logger()
+
+
+@dataclass(frozen=True)
+class CheckpointRestore:
+    """The authoritative result of restoring one checkpoint.
+
+    C2PRO P0b true-resume hotfix: resuming an interrupted LangGraph run
+    requires the checkpointer's OWN config -- not one rebuilt from
+    thread_id. ``CheckpointTuple.config`` is that authoritative identity;
+    verified empirically against the installed langgraph 1.2.10 /
+    langgraph-checkpoint-postgres 3.1.2 to be identical to
+    ``CompiledStateGraph.aget_state(...).config`` and to resume the exact
+    interrupted checkpoint when passed verbatim to
+    ``ainvoke(Command(resume=...), config)``. It carries thread_id,
+    checkpoint_ns and checkpoint_id together -- all three matter, and
+    checkpoint_ns in particular cannot be reconstructed from thread_id.
+    """
+
+    checkpoint: dict[str, Any]
+    config: dict[str, Any]
+    metadata: dict[str, Any]
+
+    @property
+    def checkpoint_id(self) -> str | None:
+        configurable = self.config.get("configurable", {})
+        return cast("str | None", configurable.get("checkpoint_id"))
 
 
 class CheckpointService:
@@ -41,6 +68,20 @@ class CheckpointService:
 
         Raises:
             ValueError: If checkpoint not found or invalid
+        """
+        restored = await self.restore_checkpoint(thread_id, checkpoint_id)
+        return restored.checkpoint if restored is not None else None
+
+    async def restore_checkpoint(
+        self, thread_id: str, checkpoint_id: str | None = None
+    ) -> CheckpointRestore | None:
+        """Load a checkpoint AND the authoritative config that identifies it.
+
+        Same resolution/verification semantics as load_checkpoint (which
+        delegates here), but returns the checkpointer's own
+        ``CheckpointTuple.config`` alongside the checkpoint so a caller can
+        resume that EXACT checkpoint/namespace rather than rebuilding an
+        identity from thread_id alone (C2PRO P0b true-resume hotfix).
         """
         try:
             # C2PRO P0b checkpoint tuple restore hotfix: forward checkpoint_id
@@ -98,7 +139,16 @@ class CheckpointService:
                 channel_values_keys=list(checkpoint.get("channel_values", {}).keys()),
             )
 
-            return cast(dict[str, Any], checkpoint)
+            # Prefer the checkpointer's OWN config (it carries checkpoint_ns
+            # and the resolved checkpoint_id). Fall back to the config we
+            # asked with only if a saver returns none, so the caller always
+            # has some usable identity.
+            restore_config = cast("dict[str, Any] | None", checkpoint_tuple.config) or config
+            return CheckpointRestore(
+                checkpoint=cast(dict[str, Any], checkpoint),
+                config=restore_config,
+                metadata=dict(checkpoint_tuple.metadata or {}),
+            )
 
         except Exception as e:
             logger.error("checkpoint_load_failed", thread_id=thread_id, error=str(e), exc_info=True)

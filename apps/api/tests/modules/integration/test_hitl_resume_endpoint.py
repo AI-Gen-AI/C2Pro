@@ -37,9 +37,25 @@ class _FakeCheckpointService:
     def __init__(self) -> None:
         self.loaded: list[tuple[str, str]] = []
 
-    async def load_checkpoint(self, thread_id: str, checkpoint_id: str) -> dict[str, str]:
+    async def load_checkpoint(self, thread_id: str, checkpoint_id: str | None = None) -> dict[str, str]:
         self.loaded.append((thread_id, checkpoint_id))
         return {"thread_id": thread_id, "checkpoint_id": checkpoint_id}
+
+    async def restore_checkpoint(self, thread_id: str, checkpoint_id: str | None = None):
+        """C2PRO P0b true-resume hotfix: the resume layer needs the exact
+        checkpoint CONFIG (thread_id + checkpoint_ns + checkpoint_id), not
+        just the checkpoint body."""
+        from src.modules.hitl.adapters.checkpoint_service import CheckpointRestore
+
+        self.loaded.append((thread_id, checkpoint_id))
+        configurable: dict[str, object] = {"thread_id": thread_id, "checkpoint_ns": ""}
+        if checkpoint_id:
+            configurable["checkpoint_id"] = checkpoint_id
+        return CheckpointRestore(
+            checkpoint={"thread_id": thread_id, "checkpoint_id": checkpoint_id},
+            config={"configurable": configurable},
+            metadata={},
+        )
 
     def extract_state(self, checkpoint: dict[str, str]) -> dict[str, object]:
         return {
@@ -54,6 +70,7 @@ class _FakeGraphApp:
     def __init__(self) -> None:
         self.updates: list[tuple[dict[str, object], dict[str, object]]] = []
         self.invocations: list[tuple[object, dict[str, object]]] = []
+        self.resume_decisions: list[str | None] = []
 
     async def aupdate_state(
         self,
@@ -67,8 +84,23 @@ class _FakeGraphApp:
         state: object,
         config: dict[str, object],
     ) -> dict[str, object]:
+        """C2PRO P0b true-resume hotfix: resume arrives as
+        Command(resume={"decision": ..., "feedback": ...}); the decision is
+        read FROM it, mirroring interrupt()'s return value in the real node.
+        """
+        from tests.support.hitl_resume_fakes import decision_from_resume
+
         self.invocations.append((state, config))
-        return {"analysis_id": "analysis-resumed"}
+        decision, feedback = decision_from_resume(state)
+        self.resume_decisions.append(decision)
+        if decision == "reject":
+            return {
+                "human_decision": "reject",
+                "human_approval_required": False,
+                "workflow_terminated": True,
+                "termination_reason": feedback,
+            }
+        return {"analysis_id": "analysis-resumed", "human_decision": decision}
 
 
 @pytest_asyncio.fixture
@@ -258,8 +290,11 @@ class TestApprovalFlow:
         assert "review_id" in data
         assert "status" in data
         assert data["status"] == "resumed" or data["status"] == "approved"
-        assert graph_app.invocations, "Approve must invoke LangGraph after state update"
-        assert graph_app.invocations[-1][0] is None
+        assert graph_app.invocations, "Approve must invoke LangGraph to resume"
+        # C2PRO P0b true-resume hotfix: the first argument is no longer
+        # None (which did NOT resume) -- it is a Command carrying the
+        # decision.
+        assert graph_app.resume_decisions[-1] == "approve"
 
     async def test_approval_updates_review_status(
         self,
@@ -491,9 +526,15 @@ class TestStateInjection:
         )
 
         assert response.status_code == 200, "Approval with feedback should succeed"
-        assert graph_app.updates[-1][1]["human_feedback"] == feedback
-        assert graph_app.updates[-1][1]["human_decision"] == "approve"
-        assert graph_app.updates[-1][1]["human_approval_required"] is False
+        # C2PRO P0b true-resume hotfix: the decision is no longer injected
+        # into stored state via aupdate_state -- it travels in
+        # Command(resume=...), which is what interrupt() returns inside the
+        # node. Assert the real carrier.
+        from tests.support.hitl_resume_fakes import decision_from_resume
+
+        resumed_decision, resumed_feedback = decision_from_resume(graph_app.invocations[-1][0])
+        assert resumed_decision == "approve"
+        assert resumed_feedback == feedback
 
     async def test_rejection_injects_termination_reason(
         self,
@@ -511,9 +552,14 @@ class TestStateInjection:
         )
 
         assert response.status_code == 200, "Rejection with reason should succeed"
-        assert graph_app.updates[-1][1]["human_decision"] == "reject"
-        assert graph_app.updates[-1][1]["workflow_terminated"] is True
-        assert graph_app.updates[-1][1]["termination_reason"] == reason
+        # See the approve case: the rejection now travels in the resume
+        # command and the graph itself terminates, rather than a
+        # "workflow_terminated" flag being patched into stored state.
+        from tests.support.hitl_resume_fakes import decision_from_resume
+
+        resumed_decision, resumed_feedback = decision_from_resume(graph_app.invocations[-1][0])
+        assert resumed_decision == "reject"
+        assert resumed_feedback == reason
 
 
 class TestErrorCases:

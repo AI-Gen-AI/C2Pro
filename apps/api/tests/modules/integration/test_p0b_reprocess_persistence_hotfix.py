@@ -208,17 +208,33 @@ class _FakeInterruptingApp:
 class _FakeResumingGraphApp:
     """Resumes by invoking the REAL N17 save_to_db_node."""
 
-    def __init__(self) -> None:
+    def __init__(self, seed_state: dict | None = None) -> None:
         self.last_state: dict | None = None
+        self.seed_state: dict | None = seed_state
 
     async def aupdate_state(self, config: dict, state: dict) -> None:
         self.last_state = state
 
-    async def ainvoke(self, _resume_signal: None, config: dict) -> dict:
+    async def ainvoke(self, resume_signal: object, config: dict) -> dict:
+        from tests.support.hitl_resume_fakes import decision_from_resume
         from src.analysis.adapters.graph.nodes import save_to_db_node
 
-        assert self.last_state is not None
-        return await save_to_db_node(self.last_state)
+        # C2PRO P0b true-resume hotfix: resume now arrives as
+        # Command(resume=...) and the decision must be read FROM it, the
+        # way the real interrupt node reads interrupt()'s return value.
+        decision, feedback = decision_from_resume(resume_signal)
+        state = dict(self.last_state or self.seed_state or {})
+        state["human_decision"] = decision or ""
+        state["human_feedback"] = feedback
+        if decision == "reject":
+            state["human_approval_required"] = False
+            state["workflow_terminated"] = True
+            state["termination_reason"] = feedback
+            return state
+        if decision != "approve":
+            return {**state, "__interrupt__": ({"reason": "approval_required"},)}
+        state["human_approval_required"] = False
+        return await save_to_db_node(state)
 
 
 class _FakeResumeCheckpointService:
@@ -226,9 +242,25 @@ class _FakeResumeCheckpointService:
         self._state = state
         self.loaded: list[tuple[str, str | None]] = []
 
-    async def load_checkpoint(self, thread_id: str, checkpoint_id: str | None) -> dict:
+    async def load_checkpoint(self, thread_id: str, checkpoint_id: str | None = None) -> dict:
         self.loaded.append((thread_id, checkpoint_id))
         return {"id": checkpoint_id or "latest", "channel_values": {"__root__": dict(self._state)}}
+
+    async def restore_checkpoint(self, thread_id: str, checkpoint_id: str | None = None):
+        from src.modules.hitl.adapters.checkpoint_service import CheckpointRestore
+
+        self.loaded.append((thread_id, checkpoint_id))
+        configurable: dict = {"thread_id": thread_id, "checkpoint_ns": ""}
+        if checkpoint_id:
+            configurable["checkpoint_id"] = checkpoint_id
+        return CheckpointRestore(
+            checkpoint={
+                "id": checkpoint_id or "latest",
+                "channel_values": {"__root__": dict(self._state)},
+            },
+            config={"configurable": configurable},
+            metadata={},
+        )
 
     def extract_state(self, checkpoint: dict) -> dict:
         return dict(checkpoint["channel_values"]["__root__"])
@@ -376,7 +408,7 @@ async def test_full_prod_shape_lifecycle_legacy_adoption_rag_idempotency_and_res
         "messages": [],
         "node_results": [],
     }
-    resuming_app = _FakeResumingGraphApp()
+    resuming_app = _FakeResumingGraphApp(resume_state)
     checkpoint_service = _FakeResumeCheckpointService(resume_state)
     use_case = ResumeWorkflowUseCase(
         review_queue_repo=review_repo,

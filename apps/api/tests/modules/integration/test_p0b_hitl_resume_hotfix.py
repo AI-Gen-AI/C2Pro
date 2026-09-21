@@ -323,19 +323,32 @@ class _FakeResumingGraphApp:
     analysis_id are all genuine.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, seed_state: dict | None = None) -> None:
         self.last_state: dict | None = None
+        self.seed_state: dict | None = seed_state
         self.update_calls: list[tuple[dict, dict]] = []
 
     async def aupdate_state(self, config: dict, state: dict) -> None:
         self.update_calls.append((config, dict(state)))
         self.last_state = state
 
-    async def ainvoke(self, _resume_signal: None, config: dict) -> dict:
+    async def ainvoke(self, resume_signal: object, config: dict) -> dict:
+        from tests.support.hitl_resume_fakes import decision_from_resume
         from src.analysis.adapters.graph.nodes import save_to_db_node
 
-        assert self.last_state is not None, "aupdate_state must run before ainvoke(None, ...)"
-        return await save_to_db_node(self.last_state)
+        # C2PRO P0b true-resume hotfix: resume arrives as
+        # Command(resume=...), and the decision is read FROM it -- the way
+        # interrupt() returns it inside the real node. The previous
+        # assertion ("aupdate_state must run before ainvoke(None, ...)")
+        # encoded the broken contract: ainvoke(None, ...) does not resume a
+        # LangGraph interrupt at all.
+        decision, feedback = decision_from_resume(resume_signal)
+        assert decision == "approve", f"expected an approve resume, got {decision!r}"
+        state = dict(self.last_state or self.seed_state or {})
+        state["human_decision"] = decision
+        state["human_feedback"] = feedback
+        state["human_approval_required"] = False
+        return await save_to_db_node(state)
 
 
 class _FakeResumeCheckpointService:
@@ -350,9 +363,25 @@ class _FakeResumeCheckpointService:
         self._state = state
         self.loaded: list[tuple[str, str | None]] = []
 
-    async def load_checkpoint(self, thread_id: str, checkpoint_id: str | None) -> dict:
+    async def load_checkpoint(self, thread_id: str, checkpoint_id: str | None = None) -> dict:
         self.loaded.append((thread_id, checkpoint_id))
         return {"id": checkpoint_id or "latest", "channel_values": {"__root__": dict(self._state)}}
+
+    async def restore_checkpoint(self, thread_id: str, checkpoint_id: str | None = None):
+        from src.modules.hitl.adapters.checkpoint_service import CheckpointRestore
+
+        self.loaded.append((thread_id, checkpoint_id))
+        configurable: dict = {"thread_id": thread_id, "checkpoint_ns": ""}
+        if checkpoint_id:
+            configurable["checkpoint_id"] = checkpoint_id
+        return CheckpointRestore(
+            checkpoint={
+                "id": checkpoint_id or "latest",
+                "channel_values": {"__root__": dict(self._state)},
+            },
+            config={"configurable": configurable},
+            metadata={},
+        )
 
     def extract_state(self, checkpoint: dict) -> dict:
         return dict(checkpoint["channel_values"]["__root__"])
@@ -438,7 +467,7 @@ async def test_full_hitl_lifecycle_resume_to_n17_to_analyzed_and_health_readable
         "messages": [],
         "node_results": [],
     }
-    resuming_app = _FakeResumingGraphApp()
+    resuming_app = _FakeResumingGraphApp(resume_state)
     checkpoint_service = _FakeResumeCheckpointService(resume_state)
     use_case = ResumeWorkflowUseCase(
         review_queue_repo=review_repo,

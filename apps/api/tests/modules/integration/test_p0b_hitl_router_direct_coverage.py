@@ -68,17 +68,33 @@ def _service(db: AsyncSession, tenant_id: UUID) -> HumanInTheLoopService:
 
 
 class _FakeResumingGraphApp:
-    def __init__(self) -> None:
+    def __init__(self, seed_state: dict | None = None) -> None:
         self.last_state: dict | None = None
+        self.seed_state: dict | None = seed_state
 
     async def aupdate_state(self, config: dict, state: dict) -> None:
         self.last_state = state
 
-    async def ainvoke(self, _resume_signal: None, config: dict) -> dict:
+    async def ainvoke(self, resume_signal: object, config: dict) -> dict:
+        from tests.support.hitl_resume_fakes import decision_from_resume
         from src.analysis.adapters.graph.nodes import save_to_db_node
 
-        assert self.last_state is not None
-        return await save_to_db_node(self.last_state)
+        # C2PRO P0b true-resume hotfix: resume now arrives as
+        # Command(resume=...) and the decision must be read FROM it, the
+        # way the real interrupt node reads interrupt()'s return value.
+        decision, feedback = decision_from_resume(resume_signal)
+        state = dict(self.last_state or self.seed_state or {})
+        state["human_decision"] = decision or ""
+        state["human_feedback"] = feedback
+        if decision == "reject":
+            state["human_approval_required"] = False
+            state["workflow_terminated"] = True
+            state["termination_reason"] = feedback
+            return state
+        if decision != "approve":
+            return {**state, "__interrupt__": ({"reason": "approval_required"},)}
+        state["human_approval_required"] = False
+        return await save_to_db_node(state)
 
 
 class _FailingGraphApp:
@@ -93,8 +109,23 @@ class _FakeCheckpointService:
     def __init__(self, state: dict) -> None:
         self._state = state
 
-    async def load_checkpoint(self, thread_id: str, checkpoint_id: str | None) -> dict:
+    async def load_checkpoint(self, thread_id: str, checkpoint_id: str | None = None) -> dict:
         return {"id": checkpoint_id or "latest", "channel_values": {"__root__": dict(self._state)}}
+
+    async def restore_checkpoint(self, thread_id: str, checkpoint_id: str | None = None):
+        from src.modules.hitl.adapters.checkpoint_service import CheckpointRestore
+
+        configurable: dict = {"thread_id": thread_id, "checkpoint_ns": ""}
+        if checkpoint_id:
+            configurable["checkpoint_id"] = checkpoint_id
+        return CheckpointRestore(
+            checkpoint={
+                "id": checkpoint_id or "latest",
+                "channel_values": {"__root__": dict(self._state)},
+            },
+            config={"configurable": configurable},
+            metadata={},
+        )
 
     def extract_state(self, checkpoint: dict) -> dict:
         return dict(checkpoint["channel_values"]["__root__"])
@@ -310,7 +341,7 @@ async def test_direct_approve_resumable_review_reaches_analyzed(db: AsyncSession
         _tenant_id=tenant.id,
         current_user=_current_user(),
         service=_service(db, tenant.id),
-        resume_use_case=_resume_use_case(db, tenant.id, resume_state, _FakeResumingGraphApp()),
+        resume_use_case=_resume_use_case(db, tenant.id, resume_state, _FakeResumingGraphApp(resume_state)),
     )
 
     assert response.current_status == ReviewStatus.APPROVED
@@ -419,7 +450,7 @@ async def test_direct_approve_non_resumable_already_approved_400(db: AsyncSessio
     assert exc_info.value.status_code == 400
 
 
-async def test_direct_approve_resume_failure_returns_502_and_keeps_approved(db: AsyncSession) -> None:
+async def test_direct_approve_resume_failure_returns_502_and_stays_pending(db: AsyncSession) -> None:
     tenant = Tenant(
         id=uuid4(), name="T", slug=f"t-{uuid4().hex[:8]}", subscription_plan="professional", is_active=True
     )
@@ -452,7 +483,11 @@ async def test_direct_approve_resume_failure_returns_502_and_keeps_approved(db: 
 
     refreshed = await db.get(ReviewItemORM, review.id)
     await db.refresh(refreshed)
-    assert refreshed.current_status == ReviewStatus.APPROVED.value
+    # C2PRO P0b true-resume hotfix: inverted on purpose. A failed resume
+    # must NOT leave a false APPROVED behind -- the decision is recorded
+    # only after the workflow reaches durable completion.
+    assert refreshed.current_status == ReviewStatus.PENDING_REVIEW_REQUIRED.value
+    assert refreshed.approved_at is None
 
 
 async def test_direct_approve_already_processed_is_idempotent(db: AsyncSession) -> None:
@@ -482,7 +517,7 @@ async def test_direct_approve_already_processed_is_idempotent(db: AsyncSession) 
         _tenant_id=tenant.id,
         current_user=_current_user(),
         service=_service(db, tenant.id),
-        resume_use_case=_resume_use_case(db, tenant.id, {}, _FakeResumingGraphApp()),
+        resume_use_case=_resume_use_case(db, tenant.id, {}, _FakeResumingGraphApp({})),
     )
     assert response.current_status == ReviewStatus.APPROVED
 
@@ -515,7 +550,7 @@ async def test_direct_reject_resumable_review_terminates_without_n17(db: AsyncSe
         _tenant_id=tenant.id,
         current_user=_current_user(),
         service=_service(db, tenant.id),
-        resume_use_case=_resume_use_case(db, tenant.id, {"messages": [], "node_results": []}, _FakeResumingGraphApp()),
+        resume_use_case=_resume_use_case(db, tenant.id, {"messages": [], "node_results": []}, _FakeResumingGraphApp({"messages": [], "node_results": []})),
     )
 
     assert response.current_status == ReviewStatus.REJECTED
@@ -692,7 +727,7 @@ async def test_direct_reject_resumable_already_processed_400(db: AsyncSession) -
             _tenant_id=tenant.id,
             current_user=_current_user(),
             service=_service(db, tenant.id),
-            resume_use_case=_resume_use_case(db, tenant.id, {}, _FakeResumingGraphApp()),
+            resume_use_case=_resume_use_case(db, tenant.id, {}, _FakeResumingGraphApp({})),
         )
     assert exc_info.value.status_code == 400
 

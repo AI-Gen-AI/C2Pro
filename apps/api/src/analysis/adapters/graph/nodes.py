@@ -471,6 +471,48 @@ async def critique_node(state: ProjectState) -> ProjectState:
 
 # ── N13 — Human Interrupt (HITL) ────────────────────────────────────────────
 
+HUMAN_DECISION_APPROVE = "approve"
+HUMAN_DECISION_REJECT = "reject"
+
+
+def _parse_human_decision(payload: Any) -> tuple[str | None, str]:
+    """Normalise whatever Command(resume=...) supplied into (decision, feedback).
+
+    Accepts the structured dict this codebase sends
+    ({"decision": "approve"|"reject", "feedback": str}) and a bare string,
+    so a resume issued by an operator or an older caller still routes
+    deterministically. Anything unrecognised yields (None, "") and the node
+    fails closed.
+    """
+    if isinstance(payload, dict):
+        raw_decision = payload.get("decision")
+        feedback = payload.get("feedback") or ""
+    else:
+        raw_decision = payload
+        feedback = ""
+
+    decision = str(raw_decision).strip().lower() if raw_decision is not None else ""
+    if decision in {HUMAN_DECISION_APPROVE, HUMAN_DECISION_REJECT}:
+        return decision, str(feedback)
+    return None, str(feedback)
+
+
+def route_after_human_interrupt(state: ProjectState) -> str:
+    """Conditional edge out of N13.
+
+    Only an explicit approval continues into the enrichment fan-out. A
+    rejection (or any state still awaiting a human) terminates instead --
+    previously this was an unconditional edge, so a rejected or
+    still-pending run fell through into enrichment and, ultimately, N17.
+    """
+    if state.get("workflow_terminated"):
+        return "terminated"
+    if state.get("human_approval_required"):
+        return "terminated"
+    if state.get("human_decision") == HUMAN_DECISION_REJECT:
+        return "terminated"
+    return "enrichment_dispatch"
+
 
 async def human_interrupt_node(state: ProjectState) -> ProjectState:
     """N13 — Route through HITL service and raise LangGraph Interrupt.
@@ -564,7 +606,22 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                 exc_info=True,
             )
 
-    interrupt(
+    # C2PRO P0b true-resume hotfix: interrupt() does NOT return on the first
+    # execution -- it raises GraphInterrupt and LangGraph persists the
+    # interrupted checkpoint. Everything below therefore runs ONLY on a
+    # resume, where interrupt() returns the value supplied by
+    # Command(resume=...). The previous code discarded that return value, so
+    # a resumed run could not know what the human decided and unconditionally
+    # re-set human_approval_required=True -- which, combined with an
+    # unconditional edge onward, made approval and rejection
+    # indistinguishable downstream.
+    #
+    # NOTE: a resumed node re-executes FROM THE TOP, so the routing block
+    # above runs again on every resume (verified empirically against
+    # langgraph 1.2.10). That is safe only because route_for_review() is
+    # idempotent for an already-active review (its find_active_review
+    # guard) -- do not add non-idempotent side effects before this call.
+    decision_payload = interrupt(
         {
             "reason": "approval_required",
             "project_id": state["project_id"],
@@ -573,8 +630,31 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
             "retry_count": state["retry_count"],
         }
     )
+
+    decision, feedback = _parse_human_decision(decision_payload)
+    state["human_decision"] = decision or ""
+    if feedback:
+        state["human_feedback"] = feedback
+
+    if decision == HUMAN_DECISION_REJECT:
+        state["human_approval_required"] = False
+        state["workflow_terminated"] = True
+        state["termination_reason"] = feedback or "Rejected by human reviewer."
+        state["messages"].append(AIMessage(content="Human rejected the analysis; terminating."))
+        return state
+
+    if decision == HUMAN_DECISION_APPROVE:
+        state["human_approval_required"] = False
+        state["messages"].append(AIMessage(content="Human approved; continuing analysis."))
+        return state
+
+    # Resumed without a decision this node understands. Fail closed: stay
+    # pending rather than silently proceeding to persist an unapproved
+    # analysis.
     state["human_approval_required"] = True
-    state["messages"].append(AIMessage(content="Human approval requested."))
+    state["messages"].append(
+        AIMessage(content="Resumed without a recognised human decision; still pending.")
+    )
     return state
 
 

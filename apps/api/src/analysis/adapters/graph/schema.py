@@ -40,6 +40,15 @@ class ProjectState(TypedDict):
     document_filename: str | None
     analysis_id: str | None
     human_approval_required: bool
+    # C2PRO P0b true-resume hotfix: the explicit decision a human supplied
+    # via Command(resume=...), consumed from interrupt()'s return value in
+    # human_interrupt_node. "approve" | "reject" | "" (undecided). This is
+    # what routes N13's outgoing conditional edge -- previously a resumed
+    # run kept no record of the decision at all, so approval and rejection
+    # were indistinguishable downstream.
+    human_decision: str
+    workflow_terminated: bool
+    termination_reason: str
     force_full_pipeline: bool
 
     # ── N1: Document Ingestion ──

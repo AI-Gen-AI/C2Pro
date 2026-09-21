@@ -236,6 +236,24 @@ async def _approve_and_resume_workflow(
         if "not found" in error_msg:
             raise HTTPException(status.HTTP_404_NOT_FOUND, error_msg) from exc
         raise HTTPException(status.HTTP_400_BAD_REQUEST, error_msg) from exc
+    except Exception as exc:  # noqa: BLE001
+        # C2PRO P0b true-resume hotfix: a genuine resume failure now RAISES
+        # out of the use case instead of being swallowed into a
+        # "_with_errors" status, because the decision is no longer recorded
+        # before the workflow has actually completed. Keep the explicit 502
+        # contract so the caller still learns the workflow did not resume --
+        # but note the review now deliberately stays PENDING and retryable,
+        # instead of the previous false "APPROVED yet nothing ran".
+        logger.error(
+            "hitl_approve_resume_failed",
+            item_id=str(item_id),
+            error=str(exc),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            f"Resuming the analysis workflow failed; the review is unchanged: {exc}",
+        ) from exc
 
     if result.status.endswith("_with_errors"):
         logger.error(

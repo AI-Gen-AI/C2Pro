@@ -54,26 +54,67 @@ def review_queue_repo():
 
 @pytest.fixture
 def checkpoint_service():
+    """C2PRO P0b true-resume hotfix: the use case now restores the exact
+    checkpoint CONFIG (restore_checkpoint), not just the checkpoint body.
+    """
+    from src.modules.hitl.adapters.checkpoint_service import CheckpointRestore
+
     svc = MagicMock()
     svc.load_checkpoint = AsyncMock()
     svc.extract_state = MagicMock(return_value={"foo": "bar"})
+
+    async def _restore(thread_id, checkpoint_id=None):
+        checkpoint = await svc.load_checkpoint(
+            thread_id=thread_id, checkpoint_id=checkpoint_id
+        )
+        if checkpoint is None:
+            return None
+        configurable = {"thread_id": thread_id, "checkpoint_ns": ""}
+        if checkpoint_id:
+            configurable["checkpoint_id"] = checkpoint_id
+        return CheckpointRestore(
+            checkpoint=checkpoint, config={"configurable": configurable}, metadata={}
+        )
+
+    svc.restore_checkpoint = _restore
     return svc
 
 
 @pytest.fixture
 def graph_app():
+    """A resume must return a state carrying analysis_id -- that is the
+    signal durable persistence (N17) actually ran.
+    """
     app = MagicMock()
     app.aupdate_state = AsyncMock()
-    app.ainvoke = AsyncMock()
+    app.ainvoke = AsyncMock(return_value={"analysis_id": "analysis-1"})
     return app
 
 
 @pytest.fixture
-def use_case(review_queue_repo, checkpoint_service, graph_app):
+def claim_session_factory():
+    """Stub the exactly-once claim's own session so these unit tests need
+    no database; the claim always succeeds here.
+    """
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _factory(_tenant_id):
+        session = MagicMock()
+        session.execute = AsyncMock(return_value=MagicMock(first=MagicMock(return_value=(1,))))
+        yield session
+
+    return _factory
+
+
+@pytest.fixture
+def use_case(review_queue_repo, checkpoint_service, graph_app, claim_session_factory):
+    review_queue_repo.tenant_id = uuid4()
     return ResumeWorkflowUseCase(
         review_queue_repo=review_queue_repo,
         checkpoint_service=checkpoint_service,
         graph_app=graph_app,
+        claim_session_factory=claim_session_factory,
     )
 
 
@@ -114,7 +155,7 @@ async def test_checkpoint_not_found_emits_checkpoint_load_error(
     spy_latency.assert_called_once()  # latency is always recorded
 
 
-async def test_workflow_update_failure_emits_workflow_resume_error(
+async def test_workflow_resume_failure_emits_workflow_resume_error(
     use_case, review_queue_repo, checkpoint_service, graph_app, monkeypatch
 ):
     """A failure inside graph_app.aupdate_state must bump the workflow-error counter."""
@@ -124,7 +165,7 @@ async def test_workflow_update_failure_emits_workflow_resume_error(
         "id": "cp-1",
         "channel_values": {"__root__": {"foo": "bar"}},
     }
-    graph_app.aupdate_state.side_effect = RuntimeError("langgraph down")
+    graph_app.ainvoke.side_effect = RuntimeError("langgraph down")
 
     spy_wf = MagicMock()
     spy_resume = MagicMock()
@@ -137,17 +178,20 @@ async def test_workflow_update_failure_emits_workflow_resume_error(
         spy_resume,
     )
 
-    resp = await use_case.execute(
-        review_id=item.item_id,
-        request=ResumeWorkflowRequest(
-            decision=WorkflowDecision.APPROVE, feedback="please continue"
-        ),
-    )
+    # C2PRO P0b true-resume hotfix: the workflow error is no longer
+    # swallowed into a "_with_errors" status. Swallowing it is exactly what
+    # let the system report a successful approval while N17 never ran, so
+    # the failure now propagates and the decision is not recorded.
+    with pytest.raises(RuntimeError):
+        await use_case.execute(
+            review_id=item.item_id,
+            request=ResumeWorkflowRequest(
+                decision=WorkflowDecision.APPROVE, feedback="please continue"
+            ),
+        )
 
     spy_wf.assert_called_once_with("approve")
     spy_resume.assert_called_once_with("workflow_error")
-    # Use case swallows the workflow error and returns an errored status
-    assert resp.status.endswith("_with_errors")
 
 
 async def test_happy_path_approve_records_attempt_and_latency(
@@ -251,8 +295,11 @@ async def test_resume_succeeds_without_checkpoint_id_using_thread_id_only(
     checkpoint_service.load_checkpoint.assert_called_once_with(
         thread_id="thr-no-checkpoint", checkpoint_id=None
     )
-    spy_warning.assert_called_once()
-    assert spy_warning.call_args.args[0] == "resuming_without_explicit_checkpoint_id"
+    # The specific warning must be emitted. (Assert on its presence rather
+    # than an exact call count: a successful resume legitimately emits other
+    # best-effort warnings, e.g. from the post-resume document transition.)
+    warned = [c.args[0] for c in spy_warning.call_args_list if c.args]
+    assert "resuming_without_explicit_checkpoint_id" in warned
 
 
 async def test_resume_raises_when_thread_id_missing_even_without_checkpoint_id(
