@@ -226,8 +226,8 @@ class _FakeResumingGraphApp:
         self.last_state = state
 
     async def ainvoke(self, resume_signal: object, config: dict) -> dict:
-        from tests.support.hitl_resume_fakes import decision_from_resume
         from src.analysis.adapters.graph.nodes import save_to_db_node
+        from tests.support.hitl_resume_fakes import decision_from_resume
 
         # C2PRO P0b true-resume hotfix: resume now arrives as
         # Command(resume=...) and the decision must be read FROM it, the
