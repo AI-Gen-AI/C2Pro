@@ -1340,6 +1340,8 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
         avg_confidence=state.diagnostics.get("avg_confidence", 0.0),
         llm_cost_usd=state.llm_cost_usd,
         evaluation_mode="low_budget" if state.config.low_budget_mode else "standard",
+        category_scores=state.diagnostics.get("category_scores") or None,
+        audit_coverage=state.diagnostics.get("audit_coverage"),
     )
 
     logger.info(
