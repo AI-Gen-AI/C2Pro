@@ -97,7 +97,7 @@ class ScoringConfig:
 
     # Scope normalization (linear formula from design doc)
     scope_normalization_enabled: bool = True
-    scope_normalization_k: float = 0.12  # scope_factor = max(1, clauses * k)
+    scope_normalization_k: float = 0.12  # Linear scope scaling with a minimum factor of 1
 
     # LLM finding treatment
     llm_weight_factor: float = 0.85  # LLM findings weighted at 85% of deterministic
