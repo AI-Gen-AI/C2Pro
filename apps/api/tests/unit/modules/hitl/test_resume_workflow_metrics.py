@@ -9,6 +9,7 @@ and `src.core.observability.monitoring`.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -29,7 +30,10 @@ def _make_review_item(
     checkpoint_id: str | None = "cp-1",
     thread_id: str | None = "thr-1",
 ) -> ReviewItem:
-    metadata: dict = {}
+    # A real review always gates a document; finalization now refuses to
+    # report success for an approval it cannot mark ANALYZED, so the
+    # fixture must model that rather than omit it.
+    metadata: dict = {"document_id": str(uuid4()), "tenant_id": str(uuid4())}
     if checkpoint_id is not None:
         metadata["checkpoint_id"] = checkpoint_id
     if thread_id is not None:
@@ -100,8 +104,23 @@ def claim_session_factory():
 
     @asynccontextmanager
     async def _factory(_tenant_id):
+        # The operation store reads RETURNING rows by attribute, like a real
+        # SQLAlchemy Row -- a bare tuple would only appear to work.
+        row = SimpleNamespace(
+            id=uuid4(),
+            token=uuid4(),
+            phase="CLAIMED",
+            analysis_id=None,
+            idempotency_key="hitl-resume:test",
+            attempts=1,
+            decision="approve",
+            checkpoint_key="",
+            lease_expired=False,
+        )
         session = MagicMock()
-        session.execute = AsyncMock(return_value=MagicMock(first=MagicMock(return_value=(1,))))
+        session.execute = AsyncMock(
+            return_value=MagicMock(first=MagicMock(return_value=row))
+        )
         yield session
 
     return _factory

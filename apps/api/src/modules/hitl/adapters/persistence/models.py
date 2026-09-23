@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -118,3 +118,60 @@ class NotificationConfigModel(Base):
     )
 
     __table_args__ = ({"info": {"rls_policy": "tenant_isolation"}},)
+
+
+class HitlResumeOperationORM(Base):
+    """Durable state machine for ONE resume of one review at one checkpoint.
+
+    C2PRO P0b crash-safe HITL resume recovery. The application drives this
+    table through explicit compare-and-set statements (see
+    adapters/persistence/resume_operations.py) rather than the ORM, because
+    every transition must be a single atomic UPDATE guarded by the phase and
+    token it expects. The mapping exists so the table is part of the
+    metadata the test schema is built from and so it is introspectable
+    alongside the rest of the module.
+    """
+
+    __tablename__ = "hitl_resume_operations"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
+    # The EXACT review row (primary key), never the business item_id.
+    review_row_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    # '' rather than NULL for a thread-only resume: NULLs are distinct in a
+    # UNIQUE index, which would silently permit competing operations.
+    checkpoint_key: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    thread_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    decision: Mapped[str] = mapped_column(String(32), nullable=False)
+    phase: Mapped[str] = mapped_column(String(32), nullable=False)
+    token: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, default=uuid4)
+    # Durable completion identity: which analysis THIS operation produced.
+    analysis_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    operation_metadata: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    claimed_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utc_now_naive
+    )
+    heartbeat_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utc_now_naive
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utc_now_naive, onupdate=_utc_now_naive
+    )
+
+    __table_args__ = (
+        # One operation per (review row, checkpoint): a retry after a crash
+        # finds this row instead of starting a competing operation.
+        Index(
+            "uq_hitl_resume_operations_row_checkpoint",
+            "review_row_id",
+            "checkpoint_key",
+            unique=True,
+        ),
+        Index("ix_hitl_resume_operations_phase", "phase"),
+        {"info": {"rls_policy": "tenant_isolation"}},
+    )

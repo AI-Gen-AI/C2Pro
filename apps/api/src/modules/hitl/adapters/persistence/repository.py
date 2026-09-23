@@ -185,10 +185,17 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         # resolve deterministically instead (most recently created),
         # matching find_active_review's own precedence so the two never
         # disagree about which row is "the" active one.
+        # C2PRO P0b crash-safe resume: populate_existing so a row already in
+        # the session's identity map is REFRESHED from the database.
+        # Finalization commits in its own transaction, so without this a
+        # caller re-reading the review it just finalized would be served the
+        # stale, pre-finalization copy.
         stmt = select(ReviewItemORM).where(ReviewItemORM.id == item_id)
         if self.tenant_id is not None:
             stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
-        result = await self.session.execute(stmt)
+        result = await self.session.execute(
+            stmt.execution_options(populate_existing=True)
+        )
         orm = result.scalar_one_or_none()
         if orm is not None:
             return self._to_domain(orm)
@@ -197,7 +204,9 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         if self.tenant_id is not None:
             stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
         stmt = stmt.order_by(*self._canonical_tiebreakers())
-        result = await self.session.execute(stmt)
+        result = await self.session.execute(
+            stmt.execution_options(populate_existing=True)
+        )
         orm = result.scalars().first()
         return self._to_domain(orm) if orm else None
 

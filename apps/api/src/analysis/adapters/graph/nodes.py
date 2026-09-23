@@ -475,6 +475,13 @@ HUMAN_DECISION_APPROVE = "approve"
 HUMAN_DECISION_REJECT = "reject"
 
 
+def _parse_resume_idempotency_key(payload: Any) -> str:
+    """The resume operation's stable identity, if the caller supplied one."""
+    if isinstance(payload, dict):
+        return str(payload.get("idempotency_key") or "")
+    return ""
+
+
 def _parse_human_decision(payload: Any) -> tuple[str | None, str]:
     """Normalise whatever Command(resume=...) supplied into (decision, feedback).
 
@@ -632,6 +639,9 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
     )
 
     decision, feedback = _parse_human_decision(decision_payload)
+    idempotency_key = _parse_resume_idempotency_key(decision_payload)
+    if idempotency_key:
+        state["analysis_idempotency_key"] = idempotency_key
     state["human_decision"] = decision or ""
     if feedback:
         state["human_feedback"] = feedback
@@ -690,6 +700,7 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
                     coherence_score=state.get("coherence_score", 0),
                     coherence_breakdown=state.get("coherence_breakdown", {}),
                     single_document_assessment=state.get("single_document_assessment"),
+                    idempotency_key=state.get("analysis_idempotency_key") or None,
                 )
             )
     # N17 persists best-effort and reports persistence failures as NodeResult.
@@ -701,6 +712,22 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
         return state
 
     state["analysis_id"] = str(result.analysis_id)
+    if not result.created:
+        # C2PRO P0b crash-safe resume: this operation's analysis was already
+        # durably persisted (a replay after a crash). Re-emitting
+        # graph.completed here would duplicate the event for a single
+        # logical completion, so report the existing analysis and stop.
+        state["node_results"] = [
+            *state.get("node_results", []),
+            _ok_node_result(
+                "save_to_db",
+                {"analysis_id": str(result.analysis_id), "idempotent_replay": True},
+            ),
+        ]
+        state["messages"].append(
+            AIMessage(content=f"Analysis {result.analysis_id} already persisted; replay ignored.")
+        )
+        return state
     try:
         await record_project_event_and_enqueue_snapshot(
             project_id=UUID(state["project_id"]),

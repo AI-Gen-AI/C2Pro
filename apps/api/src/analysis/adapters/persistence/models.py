@@ -117,6 +117,14 @@ class Analysis(Base):
     # Alerts count
     alerts_count: Mapped[int] = mapped_column(Integer, default=0)
 
+    # C2PRO P0b crash-safe resume: stable identity of the operation that
+    # produced this analysis. A PARTIAL unique index (WHERE NOT NULL) makes
+    # N17 idempotent for a replayed resume without forbidding legitimate
+    # re-analyses/revisions, which a project-scoped constraint would.
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+
     # Timing
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

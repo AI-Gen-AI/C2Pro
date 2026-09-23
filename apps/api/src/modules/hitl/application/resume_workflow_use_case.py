@@ -6,12 +6,13 @@ Refers to Suite ID: TS-BCK-032-001.
 """
 from __future__ import annotations
 
+import asyncio
 import time
+from contextlib import suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import structlog
 from langgraph.types import Command
@@ -26,14 +27,36 @@ from src.core.observability.monitoring import (
     record_hitl_resume_latency,
     record_hitl_workflow_resume_error,
 )
-from src.modules.hitl.adapters.persistence.resume_claim import (
-    claim_resume,
-    release_resume_claim,
+from src.modules.hitl.adapters.persistence.resume_operations import (
+    DEFAULT_LEASE_SECONDS,
+    ResumeAction,
+    ResumeOperation,
+    begin_or_recover,
+    finalize,
+    heartbeat,
+    mark_failed,
+    mark_graph_completed,
 )
 from src.modules.hitl.domain.entities import ReviewStatus
 from src.modules.hitl.ports.review_queue_repository import IReviewQueueRepository
 
 logger = structlog.get_logger()
+
+
+def _as_uuid_or_none(value: Any) -> UUID | None:
+    """Parse an analysis id defensively.
+
+    The completion marker is evidence, not a foreign key: a state that
+    carries an unparseable analysis id must not abort an otherwise healthy
+    resume -- the phase transition itself is what recovery depends on.
+    """
+    if not value:
+        return None
+    try:
+        return UUID(str(value))
+    except (ValueError, AttributeError, TypeError):
+        logger.warning("hitl_resume_unparseable_analysis_id", analysis_id=str(value))
+        return None
 
 
 class WorkflowDecision(StrEnum):
@@ -100,6 +123,8 @@ class ResumeWorkflowUseCase:
         checkpoint_service: CheckpointService | None = None,
         graph_app: Any = None,
         claim_session_factory: Any = None,
+        lease_seconds: int = DEFAULT_LEASE_SECONDS,
+        fault: Any = None,
     ) -> None:
         """
         Initialize use case with dependencies.
@@ -112,11 +137,51 @@ class ResumeWorkflowUseCase:
         self.review_queue_repo = review_queue_repo
         self._checkpoint_service = checkpoint_service
         self._graph_app = graph_app
-        # Optional injection point for the exactly-once claim's own
-        # short-lived session (tests supply the test session factory).
+        # Optional injection point for the durable operation store's own
+        # short-lived sessions (tests supply the test session factory).
         self._claim_session_factory = claim_session_factory
+        self._lease_seconds = lease_seconds
+        # Deterministic crash-point injection (tests only). Called with a
+        # named checkpoint; raising from it simulates hard process loss at
+        # that exact durability boundary.
+        self._fault = fault
 
-    # -- exactly-once / atomicity helpers ------------------------------------
+    async def _heartbeat_loop(self, operation: ResumeOperation) -> None:
+        """Renew the lease while the graph runs.
+
+        Without this, a genuinely healthy long-running resume would look
+        abandoned once the TTL elapsed and could be taken over mid-flight.
+        The lease therefore only expires when a worker actually stopped.
+        """
+        interval = max(1.0, self._lease_seconds / 3)
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                await heartbeat(
+                    operation=operation, session_factory=self._claim_session_factory
+                )
+            except Exception:  # noqa: BLE001 - never let telemetry kill a resume
+                logger.warning(
+                    "hitl_resume_heartbeat_failed",
+                    operation_id=str(operation.id),
+                    exc_info=True,
+                )
+
+    @staticmethod
+    def _document_id_for(review_item: Any, resumed_state: dict[str, Any]) -> UUID | None:
+        """The document this review gates.
+
+        Metadata first (set by human_interrupt_node), then the resumed
+        state. Finalization refuses to report success when an approval
+        cannot resolve it, rather than silently skipping the ANALYZED
+        transition and leaving Health unavailable.
+        """
+        raw = (review_item.metadata or {}).get("document_id") or (
+            review_item.item_data or {}
+        ).get("document_id")
+        if not raw and isinstance(resumed_state, dict):
+            raw = resumed_state.get("document_id")
+        return UUID(str(raw)) if raw else None
 
     @staticmethod
     def _row_id_for(review_item: Any, review_id: UUID) -> UUID:
@@ -125,7 +190,7 @@ class ResumeWorkflowUseCase:
         metadata["row_id"] is the persistent row identity threaded through
         the domain layer (item_id is a business key and is NOT unique across
         legacy duplicates -- see SqlAlchemyReviewQueueRepository._to_domain).
-        The claim must address the exact row, never a sibling.
+        The operation must address the exact row, never a sibling.
         """
         row_id_raw = (review_item.metadata or {}).get("row_id")
         return UUID(str(row_id_raw)) if row_id_raw else review_id
@@ -205,66 +270,6 @@ class ResumeWorkflowUseCase:
             self._graph_app = _gga()
         return self._graph_app
 
-    async def _mark_document_analyzed_after_resume(
-        self,
-        *,
-        review_id: UUID,
-        review_item: Any,
-        resumed_state: Any,
-    ) -> None:
-        """Transition the document to ANALYZED once the resumed graph
-        actually persisted an analysis (N17 ran to completion).
-
-        Best-effort and isolated in its own session: a failure here must
-        never undo the HITL decision that was already recorded, and must
-        never mark a document ANALYZED when the resumed run did not
-        genuinely persist an analysis (e.g. it re-paused, or N17 itself
-        degraded -- see save_to_db_node's own best-effort persistence).
-        """
-        if not isinstance(resumed_state, dict):
-            return
-        analysis_id = resumed_state.get("analysis_id")
-        if not analysis_id:
-            return
-
-        document_id_raw = review_item.metadata.get("document_id")
-        tenant_id_raw = review_item.metadata.get("tenant_id")
-        if not document_id_raw or not tenant_id_raw:
-            logger.warning(
-                "resume_document_status_update_skipped_missing_ids",
-                review_id=str(review_id),
-            )
-            return
-
-        try:
-            from src.core.database import get_raw_session
-            from src.documents.adapters.persistence.sqlalchemy_document_repository import (
-                SqlAlchemyDocumentRepository,
-            )
-            from src.documents.domain.models import DocumentStatus
-
-            async with get_raw_session() as session:
-                document_repo = SqlAlchemyDocumentRepository(session)
-                await document_repo.update_status(
-                    UUID(str(tenant_id_raw)),
-                    UUID(str(document_id_raw)),
-                    DocumentStatus.ANALYZED,
-                )
-                await session.commit()
-
-            logger.info(
-                "resume_document_marked_analyzed",
-                review_id=str(review_id),
-                document_id=str(document_id_raw),
-                analysis_id=str(analysis_id),
-            )
-        except Exception:
-            logger.warning(
-                "resume_document_status_update_failed",
-                review_id=str(review_id),
-                document_id=str(document_id_raw),
-                exc_info=True,
-            )
 
     async def execute(
         self,
@@ -385,134 +390,184 @@ class ResumeWorkflowUseCase:
                 restored_state_keys=sorted(restored_state.keys()),
             )
 
-            # 6. Claim this review for exactly ONE resume attempt.
+            # 6. Begin or RECOVER a durable resume operation.
             #
-            # C2PRO P0b true-resume hotfix (exactly-once): this MUST happen
-            # before any graph work, and it deliberately does not mutate
-            # current_status. Reproduced defect: two approve calls -- whether
-            # sequential or concurrent -- each drove the graph to completion,
-            # running N17 twice and persisting two analyses and two
-            # graph.completed events. The claim commits in its own short
-            # transaction (see resume_claim) so it is immediately visible to
-            # other API workers and holds no lock across the graph run.
-            claim_token = str(uuid4())
-            claimed = await claim_resume(
-                row_id=self._row_id_for(review_item, review_id),
-                tenant_id=self._tenant_id_for(review_item),
+            # C2PRO P0b crash-safe resume: this decides what to do from
+            # DURABLE state, not from a lease alone. The previous opaque
+            # review_metadata claim could be orphaned forever by a hard
+            # process death, and a naive TTL on it was unsafe: a worker can
+            # die AFTER N17 committed but BEFORE the review was finalized,
+            # so "expired" must never be read as "the graph never ran".
+            row_id = self._row_id_for(review_item, review_id)
+            tenant_id = self._tenant_id_for(review_item)
+            operation, action = await begin_or_recover(
+                review_row_id=row_id,
+                tenant_id=tenant_id,
                 checkpoint_id=restored.checkpoint_id,
-                token=claim_token,
-                claimed_at=datetime.now(UTC).isoformat(),
+                thread_id=thread_id,
+                decision=request.decision.value,
+                lease_seconds=self._lease_seconds,
                 session_factory=self._claim_session_factory,
             )
-            if not claimed:
+
+            if action is ResumeAction.BUSY or operation is None:
                 record_hitl_resume_error("already_claimed")
                 raise ValueError(self._ERR_ALREADY_CLAIMED.format(review_id=review_id))
 
-            # 7. Resume the EXACT interrupted checkpoint (TASK-BCK-031).
-            graph_app = self._get_graph_app()
-            status_message = "resumed" if request.decision == WorkflowDecision.APPROVE else "rejected"
+            status_message = (
+                "resumed" if request.decision == WorkflowDecision.APPROVE else "rejected"
+            )
 
-            try:
-                logger.info(
-                    "resuming_workflow",
+            if action is ResumeAction.ALREADY_COMPLETED:
+                # Everything durable already landed (e.g. the process died
+                # after finalization but before the HTTP response). Idempotent
+                # replay: touch nothing, report the same outcome.
+                record_hitl_resume_attempt(decision, "already_completed")
+                record_hitl_resume_latency(decision, time.perf_counter() - start_time)
+                return ResumeWorkflowResponse(
+                    review_id=review_id,
+                    status=status_message,
+                    message=f"Workflow {status_message} (already completed; idempotent replay).",
+                )
+
+            resumed_state: dict[str, Any] = {}
+            if action is ResumeAction.FINALIZE_ONLY:
+                # Durable evidence says this operation already crossed N17.
+                # Finalize WITHOUT touching the graph -- replaying it here is
+                # exactly the post-N17/pre-finalization split brain.
+                logger.warning(
+                    "hitl_resume_recovering_after_graph_completion",
                     review_id=str(review_id),
-                    thread_id=thread_id,
-                    checkpoint_id=restored.checkpoint_id,
-                    decision=decision,
+                    operation_id=str(operation.id),
+                    analysis_id=str(operation.analysis_id) if operation.analysis_id else None,
                 )
-
-                # Command(resume=...) is the supported interrupt-resume
-                # primitive for the installed langgraph 1.2.10 -- verified
-                # empirically against a real compiled graph and a real
-                # AsyncPostgresSaver. The previous
-                # `aupdate_state(...)` + `ainvoke(None, ...)` pattern did NOT
-                # resume: it re-entered human_interrupt_node from the top,
-                # hit interrupt() again, and returned another __interrupt__
-                # without ever reaching N17 -- exactly the production
-                # symptom (decision recorded, no analysis, document stuck at
-                # parsed_pending_analysis).
-                resumed_state = await graph_app.ainvoke(
-                    Command(
-                        resume={
-                            "decision": request.decision.value,
-                            "feedback": request.feedback,
-                        }
-                    ),
-                    resume_config,
-                )
-
-                # A resume that did not actually consume the interrupt is a
-                # FAILURE, not a success. LangGraph reports that by handing
-                # back another __interrupt__ (and a wrong/stale checkpoint
-                # silently returns without running anything at all), so an
-                # unchecked call would look identical to a real completion.
-                self._assert_interrupt_consumed(
-                    resumed_state, review_id=review_id, thread_id=thread_id
-                )
-
-                if request.decision == WorkflowDecision.APPROVE:
-                    self._assert_downstream_completed(
-                        resumed_state, review_id=review_id, thread_id=thread_id
+                resumed_state = {
+                    "analysis_id": str(operation.analysis_id) if operation.analysis_id else None
+                }
+            else:
+                # 7. Resume the EXACT interrupted checkpoint (TASK-BCK-031).
+                graph_app = self._get_graph_app()
+                heartbeat_task = asyncio.create_task(self._heartbeat_loop(operation))
+                try:
+                    logger.info(
+                        "resuming_workflow",
+                        review_id=str(review_id),
+                        thread_id=thread_id,
+                        checkpoint_id=restored.checkpoint_id,
+                        decision=decision,
+                        operation_id=str(operation.id),
+                        attempt=operation.attempts,
                     )
 
-                logger.info(
-                    "workflow_resumed",
-                    review_id=str(review_id),
-                    thread_id=thread_id,
-                    status=status_message,
-                    analysis_id=(resumed_state or {}).get("analysis_id"),
-                )
+                    # Command(resume=...) is the supported interrupt-resume
+                    # primitive for the installed langgraph 1.2.10 -- verified
+                    # empirically against a real compiled graph and a real
+                    # AsyncPostgresSaver. The previous
+                    # `aupdate_state(...)` + `ainvoke(None, ...)` pattern did
+                    # NOT resume: it re-entered human_interrupt_node from the
+                    # top, hit interrupt() again, and returned another
+                    # __interrupt__ without ever reaching N17.
+                    #
+                    # idempotency_key rides along so N17 itself is fenced: a
+                    # replay of THIS operation adopts the analysis already
+                    # committed instead of persisting a second one.
+                    resumed_state = await graph_app.ainvoke(
+                        Command(
+                            resume={
+                                "decision": request.decision.value,
+                                "feedback": request.feedback,
+                                "idempotency_key": operation.idempotency_key,
+                            }
+                        ),
+                        resume_config,
+                    )
 
-            except Exception as e:
-                logger.error(
-                    "workflow_resumption_failed",
-                    review_id=str(review_id),
-                    thread_id=thread_id,
-                    error=str(e),
-                    exc_info=True,
-                )
-                record_hitl_resume_error("workflow_error")
-                record_hitl_workflow_resume_error(decision)
-                # C2PRO P0b true-resume hotfix (atomicity): the decision is
-                # NOT recorded on a failed resume. Previously the review was
-                # flipped to APPROVED before the graph ran and graph failures
-                # were swallowed, so the system claimed a successful approval
-                # while N17 had never executed. Release the claim so the
-                # review stays genuinely pending and retryable, and let the
-                # caller surface a truthful error.
-                await release_resume_claim(
-                    row_id=self._row_id_for(review_item, review_id),
-                    tenant_id=self._tenant_id_for(review_item),
-                    token=claim_token,
-                    session_factory=self._claim_session_factory,
-                )
-                raise
+                    if self._fault is not None:
+                        await self._fault("after_graph_before_completion_marker")
 
-            # 8. Durable completion reached -- only NOW record the decision.
-            if request.decision == WorkflowDecision.APPROVE:
-                review_item.current_status = ReviewStatus.APPROVED
-            else:
-                review_item.current_status = ReviewStatus.REJECTED
-            review_item.approved_at = datetime.now(UTC)
-            if request.approved_by:
-                review_item.approved_by = request.approved_by
-            review_item.metadata["review_decision"] = request.feedback
-            review_item.metadata["resume_checkpoint_id"] = restored.checkpoint_id
-            await self.review_queue_repo.update_review_item(review_item)
+                    # A resume that did not actually consume the interrupt is
+                    # a FAILURE, not a success. LangGraph reports that by
+                    # handing back another __interrupt__ (and a wrong/stale
+                    # checkpoint silently returns without running anything at
+                    # all), so an unchecked call looks identical to a real
+                    # completion.
+                    self._assert_interrupt_consumed(
+                        resumed_state, review_id=review_id, thread_id=thread_id
+                    )
+                    if request.decision == WorkflowDecision.APPROVE:
+                        self._assert_downstream_completed(
+                            resumed_state, review_id=review_id, thread_id=thread_id
+                        )
 
-            if request.decision == WorkflowDecision.APPROVE:
-                # Resuming to completion runs N17 (save_to_db), which persists
-                # the analysis -- but N17 never touches Document.upload_status
-                # (that transition normally happens in _run_document_analysis,
-                # a code path this resume never goes through). Without this an
-                # approved, fully-analyzed document stayed
-                # parsed_pending_analysis forever and Health/Evidence never
-                # became readable.
-                await self._mark_document_analyzed_after_resume(
-                    review_id=review_id,
-                    review_item=review_item,
-                    resumed_state=resumed_state,
-                )
+                    # Durable completion marker: written BEFORE finalization
+                    # so a crash in between recovers as FINALIZE_ONLY.
+                    analysis_id_raw = (resumed_state or {}).get("analysis_id")
+                    await mark_graph_completed(
+                        operation=operation,
+                        analysis_id=_as_uuid_or_none(analysis_id_raw),
+                        session_factory=self._claim_session_factory,
+                    )
+
+                    if self._fault is not None:
+                        await self._fault("after_completion_marker_before_finalize")
+
+                    logger.info(
+                        "workflow_resumed",
+                        review_id=str(review_id),
+                        thread_id=thread_id,
+                        status=status_message,
+                        analysis_id=analysis_id_raw,
+                    )
+
+                except Exception as e:
+                    logger.error(
+                        "workflow_resumption_failed",
+                        review_id=str(review_id),
+                        thread_id=thread_id,
+                        error=str(e),
+                        exc_info=True,
+                    )
+                    record_hitl_resume_error("workflow_error")
+                    record_hitl_workflow_resume_error(decision)
+                    # The decision is NOT recorded on a failed resume. Mark
+                    # the operation retryable -- but only while it is still
+                    # CLAIMED, so a GRAPH_COMPLETED marker survives and a
+                    # retry finalizes instead of replaying N17.
+                    await mark_failed(
+                        operation=operation,
+                        error=str(e),
+                        session_factory=self._claim_session_factory,
+                    )
+                    raise
+                finally:
+                    heartbeat_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await heartbeat_task
+
+            # 8. Finalize: review + document + operation in ONE transaction.
+            #
+            # A clean success response now means EVERY durable state landed.
+            # The old code updated the review, then best-effort updated the
+            # document while swallowing its exceptions -- so an approval could
+            # report success while the document never became ANALYZED and
+            # Health stayed unavailable.
+            await finalize(
+                operation=operation,
+                review_row_id=row_id,
+                tenant_id=tenant_id,
+                status=(
+                    ReviewStatus.APPROVED.value
+                    if request.decision == WorkflowDecision.APPROVE
+                    else ReviewStatus.REJECTED.value
+                ),
+                approved_by=request.approved_by,
+                feedback=request.feedback,
+                checkpoint_id=restored.checkpoint_id,
+                document_id=self._document_id_for(review_item, resumed_state),
+                mark_document_analyzed=request.decision == WorkflowDecision.APPROVE,
+                session_factory=self._claim_session_factory,
+                fault=self._fault,
+            )
 
             # Record success metrics + audit event
             duration = time.perf_counter() - start_time

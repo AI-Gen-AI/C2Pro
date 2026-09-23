@@ -49,6 +49,10 @@ class ProjectState(TypedDict):
     human_decision: str
     workflow_terminated: bool
     termination_reason: str
+    # C2PRO P0b crash-safe resume: stable identity of the resume operation,
+    # carried into N17 so persistence is idempotent if the operation is
+    # replayed after a crash. Empty for non-resume runs.
+    analysis_idempotency_key: str
     force_full_pipeline: bool
 
     # ── N1: Document Ingestion ──
