@@ -50,6 +50,24 @@ def _maintenance_dsn(dsn: str) -> str:
     return urlunparse(urlparse(dsn)._replace(path="/postgres"))
 
 
+
+def _head_revision() -> str:
+    """The migration chain's current head, read from the chain itself.
+
+    Hard-coding a revision id here meant every new migration failed these
+    tests for no real reason -- which is exactly what happened. What they
+    actually assert is "upgrade head really did land on head", so derive it.
+    """
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    heads = ScriptDirectory.from_config(
+        Config(str(API_ROOT / "alembic.ini"))
+    ).get_heads()
+    assert len(heads) == 1, f"expected a single head, got {heads}"
+    return heads[0]
+
+
 def _alembic(command: str, revision: str) -> str:
     assert SCRATCH_DSN is not None
     env = {**os.environ, "DATABASE_URL": SCRATCH_DSN, "TEST_DATABASE_URL": SCRATCH_DSN}
@@ -383,7 +401,7 @@ async def test_legacy_wbs_data_reaches_one_canonical_wbs_and_round_trips() -> No
         _alembic("upgrade", "head")
         conn = await asyncpg.connect(SCRATCH_DSN)
         try:
-            assert await conn.fetchval("SELECT version_num FROM alembic_version") == "20260914_0005"
+            assert await conn.fetchval("SELECT version_num FROM alembic_version") == _head_revision()
             assert await conn.fetchval("SELECT count(*) FROM wbs_nodes WHERE project_id = $1", ids["project_A"]) == 8
             await _assert_nested_set(conn, ids["project_A"])
         finally:
@@ -472,7 +490,7 @@ async def test_production_predecessor_schema_wbs_code_no_version_migrates_cleanl
 
         conn = await asyncpg.connect(SCRATCH_DSN)
         try:
-            assert await conn.fetchval("SELECT version_num FROM alembic_version") == "20260914_0005"
+            assert await conn.fetchval("SELECT version_num FROM alembic_version") == _head_revision()
 
             # --- no silent row loss, every legacy row classified ------------------------------
             for table, count in before_counts.items():
