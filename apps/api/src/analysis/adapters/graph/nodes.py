@@ -471,6 +471,57 @@ async def critique_node(state: ProjectState) -> ProjectState:
 
 # ── N13 — Human Interrupt (HITL) ────────────────────────────────────────────
 
+HUMAN_DECISION_APPROVE = "approve"
+HUMAN_DECISION_REJECT = "reject"
+
+
+def _parse_resume_provenance(payload: Any) -> dict[str, str]:
+    """Attempt provenance supplied by the resuming caller, if any."""
+    if isinstance(payload, dict):
+        provenance = payload.get("resume_provenance")
+        if isinstance(provenance, dict):
+            return {str(k): str(v) for k, v in provenance.items()}
+    return {}
+
+
+def _parse_human_decision(payload: Any) -> tuple[str | None, str]:
+    """Normalise whatever Command(resume=...) supplied into (decision, feedback).
+
+    Accepts the structured dict this codebase sends
+    ({"decision": "approve"|"reject", "feedback": str}) and a bare string,
+    so a resume issued by an operator or an older caller still routes
+    deterministically. Anything unrecognised yields (None, "") and the node
+    fails closed.
+    """
+    if isinstance(payload, dict):
+        raw_decision = payload.get("decision")
+        feedback = payload.get("feedback") or ""
+    else:
+        raw_decision = payload
+        feedback = ""
+
+    decision = str(raw_decision).strip().lower() if raw_decision is not None else ""
+    if decision in {HUMAN_DECISION_APPROVE, HUMAN_DECISION_REJECT}:
+        return decision, str(feedback)
+    return None, str(feedback)
+
+
+def route_after_human_interrupt(state: ProjectState) -> str:
+    """Conditional edge out of N13.
+
+    Only an explicit approval continues into the enrichment fan-out. A
+    rejection (or any state still awaiting a human) terminates instead --
+    previously this was an unconditional edge, so a rejected or
+    still-pending run fell through into enrichment and, ultimately, N17.
+    """
+    if state.get("workflow_terminated"):
+        return "terminated"
+    if state.get("human_approval_required"):
+        return "terminated"
+    if state.get("human_decision") == HUMAN_DECISION_REJECT:
+        return "terminated"
+    return "enrichment_dispatch"
+
 
 async def human_interrupt_node(state: ProjectState) -> ProjectState:
     """N13 — Route through HITL service and raise LangGraph Interrupt.
@@ -564,7 +615,22 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                 exc_info=True,
             )
 
-    interrupt(
+    # C2PRO P0b true-resume hotfix: interrupt() does NOT return on the first
+    # execution -- it raises GraphInterrupt and LangGraph persists the
+    # interrupted checkpoint. Everything below therefore runs ONLY on a
+    # resume, where interrupt() returns the value supplied by
+    # Command(resume=...). The previous code discarded that return value, so
+    # a resumed run could not know what the human decided and unconditionally
+    # re-set human_approval_required=True -- which, combined with an
+    # unconditional edge onward, made approval and rejection
+    # indistinguishable downstream.
+    #
+    # NOTE: a resumed node re-executes FROM THE TOP, so the routing block
+    # above runs again on every resume (verified empirically against
+    # langgraph 1.2.10). That is safe only because route_for_review() is
+    # idempotent for an already-active review (its find_active_review
+    # guard) -- do not add non-idempotent side effects before this call.
+    decision_payload = interrupt(
         {
             "reason": "approval_required",
             "project_id": state["project_id"],
@@ -573,12 +639,97 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
             "retry_count": state["retry_count"],
         }
     )
+
+    decision, feedback = _parse_human_decision(decision_payload)
+    provenance = _parse_resume_provenance(decision_payload)
+    if provenance:
+        state["resume_provenance"] = provenance
+    state["human_decision"] = decision or ""
+    if feedback:
+        state["human_feedback"] = feedback
+
+    if decision == HUMAN_DECISION_REJECT:
+        state["human_approval_required"] = False
+        state["workflow_terminated"] = True
+        state["termination_reason"] = feedback or "Rejected by human reviewer."
+        state["messages"].append(AIMessage(content="Human rejected the analysis; terminating."))
+        return state
+
+    if decision == HUMAN_DECISION_APPROVE:
+        state["human_approval_required"] = False
+        state["messages"].append(AIMessage(content="Human approved; continuing analysis."))
+        return state
+
+    # Resumed without a decision this node understands. Fail closed: stay
+    # pending rather than silently proceeding to persist an unapproved
+    # analysis.
     state["human_approval_required"] = True
-    state["messages"].append(AIMessage(content="Human approval requested."))
+    state["messages"].append(
+        AIMessage(content="Resumed without a recognised human decision; still pending.")
+    )
     return state
 
 
 # ── N17 — Save to DB ────────────────────────────────────────────────────────
+
+
+async def _save_to_db_fenced(state: ProjectState, provenance: Any) -> ProjectState:
+    """N17 for a fenced resume: one atomic transaction, ownership verified.
+
+    Emits ``analysis.persisted`` (inside that transaction), never
+    ``graph.completed`` -- the graph continues after N17, so those are
+    different facts. ``graph.completed`` is recorded later, only against a
+    verified terminal checkpoint.
+    """
+    from src.analysis.application.persist_resume_analysis import (
+        persist_resume_analysis_atomically,
+    )
+    from src.modules.hitl.adapters.persistence.resume_ownership import OwnershipError
+
+    try:
+        result = await persist_resume_analysis_atomically(
+            state=dict(state), provenance=provenance
+        )
+    except OwnershipError as exc:
+        # Fenced out: a newer attempt owns this operation, or the lease
+        # lapsed. This worker may keep computing, but it must not persist.
+        # Surfaced as a node failure so nothing downstream reads it as done.
+        node_result = _failed_node_result("save_to_db", exc)
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        state["messages"].append(
+            AIMessage(content=f"N17 save_to_db: fenced out, no writes performed ({exc})")
+        )
+        logger.warning(
+            "hitl_resume_n17_fenced_out",
+            document_id=state.get("document_id"),
+            error=str(exc),
+        )
+        return state
+    except Exception as exc:  # noqa: BLE001 - reported, never silently swallowed
+        node_result = _failed_node_result("save_to_db", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        state["messages"].append(AIMessage(content="N17 save_to_db: failed (see node_results)"))
+        return state
+
+    state["analysis_id"] = str(result.analysis_id)
+    state["node_results"] = [
+        *state.get("node_results", []),
+        _ok_node_result(
+            "save_to_db",
+            {"analysis_id": str(result.analysis_id), "created": result.created},
+        ),
+    ]
+    state["messages"].append(
+        AIMessage(
+            content=(
+                f"Persisted analysis {result.analysis_id}."
+                if result.created
+                else f"Analysis {result.analysis_id} already durable for this operation."
+            )
+        )
+    )
+    return state
 
 
 async def save_to_db_node(state: ProjectState) -> ProjectState:
@@ -586,6 +737,18 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
     if not state.get("tenant_id"):
         state["messages"].append(AIMessage(content="Missing tenant_id; skipping persistence."))
         return state
+
+    # C2PRO P0b crash-safe resume V3: a fenced resume persists through ONE
+    # atomic transaction that also re-verifies this attempt still owns the
+    # operation. The legacy path below stays for non-resume runs, which have
+    # no operation to fence against.
+    from src.analysis.application.persist_resume_analysis import (
+        ResumeProvenance,
+    )
+
+    provenance = ResumeProvenance.from_state(dict(state))
+    if provenance is not None:
+        return await _save_to_db_fenced(state, provenance)
 
     from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
     from src.analysis.application.persist_analysis_use_case import (

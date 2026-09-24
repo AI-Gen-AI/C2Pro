@@ -133,6 +133,12 @@ _ORM_MODEL_MODULES = (
     "src.core.auth.models",
     "src.core.security.adapters.persistence.models",
     "src.documents.adapters.persistence.models",
+    # The HITL module owns review_items plus the durable resume-operation
+    # tables. It was missing here, so those tables only reached
+    # Base.metadata when some unrelated import happened to pull the module
+    # in first -- making create_all's output depend on import order and
+    # leaving the tables absent for tests that imported neither.
+    "src.modules.hitl.adapters.persistence.models",
     "src.procurement.adapters.persistence.models",
     "src.project_state.adapters.persistence.models",
     "src.projects.adapters.persistence.models",

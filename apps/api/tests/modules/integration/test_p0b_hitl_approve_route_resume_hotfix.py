@@ -44,27 +44,42 @@ from src.modules.hitl.adapters.persistence.repository import (
 from src.modules.hitl.application.resume_workflow_use_case import ResumeWorkflowUseCase
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
+from tests.support.hitl_resume_fakes import ResumeGraphDouble
 
 pytestmark = pytest.mark.asyncio
 
 
-class _FakeResumingGraphApp:
+class _FakeResumingGraphApp(ResumeGraphDouble):
     """Resumes by invoking the REAL N17 save_to_db_node -- so persisted
     analysis rows, the graph.completed event, and the returned analysis_id
     are all genuine, not stubbed.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, seed_state: dict | None = None) -> None:
         self.last_state: dict | None = None
+        self.seed_state: dict | None = seed_state
 
-    async def aupdate_state(self, config: dict, state: dict) -> None:
-        self.last_state = state
 
-    async def ainvoke(self, _resume_signal: None, config: dict) -> dict:
+    async def ainvoke(self, resume_signal: object, config: dict) -> dict:
         from src.analysis.adapters.graph.nodes import save_to_db_node
+        from tests.support.hitl_resume_fakes import decision_from_resume
 
-        assert self.last_state is not None
-        return await save_to_db_node(self.last_state)
+        # C2PRO P0b true-resume hotfix: resume now arrives as
+        # Command(resume=...) and the decision must be read FROM it, the
+        # way the real interrupt node reads interrupt()'s return value.
+        decision, feedback = decision_from_resume(resume_signal)
+        state = self.resumed_state(resume_signal)
+        state["human_decision"] = decision or ""
+        state["human_feedback"] = feedback
+        if decision == "reject":
+            state["human_approval_required"] = False
+            state["workflow_terminated"] = True
+            state["termination_reason"] = feedback
+            return state
+        if decision != "approve":
+            return {**state, "__interrupt__": ({"reason": "approval_required"},)}
+        state["human_approval_required"] = False
+        return await save_to_db_node(state)
 
 
 class _FakeResumeCheckpointService:
@@ -72,9 +87,25 @@ class _FakeResumeCheckpointService:
         self._state = state
         self.loaded: list[tuple[str, str | None]] = []
 
-    async def load_checkpoint(self, thread_id: str, checkpoint_id: str | None) -> dict:
+    async def load_checkpoint(self, thread_id: str, checkpoint_id: str | None = None) -> dict:
         self.loaded.append((thread_id, checkpoint_id))
         return {"id": checkpoint_id or "latest", "channel_values": {"__root__": dict(self._state)}}
+
+    async def restore_checkpoint(self, thread_id: str, checkpoint_id: str | None = None):
+        from src.modules.hitl.adapters.checkpoint_service import CheckpointRestore
+
+        self.loaded.append((thread_id, checkpoint_id))
+        configurable: dict = {"thread_id": thread_id, "checkpoint_ns": ""}
+        if checkpoint_id:
+            configurable["checkpoint_id"] = checkpoint_id
+        return CheckpointRestore(
+            checkpoint={
+                "id": checkpoint_id or "latest",
+                "channel_values": {"__root__": dict(self._state)},
+            },
+            config={"configurable": configurable},
+            metadata={},
+        )
 
     def extract_state(self, checkpoint: dict) -> dict:
         return dict(checkpoint["channel_values"]["__root__"])
@@ -144,7 +175,7 @@ def _make_review_row(
 
 
 def _override_resume_use_case(app, db: AsyncSession, tenant_id: UUID, resume_state: dict):
-    resuming_app = _FakeResumingGraphApp()
+    resuming_app = _FakeResumingGraphApp(resume_state)
     checkpoint_service = _FakeResumeCheckpointService(resume_state)
 
     def _use_case() -> ResumeWorkflowUseCase:
@@ -277,12 +308,15 @@ async def test_approve_route_defines_explicit_failure_semantics_on_resume_error(
 
     checkpoint_service = _FakeResumeCheckpointService({"tenant_id": str(tenant.id)})
 
+    from tests.support.hitl_resume_fakes import claim_session_factory_for
+
     def _use_case() -> ResumeWorkflowUseCase:
         repo = SqlAlchemyReviewQueueRepository(session=db, tenant_id=tenant.id)
         return ResumeWorkflowUseCase(
             review_queue_repo=repo,
             checkpoint_service=checkpoint_service,
             graph_app=_ExplodingGraphApp(),
+            claim_session_factory=claim_session_factory_for(db),
         )
 
     app.dependency_overrides[get_resume_workflow_use_case] = _use_case
@@ -297,10 +331,18 @@ async def test_approve_route_defines_explicit_failure_semantics_on_resume_error(
 
     refreshed = await db.get(ReviewItemORM, review.id)
     await db.refresh(refreshed)
-    # The human decision IS durably recorded (audit trail intact) even
-    # though the workflow itself did not resume -- this is the documented
-    # ResumeWorkflowUseCase contract, not a bug.
-    assert refreshed.current_status == ReviewStatus.APPROVED.value
+    # C2PRO P0b true-resume hotfix: this assertion is INVERTED on purpose.
+    # It previously asserted APPROVED after a failed resume -- the old
+    # "record the decision first, swallow graph errors" contract, which made
+    # the system claim a successful approval while N17 had never executed.
+    # A decision is now recorded only once the workflow actually reached
+    # durable completion, so a failed resume must leave the review genuinely
+    # pending and retryable.
+    assert refreshed.current_status == ReviewStatus.PENDING_REVIEW_REQUIRED.value
+    assert refreshed.approved_at is None
+    assert (refreshed.review_metadata or {}).get("resume_claim") is None, (
+        "the claim must be released so the review stays retryable"
+    )
 
 
 async def test_legacy_duplicates_hidden_from_queue_list(
@@ -680,16 +722,41 @@ async def test_reject_graph_gated_review_terminates_without_running_n17(
     }
 
     class _RejectOnlyGraphApp:
+        """C2PRO P0b true-resume hotfix: a rejection now DOES resume the
+        graph -- with Command(resume={"decision": "reject"}) -- so the real
+        workflow terminates at its own conditional edge instead of merely
+        having a "terminated" flag patched into stored state. What must
+        still never happen is N17: this double therefore records the
+        decision it was resumed with and refuses to run save_to_db.
+        """
+
         def __init__(self) -> None:
             self.update_calls: list[dict] = []
             self.invoked = False
+            self.resumed_decisions: list[str | None] = []
+            self.resumed_state: dict = {}
 
         async def aupdate_state(self, config: dict, state: dict) -> None:
             self.update_calls.append(dict(state))
 
-        async def ainvoke(self, *args, **kwargs) -> dict:
+        async def ainvoke(self, resume_signal: object, config: dict) -> dict:
+            from tests.support.hitl_resume_fakes import decision_from_resume
+
             self.invoked = True
-            raise AssertionError("reject must never call ainvoke -- that would resume, not terminate")
+            decision, feedback = decision_from_resume(resume_signal)
+            self.resumed_decisions.append(decision)
+            assert decision == "reject", (
+                f"a reject request must resume with a reject decision, got {decision!r}"
+            )
+            resumed = {
+                **resume_state,
+                "human_decision": "reject",
+                "human_approval_required": False,
+                "workflow_terminated": True,
+                "termination_reason": feedback,
+            }
+            self.resumed_state = resumed
+            return resumed
 
     checkpoint_service = _FakeResumeCheckpointService(resume_state)
     reject_graph_app = _RejectOnlyGraphApp()
@@ -712,9 +779,18 @@ async def test_reject_graph_gated_review_terminates_without_running_n17(
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["current_status"] == "REJECTED"
-    assert not reject_graph_app.invoked, "reject must not resume (ainvoke) the workflow"
-    assert reject_graph_app.update_calls, "reject must still persist termination state on the checkpoint"
-    assert reject_graph_app.update_calls[-1]["workflow_terminated"] is True
+    # C2PRO P0b true-resume hotfix: the invariant is "reject must not run
+    # N17", not "reject must not call ainvoke". A rejection now resumes the
+    # real workflow so it terminates at the graph's own conditional edge --
+    # carrying an explicit reject decision, asserted inside the double.
+    assert reject_graph_app.resumed_decisions == ["reject"], (
+        "reject must resume the graph with an explicit reject decision"
+    )
+    reject_resumed_state = reject_graph_app.resumed_state
+    # Termination is now carried by the resumed run itself (the graph's own
+    # conditional edge to END), not by a separate aupdate_state patch, so
+    # assert the resumed result rather than a state-injection side channel.
+    assert reject_resumed_state["workflow_terminated"] is True
 
     # No analysis persisted, document not ANALYZED -- rejection never
     # completes the pipeline.

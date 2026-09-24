@@ -137,3 +137,4 @@ class PersistAnalysisUseCase:
         await self._analysis_repo.commit()
 
         return PersistAnalysisResult(analysis_id=analysis_id)
+

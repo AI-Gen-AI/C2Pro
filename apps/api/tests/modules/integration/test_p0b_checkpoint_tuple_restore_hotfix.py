@@ -41,6 +41,7 @@ from src.modules.hitl.application.resume_workflow_use_case import ResumeWorkflow
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
 from src.temporal.adapters.persistence.models import ProjectEventORM
+from tests.support.hitl_resume_fakes import ResumeGraphDouble
 
 pytestmark = pytest.mark.asyncio
 
@@ -217,18 +218,32 @@ async def test_load_checkpoint_unknown_thread_returns_none(real_postgres_saver) 
 # selection fix, and the approve-route resume flow all compose correctly.
 
 
-class _FakeResumingGraphApp:
-    def __init__(self) -> None:
+class _FakeResumingGraphApp(ResumeGraphDouble):
+    def __init__(self, seed_state: dict | None = None) -> None:
         self.last_state: dict | None = None
+        self.seed_state: dict | None = seed_state
 
-    async def aupdate_state(self, config: dict, state: dict) -> None:
-        self.last_state = state
 
-    async def ainvoke(self, _resume_signal: None, config: dict) -> dict:
+    async def ainvoke(self, resume_signal: object, config: dict) -> dict:
         from src.analysis.adapters.graph.nodes import save_to_db_node
+        from tests.support.hitl_resume_fakes import decision_from_resume
 
-        assert self.last_state is not None
-        return await save_to_db_node(self.last_state)
+        # C2PRO P0b true-resume hotfix: resume now arrives as
+        # Command(resume=...) and the decision must be read FROM it, the
+        # way the real interrupt node reads interrupt()'s return value.
+        decision, feedback = decision_from_resume(resume_signal)
+        state = self.resumed_state(resume_signal)
+        state["human_decision"] = decision or ""
+        state["human_feedback"] = feedback
+        if decision == "reject":
+            state["human_approval_required"] = False
+            state["workflow_terminated"] = True
+            state["termination_reason"] = feedback
+            return state
+        if decision != "approve":
+            return {**state, "__interrupt__": ({"reason": "approval_required"},)}
+        state["human_approval_required"] = False
+        return await save_to_db_node(state)
 
 
 async def _seed_project_and_document(db: AsyncSession, tenant: Tenant) -> DocumentORM:
@@ -382,7 +397,7 @@ async def test_full_prod_shape_lifecycle_through_real_checkpointer_and_approve_r
         return ResumeWorkflowUseCase(
             review_queue_repo=repo,
             checkpoint_service=CheckpointService(checkpointer=saver),
-            graph_app=_FakeResumingGraphApp(),
+            graph_app=_FakeResumingGraphApp(resume_state),
         )
 
     app.dependency_overrides[get_resume_workflow_use_case] = _real_resume_use_case

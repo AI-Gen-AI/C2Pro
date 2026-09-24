@@ -40,6 +40,21 @@ class ProjectState(TypedDict):
     document_filename: str | None
     analysis_id: str | None
     human_approval_required: bool
+    # C2PRO P0b true-resume hotfix: the explicit decision a human supplied
+    # via Command(resume=...), consumed from interrupt()'s return value in
+    # human_interrupt_node. "approve" | "reject" | "" (undecided). This is
+    # what routes N13's outgoing conditional edge -- previously a resumed
+    # run kept no record of the decision at all, so approval and rejection
+    # were indistinguishable downstream.
+    human_decision: str
+    workflow_terminated: bool
+    termination_reason: str
+    # C2PRO P0b crash-safe resume V3: which ATTEMPT of which operation this
+    # run belongs to (operation_id/attempt_id/owner_token/fencing_token/
+    # decision_revision). Every descendant checkpoint therefore belongs to
+    # exactly one attempt, so a superseded attempt's descendants can never
+    # be mistaken for the current one's.
+    resume_provenance: dict[str, str]
     force_full_pipeline: bool
 
     # ── N1: Document Ingestion ──

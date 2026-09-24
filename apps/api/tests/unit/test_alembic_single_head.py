@@ -74,4 +74,12 @@ def test_migration_health_parser_accepts_merge_revisions() -> None:
     nodes, _ = module.parse_migration_graph(versions_dir)
 
     assert nodes["20260524_0001"] == ("20260516_0004", "20260517_0002")
-    assert module.validate_linear_chain(nodes) == "20260914_0005"
+
+    # The subject is that validate_linear_chain finds THE head, so compare it
+    # against the head derived from the graph itself. Hard-coding a revision
+    # id here made every new migration fail this test for no real reason --
+    # which is exactly what happened, so the id had stopped meaning anything.
+    referenced = {parent for parents in nodes.values() for parent in parents if parent}
+    expected_head = sorted(set(nodes) - referenced)
+    assert len(expected_head) == 1, expected_head
+    assert module.validate_linear_chain(nodes) == expected_head[0]

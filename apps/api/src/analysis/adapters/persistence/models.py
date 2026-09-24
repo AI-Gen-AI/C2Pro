@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
     ARRAY,
     CheckConstraint,
     DDL,
@@ -117,6 +118,20 @@ class Analysis(Base):
     # Alerts count
     alerts_count: Mapped[int] = mapped_column(Integer, default=0)
 
+    # C2PRO P0b crash-safe resume: stable identity of the operation that
+    # C2PRO P0b crash-safe resume V3: operation provenance. The partial
+    # unique index on resume_operation_id is what makes N17 re-entry a
+    # no-op for the same operation while leaving other analyses of the same
+    # project (legitimate re-analyses, revisions) untouched.
+    resume_operation_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+    resume_attempt_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+    fencing_token: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    decision_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # Timing
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -134,6 +149,12 @@ class Analysis(Base):
 
     # Indexes
     __table_args__ = (
+        Index(
+            "uq_analyses_resume_operation",
+            "resume_operation_id",
+            unique=True,
+            postgresql_where=text("resume_operation_id IS NOT NULL"),
+        ),
         Index("ix_analyses_project", "project_id"),
         Index("ix_analyses_status", "status"),
         Index("ix_analyses_created", "created_at"),

@@ -6,14 +6,16 @@ Refers to Suite ID: TS-BCK-032-001.
 """
 from __future__ import annotations
 
+import asyncio
 import time
+from contextlib import suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import structlog
+from langgraph.types import Command
 
 if TYPE_CHECKING:
     from src.modules.hitl.adapters.checkpoint_service import CheckpointService
@@ -25,10 +27,36 @@ from src.core.observability.monitoring import (
     record_hitl_resume_latency,
     record_hitl_workflow_resume_error,
 )
+from src.modules.hitl.adapters.persistence.resume_ownership import (
+    DEFAULT_LEASE_SECONDS,
+    Ownership,
+    Phase,
+    acquire,
+    finalize_v3,
+    mark_graph_completed,
+    record_failure,
+    renew,
+)
 from src.modules.hitl.domain.entities import ReviewStatus
 from src.modules.hitl.ports.review_queue_repository import IReviewQueueRepository
 
 logger = structlog.get_logger()
+
+
+def _as_uuid_or_none(value: Any) -> UUID | None:
+    """Parse an analysis id defensively.
+
+    The completion marker is evidence, not a foreign key: a state that
+    carries an unparseable analysis id must not abort an otherwise healthy
+    resume -- the phase transition itself is what recovery depends on.
+    """
+    if not value:
+        return None
+    try:
+        return UUID(str(value))
+    except (ValueError, AttributeError, TypeError):
+        logger.warning("hitl_resume_unparseable_analysis_id", analysis_id=str(value))
+        return None
 
 
 class WorkflowDecision(StrEnum):
@@ -72,7 +100,28 @@ class ResumeWorkflowUseCase:
     7. Return response
     """
 
+    _DESCENDANT_SCAN_LIMIT = 50
+
     _ERR_NOT_FOUND = "Review item {review_id} not found"
+    _ERR_ALREADY_CLAIMED = (
+        "Review item {review_id} is already being resumed by another request"
+    )
+    _ERR_OPERATOR_REQUIRED = (
+        "Review item {review_id} needs operator intervention and will not be "
+        "resumed automatically"
+    )
+    _ERR_NOT_TERMINAL = (
+        "Resume of review {review_id} (thread {thread_id}) did not reach a terminal "
+        "graph state; refusing to report completion"
+    )
+    _ERR_INTERRUPT_NOT_CONSUMED = (
+        "Resume did not consume the human interrupt for review {review_id} "
+        "(thread {thread_id}); the workflow did not advance"
+    )
+    _ERR_DOWNSTREAM_INCOMPLETE = (
+        "Resume of review {review_id} (thread {thread_id}) did not reach durable "
+        "persistence; no analysis was produced"
+    )
     _ERR_NOT_PENDING = "Review item {review_id} is not in pending status (current: {status})"
     _ERR_MISSING_THREAD_ID = "Review item {review_id} missing thread_id for workflow resumption"
     _ERR_ALREADY_PROCESSED = "Review item {review_id} already processed (status: {status})"
@@ -83,6 +132,9 @@ class ResumeWorkflowUseCase:
         review_queue_repo: IReviewQueueRepository,
         checkpoint_service: CheckpointService | None = None,
         graph_app: Any = None,
+        claim_session_factory: Any = None,
+        lease_seconds: int = DEFAULT_LEASE_SECONDS,
+        fault: Any = None,
     ) -> None:
         """
         Initialize use case with dependencies.
@@ -95,6 +147,122 @@ class ResumeWorkflowUseCase:
         self.review_queue_repo = review_queue_repo
         self._checkpoint_service = checkpoint_service
         self._graph_app = graph_app
+        # Optional injection point for the durable operation store's own
+        # short-lived sessions (tests supply the test session factory).
+        self._claim_session_factory = claim_session_factory
+        self._lease_seconds = lease_seconds
+        # Deterministic crash-point injection (tests only). Called with a
+        # named checkpoint; raising from it simulates hard process loss at
+        # that exact durability boundary.
+        self._fault = fault
+
+    async def _heartbeat_loop(self, ownership: Ownership) -> None:
+        """Renew the lease while the graph runs.
+
+        Without this, a genuinely healthy long-running resume would look
+        abandoned once the TTL elapsed and could be taken over mid-flight.
+        The lease therefore only expires when a worker actually stopped.
+
+        Renewal is fenced like every other write: it only renews while this
+        attempt is still the current one, so a worker that was taken over
+        cannot resurrect its own lease.
+        """
+        interval = max(1.0, self._lease_seconds / 3)
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                await renew(
+                    ownership=ownership,
+                    lease_seconds=self._lease_seconds,
+                    session_factory=self._claim_session_factory,
+                )
+            except Exception:  # noqa: BLE001 - never let telemetry kill a resume
+                logger.warning(
+                    "hitl_resume_heartbeat_failed",
+                    operation_id=str(ownership.operation_id),
+                    attempt_id=str(ownership.attempt_id),
+                    exc_info=True,
+                )
+
+    @staticmethod
+    def _document_id_for(review_item: Any, resumed_state: dict[str, Any]) -> UUID | None:
+        """The document this review gates.
+
+        Metadata first (set by human_interrupt_node), then the resumed
+        state. Finalization refuses to report success when an approval
+        cannot resolve it, rather than silently skipping the ANALYZED
+        transition and leaving Health unavailable.
+        """
+        raw = (review_item.metadata or {}).get("document_id") or (
+            review_item.item_data or {}
+        ).get("document_id")
+        if not raw and isinstance(resumed_state, dict):
+            raw = resumed_state.get("document_id")
+        return UUID(str(raw)) if raw else None
+
+    @staticmethod
+    def _row_id_for(review_item: Any, review_id: UUID) -> UUID:
+        """The review's TRUE row primary key.
+
+        metadata["row_id"] is the persistent row identity threaded through
+        the domain layer (item_id is a business key and is NOT unique across
+        legacy duplicates -- see SqlAlchemyReviewQueueRepository._to_domain).
+        The operation must address the exact row, never a sibling.
+        """
+        row_id_raw = (review_item.metadata or {}).get("row_id")
+        return UUID(str(row_id_raw)) if row_id_raw else review_id
+
+    def _tenant_id_for(self, review_item: Any) -> UUID:
+        """Tenant that owns this review.
+
+        Prefers the row's own metadata, but falls back to the repository's
+        tenant scope: legacy rows created before thread/checkpoint tracking
+        existed often carry no tenant_id in metadata (exactly why
+        _persist_real_checkpoint_id backfills it). The repository is already
+        tenant-scoped and the review was resolved THROUGH that scope, so it
+        is an authoritative -- and equally isolated -- source.
+        """
+        tenant_raw = (review_item.metadata or {}).get("tenant_id")
+        if tenant_raw:
+            return UUID(str(tenant_raw))
+        repo_tenant = getattr(self.review_queue_repo, "tenant_id", None)
+        if repo_tenant:
+            return UUID(str(repo_tenant))
+        raise ValueError(
+            "Review item has no resolvable tenant; cannot claim a resume safely."
+        )
+
+    def _assert_interrupt_consumed(
+        self, resumed_state: Any, *, review_id: UUID, thread_id: str
+    ) -> None:
+        """A resume that returns another __interrupt__ did not advance.
+
+        LangGraph signals "still interrupted" by returning __interrupt__ in
+        the result rather than raising, so this must be checked explicitly
+        or a non-resume is indistinguishable from a completion.
+        """
+        if isinstance(resumed_state, dict) and "__interrupt__" in resumed_state:
+            raise RuntimeError(
+                self._ERR_INTERRUPT_NOT_CONSUMED.format(
+                    review_id=review_id, thread_id=thread_id
+                )
+            )
+
+    def _assert_downstream_completed(
+        self, resumed_state: Any, *, review_id: UUID, thread_id: str
+    ) -> None:
+        """An approval must have reached durable persistence (N17).
+
+        A stale/wrong checkpoint resolves to a no-op that returns WITHOUT
+        running anything and without raising, so the absence of an
+        analysis_id is the honest signal that nothing was persisted.
+        """
+        if not isinstance(resumed_state, dict) or not resumed_state.get("analysis_id"):
+            raise RuntimeError(
+                self._ERR_DOWNSTREAM_INCOMPLETE.format(
+                    review_id=review_id, thread_id=thread_id
+                )
+            )
 
     def _get_checkpoint_service(self) -> CheckpointService:
         """Get or create checkpoint service lazily."""
@@ -119,66 +287,242 @@ class ResumeWorkflowUseCase:
             self._graph_app = _gga()
         return self._graph_app
 
-    async def _mark_document_analyzed_after_resume(
+
+    @staticmethod
+    def _project_id_for(review_item: Any) -> UUID | None:
+        """The project this review belongs to (evidence, not a key)."""
+        raw = (review_item.metadata or {}).get("project_id") or (
+            review_item.item_data or {}
+        ).get("project_id")
+        return UUID(str(raw)) if raw else None
+
+    async def _attempt_resume_config(
         self,
         *,
-        review_id: UUID,
-        review_item: Any,
-        resumed_state: Any,
-    ) -> None:
-        """Transition the document to ANALYZED once the resumed graph
-        actually persisted an analysis (N17 ran to completion).
+        checkpoint_service: CheckpointService,
+        graph_app: Any,
+        ownership: Ownership,
+        thread_id: str,
+        restored: Any,
+    ) -> dict[str, Any]:
+        """The exact checkpoint THIS ATTEMPT is entitled to resume from.
 
-        Best-effort and isolated in its own session: a failure here must
-        never undo the HITL decision that was already recorded, and must
-        never mark a document ANALYZED when the resumed run did not
-        genuinely persist an analysis (e.g. it re-paused, or N17 itself
-        degraded -- see save_to_db_node's own best-effort persistence).
+        Three selections are wrong here, and each corrupts the run in a
+        different way:
+
+        * latest-by-thread -- adopts whatever the last writer left, which
+          after a partial crashed attempt is a half-advanced state that no
+          longer contains the interrupt.
+        * operation-only -- matches descendants of a SUPERSEDED attempt
+          (same operation, older fence), so a takeover would silently
+          continue the dead worker's in-flight state.
+        * a superseded attempt's descendant after a decision change --
+          resuming those would apply the OLD decision.
+
+        So: prefer a descendant written by this exact attempt (an in-process
+        retry of the same attempt legitimately continues where it left off),
+        identified by the provenance the attempt itself stamped into state.
+        Otherwise restart from ``source_checkpoint_id`` -- the IMMUTABLE
+        original human-interrupt checkpoint recorded when the operation was
+        first created, which is the only checkpoint a takeover may adopt.
         """
-        if not isinstance(resumed_state, dict):
-            return
-        analysis_id = resumed_state.get("analysis_id")
-        if not analysis_id:
-            return
-
-        document_id_raw = review_item.metadata.get("document_id")
-        tenant_id_raw = review_item.metadata.get("tenant_id")
-        if not document_id_raw or not tenant_id_raw:
-            logger.warning(
-                "resume_document_status_update_skipped_missing_ids",
-                review_id=str(review_id),
-            )
-            return
-
-        try:
-            from src.core.database import get_raw_session
-            from src.documents.adapters.persistence.sqlalchemy_document_repository import (
-                SqlAlchemyDocumentRepository,
-            )
-            from src.documents.domain.models import DocumentStatus
-
-            async with get_raw_session() as session:
-                document_repo = SqlAlchemyDocumentRepository(session)
-                await document_repo.update_status(
-                    UUID(str(tenant_id_raw)),
-                    UUID(str(document_id_raw)),
-                    DocumentStatus.ANALYZED,
-                )
-                await session.commit()
-
+        descendant = await self._attempt_descendant_config(
+            checkpoint_service=checkpoint_service,
+            ownership=ownership,
+            thread_id=thread_id,
+        )
+        if descendant is not None:
             logger.info(
-                "resume_document_marked_analyzed",
-                review_id=str(review_id),
-                document_id=str(document_id_raw),
-                analysis_id=str(analysis_id),
+                "hitl_resume_continuing_own_attempt",
+                operation_id=str(ownership.operation_id),
+                attempt_id=str(ownership.attempt_id),
+                checkpoint_id=descendant["configurable"].get("checkpoint_id"),
             )
-        except Exception:
+            return descendant
+
+        source_id = ownership.source_checkpoint_id
+        if source_id and source_id != restored.checkpoint_id:
+            # A takeover after a superseded attempt advanced the thread:
+            # `restored` is the LATEST checkpoint, which is not ours. Pin
+            # the operation's immutable interrupt checkpoint instead.
+            logger.info(
+                "hitl_resume_restarting_from_source_checkpoint",
+                operation_id=str(ownership.operation_id),
+                attempt_id=str(ownership.attempt_id),
+                source_checkpoint_id=source_id,
+                latest_checkpoint_id=restored.checkpoint_id,
+            )
+            config = dict(restored.config)
+            configurable = dict(config.get("configurable") or {})
+            configurable["checkpoint_id"] = source_id
+            configurable.setdefault("thread_id", thread_id)
+            config["configurable"] = configurable
+            return config
+
+        # Otherwise this attempt starts from the immutable interrupt
+        # checkpoint -- via a FORK, never the checkpoint itself. See
+        # _fork_for_attempt: re-resuming a checkpoint replays the FIRST
+        # attempt's resume payload.
+        base: dict[str, Any] = restored.config
+        return await self._fork_for_attempt(
+            graph_app=graph_app, base=base, ownership=ownership
+        )
+
+    async def _fork_for_attempt(
+        self, *, graph_app: Any, base: dict[str, Any], ownership: Ownership
+    ) -> dict[str, Any]:
+        """Give this attempt its OWN checkpoint to resume from.
+
+        LangGraph stores a `Command(resume=...)` payload as a `__resume__`
+        write against the checkpoint being resumed, and a SECOND resume of
+        that same checkpoint re-delivers the FIRST payload -- verified
+        empirically against langgraph 1.2.10 + AsyncPostgresSaver.
+
+        That is fatal for a takeover: the new attempt would run with the
+        SUPERSEDED attempt's provenance, be fenced out at N17 (its fence is
+        stale), fail, be retried, and be fenced out again -- a livelock in
+        which the operation can never complete. Recovery is not optional
+        here, so the payload must be the new attempt's own.
+
+        Forking writes a CHILD of the interrupt checkpoint, so the original
+        stays immutable (it remains the audit record of what the human saw
+        and the only checkpoint takeovers restart from), while this attempt
+        gets a lineage with no prior resume write. The fork carries the
+        attempt's provenance, which is also what lets a later retry of THIS
+        attempt recognise its own descendants.
+        """
+        aupdate_state = getattr(graph_app, "aupdate_state", None)
+        if aupdate_state is None:
+            return base
+        try:
+            fork = await aupdate_state(
+                base, {"resume_provenance": ownership.as_graph_provenance()}
+            )
+        except Exception:  # noqa: BLE001
+            # Fail open to the base checkpoint: for a FIRST attempt (no
+            # prior resume write) that is still correct, and a takeover
+            # that cannot fork is caught by the fence at N17 rather than
+            # being allowed to write.
             logger.warning(
-                "resume_document_status_update_failed",
-                review_id=str(review_id),
-                document_id=str(document_id_raw),
+                "hitl_resume_attempt_fork_failed",
+                operation_id=str(ownership.operation_id),
+                attempt_id=str(ownership.attempt_id),
                 exc_info=True,
             )
+            return base
+        # A fork is only usable if it actually came back as a config naming a
+        # checkpoint. Anything else (None, a stub) is treated as "could not
+        # fork" rather than trusted: passing it to ainvoke would resume the
+        # WRONG thing, which is far worse than resuming the base checkpoint,
+        # where a stale attempt is still stopped by the fence at N17.
+        fork_checkpoint_id = (
+            (fork.get("configurable") or {}).get("checkpoint_id")
+            if isinstance(fork, dict)
+            else None
+        )
+        if not fork_checkpoint_id:
+            logger.warning(
+                "hitl_resume_attempt_fork_unusable",
+                operation_id=str(ownership.operation_id),
+                attempt_id=str(ownership.attempt_id),
+                returned=type(fork).__name__,
+            )
+            return base
+        logger.info(
+            "hitl_resume_attempt_forked",
+            operation_id=str(ownership.operation_id),
+            attempt_id=str(ownership.attempt_id),
+            fencing_token=ownership.fencing_token,
+            from_checkpoint_id=(base.get("configurable") or {}).get("checkpoint_id"),
+            fork_checkpoint_id=fork_checkpoint_id,
+        )
+        forked: dict[str, Any] = fork
+        return forked
+
+    async def _attempt_descendant_config(
+        self,
+        *,
+        checkpoint_service: CheckpointService,
+        ownership: Ownership,
+        thread_id: str,
+    ) -> dict[str, Any] | None:
+        """Newest checkpoint stamped with EXACTLY this attempt's provenance.
+
+        All four fields must match. operation_id alone would match a
+        superseded attempt; adding attempt_id/fencing_token/decision_revision
+        makes "belongs to this attempt" unambiguous even when a takeover
+        reuses the operation and even when the decision changed.
+        """
+        checkpointer = getattr(checkpoint_service, "checkpointer", None)
+        alist = getattr(checkpointer, "alist", None)
+        if alist is None:
+            return None
+
+        expected = ownership.as_graph_provenance()
+        try:
+            # alist yields newest-first, so the first match is the furthest
+            # this attempt got.
+            async for tup in alist(
+                {"configurable": {"thread_id": thread_id}},
+                limit=self._DESCENDANT_SCAN_LIMIT,
+            ):
+                values = (tup.checkpoint or {}).get("channel_values") or {}
+                got = values.get("resume_provenance") or {}
+                if not got:
+                    continue
+                if all(str(got.get(k)) == str(v) for k, v in expected.items()):
+                    config = dict(tup.config)
+                    configurable = dict(config.get("configurable") or {})
+                    configurable["checkpoint_id"] = (tup.checkpoint or {}).get("id")
+                    config["configurable"] = configurable
+                    return config
+        except Exception:  # noqa: BLE001 - selection falls back to the source
+            logger.warning(
+                "hitl_resume_descendant_scan_failed",
+                operation_id=str(ownership.operation_id),
+                exc_info=True,
+            )
+        return None
+
+    async def _verified_terminal_checkpoint(
+        self, *, graph_app: Any, config: dict[str, Any]
+    ) -> str | None:
+        """Checkpoint id of a VERIFIED graph END, or None.
+
+        `ainvoke` returning normally is NOT evidence that the graph
+        finished: it also returns when the run stopped at another interrupt,
+        and a no-op resume of a stale checkpoint returns having executed
+        nothing. The authority is LangGraph's own state: `next` empty means
+        no task remains to run, i.e. END was reached.
+
+        Returning None here is what keeps `graph.completed` truthful -- the
+        caller refuses to report completion rather than emitting an event
+        that recovery would later trust.
+        """
+        aget_state = getattr(graph_app, "aget_state", None)
+        if aget_state is None:
+            return None
+        # Read the THREAD's latest state, not the pinned resume checkpoint:
+        # the run advanced past it.
+        configurable = dict(config.get("configurable") or {})
+        configurable.pop("checkpoint_id", None)
+        try:
+            state = await aget_state({"configurable": configurable})
+        except Exception:  # noqa: BLE001
+            logger.warning("hitl_resume_terminal_state_unreadable", exc_info=True)
+            return None
+        if state is None:
+            return None
+        if getattr(state, "next", None):
+            return None
+        if getattr(state, "tasks", None):
+            # Pending tasks (including an interrupt) mean the graph is still
+            # mid-run even though `next` may be empty for this snapshot.
+            return None
+        return ((getattr(state, "config", None) or {}).get("configurable") or {}).get(
+            "checkpoint_id"
+        )
+
 
     async def execute(
         self,
@@ -269,106 +613,212 @@ class ResumeWorkflowUseCase:
             )
 
             checkpoint_service = self._get_checkpoint_service()
-            checkpoint = await checkpoint_service.load_checkpoint(
+            restored = await checkpoint_service.restore_checkpoint(
                 thread_id=thread_id,
                 checkpoint_id=checkpoint_id,
             )
 
-            if not checkpoint:
+            if not restored:
                 record_hitl_checkpoint_load_error("checkpoint_not_found")
                 record_hitl_resume_error("checkpoint_not_found")
                 record_hitl_checkpoint_load_error("not_found")
                 raise ValueError(self._ERR_CHECKPOINT_NOT_FOUND.format(thread_id=thread_id))
 
-            # 5. Extract and update state with human feedback (TASK-BCK-031)
-            state = checkpoint_service.extract_state(checkpoint)
+            # `restored` carries the checkpointer's OWN config (thread_id +
+            # checkpoint_ns + checkpoint_id), the authoritative resume
+            # identity -- never rebuild one from thread_id alone (see
+            # CheckpointRestore). WHICH checkpoint this attempt may resume
+            # from is decided later by _attempt_resume_config, once
+            # ownership is known.
 
-            # Inject human decision into state
-            state["human_feedback"] = request.feedback
-            state["human_approval_required"] = False
-            state["human_decision"] = request.decision.value
+            # 5. Extract state purely for observability/audit. The graph
+            # itself resumes from the checkpoint LangGraph already holds; we
+            # deliberately do NOT push a whole rebuilt state back into it.
+            restored_state = checkpoint_service.extract_state(restored.checkpoint)
 
             logger.info(
-                "state_updated",
+                "resume_prepared",
                 review_id=str(review_id),
                 decision=request.decision.value,
+                checkpoint_id=restored.checkpoint_id,
                 feedback_length=len(request.feedback),
+                restored_state_keys=sorted(restored_state.keys()),
             )
 
-            # 6. Update review item based on decision
-            if request.decision == WorkflowDecision.APPROVE:
-                review_item.current_status = ReviewStatus.APPROVED
-                review_item.approved_at = datetime.now(UTC)
-                if request.approved_by:
-                    review_item.approved_by = request.approved_by
-                status_message = "resumed"
-            else:  # REJECT
-                review_item.current_status = ReviewStatus.REJECTED
-                review_item.approved_at = datetime.now(UTC)
-                if request.approved_by:
-                    review_item.approved_by = request.approved_by
-                status_message = "rejected"
+            # 6. Acquire FENCED V3 ownership (sections 2-4).
+            #
+            # Decided from durable state, never from a lease alone: a worker
+            # can die AFTER N17 committed but BEFORE finalization, so
+            # "expired" must never be read as "the graph never ran". Every
+            # attempt carries a monotonic fencing token that each durable
+            # writer re-verifies inside its own transaction, so a worker
+            # that lost its lease may keep computing but can never persist.
+            row_id = self._row_id_for(review_item, review_id)
+            tenant_id = self._tenant_id_for(review_item)
+            document_id = self._document_id_for(review_item, {})
+            project_id = self._project_id_for(review_item)
 
-            # Store feedback/reason in review_decision field
-            review_item.metadata["review_decision"] = request.feedback
+            ownership, phase, refusal = await acquire(
+                review_row_id=row_id,
+                tenant_id=tenant_id,
+                project_id=project_id,
+                document_id=document_id,
+                thread_id=thread_id,
+                source_checkpoint_id=restored.checkpoint_id,
+                decision=request.decision.value,
+                feedback=request.feedback,
+                reviewer=request.approved_by,
+                lease_seconds=self._lease_seconds,
+                session_factory=self._claim_session_factory,
+            )
 
-            # Save updated review item
-            await self.review_queue_repo.update_review_item(review_item)
+            status_message = (
+                "resumed" if request.decision == WorkflowDecision.APPROVE else "rejected"
+            )
 
-            # 7. Resume or terminate workflow (TASK-BCK-031)
-            graph_app = self._get_graph_app()
-            config = {"configurable": {"thread_id": thread_id}}
+            if ownership is None:
+                # The reason is the only thing that distinguishes "someone
+                # else is working on it" from "this needs a human", so it is
+                # logged rather than collapsed into the HTTP message.
+                logger.info(
+                    "hitl_resume_not_acquired",
+                    review_id=str(review_id),
+                    phase=phase.value if phase is not None else None,
+                    reason=refusal,
+                )
+                if phase in {Phase.FINALIZED_APPROVED, Phase.FINALIZED_REJECTED}:
+                    # Everything durable already landed (e.g. the process
+                    # died after finalization but before the HTTP response).
+                    # Idempotent replay: touch nothing, report the outcome.
+                    record_hitl_resume_attempt(decision, "already_completed")
+                    record_hitl_resume_latency(decision, time.perf_counter() - start_time)
+                    return ResumeWorkflowResponse(
+                        review_id=review_id,
+                        status=status_message,
+                        message=(
+                            f"Workflow {status_message} (already completed; "
+                            "idempotent replay)."
+                        ),
+                    )
+                if phase is Phase.OPERATOR_REQUIRED:
+                    record_hitl_resume_error("operator_required")
+                    raise ValueError(self._ERR_OPERATOR_REQUIRED.format(review_id=review_id))
+                record_hitl_resume_error("already_claimed")
+                raise ValueError(self._ERR_ALREADY_CLAIMED.format(review_id=review_id))
 
+            resumed_state: dict[str, Any] = {}
+            terminal_checkpoint_id: str | None = None
+            heartbeat_task = asyncio.create_task(self._heartbeat_loop(ownership))
             try:
-                if request.decision == WorkflowDecision.APPROVE:
-                    # Resume workflow with updated state
+                if phase is Phase.GRAPH_COMPLETED:
+                    # Durable evidence says this operation already reached a
+                    # verified terminal checkpoint. Finalize only -- replaying
+                    # the graph here is the post-N17 split brain.
+                    logger.warning(
+                        "hitl_resume_recovering_at_graph_completed",
+                        review_id=str(review_id),
+                        operation_id=str(ownership.operation_id),
+                    )
+                else:
+                    # 7. Resume the checkpoint this ATTEMPT is entitled to.
+                    #
+                    # A takeover restarts from the IMMUTABLE original
+                    # human-interrupt checkpoint; it must never adopt a
+                    # superseded attempt's descendants (section 5).
+                    graph_app = self._get_graph_app()
+                    resume_config = await self._attempt_resume_config(
+                        checkpoint_service=checkpoint_service,
+                        graph_app=graph_app,
+                        ownership=ownership,
+                        thread_id=thread_id,
+                        restored=restored,
+                    )
                     logger.info(
                         "resuming_workflow",
                         review_id=str(review_id),
                         thread_id=thread_id,
+                        checkpoint_id=restored.checkpoint_id,
+                        decision=decision,
+                        operation_id=str(ownership.operation_id),
+                        attempt_id=str(ownership.attempt_id),
+                        fencing_token=ownership.fencing_token,
                     )
 
-                    # Use update_state to inject the modified state back into the checkpoint
-                    # This will resume from the interrupt point (human_interrupt_node)
-                    await graph_app.aupdate_state(config, state)
-                    resumed_state = await graph_app.ainvoke(None, config)
+                    # Command(resume=...) is the supported interrupt-resume
+                    # primitive for langgraph 1.2.10 (verified empirically).
+                    # The attempt's provenance rides along so every
+                    # descendant checkpoint, and N17's own write, belong to
+                    # exactly this attempt.
+                    resumed_state = await graph_app.ainvoke(
+                        Command(
+                            resume={
+                                "decision": request.decision.value,
+                                "feedback": request.feedback,
+                                "resume_provenance": ownership.as_graph_provenance(),
+                            }
+                        ),
+                        resume_config,
+                    )
+
+                    if self._fault is not None:
+                        await self._fault("after_graph_before_terminal_marker")
+
+                    # A resume that did not consume the interrupt did not
+                    # advance: LangGraph reports that by returning another
+                    # __interrupt__ rather than raising, and a wrong/stale
+                    # checkpoint silently returns having run nothing.
+                    self._assert_interrupt_consumed(
+                        resumed_state, review_id=review_id, thread_id=thread_id
+                    )
+                    if request.decision == WorkflowDecision.APPROVE:
+                        self._assert_downstream_completed(
+                            resumed_state, review_id=review_id, thread_id=thread_id
+                        )
+
+                    # 9. Terminal marker -- ONLY after a verified graph END.
+                    terminal_checkpoint_id = await self._verified_terminal_checkpoint(
+                        graph_app=graph_app, config=resume_config
+                    )
+                    if request.decision == WorkflowDecision.APPROVE:
+                        if terminal_checkpoint_id is None:
+                            raise RuntimeError(
+                                self._ERR_NOT_TERMINAL.format(
+                                    review_id=review_id, thread_id=thread_id
+                                )
+                            )
+                        await mark_graph_completed(
+                            ownership=ownership,
+                            terminal_checkpoint_id=terminal_checkpoint_id,
+                            document_id=str(document_id) if document_id else None,
+                            session_factory=self._claim_session_factory,
+                        )
+
+                    if self._fault is not None:
+                        await self._fault("after_terminal_marker_before_finalize")
 
                     logger.info(
                         "workflow_resumed",
                         review_id=str(review_id),
                         thread_id=thread_id,
                         status=status_message,
+                        analysis_id=(resumed_state or {}).get("analysis_id"),
+                        terminal_checkpoint_id=terminal_checkpoint_id,
                     )
 
-                    # C2PRO P0b HITL resume hotfix: resuming to completion runs
-                    # N17 (save_to_db), which persists the analysis and sets
-                    # resumed_state["analysis_id"] -- but N17 never touches
-                    # Document.upload_status (that transition normally happens
-                    # in _run_document_analysis, a code path this resume never
-                    # goes through). Without this, an approved, fully-analyzed
-                    # document stayed parsed_pending_analysis forever and
-                    # Health/Evidence never became readable. Best-effort: a
-                    # failure here must not undo the recorded HITL decision.
-                    await self._mark_document_analyzed_after_resume(
-                        review_id=review_id,
-                        review_item=review_item,
-                        resumed_state=resumed_state,
-                    )
-
-                else:  # REJECT
-                    # For rejection, we update state but don't resume - the workflow ends
-                    # The state is updated to reflect the rejection for audit purposes
-                    logger.info(
-                        "workflow_terminated",
-                        review_id=str(review_id),
-                        thread_id=thread_id,
-                        reason=request.feedback[:100],
-                    )
-
-                    # Update state with rejection info (for audit trail)
-                    state["workflow_terminated"] = True
-                    state["termination_reason"] = request.feedback
-                    await graph_app.aupdate_state(config, state)
+                # 10. Finalize: review + document + operation, ONE fenced
+                # transaction. A clean success now means every durable state
+                # exists -- the old best-effort document update could report
+                # success while Health stayed unavailable.
+                await finalize_v3(
+                    ownership=ownership,
+                    review_row_id=row_id,
+                    approved=request.decision == WorkflowDecision.APPROVE,
+                    approved_by=request.approved_by,
+                    feedback=request.feedback,
+                    document_id=document_id,
+                    session_factory=self._claim_session_factory,
+                    fault=self._fault,
+                )
 
             except Exception as e:
                 logger.error(
@@ -380,9 +830,20 @@ class ResumeWorkflowUseCase:
                 )
                 record_hitl_resume_error("workflow_error")
                 record_hitl_workflow_resume_error(decision)
-                # Don't fail the entire operation if workflow resumption fails
-                # The review item is already updated, so the decision is recorded
-                status_message = f"{status_message}_with_errors"
+                # The decision is NOT recorded on failure. Releasing the
+                # attempt never destroys durable evidence: a recorded
+                # N17_DURABLE/GRAPH_COMPLETED phase survives, so a retry
+                # finalizes instead of replaying N17.
+                await record_failure(
+                    ownership=ownership,
+                    error=str(e),
+                    session_factory=self._claim_session_factory,
+                )
+                raise
+            finally:
+                heartbeat_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await heartbeat_task
 
             # Record success metrics + audit event
             duration = time.perf_counter() - start_time
