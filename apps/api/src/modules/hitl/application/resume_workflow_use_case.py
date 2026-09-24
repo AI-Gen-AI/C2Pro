@@ -29,6 +29,7 @@ from src.core.observability.monitoring import (
 )
 from src.modules.hitl.adapters.persistence.resume_ownership import (
     DEFAULT_LEASE_SECONDS,
+    FinalizedCorrection,
     Ownership,
     Phase,
     acquire,
@@ -287,6 +288,33 @@ class ResumeWorkflowUseCase:
             self._graph_app = _gga()
         return self._graph_app
 
+
+    @staticmethod
+    def _enqueue_correction_snapshot(correction: FinalizedCorrection, tenant_id: UUID) -> None:
+        """Fire-and-forget the snapshot for a committed correction event.
+
+        Fail-open like every other projection trigger: the decision and its
+        audit event are already durable, and the daily snapshot job still
+        provides eventual coverage.
+        """
+        from src.core.tenants.types import require_tenant_id
+        from src.temporal.application import project_snapshot_trigger
+        from src.temporal.domain.project_snapshot import SnapshotTrigger
+
+        try:
+            project_snapshot_trigger.enqueue_project_snapshot(
+                project_id=correction.project_id,
+                tenant_id=require_tenant_id(tenant_id),
+                trigger=SnapshotTrigger.HITL_CORRECTION,
+                source_event_id=correction.event_id,
+            )
+        except Exception:  # noqa: BLE001 - never fail a recorded decision
+            logger.warning(
+                "hitl_correction_snapshot_enqueue_failed",
+                event_id=str(correction.event_id),
+                project_id=str(correction.project_id),
+                exc_info=True,
+            )
 
     @staticmethod
     def _project_id_for(review_item: Any) -> UUID | None:
@@ -708,6 +736,7 @@ class ResumeWorkflowUseCase:
 
             resumed_state: dict[str, Any] = {}
             terminal_checkpoint_id: str | None = None
+            correction: FinalizedCorrection | None = None
             heartbeat_task = asyncio.create_task(self._heartbeat_loop(ownership))
             try:
                 if phase is Phase.GRAPH_COMPLETED:
@@ -809,13 +838,14 @@ class ResumeWorkflowUseCase:
                 # transaction. A clean success now means every durable state
                 # exists -- the old best-effort document update could report
                 # success while Health stayed unavailable.
-                await finalize_v3(
+                correction = await finalize_v3(
                     ownership=ownership,
                     review_row_id=row_id,
                     approved=request.decision == WorkflowDecision.APPROVE,
                     approved_by=request.approved_by,
                     feedback=request.feedback,
                     document_id=document_id,
+                    review_item_id=review_item.item_id,
                     session_factory=self._claim_session_factory,
                     fault=self._fault,
                 )
@@ -844,6 +874,13 @@ class ResumeWorkflowUseCase:
                 heartbeat_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await heartbeat_task
+
+            # C2PRO #649: the decision's hitl.correction committed WITH the
+            # finalization; only its snapshot projection is triggered here,
+            # after commit, and only by the call that actually finalized --
+            # a replay returns above and never reaches this line.
+            if correction is not None:
+                self._enqueue_correction_snapshot(correction, tenant_id)
 
             # Record success metrics + audit event
             duration = time.perf_counter() - start_time
