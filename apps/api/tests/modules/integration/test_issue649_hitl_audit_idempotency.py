@@ -142,7 +142,15 @@ async def _post_approve(
 
 
 async def _post_reject(
-    maker: Any, tenant_id: UUID, item_id: UUID, *, saver: Any, app: Any, sessions: Any
+    maker: Any,
+    tenant_id: UUID,
+    item_id: UUID,
+    *,
+    saver: Any,
+    app: Any,
+    sessions: Any,
+    reason: str = "wrong clause extraction",
+    reviewer_name: str = "Reviewer",
 ) -> Any:
     async with maker() as session:
         await session.execute(
@@ -159,9 +167,9 @@ async def _post_reject(
         try:
             return await hitl_router.reject_item(
                 item_id=item_id,
-                payload=RejectRequest(reason="wrong clause extraction"),
+                payload=RejectRequest(reason=reason),
                 _tenant_id=tenant_id,
-                current_user=_reviewer(),
+                current_user=SimpleNamespace(id=uuid4(), full_name=reviewer_name),
                 service=SimpleNamespace(review_queue_repo=repo),
                 resume_use_case=use_case,
             )
@@ -938,3 +946,252 @@ async def test_dedupe_boundary_is_the_database_unique_index(
             )
             await s.flush()
     assert len(await _events(db, arranged.project_id, HITL_CORRECTION)) == 1
+
+
+# ── a finalized rejection is immutable (Codex review of #650) ────────────────
+
+
+async def _stored_review(db: AsyncSession, row_id: UUID) -> ReviewItemORM:
+    return await _reload(db, ReviewItemORM, row_id)
+
+
+async def _operation(sessions: Any, tenant_id: UUID, row_id: UUID) -> Any:
+    async with sessions(tenant_id) as s:
+        return (
+            await s.execute(
+                text(
+                    "SELECT id, phase, decision, decision_hash, current_attempt_id, "
+                    "       (SELECT count(*) FROM resume_operations o2 "
+                    "         WHERE o2.review_row_id = o.review_row_id) AS n "
+                    "  FROM resume_operations o WHERE o.review_row_id = cast(:r as uuid)"
+                ),
+                {"r": str(row_id)},
+            )
+        ).one()
+
+
+async def test_finalized_reject_reason_is_immutable_under_different_reason_replay(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,
+    snapshot_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register)
+    N17_RUNS.clear()
+    common = {"saver": saver, "app": arranged.app, "sessions": independent_sessions}
+
+    first = await _post_reject(
+        request_sessions,
+        tenant.id,
+        arranged.review_item_id,
+        reason="reason A",
+        reviewer_name="Reviewer A",
+        **common,
+    )
+    assert first.current_status == ReviewStatus.REJECTED
+    stored = await _stored_review(db, arranged.review_row_id)
+    assert stored.review_metadata.get("rejection_reason") == "reason A"
+    assert stored.review_decision == "reason A"
+    approved_at_a = stored.approved_at
+
+    replay = await _post_reject(
+        request_sessions,
+        tenant.id,
+        arranged.review_item_id,
+        reason="reason B",
+        reviewer_name="Reviewer B",
+        **common,
+    )
+    assert replay.current_status == ReviewStatus.REJECTED
+    assert replay.row_id == arranged.review_row_id
+    assert replay.approved_by == "Reviewer A", "replay returns the STORED decision"
+
+    stored = await _stored_review(db, arranged.review_row_id)
+    assert stored.current_status == ReviewStatus.REJECTED.value
+    assert stored.review_metadata.get("rejection_reason") == "reason A", (
+        "an idempotent replay must never rewrite a finalized rejection reason"
+    )
+    assert stored.review_decision == "reason A"
+    assert stored.approved_by == "Reviewer A"
+    assert stored.approved_at == approved_at_a
+
+    op = await _operation(independent_sessions, tenant.id, arranged.review_row_id)
+    assert op.phase == "FINALIZED_REJECTED" and op.n == 1
+    assert N17_RUNS == []
+    analyses = (
+        (await db.execute(select(Analysis).where(Analysis.project_id == arranged.project_id)))
+        .scalars()
+        .all()
+    )
+    assert analyses == []
+    corrections = await _events(db, arranged.project_id, HITL_CORRECTION)
+    assert len(corrections) == 1
+    assert corrections[0].payload["reason"] == "reason A"
+
+
+async def test_concurrent_different_reason_rejects_store_the_winning_operations_reason(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,
+    snapshot_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """The winner is whoever V3 ownership says finalized -- not arrival order.
+
+    Correctness is defined by provenance coherence: the stored reason, the
+    finalized operation's decision hash and the single correction event must
+    all describe the SAME decision, and later replays cannot change it.
+    """
+    from src.modules.hitl.adapters.persistence.resume_ownership import decision_hash
+
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register)
+    N17_RUNS.clear()
+    common = {"saver": saver, "app": arranged.app, "sessions": independent_sessions}
+
+    results = await asyncio.gather(
+        _post_reject(
+            request_sessions,
+            tenant.id,
+            arranged.review_item_id,
+            reason="A",
+            reviewer_name="Reviewer A",
+            **common,
+        ),
+        _post_reject(
+            request_sessions,
+            tenant.id,
+            arranged.review_item_id,
+            reason="B",
+            reviewer_name="Reviewer B",
+            **common,
+        ),
+        return_exceptions=True,
+    )
+    assert any(not isinstance(r, BaseException) for r in results), results
+
+    stored = await _stored_review(db, arranged.review_row_id)
+    winning_reason = stored.review_metadata.get("rejection_reason")
+    assert winning_reason in {"A", "B"}
+    assert stored.review_decision == winning_reason
+    assert stored.approved_by == f"Reviewer {winning_reason}"
+
+    op = await _operation(independent_sessions, tenant.id, arranged.review_row_id)
+    assert op.phase == "FINALIZED_REJECTED" and op.n == 1
+    assert op.decision_hash == decision_hash("reject", winning_reason), (
+        "stored reason must be the finalized operation's own feedback"
+    )
+    corrections = await _events(db, arranged.project_id, HITL_CORRECTION)
+    assert len(corrections) == 1
+    assert corrections[0].payload["reason"] == winning_reason
+    assert str(corrections[0].resume_attempt_id) == str(op.current_attempt_id)
+
+    # Afterwards, neither reason can overwrite the finalized decision.
+    for reason in ("A", "B", "C"):
+        await _post_reject(
+            request_sessions,
+            tenant.id,
+            arranged.review_item_id,
+            reason=reason,
+            reviewer_name=f"Reviewer {reason}",
+            **common,
+        )
+    stored = await _stored_review(db, arranged.review_row_id)
+    assert stored.review_metadata.get("rejection_reason") == winning_reason
+    assert stored.review_decision == winning_reason
+    assert stored.approved_by == f"Reviewer {winning_reason}"
+    assert len(await _events(db, arranged.project_id, HITL_CORRECTION)) == 1
+    assert N17_RUNS == []
+
+
+async def test_reconciled_rejection_completes_the_same_human_decision(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,
+    snapshot_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """The reconciler may FINISH a human decision; it must not author one.
+
+    A rejection's worker dies after acquiring ownership. The sweep that
+    completes it must finalize the human's own reason under the SAME
+    decision revision -- not a synthetic empty-feedback revision -- so its
+    single hitl.correction describes the decision the human actually made.
+    """
+    from src.core.tasks import hitl_resume_reconciler as reconciler
+    from tests.modules.integration.test_p0b_crash_safe_resume_recovery import _sweep
+
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register)
+    N17_RUNS.clear()
+
+    class _HardDeath:
+        checkpointer = saver
+
+        async def ainvoke(self, *_a: Any, **_k: Any) -> dict:
+            raise BaseException("SIGKILL")  # noqa: TRY002
+
+    with pytest.raises(BaseException, match="SIGKILL"):
+        async with request_sessions() as session:
+            await session.execute(
+                text("SELECT set_config('app.current_tenant', :t, true)"),
+                {"t": str(tenant.id)},
+            )
+            await ResumeWorkflowUseCase(
+                review_queue_repo=SqlAlchemyReviewQueueRepository(
+                    session=session, tenant_id=tenant.id
+                ),
+                checkpoint_service=CheckpointService(checkpointer=saver),
+                graph_app=_HardDeath(),
+                claim_session_factory=independent_sessions,
+            ).execute(
+                review_id=arranged.review_item_id,
+                request=ResumeWorkflowRequest(
+                    decision=WorkflowDecision.REJECT,
+                    feedback="human reason",
+                    approved_by="Reviewer A",
+                ),
+            )
+
+    async with independent_sessions(tenant.id) as s:
+        await s.execute(
+            text(
+                "UPDATE resume_operations "
+                "   SET lease_expires_at = clock_timestamp() - interval '1 hour' "
+                " WHERE review_row_id = cast(:r as uuid)"
+            ),
+            {"r": str(arranged.review_row_id)},
+        )
+
+    swept = await _sweep(reconciler, independent_sessions, tenant, saver, arranged.app)
+    assert swept["recovered"] == 1, swept
+
+    stored = await _stored_review(db, arranged.review_row_id)
+    assert stored.current_status == ReviewStatus.REJECTED.value
+    assert stored.review_metadata.get("rejection_reason") == "human reason"
+    assert stored.review_decision == "human reason"
+    assert stored.approved_by == "Reviewer A"
+
+    async with independent_sessions(tenant.id) as s:
+        revision = (
+            await s.execute(
+                text(
+                    "SELECT decision_revision FROM resume_operations WHERE review_row_id = cast(:r as uuid)"
+                ),
+                {"r": str(arranged.review_row_id)},
+            )
+        ).scalar_one()
+    assert revision == 1, "completing a decision is not a new decision revision"
+    corrections = await _events(db, arranged.project_id, HITL_CORRECTION)
+    assert len(corrections) == 1
+    assert corrections[0].payload["reason"] == "human reason"
+    assert corrections[0].payload["decision_revision"] == 1
+    assert N17_RUNS == []

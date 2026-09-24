@@ -61,7 +61,8 @@ _RECOVERABLE_PHASES = (
 _CLAIMABLE_SQL = text(
     """
     SELECT o.id, o.tenant_id, o.review_row_id, o.phase, o.decision,
-           o.reviewer, o.failure_count, r.item_id
+           o.reviewer, o.failure_count, r.item_id,
+           o.operation_metadata ->> 'feedback' AS feedback
       FROM resume_operations o
       JOIN review_items r ON r.id = o.review_row_id
      WHERE o.phase = ANY(:phases)
@@ -146,7 +147,12 @@ async def _sweep_async(
                     review_id=UUID(str(row.item_id)),
                     request=ResumeWorkflowRequest(
                         decision=decision,
-                        feedback="",
+                        # The human's own feedback (C2PRO #649): replaying
+                        # it keeps the decision hash, so this completes the
+                        # same decision rather than authoring a new one.
+                        # Operations created before it was recorded fall
+                        # back to the previous empty feedback.
+                        feedback=row.feedback or "",
                         approved_by=row.reviewer or "reconciler",
                     ),
                 )

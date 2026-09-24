@@ -381,13 +381,16 @@ async def reject_item(
         # again -- see _approve_and_resume_workflow's matching comment for
         # why re-resolving by item_id after the status flip can return a
         # different, historical row sharing this item_id.
+        #
+        # C2PRO #649: read-only. The rejection reason is written once, by the
+        # V3 finalization, from the operation's own feedback. Rewriting it
+        # here let an idempotent replay with a different reason mutate an
+        # already-finalized decision; a replay now returns the STORED row.
         existing_row_id = existing.metadata.get("row_id")
         lookup_id = UUID(existing_row_id) if existing_row_id else item_id
         item = await service.review_queue_repo.get_review_item(lookup_id)
         if item is None:  # pragma: no cover - execute() above already confirmed the row exists
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
-        item.metadata["rejection_reason"] = payload.reason
-        await service.review_queue_repo.update_review_item(item)
     else:
         if existing.current_status not in {
             ReviewStatus.PENDING_REVIEW_REQUIRED,

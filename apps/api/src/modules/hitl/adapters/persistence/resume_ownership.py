@@ -146,7 +146,8 @@ _UPSERT_OPERATION_SQL = text(
         cast(:id as uuid), cast(:tenant_id as uuid), cast(:review_row_id as uuid),
         cast(:project_id as uuid), cast(:document_id as uuid), cast(:thread_id as text),
         cast(:source_checkpoint_id as text), 0, 1, cast(:decision as text),
-        cast(:decision_hash as text), cast(:reviewer as text), 'PENDING', 0, '{}'::jsonb,
+        cast(:decision_hash as text), cast(:reviewer as text), 'PENDING', 0,
+        jsonb_build_object('feedback', cast(:feedback as text)),
         clock_timestamp(), clock_timestamp()
     )
     ON CONFLICT (review_row_id) DO NOTHING
@@ -182,6 +183,13 @@ _ACQUIRE_SQL = text(
            decision = cast(:decision as text),
            decision_hash = cast(:decision_hash as text),
            reviewer = coalesce(cast(:reviewer as text), reviewer),
+           -- C2PRO #649: the decision's own feedback travels with the
+           -- operation, so a reconciler completes the SAME human decision
+           -- (same decision_hash, same revision) instead of replaying it
+           -- with empty feedback -- which would read as a NEW revision and
+           -- finalize a reason the human never gave.
+           operation_metadata = coalesce(operation_metadata, '{}'::jsonb)
+                                || jsonb_build_object('feedback', cast(:feedback as text)),
            -- Taking ownership must not erase durable progress. A takeover
            -- of an operation whose N17 already committed, or which already
            -- reached a verified terminal checkpoint, inherits that phase;
@@ -373,6 +381,7 @@ async def acquire(
                 "decision": decision,
                 "decision_hash": new_hash,
                 "reviewer": reviewer,
+                "feedback": feedback,
             },
         )
         row = (
@@ -412,6 +421,7 @@ async def acquire(
                     "decision": decision,
                     "decision_hash": new_hash,
                     "reviewer": reviewer,
+                    "feedback": feedback,
                     "lease_seconds": lease_seconds,
                     "force_revision": decision_changed,
                 },
@@ -747,6 +757,14 @@ _FINALIZE_REVIEW_SQL = text(
                                     'resume_attempt_id', cast(:attempt_id as text),
                                     'terminal_checkpoint_id', cast(:terminal as text)
                                 )
+                             -- C2PRO #649: the rejection reason is the
+                             -- finalized operation's OWN feedback, written
+                             -- once here; nothing may rewrite it afterwards.
+                             || CASE WHEN cast(:status as text) = 'REJECTED'
+                                     THEN jsonb_build_object(
+                                              'rejection_reason', cast(:feedback as text))
+                                     ELSE '{}'::jsonb
+                                END
                              - 'resume_claim'
      WHERE id = cast(:review_row_id as uuid)
        AND tenant_id = cast(:tenant_id as uuid)
@@ -922,6 +940,7 @@ async def finalize_v3(
             decision_revision=int(row.decision_revision),
             approved=approved,
             reviewer=approved_by,
+            feedback=feedback,
         )
         await session.flush()
 
@@ -944,6 +963,7 @@ def _append_correction_event(
     decision_revision: int,
     approved: bool,
     reviewer: str | None,
+    feedback: str,
 ) -> FinalizedCorrection | None:
     """Stage the final decision's audit event on the finalizing session.
 
@@ -978,6 +998,7 @@ def _append_correction_event(
                 "resume_operation_id": str(ownership.operation_id),
                 "resume_attempt_id": str(ownership.attempt_id),
                 "decision_revision": decision_revision,
+                "reason": None if approved else feedback,
             },
             actor=reviewer,
             evidence_refs=[],
