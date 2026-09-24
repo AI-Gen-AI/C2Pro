@@ -14,8 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.domain.enums import AnalysisStatus, AnalysisType
@@ -36,12 +35,6 @@ class PersistAnalysisCommand:
     # ``None`` => not evaluated for this analysis; the key is then simply absent from
     # result_json, which readers must treat as UNAVAILABLE (never "evaluated, empty").
     single_document_assessment: dict[str, Any] | None = None
-    # C2PRO P0b crash-safe resume: stable identity of the operation this
-    # persistence belongs to. When set, N17 becomes idempotent for that
-    # operation -- a replay after a crash returns the analysis already
-    # committed instead of creating a second one. ``None`` keeps the
-    # historical behaviour for every non-HITL caller.
-    idempotency_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -49,10 +42,6 @@ class PersistAnalysisResult:
     """Result of persistence operation."""
 
     analysis_id: UUID
-    # False when this call found an analysis already persisted for the same
-    # idempotency_key, i.e. it was a replay. Callers use it to suppress
-    # duplicate side effects such as a second graph.completed event.
-    created: bool = True
 
 
 class PersistAnalysisUseCase:
@@ -77,16 +66,6 @@ class PersistAnalysisUseCase:
         from src.coherence.alert_generator import AlertGenerator
         from src.wbs.adapters.persistence.models import WBSNodeORM
 
-        # C2PRO P0b crash-safe resume: fence N17 on the operation identity
-        # BEFORE doing any work. A crash between this commit and the caller
-        # recording completion would otherwise replay the whole persistence.
-        if command.idempotency_key:
-            existing = await self._find_by_idempotency_key(
-                command.idempotency_key, command.tenant_id
-            )
-            if existing is not None:
-                return PersistAnalysisResult(analysis_id=existing, created=False)
-
         analysis_type = (
             AnalysisType.RISK if command.extracted_risks else AnalysisType.SCHEDULE
         )
@@ -103,7 +82,6 @@ class PersistAnalysisUseCase:
             coherence_breakdown=command.coherence_breakdown,
             alerts_count=len(command.extracted_risks),
             completed_at=completed_at,
-            idempotency_key=command.idempotency_key,
             result_json={
                 "risks": command.extracted_risks,
                 "wbs": command.extracted_wbs,
@@ -113,20 +91,7 @@ class PersistAnalysisUseCase:
             },
         )
         await self._analysis_repo.add_analysis(analysis, tenant_id=command.tenant_id)
-        try:
-            await self._analysis_repo.flush()
-        except IntegrityError:
-            # Lost the race against a concurrent replay of the SAME
-            # operation: the partial unique index on analyses.idempotency_key
-            # is the authoritative arbiter, so adopt the winner rather than
-            # persisting a duplicate.
-            await self._session.rollback()
-            existing = await self._find_by_idempotency_key(
-                command.idempotency_key, command.tenant_id
-            )
-            if existing is None:
-                raise
-            return PersistAnalysisResult(analysis_id=existing, created=False)
+        await self._analysis_repo.flush()
 
         if command.extracted_risks:
             generator = AlertGenerator(
@@ -171,21 +136,5 @@ class PersistAnalysisUseCase:
 
         await self._analysis_repo.commit()
 
-        return PersistAnalysisResult(analysis_id=analysis_id, created=True)
+        return PersistAnalysisResult(analysis_id=analysis_id)
 
-    async def _find_by_idempotency_key(
-        self, idempotency_key: str | None, tenant_id: UUID
-    ) -> UUID | None:
-        if not idempotency_key:
-            return None
-        from src.analysis.adapters.persistence.models import Analysis
-
-        found = (
-            await self._session.execute(
-                select(Analysis.id).where(
-                    Analysis.idempotency_key == idempotency_key,
-                    Analysis.tenant_id == tenant_id,
-                )
-            )
-        ).scalars().first()
-        return found

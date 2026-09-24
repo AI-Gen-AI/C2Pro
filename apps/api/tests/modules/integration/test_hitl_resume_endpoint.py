@@ -13,11 +13,13 @@ All tests now use authenticated_client fixture for proper JWT authentication.
 """
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
-from uuid import uuid4
+from types import SimpleNamespace
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
+from sqlalchemy import text
 
 from src.core.auth.models import Tenant
 from src.documents.adapters.persistence.models import DocumentORM
@@ -67,17 +69,48 @@ class _FakeCheckpointService:
 class _FakeGraphApp:
     """Records state updates and resume invocations without real LangGraph runtime."""
 
-    def __init__(self) -> None:
+    def __init__(self, tenant_id: UUID) -> None:
         self.updates: list[tuple[dict[str, object], dict[str, object]]] = []
         self.invocations: list[tuple[object, dict[str, object]]] = []
         self.resume_decisions: list[str | None] = []
+        # In production the tenant comes from the graph STATE, which this
+        # fake has no checkpoint to carry; the fixture supplies it instead.
+        self._tenant_id = tenant_id
+        self._ran = False
 
     async def aupdate_state(
         self,
         config: dict[str, object],
         state: dict[str, object],
-    ) -> None:
+    ) -> dict[str, object]:
+        """Fork the given checkpoint, as real LangGraph does.
+
+        C2PRO P0b crash-safe resume V3: each attempt resumes a CHILD of the
+        interrupt checkpoint, because re-resuming a checkpoint re-delivers
+        the FIRST attempt's payload. Returning the new config is part of
+        that contract, so the fake has to return one too.
+        """
         self.updates.append((config, dict(state)))
+        configurable = dict(config.get("configurable") or {})
+        parent = configurable.get("checkpoint_id") or "cp"
+        configurable["checkpoint_id"] = f"{parent}-fork-{len(self.updates)}"
+        return {**config, "configurable": configurable}
+
+    async def aget_state(self, config: dict[str, object]) -> object:
+        """Report terminality the way the use case verifies it.
+
+        `ainvoke` returning is NOT evidence the graph finished, so the use
+        case asks LangGraph for the thread's state and treats an empty
+        `next`/`tasks` as END. Before any resume has run, this thread is
+        still sitting at its interrupt.
+        """
+        configurable = dict(config.get("configurable") or {})
+        if not self._ran:
+            return SimpleNamespace(
+                next=("human_interrupt",), tasks=(), config={"configurable": configurable}
+            )
+        configurable["checkpoint_id"] = "cp-terminal"
+        return SimpleNamespace(next=(), tasks=(), config={"configurable": configurable})
 
     async def ainvoke(
         self,
@@ -91,6 +124,7 @@ class _FakeGraphApp:
         from tests.support.hitl_resume_fakes import decision_from_resume
 
         self.invocations.append((state, config))
+        self._ran = True
         decision, feedback = decision_from_resume(state)
         self.resume_decisions.append(decision)
         if decision == "reject":
@@ -100,7 +134,57 @@ class _FakeGraphApp:
                 "workflow_terminated": True,
                 "termination_reason": feedback,
             }
-        return {"analysis_id": "analysis-resumed", "human_decision": decision}
+        analysis_id = await self._run_real_n17(state)
+        return {"analysis_id": str(analysis_id), "human_decision": decision}
+
+    async def _run_real_n17(self, resume_signal: object) -> object:
+        """Persist for real, exactly as the production N17 node does.
+
+        This fake stands in for the LangGraph RUNTIME, not for durability.
+        Returning a made-up analysis_id would assert a fiction: under V3 an
+        approval is only finalized when the analysis is genuinely durable
+        for this operation, so a fake that persists nothing would prove the
+        endpoint can report a success that never happened -- the exact
+        failure this design removes.
+        """
+        from src.analysis.application.persist_resume_analysis import (
+            ResumeProvenance,
+            persist_resume_analysis_atomically,
+        )
+        from src.core.database import get_session_with_tenant
+
+        payload = getattr(resume_signal, "resume", None) or {}
+        raw = payload.get("resume_provenance") or {}
+        provenance = ResumeProvenance.from_state(
+            {"resume_provenance": raw, "tenant_id": str(self._tenant_id)}
+        )
+        assert provenance is not None, "the resume must carry attempt provenance"
+
+        # The operation row is the authority for what this resume is about.
+        async with get_session_with_tenant(provenance.tenant_id) as session:
+            row = (
+                await session.execute(
+                    text(
+                        "SELECT project_id, document_id FROM resume_operations "
+                        " WHERE id = cast(:op as uuid)"
+                    ),
+                    {"op": str(provenance.operation_id)},
+                )
+            ).first()
+
+        result = await persist_resume_analysis_atomically(
+            state={
+                "project_id": str(row.project_id),
+                "document_id": str(row.document_id),
+                "tenant_id": str(provenance.tenant_id),
+                "extracted_risks": [],
+                "extracted_wbs": [],
+                "coherence_score": 90,
+                "coherence_breakdown": {"overall": 90},
+            },
+            provenance=provenance,
+        )
+        return result.analysis_id
 
 
 @pytest_asyncio.fixture
@@ -111,7 +195,7 @@ async def hitl_resume_override(
 ) -> AsyncGenerator[tuple[_FakeCheckpointService, _FakeGraphApp], None]:
     """Override the resume workflow dependency with deterministic collaborators."""
     checkpoint_service = _FakeCheckpointService()
-    graph_app = _FakeGraphApp()
+    graph_app = _FakeGraphApp(tenant_id=test_user.tenant_id)
 
     def _override_use_case() -> ResumeWorkflowUseCase:
         repo = SqlAlchemyReviewQueueRepository(session=db, tenant_id=test_user.tenant_id)

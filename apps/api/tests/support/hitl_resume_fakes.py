@@ -42,6 +42,67 @@ def decision_from_resume(resume_signal: Any) -> tuple[str | None, str]:
     return str(payload), ""
 
 
+class ResumeGraphDouble:
+    """Fork/terminal/provenance behaviour shared by the HITL resume doubles.
+
+    C2PRO P0b crash-safe HITL resume V3. The V2-era doubles modelled
+    ``aupdate_state`` as "stash the whole state, then replay it", which is
+    not what the real graph does and, worse, made three V3 contracts
+    invisible to tests:
+
+    * ``aupdate_state`` FORKS. It merges the update into the checkpoint's
+      state and RETURNS the new config. V3 forks once per attempt because
+      re-resuming a checkpoint re-delivers the FIRST attempt's payload
+      (verified against langgraph 1.2.10 + AsyncPostgresSaver).
+    * ``aget_state`` reports terminality. `ainvoke` returning is not
+      evidence the graph finished, so it is the only thing the use case
+      accepts before emitting ``graph.completed``.
+    * the resumed node copies ``resume_provenance`` out of the interrupt
+      payload into state -- which is what puts N17 on the FENCED path
+      instead of the legacy unkeyed one.
+    """
+
+    async def aupdate_state(
+        self, config: dict[str, Any], state: dict[str, Any]
+    ) -> dict[str, Any]:
+        merged = self._double_state()
+        merged.update(state or {})
+        self.last_state = merged
+        configurable = dict((config or {}).get("configurable") or {})
+        parent = configurable.get("checkpoint_id") or "cp"
+        self._fork_seq = getattr(self, "_fork_seq", 0) + 1
+        configurable["checkpoint_id"] = f"{parent}-fork-{self._fork_seq}"
+        return {**(config or {}), "configurable": configurable}
+
+    async def aget_state(self, config: dict[str, Any]) -> Any:
+        from types import SimpleNamespace
+
+        configurable = dict((config or {}).get("configurable") or {})
+        if not getattr(self, "_resumed", False):
+            # Still sitting at the interrupt: not terminal.
+            return SimpleNamespace(
+                next=("human_interrupt",), tasks=(), config={"configurable": configurable}
+            )
+        configurable["checkpoint_id"] = "cp-terminal"
+        return SimpleNamespace(next=(), tasks=(), config={"configurable": configurable})
+
+    def _double_state(self) -> dict[str, Any]:
+        for attr in ("last_state", "seed_state", "_state"):
+            value = getattr(self, attr, None)
+            if value:
+                return dict(value)
+        return {}
+
+    def resumed_state(self, resume_signal: Any) -> dict[str, Any]:
+        """State for the resumed node, assembled as human_interrupt_node does."""
+        state = self._double_state()
+        payload = getattr(resume_signal, "resume", None)
+        if isinstance(payload, dict) and payload.get("resume_provenance"):
+            state["resume_provenance"] = payload["resume_provenance"]
+        self._resumed = True
+        return state
+
+
 class FakeResumeCheckpointService:
     """Checkpoint service double exposing the real restore contract.
 
@@ -82,7 +143,7 @@ class FakeResumeCheckpointService:
         return dict(checkpoint["channel_values"]["__root__"])
 
 
-class FakeResumingGraphApp:
+class FakeResumingGraphApp(ResumeGraphDouble):
     """Graph double that resumes the way the real graph does.
 
     Runs the REAL ``save_to_db_node`` on approval -- so the persisted
@@ -95,11 +156,6 @@ class FakeResumingGraphApp:
         self.resume_payloads: list[Any] = []
         self.invocations = 0
 
-    async def aupdate_state(self, config: dict[str, Any], state: dict[str, Any]) -> None:
-        # Retained only so a caller that still updates state does not crash;
-        # the resume itself no longer depends on it.
-        self._state.update(state or {})
-
     async def ainvoke(self, resume_signal: Any, config: dict[str, Any]) -> dict[str, Any]:
         from src.analysis.adapters.graph.nodes import save_to_db_node
 
@@ -107,7 +163,7 @@ class FakeResumingGraphApp:
         decision, feedback = decision_from_resume(resume_signal)
         self.resume_payloads.append(decision)
 
-        state = dict(self._state)
+        state = self.resumed_state(resume_signal)
         state["human_decision"] = decision or ""
         state["human_feedback"] = feedback
 

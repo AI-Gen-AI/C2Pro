@@ -47,6 +47,7 @@ celery_app = Celery(
         "src.core.tasks.project_graph_tasks",
         "src.core.tasks.snapshot_tasks",
         "src.core.tasks.snapshot_retention",
+        "src.core.tasks.hitl_resume_reconciler",
     ],
 )
 
@@ -85,6 +86,14 @@ celery_app.conf.update(
         "project-snapshots-retention": {
             "task": "project_snapshots.retention",
             "schedule": 86400.0,
+        },
+        # A resume is driven by an HTTP request, so a worker that dies takes
+        # the retry with it. This sweep is what makes crash recovery actually
+        # happen; it is bounded per run and skips operations whose lease is
+        # still being renewed.
+        "hitl-resume-reconcile": {
+            "task": "hitl_resume.reconcile",
+            "schedule": 60.0,
         },
     },
 )

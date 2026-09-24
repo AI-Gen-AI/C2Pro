@@ -32,9 +32,11 @@ class AnalysisWrite:
     coherence_breakdown: JsonDict
     alerts_count: int
     completed_at: datetime
-    # C2PRO P0b crash-safe resume: stable per-operation identity, enforced by
-    # a PARTIAL unique index so only keyed (HITL-resume) analyses are fenced.
-    idempotency_key: str | None = None
+    # C2PRO P0b crash-safe resume V3 operation provenance.
+    resume_operation_id: UUID | None = None
+    resume_attempt_id: UUID | None = None
+    fencing_token: int | None = None
+    decision_revision: int | None = None
 
 
 @dataclass(frozen=True)

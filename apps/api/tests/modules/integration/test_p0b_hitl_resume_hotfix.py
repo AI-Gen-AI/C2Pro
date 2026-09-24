@@ -42,6 +42,7 @@ from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
+from tests.support.hitl_resume_fakes import ResumeGraphDouble
 
 pytestmark = pytest.mark.asyncio
 
@@ -312,7 +313,7 @@ async def test_hitl_interrupt_is_durable_resumable_and_non_duplicating(
     assert review.checkpoint_id.startswith("real-checkpoint-")
 
 
-class _FakeResumingGraphApp:
+class _FakeResumingGraphApp(ResumeGraphDouble):
     """Simulates the compiled LangGraph app being resumed after HITL approval.
 
     aupdate_state captures the (human-feedback-injected) checkpoint state
@@ -328,9 +329,6 @@ class _FakeResumingGraphApp:
         self.seed_state: dict | None = seed_state
         self.update_calls: list[tuple[dict, dict]] = []
 
-    async def aupdate_state(self, config: dict, state: dict) -> None:
-        self.update_calls.append((config, dict(state)))
-        self.last_state = state
 
     async def ainvoke(self, resume_signal: object, config: dict) -> dict:
         from src.analysis.adapters.graph.nodes import save_to_db_node
@@ -344,7 +342,7 @@ class _FakeResumingGraphApp:
         # LangGraph interrupt at all.
         decision, feedback = decision_from_resume(resume_signal)
         assert decision == "approve", f"expected an approve resume, got {decision!r}"
-        state = dict(self.last_state or self.seed_state or {})
+        state = self.resumed_state(resume_signal)
         state["human_decision"] = decision
         state["human_feedback"] = feedback
         state["human_approval_required"] = False

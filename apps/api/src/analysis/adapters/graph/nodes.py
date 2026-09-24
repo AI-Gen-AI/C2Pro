@@ -475,11 +475,13 @@ HUMAN_DECISION_APPROVE = "approve"
 HUMAN_DECISION_REJECT = "reject"
 
 
-def _parse_resume_idempotency_key(payload: Any) -> str:
-    """The resume operation's stable identity, if the caller supplied one."""
+def _parse_resume_provenance(payload: Any) -> dict[str, str]:
+    """Attempt provenance supplied by the resuming caller, if any."""
     if isinstance(payload, dict):
-        return str(payload.get("idempotency_key") or "")
-    return ""
+        provenance = payload.get("resume_provenance")
+        if isinstance(provenance, dict):
+            return {str(k): str(v) for k, v in provenance.items()}
+    return {}
 
 
 def _parse_human_decision(payload: Any) -> tuple[str | None, str]:
@@ -639,9 +641,9 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
     )
 
     decision, feedback = _parse_human_decision(decision_payload)
-    idempotency_key = _parse_resume_idempotency_key(decision_payload)
-    if idempotency_key:
-        state["analysis_idempotency_key"] = idempotency_key
+    provenance = _parse_resume_provenance(decision_payload)
+    if provenance:
+        state["resume_provenance"] = provenance
     state["human_decision"] = decision or ""
     if feedback:
         state["human_feedback"] = feedback
@@ -671,11 +673,82 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
 # ── N17 — Save to DB ────────────────────────────────────────────────────────
 
 
+async def _save_to_db_fenced(state: ProjectState, provenance: Any) -> ProjectState:
+    """N17 for a fenced resume: one atomic transaction, ownership verified.
+
+    Emits ``analysis.persisted`` (inside that transaction), never
+    ``graph.completed`` -- the graph continues after N17, so those are
+    different facts. ``graph.completed`` is recorded later, only against a
+    verified terminal checkpoint.
+    """
+    from src.analysis.application.persist_resume_analysis import (
+        persist_resume_analysis_atomically,
+    )
+    from src.modules.hitl.adapters.persistence.resume_ownership import OwnershipError
+
+    try:
+        result = await persist_resume_analysis_atomically(
+            state=dict(state), provenance=provenance
+        )
+    except OwnershipError as exc:
+        # Fenced out: a newer attempt owns this operation, or the lease
+        # lapsed. This worker may keep computing, but it must not persist.
+        # Surfaced as a node failure so nothing downstream reads it as done.
+        node_result = _failed_node_result("save_to_db", exc)
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        state["messages"].append(
+            AIMessage(content=f"N17 save_to_db: fenced out, no writes performed ({exc})")
+        )
+        logger.warning(
+            "hitl_resume_n17_fenced_out",
+            document_id=state.get("document_id"),
+            error=str(exc),
+        )
+        return state
+    except Exception as exc:  # noqa: BLE001 - reported, never silently swallowed
+        node_result = _failed_node_result("save_to_db", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        state["messages"].append(AIMessage(content="N17 save_to_db: failed (see node_results)"))
+        return state
+
+    state["analysis_id"] = str(result.analysis_id)
+    state["node_results"] = [
+        *state.get("node_results", []),
+        _ok_node_result(
+            "save_to_db",
+            {"analysis_id": str(result.analysis_id), "created": result.created},
+        ),
+    ]
+    state["messages"].append(
+        AIMessage(
+            content=(
+                f"Persisted analysis {result.analysis_id}."
+                if result.created
+                else f"Analysis {result.analysis_id} already durable for this operation."
+            )
+        )
+    )
+    return state
+
+
 async def save_to_db_node(state: ProjectState) -> ProjectState:
     """N17 — Persist analysis, alerts, and WBS via PersistAnalysisUseCase."""
     if not state.get("tenant_id"):
         state["messages"].append(AIMessage(content="Missing tenant_id; skipping persistence."))
         return state
+
+    # C2PRO P0b crash-safe resume V3: a fenced resume persists through ONE
+    # atomic transaction that also re-verifies this attempt still owns the
+    # operation. The legacy path below stays for non-resume runs, which have
+    # no operation to fence against.
+    from src.analysis.application.persist_resume_analysis import (
+        ResumeProvenance,
+    )
+
+    provenance = ResumeProvenance.from_state(dict(state))
+    if provenance is not None:
+        return await _save_to_db_fenced(state, provenance)
 
     from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
     from src.analysis.application.persist_analysis_use_case import (
@@ -700,7 +773,6 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
                     coherence_score=state.get("coherence_score", 0),
                     coherence_breakdown=state.get("coherence_breakdown", {}),
                     single_document_assessment=state.get("single_document_assessment"),
-                    idempotency_key=state.get("analysis_idempotency_key") or None,
                 )
             )
     # N17 persists best-effort and reports persistence failures as NodeResult.
@@ -712,22 +784,6 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
         return state
 
     state["analysis_id"] = str(result.analysis_id)
-    if not result.created:
-        # C2PRO P0b crash-safe resume: this operation's analysis was already
-        # durably persisted (a replay after a crash). Re-emitting
-        # graph.completed here would duplicate the event for a single
-        # logical completion, so report the existing analysis and stop.
-        state["node_results"] = [
-            *state.get("node_results", []),
-            _ok_node_result(
-                "save_to_db",
-                {"analysis_id": str(result.analysis_id), "idempotent_replay": True},
-            ),
-        ]
-        state["messages"].append(
-            AIMessage(content=f"Analysis {result.analysis_id} already persisted; replay ignored.")
-        )
-        return state
     try:
         await record_project_event_and_enqueue_snapshot(
             project_id=UUID(state["project_id"]),

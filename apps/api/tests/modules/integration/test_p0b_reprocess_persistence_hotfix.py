@@ -51,6 +51,7 @@ from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
+from tests.support.hitl_resume_fakes import ResumeGraphDouble
 
 pytestmark = pytest.mark.asyncio
 
@@ -205,15 +206,13 @@ class _FakeInterruptingApp:
         )
 
 
-class _FakeResumingGraphApp:
+class _FakeResumingGraphApp(ResumeGraphDouble):
     """Resumes by invoking the REAL N17 save_to_db_node."""
 
     def __init__(self, seed_state: dict | None = None) -> None:
         self.last_state: dict | None = None
         self.seed_state: dict | None = seed_state
 
-    async def aupdate_state(self, config: dict, state: dict) -> None:
-        self.last_state = state
 
     async def ainvoke(self, resume_signal: object, config: dict) -> dict:
         from src.analysis.adapters.graph.nodes import save_to_db_node
@@ -223,7 +222,7 @@ class _FakeResumingGraphApp:
         # Command(resume=...) and the decision must be read FROM it, the
         # way the real interrupt node reads interrupt()'s return value.
         decision, feedback = decision_from_resume(resume_signal)
-        state = dict(self.last_state or self.seed_state or {})
+        state = self.resumed_state(resume_signal)
         state["human_decision"] = decision or ""
         state["human_feedback"] = feedback
         if decision == "reject":

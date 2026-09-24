@@ -49,10 +49,12 @@ class ProjectState(TypedDict):
     human_decision: str
     workflow_terminated: bool
     termination_reason: str
-    # C2PRO P0b crash-safe resume: stable identity of the resume operation,
-    # carried into N17 so persistence is idempotent if the operation is
-    # replayed after a crash. Empty for non-resume runs.
-    analysis_idempotency_key: str
+    # C2PRO P0b crash-safe resume V3: which ATTEMPT of which operation this
+    # run belongs to (operation_id/attempt_id/owner_token/fencing_token/
+    # decision_revision). Every descendant checkpoint therefore belongs to
+    # exactly one attempt, so a superseded attempt's descendants can never
+    # be mistaken for the current one's.
+    resume_provenance: dict[str, str]
     force_full_pipeline: bool
 
     # ── N1: Document Ingestion ──

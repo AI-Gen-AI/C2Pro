@@ -87,53 +87,95 @@ def checkpoint_service():
 @pytest.fixture
 def graph_app():
     """A resume must return a state carrying analysis_id -- that is the
-    signal durable persistence (N17) actually ran.
+    signal durable persistence (N17) actually ran -- and the thread must
+    then report a TERMINAL state, which is the only evidence the use case
+    accepts for `graph.completed`.
     """
     app = MagicMock()
-    app.aupdate_state = AsyncMock()
     app.ainvoke = AsyncMock(return_value={"analysis_id": "analysis-1"})
+    app.aget_state = AsyncMock(
+        return_value=SimpleNamespace(
+            next=(),
+            tasks=(),
+            config={"configurable": {"thread_id": "thr-1", "checkpoint_id": "cp-end"}},
+        )
+    )
     return app
 
 
 @pytest.fixture
-def claim_session_factory():
-    """Stub the exactly-once claim's own session so these unit tests need
-    no database; the claim always succeeds here.
+def v3_ownership(monkeypatch):
+    """Stub the V3 ownership seam so these unit tests need no database.
+
+    Patched at the ownership FUNCTIONS, not at raw SQL rows: the durable
+    contract these tests care about is "the use case acquires, marks and
+    finalizes", and asserting on hand-built RETURNING rows would pin the
+    statements' shape instead -- brittle, and it would keep passing if the
+    use case stopped calling them at all.
     """
-    from contextlib import asynccontextmanager
+    from src.modules.hitl.adapters.persistence.resume_ownership import (
+        Ownership,
+        Phase,
+    )
 
-    @asynccontextmanager
-    async def _factory(_tenant_id):
-        # The operation store reads RETURNING rows by attribute, like a real
-        # SQLAlchemy Row -- a bare tuple would only appear to work.
-        row = SimpleNamespace(
-            id=uuid4(),
-            token=uuid4(),
-            phase="CLAIMED",
-            analysis_id=None,
-            idempotency_key="hitl-resume:test",
-            attempts=1,
-            decision="approve",
-            checkpoint_key="",
-            lease_expired=False,
-        )
-        session = MagicMock()
-        session.execute = AsyncMock(
-            return_value=MagicMock(first=MagicMock(return_value=row))
-        )
-        yield session
+    ownership = Ownership(
+        operation_id=uuid4(),
+        attempt_id=uuid4(),
+        owner_token=uuid4(),
+        fencing_token=1,
+        decision_revision=1,
+        tenant_id=uuid4(),
+        review_row_id=uuid4(),
+        decision="approve",
+        phase=Phase.RUNNING,
+        source_checkpoint_id="cp-1",
+        terminal_checkpoint_id=None,
+        analysis_id=None,
+        project_id=uuid4(),
+        document_id=uuid4(),
+        failure_count=0,
+    )
 
-    return _factory
+    calls: dict[str, list] = {
+        "acquire": [],
+        "mark_graph_completed": [],
+        "finalize_v3": [],
+        "record_failure": [],
+    }
+    module = "src.modules.hitl.application.resume_workflow_use_case"
+
+    async def _acquire(**kwargs):
+        calls["acquire"].append(kwargs)
+        return ownership, Phase.RUNNING, None
+
+    async def _mark(**kwargs):
+        calls["mark_graph_completed"].append(kwargs)
+        return True
+
+    async def _finalize(**kwargs):
+        calls["finalize_v3"].append(kwargs)
+
+    async def _fail(**kwargs):
+        calls["record_failure"].append(kwargs)
+
+    async def _renew(**kwargs):
+        return True
+
+    monkeypatch.setattr(f"{module}.acquire", _acquire)
+    monkeypatch.setattr(f"{module}.mark_graph_completed", _mark)
+    monkeypatch.setattr(f"{module}.finalize_v3", _finalize)
+    monkeypatch.setattr(f"{module}.record_failure", _fail)
+    monkeypatch.setattr(f"{module}.renew", _renew)
+    return SimpleNamespace(ownership=ownership, calls=calls)
 
 
 @pytest.fixture
-def use_case(review_queue_repo, checkpoint_service, graph_app, claim_session_factory):
+def use_case(review_queue_repo, checkpoint_service, graph_app, v3_ownership):
     review_queue_repo.tenant_id = uuid4()
     return ResumeWorkflowUseCase(
         review_queue_repo=review_queue_repo,
         checkpoint_service=checkpoint_service,
         graph_app=graph_app,
-        claim_session_factory=claim_session_factory,
     )
 
 
