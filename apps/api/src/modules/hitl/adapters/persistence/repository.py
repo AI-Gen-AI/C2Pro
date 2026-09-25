@@ -247,6 +247,29 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         orm = result.scalars().first()
         return self._to_domain(orm) if orm else None
 
+    async def get_review_item_by_row_id(
+        self, review_row_id: UUID, *, for_update: bool = False
+    ) -> ReviewItem | None:
+        """Exact tenant-scoped recovery identity; never fall back to item_id."""
+        if self.tenant_id is None:
+            raise ValueError("Exact review recovery requires a tenant")
+        stmt = select(ReviewItemORM).where(
+            ReviewItemORM.id == review_row_id,
+            ReviewItemORM.tenant_id == self.tenant_id,
+        )
+        if for_update:
+            stmt = stmt.with_for_update()
+        orm = (await self.session.execute(
+            stmt.execution_options(populate_existing=True)
+        )).scalar_one_or_none()
+        if orm is None:
+            return None
+        review = self._to_domain(orm)
+        # Recovery distinguishes explicit empty plaintext from unknown.
+        if orm.review_decision is not None:
+            review.metadata["review_decision"] = orm.review_decision
+        return review
+
     async def update_review_item(self, item: ReviewItem) -> None:
         row_id_raw = item.metadata.get("row_id")
         stmt = select(ReviewItemORM)
