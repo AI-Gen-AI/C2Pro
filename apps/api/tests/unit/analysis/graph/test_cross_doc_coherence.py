@@ -310,3 +310,36 @@ async def _enabled(_tenant_id) -> bool:
 
 async def _disabled(_tenant_id) -> bool:
     return False
+
+
+
+def test_critical_coherence_finding_preserves_severity_and_impact() -> None:
+    """Issue #637: shared contract CRITICAL must not degrade in Tier-2 bridging."""
+    from src.analysis.adapters.graph.project_graph import _finding_signal_for_artifact
+
+    artifact = DocumentArtifact(
+        document_id="critical-doc",
+        document_revision_id=str(uuid4()),
+        doc_type="contract",
+        coherence_findings=[
+            CoherenceFinding(
+                category="LEGAL",
+                message="Critical contractual conflict",
+                rule_id="FIND-CRITICAL",
+                severity=Severity.CRITICAL,
+                score=None,
+                confidence=0.9,
+                evidence_ref="critical evidence",
+            )
+        ],
+    )
+
+    signal = _finding_signal_for_artifact(
+        artifact,
+        0,
+        artifact.coherence_findings[0],
+    )
+
+    assert signal is not None
+    assert signal.severity == "critical"
+    assert signal.impact_score == 0.9

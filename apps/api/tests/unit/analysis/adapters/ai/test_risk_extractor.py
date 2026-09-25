@@ -24,6 +24,7 @@ from src.analysis.adapters.ai.agents.risk_extractor import (
     _split_paragraphs,
     _truncate,
 )
+from src.analysis.adapters.ai.tools.risk_extraction_tool import RiskExtractionTool
 from src.analysis.domain.risk_categories import RiskCategory
 
 
@@ -109,6 +110,27 @@ class TestRiskScore:
     def test_critical_high_is_12(self) -> None:
         risk = RiskExtractionCandidate(category=RiskCategory.LEGAL, probability=RiskProbability.HIGH, impact=RiskImpact.CRITICAL)
         assert _risk_score(risk) == 12
+
+    def test_critical_legacy_dict_retains_impact_and_alert_semantics(self) -> None:
+        """Issue #637: adapter-local CRITICAL semantics survive the legacy graph shape."""
+        risk = RiskExtractionCandidate(
+            title="Uncapped liability",
+            description="Liability exposure requires immediate attention",
+            category=RiskCategory.LEGAL,
+            probability=RiskProbability.HIGH,
+            impact=RiskImpact.CRITICAL,
+        )
+        risk.risk_score = _risk_score(risk)
+        risk.immediate_alert = _is_immediate_alert(risk)
+
+        payload = RiskExtractionTool()._risk_item_to_dict(risk)
+
+        assert risk.risk_score == 12
+        assert risk.immediate_alert is True
+        assert payload["impact"] == "CRITICAL"
+        assert payload["probability"] == "HIGH"
+        assert payload["risk_score"] == 12
+        assert payload["immediate_alert"] is True
 
     def test_medium_medium_is_4(self) -> None:
         risk = RiskExtractionCandidate(category=RiskCategory.SCHEDULE, probability=RiskProbability.MEDIUM, impact=RiskImpact.MEDIUM)

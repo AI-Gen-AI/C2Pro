@@ -4,7 +4,7 @@ Formula v0:
 - no completed assessment, or extraction quality below 0.40, returns honest-null.
 - successful clean assessment scores 90 with explicit clean-assessment evidence.
 - otherwise score = max(0, 95 - severity penalties), where LOW=5,
-  MEDIUM=12, HIGH=25, CRITICAL=40 if a future producer emits it.
+  MEDIUM=12, HIGH=25, CRITICAL=40.
 """
 
 from __future__ import annotations

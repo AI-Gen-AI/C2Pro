@@ -137,6 +137,8 @@ def _coherence_category(value: str | None) -> FindingCategory | None:
 
 
 def _finding_severity(value: ArtifactSeverity | None) -> SeverityLevel:
+    if value is ArtifactSeverity.CRITICAL:
+        return "critical"
     if value is ArtifactSeverity.HIGH:
         return "high"
     if value is ArtifactSeverity.LOW:
@@ -147,6 +149,7 @@ def _finding_severity(value: ArtifactSeverity | None) -> SeverityLevel:
 def _severity_to_impact(value: object) -> float:
     normalized = getattr(value, "value", value)
     return {
+        "CRITICAL": 0.9,
         "HIGH": 0.7,
         "MEDIUM": 0.5,
         "LOW": 0.3,
