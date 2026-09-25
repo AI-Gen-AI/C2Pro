@@ -9,6 +9,7 @@ and `src.core.observability.monitoring`.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -29,7 +30,10 @@ def _make_review_item(
     checkpoint_id: str | None = "cp-1",
     thread_id: str | None = "thr-1",
 ) -> ReviewItem:
-    metadata: dict = {}
+    # A real review always gates a document; finalization now refuses to
+    # report success for an approval it cannot mark ANALYZED, so the
+    # fixture must model that rather than omit it.
+    metadata: dict = {"document_id": str(uuid4()), "tenant_id": str(uuid4())}
     if checkpoint_id is not None:
         metadata["checkpoint_id"] = checkpoint_id
     if thread_id is not None:
@@ -54,22 +58,120 @@ def review_queue_repo():
 
 @pytest.fixture
 def checkpoint_service():
+    """C2PRO P0b true-resume hotfix: the use case now restores the exact
+    checkpoint CONFIG (restore_checkpoint), not just the checkpoint body.
+    """
+    from src.modules.hitl.adapters.checkpoint_service import CheckpointRestore
+
     svc = MagicMock()
     svc.load_checkpoint = AsyncMock()
     svc.extract_state = MagicMock(return_value={"foo": "bar"})
+
+    async def _restore(thread_id, checkpoint_id=None):
+        checkpoint = await svc.load_checkpoint(
+            thread_id=thread_id, checkpoint_id=checkpoint_id
+        )
+        if checkpoint is None:
+            return None
+        configurable = {"thread_id": thread_id, "checkpoint_ns": ""}
+        if checkpoint_id:
+            configurable["checkpoint_id"] = checkpoint_id
+        return CheckpointRestore(
+            checkpoint=checkpoint, config={"configurable": configurable}, metadata={}
+        )
+
+    svc.restore_checkpoint = _restore
     return svc
 
 
 @pytest.fixture
 def graph_app():
+    """A resume must return a state carrying analysis_id -- that is the
+    signal durable persistence (N17) actually ran -- and the thread must
+    then report a TERMINAL state, which is the only evidence the use case
+    accepts for `graph.completed`.
+    """
     app = MagicMock()
-    app.aupdate_state = AsyncMock()
-    app.ainvoke = AsyncMock()
+    app.ainvoke = AsyncMock(return_value={"analysis_id": "analysis-1"})
+    app.aget_state = AsyncMock(
+        return_value=SimpleNamespace(
+            next=(),
+            tasks=(),
+            config={"configurable": {"thread_id": "thr-1", "checkpoint_id": "cp-end"}},
+        )
+    )
     return app
 
 
 @pytest.fixture
-def use_case(review_queue_repo, checkpoint_service, graph_app):
+def v3_ownership(monkeypatch):
+    """Stub the V3 ownership seam so these unit tests need no database.
+
+    Patched at the ownership FUNCTIONS, not at raw SQL rows: the durable
+    contract these tests care about is "the use case acquires, marks and
+    finalizes", and asserting on hand-built RETURNING rows would pin the
+    statements' shape instead -- brittle, and it would keep passing if the
+    use case stopped calling them at all.
+    """
+    from src.modules.hitl.adapters.persistence.resume_ownership import (
+        Ownership,
+        Phase,
+    )
+
+    ownership = Ownership(
+        operation_id=uuid4(),
+        attempt_id=uuid4(),
+        owner_token=uuid4(),
+        fencing_token=1,
+        decision_revision=1,
+        tenant_id=uuid4(),
+        review_row_id=uuid4(),
+        decision="approve",
+        phase=Phase.RUNNING,
+        source_checkpoint_id="cp-1",
+        terminal_checkpoint_id=None,
+        analysis_id=None,
+        project_id=uuid4(),
+        document_id=uuid4(),
+        failure_count=0,
+    )
+
+    calls: dict[str, list] = {
+        "acquire": [],
+        "mark_graph_completed": [],
+        "finalize_v3": [],
+        "record_failure": [],
+    }
+    module = "src.modules.hitl.application.resume_workflow_use_case"
+
+    async def _acquire(**kwargs):
+        calls["acquire"].append(kwargs)
+        return ownership, Phase.RUNNING, None
+
+    async def _mark(**kwargs):
+        calls["mark_graph_completed"].append(kwargs)
+        return True
+
+    async def _finalize(**kwargs):
+        calls["finalize_v3"].append(kwargs)
+
+    async def _fail(**kwargs):
+        calls["record_failure"].append(kwargs)
+
+    async def _renew(**kwargs):
+        return True
+
+    monkeypatch.setattr(f"{module}.acquire", _acquire)
+    monkeypatch.setattr(f"{module}.mark_graph_completed", _mark)
+    monkeypatch.setattr(f"{module}.finalize_v3", _finalize)
+    monkeypatch.setattr(f"{module}.record_failure", _fail)
+    monkeypatch.setattr(f"{module}.renew", _renew)
+    return SimpleNamespace(ownership=ownership, calls=calls)
+
+
+@pytest.fixture
+def use_case(review_queue_repo, checkpoint_service, graph_app, v3_ownership):
+    review_queue_repo.tenant_id = uuid4()
     return ResumeWorkflowUseCase(
         review_queue_repo=review_queue_repo,
         checkpoint_service=checkpoint_service,
@@ -114,7 +216,7 @@ async def test_checkpoint_not_found_emits_checkpoint_load_error(
     spy_latency.assert_called_once()  # latency is always recorded
 
 
-async def test_workflow_update_failure_emits_workflow_resume_error(
+async def test_workflow_resume_failure_emits_workflow_resume_error(
     use_case, review_queue_repo, checkpoint_service, graph_app, monkeypatch
 ):
     """A failure inside graph_app.aupdate_state must bump the workflow-error counter."""
@@ -124,7 +226,7 @@ async def test_workflow_update_failure_emits_workflow_resume_error(
         "id": "cp-1",
         "channel_values": {"__root__": {"foo": "bar"}},
     }
-    graph_app.aupdate_state.side_effect = RuntimeError("langgraph down")
+    graph_app.ainvoke.side_effect = RuntimeError("langgraph down")
 
     spy_wf = MagicMock()
     spy_resume = MagicMock()
@@ -137,17 +239,20 @@ async def test_workflow_update_failure_emits_workflow_resume_error(
         spy_resume,
     )
 
-    resp = await use_case.execute(
-        review_id=item.item_id,
-        request=ResumeWorkflowRequest(
-            decision=WorkflowDecision.APPROVE, feedback="please continue"
-        ),
-    )
+    # C2PRO P0b true-resume hotfix: the workflow error is no longer
+    # swallowed into a "_with_errors" status. Swallowing it is exactly what
+    # let the system report a successful approval while N17 never ran, so
+    # the failure now propagates and the decision is not recorded.
+    with pytest.raises(RuntimeError):
+        await use_case.execute(
+            review_id=item.item_id,
+            request=ResumeWorkflowRequest(
+                decision=WorkflowDecision.APPROVE, feedback="please continue"
+            ),
+        )
 
     spy_wf.assert_called_once_with("approve")
     spy_resume.assert_called_once_with("workflow_error")
-    # Use case swallows the workflow error and returns an errored status
-    assert resp.status.endswith("_with_errors")
 
 
 async def test_happy_path_approve_records_attempt_and_latency(
@@ -213,6 +318,63 @@ async def test_happy_path_reject_records_attempt_with_rejected_status(
     assert args[0] == "reject"
     assert args[1] == "rejected"
     assert resp.status == "rejected"
+
+
+async def test_resume_succeeds_without_checkpoint_id_using_thread_id_only(
+    use_case, review_queue_repo, checkpoint_service, monkeypatch
+):
+    """C2PRO P0b HITL resume hotfix: checkpoint_id is optional.
+
+    thread_id alone must be sufficient to resume -- CheckpointService.
+    load_checkpoint already falls back to the latest checkpoint for a thread
+    when checkpoint_id is omitted, which for a freshly-interrupted thread IS
+    the interrupt point. A review that never had a real checkpoint_id
+    captured (e.g. the capture step failed, or hasn't run yet) must not be
+    permanently blocked from resuming.
+    """
+    item = _make_review_item(checkpoint_id=None, thread_id="thr-no-checkpoint")
+    review_queue_repo.get_review_item.return_value = item
+    checkpoint_service.load_checkpoint.return_value = {
+        "id": "latest",
+        "channel_values": {"__root__": {"foo": "bar"}},
+    }
+
+    spy_warning = MagicMock()
+    monkeypatch.setattr(
+        "src.modules.hitl.application.resume_workflow_use_case.logger.warning",
+        spy_warning,
+    )
+
+    resp = await use_case.execute(
+        review_id=item.item_id,
+        request=ResumeWorkflowRequest(
+            decision=WorkflowDecision.APPROVE, feedback="thread_id alone suffices"
+        ),
+    )
+
+    assert resp.status == "resumed"
+    checkpoint_service.load_checkpoint.assert_called_once_with(
+        thread_id="thr-no-checkpoint", checkpoint_id=None
+    )
+    # The specific warning must be emitted. (Assert on its presence rather
+    # than an exact call count: a successful resume legitimately emits other
+    # best-effort warnings, e.g. from the post-resume document transition.)
+    warned = [c.args[0] for c in spy_warning.call_args_list if c.args]
+    assert "resuming_without_explicit_checkpoint_id" in warned
+
+
+async def test_resume_raises_when_thread_id_missing_even_without_checkpoint_id(
+    use_case, review_queue_repo
+):
+    """thread_id remains hard-required: absence must still fail fast."""
+    item = _make_review_item(checkpoint_id=None, thread_id=None)
+    review_queue_repo.get_review_item.return_value = item
+
+    with pytest.raises(ValueError, match="missing thread_id"):
+        await use_case.execute(
+            review_id=item.item_id,
+            request=ResumeWorkflowRequest(decision=WorkflowDecision.APPROVE, feedback="x"),
+        )
 
 
 def test_use_case_imports_new_recorders():

@@ -35,15 +35,21 @@ def _extraer_de_modelo(filepath: Path) -> list[dict]:
     try:
         content = filepath.read_text(encoding="utf-8")
         # Buscar clases que hereden de Base
-        class_pattern = re.compile(r"class\s+(\w+)\(.*Base.*\):")
+        class_pattern = re.compile(r"class\s+(\w+)\(([^)\r\n]*)\):")
         col_pattern = re.compile(r"Column\(['\"](\w+)['\"]")
+        class_matches = [
+            match for match in class_pattern.finditer(content) if "Base" in match.group(2)
+        ]
 
-        for match in class_pattern.finditer(content):
+        for index, match in enumerate(class_matches):
             clase = match.group(1)
             start = match.end()
-            # Buscar siguiente clase o fin del archivo
-            next_match = class_pattern.search(content, start)
-            end = next_match.start() if next_match else len(content)
+            # Buscar siguiente clase Base o fin del archivo
+            end = (
+                class_matches[index + 1].start()
+                if index + 1 < len(class_matches)
+                else len(content)
+            )
             bloque = content[start:end]
 
             columnas = [m.group(1) for m in col_pattern.finditer(bloque)]
@@ -58,18 +64,30 @@ def _extraer_de_migracion(filepath: Path) -> list[dict]:
     tablas = []
     try:
         content = filepath.read_text(encoding="utf-8")
-        create_pattern = re.compile(r"CREATE TABLE\s+(?:IF NOT EXISTS\s+)?(\w+)\s*\((.*?)\);", re.DOTALL)
+        create_pattern = re.compile(r"CREATE TABLE\s+(?:IF NOT EXISTS\s+)?(\w+)\s*\(")
 
-        for match in create_pattern.finditer(content):
+        for statement in content.split(";"):
+            match = create_pattern.search(statement)
+            if not match:
+                continue
+
+            body_and_close = statement[match.end():]
+            if not body_and_close.endswith(")"):
+                continue
+
             nombre = match.group(1)
-            columnas_raw = match.group(2)
+            columnas_raw = body_and_close[:-1]
             columnas = []
-            for linea in columnas.split("\n"):
+            for linea in columnas_raw.split("\n"):
                 linea = linea.strip().rstrip(",")
-                if linea and not linea.startswith(("--", "PRIMARY", "FOREIGN", "CONSTRAINT", "UNIQUE")):
-                    col_name = linea.split()[0].strip('"')
-                    if col_name:
-                        columnas.append(col_name)
+                if not linea or linea.startswith(
+                    ("--", "PRIMARY", "FOREIGN", "CONSTRAINT", "UNIQUE")
+                ):
+                    continue
+
+                col_name = linea.split()[0].strip('"')
+                if col_name:
+                    columnas.append(col_name)
             tablas.append({"nombre": nombre, "columnas": columnas})
     except Exception:
         pass

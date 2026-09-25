@@ -1,0 +1,81 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: c2pro-work-envelope-v1
+type: object
+additionalProperties: false
+required:
+  - schema
+  - schema_version
+  - work_id
+  - campaign_id
+  - role
+  - base_sha
+  - branch
+  - risk_class
+  - scope
+  - out_of_scope
+  - allowed_tools
+  - forbidden_paths
+  - acceptance_criteria
+  - required_tests
+  - evidence_required
+  - review_policy
+  - worker_selection
+  - timeout_resource_policy
+properties:
+  schema: {const: c2pro-work-envelope-v1}
+  schema_version: {const: 1}
+  work_id: {type: string, pattern: '^C2PRO-DEV-[0-9]{2}$'}
+  campaign_id: {type: [string, 'null']}
+  role: {type: string, minLength: 1}
+  base_sha: {type: string, pattern: '^[0-9a-f]{40}$'}
+  branch: {type: string, minLength: 1}
+  risk_class: {enum: [trivial, normal, material, architecture, security, high_blast_radius]}
+  scope:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  out_of_scope:
+    type: array
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  allowed_tools:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  forbidden_paths:
+    type: array
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  acceptance_criteria:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  required_tests:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  evidence_required:
+    type: array
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  review_policy: {enum: [optional, independent_principal, principal_and_challenger]}
+  worker_selection:
+    type: object
+    additionalProperties: false
+    required: [preferred, eligible_principals, eligible_subordinates, selected]
+    properties:
+      preferred: {type: [string, 'null']}
+      eligible_principals:
+        type: array
+        uniqueItems: true
+        items: {type: string, minLength: 1}
+      eligible_subordinates:
+        type: array
+        uniqueItems: true
+        items: {type: string, minLength: 1}
+      selected: {type: [string, 'null']}
+  timeout_resource_policy: {type: string, minLength: 1}

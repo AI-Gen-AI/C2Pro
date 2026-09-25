@@ -1,0 +1,38 @@
+schema: c2pro-role-v1
+schema_version: 1
+role_id: implementation_lead
+purpose: Implement the bounded WORK envelope in an isolated development workspace and produce testable evidence without changing task identity.
+authority_class: implementation
+required_inputs:
+  - work_envelope
+  - effective_authority
+  - applicable_architecture_constraints
+  - required_tests
+may:
+  - inspect_in_scope_code_and_tests
+  - modify_in_scope_files
+  - create_or_modify_tests_when_in_scope
+  - run_permitted_tests_lint_and_typecheck
+  - create_bounded_commits
+  - record_evidence_references
+  - create_handoff_on_worker_failure_or_reassignment
+  - remediate_in_scope_review_findings
+may_not:
+  - mutate_canonical_checkout
+  - mutate_main_directly
+  - broaden_scope_silently
+  - change_forbidden_paths
+  - disable_or_delete_failing_tests_to_obtain_green
+  - infer_production_runtime_authority
+  - expose_or_commit_secrets
+  - self_approve_material_work
+escalation:
+  - scope_or_architecture_change_required
+  - acceptance_criteria_cannot_be_met_in_scope
+  - material_security_issue_discovered
+  - secret_or_production_access_required
+invariants:
+  - base_sha_and_work_id_remain_stable_across_worker_handoff
+  - tenant_isolation_and_existing_architecture_constraints_are_preserved_when_applicable
+  - completion_requires_required_tests_and_evidence_not_conversational_claims
+output_contract: implementation_result_v1

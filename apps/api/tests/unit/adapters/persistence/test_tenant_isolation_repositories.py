@@ -41,7 +41,7 @@ from src.stakeholders.domain.models import (
 async def test_coherence_repository_maps_wbs_payload_to_current_orm_fields(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """TS-UT-ANA-PER-001: Map legacy extraction keys to the current WBS ORM."""
+    """TS-UT-ANA-PER-001: Map legacy extraction keys onto the canonical WBS repository (ADR-025)."""
     tenant_id = uuid4()
     project_id = uuid4()
     db = AsyncMock()
@@ -49,6 +49,24 @@ async def test_coherence_repository_maps_wbs_payload_to_current_orm_fields(
     tenant_db.scalar = AsyncMock(return_value=None)
     tenant_db.commit = AsyncMock()
     tenant_db.refresh = AsyncMock()
+
+    class _CanonicalWBSRepository:
+        created: list = []
+
+        def __init__(self, session: object) -> None:
+            assert session is tenant_db
+
+        async def get_by_project(self, _project_id: object, _tenant_id: object) -> list:
+            return []
+
+        async def bulk_create(self, items: list, _tenant_id: object) -> list:
+            _CanonicalWBSRepository.created = items
+            return items
+
+    monkeypatch.setattr(
+        "src.analysis.adapters.persistence.coherence_repository.SQLAlchemyWBSRepository",
+        _CanonicalWBSRepository,
+    )
 
     @asynccontextmanager
     async def tenant_session(_tenant_id: object):
@@ -207,6 +225,169 @@ async def test_analysis_repository_count_all_filters_by_tenant_id() -> None:
 
     stmt = session.scalar.call_args.args[0]
     assert "projects.tenant_id" in str(stmt)
+
+
+def _analysis_write(*, tenant_id: Any, project_id: Any) -> Any:
+    from src.analysis.domain.enums import AnalysisStatus, AnalysisType
+    from src.analysis.ports.types import AnalysisWrite
+
+    return AnalysisWrite(
+        id=uuid4(),
+        tenant_id=tenant_id,
+        project_id=project_id,
+        analysis_type=AnalysisType.RISK,
+        status=AnalysisStatus.COMPLETED,
+        result_json={},
+        coherence_score=None,
+        coherence_breakdown={},
+        alerts_count=0,
+        completed_at=datetime.now(UTC),
+    )
+
+
+def _alert_write(*, tenant_id: Any, project_id: Any) -> Any:
+    from src.analysis.domain.enums import AlertSeverity, AlertType
+    from src.analysis.ports.types import AlertWrite
+
+    return AlertWrite(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        analysis_id=None,
+        alert_type=AlertType.RISK,
+        severity=AlertSeverity.LOW,
+        title="t",
+        message="m",
+        description="d",
+        category=None,
+        impact_level=None,
+        alert_metadata={},
+        rule_id=None,
+        source_clause_id=None,
+        related_clause_ids=None,
+        affected_entities={},
+        recommendation=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_add_analysis_rejects_project_outside_tenant() -> None:
+    """TS-SEC-APP-TENANT-001 (invariant C): a caller-supplied tenant_id that
+
+    does not own the analysis' project must never receive child persistence,
+    even though the analysis DTO itself is well-formed.
+    """
+    caller_tenant = uuid4()
+    other_tenant = uuid4()
+    project_id = uuid4()
+
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = other_tenant  # project belongs elsewhere
+    session.execute.return_value = result
+
+    repo = SqlAlchemyAnalysisRepository(session=session)
+    analysis = _analysis_write(tenant_id=caller_tenant, project_id=project_id)
+
+    with pytest.raises(PermissionError):
+        await repo.add_analysis(analysis, tenant_id=caller_tenant)
+
+    session.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_add_analysis_rejects_mismatched_dto_tenant_id() -> None:
+    """TS-SEC-APP-TENANT-001 (invariant C): the analysis DTO's own tenant_id
+
+    must match the caller-authenticated tenant_id, even if the project
+    ownership lookup alone would have passed.
+    """
+    caller_tenant = uuid4()
+    dto_tenant = uuid4()
+    project_id = uuid4()
+
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = caller_tenant
+    session.execute.return_value = result
+
+    repo = SqlAlchemyAnalysisRepository(session=session)
+    analysis = _analysis_write(tenant_id=dto_tenant, project_id=project_id)
+
+    with pytest.raises(PermissionError):
+        await repo.add_analysis(analysis, tenant_id=caller_tenant)
+
+    session.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_add_analysis_requires_tenant_id_argument() -> None:
+    """TS-SEC-APP-TENANT-001 (invariant D): omitting tenant_id must fail
+
+    closed at the call boundary (TypeError), not silently skip the
+    ownership check the way the previous optional-default signature did.
+    """
+    session = AsyncMock()
+    repo = SqlAlchemyAnalysisRepository(session=session)
+    analysis = _analysis_write(tenant_id=uuid4(), project_id=uuid4())
+
+    with pytest.raises(TypeError):
+        await repo.add_analysis(analysis)  # type: ignore[call-arg]
+
+
+@pytest.mark.asyncio
+async def test_add_analysis_succeeds_for_matching_tenant(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TS-SEC-APP-TENANT-001 (invariant E): the correct tenant is unaffected."""
+    tenant_id = uuid4()
+    project_id = uuid4()
+
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = tenant_id
+    session.execute.return_value = result
+
+    monkeypatch.setattr(
+        "src.analysis.adapters.persistence.analysis_repository.Analysis",
+        lambda **kwargs: SimpleNamespace(**kwargs),
+    )
+
+    repo = SqlAlchemyAnalysisRepository(session=session)
+    analysis = _analysis_write(tenant_id=tenant_id, project_id=project_id)
+
+    await repo.add_analysis(analysis, tenant_id=tenant_id)
+
+    session.add.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_add_alerts_rejects_project_outside_tenant() -> None:
+    """TS-SEC-APP-TENANT-001 (invariant C): same guarantee for alert persistence."""
+    caller_tenant = uuid4()
+    other_tenant = uuid4()
+    project_id = uuid4()
+
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = other_tenant
+    session.execute.return_value = result
+
+    repo = SqlAlchemyAnalysisRepository(session=session)
+    alert = _alert_write(tenant_id=caller_tenant, project_id=project_id)
+
+    with pytest.raises(PermissionError):
+        await repo.add_alerts([alert], tenant_id=caller_tenant)
+
+    session.add_all.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_add_alerts_requires_tenant_id_argument() -> None:
+    """TS-SEC-APP-TENANT-001 (invariant D): same fail-closed guarantee for alerts."""
+    session = AsyncMock()
+    repo = SqlAlchemyAnalysisRepository(session=session)
+    alert = _alert_write(tenant_id=uuid4(), project_id=uuid4())
+
+    with pytest.raises(TypeError):
+        await repo.add_alerts([alert])  # type: ignore[call-arg]
 
 
 @pytest.mark.asyncio

@@ -20,12 +20,26 @@ class ProjectStatus(StrEnum):
 
 
 class ProjectType(StrEnum):
-    """Types of projects supported by the system."""
+    """Types of projects supported by the system.
+
+    Single vocabulary for the ``projecttype`` database enum, the ORM column and HTTP validation
+    (IR-6). The sector values below were added to the database by 20260808_0001 because the
+    project creation wizard offers them.
+    """
     CONSTRUCTION = "construction"
     ENGINEERING = "engineering"
     INDUSTRIAL = "industrial"
     INFRASTRUCTURE = "infrastructure"
     OTHER = "other"
+    EPC = "epc"
+    CIVIL = "civil"
+    BUILDING = "building"
+    MARITIME = "maritime"
+    CHEMICAL = "chemical"
+    ENERGY = "energy"
+    MUNICIPAL = "municipal"
+    OIL_GAS = "oil_gas"
+    MINING = "mining"
 
 
 @dataclass

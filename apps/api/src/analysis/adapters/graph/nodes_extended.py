@@ -14,12 +14,15 @@ import asyncio
 import hashlib
 import inspect
 import traceback
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
 from langchain_core.messages import AIMessage
 
+from src.analysis.adapters.graph.clause_evidence_loader import (
+    load_persisted_clause_evidence,
+)
 from src.analysis.adapters.graph.dependencies import (
     get_ai_service,
     get_anonymization_service,
@@ -27,6 +30,17 @@ from src.analysis.adapters.graph.dependencies import (
 )
 from src.analysis.adapters.graph.risk_signal_bridge import build_risk_signals
 from src.analysis.adapters.graph.schema import ProjectState
+from src.analysis.application.clause_evidence import (
+    CONTRACT_DOC_TYPE,
+    REASON_CLAUSE_READ_FAILED,
+    REASON_MISSING_IDENTITY,
+    REASON_NO_PERSISTED_CLAUSES,
+    REASON_NON_CONTRACT,
+    ClauseEvidence,
+    granular_evidence,
+    whole_document_clause_id,
+    whole_document_evidence,
+)
 from src.analysis.application.generate_raci_use_case import (
     GenerateRaciCommand,
     GenerateRaciUseCase,
@@ -42,9 +56,6 @@ from src.analysis.domain.node_result import ErrorRecord, NodeResult, NodeStatus
 from src.core.database import get_session_with_tenant
 
 logger = structlog.get_logger()
-
-if TYPE_CHECKING:
-    from src.coherence.models import Clause
 
 # ── Domain service instances (stateless, reusable) ──────────────────────────
 
@@ -427,15 +438,26 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
             )
         )
 
-        clauses = _build_coherence_clauses(state)
+        evidence = await _resolve_clause_evidence(state)
+        clauses = list(evidence.clauses)
         missing_dimensions = _missing_audit_dimensions(state)
+        logger.info(
+            "node_coherence_scorer_clause_evidence",
+            granularity=evidence.granularity.value,
+            clause_count=len(clauses),
+            degradation_reason=evidence.degradation_reason,
+        )
 
         # Interim bridge: convert LLM-extracted risks into FindingSignals
         # so LEGAL/TECHNICAL/QUALITY categories appear as assessed_findings
         # instead of unassessed. Removed when ADR-011 2A.5 wires the
         # evidence module through the pipeline.
         extracted_risks = state.get("extracted_risks", [])
-        clause_id = clauses[0].id if clauses else "contract-document"
+        # Extracted risks are document-level: they are not traceable to one persisted
+        # clause. Attributing them to whichever clause happens to sort first would
+        # fabricate provenance, so the bridge keeps the document-level identifier even
+        # when the evidence itself is clause-granular.
+        clause_id = whole_document_clause_id(*_document_identity(state))
         bridge_result = build_risk_signals(extracted_risks, clause_id=clause_id)
         logger.info(
             "node_coherence_scorer_bridge",
@@ -467,6 +489,22 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
             item.category: item.score
             for item in result.category_breakdown
         }
+        # ADR-024 / P0b L4-3 — the ONE production invocation of the L4-2 mapping.
+        # N8 is the earliest point where the canonical coherence.models.Clause[] and
+        # FindingSignal[] (deterministic + llm + cross) coexist. The result is persisted
+        # by N17; no downstream consumer re-runs the CategoryRouter.
+        from src.health.application.document_assessment import (
+            build_document_assessment_artifact,
+        )
+
+        single_document_assessment = build_document_assessment_artifact(
+            clauses,
+            result.finding_signals,
+            granularity=evidence.granularity,
+            degradation_reason=evidence.degradation_reason,
+            document_id=coverage_source_document_id(state),
+        )
+
         quality_note = derivation.quality_note
         reason = result.score_reason
         result_missing_dimensions = result.score_missing_dimensions or missing_dimensions
@@ -494,6 +532,8 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         reason = "node_failed"
         result_missing_dimensions = ["schedule", "budget"]
         bridge_marker = " bridge[error]"
+        # The assessment did not run — stay honestly unavailable, never an empty result.
+        single_document_assessment = None
 
     risk_count = len(state.get("extracted_risks", []))
     wbs_count = len(state.get("extracted_wbs", []))
@@ -502,6 +542,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         "coherence_score": score,
         "coherence_score_version": score_version,
         "coherence_breakdown": breakdown,
+        "single_document_assessment": single_document_assessment,
         "coherence_reason": reason,
         "coherence_missing_dimensions": result_missing_dimensions,
         "node_results": [node_result],
@@ -515,24 +556,108 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
     }
 
 
-def _build_coherence_clauses(state: ProjectState) -> list[Clause]:
-    """Build canonical subgraph clauses from the analysis graph state."""
-    from src.coherence.models import Clause
+def _document_identity(state: ProjectState) -> tuple[str, str]:
+    """The document's type and id as the graph knows them — derived in exactly one place.
 
-    document_id = state.get("document_id") or "document"
-    doc_type = state.get("doc_type") or state.get("document_category") or "contract"
-    return [
-        Clause(
-            id=f"{doc_type}-{document_id}",
-            text=state.get("anonymized_text") or state.get("document_text", ""),
-            data={
-                "document_type": doc_type,
-                "risks": state.get("extracted_risks", []),
-                "wbs": state.get("extracted_wbs", []),
-                "bom_items": state.get("bom_items", []),
-            },
+    N8 needs both for the evidence lookup and for the document-level identifier the risk
+    bridge stamps on its signals; deriving them twice invites the two to drift apart.
+    """
+    doc_type = state.get("doc_type") or state.get("document_category") or CONTRACT_DOC_TYPE
+    return str(doc_type), str(state.get("document_id") or "document")
+
+
+def coverage_source_document_id(state: Any) -> UUID | None:
+    """The document a single-document assessment belongs to, or ``None`` when unknown.
+
+    Only the graph's own ``document_id`` counts. The ``"document"`` placeholder of
+    ``_document_identity`` or any malformed value yields ``None`` — the assessment is then
+    unattributed and Health → Evidence fails closed instead of guessing a document.
+    """
+    raw = state.get("document_id")
+    if isinstance(raw, UUID):
+        return raw
+    if not raw:
+        return None
+    try:
+        return UUID(str(raw))
+    except ValueError:
+        return None
+
+
+def _legacy_whole_document_evidence(
+    state: ProjectState,
+    *,
+    doc_type: str,
+    document_id: str,
+    degradation_reason: str | None,
+) -> ClauseEvidence:
+    """The pre-R1 single-clause evidence, kept intact for the paths that still need it."""
+    return whole_document_evidence(
+        doc_type=doc_type,
+        document_id=document_id,
+        text=state.get("anonymized_text") or state.get("document_text", ""),
+        risks=state.get("extracted_risks", []),
+        wbs=state.get("extracted_wbs", []),
+        bom_items=state.get("bom_items", []),
+        degradation_reason=degradation_reason,
+    )
+
+
+async def _resolve_clause_evidence(state: ProjectState) -> ClauseEvidence:
+    """P0b-R1 — score the contract's persisted clauses instead of one synthetic blob.
+
+    Contracts are already segmented and persisted by ingestion, so N8 reads those rows back
+    through the Documents read port. Every other case keeps the legacy whole-document clause
+    and says, explicitly, why: a non-contract document has no persisted segmentation, and a
+    contract whose clauses are missing or unreadable must degrade honestly rather than
+    present a synthetic id as if it were persisted clause evidence.
+    """
+    doc_type, document_id = _document_identity(state)
+
+    if doc_type.lower() != CONTRACT_DOC_TYPE:
+        return _legacy_whole_document_evidence(
+            state,
+            doc_type=doc_type,
+            document_id=document_id,
+            degradation_reason=REASON_NON_CONTRACT,
         )
-    ]
+
+    tenant_id = state.get("tenant_id")
+    raw_document_id = state.get("document_id")
+    if not tenant_id or not raw_document_id:
+        return _legacy_whole_document_evidence(
+            state,
+            doc_type=doc_type,
+            document_id=document_id,
+            degradation_reason=REASON_MISSING_IDENTITY,
+        )
+
+    try:
+        persisted = await load_persisted_clause_evidence(
+            UUID(str(tenant_id)), UUID(str(raw_document_id))
+        )
+    except Exception as exc:  # noqa: BLE001 - a clause-store outage degrades, never fails N8.
+        logger.warning(
+            "node_coherence_scorer_clause_evidence_unavailable",
+            document_id=document_id,
+            error=str(exc),
+        )
+        return _legacy_whole_document_evidence(
+            state,
+            doc_type=doc_type,
+            document_id=document_id,
+            degradation_reason=REASON_CLAUSE_READ_FAILED,
+        )
+
+    if not persisted:
+        return _legacy_whole_document_evidence(
+            state,
+            doc_type=doc_type,
+            document_id=document_id,
+            degradation_reason=REASON_NO_PERSISTED_CLAUSES,
+        )
+
+    return granular_evidence(persisted, doc_type=doc_type)
 
 
 def _missing_audit_dimensions(state: ProjectState) -> list[str]:

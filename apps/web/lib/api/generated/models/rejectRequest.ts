@@ -38,9 +38,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * See ApproveRequest docstring: reviewer identity is server-derived,
+ * never client-supplied.
+ */
 export interface RejectRequest {
-  /** @minLength 1 */
-  reviewer_name: string;
   /** @maxLength 2000 */
   reason?: string;
 }

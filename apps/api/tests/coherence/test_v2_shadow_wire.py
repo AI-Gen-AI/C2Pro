@@ -194,7 +194,9 @@ async def test_v2_shadow_runs_orchestrator_not_adapter(
     assert shadows[0].project_id == project_id
     assert shadows[0].score_version == "coherence-v2"
     assert shadows[0].categories_v2
-    db.execute.assert_awaited_once()
+    # evaluate now also mirrors coherence alerts into the alerts table (one delete
+    # execute) before the v2-shadow query; assert the v2 query specifically (last).
+    assert db.execute.await_count == 2
     assert db.execute.await_args.args[1] == {"tenant_id": str(_current_user.tenant_id)}
 
 
@@ -241,7 +243,10 @@ async def test_v2_shadow_disabled_when_v2_flag_off(
     persisted = [call.args[0] for call in db.add.call_args_list]
     assert not any(isinstance(row, CoherenceV2ShadowORM) for row in persisted)
     assert len([row for row in persisted if isinstance(row, CoherenceResultORM)]) == 1
-    db.execute.assert_not_awaited()
+    # v2 shadow is disabled (no v2 query), but evaluate still mirrors coherence
+    # alerts into the alerts table — one delete execute. The "shadow did not run"
+    # intent is covered by emit_calls == [] and the absence of a shadow row above.
+    db.execute.assert_awaited_once()
     assert isinstance(result, CoherenceResult)
     assert result.overall_score == _v1_result.overall_score
 

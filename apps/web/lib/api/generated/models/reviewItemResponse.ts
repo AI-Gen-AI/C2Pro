@@ -52,4 +52,6 @@ export interface ReviewItemResponse {
   sla_due_date: string;
   created_at: string;
   item_data?: ReviewItemResponseItemData;
+  row_id?: string | null;
+  resumable?: boolean;
 }

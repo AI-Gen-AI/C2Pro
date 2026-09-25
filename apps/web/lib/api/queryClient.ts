@@ -1,4 +1,5 @@
 import { MutationCache, QueryClient } from "@tanstack/react-query";
+import { retryDelayForRequest, shouldRetryRequest } from "@/lib/api/retryPolicy";
 import { showToast } from "@/lib/ui/toast";
 
 function detailToMessage(detail: unknown): string | null {
@@ -79,6 +80,14 @@ export const queryClientConfig = {
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000,
+      // Single, bounded, class-specific retry owner (P0a.2): no retry on terminal 4xx,
+      // bounded 429 (respecting Retry-After) and transient (408/network/5xx) retries.
+      retry: shouldRetryRequest,
+      retryDelay: retryDelayForRequest,
+    },
+    mutations: {
+      // Mutations do NOT inherit the query retry policy and get no generic automatic retry.
+      retry: false,
     },
   },
 };

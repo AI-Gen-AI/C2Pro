@@ -1,0 +1,30 @@
+SAMPLE CONSTRUCTION CONTRACT (PJ-01 CONTRACT A)
+Between ABC Construction Corp (the Client) and the Contractor.
+
+1. - SCOPE OF WORK, DELIVERABLES AND EXCLUSIONS
+1.1 The Contractor shall perform the complete renovation of the commercial building located at the Site, including demolition, structural works, mechanical and electrical installation, and final finishing.
+1.2 The deliverables are the renovated building, the as-built records and the operation and maintenance manuals.
+1.3 Any work not expressly described in this scope is listed in the exclusions and requires a written change order signed by both parties.
+
+2. - CONTRACT PRICE, PAYMENT TERMS AND INVOICING
+2.1 The total contract price is 2,650,000.00 EUR (two million six hundred and fifty thousand euros), fixed and not subject to revision.
+2.2 The Client shall pay monthly progress invoices within thirty (30) days of certification.
+2.3 A retention of 5% shall be withheld from each payment and released upon issue of the Final Completion Certificate.
+
+3. - TIME FOR COMPLETION, MILESTONES AND PROGRAMME
+3.1 The Works shall commence on 01/06/2025 and shall achieve Practical Completion no later than 31/03/2026, in accordance with the approved programme.
+3.2 The Contractor shall achieve the structural milestone within 120 days of commencement.
+
+4. - TECHNICAL SPECIFICATIONS, STANDARDS AND DRAWINGS
+4.1 All structural steel shall comply with EN 1090-2 execution class EXC3 and the approved drawings.
+4.2 Concrete shall achieve a characteristic strength of C30/37 with a minimum reinforcement cover of 40 mm.
+
+5. - QUALITY PLAN, INSPECTION AND TEST PLAN
+5.1 The Contractor shall maintain a documented Quality Plan certified to ISO 9001 and shall grant the Client access to all inspection and test records.
+5.2 Defective work identified during inspection shall be rectified at the Contractor's cost within fourteen (14) days of written notice.
+
+6. - LIABILITY, INSURANCE, TERMINATION AND GOVERNING LAW
+6.1 The Contractor's aggregate liability shall not exceed the total contract price, save for death, personal injury or fraud.
+6.2 The Contractor shall maintain all-risks insurance for the full reinstatement value of the Works.
+6.3 Either party may terminate for material breach not remedied within thirty (30) days of written notice.
+6.4 This Contract is governed by Spanish law, and the parties submit to the exclusive jurisdiction of the courts of Madrid.

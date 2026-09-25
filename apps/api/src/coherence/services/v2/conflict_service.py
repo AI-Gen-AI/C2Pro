@@ -61,6 +61,13 @@ _CONTRADICTION_VALUE_KEYS: dict[str, tuple[str, str]] = {
     "DET-BUD-INTERNAL": ("items_sum", "stated_total"),
     "DET-CRS-SCPBUD": ("unfunded_count", "total_deliverables"),
     "DET-TEC-BOMBUDGET": ("unlinked_count", "total"),
+    # First-class cross-document total comparators (ADR-023 Phase 1b).
+    "DET-CRS-CONBUD": ("contract_total", "budget_total"),
+    "DET-CRS-WBSBUD": ("wbs_total", "budget_total"),
+    "DET-CRS-BOMBUD": ("bom_total", "budget_total"),
+    "DET-CRS-NEGMARGIN": ("budget_total", "contract_total"),
+    "DET-CRS-RISKCONT": ("max_risk_exposure", "contingency"),
+    "DET-CRS-SCHDEAD": ("schedule_end", "contract_deadline"),  # date ordinals (numeric)
 }
 
 

@@ -6,7 +6,6 @@
  */
 export type ScoreVersion = "coherence-v1" | "coherence-v2";
 
-import Link from "next/link";
 import {
   Tooltip,
   TooltipContent,
@@ -63,14 +62,8 @@ export function ScoreVersionBadge({ scoreVersion }: ScoreVersionBadgeProps) {
             {copy.label}
           </button>
         </TooltipTrigger>
-        <TooltipContent forceMount className="max-w-[300px] space-y-2 p-3 text-xs leading-relaxed">
+        <TooltipContent forceMount className="max-w-[300px] p-3 text-xs leading-relaxed">
           <p>{copy.tooltip}</p>
-          <Link
-            className="font-semibold text-primary underline-offset-4 hover:underline"
-            href="/docs/customer/COHERENCE_V1_FAQ.md"
-          >
-            What changed
-          </Link>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

@@ -96,6 +96,33 @@ class DocumentPollingStatus(StrEnum):
     ERROR = "error"
 
 
+class DocumentLifecycleStatus(StrEnum):
+    """User-facing lifecycle state; unlike the polling status it never merges
+    "parsed", "analysis pending" and "analyzed"."""
+    UPLOADED = "uploaded"
+    PROCESSING = "processing"
+    PARSED = "parsed"
+    ANALYSIS_PENDING = "analysis_pending"
+    ANALYZED = "analyzed"
+    ERROR = "error"
+
+
+_LIFECYCLE_BY_STORED_STATUS = {
+    DocumentStatus.UPLOADED: DocumentLifecycleStatus.UPLOADED,
+    DocumentStatus.QUEUED: DocumentLifecycleStatus.UPLOADED,
+    DocumentStatus.PARSING: DocumentLifecycleStatus.PROCESSING,
+    DocumentStatus.PARSED: DocumentLifecycleStatus.PARSED,
+    DocumentStatus.PARSED_PENDING_ANALYSIS: DocumentLifecycleStatus.ANALYSIS_PENDING,
+    DocumentStatus.ANALYZED: DocumentLifecycleStatus.ANALYZED,
+    DocumentStatus.ERROR: DocumentLifecycleStatus.ERROR,
+}
+
+
+def document_lifecycle_status(status: DocumentStatus) -> DocumentLifecycleStatus:
+    """Map the stored document status to its lifecycle state (every stored status is mapped)."""
+    return _LIFECYCLE_BY_STORED_STATUS[status]
+
+
 class DocumentResponse(BaseModel):
     """Base response DTO for documents."""
     model_config = ConfigDict(from_attributes=True)
@@ -139,6 +166,7 @@ class DocumentListItem(BaseModel):
     document_type: str | None = None
     status: DocumentPollingStatus
     status_detail: str
+    lifecycle_status: DocumentLifecycleStatus
     error_message: str | None = None
     uploaded_at: datetime | None = None
     file_size_bytes: int | None = None

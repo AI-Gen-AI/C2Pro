@@ -247,7 +247,7 @@ async def test_orchestrator_forwards_ledger_without_changing_category_score() ->
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_orchestrator_applies_existing_high_conflict_penalty() -> None:
-    """A detected high conflict uses the existing 0.4 category multiplier."""
+    """A detected high conflict lands in the canonical high band (45)."""
     candidate = build_conflict_candidates([_budget_sum_signal()])[0]
     orchestrator = CoherenceV2Orchestrator(
         evidence=EvidenceService(),
@@ -270,5 +270,7 @@ async def test_orchestrator_applies_existing_high_conflict_penalty() -> None:
 
     budget = next(category for category in payload.categories if category.category == "BUDGET")
     assert budget.status.value == "conflicting_evidence"
-    assert budget.coherence_score == 10.0
+    assert budget.coherence_score is not None
+    # canonical high band [45,65], materiality-positioned (was 10.0 under base×mult×certainty)
+    assert 45.0 <= budget.coherence_score <= 65.0
     assert budget.detected_conflicts[0]["rule_id"] == "DET-BUD-SUM"

@@ -6,20 +6,25 @@ Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 from collections.abc import Sequence
 from contextlib import suppress
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import String, cast, func, select, text
+from sqlalchemy import String, cast, delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.alerts.adapters.persistence.tenant_repository import SqlAlchemyTenantRepository
 from src.analysis.adapters.persistence.models import Alert as AlertORM
 from src.analysis.adapters.persistence.models import Analysis
-from src.analysis.domain.enums import AnalysisStatus
+from src.analysis.domain.enums import AlertSeverity, AlertType, AnalysisStatus
 from src.coherence.adapters.persistence.models import CoherenceResultORM
-from src.coherence.feature_flags import coherence_v2_enabled_for_tenant
+from src.coherence.feature_flags import (
+    coherence_canonical_canary_enabled_for_tenant,
+    coherence_llm_crosscheck_enabled_for_tenant,
+    coherence_v2_enabled_for_tenant,
+)
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session
@@ -31,7 +36,12 @@ from src.projects.adapters.persistence.models import ProjectORM
 
 # Import v0.3 graph evaluation
 from .budget_clause_builder import build_budget_clauses
-from .domain.v2_constants import SCORE_VERSION_V1
+from .canonical.live_rescore import (
+    CanonicalRescore,
+    canonical_category_name,
+    canonical_rescore,
+)
+from .domain.v2_constants import SCORE_VERSION_V1, SCORE_VERSION_V2
 from .graph.graph import evaluate_coherence_async
 from .graph.state import EvaluationConfig
 from .models import Clause, CoherenceResult, DashboardSummary, EnrichedCoherenceResult
@@ -522,6 +532,113 @@ async def _get_parsed_text_fallback_clauses(
     return fallback_clauses
 
 
+# Map coherence alert severity strings to the alerts-table severity enum.
+_COHERENCE_ALERT_SEVERITY: dict[str, AlertSeverity] = {
+    "critical": AlertSeverity.CRITICAL,
+    "high": AlertSeverity.HIGH,
+    "medium": AlertSeverity.MEDIUM,
+    "low": AlertSeverity.LOW,
+}
+
+
+async def _mirror_coherence_alerts_to_alerts_table(
+    *,
+    db: AsyncSession,
+    project_id: UUID,
+    tenant_id: UUID,
+    alerts: Sequence[Any],
+) -> None:
+    """Mirror ``/evaluate`` coherence alerts into the ``alerts`` table.
+
+    The alerts UI lists rows from the ``alerts`` table (ListAlertsUseCase), but
+    ``/evaluate`` only stored alerts inside ``coherence_results.alerts`` (JSON) —
+    so the dashboard showed a non-zero ``alert_count`` while the alerts page stayed
+    empty. Coherence-sourced rows are ``analysis_id=NULL`` + ``alert_type=COHERENCE``;
+    the prior batch for the project is replaced first so re-evaluating never
+    duplicates. Not committed here — the caller commits with the coherence result.
+    """
+    await db.execute(
+        delete(AlertORM).where(
+            AlertORM.project_id == project_id,
+            AlertORM.tenant_id == tenant_id,
+            AlertORM.analysis_id.is_(None),
+            AlertORM.alert_type == AlertType.COHERENCE,
+        )
+    )
+    for alert in alerts:
+        severity_key = str(getattr(alert.severity, "value", alert.severity)).lower()
+        message = (alert.message or "Coherence issue detected.").strip()
+        evidence = getattr(alert, "evidence", None)
+        db.add(
+            AlertORM(
+                project_id=project_id,
+                tenant_id=tenant_id,
+                analysis_id=None,
+                severity=_COHERENCE_ALERT_SEVERITY.get(severity_key, AlertSeverity.MEDIUM),
+                alert_type=AlertType.COHERENCE,
+                category=getattr(alert, "category", None),
+                rule_id=getattr(alert, "rule_id", None),
+                title=message[:255],
+                message=message,
+                description=message,
+                alert_metadata={
+                    "source": "coherence_evaluate",
+                    "evidence": (
+                        {
+                            "source_clause_id": evidence.source_clause_id,
+                            "claim": evidence.claim,
+                            "quote": evidence.quote,
+                        }
+                        if evidence
+                        else None
+                    ),
+                },
+            )
+        )
+
+
+_TECHNICAL_PLIEGO_MARKERS: tuple[str, ...] = (
+    "prescripciones técnicas",
+    "prescripciones tecnicas",
+    "especificaciones técnicas",
+    "especificaciones tecnicas",
+    "pliego técnico",
+    "pliego tecnico",
+)
+
+
+def _technical_specs_referenced(clauses: Sequence[Clause]) -> bool:
+    """True if any clause references a separate technical specifications document."""
+    return any(
+        marker in (clause.text or "").lower()
+        for clause in clauses
+        for marker in _TECHNICAL_PLIEGO_MARKERS
+    )
+
+
+def _annotate_missing_technical_hint(
+    result: EnrichedCoherenceResult, clauses: Sequence[Clause]
+) -> None:
+    """Append an actionable hint to ``score_reason`` when TECHNICAL is withheld for
+    lack of evidence but the documents reference an (unprovided) technical pliego.
+
+    Honest by design: it never invents a technical score — it explains the
+    withholding and tells the user which document to upload.
+    """
+    if "TECHNICAL" not in (result.score_missing_dimensions or []):
+        return
+    if not _technical_specs_referenced(clauses):
+        return
+    hint = (
+        "Technical dimension withheld: the documents reference a technical "
+        "specifications pliego (prescripciones técnicas) that was not provided. "
+        "Upload the Pliego de prescripciones técnicas for a technical coherence score."
+    )
+    result.score_reason = (
+        f"{result.score_reason} {hint}".strip() if result.score_reason else hint
+    )
+
+
 # ---- API Endpoint ----
 @router.post(
     "/evaluate",
@@ -589,12 +706,35 @@ async def evaluate_project_coherence(
         include_diagnostics=include_diagnostics,
     )
 
+    # Resolve the LLM cross-clause depth flag per tenant (default off). Adds a bounded LLM
+    # call to detect semantic contradictions between clause pairs; the deterministic floor
+    # is always on regardless. Resolved here so the graph node stays free of the flags service.
+    llm_crosscheck_enabled = False
+    if flags_service is not None:
+        try:
+            llm_crosscheck_enabled = await coherence_llm_crosscheck_enabled_for_tenant(
+                current_user.tenant_id, flags_service=flags_service
+            )
+        except Exception:
+            logger.warning("coherence_llm_crosscheck_flag_resolution_failed", exc_info=True)
+
+    # Load the project name for the project-identity (LOC-MISMATCH) comparator. Best-effort +
+    # RLS-scoped (the session carries the tenant), so it only resolves the caller's own project.
+    project_name: str | None = None
+    if payload.project_id:
+        with suppress(Exception):
+            project_name = await db.scalar(
+                select(ProjectORM.name).where(ProjectORM.id == payload.project_id)
+            )
+
     # Create evaluation config
     config = EvaluationConfig(
         low_budget_mode=payload.low_budget_mode,
         include_rag_similarity=payload.include_rag_similarity,
+        llm_crosscheck_enabled=llm_crosscheck_enabled,
         tenant_id=str(current_user.tenant_id),
         project_id=str(payload.project_id) if payload.project_id else None,
+        project_name=project_name,
     )
 
     # Evaluate using LangGraph subgraph
@@ -608,6 +748,20 @@ async def evaluate_project_coherence(
         "coherence_evaluate_complete",
         alerts_count=len(enriched_result.alerts),
         overall_score=enriched_result.overall_score,
+    )
+
+    # Referenced-but-missing hint: if the technical dimension was withheld for lack
+    # of evidence but the documents reference a technical specifications pliego, tell
+    # the user what to upload — honest and actionable, never a fabricated score.
+    _annotate_missing_technical_hint(enriched_result, clauses)
+
+    # ADR-017 canary: for enrolled tenants, re-score the SAME findings through the canonical
+    # scorer (ADR-009 §G.1) — this flips the SCORER only; detection/alerts are unchanged.
+    # Always logs the v1↔canonical delta; substitutes the headline only when the tenant is
+    # enrolled. Default off (no tenant enrolled) ⇒ persistence + response below are
+    # byte-identical to the v1 path.
+    enriched_result = await _maybe_apply_canonical_canary(
+        enriched_result, tenant_id=current_user.tenant_id, flags_service=flags_service
     )
 
     # Persist result so the dashboard always reflects the latest evaluation
@@ -665,6 +819,24 @@ async def evaluate_project_coherence(
             )
         )
         await db.commit()
+        # Best-effort: mirror alerts into the alerts table so the alerts UI (which
+        # lists the alerts table, not coherence_results.alerts) surfaces them. Runs
+        # after the coherence result is committed so a mirroring failure can never
+        # fail the already-persisted evaluation.
+        try:
+            await _mirror_coherence_alerts_to_alerts_table(
+                db=db,
+                project_id=payload.project_id,
+                tenant_id=current_user.tenant_id,
+                alerts=enriched_result.alerts,
+            )
+            await db.commit()
+        except Exception:
+            logger.warning(
+                "coherence_alert_mirror_failed",
+                project_id=str(payload.project_id),
+                exc_info=True,
+            )
 
     # V2 shadow: run real CoherenceV2Orchestrator and emit delta event.
     # Guard mirrors _maybe_add_v2_dashboard: only fires when both flags are True.
@@ -690,6 +862,67 @@ async def evaluate_project_coherence(
 
     # Otherwise return backward-compatible response (Task 7.3)
     return _convert_enriched_to_coherence_result(enriched_result)
+
+
+async def _maybe_apply_canonical_canary(
+    result: EnrichedCoherenceResult,
+    *,
+    tenant_id: UUID,
+    flags_service: TenantFlagsService | None,
+) -> EnrichedCoherenceResult:
+    """ADR-017 canary: re-score findings via the canonical scorer for enrolled tenants.
+
+    Always emits the v1↔canonical delta (shadow signal). Substitutes the headline only when
+    the tenant is enrolled AND the canonical scorer yields a score. Never raises — any
+    failure falls back to the untouched v1 result so the canary can't break ``/evaluate``.
+    """
+    if result.overall_score is None or flags_service is None:
+        return result
+    try:
+        enrolled = await coherence_canonical_canary_enabled_for_tenant(
+            tenant_id, flags_service=flags_service
+        )
+        rescore = canonical_rescore(result.category_breakdown)
+    except Exception:
+        logger.warning("coherence_canary_rescore_failed", exc_info=True)
+        return result
+
+    delta = rescore.score - result.overall_score if rescore.score is not None else None
+    logger.info(
+        "coherence_canary_rescore",
+        tenant_id=str(tenant_id),
+        enrolled=enrolled,
+        v1_score=result.overall_score,
+        canonical_score=rescore.score,
+        delta=delta,
+    )
+    if not enrolled or rescore.score is None:
+        return result
+    return _apply_canonical_rescore(result, rescore)
+
+
+def _apply_canonical_rescore(
+    result: EnrichedCoherenceResult, rescore: CanonicalRescore
+) -> EnrichedCoherenceResult:
+    """Return a copy carrying the canonical headline + per-category scores + v2 stamp."""
+    updated_breakdown = [
+        breakdown.model_copy(
+            update={
+                "score": rescore.category_scores.get(
+                    canonical_category_name(str(breakdown.category)), breakdown.score
+                )
+            }
+        )
+        for breakdown in result.category_breakdown
+    ]
+    return result.model_copy(
+        update={
+            "overall_score": rescore.score,
+            "category_breakdown": updated_breakdown,
+            "score_version": SCORE_VERSION_V2,
+            "score_reason": rescore.reason or "canonical_canary",
+        }
+    )
 
 
 async def _run_v2_shadow_on_evaluate(
@@ -914,6 +1147,7 @@ async def get_coherence_dashboard(
         select(
             CoherenceResultORM.global_score,
             CoherenceResultORM.category_scores,
+            CoherenceResultORM.alerts,
             CoherenceResultORM.calculated_at,
             CoherenceResultORM.score_version,
             CoherenceResultORM.score_reason,
@@ -951,8 +1185,14 @@ async def get_coherence_dashboard(
     elif project.coherence_score is not None:
         global_score = float(project.coherence_score)
 
+    # alert_count follows the same source priority as the score (see docstring):
+    # a completed Analysis first, then the latest /evaluate CoherenceResult, else
+    # the alerts table count computed above. Without this fallback an evaluate-only
+    # project (no analysis pipeline run) always reported alert_count = 0.
     if latest_analysis and latest_analysis.alerts_count is not None:
         alert_count = latest_analysis.alerts_count
+    elif coherence_result is not None and coherence_result.alerts is not None:
+        alert_count = len(coherence_result.alerts)
 
     # Calculate last_updated timestamp
     candidates = [

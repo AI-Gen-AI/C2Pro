@@ -37,7 +37,16 @@ async def test_approval_of_project_review_emits_material_correction_snapshot(mon
         metadata={"project_id": str(project_id)},
     )
 
+    class FakeReviewQueueRepo:
+        async def get_review_item(self, _item_id: UUID) -> ReviewItem:
+            # No thread_id in metadata -> the plain (non-graph-resumable)
+            # approve branch, matching this review's item_data (no HITL
+            # workflow attached).
+            return item
+
     class FakeService:
+        review_queue_repo = FakeReviewQueueRepo()
+
         async def approve_item(self, **_kwargs: Any) -> ReviewItem:
             return item
 
@@ -55,6 +64,7 @@ async def test_approval_of_project_review_emits_material_correction_snapshot(mon
         _tenant_id=tenant_id,
         current_user=SimpleNamespace(id=uuid4(), full_name="Reviewer"),
         service=FakeService(),
+        resume_use_case=SimpleNamespace(),  # unused: this review has no thread_id
     )
 
     assert calls == [

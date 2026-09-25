@@ -44,6 +44,7 @@ _VALUE_OBJECT = ConfigDict(
 
 
 class Severity(StrEnum):
+    CRITICAL = "CRITICAL"
     HIGH = "HIGH"
     MEDIUM = "MEDIUM"
     LOW = "LOW"

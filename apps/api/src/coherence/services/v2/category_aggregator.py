@@ -2,15 +2,20 @@
 Per-category aggregator: turns evidence + conflicts + rule signals into a
 fully-typed `CategoryV2` (ADR-009 §6, §10, §13).
 
-This module is the single source of truth for the deterministic conflict
-formula:
-
-    adjusted_score = base_score × SEVERITY_MULTIPLIERS[severity] × evidence_certainty
+Scoring is delegated to the single canonical model (`coherence.canonical`): a hard
+conflict is placed in its severity band by certainty × materiality — graduated,
+monotonic, never 0 and never the "falsehood" ~8 (ADR-009 2026-08-16 amendment
+§B/§D). Per the binding separation of concerns (§C) the per-category scorer sees
+ONLY this category's evidence; the global critical-risk envelope lives in
+`GlobalAggregatorV2` / `canonical.aggregate_global`.
 
 Refers to Suite ID: TS-UA-COH-V2-CATAGG-001.
 """
 
 from __future__ import annotations
+
+from collections.abc import Iterable
+from typing import cast
 
 from src.coherence.application.dtos.coherence_v2_dtos import (
     BudgetReconciliation,
@@ -18,13 +23,74 @@ from src.coherence.application.dtos.coherence_v2_dtos import (
     CategoryV2,
     ScoreExplanation,
 )
-from src.coherence.domain.category_state_machine import CategoryStateMachine
-from src.coherence.domain.v2_constants import (
-    MIN_EVIDENCE_BY_CATEGORY,
-    SEVERITY_MULTIPLIERS,
+from src.coherence.canonical.category import (
+    CategoryScoreInput,
+    ConflictInput,
+    Severity,
+    score_category,
 )
+from src.coherence.domain.category_state_machine import CategoryStateMachine
+from src.coherence.domain.v2_constants import MIN_EVIDENCE_BY_CATEGORY
 from src.coherence.services.v2.conflict_service import ConflictReport
 from src.coherence.services.v2.evidence_service import EvidenceBundle
+
+_CANONICAL_SEVERITIES: frozenset[str] = frozenset({"low", "medium", "high", "critical"})
+
+
+def _to_canonical_severity(severity: str) -> Severity:
+    """Map a ConflictReport severity to the canonical Severity (fallback: high)."""
+    return cast(Severity, severity) if severity in _CANONICAL_SEVERITIES else "high"
+
+
+_SEVERITY_RANK: dict[str, int] = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+
+
+def worst_open_severity(conflicts: Iterable[ConflictReport]) -> Severity | None:
+    """Worst severity among hard conflicts, as a canonical Severity (None if none).
+
+    Fed to the global critical-risk envelope (§C) by the v2 entry points; the
+    per-category scorer never sees it.
+    """
+    worst: str | None = None
+    for conflict in conflicts:
+        if not conflict.hard_conflict:
+            continue
+        rank = _SEVERITY_RANK.get(conflict.severity, 0)
+        if worst is None or rank > _SEVERITY_RANK.get(worst, 0):
+            worst = conflict.severity
+    return _to_canonical_severity(worst) if worst is not None else None
+
+
+# Interim (§B, calibratable): a discrepancy whose |delta| reaches this fraction of the
+# compared magnitude is treated as fully material (⇒ band floor). Smaller gaps sit
+# nearer the band ceiling.
+_MATERIALITY_SATURATION_RATIO = 0.5
+
+
+def _materiality_from_conflict(conflict: ConflictReport) -> float | None:
+    """Normalized discrepancy materiality in [0, 1] from the conflict's compared values.
+
+    Larger relative gap ⇒ higher materiality ⇒ nearer the band floor. Returns None
+    when the conflict carries no numeric basis (⇒ the canonical model treats it as
+    fully material). `base` is deliberately NOT consulted (§B/§C).
+    """
+    ratios: list[float] = []
+    for candidate in conflict.conflict_set:
+        if not isinstance(candidate, dict):
+            continue
+        values = candidate.get("compared_values")
+        delta = candidate.get("delta")
+        if not isinstance(values, dict) or not isinstance(delta, int | float):
+            continue
+        denom = max(
+            (abs(float(v)) for v in values.values() if isinstance(v, int | float)),
+            default=0.0,
+        )
+        if denom > 0:
+            ratios.append(abs(float(delta)) / denom)
+    if not ratios:
+        return None
+    return min(1.0, max(ratios) / _MATERIALITY_SATURATION_RATIO)
 
 
 class CategoryAggregator:
@@ -107,21 +173,27 @@ class CategoryAggregator:
             assessment_state = "assessed_with_signals"
 
         if conflict.hard_conflict:
-            multiplier = SEVERITY_MULTIPLIERS.get(conflict.severity, 0.4)
-            adjusted = base * multiplier * conflict.evidence_certainty
+            # Delegate scoring to the single canonical model (§B/§C/§D). A hard
+            # conflict lands in its severity band by certainty × materiality —
+            # graduated, monotonic, never 0. `base` (this category's own rule
+            # signals) is passed in; worst_open is deliberately NOT — that is the
+            # global layer's concern (§C).
+            canonical = score_category(
+                CategoryScoreInput(
+                    base=base,
+                    conflict=ConflictInput(
+                        severity=_to_canonical_severity(conflict.severity),
+                        certainty=conflict.evidence_certainty,
+                        magnitude=_materiality_from_conflict(conflict),
+                        independent_count=max(1, len(conflict.conflict_set)),
+                    ),
+                )
+            )
+            adjusted = canonical.score if canonical.score is not None else base
             explanation = ScoreExplanation(
                 negative_factors=["hard_conflict", f"severity:{conflict.severity}"],
                 dominant_rules=[r for r, _ in rule_signals],
-                score_path=[
-                    {"step": "base", "value": base},
-                    {
-                        "step": "severity_multiplier",
-                        "severity": conflict.severity,
-                        "value": multiplier,
-                    },
-                    {"step": "evidence_certainty", "value": conflict.evidence_certainty},
-                    {"step": "adjusted", "value": adjusted},
-                ],
+                score_path=[{"step": "base", "value": base}, *canonical.penalty_steps],
             )
             return CategoryV2(
                 category=category,

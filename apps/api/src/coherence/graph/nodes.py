@@ -70,6 +70,11 @@ _CATEGORY_CROSS_CHECK_PAIRS = (
     ("BUDGET", "SCOPE"),
     ("TIME", "TECHNICAL"),
     ("SCOPE", "BUDGET"),
+    # Cross-document contradiction coverage (previously absent): LEGAL was in ZERO
+    # pairs, so legal contradictions were never compared; SCOPE only saw BUDGET.
+    ("LEGAL", "LEGAL"),  # conflicting penalty/liability regimes (general vs particular)
+    ("SCOPE", "SCOPE"),  # contradictory inclusion/exclusion of the same scope item
+    ("LEGAL", "SCOPE"),  # legal terms conflicting with scope obligations
 )
 
 
@@ -896,13 +901,42 @@ def cross_clause_eval(state: CoherenceGraphState) -> NodeOutput:
     Returns:
         Partial state update with cross_signals
     """
-    if not state.config.include_cross_clause or not state.cross_pairs:
-        logger.info("cross_clause_eval: skipped (no pairs or disabled)")
+    if not state.config.include_cross_clause:
+        logger.info("cross_clause_eval: skipped (disabled)")
         return {"cross_signals": []}
+
+    from src.coherence.cross_document import cross_document_signals  # noqa: PLC0415
 
     signals: list[FindingSignal] = []
     errors: list[str] = []
 
+    # Project-level cross-document comparators (assembled totals; no clause pairs
+    # needed) — ADR-023 Phase 1b. Contract↔Budget / WBS↔Budget / BOM↔Budget.
+    try:
+        signals.extend(cross_document_signals(state.clauses))
+    except (AttributeError, TypeError, ValueError) as e:
+        error_msg = f"Cross-document comparator failed: {e}"
+        logger.warning(error_msg)
+        errors.append(error_msg)
+
+    # Project-identity (LOC-MISMATCH) comparator: project name vs document text — a
+    # metadata-vs-document check the clause-pair machinery can't reach. Needs the project name.
+    if state.config.project_name:
+        try:
+            from src.coherence.cross_document.identity import (  # noqa: PLC0415
+                project_identity_mismatch,
+            )
+
+            document_text = " ".join(clause.text for clause in state.clauses)
+            identity_signal = project_identity_mismatch(state.config.project_name, document_text)
+            if identity_signal is not None:
+                signals.append(identity_signal)
+        except (AttributeError, TypeError, ValueError) as e:
+            error_msg = f"Project-identity comparator failed: {e}"
+            logger.warning(error_msg)
+            errors.append(error_msg)
+
+    # Pairwise cross-clause heuristics (need RAG/category pairs).
     for pair in state.cross_pairs:
         try:
             # Heuristic cross-clause checks (no LLM)
@@ -914,12 +948,56 @@ def cross_clause_eval(state: CoherenceGraphState) -> NodeOutput:
             logger.warning(error_msg)
             errors.append(error_msg)
 
+    # LLM contradiction DEPTH pass (ADR-017-style flag, default off; skipped in
+    # low_budget_mode). Semantic contradiction over the SAME clause pairs, beyond the
+    # deterministic floor above. Fail-open — a failure never breaks the evaluation.
+    if (
+        state.config.llm_crosscheck_enabled
+        and not state.config.low_budget_mode
+        and state.cross_pairs
+    ):
+        try:
+            from src.coherence.graph.cross_clause_llm import (  # noqa: PLC0415
+                llm_contradiction_signals,
+            )
+            from src.core.ai.anthropic_wrapper import get_anthropic_wrapper  # noqa: PLC0415
+
+            wrapper = get_anthropic_wrapper()
+            llm_signals = _run_coro_in_sync_node(
+                llm_contradiction_signals(
+                    state.cross_pairs, wrapper=wrapper, max_pairs=state.config.max_cross_pairs
+                )
+            )
+            signals.extend(llm_signals)
+        except Exception as e:  # noqa: BLE001 — depth pass must never break /evaluate
+            error_msg = f"LLM cross-clause pass failed: {e}"
+            logger.warning(error_msg)
+            errors.append(error_msg)
+
     logger.info(f"cross_clause_eval: {len(signals)} cross-clause findings")
 
     return {
         "cross_signals": signals,
         "errors": errors,
     }
+
+
+def _run_coro_in_sync_node(coro: Any) -> list[FindingSignal]:
+    """Run an async coroutine from a sync graph node (mirrors prepare_context, lines ~352).
+
+    The graph runs nodes inside an event loop (ainvoke), so a running loop is offloaded to a
+    worker thread; otherwise the coroutine runs directly.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures  # noqa: PLC0415
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return cast(list[FindingSignal], pool.submit(asyncio.run, coro).result())
+        return cast(list[FindingSignal], loop.run_until_complete(coro))
+    except RuntimeError:
+        return cast(list[FindingSignal], asyncio.run(coro))
 
 
 def _check_cross_clause_heuristic(pair: CrossClausePair) -> FindingSignal | None:
@@ -931,7 +1009,12 @@ def _check_cross_clause_heuristic(pair: CrossClausePair) -> FindingSignal | None
     - Schedule dates conflicting with delivery dates
     - Scope items without budget coverage
     """
-    return _check_budget_scope_mismatch(pair) or _check_schedule_delivery_conflict(pair)
+    return (
+        _check_budget_scope_mismatch(pair)
+        or _check_schedule_delivery_conflict(pair)
+        or _check_legal_conflict(pair)
+        or _check_scope_conflict(pair)
+    )
 
 
 def _check_budget_scope_mismatch(pair: CrossClausePair) -> FindingSignal | None:
@@ -978,6 +1061,101 @@ def _check_budget_scope_mismatch(pair: CrossClausePair) -> FindingSignal | None:
             "scope_estimate": se,
             "variance_pct": round(variance * 100, 2),
         },
+    )
+
+
+def _has_any(text: str, markers: tuple[str, ...]) -> bool:
+    return any(marker in text for marker in markers)
+
+
+# Deterministic cross-clause contradiction floor for LEGAL/SCOPE (ADR-009 — cross-document
+# coherence is the core differentiator). Keyword-antonym conflicts in prose; the LLM depth
+# pass (gated by budget mode) refines beyond these.
+_PENALTY_TOPIC_MARKERS = (
+    "penal", "liquidated damages", "liable", "responsabilidad", "aval", "bond",
+)
+_EXEMPTION_MARKERS = (
+    "exempt", "exento", "waived", "waiver", "sin penali", "no penalt", "no aplica",
+    "not liable", "sin responsabilidad",
+)
+_SCOPE_INCLUDE_MARKERS = (
+    "includes", "incluye", "in scope", "dentro del alcance", "shall provide",
+    "shall supply", "responsible for supplying", "suministrar",
+)
+_SCOPE_EXCLUDE_MARKERS = (
+    "excludes", "excluye", "out of scope", "fuera del alcance", "not included",
+    "no incluye", "supplied by others", "by client", "por el cliente", "excluido",
+)
+
+
+def _check_legal_conflict(pair: CrossClausePair) -> FindingSignal | None:
+    """Conflicting penalty/liability regimes between two LEGAL clauses.
+
+    Both clauses discuss penalties/liability, but one exempts/waives while the other
+    enforces — e.g. "exempt from delay penalties" vs "delay penalties apply" (the AL-Zour
+    pattern), or a general condition vs a particular annex. Order-canonical (a<b) so the
+    (a,b)/(b,a) pair yields a single finding.
+    """
+    clause_a, clause_b = pair.clause_a, pair.clause_b
+    if clause_a.category != "LEGAL" or clause_b.category != "LEGAL":
+        return None
+    if clause_a.clause_id >= clause_b.clause_id:
+        return None
+    text_a, text_b = clause_a.text.lower(), clause_b.text.lower()
+    if not (_has_any(text_a, _PENALTY_TOPIC_MARKERS) and _has_any(text_b, _PENALTY_TOPIC_MARKERS)):
+        return None  # both must be about penalties/liability (shared topic)
+    if _has_any(text_a, _EXEMPTION_MARKERS) == _has_any(text_b, _EXEMPTION_MARKERS):
+        return None  # agree (both exempt or both enforce) — no conflict
+    return FindingSignal(
+        rule_id="CROSS-LEGAL-CONFLICT",
+        clause_id=f"{clause_a.clause_id}|{clause_b.clause_id}",
+        source="deterministic",
+        impact_score=0.7,
+        confidence=0.8,
+        severity="high",
+        category="LEGAL",
+        evidence_summary=(
+            "Conflicting penalty/liability regimes: one clause exempts/waives while the "
+            "other enforces penalties for the same subject."
+        ),
+        quote=f"A: {clause_a.text[:100]}... | B: {clause_b.text[:100]}...",
+        raw_data={"conflict": "penalty_exemption_vs_enforcement"},
+    )
+
+
+def _check_scope_conflict(pair: CrossClausePair) -> FindingSignal | None:
+    """Contradictory inclusion/exclusion of the same scope between two SCOPE clauses.
+
+    One clause marks work in-scope while the other marks it out-of-scope. Order-canonical
+    (a<b) to avoid duplicate findings.
+    """
+    clause_a, clause_b = pair.clause_a, pair.clause_b
+    if clause_a.category != "SCOPE" or clause_b.category != "SCOPE":
+        return None
+    if clause_a.clause_id >= clause_b.clause_id:
+        return None
+    text_a, text_b = clause_a.text.lower(), clause_b.text.lower()
+    a_in, a_out = _has_any(text_a, _SCOPE_INCLUDE_MARKERS), _has_any(text_a, _SCOPE_EXCLUDE_MARKERS)
+    b_in, b_out = _has_any(text_b, _SCOPE_INCLUDE_MARKERS), _has_any(text_b, _SCOPE_EXCLUDE_MARKERS)
+    conflict = (a_in and b_out and not a_out and not b_in) or (
+        a_out and b_in and not a_in and not b_out
+    )
+    if not conflict:
+        return None
+    return FindingSignal(
+        rule_id="CROSS-SCOPE-CONFLICT",
+        clause_id=f"{clause_a.clause_id}|{clause_b.clause_id}",
+        source="deterministic",
+        impact_score=0.6,
+        confidence=0.75,
+        severity="medium",
+        category="SCOPE",
+        evidence_summary=(
+            "Contradictory scope: one clause marks work in-scope while another marks it "
+            "out-of-scope."
+        ),
+        quote=f"A: {clause_a.text[:100]}... | B: {clause_b.text[:100]}...",
+        raw_data={"conflict": "scope_include_vs_exclude"},
     )
 
 
@@ -1162,6 +1340,8 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
         avg_confidence=state.diagnostics.get("avg_confidence", 0.0),
         llm_cost_usd=state.llm_cost_usd,
         evaluation_mode="low_budget" if state.config.low_budget_mode else "standard",
+        category_scores=state.diagnostics.get("category_scores") or None,
+        audit_coverage=state.diagnostics.get("audit_coverage"),
     )
 
     logger.info(

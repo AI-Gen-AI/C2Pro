@@ -2,6 +2,8 @@
 """
 WBS Repository Integration Tests (TDD - RED Phase)
 
+The repository reads and writes the canonical Project Controls WBS (``wbs_nodes``, ADR-025).
+
 Refers to Suite ID: TS-INT-DB-WBS-001.
 """
 
@@ -13,29 +15,17 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from docker.errors import DockerException
-from sqlalchemy import Column, Table
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
 
 from src.core import database as core_database
 from src.core.database import Base, get_session_with_tenant
-from src.procurement.adapters.persistence.models import Base as ProcurementBase
-from src.procurement.adapters.persistence.models import WBSItemORM
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.domain.models import WBSItem
 from src.projects.adapters.persistence.models import ProjectORM
-
-
-def _ensure_test_fk_stub_tables() -> None:
-    if "wbs_items" not in Base.metadata.tables:
-        Table(
-            "wbs_items",
-            Base.metadata,
-            Column("id", PGUUID(as_uuid=True), primary_key=True),
-            extend_existing=True,
-        )
+from src.wbs.adapters.persistence.models import WBSNodeORM
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -65,9 +55,12 @@ async def pg_engine():
             autoflush=False,
         )
         async with engine.begin() as conn:
-            _ensure_test_fk_stub_tables()
             await conn.run_sync(Base.metadata.create_all, tables=[ProjectORM.__table__])
-            await conn.run_sync(ProcurementBase.metadata.create_all, tables=[WBSItemORM.__table__])
+            # Minimal FK-target stubs for WBSNodeORM.tenant_id -> tenants.id and
+            # WBSNodeORM.source_document_id -> documents.id.
+            await conn.execute(text("CREATE TABLE IF NOT EXISTS tenants (id uuid PRIMARY KEY)"))
+            await conn.execute(text("CREATE TABLE IF NOT EXISTS documents (id uuid PRIMARY KEY)"))
+            await conn.run_sync(Base.metadata.create_all, tables=[WBSNodeORM.__table__])
         yield engine
     finally:
         core_database._engine = None
@@ -85,19 +78,13 @@ async def session(pg_engine) -> AsyncSession:
         yield db
 
 
-@pytest.mark.asyncio
-async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
-    """
-    WBS tree retrieval should include parent/child and enforce tenant isolation.
-    """
-    tenant_a = uuid4()
-    tenant_b = uuid4()
-    project_a = ProjectORM(
+def _project(tenant_id, code: str) -> ProjectORM:
+    return ProjectORM(
         id=uuid4(),
-        tenant_id=tenant_a,
+        tenant_id=tenant_id,
         name="Tenant A Project",
         description=None,
-        code="A-1",
+        code=code,
         project_type="construction",
         status="draft",
         estimated_budget=1000.0,
@@ -107,39 +94,66 @@ async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
+        created_at=datetime.now(UTC).replace(tzinfo=None),
+        updated_at=datetime.now(UTC).replace(tzinfo=None),
     )
+
+
+async def _seed_tenants(session: AsyncSession, *tenant_ids) -> None:
+    for tenant_id in tenant_ids:
+        await session.execute(text("INSERT INTO tenants (id) VALUES (:id)"), {"id": tenant_id})
+
+
+@pytest.mark.asyncio
+async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
+    """
+    WBS tree retrieval should include parent/child and enforce tenant isolation.
+    """
+    tenant_a = uuid4()
+    tenant_b = uuid4()
+    await _seed_tenants(session, tenant_a, tenant_b)
+    project_a = _project(tenant_a, f"A-{uuid4().hex[:6]}")
     session.add(project_a)
     await session.commit()
 
-    # Seed ORM hierarchy directly to test repository tree building
+    # Seed the canonical nested-set hierarchy directly to test repository tree building
     root_code = f"1-{uuid4().hex[:6]}"
     child_code = f"{root_code}.1"
-    parent = WBSItemORM(
+    parent = WBSNodeORM(
         id=uuid4(),
         project_id=project_a.id,
+        tenant_id=tenant_a,
         code=root_code,
         name="Root",
-        level=1,
+        lft=1,
+        rgt=4,
+        depth=0,
     )
-    child = WBSItemORM(
+    session.add(parent)
+    await session.commit()
+    child = WBSNodeORM(
         id=uuid4(),
         project_id=project_a.id,
+        tenant_id=tenant_a,
+        parent_id=parent.id,
         code=child_code,
         name="Child",
-        level=2,
-        parent_code=root_code,
+        lft=2,
+        rgt=3,
+        depth=1,
     )
-    session.add_all([parent, child])
+    session.add(child)
     await session.commit()
 
     repo = SQLAlchemyWBSRepository(session)
     tree = await repo.get_tree(project_id=project_a.id, tenant_id=tenant_a)
     assert len(tree) == 1
     assert tree[0].code == root_code
+    assert tree[0].level == 1
     assert len(tree[0].children) == 1
     assert tree[0].children[0].code == child_code
+    assert tree[0].children[0].parent_code == root_code
+    assert tree[0].children[0].level == 2
 
     # Critical security test: tenant isolation via RLS/session context
     async with get_session_with_tenant(tenant_b) as tenant_b_session:
@@ -155,25 +169,8 @@ async def test_wbs_bulk_create_rejects_project_outside_tenant(session: AsyncSess
     """
     tenant_a = uuid4()
     tenant_b = uuid4()
-
-    project_a = ProjectORM(
-        id=uuid4(),
-        tenant_id=tenant_a,
-        name="Tenant A Project",
-        description=None,
-        code="A-2",
-        project_type="construction",
-        status="draft",
-        estimated_budget=1000.0,
-        currency="EUR",
-        start_date=None,
-        end_date=None,
-        coherence_score=None,
-        last_analysis_at=None,
-        metadata_json={},
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
-    )
+    await _seed_tenants(session, tenant_a, tenant_b)
+    project_a = _project(tenant_a, f"A-{uuid4().hex[:6]}")
     session.add(project_a)
     await session.commit()
 

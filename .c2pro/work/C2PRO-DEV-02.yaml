@@ -1,0 +1,53 @@
+schema: c2pro-work-envelope-v1
+schema_version: 1
+work_id: C2PRO-DEV-02
+campaign_id: null
+role: orchestrator
+base_sha: 3fa846d60cecd14239ddb0a953be5e34bede463d
+branch: feat/c2pro-dev-02-role-authority-v1
+risk_class: architecture
+scope:
+  - define six canonical model-neutral development roles
+  - freeze principal versus subordinate authority ceilings
+  - freeze no-self-approval and risk/review policy
+  - define principal fallback and identity-preserving handoff
+  - extend deterministic validation for role and routing authority
+out_of_scope:
+  - install or authenticate coding CLIs on VPS
+  - qualify AF-DEV or MR-DEV routes
+  - implement Development Orchestrator runtime state machine
+  - modify product runtime code
+  - enable automated merge to main
+allowed_tools:
+  - github_repository_read
+  - github_branch_write
+  - yaml_validation
+  - focused_python_tests
+forbidden_paths:
+  - apps/api/src/**
+  - apps/web/**
+  - supabase/migrations/**
+  - production_runtime/**
+acceptance_criteria:
+  - role authority is independent from worker model provider and harness identity
+  - Claude Code and Codex are the only principal workers in this phase
+  - Gemini CLI Antigravity and OpenCode cannot independently satisfy a principal promotion gate
+  - material work cannot be reviewed for principal approval by the same worker that implemented it
+  - the same WORK identity can move between Claude Code and Codex without changing invariant task fields
+  - risk classes deterministically select independent review and challenger requirements
+  - hot bootstrap context remains within the existing 16 KiB ceiling
+required_tests:
+  - python scripts/development/validate_c2pro_control.py
+  - python -m pytest -q --confcutdir=tests/development tests/development/test_c2pro_control_plane.py
+evidence_required:
+  - focused_validator_result
+  - focused_regression_result
+  - context_budget_measurement
+  - github_ci_result
+review_policy: principal_and_challenger
+worker_selection:
+  preferred: null
+  eligible_principals: [claude_code, codex]
+  eligible_subordinates: [gemini_cli, antigravity, opencode]
+  selected: null
+timeout_resource_policy: af-dev-policy-ref-pending-integration

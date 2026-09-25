@@ -161,9 +161,14 @@ async def test_uploaded_real_pdf_is_parsed_and_redacted_before_ai_analysis(
     assert document_row.upload_status == DocumentStatus.UPLOADED
     assert document_row.storage_url is not None
 
+    # storage_url is the durable object KEY, not a local filesystem path -- resolve
+    # it through the storage service that wrote it to get a real, materialized Path
+    # (see IStorageService.download_object). Object key != local filesystem path.
+    storage = LocalFileStorageService(base_dir=upload_dir)
+    materialized_path = await storage.download_object(document_row.storage_url)
     parsed_payload = await CompositeFileParser.create().parse_document_file(
         _to_domain_document(document_row),
-        Path(document_row.storage_url),
+        materialized_path,
     )
     text_blocks = parsed_payload["text_blocks"]
     parsed_text = "\n".join(block["text"] for block in text_blocks)

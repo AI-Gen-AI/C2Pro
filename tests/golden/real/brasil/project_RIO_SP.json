@@ -1,0 +1,48 @@
+{
+  "project_metadata": {
+    "id": "P-BR-01",
+    "name": "TAV Rio - São Paulo",
+    "type": "High Speed Rail",
+    "complexity": "Complex",
+    "language": "pt"
+  },
+  "input_documents": {
+    "contract_text": "CONTRATO DE TREM DE ALTA VELOCIDADE RIO - SÃO PAULO. Valor global: 34,600,000,000.00 BRL sem impostos.",
+    "risk_analysis_text": "Análise de riscos para o trecho de Campinas.",
+    "budget_summary": {
+      "total_value_brl": 34600000000.0,
+      "budget_total_brl": 31200000000.0,
+      "contract_total": 34600000000.0,
+      "budget_total": 31200000000.0,
+      "currency": "BRL",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "Normal 15% execution margin."
+    }
+  },
+  "expected_output": {
+    "coherence_alerts": [
+      {
+        "rule_id": "LOC-MISMATCH-01",
+        "severity": "critical",
+        "description": "Location name discrepancy: Campinas folder vs São Paulo contract.",
+        "conflicting_elements": [],
+        "category": "SCOPE",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "São Paulo Contract vs Folder",
+          "contract_value": "São Paulo",
+          "other_value": "Campinas"
+        }
+      }
+    ],
+    "expert_score": 91,
+    "per_category_scores": {
+      "SCOPE": 50,
+      "BUDGET": 100,
+      "TIME": 100,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
+  }
+}

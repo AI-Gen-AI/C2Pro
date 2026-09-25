@@ -8,6 +8,18 @@ export type DocumentType = 'contract' | 'schedule' | 'budget' | 'specification' 
 /** Processing status for documents */
 export type DocumentProcessingStatus = 'queued' | 'processing' | 'parsed' | 'error';
 
+/**
+ * User-facing lifecycle state. Unlike the polling status, it keeps
+ * "parsed", "analysis pending" and "analyzed" apart.
+ */
+export type DocumentLifecycleStatus =
+  | 'uploaded'
+  | 'processing'
+  | 'parsed'
+  | 'analysis_pending'
+  | 'analyzed'
+  | 'error';
+
 export interface DocumentInfo {
   /** Unique identifier for the document */
   id: string;
@@ -27,6 +39,8 @@ export interface DocumentInfo {
   uploadedAt?: Date;
   /** Processing status */
   status?: DocumentProcessingStatus;
+  /** Lifecycle state from the backend (absent in older payloads) */
+  lifecycleStatus?: DocumentLifecycleStatus;
 }
 
 export interface DocumentViewState {

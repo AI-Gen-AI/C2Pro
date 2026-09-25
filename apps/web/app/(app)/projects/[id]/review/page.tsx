@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
@@ -59,6 +59,12 @@ function impactColor(impact: string): string {
   return severityToToken(impact);
 }
 
+// The exact row a decision was submitted for. row_id when the API provides
+// it, so a later re-review of the same item_id (a new row) stays actionable.
+function decisionKey(item: ReviewItemResponse): string {
+  return item.row_id ?? item.item_id;
+}
+
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message.trim().length > 0
     ? error.message
@@ -82,6 +88,16 @@ export default function ReviewPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [pageLimit, setPageLimit] = useState(PAGE_LIMIT_STEP);
   const [actionError, setActionError] = useState<string | null>(null);
+  // C2PRO #649: one human decision -> one request. The ref closes the gap
+  // before React re-renders the disabled state (rapid clicks land in the
+  // same frame); `submitting` drives what the reviewer sees. The backend is
+  // independently idempotent -- this is not a substitute for it.
+  const inFlightRef = useRef(false);
+  const [submitting, setSubmitting] = useState<'approve' | 'reject' | null>(null);
+  // Rows decided in this session stay non-actionable until the refreshed
+  // queue shows their new status, so a stale PENDING card cannot be
+  // approved a second time.
+  const [decidedKeys, setDecidedKeys] = useState<ReadonlySet<string>>(() => new Set());
 
   const queueParams = useMemo(
     () => ({
@@ -120,42 +136,79 @@ export default function ReviewPage() {
     setActionError(null);
   };
 
+  const dismissModal = () => {
+    if (inFlightRef.current) return;
+    closeModal();
+  };
+
+  const beginSubmit = (kind: 'approve' | 'reject'): boolean => {
+    if (inFlightRef.current) return false;
+    inFlightRef.current = true;
+    setSubmitting(kind);
+    setActionError(null);
+    return true;
+  };
+
+  const endSubmit = () => {
+    inFlightRef.current = false;
+    setSubmitting(null);
+  };
+
+  const markDecided = (item: ReviewItemResponse) => {
+    setDecidedKeys((current) => new Set(current).add(decisionKey(item)));
+  };
+
   const handleApprove = async () => {
     if (modal.kind !== 'approve' || !reviewerName) return;
-    setActionError(null);
+    if (!beginSubmit('approve')) return;
     try {
       await approveMutation.mutateAsync({
+        // The queue list already collapses legacy item_id duplicates to one
+        // canonical (resumable, most-recent) row -- see
+        // SqlAlchemyReviewQueueRepository.list_by_status -- so the card the
+        // user is looking at and the row item_id resolves to on the backend
+        // are always the same one. Keep the URL contract as item_id (not
+        // row_id): callers/tests outside this page still address reviews by
+        // item_id, and get_review_item() already resolves it exactly.
         itemId: modal.item.item_id,
-        data: { reviewer_name: reviewerName },
+        data: {},
       });
+      markDecided(modal.item);
       closeModal();
-      refetch();
+      void refetch();
     } catch (error) {
       const message = errorMessage(error, 'Failed to approve review item');
       setActionError(message);
       showToast(message);
+    } finally {
+      endSubmit();
     }
   };
 
   const handleReject = async () => {
     if (modal.kind !== 'reject' || rejectReason.trim().length === 0 || !reviewerName) return;
-    setActionError(null);
+    if (!beginSubmit('reject')) return;
     try {
       await rejectMutation.mutateAsync({
         itemId: modal.item.item_id,
         data: {
-          reviewer_name: reviewerName,
           reason: rejectReason.trim(),
         },
       });
+      markDecided(modal.item);
       closeModal();
-      refetch();
+      void refetch();
     } catch (error) {
       const message = errorMessage(error, 'Failed to reject review item');
       setActionError(message);
       showToast(message);
+    } finally {
+      endSubmit();
     }
   };
+
+  const approving = submitting === 'approve' || approveMutation.isPending;
+  const rejecting = submitting === 'reject' || rejectMutation.isPending;
 
   const setFilter = (filter: string) => {
     setStatusFilter(filter);
@@ -244,6 +297,7 @@ export default function ReviewPage() {
               item={item}
               projectId={projectId}
               reviewerIdentityReady={reviewerIdentityReady}
+              actionsLocked={decidedKeys.has(decisionKey(item))}
               onApprove={(reviewItem) => {
                 setActionError(null);
                 setModal({ kind: 'approve', item: reviewItem });
@@ -270,14 +324,16 @@ export default function ReviewPage() {
       {/* Approve Dialog */}
       <Dialog
         open={modal.kind === 'approve'}
-        onOpenChange={(open) => { if (!open) closeModal(); }}
+        onOpenChange={(open) => { if (!open) dismissModal(); }}
       >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Approve Review Item</DialogTitle>
             <DialogDescription>
               Confirm approval for this {modal.kind === 'approve' ? modal.item.item_type : ''} item.
-              This will resume the analysis workflow with an approved state.
+              {modal.kind === 'approve' && modal.item.resumable
+                ? ' This will resume the analysis workflow with an approved state.'
+                : ' This will mark the item as approved.'}
             </DialogDescription>
           </DialogHeader>
           {modal.kind === 'approve' && (
@@ -294,22 +350,28 @@ export default function ReviewPage() {
               </div>
             </div>
           )}
+          {approving ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              Approving… resuming the analysis can take a minute. Keep this window open.
+            </p>
+          ) : null}
           {actionError ? (
             <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
               {actionError}
             </div>
           ) : null}
           <DialogFooter>
-            <Button variant="outline" onClick={closeModal}>
+            <Button variant="outline" onClick={dismissModal} disabled={approving}>
               Cancel
             </Button>
             <Button
               onClick={handleApprove}
-              disabled={approveMutation.isPending || !reviewerIdentityReady}
+              disabled={approving || !reviewerIdentityReady}
+              aria-busy={approving}
               title={!reviewerIdentityReady ? 'Loading your identity…' : undefined}
               className="bg-green-600 hover:bg-green-700"
             >
-              {approveMutation.isPending ? (
+              {approving ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : null}
               Confirm Approve
@@ -321,13 +383,16 @@ export default function ReviewPage() {
       {/* Reject Dialog */}
       <Dialog
         open={modal.kind === 'reject'}
-        onOpenChange={(open) => { if (!open) closeModal(); }}
+        onOpenChange={(open) => { if (!open) dismissModal(); }}
       >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reject Review Item</DialogTitle>
             <DialogDescription>
-              Provide a reason for rejecting this item. This will terminate the analysis workflow.
+              Provide a reason for rejecting this item.
+              {modal.kind === 'reject' && modal.item.resumable
+                ? ' This will terminate the analysis workflow.'
+                : ' This will mark the item as rejected.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -346,26 +411,32 @@ export default function ReviewPage() {
               {rejectReason.length}/2000
             </div>
           </div>
+          {rejecting ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              Rejecting… this can take a moment. Keep this window open.
+            </p>
+          ) : null}
           {actionError ? (
             <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
               {actionError}
             </div>
           ) : null}
           <DialogFooter>
-            <Button variant="outline" onClick={closeModal}>
+            <Button variant="outline" onClick={dismissModal} disabled={rejecting}>
               Cancel
             </Button>
             <Button
               variant="destructive"
               onClick={handleReject}
+              aria-busy={rejecting}
               disabled={
-                rejectMutation.isPending ||
+                rejecting ||
                 rejectReason.trim().length === 0 ||
                 !reviewerIdentityReady
               }
               title={!reviewerIdentityReady ? 'Loading your identity…' : undefined}
             >
-              {rejectMutation.isPending ? (
+              {rejecting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : null}
               Confirm Reject

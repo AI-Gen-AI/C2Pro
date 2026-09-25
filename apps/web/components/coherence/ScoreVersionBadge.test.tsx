@@ -33,18 +33,22 @@ describe("ScoreVersionBadge", () => {
     expect(screen.getByLabelText(/v1 coherence score/i)).toBeInTheDocument();
   });
 
-  it("shows customer-facing version guidance and a FAQ link in the tooltip", async () => {
+  it("shows customer-facing version guidance without a dead internal FAQ link", async () => {
     renderWithProviders(<ScoreVersionBadge scoreVersion="coherence-v1" />);
 
     fireEvent.mouseOver(screen.getByLabelText(/v1 coherence score/i));
 
+    // The useful tooltip guidance copy is preserved...
     expect(
       (await screen.findAllByText(/v1 uses weighted finding severity/i))[0],
     ).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: /what changed/i })[0]).toHaveAttribute(
-      "href",
-      "/docs/customer/COHERENCE_V1_FAQ.md",
-    );
+
+    // ...but the previously-hardcoded internal route (a production 404 — Coherence is demoted,
+    // so no V1 doc is served) must never return to the component.
+    expect(screen.queryByRole("link", { name: /what changed/i })).not.toBeInTheDocument();
+    expect(
+      document.querySelector('a[href="/docs/customer/COHERENCE_V1_FAQ.md"]'),
+    ).toBeNull();
   });
 
   it("data-score-version attribute reflects canonical resolved version", () => {

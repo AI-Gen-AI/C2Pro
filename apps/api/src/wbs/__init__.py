@@ -1,34 +1,5 @@
-"""WBS module."""
+"""WBS module: the canonical Project Controls WBS (ADR-025), a nested-set hierarchy in wbs_nodes."""
 
-from src.wbs.adapters.http.router import router
-from src.wbs.application.dtos import (
-    CreateWBSItemRequest,
-    MoveWBSItemRequest,
-    UpdateWBSItemRequest,
-    WBSItemDTO,
-    WBSResponse,
-)
-from src.wbs.application.use_cases import (
-    CreateWBSItemUseCase,
-    DeleteWBSItemUseCase,
-    GetWBSUseCase,
-    MoveWBSItemUseCase,
-    UpdateWBSItemUseCase,
-)
-from src.wbs.domain.entities import Money, WBSItem
+from src.wbs.domain import WBSNode, WBSNodeStatus, WBSNodeType
 
-__all__ = [
-    "router",
-    "WBSItem",
-    "Money",
-    "WBSItemDTO",
-    "CreateWBSItemRequest",
-    "UpdateWBSItemRequest",
-    "MoveWBSItemRequest",
-    "WBSResponse",
-    "GetWBSUseCase",
-    "CreateWBSItemUseCase",
-    "UpdateWBSItemUseCase",
-    "MoveWBSItemUseCase",
-    "DeleteWBSItemUseCase",
-]
+__all__ = ["WBSNode", "WBSNodeStatus", "WBSNodeType"]

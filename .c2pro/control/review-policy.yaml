@@ -1,0 +1,47 @@
+schema: c2pro-review-policy-v1
+schema_version: 1
+status: canonical
+risk_classes:
+  trivial:
+    independent_principal_review: optional
+    challenger: false
+    orchestrator_synthesis: false
+  normal:
+    independent_principal_review: required
+    challenger: false
+    orchestrator_synthesis: false
+  material:
+    independent_principal_review: required
+    challenger: optional
+    orchestrator_synthesis: false
+  architecture:
+    independent_principal_review: required
+    challenger: required
+    orchestrator_synthesis: true
+  security:
+    independent_principal_review: required
+    challenger: required
+    orchestrator_synthesis: true
+  high_blast_radius:
+    independent_principal_review: required
+    challenger: required
+    orchestrator_synthesis: true
+principal_independence:
+  material_or_higher_same_worker_review_forbidden: true
+  reviewer_must_be_principal_when_principal_review_required: true
+  subordinate_result_can_never_satisfy_principal_review_gate: true
+challenger_policy:
+  purpose: independent_alternative_or_failure_mode_analysis
+  open_ended_debate_default: false
+  directed_adjudication_round_max: 1
+  unresolved_material_disagreement: escalate_owner
+promotion_gate:
+  require_when_applicable:
+    - required_ci_green
+    - required_tests_pass
+    - zero_blocking_findings
+    - no_scope_deviation
+    - forbidden_paths_untouched
+    - valid_effective_authority
+    - independent_principal_review_satisfied
+  initial_merge_mode: human_merge

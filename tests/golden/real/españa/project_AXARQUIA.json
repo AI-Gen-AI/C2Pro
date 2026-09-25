@@ -30,7 +30,12 @@
           "name": "Torre de refrigeracion",
           "cost": 20787.0
         }
-      ]
+      ],
+      "contract_total": 247597.65,
+      "budget_total": 210458.0,
+      "currency": "EUR",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "Normal 15% execution margin."
     }
   },
   "expected_output": {
@@ -110,7 +115,14 @@
             "source": "contract_text",
             "identifier": "specific_annex_penalty_terms"
           }
-        ]
+        ],
+        "category": "LEGAL",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Condiciones generales de pedido (Page 1) vs Anexo particular (Page 5)",
+          "contract_value": "general penalty cap 10%",
+          "other_value": "specific annex cap 15%"
+        }
       },
       {
         "rule_id": "OPS-AXA-01",
@@ -125,8 +137,24 @@
             "source": "contract_text",
             "identifier": "hospital_operation_risk"
           }
-        ]
+        ],
+        "category": "SCOPE",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Torres de refrigeración - Especificación técnica.pdf (Page 2)",
+          "contract_value": "hospital operation safety",
+          "other_value": "Legionella water treatment checklist required"
+        }
       }
-    ]
+    ],
+    "expert_score": 89,
+    "per_category_scores": {
+      "SCOPE": 85,
+      "BUDGET": 100,
+      "TIME": 100,
+      "TECHNICAL": 100,
+      "LEGAL": 50,
+      "QUALITY": 100
+    }
   }
 }

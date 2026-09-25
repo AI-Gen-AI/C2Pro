@@ -32,6 +32,9 @@ class WBSItemBase(BaseModel):
     planned_end: datetime | None = Field(None, description="Planned end date")
     actual_start: datetime | None = Field(None, description="Actual start date")
     actual_end: datetime | None = Field(None, description="Actual end date")
+    source_document_id: UUID | None = Field(
+        None, description="Source document that produced this parsed WBS item"
+    )
     wbs_metadata: dict[str, object] = Field(default_factory=dict, description="Custom metadata")
 
 
