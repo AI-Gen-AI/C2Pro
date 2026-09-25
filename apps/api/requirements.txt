@@ -96,7 +96,7 @@ networkx==3.6.1
 # Testing
 pytest>=9.0.3  # >=9.0.3 fixes tmpdir predictable path CVE
 pytest-asyncio>=1.4.0  # >=1.4.0 required for Windows event loop fixes
-pytest-cov>=5.0.0  # >=5.0.0 required for pytest 9 compatibility
+pytest-cov>=7.1.0  # >=5.0.0 required for pytest 9 compatibility
 pytest-benchmark==5.2.3
 schemathesis>=4.24.3  # TASK-QA-200/TASK-OPS-DOCFLOW-015: OpenAPI contract testing
 factory-boy==3.3.3
