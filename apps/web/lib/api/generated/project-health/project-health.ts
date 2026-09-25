@@ -74,6 +74,13 @@ const withQueryKey = <T extends object, K>(
 
 /**
  * Return latest tenant-scoped project HealthVector or honest insufficient data.
+ *
+ * A project the caller cannot see is a 404, exactly as ``GET /projects/{project_id}``
+ * and its siblings behave: "not found" covers both "does not exist" and "belongs to
+ * another tenant", so the response never reveals which. Returning 200 with an empty
+ * vector would make an authorization failure indistinguishable from a real project
+ * that simply has no snapshot yet — and "no data" is a legitimate answer only for a
+ * project the caller actually owns.
  * @summary Get latest project health vector
  */
 export const getProjectHealthApiV1ProjectsProjectIdHealthGet = (
@@ -97,7 +104,7 @@ export const getGetProjectHealthApiV1ProjectsProjectIdHealthGetQueryOptions = <
   TData = Awaited<
     ReturnType<typeof getProjectHealthApiV1ProjectsProjectIdHealthGet>
   >,
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
 >(
   projectId: string,
   options?: {
@@ -140,13 +147,13 @@ export type GetProjectHealthApiV1ProjectsProjectIdHealthGetQueryResult =
     Awaited<ReturnType<typeof getProjectHealthApiV1ProjectsProjectIdHealthGet>>
   >;
 export type GetProjectHealthApiV1ProjectsProjectIdHealthGetQueryError =
-  HTTPValidationError;
+  void | HTTPValidationError;
 
 export function useGetProjectHealthApiV1ProjectsProjectIdHealthGet<
   TData = Awaited<
     ReturnType<typeof getProjectHealthApiV1ProjectsProjectIdHealthGet>
   >,
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
 >(
   projectId: string,
   options: {
@@ -180,7 +187,7 @@ export function useGetProjectHealthApiV1ProjectsProjectIdHealthGet<
   TData = Awaited<
     ReturnType<typeof getProjectHealthApiV1ProjectsProjectIdHealthGet>
   >,
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
 >(
   projectId: string,
   options?: {
@@ -214,7 +221,7 @@ export function useGetProjectHealthApiV1ProjectsProjectIdHealthGet<
   TData = Awaited<
     ReturnType<typeof getProjectHealthApiV1ProjectsProjectIdHealthGet>
   >,
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
 >(
   projectId: string,
   options?: {
@@ -240,7 +247,7 @@ export function useGetProjectHealthApiV1ProjectsProjectIdHealthGet<
   TData = Awaited<
     ReturnType<typeof getProjectHealthApiV1ProjectsProjectIdHealthGet>
   >,
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
 >(
   projectId: string,
   options?: {

@@ -4,13 +4,31 @@ from src.config import Settings
 
 
 def _set_required_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Both mock flags are forbidden in production; an ambient value would make every
+    # production-settings test fail on the mock guard instead of the rule it targets.
     monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+    monkeypatch.delenv("C2PRO_EMBEDDINGS_MOCK", raising=False)
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "test-anon-key")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
     monkeypatch.setenv(
         "JWT_SECRET_KEY", "test-secret-key-min-32-chars-required-for-testing-purposes-only"
     )
+
+
+def test_production_settings_checks_are_hermetic_against_ambient_mock_flags(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A developer shell or CI job exporting the mock flags must not change what these tests prove."""
+    monkeypatch.setenv("C2PRO_AI_MOCK", "1")
+    monkeypatch.setenv("C2PRO_EMBEDDINGS_MOCK", "1")
+    _set_required_settings_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://prod-user:prod-pass@supabase.example.com/app")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("CORS_ORIGINS", '["http://localhost:3000"]')
+
+    with pytest.raises(ValueError, match="localhost origins are not allowed"):
+        Settings(_env_file=None)
 
 
 def test_settings_prefer_test_database_url_over_database_url(
@@ -127,6 +145,11 @@ def test_test_settings_allow_missing_supabase_credentials(
 
     settings = Settings(_env_file=None)
 
-    assert settings.supabase_url == "http://test.supabase.local"
+    assert settings.supabase_url == "https://test.supabase.local"
     assert settings.supabase_anon_key == "test-anon-key"
     assert settings.supabase_service_role_key == "test-service-role-key"
+    # The placeholder is never dialled, but it is still a URL the codebase
+    # hands out, and a clear-text scheme in one is a security finding whether
+    # or not anything connects to it. Nothing here needs http://, so nothing
+    # here uses it.
+    assert not settings.supabase_url.startswith("http://")

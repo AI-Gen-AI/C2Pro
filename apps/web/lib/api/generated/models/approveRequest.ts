@@ -38,7 +38,14 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is never
+ * accepted from the client — it is derived server-side from the
+ * authenticated session (Depends(get_current_user)). A client-supplied
+ * reviewer field here would let any authenticated user forge a review as
+ * another user, corrupting the HITL audit trail. This body is currently
+ * empty by design; do not add a reviewer identity field back.
+ */
 export interface ApproveRequest {
-  /** @minLength 1 */
-  reviewer_name: string;
+  [key: string]: unknown;
 }

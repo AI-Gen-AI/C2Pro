@@ -42,28 +42,6 @@ from src.procurement.application.use_cases import (
     UpdateBOMStatusUseCase,
     UpdateWBSItemUseCase,
 )
-from src.wbs.adapters.http.router import (
-    get_create_wbs_item_use_case as get_wbs_create_item_use_case,
-)
-from src.wbs.adapters.http.router import (
-    get_delete_wbs_item_use_case as get_wbs_delete_item_use_case,
-)
-from src.wbs.adapters.http.router import (
-    get_move_wbs_item_use_case,
-    get_wbs_use_case,
-)
-from src.wbs.adapters.http.router import (
-    get_update_wbs_item_use_case as get_wbs_update_item_use_case,
-)
-from src.wbs.adapters.persistence import InMemoryWBSRepository
-from src.wbs.application.use_cases import (
-    CreateWBSItemUseCase as CreateAppWBSItemUseCase,
-)
-from src.wbs.application.use_cases import (
-    DeleteWBSItemUseCase as DeleteAppWBSItemUseCase,
-)
-from src.wbs.application.use_cases import GetWBSUseCase, MoveWBSItemUseCase
-from src.wbs.application.use_cases import UpdateWBSItemUseCase as UpdateAppWBSItemUseCase
 
 API_ROOT = Path(__file__).resolve().parents[2]
 
@@ -97,23 +75,6 @@ def test_task_120_procurement_router_does_not_construct_repositories_or_use_case
         assert snippet not in source, f"Procurement router still constructs dependencies inline: {snippet}"
 
 
-def test_task_120_wbs_router_does_not_construct_repositories_or_use_cases_in_handlers() -> None:
-    """TASK-120: WBS HTTP handlers must consume injected collaborators instead of constructing them inline."""
-    source = _read("wbs/adapters/http/router.py")
-
-    forbidden_snippets = [
-        "repository = get_wbs_repository()",
-        "use_case = GetWBSUseCase(repository)",
-        "use_case = CreateWBSItemUseCase(repository)",
-        "use_case = UpdateWBSItemUseCase(repository)",
-        "use_case = MoveWBSItemUseCase(repository)",
-        "use_case = DeleteWBSItemUseCase(repository)",
-    ]
-
-    for snippet in forbidden_snippets:
-        assert snippet not in source, f"WBS router still constructs dependencies inline: {snippet}"
-
-
 def test_task_120_observability_router_does_not_construct_services_in_handlers() -> None:
     """TASK-120: observability HTTP handlers must consume injected services instead of constructing them inline."""
     source = _read("core/observability/router.py")
@@ -144,17 +105,6 @@ def test_task_120_procurement_dependency_factories_build_expected_types() -> Non
     assert isinstance(get_update_bom_item_use_case(repository=bom_repository), UpdateBOMItemUseCase)
     assert isinstance(get_update_bom_status_use_case(repository=bom_repository), UpdateBOMStatusUseCase)
     assert isinstance(get_delete_bom_item_use_case(repository=bom_repository), DeleteBOMItemUseCase)
-
-
-def test_task_120_wbs_dependency_factories_build_expected_types() -> None:
-    """TASK-120: WBS dependency providers must construct use cases outside handlers."""
-    repository = InMemoryWBSRepository()
-
-    assert isinstance(get_wbs_use_case(repository=repository), GetWBSUseCase)
-    assert isinstance(get_wbs_create_item_use_case(repository=repository), CreateAppWBSItemUseCase)
-    assert isinstance(get_wbs_update_item_use_case(repository=repository), UpdateAppWBSItemUseCase)
-    assert isinstance(get_move_wbs_item_use_case(repository=repository), MoveWBSItemUseCase)
-    assert isinstance(get_wbs_delete_item_use_case(repository=repository), DeleteAppWBSItemUseCase)
 
 
 def test_task_120_observability_dependency_factories_build_expected_types() -> None:

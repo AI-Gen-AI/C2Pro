@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from importlib import import_module
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
 
@@ -19,6 +20,7 @@ from src.analysis.adapters.graph.nodes import (
     critique_node,
     human_interrupt_node,
     risk_extractor_node,
+    route_after_human_interrupt,
     router_node,
     save_to_db_node,
     wbs_extractor_node,
@@ -117,8 +119,13 @@ def _next_after_critique_v2(state: ProjectState) -> Literal[
 # ── Enrichment fan-out point (passthrough) ──────────────────────────────────
 
 
-async def enrichment_dispatch_node(_state: ProjectState) -> dict[str, Any]:
+def enrichment_dispatch_node(_state: ProjectState) -> dict[str, Any]:
     """TS-UA-ANA-GRAPH-001 - Anchor the fan-out without rewriting shared state.
+
+    Synchronous on purpose: the node emits a constant empty patch and performs
+    no I/O, so it needs no event-loop hop. LangGraph registers sync and async
+    nodes identically (``add_node`` wraps either), and the empty-patch return
+    is the sole contract downstream branches depend on.
 
     Why this node exists:
         1. The critique conditional edge must terminate at a *single* physical
@@ -286,7 +293,22 @@ def build_workflow() -> ProjectWorkflow:
     # ── HITL exit converges on the same dispatch node ───────────────────
     # (Mutually exclusive with the direct critique→dispatch path; only one
     # of these two edges fires per execution, so this is *not* a join.)
-    workflow.add_edge("human_interrupt", "enrichment_dispatch")
+    #
+    # C2PRO P0b true-resume hotfix: this used to be an UNCONDITIONAL edge,
+    # so once N13 returned the run continued into enrichment and on to N17
+    # regardless of what the human actually decided -- a rejection was
+    # indistinguishable from an approval. Route on the decision N13 now
+    # consumes from Command(resume=...). Rejection terminates at END; it
+    # must never enter the fan-out below, because the list-valued join into
+    # knowledge_graph would then wait on branches that never run.
+    workflow.add_conditional_edges(
+        "human_interrupt",
+        route_after_human_interrupt,
+        {
+            "enrichment_dispatch": "enrichment_dispatch",
+            "terminated": END,
+        },
+    )
 
     # ── Parallel fan-out from dispatch ──────────────────────────────────
     # Multiple unconditional outgoing edges from a single node = static
@@ -320,11 +342,68 @@ def build_workflow() -> ProjectWorkflow:
     return workflow
 
 
-# ── Infrastructure helpers (unchanged) ───────────────────────────────────────
+# ── Infrastructure helpers ───────────────────────────────────────────────────
+#
+# Option-C C2 (checkpoint role boundary): runtime no longer calls
+# AsyncPostgresSaver.setup() -- that DDL now runs exclusively from
+# scripts/checkpoint_bootstrap.py under the owner/admin credential
+# (c2pro_owner). setup() unconditionally re-issues
+# `CREATE TABLE IF NOT EXISTS checkpoint_migrations` on every call regardless
+# of migration state, which requires schema CREATE privilege even against an
+# already-current schema -- a restricted, non-owning `c2pro_checkpoint`
+# runtime role can never satisfy that. Runtime now performs a read-only
+# readiness check instead (see verify_checkpoint_schema_ready below).
 
 _checkpointer_pool: AsyncConnectionPool[AsyncConnection[dict[str, Any]]] | None = None
 _checkpointer_ready = False
 _checkpointer_setup_lock = asyncio.Lock()
+
+# Deterministic checkpoint-package contract (C2-R1): the exact
+# langgraph-checkpoint-postgres version validated against the checkpoint schema.
+# The runtime refuses to claim readiness if the installed version differs (see
+# verify_checkpoint_package_supported), so a package upgrade can never go
+# unnoticed while the old floor marker still resolves.
+_CHECKPOINT_PACKAGE = "langgraph-checkpoint-postgres"
+_CHECKPOINT_SUPPORTED_VERSION = "3.1.2"
+
+# The newest of AsyncPostgresSaver's built-in migrations (v9 of v0-v9) adds
+# this column. Its presence is a read-only floor marker for "the checkpoint
+# schema is at least current with the validated package version". Because the
+# package itself is version-pinned and verified above, the floor marker is a
+# consistent proxy: a version mismatch fails closed before this check runs.
+_CHECKPOINT_SCHEMA_MARKER_TABLE = "checkpoint_writes"
+_CHECKPOINT_SCHEMA_MARKER_COLUMN = "task_path"
+
+
+class CheckpointSchemaNotReadyError(RuntimeError):
+    """Raised when the checkpoint schema is missing or not fully migrated.
+
+    This must propagate out of ensure_checkpointer_ready() rather than being
+    caught and downgraded to a warning: a missing/outdated checkpoint schema
+    is a deployment problem (the owner bootstrap step -- scripts/
+    checkpoint_bootstrap.py -- was not run) and must be an observable startup
+    failure, not a silently degraded runtime state.
+    """
+
+
+class CheckpointDatabaseUnavailableError(RuntimeError):
+    """Raised when the checkpoint database cannot be reached at startup.
+
+    A PostgreSQL checkpoint backend that cannot be reached during startup is
+    fail-closed: the exception propagates out of ensure_checkpointer_ready()
+    (and therefore out of the FastAPI lifespan) so startup fails rather than
+    silently continuing with in-memory checkpointing. ``_checkpointer_ready``
+    stays False, so a later process restart re-attempts the connection.
+    """
+
+
+class CheckpointPackageVersionMismatchError(RuntimeError):
+    """Raised when the installed checkpoint package differs from the validated version.
+
+    Guards the deterministic package contract: a package upgraded silently
+    while the old floor marker still resolves must fail closed instead of
+    claiming readiness.
+    """
 
 
 def _async_postgres_saver_factory() -> AsyncPostgresSaverFactory:
@@ -336,6 +415,24 @@ def _async_postgres_saver_factory() -> AsyncPostgresSaverFactory:
     return cast(AsyncPostgresSaverFactory, module.AsyncPostgresSaver)
 
 
+def _checkpoint_pool_conninfo() -> str:
+    """Resolve and log the checkpoint runtime DSN (never silently falls back)."""
+    from src.config import settings
+
+    if settings.checkpoint_database_url_is_fallback:
+        logger.warning(
+            "checkpoint_dsn_fallback",
+            reason=(
+                "CHECKPOINT_DATABASE_URL is not set; falling back to DATABASE_URL. "
+                "TRANSITIONAL -- scheduled for removal once C3 provisions a dedicated "
+                "c2pro_checkpoint credential in every environment."
+            ),
+        )
+    else:
+        logger.info("checkpoint_dsn_dedicated", reason="using CHECKPOINT_DATABASE_URL")
+    return settings.checkpoint_database_url_async.replace("postgresql+asyncpg://", "postgresql://")
+
+
 def _build_checkpointer() -> BaseCheckpointSaver[str]:
     """
     Build a checkpointer for persistent state management.
@@ -345,10 +442,13 @@ def _build_checkpointer() -> BaseCheckpointSaver[str]:
 
     Note: The pool is created with min_size=0, max_size=10 to avoid blocking on sync initialization.
     The pool will automatically open connections as needed.
+
+    Uses settings.checkpoint_database_url_async (not database_url_async) --
+    see _checkpoint_pool_conninfo for the TRANSITIONAL fallback contract.
     """
     from src.config import settings
 
-    if settings.database_url_async.startswith("sqlite"):
+    if settings.checkpoint_database_url_async.startswith("sqlite"):
         logger.warning("checkpointer_fallback", reason="SQLite not supported for postgres checkpointer")
         from langgraph.checkpoint.memory import MemorySaver
         return MemorySaver()
@@ -359,7 +459,7 @@ def _build_checkpointer() -> BaseCheckpointSaver[str]:
 
         global _checkpointer_pool
         if _checkpointer_pool is None:
-            conn_string = settings.database_url_async.replace("postgresql+asyncpg://", "postgresql://")
+            conn_string = _checkpoint_pool_conninfo()
 
             # String form: cast()'s type argument is evaluated at runtime, and
             # AsyncConnection is only imported under TYPE_CHECKING.
@@ -390,14 +490,72 @@ def _build_checkpointer() -> BaseCheckpointSaver[str]:
         return MemorySaver()
 
 
-async def ensure_checkpointer_ready() -> None:
-    """Ensure PostgreSQL checkpointer tables/migrations are initialized exactly once.
+def verify_checkpoint_package_supported() -> None:
+    """Fail closed if the installed checkpoint package differs from the validated version.
 
-    If the pool cannot connect within its configured timeout (e.g. network
-    restriction in the sandbox, PgBouncer misconfiguration, or Supabase direct
-    connection unavailable), we log a warning and mark the checkpointer ready
-    without running setup — the app starts with in-memory checkpointing rather
-    than crashing entirely.
+    Guards the deterministic package/schema contract: a package upgraded
+    silently (while the old floor marker still resolves) must raise rather than
+    claim readiness. Exact-string match against the version pinned in
+    requirements.txt.
+    """
+    try:
+        installed = version(_CHECKPOINT_PACKAGE)
+    except PackageNotFoundError as exc:
+        raise CheckpointPackageVersionMismatchError(
+            f"Checkpoint package {_CHECKPOINT_PACKAGE!r} is not installed; "
+            f"the supported/validated version is {_CHECKPOINT_SUPPORTED_VERSION!r}."
+        ) from exc
+    if installed != _CHECKPOINT_SUPPORTED_VERSION:
+        raise CheckpointPackageVersionMismatchError(
+            f"Installed {_CHECKPOINT_PACKAGE} {installed!r} differs from the "
+            f"supported/validated version {_CHECKPOINT_SUPPORTED_VERSION!r}; "
+            f"re-pin the package and re-run scripts/checkpoint_bootstrap.py."
+        )
+
+
+async def verify_checkpoint_schema_ready(
+    pool: AsyncConnectionPool[AsyncConnection[dict[str, Any]]],
+) -> bool:
+    """Read-only check: does the checkpoint schema contain the floor marker column?
+
+    Queries information_schema.columns for the column added by the newest of
+    AsyncPostgresSaver's built-in migrations. information_schema.columns only
+    lists columns of tables the connecting role has privileges on, so this
+    requires SELECT on the checkpoint tables themselves (which the
+    c2pro_checkpoint role is granted) but never requires access to
+    checkpoint_migrations or any DDL right -- exactly the c2pro_checkpoint
+    contract this slice establishes. Never issues DDL.
+    """
+    async with pool.connection() as conn, conn.cursor() as cur:
+        await cur.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema = 'public' AND table_name = %s AND column_name = %s",
+            (_CHECKPOINT_SCHEMA_MARKER_TABLE, _CHECKPOINT_SCHEMA_MARKER_COLUMN),
+        )
+        row = await cur.fetchone()
+        return row is not None
+
+
+async def ensure_checkpointer_ready() -> None:
+    """Verify (read-only) that the checkpoint backend is ready -- exactly once.
+
+    Does NOT run AsyncPostgresSaver.setup() and never issues DDL: schema
+    provisioning/migration is the owner's job (scripts/checkpoint_bootstrap.py
+    under the c2pro_owner credential), run at deploy/bootstrap time before the
+    application starts.
+
+    Fail-closed contract for a configured PostgreSQL checkpoint backend:
+      - an installed checkpoint package whose version differs from the
+        supported/validated version raises CheckpointPackageVersionMismatchError;
+      - a database connectivity failure (pool open or readiness query) raises
+        CheckpointDatabaseUnavailableError;
+      - a reachable database whose checkpoint schema is not current raises
+        CheckpointSchemaNotReadyError.
+
+    None of these set ``_checkpointer_ready``, so a later process restart can
+    retry once the underlying cause is resolved. MemorySaver is used only when
+    the application deliberately selects it (SQLite, or missing optional
+    package) -- never as an implicit connectivity fallback.
     """
     global _checkpointer_ready
 
@@ -409,29 +567,42 @@ async def ensure_checkpointer_ready() -> None:
     if checkpointer is None:
         return
 
-    setup = getattr(checkpointer, "setup", None)
-    if not callable(setup):
+    if _checkpointer_pool is None:
+        # Non-Postgres checkpointer (MemorySaver selected explicitly) -- nothing to verify.
         _checkpointer_ready = True
         return
+
+    verify_checkpoint_package_supported()
 
     async with _checkpointer_setup_lock:
         if _checkpointer_ready:
             return
+
         try:
-            if _checkpointer_pool is not None and getattr(_checkpointer_pool, "closed", False):
+            if getattr(_checkpointer_pool, "closed", False):
                 await _checkpointer_pool.open()
-            setup_result = setup()
-            if asyncio.iscoroutine(setup_result):
-                await setup_result
-            _checkpointer_ready = True
-            logger.info("langgraph_checkpointer_ready", checkpointer_type=type(checkpointer).__name__)
-        except Exception as exc:  # noqa: BLE001 — pool timeout, SSL error, etc.
-            _checkpointer_ready = True  # prevent retry storm on every request
-            logger.warning(
-                "langgraph_checkpointer_setup_failed",
-                error=str(exc),
-                reason="checkpointer tables not verified; app continues with in-memory fallback",
+        except Exception as exc:
+            raise CheckpointDatabaseUnavailableError(
+                "Could not reach the checkpoint database during startup."
+            ) from exc
+
+        try:
+            ready = await verify_checkpoint_schema_ready(_checkpointer_pool)
+        except Exception as exc:
+            raise CheckpointDatabaseUnavailableError(
+                "Could not verify the checkpoint schema during startup."
+            ) from exc
+
+        if not ready:
+            raise CheckpointSchemaNotReadyError(
+                f"Checkpoint schema is missing or not fully migrated: "
+                f"{_CHECKPOINT_SCHEMA_MARKER_TABLE}.{_CHECKPOINT_SCHEMA_MARKER_COLUMN} not found. "
+                f"Run scripts/checkpoint_bootstrap.py with the c2pro_owner credential "
+                f"before starting the application."
             )
+
+        _checkpointer_ready = True
+        logger.info("langgraph_checkpointer_ready", checkpointer_type=type(checkpointer).__name__)
 
 
 async def close_checkpointer_resources() -> None:
@@ -485,6 +656,76 @@ def get_graph_app() -> ProjectGraph:
     return _graph_app
 
 
+async def _persist_real_checkpoint_id(
+    app: ProjectGraph,
+    config: RunnableConfig,
+    *,
+    thread_id: str,
+    document_id: str | None,
+    tenant_id: str | None,
+) -> None:
+    """Attach the REAL LangGraph checkpoint id to the pending ReviewItem.
+
+    Must run strictly AFTER ``app.ainvoke`` returns: the checkpointer only
+    persists the interrupt checkpoint as part of that call, so querying
+    state any earlier would read a stale (pre-interrupt) or empty snapshot.
+    ``aget_state`` returns a ``StateSnapshot`` whose
+    ``config["configurable"]["checkpoint_id"]`` is the checkpointer's own,
+    durable, resumable identifier -- never fabricated here (C2PRO P0b HITL
+    resume hotfix, section 2).
+
+    Best-effort: human_interrupt_node already created the pending review
+    with a stable thread_id, which alone is sufficient for
+    CheckpointService.load_checkpoint (it loads the latest checkpoint for a
+    thread when no checkpoint_id is given). A failure here must not fail the
+    graph run -- it only means checkpoint_id stays unset and resume falls
+    back to thread_id-only.
+    """
+    if not document_id or not tenant_id:
+        return
+    try:
+        snapshot = await app.aget_state(config)
+        checkpoint_id = (snapshot.config or {}).get("configurable", {}).get("checkpoint_id")
+    except Exception:
+        logger.warning("checkpoint_id_capture_failed", thread_id=thread_id, exc_info=True)
+        return
+    if not checkpoint_id:
+        return
+
+    try:
+        from uuid import UUID
+
+        from src.analysis.adapters.graph.dependencies import get_hitl_service_for_graph
+        from src.core.database import get_session_with_tenant
+
+        async with get_session_with_tenant(UUID(tenant_id)) as session:
+            service = get_hitl_service_for_graph(session=session, tenant_id=UUID(tenant_id))
+            review = await service.review_queue_repo.find_active_review(
+                document_id=UUID(document_id),
+                review_type="analysis_critique",
+            )
+            if review is not None and not review.metadata.get("checkpoint_id"):
+                review.metadata["checkpoint_id"] = checkpoint_id
+                review.metadata.setdefault("thread_id", thread_id)
+                # C2PRO P0b reprocess/persist hotfix: a LEGACY row being
+                # adopted here (created before thread_id/checkpoint_id
+                # existed, or by a dedup hit on an even older row) may never
+                # have had tenant_id embedded in its metadata either --
+                # ResumeWorkflowUseCase needs it after approval to mark the
+                # document ANALYZED. Backfill it from what this function
+                # already knows to be true, never fabricated.
+                review.metadata.setdefault("tenant_id", tenant_id)
+                await service.review_queue_repo.update_review_item(review)
+                logger.info(
+                    "checkpoint_id_persisted",
+                    thread_id=thread_id,
+                    checkpoint_id=checkpoint_id,
+                    document_id=document_id,
+                )
+    except Exception:
+        logger.warning("checkpoint_id_persist_failed", thread_id=thread_id, exc_info=True)
+
+
 async def run_orchestration(initial_state: dict[str, Any], thread_id: str) -> dict[str, Any]:
     """
     Run the LangGraph orchestration workflow with the given initial state.
@@ -530,5 +771,14 @@ async def run_orchestration(initial_state: dict[str, Any], thread_id: str) -> di
         doc_type=result.get("doc_type"),
         human_approval_required=result.get("human_approval_required", False),
     )
+
+    if result.get("human_approval_required"):
+        await _persist_real_checkpoint_id(
+            app,
+            config,
+            thread_id=thread_id,
+            document_id=result.get("document_id"),
+            tenant_id=result.get("tenant_id"),
+        )
 
     return cast(dict[str, Any], result)

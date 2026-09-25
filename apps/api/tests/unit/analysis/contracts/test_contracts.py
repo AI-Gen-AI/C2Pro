@@ -46,6 +46,17 @@ class TestRiskItem:
         r = RiskItem(title="T", description="D", severity="LOW", impact="HIGH")
         assert r.severity is Severity.LOW
 
+    def test_critical_impact_normalizes_to_canonical_critical(self):
+        """Issue #637: CRITICAL must cross the canonical RiskItem boundary losslessly."""
+        r = RiskItem(
+            category="LEGAL",
+            title="Uncapped liability",
+            description="Liability exposure requires immediate attention",
+            impact="CRITICAL",
+        )
+        assert r.severity is Severity.CRITICAL
+        assert r.impact is Severity.CRITICAL
+
     def test_extra_key_rejected(self):
         with pytest.raises(ValidationError):
             RiskItem(title="T", description="D", bogus="x")

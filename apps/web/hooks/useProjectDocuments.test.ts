@@ -232,4 +232,37 @@ describe("useProjectDocuments", () => {
     });
     expect(getProjectDocumentsMock).toHaveBeenCalledTimes(2);
   });
+
+  it("carries the backend lifecycle state alongside the polling status", async () => {
+    getProjectDocumentsMock.mockResolvedValueOnce([
+      {
+        id: "doc-pending",
+        filename: "Contract.pdf",
+        document_type: "contract",
+        status: "processing",
+        lifecycle_status: "analysis_pending",
+        uploaded_at: "2026-03-19T09:00:00Z",
+        file_size_bytes: 2048,
+      },
+      {
+        id: "doc-legacy",
+        filename: "Budget.xlsx",
+        document_type: "budget",
+        status: "parsed",
+        uploaded_at: "2026-03-19T09:00:00Z",
+        file_size_bytes: 1024,
+      },
+    ]);
+
+    const { result } = renderHook(() => useProjectDocuments("proj-lifecycle"), {
+      wrapper: createTestWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.documents).toHaveLength(2));
+    expect(result.current.documents[0]).toMatchObject({
+      status: "processing",
+      lifecycleStatus: "analysis_pending",
+    });
+    expect(result.current.documents[1]?.lifecycleStatus).toBeUndefined();
+  });
 });

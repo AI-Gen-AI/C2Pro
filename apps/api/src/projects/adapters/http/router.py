@@ -20,8 +20,8 @@ else:
     RequestType = Request
 
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-from sqlalchemy import case, func, select
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import String, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -39,6 +39,7 @@ from src.procurement.application.budget_use_cases import GetBudgetUseCase
 from src.procurement.application.use_cases import GetWBSTreeUseCase, ListWBSItemsUseCase
 from src.procurement.domain.models import WBSItem
 from src.projects.adapters.persistence.models import ProjectORM
+from src.projects.domain.models import ProjectType
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -125,6 +126,10 @@ class ProjectQuickViewSummaryResponse(BaseModel):
     updated_at: datetime
 
 
+# One vocabulary with the projecttype enum and the ORM column (IR-6).
+VALID_PROJECT_TYPES = frozenset(member.value for member in ProjectType)
+
+
 class ProjectCreateRequest(BaseModel):
     """Create project payload."""
 
@@ -137,6 +142,15 @@ class ProjectCreateRequest(BaseModel):
     budget_planned: float | None = None
     estimated_budget: float | None = None
     currency: str = "EUR"
+
+    @field_validator("project_type")
+    @classmethod
+    def validate_project_type(cls, v: str) -> str:
+        if v not in VALID_PROJECT_TYPES:
+            raise ValueError(
+                f"Invalid project_type '{v}'. Must be one of: {sorted(VALID_PROJECT_TYPES)}"
+            )
+        return v
 
 
 class ProjectUpdateRequest(BaseModel):
@@ -153,6 +167,15 @@ class ProjectUpdateRequest(BaseModel):
     estimated_budget: float | None = None
     currency: str | None = None
     expected_version: int | None = None
+
+    @field_validator("project_type")
+    @classmethod
+    def validate_project_type(cls, v: str | None) -> str | None:
+        if v is not None and v not in VALID_PROJECT_TYPES:
+            raise ValueError(
+                f"Invalid project_type '{v}'. Must be one of: {sorted(VALID_PROJECT_TYPES)}"
+            )
+        return v
 
 
 def _project_to_response(project_data: ProjectPayload) -> ProjectResponse:
@@ -202,11 +225,18 @@ def _project_orm_to_dict(project: ProjectORM) -> ProjectPayload:
 
 
 def _severity_rank_expression() -> ColumnElement[int]:
+    # PRODUCTION DATA SHAPE: the `alerts.severity` column is `character varying`, NOT the native
+    # `alertseverity` enum type that the ORM maps it as. Comparing the column against enum-typed
+    # literals makes Postgres look for a `varchar = alertseverity` operator that does not exist
+    # (asyncpg UndefinedFunctionError -> HTTP 500 at query-plan time, even for projects with zero
+    # alerts). Compare the column AS TEXT against the enum *values* so the operator always resolves
+    # as `varchar = varchar` — correct whether the column is varchar (prod) or the enum (ORM/tests).
+    severity_text = cast(Alert.severity, String)
     return case(
-        (Alert.severity == AlertSeverity.CRITICAL, 0),
-        (Alert.severity == AlertSeverity.HIGH, 1),
-        (Alert.severity == AlertSeverity.MEDIUM, 2),
-        (Alert.severity == AlertSeverity.LOW, 3),
+        (severity_text == AlertSeverity.CRITICAL.value, 0),
+        (severity_text == AlertSeverity.HIGH.value, 1),
+        (severity_text == AlertSeverity.MEDIUM.value, 2),
+        (severity_text == AlertSeverity.LOW.value, 3),
         else_=4,
     )
 
@@ -1102,6 +1132,49 @@ async def get_project_budget(
     }
 
 
+class ProjectWBSNode(BaseModel):
+    """A procurement WBS item as served by GET /projects/{project_id}/wbs, with its subtree."""
+
+    id: str
+    project_id: str
+    code: str
+    name: str
+    level: int
+    description: str | None = None
+    parent_code: str | None = None
+    item_type: str | None = None
+    budget_allocated: float | None = None
+    budget_spent: float
+    planned_start: str | None = Field(None, description="ISO 8601 timestamp as stored")
+    planned_end: str | None = Field(None, description="ISO 8601 timestamp as stored")
+    actual_start: str | None = Field(None, description="ISO 8601 timestamp as stored")
+    actual_end: str | None = Field(None, description="ISO 8601 timestamp as stored")
+    source_clause_id: str | None = None
+    version: int
+    metadata: dict[str, Any]
+    children: list["ProjectWBSNode"]
+
+
+class ProjectWBSCoverage(BaseModel):
+    """Evidence coverage over every WBS item of the project (not only roots)."""
+
+    total_items: int
+    items_with_budget: int
+    items_with_dates: int
+    items_with_alerts: int
+    completion_average: float
+
+
+class ProjectWBSResponse(BaseModel):
+    """Authoritative WBS contract: root items with nested children (procurement WBS store)."""
+
+    project_id: str
+    items: list[ProjectWBSNode]
+    coverage: ProjectWBSCoverage
+    alerts: list[dict[str, Any]]
+    total_items: int
+
+
 def _serialize_wbs_item_tree(item: WBSItem) -> dict[str, object]:
     """TS-E2E-FLW-BLK-001: serialize procurement WBS domain rows as a hierarchy."""
     return {
@@ -1152,6 +1225,7 @@ def _build_wbs_coverage(items: Sequence[object]) -> dict[str, object]:
 
 @router.get(
     "/{project_id}/wbs",
+    response_model=ProjectWBSResponse,
     summary="Get Project WBS Tree",
     description="""
     Returns WBS (Work Breakdown Structure) tree for a project.

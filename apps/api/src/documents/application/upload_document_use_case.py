@@ -3,12 +3,14 @@ Use Case for uploading a document.
 ADR-015: creates genesis DocumentRevision (rev_no=1) at initial upload.
 Refers to Suite ID: TS-UA-DOC-UC-001.
 """
+
 import hashlib
 import os
 from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID, uuid4
 
+import structlog
 from fastapi import HTTPException, UploadFile, status
 
 from src.config import settings
@@ -16,12 +18,17 @@ from src.core.json_types import JsonDict
 from src.core.tasks.snapshot_tasks import enqueue_project_snapshot
 from src.core.tenants.types import require_tenant_id
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
+from src.documents.domain.storage_keys import revision_object_key
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
 from src.projects.ports.project_repository import ProjectRepository
 from src.temporal.domain.document_revision import DocumentRevision
 from src.temporal.domain.project_snapshot import SnapshotTrigger
+from src.temporal.domain.revision_event_factory import build_revision_ingested_event
 from src.temporal.ports.document_revision_repository import IDocumentRevisionRepository
+from src.temporal.ports.project_event_repository import IProjectEventRepository
+
+logger = structlog.get_logger()
 
 STRUCTURED_DOCUMENT_TYPES = {DocumentType.BUDGET, DocumentType.SCHEDULE}
 STRUCTURED_DOCX_ERROR = "budget/schedule require .xlsx/.bc3"
@@ -38,16 +45,24 @@ class UploadDocumentUseCase:
         storage_service: IStorageService,
         project_repository: ProjectRepository,
         revision_repository: IDocumentRevisionRepository | None = None,
+        event_repository: IProjectEventRepository | None = None,
     ):
         self.document_repository = document_repository
         self.storage_service = storage_service
         self.project_repository = project_repository
         self.revision_repository = revision_repository
+        self.event_repository = event_repository
+        # HTTP dispatch pins the worker to this revision after a successful execute. It is
+        # reset per execution so a reused instance can never enqueue a stale revision.
+        self.created_revision_id: UUID | None = None
 
-    @staticmethod
-    def _blob_key(blob_hash: str, filename: str) -> str:
-        ext = os.path.splitext(filename)[1].lower()
-        return f"revisions/{blob_hash}{ext}"
+        # Dependency invariant: a revision without its material ProjectEvent must
+        # never be silently persisted. Legacy/test construction may omit BOTH, but
+        # a revision_repository can never be wired without an event_repository.
+        if revision_repository is not None and event_repository is None:
+            raise ValueError(
+                "event_repository is required when revision_repository is provided"
+            )
 
     async def execute(
         self,
@@ -58,6 +73,7 @@ class UploadDocumentUseCase:
         tenant_id: UUID,
         metadata: JsonDict | None = None,
     ) -> Document:
+        self.created_revision_id = None
         if not metadata:
             metadata = {}
 
@@ -113,13 +129,22 @@ class UploadDocumentUseCase:
         file.file.seek(0)
         content_bytes = await file.read()
         file.file.seek(0)
-        storage_path = await self.storage_service.upload_file(
-            file_content=file.file, file_id=new_document.id, file_extension=file_extension
-        )
         file_hash = hashlib.sha256(content_bytes).hexdigest()
 
+        # P0b: the bytes live only at the immutable revision object (the same key a
+        # re-upload uses); storage_url is a pointer to it, never a mutable document path.
+        blob_key = revision_object_key(
+            tenant_id=scoped_tenant_id,
+            project_id=project_id,
+            document_id=new_document.id,
+            blob_hash=file_hash,
+            filename=filename,
+        )
+        if not await self.storage_service.file_exists(blob_key):
+            await self.storage_service.upload_bytes(content_bytes, blob_key)
+
         await self.document_repository.update_storage_path(
-            scoped_tenant_id, new_document.id, storage_path
+            scoped_tenant_id, new_document.id, blob_key
         )
         await self.document_repository.update_status(
             scoped_tenant_id, new_document.id, DocumentStatus.UPLOADED
@@ -131,9 +156,7 @@ class UploadDocumentUseCase:
 
         # H1: genesis revision at initial upload, content-addressed
         if self.revision_repository:
-            blob_key = self._blob_key(file_hash, filename)
-            if not await self.storage_service.file_exists(blob_key):
-                await self.storage_service.upload_bytes(content_bytes, blob_key)
+            assert self.event_repository is not None  # guaranteed by __init__ invariant
             now = _now_naive()
             genesis = DocumentRevision(
                 revision_id=uuid4(),
@@ -148,12 +171,40 @@ class UploadDocumentUseCase:
                 created_at=now,
             )
             await self.revision_repository.append_revision(genesis)
-            enqueue_project_snapshot(
+            self.created_revision_id = genesis.revision_id
+
+            event = build_revision_ingested_event(
+                document_id=new_document.id,
                 project_id=project_id,
                 tenant_id=scoped_tenant_id,
-                trigger=SnapshotTrigger.REVISION_INGESTED,
-                source_event_id=genesis.revision_id,
+                revision=genesis,
+                filename=filename,
+                actor=str(user_id),
             )
+            await self.event_repository.append(event)
+
+            # REVISION + PROJECT_EVENT commit atomically here, before the enqueue.
+            await self.document_repository.commit()
+
+            # Best-effort: enqueuing the snapshot task hits the Celery broker
+            # synchronously. A broker/Redis outage must NOT fail the upload — the
+            # document, its genesis revision, and its material event are already
+            # persisted. (Mirrors the resilient _enqueue_document_processing in
+            # the HTTP router.)
+            try:
+                enqueue_project_snapshot(
+                    project_id=project_id,
+                    tenant_id=scoped_tenant_id,
+                    trigger=SnapshotTrigger.REVISION_INGESTED,
+                    source_event_id=event.event_id,
+                )
+            except Exception as exc:  # pragma: no cover - infra failure path
+                logger.warning(
+                    "project_snapshot_enqueue_failed",
+                    document_id=str(new_document.id),
+                    project_id=str(project_id),
+                    error=str(exc),
+                )
 
         await self.document_repository.refresh(new_document)
         return new_document

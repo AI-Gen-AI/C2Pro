@@ -27,8 +27,8 @@ describe("ProjectTabs", () => {
     const links = screen.getAllByRole("link");
 
     expect(nav).toBeInTheDocument();
-    // 11 defined tabs minus the two phase2 tabs (Stakeholders, WBS) gated off by default.
-    expect(links).toHaveLength(9);
+    // 13 defined tabs minus the two phase2 tabs (Stakeholders, WBS) gated off by default.
+    expect(links).toHaveLength(11);
     expect(
       screen.getByRole("link", { name: /overview/i }),
     ).toHaveAttribute("href", "/projects/proj_demo_001");
@@ -42,11 +42,17 @@ describe("ProjectTabs", () => {
       screen.getByRole("link", { name: /evidence/i }),
     ).toHaveAttribute("href", "/projects/proj_demo_001/evidence");
     expect(
+      screen.getByRole("link", { name: /what changed/i }),
+    ).toHaveAttribute("href", "/projects/proj_demo_001/changes");
+    expect(
       screen.getByRole("link", { name: /alerts/i }),
     ).toHaveAttribute("href", "/projects/proj_demo_001/alerts");
     expect(
       screen.getByRole("link", { name: /review/i }),
     ).toHaveAttribute("href", "/projects/proj_demo_001/review");
+    expect(
+      screen.getByRole("link", { name: /health/i }),
+    ).toHaveAttribute("href", "/projects/proj_demo_001/analysis");
     expect(
       screen.getByRole("link", { name: /budget/i }),
     ).toHaveAttribute("href", "/projects/proj_demo_001/budget");

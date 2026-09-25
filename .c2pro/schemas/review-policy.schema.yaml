@@ -1,0 +1,39 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: c2pro-review-policy-v1
+type: object
+additionalProperties: false
+required:
+  - schema
+  - schema_version
+  - status
+  - risk_classes
+  - principal_independence
+  - challenger_policy
+  - promotion_gate
+properties:
+  schema: {const: c2pro-review-policy-v1}
+  schema_version: {const: 1}
+  status: {const: canonical}
+  risk_classes:
+    type: object
+    additionalProperties: false
+    required: [trivial, normal, material, architecture, security, high_blast_radius]
+    properties:
+      trivial: {$ref: '#/$defs/risk'}
+      normal: {$ref: '#/$defs/risk'}
+      material: {$ref: '#/$defs/risk'}
+      architecture: {$ref: '#/$defs/risk'}
+      security: {$ref: '#/$defs/risk'}
+      high_blast_radius: {$ref: '#/$defs/risk'}
+  principal_independence: {type: object}
+  challenger_policy: {type: object}
+  promotion_gate: {type: object}
+$defs:
+  risk:
+    type: object
+    additionalProperties: false
+    required: [independent_principal_review, challenger, orchestrator_synthesis]
+    properties:
+      independent_principal_review: {enum: [optional, required]}
+      challenger: {enum: [false, optional, required]}
+      orchestrator_synthesis: {type: boolean}

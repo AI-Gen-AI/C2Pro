@@ -1,0 +1,75 @@
+{
+  "project_metadata": {
+    "id": "P-100044",
+    "name": "O-XXXXXX Cambio luminarias Airbus (DR Sur)",
+    "type": "Industrial",
+    "complexity": "Complex",
+    "language": "es"
+  },
+  "input_documents": {
+    "contract_text": "CONTRATO DE ADJUDICACIÓN Y OBRA para O-XXXXXX Cambio luminarias Airbus (DR Sur) (España). El contratista se compromete a realizar los trabajos completos según las bases de licitación. El importe total de adjudicación asciende a 65,000,000.00 EUR sin IVA. El plazo de ejecución será de 24 meses, contados a partir de la firma del acta de replanteo.",
+    "risk_analysis_text": "ANÁLISIS DE RIESGOS INICIAL (FORMG-121) - O-XXXXXX Cambio luminarias Airbus (DR Sur). Se identifican riesgos críticos de aprovisionamiento en la región que podrían demorar la entrega 30 meses. El desvío de costes estimado es de 6,500,000.00 EUR debido al encarecimiento de materias primas.",
+    "schedule_summary": {
+      "execution_period_months": 24,
+      "total_period_months": 36,
+      "contract_duration_months": 24,
+      "forecast_duration_months": 24
+    },
+    "budget_summary": {
+      "total_value": 65000000,
+      "budget_total": 55250000.0,
+      "line_items": [
+        {
+          "name": "Civil & Installation",
+          "cost": 33150000.0
+        },
+        {
+          "name": "Equipment & Materials",
+          "cost": 22100000.0
+        }
+      ],
+      "contract_total": 65000000,
+      "currency": "EUR",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "Normal 15% execution margin."
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-OBJ-01",
+        "type": "scope",
+        "text": "O-XXXXXX Cambio luminarias Airbus (DR Sur)",
+        "metadata": {
+          "location": "España"
+        }
+      },
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "24",
+        "metadata": {
+          "duration_months": 24
+        }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "Abengoa Inabensa",
+        "mention": "contratista",
+        "role": "Main Contractor",
+        "quadrant": "Responsible"
+      }
+    ],
+    "coherence_alerts": [],
+    "expert_score": 100,
+    "per_category_scores": {
+      "SCOPE": 100,
+      "BUDGET": 100,
+      "TIME": 100,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
+  }
+}

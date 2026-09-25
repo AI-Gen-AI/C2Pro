@@ -62,3 +62,16 @@ class IStorageService(ABC):
         :return: URL or path to the stored object.
         """
         pass
+
+    async def download_object(self, key: str) -> Path:
+        """Download an object by its exact immutable key (P0b revision objects).
+
+        Unlike ``download_file``, which some adapters reduce to a basename for legacy
+        storage URLs, the key is never rewritten, so a revision can never be redirected
+        to another object.
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not support exact-key downloads")
+
+    async def delete_prefix(self, prefix: str) -> None:
+        """Delete every object of one document (``tenants/{t}/projects/{p}/documents/{d}/``)."""
+        raise NotImplementedError(f"{type(self).__name__} does not support prefix deletes")

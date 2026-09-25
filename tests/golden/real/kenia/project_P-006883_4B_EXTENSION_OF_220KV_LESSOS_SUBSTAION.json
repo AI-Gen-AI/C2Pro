@@ -1,0 +1,75 @@
+{
+  "project_metadata": {
+    "id": "P-100069",
+    "name": "P-006883 4B Extension of 220kV Lessos Substaion",
+    "type": "Industrial",
+    "complexity": "Complex",
+    "language": "es"
+  },
+  "input_documents": {
+    "contract_text": "CONTRATO DE ADJUDICACIÓN Y OBRA para P-006883 4B Extension of 220kV Lessos Substaion (Kenia). El contratista se compromete a realizar los trabajos completos según las bases de licitación. El importe total de adjudicación asciende a 96,250,000.00 EUR sin IVA. El plazo de ejecución será de 12 meses, contados a partir de la firma del acta de replanteo.",
+    "risk_analysis_text": "ANÁLISIS DE RIESGOS INICIAL (FORMG-121) - P-006883 4B Extension of 220kV Lessos Substaion. Se identifican riesgos críticos de aprovisionamiento en la región que podrían demorar la entrega 18 meses. El desvío de costes estimado es de 9,625,000.00 EUR debido al encarecimiento de materias primas.",
+    "schedule_summary": {
+      "execution_period_months": 12,
+      "total_period_months": 24,
+      "contract_duration_months": 12,
+      "forecast_duration_months": 12
+    },
+    "budget_summary": {
+      "total_value": 96250000,
+      "budget_total": 81812500.0,
+      "line_items": [
+        {
+          "name": "Civil & Installation",
+          "cost": 49087500.0
+        },
+        {
+          "name": "Equipment & Materials",
+          "cost": 32725000.0
+        }
+      ],
+      "contract_total": 96250000,
+      "currency": "EUR",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "Normal 15% execution margin."
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-OBJ-01",
+        "type": "scope",
+        "text": "P-006883 4B Extension of 220kV Lessos Substaion",
+        "metadata": {
+          "location": "Kenia"
+        }
+      },
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "12",
+        "metadata": {
+          "duration_months": 12
+        }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "Abengoa Inabensa",
+        "mention": "contratista",
+        "role": "Main Contractor",
+        "quadrant": "Responsible"
+      }
+    ],
+    "coherence_alerts": [],
+    "expert_score": 100,
+    "per_category_scores": {
+      "SCOPE": 100,
+      "BUDGET": 100,
+      "TIME": 100,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
+  }
+}

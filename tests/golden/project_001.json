@@ -19,7 +19,25 @@
     "budget_summary": {
       "total_value_eur": 10000000,
       "risk_contingency_pct": 0.0,
-      "line_items": [ { "name": "Civil Works", "cost": 3000000 }, { "name": "PV Modules & Inverters", "cost": 5000000 }, { "name": "Labor", "cost": 2000000 } ]
+      "line_items": [
+        {
+          "name": "Civil Works",
+          "cost": 3000000
+        },
+        {
+          "name": "PV Modules & Inverters",
+          "cost": 5000000
+        },
+        {
+          "name": "Labor",
+          "cost": 2000000
+        }
+      ],
+      "contract_total": 10000000,
+      "budget_total": 10000000,
+      "currency": "EUR",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "Contract total and budget are fully reconciled."
     }
   },
   "expected_output": {
@@ -28,13 +46,18 @@
         "clause_code": "CL-DEADLINE-01",
         "type": "deadline",
         "text": "entrega completa y operativa de la planta a más tardar el 1 de Julio de 2026",
-        "metadata": { "date": "2026-07-01" }
+        "metadata": {
+          "date": "2026-07-01"
+        }
       },
       {
         "clause_code": "CL-PENALTY-01",
         "type": "penalty",
         "text": "Cualquier retraso en la entrega final incurrirá en una penalización del 5% sobre el valor total del contrato.",
-        "metadata": { "percentage": 5.0, "condition": "retraso en la entrega final" }
+        "metadata": {
+          "percentage": 5.0,
+          "condition": "retraso en la entrega final"
+        }
       }
     ],
     "stakeholders": [
@@ -57,10 +80,32 @@
         "severity": "critical",
         "description": "La fecha de finalización del cronograma (15-Jul-2026) es posterior a la fecha límite contractual (01-Jul-2026).",
         "conflicting_elements": [
-          { "source": "contract_text", "identifier": "CL-DEADLINE-01" },
-          { "source": "schedule_summary", "identifier": "project_end_date" }
-        ]
+          {
+            "source": "contract_text",
+            "identifier": "CL-DEADLINE-01"
+          },
+          {
+            "source": "schedule_summary",
+            "identifier": "project_end_date"
+          }
+        ],
+        "category": "TIME",
+        "evidence_verified": true,
+        "evidence": {
+          "doc": "Synthetic contract vs schedule_summary",
+          "contract_value": "2026-07-01",
+          "other_value": "2026-07-15"
+        }
       }
-    ]
+    ],
+    "expert_score": 91,
+    "per_category_scores": {
+      "SCOPE": 100,
+      "BUDGET": 100,
+      "TIME": 50,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
   }
 }

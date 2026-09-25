@@ -249,3 +249,31 @@ class TestPersistAnalysisUseCase:
         call_args = self.analysis_repo.add_analysis.call_args
         analysis = call_args.args[0]
         assert analysis.status == AnalysisStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_add_analysis_receives_command_tenant_id(self):
+        """TS-SEC-APP-TENANT-001: the use case must never let the repository's
+
+        tenant-ownership check be silently skipped. Omitting ``tenant_id``
+        was exactly how a prior version of this call site bypassed
+        ``SqlAlchemyAnalysisRepository._verify_project_ownership``.
+        """
+        cmd = _make_command()
+        await self.use_case.execute(cmd)
+
+        call_kwargs = self.analysis_repo.add_analysis.call_args.kwargs
+        assert call_kwargs.get("tenant_id") == cmd.tenant_id
+
+    @pytest.mark.asyncio
+    async def test_add_alerts_receives_command_tenant_id(self):
+        """TS-SEC-APP-TENANT-001: alert persistence must carry the same
+
+        mandatory tenant context as analysis persistence.
+        """
+        cmd = _make_command(
+            extracted_risks=[{"title": "R1", "category": "LEGAL", "impact": "HIGH"}],
+        )
+        await self.use_case.execute(cmd)
+
+        call_kwargs = self.analysis_repo.add_alerts.call_args.kwargs
+        assert call_kwargs.get("tenant_id") == cmd.tenant_id

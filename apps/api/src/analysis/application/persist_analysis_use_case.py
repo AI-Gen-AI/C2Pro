@@ -31,6 +31,10 @@ class PersistAnalysisCommand:
     extracted_wbs: list[dict[str, Any]]
     coherence_score: int | float | None
     coherence_breakdown: dict[str, Any]
+    # ADR-024 / P0b L4-3: versioned single-document assessment fragment produced at N8.
+    # ``None`` => not evaluated for this analysis; the key is then simply absent from
+    # result_json, which readers must treat as UNAVAILABLE (never "evaluated, empty").
+    single_document_assessment: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -60,7 +64,7 @@ class PersistAnalysisUseCase:
     async def execute(self, command: PersistAnalysisCommand) -> PersistAnalysisResult:
         from src.analysis.ports.types import AlertWrite, AnalysisWrite
         from src.coherence.alert_generator import AlertGenerator
-        from src.procurement.adapters.persistence.models import WBSItemORM
+        from src.wbs.adapters.persistence.models import WBSNodeORM
 
         analysis_type = (
             AnalysisType.RISK if command.extracted_risks else AnalysisType.SCHEDULE
@@ -81,9 +85,12 @@ class PersistAnalysisUseCase:
             result_json={
                 "risks": command.extracted_risks,
                 "wbs": command.extracted_wbs,
+                # Additive: existing keys are preserved; the assessment key is written
+                # only when the assessment actually ran.
+                **(command.single_document_assessment or {}),
             },
         )
-        await self._analysis_repo.add_analysis(analysis)
+        await self._analysis_repo.add_analysis(analysis, tenant_id=command.tenant_id)
         await self._analysis_repo.flush()
 
         if command.extracted_risks:
@@ -113,12 +120,14 @@ class PersistAnalysisUseCase:
                 )
                 for dto in alert_dtos
             ]
-            await self._analysis_repo.add_alerts(alerts)
+            await self._analysis_repo.add_alerts(alerts, tenant_id=command.tenant_id)
 
         if command.extracted_wbs:
+            # The analysis replaces the project's canonical WBS (ADR-025: one WBS per project).
             await self._session.execute(
-                delete(WBSItemORM).where(
-                    WBSItemORM.project_id == command.project_id
+                delete(WBSNodeORM).where(
+                    WBSNodeORM.project_id == command.project_id,
+                    WBSNodeORM.tenant_id == command.tenant_id,
                 )
             )
             await self._wbs_repo.bulk_create_from_dicts(
@@ -128,3 +137,4 @@ class PersistAnalysisUseCase:
         await self._analysis_repo.commit()
 
         return PersistAnalysisResult(analysis_id=analysis_id)
+

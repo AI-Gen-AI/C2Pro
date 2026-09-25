@@ -272,7 +272,9 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await page.getByRole("button", { name: /confirm approve/i }).click();
   await expect(page.getByTestId("stat-approved")).toContainText("1");
 
-  await page.goto(`/projects/${projectId}/report`);
+  // The Report tab defaults to Current State (P0d slice 8); the Audit Report view is
+  // reached only via ?mode=audit, matching what a user gets from clicking "Audit export".
+  await page.goto(`/projects/${projectId}/report?mode=audit`);
   await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: projectName }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled();
@@ -304,7 +306,9 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
   await expect((await approveResponse).status()).toBe(200);
   await expect(page.getByTestId("stat-approved")).toContainText("1");
 
-  await page.goto(`/projects/${liveProjectId}/report`);
+  // The Report tab defaults to Current State (P0d slice 8); the Audit Report view is
+  // reached only via ?mode=audit, matching what a user gets from clicking "Audit export".
+  await page.goto(`/projects/${liveProjectId}/report?mode=audit`);
   await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: projectName }).first()).toBeVisible();
   await expect(page.getByText("HITL decisions")).toBeVisible();

@@ -58,6 +58,31 @@ from .qa_reviewer_agent import review_tests, should_regenerate
 from .state import QASwarmState, make_initial_state
 from .test_generator_agent import generate_tests
 
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_ALLOWED_TARGET_ROOT = (_REPO_ROOT / "apps/api/src").resolve()
+
+
+def _validate_target_file(target_file: str) -> Path:
+    """Return a canonical, allowed QA Swarm source target."""
+    target_path = Path(target_file)
+    if target_path.is_absolute() or ".." in target_path.parts:
+        raise ValueError("Target must be a repository-relative file beneath apps/api/src")
+
+    resolved_target = (_REPO_ROOT / target_path).resolve()
+    try:
+        resolved_target.relative_to(_ALLOWED_TARGET_ROOT)
+    except ValueError as exc:
+        raise ValueError(
+            "Target must resolve beneath the allowed boundary apps/api/src"
+        ) from exc
+
+    if resolved_target.suffix != ".py":
+        raise ValueError("Target must be a .py source file beneath apps/api/src")
+    if not resolved_target.is_file():
+        raise ValueError("Target must be a regular file beneath apps/api/src")
+
+    return resolved_target
+
 # ---------------------------------------------------------------------------
 # commit_or_output node
 # ---------------------------------------------------------------------------
@@ -243,19 +268,20 @@ async def run_qa_swarm(
     Returns:
         The final QASwarmState dictionary.
     """
-    # Read source file
-    if not os.path.exists(target_file):
-        return {"error": f"Target file not found: {target_file}"}
+    try:
+        validated_target = _validate_target_file(target_file)
+    except (OSError, ValueError):
+        return {"error": "Invalid target: expected a regular .py file beneath apps/api/src"}
 
-    source_code = Path(target_file).read_text(encoding="utf-8")
+    source_code = validated_target.read_text(encoding="utf-8")
 
     # Discover existing test files for this module
-    module_stem = Path(target_file).stem
+    module_stem = validated_target.stem
     existing_test_files: list[str] = []
-    test_dirs = ["apps/api/tests"]
+    test_dirs = [_REPO_ROOT / "apps/api/tests"]
     for test_dir in test_dirs:
-        if os.path.isdir(test_dir):
-            for p in Path(test_dir).rglob(f"*{module_stem}*.py"):
+        if test_dir.is_dir():
+            for p in test_dir.rglob(f"*{module_stem}*.py"):
                 existing_test_files.append(str(p))
 
     initial_state = make_initial_state(
@@ -331,9 +357,6 @@ async def run_qa_swarm_for_pr(
 
     results = []
     for file_path in changed_files:
-        if not os.path.exists(file_path):
-            print(f"[QA Swarm] Skipping (not found locally): {file_path}")
-            continue
         print(f"[QA Swarm] → {file_path}")
         result = await run_qa_swarm(
             target_file=file_path,

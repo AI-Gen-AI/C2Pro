@@ -1,15 +1,15 @@
-"""WBS use cases."""
+"""WBS node use cases over the canonical nested-set hierarchy."""
 
-from src.wbs.application.use_cases.create_wbs_item import CreateWBSItemUseCase
-from src.wbs.application.use_cases.delete_wbs_item import DeleteWBSItemUseCase
-from src.wbs.application.use_cases.get_wbs import GetWBSUseCase
-from src.wbs.application.use_cases.move_wbs_item import MoveWBSItemUseCase
-from src.wbs.application.use_cases.update_wbs_item import UpdateWBSItemUseCase
+from src.wbs.application.use_cases.create_wbs_node import CreateWBSNodeUseCase
+from src.wbs.application.use_cases.delete_wbs_node import DeleteWBSNodeUseCase
+from src.wbs.application.use_cases.get_wbs_tree import GetWBSTreeUseCase
+from src.wbs.application.use_cases.move_wbs_node import MoveWBSNodeUseCase
+from src.wbs.application.use_cases.update_wbs_node import UpdateWBSNodeUseCase
 
 __all__ = [
-    "GetWBSUseCase",
-    "CreateWBSItemUseCase",
-    "UpdateWBSItemUseCase",
-    "MoveWBSItemUseCase",
-    "DeleteWBSItemUseCase",
+    "CreateWBSNodeUseCase",
+    "DeleteWBSNodeUseCase",
+    "GetWBSTreeUseCase",
+    "MoveWBSNodeUseCase",
+    "UpdateWBSNodeUseCase",
 ]

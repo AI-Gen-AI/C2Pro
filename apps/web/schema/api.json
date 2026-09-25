@@ -17,28 +17,12 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/health/worker": {
-      "get": {
-        "tags": ["Health", "Public"],
-        "summary": "Celery Worker Health",
-        "description": "Checks that a Celery worker is online and consuming the document_parsing queue.",
-        "operationId": "worker_health_check_api_v1_health_worker_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
                 "schema": {
-                  "additionalProperties": true,
+                  "additionalProperties": {
+                    "type": "string"
+                  },
                   "type": "object",
-                  "title": "Response Worker Health Check Api V1 Health Worker Get"
+                  "title": "Response Root  Get"
                 }
               }
             }
@@ -57,7 +41,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Liveness Check Health Live Get"
+                }
               }
             }
           }
@@ -75,7 +65,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Readiness Check Health Ready Get"
+                }
               }
             }
           }
@@ -93,7 +87,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Circuit Breaker Status Health Circuit Breakers Get"
+                }
               }
             }
           }
@@ -111,7 +109,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Generic Health Check Health Get"
+                }
               }
             }
           }
@@ -151,7 +155,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Liveness Check Api V1 Health Live Get"
+                }
               }
             }
           }
@@ -169,7 +179,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Readiness Check Api V1 Health Ready Get"
+                }
               }
             }
           }
@@ -187,7 +201,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Circuit Breaker Status Api V1 Health Circuit Breakers Get"
+                }
               }
             }
           }
@@ -205,7 +223,35 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Generic Health Check Api V1 Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/worker": {
+      "get": {
+        "tags": ["Health", "Public"],
+        "summary": "Celery Worker Health",
+        "description": "Checks that a Celery worker is online and consuming the document_parsing queue.",
+        "operationId": "worker_health_check_api_v1_health_worker_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Worker Health Check Api V1 Health Worker Get"
+                }
               }
             }
           }
@@ -576,7 +622,9 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
+                  "additionalProperties": {
+                    "type": "string"
+                  },
                   "type": "object",
                   "title": "Response Health Check Api V1 Projects Health Get"
                 }
@@ -1320,10 +1368,10 @@
     },
     "/api/v1/projects/{project_id}/wbs": {
       "get": {
-        "tags": ["wbs"],
-        "summary": "Get Wbs",
-        "description": "Get WBS items for a project.\n\nReturns all WBS items with their hierarchy and coverage information.",
-        "operationId": "get_wbs_api_v1_projects__project_id__wbs_get",
+        "tags": ["projects"],
+        "summary": "Get Project WBS Tree",
+        "description": "Returns WBS (Work Breakdown Structure) tree for a project.\n\n    Uses procurement WBS items for real data.\n\n    Returns:\n    - Hierarchical WBS tree with children",
+        "operationId": "get_project_wbs_api_v1_projects__project_id__wbs_get",
         "security": [
           {
             "HTTPBearer": []
@@ -1336,6 +1384,7 @@
             "required": true,
             "schema": {
               "type": "string",
+              "format": "uuid",
               "title": "Project Id"
             }
           }
@@ -1346,7 +1395,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WBSOutput"
+                  "$ref": "#/components/schemas/ProjectWBSResponse"
                 }
               }
             }
@@ -1368,7 +1417,7 @@
       "get": {
         "tags": ["project-health"],
         "summary": "Get latest project health vector",
-        "description": "Return latest tenant-scoped project HealthVector or honest insufficient data.",
+        "description": "Return latest tenant-scoped project HealthVector or honest insufficient data.\n\nA project the caller cannot see is a 404, exactly as ``GET /projects/{project_id}``\nand its siblings behave: \"not found\" covers both \"does not exist\" and \"belongs to\nanother tenant\", so the response never reveals which. Returning 200 with an empty\nvector would make an authorization failure indistinguishable from a real project\nthat simply has no snapshot yet \u2014 and \"no data\" is a legitimate answer only for a\nproject the caller actually owns.",
         "operationId": "get_project_health_api_v1_projects__project_id__health_get",
         "security": [
           {
@@ -1397,6 +1446,59 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Project not found, or it belongs to another tenant. The two are deliberately indistinguishable so the response cannot be used to probe which project ids exist."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/reports/current-state": {
+      "get": {
+        "tags": ["project-reports"],
+        "summary": "Get the current state report for a project",
+        "description": "Project the current state of a project the caller owns.\n\nNo domain source is read until project ownership is confirmed, so a foreign\nor unknown project id costs nothing and reveals nothing.",
+        "operationId": "get_current_state_report_api_v1_projects__project_id__reports_current_state_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentStateReport"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found, or it belongs to another tenant. The two are deliberately indistinguishable."
           },
           "422": {
             "description": "Validation Error",
@@ -2113,6 +2215,148 @@
           },
           "404": {
             "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/timeline": {
+      "get": {
+        "tags": ["Temporal changes"],
+        "summary": "Get Project Timeline",
+        "description": "Read the append-only project timeline in canonical temporal order.",
+        "operationId": "get_project_timeline_api_v1_projects__project_id__timeline_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/documents/{document_id}/changes/{revision_id}": {
+      "get": {
+        "tags": ["Temporal changes"],
+        "summary": "Get Revision Change Detail",
+        "description": "Read a revision detail only from the tenant-scoped immutable projection.",
+        "operationId": "get_revision_change_detail_api_v1_projects__project_id__documents__document_id__changes__revision_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "revision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Revision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeDetailResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3326,9 +3570,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "parameters": [
@@ -3395,12 +3636,9 @@
       "post": {
         "tags": ["Admin", "DLQ"],
         "summary": "Retry a DLQ entry",
-        "description": "TS-BCK-042-001: Retry a DLQ entry for organization administrators.",
+        "description": "Retry a cross-tenant DLQ entry as an authorized platform operator.",
         "operationId": "retry_dlq_entry_api_v1_admin_dlq__dlq_id__retry_post",
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -3446,6 +3684,11 @@
         "tags": ["frontend-support"],
         "summary": "Create Cookie Consent",
         "operationId": "create_cookie_consent_api_v1_compliance_cookies_consent_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -3485,6 +3728,11 @@
         "tags": ["frontend-support"],
         "summary": "Get Cookie Consent",
         "operationId": "get_cookie_consent_api_v1_compliance_cookies_consent_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "tenantId",
@@ -3543,6 +3791,11 @@
         "tags": ["frontend-support"],
         "summary": "Update Cookie Consent",
         "operationId": "update_cookie_consent_api_v1_compliance_cookies_consent_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -3687,6 +3940,7 @@
       "post": {
         "tags": ["frontend-support"],
         "summary": "Start Sample Project",
+        "description": "Create (or idempotently reuse) a REAL seeded sample project for the tenant (ADR-024).\n\nThe previous stub returned a non-UUID id (``proj_sample_001``) that 422'd every downstream\ncall, breaking the new-user flow. This creates a real project so onboarding lands on\nworking endpoints; a genuine UUID + route is returned.",
         "operationId": "start_sample_project_api_v1_onboarding_sample_project_start_post",
         "responses": {
           "200": {
@@ -4054,8 +4308,13 @@
             "required": false,
             "schema": {
               "anyOf": [
-                { "type": "string", "format": "uuid" },
-                { "type": "null" }
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
               ],
               "description": "Filter by project",
               "title": "Project Id"
@@ -4499,318 +4758,6 @@
         ]
       }
     },
-    "/api/v1/projects/{project_id}/wbs/items": {
-      "post": {
-        "tags": ["wbs"],
-        "summary": "Create Wbs Item",
-        "description": "Create a new WBS item.\n\nAuto-generates code if not provided.",
-        "operationId": "create_wbs_item_api_v1_projects__project_id__wbs_items_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "project_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Project Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateWBSItemInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WBSItemOutput"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/projects/{project_id}/wbs/items/{item_id}": {
-      "patch": {
-        "tags": ["wbs"],
-        "summary": "Update Wbs Item",
-        "description": "Update a WBS item.\n\nPartial update - only provided fields are updated.",
-        "operationId": "update_wbs_item_api_v1_projects__project_id__wbs_items__item_id__patch",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "project_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Project Id"
-            }
-          },
-          {
-            "name": "item_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Item Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateWBSItemInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WBSItemOutput"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": ["wbs"],
-        "summary": "Delete Wbs Item",
-        "description": "Delete a WBS item.\n\nRequires cascade=True if the item has children.",
-        "operationId": "delete_wbs_item_api_v1_projects__project_id__wbs_items__item_id__delete",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "project_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Project Id"
-            }
-          },
-          {
-            "name": "item_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Item Id"
-            }
-          },
-          {
-            "name": "cascade",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "Delete item and all descendants",
-              "default": false,
-              "title": "Cascade"
-            },
-            "description": "Delete item and all descendants"
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "tags": ["wbs"],
-        "summary": "Get Wbs Item",
-        "description": "Get a single WBS item by ID.",
-        "operationId": "get_wbs_item_api_v1_projects__project_id__wbs_items__item_id__get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "project_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Project Id"
-            }
-          },
-          {
-            "name": "item_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Item Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WBSItemOutput"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/projects/{project_id}/wbs/items/{item_id}/move": {
-      "post": {
-        "tags": ["wbs"],
-        "summary": "Move Wbs Item",
-        "description": "Move a WBS item to a new parent.\n\nValidates against circular references and maximum depth.",
-        "operationId": "move_wbs_item_api_v1_projects__project_id__wbs_items__item_id__move_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "project_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Project Id"
-            }
-          },
-          {
-            "name": "item_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Item Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MoveWBSItemInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WBSItemOutput"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/analysis/analyze": {
       "post": {
         "tags": ["analysis"],
@@ -4864,11 +4811,6 @@
         "tags": ["analysis"],
         "summary": "Stream Project Processing",
         "operationId": "stream_project_processing_api_v1_analysis_projects__project_id__process_stream_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "project_id",
@@ -5113,9 +5055,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "parameters": [
@@ -5213,9 +5152,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ]
       }
@@ -5227,9 +5163,6 @@
         "description": "Returns coherence dashboard data for a project.\n    Derived from the latest Analysis or CoherenceResult records.",
         "operationId": "get_coherence_dashboard_api_v1_coherence_dashboard__project_id__get",
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -5277,9 +5210,6 @@
         "description": "Returns coherence dashboard data for a project.\n    Derived from the latest Analysis or CoherenceResult records.",
         "operationId": "get_coherence_dashboard_api_coherence_dashboard__project_id__get",
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -5936,6 +5866,80 @@
         "required": ["alert_id", "items"],
         "title": "AlertHistoryResponse"
       },
+      "AlertItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "sla_due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sla Due At"
+          },
+          "overdue": {
+            "type": "boolean",
+            "title": "Overdue"
+          },
+          "source_clause_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Clause Id"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "severity",
+          "category",
+          "status",
+          "created_at",
+          "overdue",
+          "evidence_tier"
+        ],
+        "title": "AlertItem"
+      },
       "AlertListResponse": {
         "properties": {
           "items": {
@@ -6160,6 +6164,129 @@
         },
         "type": "object",
         "title": "AlertWorkspaceSettingsPayload"
+      },
+      "AlertsData": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "open_count": {
+            "type": "integer",
+            "title": "Open Count"
+          },
+          "open_by_severity": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Open By Severity"
+          },
+          "overdue_open_count": {
+            "type": "integer",
+            "title": "Overdue Open Count"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlertItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "evidence_breakdown": {
+            "$ref": "#/components/schemas/EvidenceBreakdown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "open_count",
+          "open_by_severity",
+          "overdue_open_count",
+          "items",
+          "evidence_breakdown"
+        ],
+        "title": "AlertsData"
+      },
+      "AlertsSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref",
+            "description": "Identifier of the single versioned record this section was projected from, when one exists."
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AlertsData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "AlertsSection"
       },
       "AnalysisStatus": {
         "properties": {
@@ -6408,16 +6535,38 @@
         "title": "ApprovalStatus"
       },
       "ApproveRequest": {
+        "properties": {},
+        "type": "object",
+        "title": "ApproveRequest",
+        "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is never\naccepted from the client \u2014 it is derived server-side from the\nauthenticated session (Depends(get_current_user)). A client-supplied\nreviewer field here would let any authenticated user forge a review as\nanother user, corrupting the HITL audit trail. This body is currently\nempty by design; do not add a reviewer identity field back."
+      },
+      "AttentionItem": {
         "properties": {
-          "reviewer_name": {
+          "kind": {
             "type": "string",
-            "minLength": 1,
-            "title": "Reviewer Name"
+            "title": "Kind"
+          },
+          "level": {
+            "$ref": "#/components/schemas/AttentionLevel"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": ["reviewer_name"],
-        "title": "ApproveRequest"
+        "required": ["kind", "level", "message", "section_key"],
+        "title": "AttentionItem"
+      },
+      "AttentionLevel": {
+        "type": "string",
+        "enum": ["critical", "warning", "info"],
+        "title": "AttentionLevel"
       },
       "AuthErrorResponse": {
         "properties": {
@@ -6450,7 +6599,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -6465,7 +6614,7 @@
           },
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -6473,23 +6622,236 @@
         "required": ["document_type", "file"],
         "title": "Body_upload_document_for_processing_api_v1_projects__project_id__documents_post"
       },
-      "BudgetInput": {
+      "BudgetData": {
         "properties": {
-          "amount": {
-            "type": "number",
-            "minimum": 0.0,
-            "title": "Amount"
+          "item_count": {
+            "type": "integer",
+            "title": "Item Count"
+          },
+          "total_budget": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Budget"
+          },
+          "spent_amount": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Spent Amount"
+          },
+          "spend_recorded": {
+            "type": "boolean",
+            "title": "Spend Recorded",
+            "description": "False when no spend has been recorded, so a zero spent_amount is not a confirmed zero."
+          },
+          "remaining_budget": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Budget",
+            "description": "Null when no spend has been recorded, because remaining would merely restate total."
           },
           "currency": {
             "type": "string",
-            "title": "Currency",
-            "default": "EUR"
+            "title": "Currency"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetLineItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "item_count",
+          "total_budget",
+          "spent_amount",
+          "spend_recorded",
+          "currency",
+          "notes",
+          "items"
+        ],
+        "title": "BudgetData"
+      },
+      "BudgetLineItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "name", "code", "amount"],
+        "title": "BudgetLineItem"
+      },
+      "BudgetReconciliation": {
+        "properties": {
+          "items_sum": {
+            "type": "number",
+            "title": "Items Sum"
+          },
+          "stated_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stated Total"
+          },
+          "contract_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Total"
+          },
+          "deviation_pct": {
+            "type": "number",
+            "title": "Deviation Pct"
+          },
+          "direction": {
+            "type": "string",
+            "title": "Direction"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "source_rule_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Rule Ids"
           }
         },
         "type": "object",
-        "required": ["amount"],
-        "title": "BudgetInput",
-        "description": "Budget input model."
+        "required": ["items_sum", "deviation_pct", "direction"],
+        "title": "BudgetReconciliation",
+        "description": "TASK-BCK-093: Typed reconciliation fields from DET-BUD FindingSignal.raw_data."
+      },
+      "BudgetSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref",
+            "description": "Identifier of the single versioned record this section was projected from, when one exists."
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BudgetData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "BudgetSection"
       },
       "BulkDocumentItem": {
         "properties": {
@@ -6739,6 +7101,61 @@
         "title": "BulkWBSRequest",
         "description": "Bulk WBS creation request."
       },
+      "CategoryAssessment": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/CoherenceCategory"
+          },
+          "state": {
+            "$ref": "#/components/schemas/CategoryCoverageState"
+          },
+          "evidence_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Evidence Count",
+            "default": 0
+          },
+          "evidence_clause_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Clause Ids",
+            "default": []
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/FindingSignal"
+            },
+            "type": "array",
+            "title": "Findings",
+            "default": []
+          },
+          "missing_data": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Data",
+            "default": []
+          },
+          "gap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoryGapAlert"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["category", "state"],
+        "title": "CategoryAssessment",
+        "description": "Per-category single-document assessment: state + evidence + findings + gap.\n\n``PRESENT`` carries qualifying evidence and no gap; ``INSUFFICIENT_EVIDENCE`` carries\nno evidence, factual ``missing_data`` and an actionable ``gap``. ``findings`` are\nindependent of coverage state (an issue can exist regardless of coverage)."
+      },
       "CategoryBreakdown": {
         "properties": {
           "category": {
@@ -6810,6 +7227,29 @@
         "title": "CategoryBreakdown",
         "description": "Represents the coherence score breakdown for a specific category."
       },
+      "CategoryCoverageState": {
+        "type": "string",
+        "enum": ["present", "insufficient_evidence"],
+        "title": "CategoryCoverageState",
+        "description": "Whether a category is evidence-backed or lacks sufficient evidence."
+      },
+      "CategoryGapAlert": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/CoherenceCategory"
+          },
+          "action": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Action"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["category", "action"],
+        "title": "CategoryGapAlert",
+        "description": "An actionable gap alert for a category that lacks sufficient evidence."
+      },
       "CategoryStatus": {
         "type": "string",
         "enum": [
@@ -6821,48 +7261,6 @@
           "processing_error"
         ],
         "title": "CategoryStatus"
-      },
-      "BudgetReconciliation": {
-        "properties": {
-          "items_sum": {
-            "type": "number",
-            "title": "Items Sum"
-          },
-          "stated_total": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stated Total"
-          },
-          "contract_total": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Contract Total"
-          },
-          "deviation_pct": {
-            "type": "number",
-            "title": "Deviation Pct"
-          },
-          "direction": {
-            "type": "string",
-            "title": "Direction"
-          }
-        },
-        "type": "object",
-        "required": ["items_sum", "deviation_pct", "direction"],
-        "title": "BudgetReconciliation",
-        "description": "TASK-BCK-093: Typed reconciliation fields from DET-BUD FindingSignal.raw_data."
       },
       "CategoryV2": {
         "properties": {
@@ -6989,6 +7387,90 @@
         "required": ["category", "status"],
         "title": "CategoryV2"
       },
+      "ChangeDetailResponse": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "occurred_at": {
+            "type": "string",
+            "title": "Occurred At"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "change_cause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Cause"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "provenance": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Provenance"
+          },
+          "l3_impact": {
+            "type": "null",
+            "title": "L3 Impact"
+          },
+          "changes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "evidence_refs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Evidence Refs"
+          }
+        },
+        "type": "object",
+        "required": ["event_id", "occurred_at", "event_type", "state"],
+        "title": "ChangeDetailResponse",
+        "description": "Evidence-grounded revision detail with L1/L2 before and after snapshots."
+      },
       "Clause": {
         "properties": {
           "id": {
@@ -7012,6 +7494,92 @@
         "required": ["id", "text"],
         "title": "Clause",
         "description": "Represents a specific clause or segment of a document."
+      },
+      "CoherenceCategory": {
+        "type": "string",
+        "enum": ["SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME"],
+        "title": "CoherenceCategory",
+        "description": "Canonical coherence categories used by score calculators."
+      },
+      "CoherenceData": {
+        "properties": {
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "score_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Version"
+          },
+          "score_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Reason"
+          },
+          "missing_dimensions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Dimensions"
+          },
+          "sub_scores": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Sub Scores"
+          },
+          "evaluation_alert_count": {
+            "type": "integer",
+            "title": "Evaluation Alert Count",
+            "description": "Alerts counted by the coherence evaluation that produced the score. This can differ from the Alerts section, which lists the project alert register."
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At",
+            "description": "Latest project activity considered by the coherence dashboard; not the evaluation time."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["evaluation_alert_count"],
+        "title": "CoherenceData"
       },
       "CoherenceEvaluateRequest": {
         "properties": {
@@ -7154,6 +7722,80 @@
         "title": "CoherenceResult",
         "description": "Represents the complete result of a coherence evaluation, including alerts and the final score."
       },
+      "CoherenceSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref",
+            "description": "Identifier of the single versioned record this section was projected from, when one exists."
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoherenceData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "CoherenceSection"
+      },
       "CoherenceV2Payload": {
         "properties": {
           "project_id": {
@@ -7207,6 +7849,43 @@
         },
         "type": "object",
         "title": "ConsentCategories"
+      },
+      "ContractClarityFinding": {
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "title": "Rule Id"
+          },
+          "clause_id": {
+            "type": "string",
+            "title": "Clause Id"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low", "info"],
+            "title": "Severity"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["rule_id", "clause_id", "severity", "summary"],
+        "title": "ContractClarityFinding",
+        "description": "One clause-level clarity finding.\n\nSeverity only \u2014 deliberately carries no score/confidence/weight field so\nit cannot be aggregated into a Health dimension or the Coherence Score."
       },
       "CookieConsentCreateRequest": {
         "properties": {
@@ -7312,93 +7991,109 @@
         ],
         "title": "CreateAlertRequest"
       },
-      "CreateWBSItemInput": {
+      "CurrentStateReport": {
         "properties": {
-          "name": {
+          "report_schema_version": {
             "type": "string",
-            "minLength": 1,
-            "title": "Name"
+            "title": "Report Schema Version",
+            "default": "current-state-report/v2"
           },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
           },
-          "parent_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Id"
+          "project": {
+            "$ref": "#/components/schemas/ProjectIdentity"
           },
-          "code": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^\\d+(\\.\\d+){0,3}$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Code"
+          "content_fingerprint": {
+            "type": "string",
+            "title": "Content Fingerprint",
+            "description": "sha256 over project identity and section content, excluding generated_at. Two reports with the same fingerprint describe the same state."
           },
-          "start_date": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Start Date"
-          },
-          "end_date": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "End Date"
-          },
-          "budget": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BudgetInput"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "completion": {
-            "type": "integer",
-            "maximum": 100.0,
-            "minimum": 0.0,
-            "title": "Completion",
-            "default": 0
+          "sections": {
+            "$ref": "#/components/schemas/CurrentStateSections"
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": ["name"],
-        "title": "CreateWBSItemInput",
-        "description": "Input model for creating a WBS item."
+        "required": [
+          "generated_at",
+          "project",
+          "content_fingerprint",
+          "sections"
+        ],
+        "title": "CurrentStateReport",
+        "description": "Current project state, projected at ``generated_at`` from authoritative reads."
+      },
+      "CurrentStateSections": {
+        "properties": {
+          "executive_summary": {
+            "$ref": "#/components/schemas/ExecutiveSummarySection"
+          },
+          "documents": {
+            "$ref": "#/components/schemas/DocumentsSection"
+          },
+          "health": {
+            "$ref": "#/components/schemas/HealthSection"
+          },
+          "missing_evidence": {
+            "$ref": "#/components/schemas/MissingEvidenceSection"
+          },
+          "coherence": {
+            "$ref": "#/components/schemas/CoherenceSection"
+          },
+          "alerts": {
+            "$ref": "#/components/schemas/AlertsSection"
+          },
+          "hitl": {
+            "$ref": "#/components/schemas/HitlSection"
+          },
+          "budget": {
+            "$ref": "#/components/schemas/BudgetSection"
+          },
+          "wbs": {
+            "$ref": "#/components/schemas/WbsSection"
+          },
+          "stakeholders": {
+            "$ref": "#/components/schemas/StakeholdersSection"
+          },
+          "raci": {
+            "$ref": "#/components/schemas/RaciSection"
+          },
+          "risks": {
+            "$ref": "#/components/schemas/NotModeledSection"
+          },
+          "obligations": {
+            "$ref": "#/components/schemas/NotModeledSection"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/NotModeledSection"
+          },
+          "evidence_quality": {
+            "$ref": "#/components/schemas/EvidenceQualitySection"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "executive_summary",
+          "documents",
+          "health",
+          "missing_evidence",
+          "coherence",
+          "alerts",
+          "hitl",
+          "budget",
+          "wbs",
+          "stakeholders",
+          "raci",
+          "risks",
+          "obligations",
+          "schedule",
+          "evidence_quality"
+        ],
+        "title": "CurrentStateSections"
       },
       "DLQEntryResponse": {
         "properties": {
@@ -7917,6 +8612,91 @@
         "title": "DocumentHistoryResponse",
         "description": "Ordered history events for a single document."
       },
+      "DocumentItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "document_type": {
+            "type": "string",
+            "title": "Document Type"
+          },
+          "upload_status": {
+            "type": "string",
+            "title": "Upload Status",
+            "description": "Raw document lifecycle status as stored."
+          },
+          "processing_status": {
+            "type": "string",
+            "title": "Processing Status",
+            "description": "Polling status as the documents list API normalizes it (its 'parsed' includes analyzed)."
+          },
+          "lifecycle_status": {
+            "type": "string",
+            "title": "Lifecycle Status",
+            "description": "Lifecycle state as the Documents tab labels it: uploaded, processing, parsed, analysis_pending, analyzed or error."
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "uploaded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploaded At"
+          },
+          "parsed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parsed At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "filename",
+          "document_type",
+          "upload_status",
+          "processing_status",
+          "lifecycle_status",
+          "version"
+        ],
+        "title": "DocumentItem"
+      },
+      "DocumentLifecycleStatus": {
+        "type": "string",
+        "enum": [
+          "uploaded",
+          "processing",
+          "parsed",
+          "analysis_pending",
+          "analyzed",
+          "error"
+        ],
+        "title": "DocumentLifecycleStatus",
+        "description": "User-facing lifecycle state; unlike the polling status it never merges\n\"parsed\", \"analysis pending\" and \"analyzed\"."
+      },
       "DocumentListItem": {
         "properties": {
           "id": {
@@ -7945,6 +8725,9 @@
           "status_detail": {
             "type": "string",
             "title": "Status Detail"
+          },
+          "lifecycle_status": {
+            "$ref": "#/components/schemas/DocumentLifecycleStatus"
           },
           "error_message": {
             "anyOf": [
@@ -7982,7 +8765,13 @@
           }
         },
         "type": "object",
-        "required": ["id", "filename", "status", "status_detail"],
+        "required": [
+          "id",
+          "filename",
+          "status",
+          "status_detail",
+          "lifecycle_status"
+        ],
         "title": "DocumentListItem",
         "description": "List item for documents."
       },
@@ -8412,6 +9201,137 @@
         "title": "DocumentUploadResponse",
         "description": "Response for parse endpoints."
       },
+      "DocumentsData": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "by_processing_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Processing Status"
+          },
+          "by_lifecycle_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Lifecycle Status"
+          },
+          "by_type": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Type"
+          },
+          "counts_are_partial": {
+            "type": "boolean",
+            "title": "Counts Are Partial",
+            "description": "True when by_processing_status/by_lifecycle_status/by_type cover only the documents that could be loaded, not total.",
+            "default": false
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "by_processing_status",
+          "by_lifecycle_status",
+          "by_type",
+          "items"
+        ],
+        "title": "DocumentsData"
+      },
+      "DocumentsSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref",
+            "description": "Identifier of the single versioned record this section was projected from, when one exists."
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentsData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "DocumentsSection"
+      },
       "EnrichedCoherenceResult": {
         "properties": {
           "overall_score": {
@@ -8569,6 +9489,34 @@
         "title": "Evidence",
         "description": "Represents the specific evidence supporting an alert."
       },
+      "EvidenceBreakdown": {
+        "properties": {
+          "strong_linked": {
+            "type": "integer",
+            "title": "Strong Linked",
+            "default": 0
+          },
+          "weak_linked": {
+            "type": "integer",
+            "title": "Weak Linked",
+            "default": 0
+          },
+          "unlinked": {
+            "type": "integer",
+            "title": "Unlinked",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "EvidenceBreakdown"
+      },
+      "EvidenceGranularity": {
+        "type": "string",
+        "enum": ["clause", "document"],
+        "title": "EvidenceGranularity",
+        "description": "What the ``evidence_clause_ids`` in a coverage actually identify (P0b-R1).\n\nThis qualifies every coverage that carries evidence ids, so it lives beside the\ncoverage contract rather than in the persistence artifact alone: \"six categories\nevidenced by six distinct clauses\" and \"six categories evidenced by one\nwhole-document blob\" are different product claims, and a reader must be able to\ntell them apart **without** inspecting the shape of an id."
+      },
       "EvidenceHistoryEventResponse": {
         "properties": {
           "id": {
@@ -8615,6 +9563,127 @@
         "required": ["id", "title", "detail", "occurred_at"],
         "title": "EvidenceHistoryEventResponse",
         "description": "A persisted evidence-history event for a document timeline."
+      },
+      "EvidenceQualityData": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceQualityRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "available_section_tiers": {
+            "$ref": "#/components/schemas/EvidenceBreakdown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["rows", "available_section_tiers"],
+        "title": "EvidenceQualityData"
+      },
+      "EvidenceQualityRow": {
+        "properties": {
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["section_key", "status", "evidence_tier"],
+        "title": "EvidenceQualityRow"
+      },
+      "EvidenceQualitySection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref",
+            "description": "Identifier of the single versioned record this section was projected from, when one exists."
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceQualityData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "EvidenceQualitySection"
       },
       "EvidenceRef": {
         "properties": {
@@ -8754,6 +9823,168 @@
         "required": ["coherence_score", "risks", "evidence_links", "citations"],
         "title": "ExecuteDecisionResponseDTO",
         "description": "Refers to Suite ID: TS-I13-E2E-REAL-001."
+      },
+      "ExecutiveSummaryData": {
+        "properties": {
+          "attention_items": {
+            "items": {
+              "$ref": "#/components/schemas/AttentionItem"
+            },
+            "type": "array",
+            "title": "Attention Items"
+          },
+          "document_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Count"
+          },
+          "parsed_document_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parsed Document Count",
+            "description": "Documents whose polling status is 'parsed' (includes analyzed documents)."
+          },
+          "analyzed_document_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analyzed Document Count",
+            "description": "Documents whose analysis completed; null when document counts are partial."
+          },
+          "awaiting_analysis_document_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Awaiting Analysis Document Count",
+            "description": "Parsed documents not yet analyzed (parsed or analysis_pending); null when counts are partial."
+          },
+          "error_section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Error Section Keys"
+          },
+          "unavailable_section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unavailable Section Keys"
+          },
+          "not_modeled_section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Not Modeled Section Keys"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "attention_items",
+          "error_section_keys",
+          "unavailable_section_keys",
+          "not_modeled_section_keys"
+        ],
+        "title": "ExecutiveSummaryData"
+      },
+      "ExecutiveSummarySection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref",
+            "description": "Identifier of the single versioned record this section was projected from, when one exists."
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutiveSummaryData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "ExecutiveSummarySection"
       },
       "FindingSignal": {
         "properties": {
@@ -8924,6 +10155,74 @@
         "enum": ["healthy", "watch", "at_risk", "critical", "unknown"],
         "title": "HealthBand"
       },
+      "HealthCategoryItem": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "state": {
+            "type": "string",
+            "title": "State",
+            "description": "present | insufficient_evidence. There is no numeric score."
+          },
+          "evidence_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Evidence Count"
+          },
+          "missing_data": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Data"
+          },
+          "gap": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gap",
+            "description": "Actionable next step for a category without evidence."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["category", "state", "evidence_count"],
+        "title": "HealthCategoryItem",
+        "description": "One canonical Health category, from the single-document coverage (ADR-024)."
+      },
+      "HealthData": {
+        "properties": {
+          "computed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Computed At"
+          },
+          "evidence_granularity": {
+            "type": "string",
+            "title": "Evidence Granularity",
+            "description": "clause | document: what the evidence counts identify."
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/HealthCategoryItem"
+            },
+            "type": "array",
+            "title": "Categories"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["computed_at", "evidence_granularity", "categories"],
+        "title": "HealthData",
+        "description": "User-facing Health: exactly the six canonical categories, in MASTER order.\n\nThe legacy ADR-018 v0 dimensions (contract/risk/documentation/governance) and their composite\nstay internal Health inputs; they are not a competing user-facing taxonomy, and no composite is\nreported until a canonical six-category roll-up exists."
+      },
       "HealthDimension": {
         "type": "string",
         "enum": [
@@ -8941,6 +10240,80 @@
         "type": "string",
         "enum": ["insufficient_evidence", "not_applicable", "budget_exhausted"],
         "title": "HealthNullReason"
+      },
+      "HealthSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref",
+            "description": "Identifier of the single versioned record this section was projected from, when one exists."
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HealthData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "HealthSection"
       },
       "HealthSignal": {
         "properties": {
@@ -9053,6 +10426,33 @@
             "type": "string",
             "format": "date-time",
             "title": "Computed At"
+          },
+          "contract_clarity_findings": {
+            "items": {
+              "$ref": "#/components/schemas/ContractClarityFinding"
+            },
+            "type": "array",
+            "title": "Contract Clarity Findings"
+          },
+          "single_document_coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SingleDocumentCoverage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "single_document_evidence_granularity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceGranularity"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -9060,6 +10460,168 @@
         "required": ["project_id", "tenant_id", "dimensions", "computed_at"],
         "title": "HealthVector",
         "description": "Project-level health vector across supported dimensions."
+      },
+      "HitlData": {
+        "properties": {
+          "pending_count": {
+            "type": "integer",
+            "title": "Pending Count"
+          },
+          "overdue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overdue Count",
+            "description": "Null when not every pending item could be loaded, so the overdue count is unknown."
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HitlItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["pending_count", "items"],
+        "title": "HitlData"
+      },
+      "HitlItem": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "item_type": {
+            "type": "string",
+            "title": "Item Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "impact_level": {
+            "type": "string",
+            "title": "Impact Level"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "sla_due_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Sla Due Date"
+          },
+          "overdue": {
+            "type": "boolean",
+            "title": "Overdue"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "item_id",
+          "item_type",
+          "status",
+          "impact_level",
+          "confidence",
+          "created_at",
+          "sla_due_date",
+          "overdue"
+        ],
+        "title": "HitlItem"
+      },
+      "HitlSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref",
+            "description": "Identifier of the single versioned record this section was projected from, when one exists."
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HitlData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "HitlSection"
       },
       "ImpactLevel": {
         "type": "string",
@@ -9185,9 +10747,47 @@
         "title": "MeResponse",
         "description": "Response para endpoint /me."
       },
-      "MoveWBSItemInput": {
+      "MissingEvidenceData": {
         "properties": {
-          "new_parent_id": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MissingEvidenceItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["items"],
+        "title": "MissingEvidenceData"
+      },
+      "MissingEvidenceItem": {
+        "properties": {
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["source_domain", "subject", "description"],
+        "title": "MissingEvidenceItem"
+      },
+      "MissingEvidenceSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
             "anyOf": [
               {
                 "type": "string"
@@ -9196,12 +10796,133 @@
                 "type": "null"
               }
             ],
-            "title": "New Parent Id"
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref",
+            "description": "Identifier of the single versioned record this section was projected from, when one exists."
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MissingEvidenceData"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "title": "MoveWBSItemInput",
-        "description": "Input model for moving a WBS item."
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "MissingEvidenceSection"
+      },
+      "NotModeledSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref",
+            "description": "Identifier of the single versioned record this section was projected from, when one exists."
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "type": "null",
+            "title": "Data"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "NotModeledSection"
       },
       "NotificationChannel": {
         "type": "string",
@@ -9520,6 +11241,45 @@
         "required": ["name"],
         "title": "ProjectCreateRequest",
         "description": "Create project payload."
+      },
+      "ProjectIdentity": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "name"],
+        "title": "ProjectIdentity"
       },
       "ProjectListResponse": {
         "properties": {
@@ -9935,6 +11695,241 @@
         "title": "ProjectUpdateRequest",
         "description": "Update payload for PUT/PATCH."
       },
+      "ProjectWBSCoverage": {
+        "properties": {
+          "total_items": {
+            "type": "integer",
+            "title": "Total Items"
+          },
+          "items_with_budget": {
+            "type": "integer",
+            "title": "Items With Budget"
+          },
+          "items_with_dates": {
+            "type": "integer",
+            "title": "Items With Dates"
+          },
+          "items_with_alerts": {
+            "type": "integer",
+            "title": "Items With Alerts"
+          },
+          "completion_average": {
+            "type": "number",
+            "title": "Completion Average"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_items",
+          "items_with_budget",
+          "items_with_dates",
+          "items_with_alerts",
+          "completion_average"
+        ],
+        "title": "ProjectWBSCoverage",
+        "description": "Evidence coverage over every WBS item of the project (not only roots)."
+      },
+      "ProjectWBSNode": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "level": {
+            "type": "integer",
+            "title": "Level"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "parent_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Code"
+          },
+          "item_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Type"
+          },
+          "budget_allocated": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Allocated"
+          },
+          "budget_spent": {
+            "type": "number",
+            "title": "Budget Spent"
+          },
+          "planned_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Start",
+            "description": "ISO 8601 timestamp as stored"
+          },
+          "planned_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned End",
+            "description": "ISO 8601 timestamp as stored"
+          },
+          "actual_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Start",
+            "description": "ISO 8601 timestamp as stored"
+          },
+          "actual_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual End",
+            "description": "ISO 8601 timestamp as stored"
+          },
+          "source_clause_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Clause Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectWBSNode"
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "code",
+          "name",
+          "level",
+          "budget_spent",
+          "version",
+          "metadata",
+          "children"
+        ],
+        "title": "ProjectWBSNode",
+        "description": "A procurement WBS item as served by GET /projects/{project_id}/wbs, with its subtree."
+      },
+      "ProjectWBSResponse": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectWBSNode"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/ProjectWBSCoverage"
+          },
+          "alerts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Alerts"
+          },
+          "total_items": {
+            "type": "integer",
+            "title": "Total Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "items",
+          "coverage",
+          "alerts",
+          "total_items"
+        ],
+        "title": "ProjectWBSResponse",
+        "description": "Authoritative WBS contract: root items with nested children (procurement WBS store)."
+      },
       "QueryResult": {
         "properties": {
           "data": {
@@ -9985,6 +11980,167 @@
         "required": ["data", "row_count", "execution_time_ms"],
         "title": "QueryResult",
         "description": "Resultado de query."
+      },
+      "RaciData": {
+        "properties": {
+          "task_count": {
+            "type": "integer",
+            "title": "Task Count"
+          },
+          "assignment_count": {
+            "type": "integer",
+            "title": "Assignment Count"
+          },
+          "verified_assignment_count": {
+            "type": "integer",
+            "title": "Verified Assignment Count"
+          },
+          "tasks_without_accountable": {
+            "type": "integer",
+            "title": "Tasks Without Accountable"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/RaciTaskItem"
+            },
+            "type": "array",
+            "title": "Tasks"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "task_count",
+          "assignment_count",
+          "verified_assignment_count",
+          "tasks_without_accountable",
+          "tasks"
+        ],
+        "title": "RaciData"
+      },
+      "RaciSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref",
+            "description": "Identifier of the single versioned record this section was projected from, when one exists."
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RaciData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "RaciSection"
+      },
+      "RaciTaskItem": {
+        "properties": {
+          "task_code": {
+            "type": "string",
+            "title": "Task Code"
+          },
+          "task_name": {
+            "type": "string",
+            "title": "Task Name"
+          },
+          "accountable": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Accountable"
+          },
+          "responsible": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Responsible"
+          },
+          "assignment_count": {
+            "type": "integer",
+            "title": "Assignment Count"
+          },
+          "verified_count": {
+            "type": "integer",
+            "title": "Verified Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "task_code",
+          "task_name",
+          "accountable",
+          "responsible",
+          "assignment_count",
+          "verified_count"
+        ],
+        "title": "RaciTaskItem"
       },
       "RagAnswerResponse": {
         "properties": {
@@ -10185,11 +12341,6 @@
       },
       "RejectRequest": {
         "properties": {
-          "reviewer_name": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Reviewer Name"
-          },
           "reason": {
             "type": "string",
             "maxLength": 2000,
@@ -10198,8 +12349,8 @@
           }
         },
         "type": "object",
-        "required": ["reviewer_name"],
-        "title": "RejectRequest"
+        "title": "RejectRequest",
+        "description": "See ApproveRequest docstring: reviewer identity is server-derived,\nnever client-supplied."
       },
       "RelationshipExplanationCitationResponse": {
         "properties": {
@@ -10237,23 +12388,17 @@
         "title": "RelationshipExplanationCitationResponse",
         "description": "Citation payload for a relationship explanation."
       },
+      "ReportEvidenceTier": {
+        "type": "string",
+        "enum": ["strong_linked", "weak_linked", "unlinked", "unavailable"],
+        "title": "ReportEvidenceTier",
+        "description": "How well a section's facts trace back to source evidence."
+      },
       "ResolveAlertRequest": {
         "properties": {
           "resolution": {
             "type": "string",
             "title": "Resolution"
-          },
-          "resolved_by": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Resolved By"
           },
           "root_cause": {
             "anyOf": [
@@ -10269,7 +12414,8 @@
         },
         "type": "object",
         "required": ["resolution"],
-        "title": "ResolveAlertRequest"
+        "title": "ResolveAlertRequest",
+        "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): resolver identity is never\naccepted from the client \u2014 it is always the authenticated session's\nuser_id. A client-supplied resolved_by here would let any authenticated\nuser forge a resolution as another user, corrupting the audit trail."
       },
       "ResumeWorkflowRequest": {
         "properties": {
@@ -10346,15 +12492,6 @@
             "format": "uuid",
             "title": "Item Id"
           },
-          "reviewer_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Reviewer Id"
-          },
-          "reviewer_name": {
-            "type": "string",
-            "title": "Reviewer Name"
-          },
           "action": {
             "type": "string",
             "enum": ["approve", "reject"],
@@ -10363,9 +12500,9 @@
           }
         },
         "type": "object",
-        "required": ["item_id", "reviewer_id", "reviewer_name"],
+        "required": ["item_id"],
         "title": "ReviewDecisionDTO",
-        "description": "Refers to Suite ID: TS-I13-E2E-REAL-001."
+        "description": "Refers to Suite ID: TS-I13-E2E-REAL-001.\n\nSECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is NEVER accepted\nfrom the client. ``reviewer_id``/``reviewer_name`` are derived server-side\nfrom the authenticated session (``Depends(get_current_user)``) at the\npoint this DTO is consumed \u2014 a client-supplied identity here would let any\nauthenticated user forge a review as another user, corrupting the HITL\naudit trail. Do not add reviewer identity fields back to this model."
       },
       "ReviewItemResponse": {
         "properties": {
@@ -10426,6 +12563,23 @@
             "type": "object",
             "title": "Item Data",
             "default": {}
+          },
+          "row_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Id"
+          },
+          "resumable": {
+            "type": "boolean",
+            "title": "Resumable",
+            "default": false
           }
         },
         "type": "object",
@@ -10555,6 +12709,11 @@
         "required": ["bundle_version", "values"],
         "title": "SecretChannelClerkResponse"
       },
+      "SectionStatus": {
+        "type": "string",
+        "enum": ["available", "empty", "unavailable", "not_modeled", "error"],
+        "title": "SectionStatus"
+      },
       "SeverityCount": {
         "properties": {
           "critical": {
@@ -10591,6 +12750,42 @@
         "type": "object",
         "title": "SeverityCount",
         "description": "Represents the count of alerts by severity level.\n\nTASK-504: Strict 5-level severity taxonomy (Critical, High, Medium, Low, Info)."
+      },
+      "SingleDocumentCoverage": {
+        "properties": {
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "assessments": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryAssessment"
+            },
+            "type": "array",
+            "title": "Assessments"
+          },
+          "cross_findings": {
+            "items": {
+              "$ref": "#/components/schemas/FindingSignal"
+            },
+            "type": "array",
+            "title": "Cross Findings",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["assessments"],
+        "title": "SingleDocumentCoverage",
+        "description": "Single-document coverage: the six category assessments + preserved CROSS findings.\n\n``cross_findings`` holds the ``FindingSignal`` entries tagged ``CROSS``. They are\ncross-dimensional and CAN be produced from one document (``CROSS-BUDGET-SCOPE`` pairs\na BUDGET clause with a SCOPE clause; ``CROSS-SCHEDULE-DELIVERY`` pairs a TIME clause\nwith a TECHNICAL clause), so they are preserved verbatim rather than discarded, and are\nNOT attributed to any canonical category \u2014 a CROSS finding spans two dimensions and\ncarries a composite ``clause_id``, so single-category attribution would fabricate\nevidence (INV-1)."
       },
       "StakeholderCreateRequest": {
         "properties": {
@@ -10738,6 +12933,66 @@
         "type": "object",
         "required": ["name"],
         "title": "StakeholderCreateRequest"
+      },
+      "StakeholderItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "organization": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization"
+          },
+          "quadrant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quadrant"
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "evidence_tier"],
+        "title": "StakeholderItem"
       },
       "StakeholderQuadrant": {
         "type": "string",
@@ -11047,6 +13302,132 @@
         "type": "object",
         "title": "StakeholderUpdateRequest"
       },
+      "StakeholdersData": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "key_player_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Player Count",
+            "description": "Null when not every stakeholder could be loaded, so the count is unknown."
+          },
+          "by_quadrant": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Quadrant"
+          },
+          "counts_are_partial": {
+            "type": "boolean",
+            "title": "Counts Are Partial",
+            "description": "True when by_quadrant covers only the stakeholders that could be loaded, not total.",
+            "default": false
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StakeholderItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "evidence_breakdown": {
+            "$ref": "#/components/schemas/EvidenceBreakdown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["total", "by_quadrant", "items", "evidence_breakdown"],
+        "title": "StakeholdersData"
+      },
+      "StakeholdersSection": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref",
+            "description": "Identifier of the single versioned record this section was projected from, when one exists."
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StakeholdersData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "StakeholdersSection"
+      },
       "SubscriptionPlan": {
         "type": "string",
         "enum": ["free", "starter", "professional", "enterprise"],
@@ -11172,6 +13553,100 @@
         "title": "TenantResponse",
         "description": "Response con informaci\u00f3n de Tenant."
       },
+      "TimelineItemResponse": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "occurred_at": {
+            "type": "string",
+            "title": "Occurred At"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "change_cause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Cause"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "provenance": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Provenance"
+          },
+          "l3_impact": {
+            "type": "null",
+            "title": "L3 Impact"
+          }
+        },
+        "type": "object",
+        "required": ["event_id", "occurred_at", "event_type", "state"],
+        "title": "TimelineItemResponse",
+        "description": "One immutable event rendered for the What Changed product surface."
+      },
+      "TimelineResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TimelineItemResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": ["items"],
+        "title": "TimelineResponse",
+        "description": "Stable cursor page; an empty page means no events, not an unavailable diff."
+      },
       "TokenResponse": {
         "properties": {
           "access_token": {
@@ -11209,83 +13684,6 @@
           "refresh_token": "example-refresh-token",
           "token_type": "bearer"
         }
-      },
-      "UpdateWBSItemInput": {
-        "properties": {
-          "name": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "start_date": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Start Date"
-          },
-          "end_date": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "End Date"
-          },
-          "budget": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BudgetInput"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "completion": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 100.0,
-                "minimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completion"
-          }
-        },
-        "type": "object",
-        "title": "UpdateWBSItemInput",
-        "description": "Input model for updating a WBS item."
       },
       "UserResponse": {
         "properties": {
@@ -11538,6 +13936,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",
@@ -11586,68 +13991,77 @@
         "title": "ViewQueryRequest",
         "description": "Request para query de vista."
       },
-      "WBSCoverageOutput": {
+      "WbsData": {
         "properties": {
-          "total_items": {
+          "item_count": {
             "type": "integer",
-            "title": "Total Items"
+            "title": "Item Count"
+          },
+          "root_count": {
+            "type": "integer",
+            "title": "Root Count"
+          },
+          "leaf_count": {
+            "type": "integer",
+            "title": "Leaf Count"
+          },
+          "max_level": {
+            "type": "integer",
+            "title": "Max Level"
+          },
+          "by_item_type": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Item Type"
           },
           "items_with_budget": {
             "type": "integer",
             "title": "Items With Budget"
           },
-          "items_with_dates": {
+          "items_with_planned_dates": {
             "type": "integer",
-            "title": "Items With Dates"
+            "title": "Items With Planned Dates",
+            "description": "Items with both a planned start and a planned end."
           },
-          "items_with_alerts": {
-            "type": "integer",
-            "title": "Items With Alerts"
+          "roots": {
+            "items": {
+              "$ref": "#/components/schemas/WbsItemSummary"
+            },
+            "type": "array",
+            "title": "Roots"
           },
-          "completion_average": {
-            "type": "number",
-            "title": "Completion Average"
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "evidence_breakdown": {
+            "$ref": "#/components/schemas/EvidenceBreakdown"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "total_items",
+          "item_count",
+          "root_count",
+          "leaf_count",
+          "max_level",
+          "by_item_type",
           "items_with_budget",
-          "items_with_dates",
-          "items_with_alerts",
-          "completion_average"
+          "items_with_planned_dates",
+          "roots",
+          "evidence_breakdown"
         ],
-        "title": "WBSCoverageOutput",
-        "description": "Output model for WBS coverage."
+        "title": "WbsData",
+        "description": "The persisted procurement WBS items: served by GET /projects/{id}/wbs and used as RACI rows."
       },
-      "WBSItemChildOutput": {
+      "WbsItemSummary": {
         "properties": {
           "id": {
             "type": "string",
-            "title": "Id"
-          },
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "level": {
-            "type": "integer",
-            "title": "Level"
-          }
-        },
-        "type": "object",
-        "required": ["id", "code", "name", "level"],
-        "title": "WBSItemChildOutput",
-        "description": "Output model for child items."
-      },
-      "WBSItemOutput": {
-        "properties": {
-          "id": {
-            "type": "string",
+            "format": "uuid",
             "title": "Id"
           },
           "code": {
@@ -11662,7 +14076,7 @@
             "type": "integer",
             "title": "Level"
           },
-          "description": {
+          "item_type": {
             "anyOf": [
               {
                 "type": "string"
@@ -11671,99 +14085,126 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Item Type"
           },
-          "parent_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Id"
-          },
-          "start_date": {
+          "planned_start": {
             "anyOf": [
               {
                 "type": "string",
-                "format": "date"
+                "format": "date-time"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Start Date"
+            "title": "Planned Start"
           },
-          "end_date": {
+          "planned_end": {
             "anyOf": [
               {
                 "type": "string",
-                "format": "date"
+                "format": "date-time"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "End Date"
+            "title": "Planned End"
           },
-          "budget": {
+          "budget_allocated": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Budget"
+            "title": "Budget Allocated"
           },
-          "completion": {
-            "type": "integer",
-            "title": "Completion",
-            "default": 0
-          },
-          "children": {
-            "items": {
-              "$ref": "#/components/schemas/WBSItemChildOutput"
-            },
-            "type": "array",
-            "title": "Children",
-            "default": []
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": ["id", "code", "name", "level"],
-        "title": "WBSItemOutput",
-        "description": "Output model for WBS items."
+        "required": ["id", "code", "name", "level", "evidence_tier"],
+        "title": "WbsItemSummary"
       },
-      "WBSOutput": {
+      "WbsSection": {
         "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/WBSItemOutput"
-            },
-            "type": "array",
-            "title": "Items"
+          "status": {
+            "$ref": "#/components/schemas/SectionStatus"
           },
-          "coverage": {
-            "$ref": "#/components/schemas/WBSCoverageOutput"
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
           },
-          "alerts": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Alerts"
+          "source_domain": {
+            "type": "string",
+            "title": "Source Domain"
+          },
+          "source_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref",
+            "description": "Identifier of the single versioned record this section was projected from, when one exists."
+          },
+          "evidence_tier": {
+            "$ref": "#/components/schemas/ReportEvidenceTier"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WbsData"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": ["items", "coverage", "alerts"],
-        "title": "WBSOutput",
-        "description": "Output model for WBS endpoint."
+        "required": ["status", "source_domain", "evidence_tier"],
+        "title": "WbsSection"
       }
     },
     "securitySchemes": {

@@ -37,6 +37,7 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { DocumentLifecycleStatus } from "./documentLifecycleStatus";
 import type { DocumentPollingStatus } from "./documentPollingStatus";
 
 /**
@@ -48,6 +49,7 @@ export interface DocumentListItem {
   document_type?: string | null;
   status: DocumentPollingStatus;
   status_detail: string;
+  lifecycle_status: DocumentLifecycleStatus;
   error_message?: string | null;
   uploaded_at?: string | null;
   file_size_bytes?: number | null;

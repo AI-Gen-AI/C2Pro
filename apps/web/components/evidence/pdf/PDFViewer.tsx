@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -34,6 +34,12 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 export interface PDFViewerProps {
   /** URL or file path to the PDF document */
   file?: string | File | null;
+  /**
+   * Extra HTTP headers sent by pdf.js when `file` is a URL string — e.g.
+   * `{ Authorization: "Bearer <token>" }` for an authenticated backend download.
+   * Without this, pdf.js fetches the URL with no credentials and the request 401s.
+   */
+  httpHeaders?: Record<string, string>;
   /** Initial page number (1-indexed) */
   initialPage?: number;
   /** Initial zoom scale (1.0 = 100%) */
@@ -68,6 +74,7 @@ export interface PDFViewerProps {
 
 export function PDFViewer({
   file,
+  httpHeaders,
   initialPage = 1,
   initialScale = 1.0,
   showControls = true,
@@ -95,6 +102,18 @@ export function PDFViewer({
     height: number;
   } | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // When `file` is a URL and auth headers are supplied, hand pdf.js a source
+  // object so the fetch carries them (fixes the 401 on authenticated backend
+  // downloads). Memoized so the object identity is stable — react-pdf reloads
+  // the document whenever the `file` prop identity changes.
+  const documentFile = useMemo(
+    () =>
+      typeof file === 'string' && httpHeaders && Object.keys(httpHeaders).length > 0
+        ? { url: file, httpHeaders }
+        : file,
+    [file, httpHeaders],
+  );
 
   // Reset to initial page when file changes
   useEffect(() => {
@@ -326,7 +345,7 @@ export function PDFViewer({
             </div>
           ) : (
             <Document
-              file={file}
+              file={documentFile}
               onLoadSuccess={onDocumentLoad}
               onLoadError={onDocumentError}
               loading={

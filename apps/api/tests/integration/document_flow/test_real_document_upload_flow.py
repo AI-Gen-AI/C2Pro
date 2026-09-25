@@ -100,8 +100,13 @@ async def test_real_pdf_upload_persists_tenant_project_storage_and_status(
     assert document.upload_status == DocumentStatus.UPLOADED
     assert document.created_by == test_user.id
     assert document.storage_url is not None
-    assert Path(document.storage_url).is_file()
-    assert Path(document.storage_url).read_bytes() == fixture_path.read_bytes()
+    # storage_url is the durable object KEY, not a local filesystem path -- it must
+    # be resolved through the storage service that wrote it to get a real, local,
+    # materialized Path (see IStorageService.download_object).
+    storage = LocalFileStorageService(base_dir=upload_dir)
+    materialized_path = await storage.download_object(document.storage_url)
+    assert materialized_path.is_file()
+    assert materialized_path.read_bytes() == fixture_path.read_bytes()
 
 
 @pytest.mark.asyncio

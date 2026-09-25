@@ -18,6 +18,7 @@ class _FakeWBSRepository:
         self.existing = existing
         self.created: list[WBSItem] = []
         self.updated: list[tuple] = []
+        self.replaced: dict | None = None
 
     async def get_by_code(self, project_id, wbs_code, tenant_id):
         if self.existing and self.existing.project_id == project_id and self.existing.code == wbs_code:
@@ -34,6 +35,55 @@ class _FakeWBSRepository:
     async def update(self, wbs_id, wbs_item, tenant_id):
         self.updated.append((wbs_id, wbs_item, tenant_id))
         return wbs_item
+
+    async def replace_for_source_document(
+        self, *, project_id, source_document_id, wbs_items, tenant_id
+    ):
+        self.replaced = {
+            "project_id": project_id,
+            "source_document_id": source_document_id,
+            "wbs_items": wbs_items,
+            "tenant_id": tenant_id,
+        }
+        return wbs_items
+
+
+@pytest.mark.asyncio
+async def test_replace_for_source_document_maps_dtos_and_scopes_to_document() -> None:
+    """TS-UD-PROC-WBS-IDEM-001: the use case maps DTOs to domain WBS items stamped with the source document."""
+    project_id = uuid4()
+    tenant_id = uuid4()
+    document_id = uuid4()
+    repo = _FakeWBSRepository()
+    use_case = CreateWBSItemUseCase(repo)
+
+    result = await use_case.replace_for_source_document(
+        project_id=project_id,
+        source_document_id=document_id,
+        wbs_items=[
+            WBSItemCreate(
+                project_id=project_id,
+                wbs_code="SCH-001",
+                name="Mobilization",
+                level=1,
+                item_type=WBSItemType.ACTIVITY,
+                wbs_metadata={"predecessor_id": "SCH-000"},
+            ),
+        ],
+        tenant_id=tenant_id,
+    )
+
+    assert repo.replaced is not None
+    assert repo.replaced["project_id"] == project_id
+    assert repo.replaced["source_document_id"] == document_id
+    assert repo.replaced["tenant_id"] == tenant_id
+    built = repo.replaced["wbs_items"]
+    assert [item.code for item in built] == ["SCH-001"]
+    assert built[0].source_document_id == document_id
+    # source document stamped into metadata; caller-supplied keys preserved.
+    assert built[0].wbs_metadata["source_document_id"] == str(document_id)
+    assert built[0].wbs_metadata["predecessor_id"] == "SCH-000"
+    assert result == built
 
 
 @pytest.mark.asyncio

@@ -11,14 +11,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import text
 
+from src.analysis.adapters.graph.workflow import close_checkpointer_resources
 from src.analysis.factories.orchestrator_factory import AnalysisOrchestratorFactory
-from src.core.database import get_raw_session, init_db
+from src.core.database import close_db, get_raw_session, init_db
 from src.core.dlq.dlq_service import DLQService
 from src.core.tasks.celery_app import celery_app
 from src.core.tenants.types import TenantId, require_tenant_id
@@ -38,10 +38,17 @@ from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
 from src.documents.adapters.storage.local_file_storage_service import (
     LocalFileStorageService,
 )
+from src.documents.application.document_source import (
+    REVISION_HASH_MISMATCH,
+    RevisionSourceError,
+    fetch_source_file,
+    resolve_source_revision,
+)
 from src.documents.application.trigger_document_analysis_use_case import (
     TriggerDocumentAnalysisUseCase,
 )
 from src.documents.domain.models import Clause, ClauseType, DocumentStatus, DocumentType
+from src.documents.ports.rag_ingestion_service import RagIngestionOutcome
 from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.application.use_cases.bom_use_cases import CreateBOMItemUseCase
@@ -50,10 +57,28 @@ from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository imp
     SqlAlchemyStakeholderRepository,
 )
 from src.stakeholders.application.create_stakeholder_use_case import CreateStakeholderUseCase
+from src.temporal.adapters.persistence.document_revision_repository import (
+    SqlAlchemyDocumentRevisionRepository,
+)
+from src.temporal.adapters.persistence.project_event_repository import (
+    SqlAlchemyProjectEventRepository,
+)
+from src.temporal.application.change_projection import build_revision_processing_failed_event
+from src.temporal.application.revision_change_orchestrator import (
+    build_revision_analysis_events,
+)
+from src.temporal.domain.document_revision import DocumentRevision
 
 logger = logging.getLogger(__name__)
 
 RAG_READINESS_MAX_RETRIES = 3
+
+
+def _temporal_failure_code(error: Exception) -> str:
+    """Return a stable safe code; raw errors can contain storage/provider data."""
+    if isinstance(error, RevisionSourceError) and str(error) == REVISION_HASH_MISMATCH:
+        return "immutable_blob_hash_mismatch"
+    return "analysis_processing_failed"
 
 
 class RagChunksUnavailableError(RuntimeError):
@@ -128,7 +153,7 @@ def _parse_money_number(raw: str) -> float | None:
 
 def _extract_numeric_money(text: str) -> float | None:
     match = re.search(
-        r"(?:eur|€)\s*([0-9][0-9\.,]*)|([0-9][0-9\.,]*)\s*(?:eur|€)", text, re.IGNORECASE
+        r"(?:eur|€)\s*(\d[\d.,]*)|(\d[\d.,]*)\s*(?:eur|€)", text, re.IGNORECASE
     )
     if not match:
         return None
@@ -151,7 +176,7 @@ _CONTRACT_LABEL_RE = re.compile(
     re.IGNORECASE,
 )
 
-_CRORE_LAKH_RE = re.compile(r"\s*(crore|cr\.?|lakh|lakhs?|lac)\b", re.IGNORECASE)
+_CRORE_LAKH_RE = re.compile(r"\s*(crore|cr\.?|lakhs?|lac)\b", re.IGNORECASE)
 
 
 def _extract_contract_base_total(text: str) -> float | None:
@@ -169,13 +194,13 @@ def _extract_contract_base_total(text: str) -> float | None:
         raw_num: str | None = None
         num_end = 0
         inr_m = re.search(
-            r"(?:₹|Rs\.?\s*|INR\s*)([0-9][0-9,\.]*)", window, re.IGNORECASE
+            r"(?:₹|Rs\.?\s*|INR\s*)(\d[\d,.]*)", window, re.IGNORECASE
         )
         if inr_m:
             raw_num = inr_m.group(1)
             num_end = inr_m.end()
         else:
-            bare_m = re.search(r"[^0-9₹]([0-9][0-9,\.]*)", window)
+            bare_m = re.search(r"[^\d₹](\d[\d,.]*)", window)
             if bare_m:
                 raw_num = bare_m.group(1)
                 num_end = bare_m.end()
@@ -203,14 +228,14 @@ def _extract_contract_base_total(text: str) -> float | None:
 def _detect_contract_currency(text: str) -> str:
     """Return 'INR' if text contains INR markers, else 'EUR'."""
     if re.search(
-        r"₹|Rs\.?\s*[0-9]|\bINR\b|\brupee\b|\bcrore\b|\blakh\b", text, re.IGNORECASE
+        r"₹|Rs\.?\s*\d|\bINR\b|\brupee\b|\bcrore\b|\blakh\b", text, re.IGNORECASE
     ):
         return "INR"
     return "EUR"
 
 
 def _extract_percentage(text: str) -> float | None:
-    match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*%", text)
+    match = re.search(r"(\d+(?:\.\d+)?)\s*%", text)
     if not match:
         return None
     try:
@@ -220,7 +245,7 @@ def _extract_percentage(text: str) -> float | None:
 
 
 def _extract_days(text: str) -> int | None:
-    match = re.search(r"([0-9]+)\s*(?:day|days|días)", text, re.IGNORECASE)
+    match = re.search(r"(\d+)\s*(?:days?|días)", text, re.IGNORECASE)
     if not match:
         return None
     try:
@@ -230,13 +255,26 @@ def _extract_days(text: str) -> int | None:
 
 
 def _extract_months(text: str) -> int | None:
-    match = re.search(r"([0-9]+)\s*(?:month|months|mes|meses)", text, re.IGNORECASE)
+    match = re.search(r"(\d+)\s*(?:months?|mes(?:es)?)", text, re.IGNORECASE)
     if not match:
         return None
     try:
         return int(match.group(1))
     except ValueError:
         return None
+
+
+# Terms that mark a coherence category regardless of the inferred clause_type. A
+# clause-sized chunk usually spans several topics, so category coverage is derived
+# from the text, not only from a single dominant type.
+_CLAUSE_KEYWORD_CATEGORIES: dict[str, tuple[str, ...]] = {
+    "SCOPE": ("objeto", "obras", "alcance", "prestaci", "scope", "deliverable", "work"),
+    "TIME": ("plazo", "deadline", "schedule", "milestone", "completion", "duraci", "entrega", "cronograma"),
+    "BUDGET": ("precio", "importe", "presupuesto", "coste", "pago", "payment", "budget", "euros", "€"),
+    "LEGAL": ("penal", "clausula", "cláusula", "ley", "law", "responsab", "garant", "warranty", "obligaci"),
+    "QUALITY": ("calidad", "quality", "inspecci", "inspection", "testing", "ensayo", "norma"),
+    "TECHNICAL": ("tecnic", "técnic", "technical", "especificac", "specification", "material"),
+}
 
 
 def _contract_affected_categories(clause_type: ClauseType, text: str) -> list[str]:
@@ -265,6 +303,10 @@ def _contract_affected_categories(clause_type: ClauseType, text: str) -> list[st
         categories.extend(["TIME", "SCOPE"])
     else:
         categories.append("LEGAL")
+
+    for category, terms in _CLAUSE_KEYWORD_CATEGORIES.items():
+        if any(term in lowered for term in terms):
+            categories.append(category)
 
     deduped: list[str] = []
     for category in categories:
@@ -325,6 +367,40 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict[str, Any]:
     return data
 
 
+# A new clause starts at a numbered header ("28.-", "28.1.-", "1.-"), a section
+# keyword (CLÁUSULA / ESTIPULACIÓN / ARTÍCULO / CLAUSE / ARTICLE / SECTION), or an
+# ordinal word (PRIMERA … DÉCIMA). Anchored at line start to avoid mid-sentence
+# matches. Used to split a contract into clause-sized chunks instead of sentences.
+_CLAUSE_BOUNDARY = re.compile(
+    r"(?m)^\s*(?:"
+    r"\d{1,3}(?:\.\d{1,3}){0,6}\s*\.\s*[-–]"
+    r"|(?:CL[ÁA]USULA|ESTIPULACI[ÓO]N|ART[ÍI]CULO|CLAUSE|ARTICLE|SECTION)\w*"
+    r"|(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|S[ÉE]PTIMA|OCTAVA|NOVENA|D[ÉE]CIMA)\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _split_contract_into_clauses(parsed_text: str) -> list[str]:
+    """Split a contract into clause-sized segments at clause-boundary markers.
+
+    Keeps each boundary marker with its clause body. Falls back to paragraph
+    blocks when no markers exist, so a contract is never fragmented into
+    per-sentence "clauses" (the old ``re.split`` on ``.!?`` produced hundreds of
+    meaningless one-line fragments).
+    """
+    boundaries = [m.start() for m in _CLAUSE_BOUNDARY.finditer(parsed_text)]
+    if boundaries:
+        cut_points = ([0] if boundaries[0] > 0 else []) + boundaries + [len(parsed_text)]
+        raw = [
+            parsed_text[cut_points[i] : cut_points[i + 1]]
+            for i in range(len(cut_points) - 1)
+        ]
+    else:
+        raw = re.split(r"\n\s*\n+", parsed_text)
+    return [segment.strip() for segment in raw if segment.strip()]
+
+
 def _extract_contract_clauses(
     *,
     document_id: UUID,
@@ -332,15 +408,11 @@ def _extract_contract_clauses(
     tenant_id: TenantId,
     parsed_text: str,
 ) -> list[Clause]:
-    segments = [
-        segment.strip()
-        for segment in re.split(r"(?<=[\.!?])\s+|\n\n+", parsed_text)
-        if segment.strip()
-    ]
     clauses: list[Clause] = []
-    for index, segment in enumerate(segments, start=1):
-        if len(segment) < 20:
+    for index, segment in enumerate(_split_contract_into_clauses(parsed_text), start=1):
+        if len(segment) < 40:
             continue
+        segment = segment[:4000]  # keep a clause clause-sized; guard OCR blobs
         clause_type = _infer_contract_clause_type(segment)
         clauses.append(
             Clause(
@@ -410,13 +482,197 @@ async def get_document_rag_chunk_count(
     return int(result.scalar_one())
 
 
+async def _run_analysis_graph_best_effort(
+    *,
+    orchestrator: Any,
+    document: Any,
+    parsed_text: str,
+    tenant_id: TenantId,
+    document_id: UUID,
+) -> dict[str, Any]:
+    """Run the N1-N17 enrichment graph and report its outcome.
+
+    Best-effort by design: a graph failure must not block the document from being
+    marked ANALYZED, since its structured extraction already succeeded during
+    parsing. The broad catch is intentional — any orchestrator error degrades to
+    "no enrichment", never a stuck document.
+
+    Returns a dict with ``analysis_id`` (str | None) and
+    ``human_approval_required`` (bool). A LangGraph HITL interrupt is NOT a
+    failure: it must be reported distinctly from "graph raised" or "graph ran
+    but produced nothing" so the caller never auto-retries a legitimate,
+    durably-checkpointed pause (see ``_run_document_analysis``).
+    """
+    graph_orchestrator = orchestrator or AnalysisOrchestratorFactory.create()
+    # Stable, deterministic thread_id: one document has exactly one analysis
+    # thread. Must NOT be re-randomized per call/retry -- a fresh thread_id on
+    # every retry orphans the checkpoint from the prior run, breaks
+    # LangGraph's own "resume this thread" semantics, and re-triggers a brand
+    # new HITL interrupt (and, previously, a brand new duplicate ReviewItem)
+    # every time the worker retries. Injected into initial_state too, since
+    # human_interrupt_node reads thread_id from state, not from the run()
+    # kwarg alone.
+    thread_id = f"document:{document_id}:analysis"
+    initial_state: dict[str, Any] = {
+        "document_text": parsed_text,
+        "project_id": str(document.project_id),
+        "document_id": str(document.id),
+        "doc_type": getattr(document.document_type, "value", "") if document.document_type else "",
+        "tenant_id": str(tenant_id),
+        "thread_id": thread_id,
+        "document_filename": getattr(document, "filename", None),
+        "messages": [],
+        "extracted_risks": [],
+        "extracted_wbs": [],
+        "confidence_score": 0.0,
+        "critique_notes": "",
+        "human_feedback": "",
+        "retry_count": 0,
+        "human_approval_required": False,
+        "analysis_id": None,
+        "force_full_pipeline": True,
+    }
+    logger.info(
+        "document_analysis_task_started",
+        extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
+    )
+    try:
+        result = await graph_orchestrator.run(initial_state, thread_id=thread_id)
+    except Exception:
+        logger.exception(
+            "document_analysis_graph_failed_nonfatal",
+            extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
+        )
+        return {"analysis_id": None, "human_approval_required": False}
+    analysis_id = result.get("analysis_id")
+    human_approval_required = bool(result.get("human_approval_required", False))
+    return {
+        "analysis_id": analysis_id if isinstance(analysis_id, str) else None,
+        "human_approval_required": human_approval_required,
+    }
+
+
+# Retry policy for ``documents.analyze_document``, declared once so the task and
+# the test that guards it cannot drift apart. ``AnalysisIncompleteRetryableError``
+# is only useful because ``autoretry_for`` catches it; if that were ever removed,
+# every transient failure would silently become a one-shot give-up.
+ANALYSIS_TASK_RETRY_OPTIONS: dict[str, Any] = {
+    "autoretry_for": (Exception,),
+    "retry_kwargs": {"max_retries": 3},
+    "retry_backoff": True,
+    "retry_backoff_max": 60,
+}
+
+
+class AnalysisIncompleteRetryableError(RuntimeError):
+    """Analysis did not complete, and retrying it is worthwhile.
+
+    ``process_document_analysis_async`` declares ``autoretry_for=(Exception,)``
+    with ``max_retries=3``, so raising is the ONLY way to obtain an automatic
+    retry: a normal return -- however honest its payload -- is a completed task
+    to Celery. Leaving a document in a re-enterable state is not a retry; this
+    exception is what actually re-enqueues one.
+
+    Raised only AFTER the degraded status has been committed, so the document is
+    already durably honest even if every retry is exhausted.
+    """
+
+
+# Document types whose product value depends on the N1-N17 free-text graph.
+# Grounded in DOC_TYPES ("contract", "technical_spec", "budget", "schedule") and
+# in how parsing treats them: schedule/budget are completed by structured WBS/BOM
+# extraction and legitimately never need the text graph.
+TEXT_ANALYSIS_DOCUMENT_TYPES: frozenset[DocumentType] = frozenset(
+    {
+        DocumentType.CONTRACT,
+        DocumentType.TECHNICAL_SPEC,
+        DocumentType.SPECIFICATION,
+    }
+)
+
+
+def requires_text_analysis(
+    document_type: DocumentType | None, parsed_text: str | None
+) -> bool:
+    """Whether this document's analysis is incomplete without the N1-N17 graph.
+
+    Deliberately NOT ``bool(parsed_text)`` alone. ``composite_file_parser``
+    emits ``text_blocks`` for ANY PDF or DOCX, so a schedule or budget uploaded
+    as a PDF carries incidental parsed text. Keying on text alone would hold
+    those documents pending forever for a graph they never needed -- trading the
+    old false-success bug for a false-incomplete one.
+
+    A structured document is complete via WBS/BOM extraction; only a free-text
+    document that actually has text can be owed a graph run.
+    """
+    if document_type not in TEXT_ANALYSIS_DOCUMENT_TYPES:
+        return False
+    return bool(parsed_text)
+
+
+def decide_document_status(
+    *,
+    requires_text_analysis: bool,
+    rag_chunk_count: int,
+    graph_analysis_id: str | None,
+) -> DocumentStatus:
+    """Decide whether a document may be called ANALYZED.
+
+    ANALYZED has to mean the analysis this document actually needed completed.
+    Previously it was set unconditionally, so a contract whose N1-N17 graph never
+    ran was indistinguishable from one fully analysed -- the shape observed in
+    production, where a contract reached ANALYZED with zero RAG chunks, zero
+    analyses and zero snapshots.
+
+    Structured documents (schedule/budget) carry no free text, so no graph is
+    required and zero chunks is their correct terminal outcome. Only free-text
+    documents that genuinely needed the graph can be held back.
+
+    PARSED_PENDING_ANALYSIS is reused rather than adding a new enum value: it
+    already means "ingestion complete, analysis not yet started", it already
+    satisfies ``Document.is_parsed()``, and ``_run_document_analysis`` accepts
+    parsed documents -- so the degraded state is retryable by construction
+    instead of being a dead end.
+    """
+    if not requires_text_analysis:
+        return DocumentStatus.ANALYZED
+    if rag_chunk_count > 0 and graph_analysis_id:
+        return DocumentStatus.ANALYZED
+    return DocumentStatus.PARSED_PENDING_ANALYSIS
+
+
+def should_retry_analysis(
+    *,
+    status: DocumentStatus,
+    rag_outcome: str | None,
+) -> bool:
+    """Whether an incomplete analysis is worth re-enqueueing automatically.
+
+    A completed document never retries. Beyond that the distinction is whether
+    anything could plausibly change on its own:
+
+    - MISCONFIGURED: an operator must set configuration. Three backoff retries
+      would burn a worker and change nothing, and the resulting task failure
+      would misreport a config problem as a transient one. Return normally
+      instead, leaving the document pending for an operator.
+    - PROVIDER_UNAVAILABLE / unknown / graph failure: plausibly transient, so
+      take the bounded automatic retry the task already declares.
+
+    Either way the document has already been persisted as incomplete, so
+    exhausting the retries never yields ANALYZED.
+    """
+    if status is DocumentStatus.ANALYZED:
+        return False
+    return rag_outcome != RagIngestionOutcome.MISCONFIGURED.value
+
+
 async def _run_document_analysis(
     *,
     tenant_id: TenantId,
     document_id: UUID,
     orchestrator: Any = None,
 ) -> dict[str, Any]:
-    """Run the full analysis graph for a parsed document and persist via N17."""
+    """Analyze a parsed document; the N1-N17 graph is a best-effort enrichment."""
     await init_db()
 
     async with get_raw_session() as session:
@@ -430,50 +686,56 @@ async def _run_document_analysis(
         parsed_text = (
             document.document_metadata.get("parsed_text") if document.document_metadata else None
         )
-        if not parsed_text:
-            raise ValueError("parsed_text not available")
-
         chunk_count = await get_document_rag_chunk_count(
             session=session,
             tenant_id=tenant_id,
             document_id=document_id,
         )
-        if chunk_count == 0:
-            raise RagChunksUnavailableError(
-                "RAG chunks were not committed before document analysis"
+
+        # The N1-N17 text-analysis graph only applies to free-text documents that
+        # have RAG chunks. Structured documents (schedule/budget) carry no free
+        # text, and text documents whose embeddings are unavailable (e.g. no
+        # OPENAI_API_KEY -> zero chunks) cannot run it either. In both cases the
+        # document is still ANALYZED via the structured extraction (clauses / WBS
+        # / BOM) done during parsing — the graph is a best-effort enrichment, never
+        # a hard gate. This is what previously stranded documents in
+        # parsed_pending_analysis and the DLQ ("parsed_text not available" /
+        # "RAG chunks were not committed").
+        human_approval_required = False
+        if parsed_text and chunk_count > 0:
+            graph_result = await _run_analysis_graph_best_effort(
+                orchestrator=orchestrator,
+                document=document,
+                parsed_text=parsed_text,
+                tenant_id=tenant_id,
+                document_id=document_id,
+            )
+            analysis_id = graph_result["analysis_id"]
+            human_approval_required = graph_result["human_approval_required"]
+        else:
+            analysis_id = None
+            logger.info(
+                "document_analysis_graph_skipped",
+                extra={
+                    "document_id": str(document_id),
+                    "tenant_id": str(tenant_id),
+                    "reason": "no_parsed_text" if not parsed_text else "no_rag_chunks",
+                },
             )
 
-        graph_orchestrator = orchestrator or AnalysisOrchestratorFactory.create()
-        initial_state = {
-            "document_text": parsed_text,
-            "project_id": str(document.project_id),
-            "document_id": str(document.id),
-            "doc_type": getattr(document.document_type, "value", "")
-            if document.document_type
-            else "",
-            "tenant_id": str(tenant_id),
-            "messages": [],
-            "extracted_risks": [],
-            "extracted_wbs": [],
-            "confidence_score": 0.0,
-            "critique_notes": "",
-            "human_feedback": "",
-            "retry_count": 0,
-            "human_approval_required": False,
-            "analysis_id": None,
-            "force_full_pipeline": True,
-        }
-
-        logger.info(
-            "document_analysis_task_started",
-            extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
+        # Structured extraction completing is not the same claim as the analysis
+        # completing. A free-text contract whose graph never ran stays in a
+        # retryable state instead of advertising success it does not have.
+        status = decide_document_status(
+            requires_text_analysis=requires_text_analysis(
+                document.document_type, parsed_text
+            ),
+            rag_chunk_count=chunk_count,
+            graph_analysis_id=analysis_id,
         )
-        thread_id = f"document:{document_id}:analysis:{uuid4()}"
-        result = await graph_orchestrator.run(initial_state, thread_id=thread_id)
-        analysis_id = result.get("analysis_id")
-        if analysis_id:
-            await repo.update_status(tenant_id, document_id, DocumentStatus.ANALYZED)
-            await session.commit()
+        await repo.update_status(tenant_id, document_id, status)
+        await session.commit()
+        completed = status is DocumentStatus.ANALYZED
         logger.info(
             "document_analysis_task_finished",
             extra={
@@ -481,18 +743,77 @@ async def _run_document_analysis(
                 "tenant_id": str(tenant_id),
                 "analysis_id": analysis_id,
                 "persisted": bool(analysis_id),
+                "document_status": status.value,
+                "rag_chunk_count": chunk_count,
             },
         )
-        return {
-            "status": "completed" if analysis_id else "completed_without_persistence",
+        rag_outcome = (
+            document.document_metadata.get("rag_ingestion_outcome")
+            if document.document_metadata
+            else None
+        )
+        # A LangGraph HITL interrupt is a legitimate, durably-checkpointed
+        # pause -- not a failure, and not "incomplete" in the retryable
+        # sense. Auto-retrying it would re-run the whole graph, orphan the
+        # pending review, and (pre-fix) mint a duplicate one. The document
+        # stays honestly PARSED_PENDING_ANALYSIS until a human approves and
+        # ResumeWorkflowUseCase resumes the SAME checkpoint -- it must never
+        # be auto-retried and never be retried via C2PRO_SKIP_HITL.
+        retry = (
+            should_retry_analysis(status=status, rag_outcome=rag_outcome)
+            and not human_approval_required
+        )
+        if human_approval_required:
+            logger.info(
+                "document_analysis_waiting_for_review",
+                extra={
+                    "document_id": str(document_id),
+                    "tenant_id": str(tenant_id),
+                    "will_retry": False,
+                },
+            )
+        elif not completed:
+            logger.warning(
+                "document_analysis_incomplete",
+                extra={
+                    "document_id": str(document_id),
+                    "tenant_id": str(tenant_id),
+                    "reason": "no_rag_chunks" if chunk_count == 0 else "graph_did_not_persist",
+                    "rag_outcome": rag_outcome,
+                    "will_retry": retry,
+                },
+            )
+
+        result = {
+            "status": (
+                "waiting_for_review"
+                if human_approval_required
+                else ("completed" if completed else "incomplete")
+            ),
             "document_id": str(document_id),
             "analysis_id": analysis_id,
             "persisted": bool(analysis_id),
+            "document_status": status.value,
+            "human_approval_required": human_approval_required,
+            "will_retry": retry,
         }
 
+    # Raised outside the session block: the degraded status is already committed,
+    # so the document stays honestly incomplete even when every retry is spent.
+    if retry:
+        raise AnalysisIncompleteRetryableError(
+            f"document {document_id} analysis incomplete "
+            f"(rag_outcome={rag_outcome or 'unknown'}, chunks={chunk_count})"
+        )
+    return result
 
-async def _process(document_id: UUID) -> dict[str, Any]:
-    """Fetch, parse, update, and trigger analysis for a document."""
+
+async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[str, Any]:
+    """Fetch, parse, update, and trigger analysis for a document.
+
+    P0b: the bytes come from the pinned revision's immutable object (or the current
+    revision for messages without ``revision_id``), never from a mutable document path.
+    """
     await init_db()
 
     async with get_raw_session() as session:
@@ -534,9 +855,17 @@ async def _process(document_id: UUID) -> dict[str, Any]:
         await repo.update_status(tenant_id, document_id, DocumentStatus.PARSING)
         await session.commit()
 
+        source_revision: DocumentRevision | None = None
         try:
-            file_name = f"{document.id}{Path(document.filename).suffix}"
-            file_path = await storage.download_file(file_name)
+            source_revision = await resolve_source_revision(
+                revision_repository=SqlAlchemyDocumentRevisionRepository(session),
+                document_id=document_id,
+                tenant_id=tenant_id,
+                revision_id=revision_id,
+            )
+            file_path = await fetch_source_file(
+                storage=storage, document=document, revision=source_revision
+            )
 
             parsed_payload = await file_parser.parse_document_file(document, file_path)
             logger.info("Document parsing successful for document %s.", document_id)
@@ -547,7 +876,7 @@ async def _process(document_id: UUID) -> dict[str, Any]:
                 tenant_id=tenant_id,
             )
 
-            await rag_ingestion.ingest_document_chunks(
+            rag_result = await rag_ingestion.ingest_document_chunks(
                 document=document,
                 parsed_payload=parsed_payload,
                 tenant_id=tenant_id,
@@ -560,21 +889,40 @@ async def _process(document_id: UUID) -> dict[str, Any]:
             ).strip()
             contract_clause_count = 0
             metadata = dict(document.document_metadata or {})
+            # Enum value only -- provider messages can carry credentials and
+            # never belong in document metadata. Recorded so an operator (or a
+            # retry) can tell "nothing to embed" from "provider misconfigured".
+            metadata["rag_ingestion_outcome"] = rag_result.outcome.value
             if parsed_text:
                 metadata["parsed_text"] = parsed_text
                 if document.document_type == DocumentType.CONTRACT:
                     existing_clauses = await repo.list_clauses_for_document(tenant_id, document_id)
+                    revision_clauses = _extract_contract_clauses(
+                        document_id=document_id,
+                        project_id=document.project_id,
+                        tenant_id=tenant_id,
+                        parsed_text=parsed_text,
+                    )
                     if not existing_clauses:
-                        extracted_clauses = _extract_contract_clauses(
-                            document_id=document_id,
-                            project_id=document.project_id,
-                            tenant_id=tenant_id,
-                            parsed_text=parsed_text,
-                        )
-                        for clause in extracted_clauses:
+                        for clause in revision_clauses:
                             await repo.add_clause(tenant_id, clause)
-                        contract_clause_count = len(extracted_clauses)
+                        contract_clause_count = len(revision_clauses)
                         metadata["contract_clause_count"] = contract_clause_count
+                    # P0c deliberately snapshots every revision's extraction even when the
+                    # mutable legacy clause rows already contain the prior revision.
+                    # Historical comparisons never read those mutable rows, and the events
+                    # are bound to the immutable revision this task pinned.
+                    if source_revision is not None:
+                        event_repository = SqlAlchemyProjectEventRepository(session)
+                        prior_events = await event_repository.list_for_project(
+                            document.project_id, tenant_id
+                        )
+                        for temporal_event in await build_revision_analysis_events(
+                            revision=source_revision,
+                            clauses=revision_clauses,
+                            existing_events=prior_events,
+                        ):
+                            await event_repository.append(temporal_event)
             await repo.update_metadata(tenant_id, document_id, metadata)
             from datetime import UTC, datetime
 
@@ -644,6 +992,23 @@ async def _process(document_id: UUID) -> dict[str, Any]:
         except Exception as error:
             logger.error("Error processing document %s: %s", document_id, error, exc_info=True)
             await session.rollback()
+            if source_revision is not None:
+                # A retry must not hide this failure behind a mutable document status:
+                # persist the revision-bound failure projection before re-raising.
+                try:
+                    await SqlAlchemyProjectEventRepository(session).append(
+                        build_revision_processing_failed_event(
+                            revision=source_revision,
+                            failure_code=_temporal_failure_code(error),
+                        )
+                    )
+                except Exception as projection_error:  # pragma: no cover - preserves primary failure
+                    logger.error(
+                        "temporal_failure_projection_append_failed document_id=%s revision_id=%s error=%s",
+                        document_id,
+                        source_revision.revision_id,
+                        projection_error,
+                    )
             await repo.update_status(
                 tenant_id, document_id, DocumentStatus.ERROR, parsing_error=str(error)
             )
@@ -659,31 +1024,109 @@ async def _process(document_id: UUID) -> dict[str, Any]:
     retry_backoff_max=60,
     task_track_started=True,
 )
-def process_document_async(self: Any, document_id: str) -> dict[str, Any]:
+def process_document_async(
+    self: Any, document_id: str, revision_id: str | None = None
+) -> dict[str, Any]:
     """
     Asynchronously processes a document using the appropriate parser.
 
     Args:
         document_id: The unique ID of the document to process. The task
                      retrieves the file path and other info from the database.
+        revision_id: The immutable revision to read. Messages without it (legacy
+                     producers, reprocess) read the document's current revision.
     """
     logger.info(
-        "Starting document processing for task_id: %s, document_id: %s",
+        "Starting document processing for task_id: %s, document_id: %s, revision_id: %s",
         self.request.id,
         document_id,
+        revision_id,
     )
-    return asyncio.run(_process(UUID(document_id)))
+    return asyncio.run(
+        _process(UUID(document_id), UUID(revision_id) if revision_id is not None else None)
+    )
+
+
+async def _close_document_analysis_task_resources(*, primary_error: Exception | None) -> None:
+    """Close task-owned async resources before the task event loop terminates."""
+    cleanup_error: Exception | None = None
+    for resource_name, close_resource in (
+        ("checkpointer", close_checkpointer_resources),
+        ("database", close_db),
+    ):
+        try:
+            await close_resource()
+        except Exception as error:  # pragma: no cover - exercised at runtime boundaries
+            logger.exception(
+                "document_analysis_task_resource_cleanup_failed",
+                extra={"resource": resource_name},
+            )
+            if cleanup_error is None:
+                cleanup_error = error
+
+    if cleanup_error is not None and primary_error is None:
+        raise cleanup_error
+
+
+async def _run_document_analysis_task_lifecycle(
+    *,
+    tenant_id: TenantId,
+    document_id: UUID,
+    route_rag_unavailable_to_dlq: bool,
+) -> dict[str, Any]:
+    """Own every loop-bound analysis resource for one Celery task invocation."""
+    primary_error: Exception | None = None
+    try:
+        return await _run_document_analysis(tenant_id=tenant_id, document_id=document_id)
+    except RagChunksUnavailableError as error:
+        if not route_rag_unavailable_to_dlq:
+            primary_error = error
+            raise
+
+        logger.error(
+            "document_analysis_rag_chunks_unavailable",
+            extra={"tenant_id": str(tenant_id), "document_id": str(document_id)},
+        )
+        await _push_trigger_failure_to_dlq(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            error=error,
+        )
+        return {
+            "status": "routed_to_dlq",
+            "document_id": str(document_id),
+            "reason": "rag_chunks_unavailable",
+        }
+    except Exception as error:
+        primary_error = error
+        logger.exception(
+            "document_analysis_task_failed",
+            extra={"tenant_id": str(tenant_id), "document_id": str(document_id)},
+        )
+        try:
+            await _push_trigger_failure_to_dlq(
+                tenant_id=tenant_id,
+                document_id=document_id,
+                error=error,
+            )
+        except Exception:
+            # The graph/analysis error is the primary outcome; DLQ failure is observable
+            # but must not replace it while the task-owned loop is still being unwound.
+            logger.exception(
+                "document_analysis_failure_dlq_persistence_failed",
+                extra={"tenant_id": str(tenant_id), "document_id": str(document_id)},
+            )
+        raise
+    finally:
+        await _close_document_analysis_task_resources(primary_error=primary_error)
 
 
 @celery_app.task(
     name="documents.analyze_document",
     bind=True,
-    autoretry_for=(Exception,),
-    retry_kwargs={"max_retries": 3},
-    retry_backoff=True,
-    retry_backoff_max=60,
     task_track_started=True,
     queue="document_parsing",
+    **ANALYSIS_TASK_RETRY_OPTIONS,
 )
 def process_document_analysis_async(self: Any, tenant_id: str, document_id: str) -> dict[str, Any]:
     """Run full document analysis after parsing; persists via graph N17."""
@@ -693,70 +1136,32 @@ def process_document_analysis_async(self: Any, tenant_id: str, document_id: str)
         document_id,
     )
     normalized_tenant_id = require_tenant_id(tenant_id)
+    retries = int(getattr(self.request, "retries", 0))
     try:
         return asyncio.run(
-            _run_document_analysis(
+            _run_document_analysis_task_lifecycle(
                 tenant_id=normalized_tenant_id,
                 document_id=UUID(document_id),
+                route_rag_unavailable_to_dlq=retries >= RAG_READINESS_MAX_RETRIES,
             )
         )
     except RagChunksUnavailableError as error:
-        retries = int(getattr(self.request, "retries", 0))
-        if retries < RAG_READINESS_MAX_RETRIES:
-            countdown = 2**retries
-            logger.warning(
-                "document_analysis_rag_chunks_retrying",
-                extra={
-                    "tenant_id": tenant_id,
-                    "document_id": document_id,
-                    "task_id": self.request.id,
-                    "retry": retries + 1,
-                    "countdown_seconds": countdown,
-                },
-            )
-            raise self.retry(
-                exc=error,
-                countdown=countdown,
-                max_retries=RAG_READINESS_MAX_RETRIES,
-            )
-
-        logger.error(
-            "document_analysis_rag_chunks_unavailable",
+        countdown = 2**retries
+        logger.warning(
+            "document_analysis_rag_chunks_retrying",
             extra={
                 "tenant_id": tenant_id,
                 "document_id": document_id,
                 "task_id": self.request.id,
+                "retry": retries + 1,
+                "countdown_seconds": countdown,
             },
         )
-        asyncio.run(
-            _push_trigger_failure_to_dlq(
-                tenant_id=normalized_tenant_id,
-                document_id=UUID(document_id),
-                error=error,
-            )
+        raise self.retry(
+            exc=error,
+            countdown=countdown,
+            max_retries=RAG_READINESS_MAX_RETRIES,
         )
-        return {
-            "status": "routed_to_dlq",
-            "document_id": document_id,
-            "reason": "rag_chunks_unavailable",
-        }
-    except Exception as error:
-        logger.exception(
-            "document_analysis_task_failed",
-            extra={
-                "tenant_id": tenant_id,
-                "document_id": document_id,
-                "task_id": self.request.id,
-            },
-        )
-        asyncio.run(
-            _push_trigger_failure_to_dlq(
-                tenant_id=normalized_tenant_id,
-                document_id=UUID(document_id),
-                error=error,
-            )
-        )
-        raise
 
 
 process_document_analysis_async.queue = "document_parsing"

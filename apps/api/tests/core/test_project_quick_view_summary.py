@@ -171,3 +171,34 @@ async def test_get_project_summary_raises_404_for_other_tenant(monkeypatch) -> N
         )
 
     assert exc_info.value.status_code == 404
+
+
+def test_severity_rank_expression_compares_severity_as_text_not_enum() -> None:
+    """Regression for the confirmed production /summary 500.
+
+    Prod `alerts.severity` is `character varying`, but the ORM maps it as the native
+    `alertseverity` enum. Ordering the quick-view alerts query by an enum-typed severity
+    comparison made Postgres raise, at query-plan time (so a 500 for EVERY /summary call, even
+    with zero alerts):
+
+        asyncpg.exceptions.UndefinedFunctionError:
+            operator does not exist: character varying = alertseverity
+
+    The fake-session unit tests above never run real SQL, and the ORM-generated test DB uses the
+    enum type, so neither reproduces the drift. The ranking expression must compare severity AS
+    TEXT so the operator always resolves as `varchar = varchar`, regardless of the physical
+    column type (varchar in prod, enum under the ORM/tests).
+    """
+    from sqlalchemy.dialects import postgresql
+
+    compiled = str(
+        projects_router_module._severity_rank_expression().compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    ).upper()
+
+    # severity is compared as text (a CAST to VARCHAR), never against the native enum type.
+    assert "CAST(ALERTS.SEVERITY AS VARCHAR" in compiled
+    # ...against the enum VALUES, so the comparison is varchar=varchar.
+    assert "'CRITICAL'" in compiled

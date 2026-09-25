@@ -330,6 +330,14 @@ class EnrichedCoherenceResult(BaseModel):
         default="standard",
         description="low_budget_mode or standard"
     )
+    category_scores: dict[str, float | None] | None = Field(
+        default=None,
+        description="Per-category coherence scores keyed by canonical category (null when UNASSESSED).",
+    )
+    audit_coverage: dict[str, float] | None = Field(
+        default=None,
+        description="Audit dimension coverage: assessed / total / pct of the 6 canonical categories.",
+    )
 
 
 class DashboardSummary(BaseModel):

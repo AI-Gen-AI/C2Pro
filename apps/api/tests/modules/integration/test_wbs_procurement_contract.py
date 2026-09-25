@@ -55,6 +55,16 @@ class _FakeWBSRepository(IWBSRepository):
     async def delete(self, wbs_id: UUID, tenant_id: UUID) -> bool:
         raise NotImplementedError
 
+    async def replace_for_source_document(
+        self,
+        *,
+        project_id: UUID,
+        source_document_id: UUID,
+        wbs_items: list[WBSItem],
+        tenant_id: UUID,
+    ) -> list[WBSItem]:
+        raise NotImplementedError
+
 
 @pytest.mark.asyncio
 class TestWBSProcurementIntegration:

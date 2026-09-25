@@ -11,10 +11,15 @@ echo "[start.sh] Migrations complete."
 _start_celery() {
     while true; do
         echo "[start.sh] Starting Celery worker..."
+        # --without-gossip/--without-mingle: this is a single worker node, so
+        # worker-to-worker gossip and startup mingle are pure Redis pub/sub noise.
+        # Heartbeat is intentionally kept (broker-connection liveness).
         celery -A src.core.tasks.celery_app.celery_app worker \
             --loglevel=info \
             --concurrency=2 \
             --queues=document_parsing \
+            --without-gossip \
+            --without-mingle \
             || true
         echo "[start.sh] Celery worker exited. Restarting in 5s..."
         sleep 5

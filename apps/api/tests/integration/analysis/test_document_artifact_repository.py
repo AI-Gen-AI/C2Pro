@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.analysis.domain.contracts import DocumentArtifact, RiskItem
+from src.analysis.domain.contracts import DocumentArtifact, RiskItem, Severity
 
 
 def _artifact(document_id: str, title: str) -> DocumentArtifact:
@@ -131,3 +131,45 @@ async def test_document_artifact_lists_superseded_for_document_newest_first(
         "Second risk",
         "First risk",
     ]
+
+
+@pytest.mark.asyncio
+async def test_document_artifact_roundtrip_preserves_critical_risk(
+    db: AsyncSession,
+) -> None:
+    """Issue #637: persisted CRITICAL risk must round-trip without degradation."""
+
+    from src.analysis.adapters.persistence.document_artifact_repository import (
+        SqlAlchemyDocumentArtifactRepository,
+    )
+
+    project_id = uuid4()
+    tenant_id = uuid4()
+    document_id = uuid4()
+    repo = SqlAlchemyDocumentArtifactRepository(db)
+    artifact = DocumentArtifact(
+        document_id=str(document_id),
+        document_revision_id=None,
+        doc_type="contract",
+        extracted_risks=[
+            RiskItem(
+                category="LEGAL",
+                title="Uncapped liability",
+                description="Liability exposure requires immediate attention",
+                impact="CRITICAL",
+                likelihood="HIGH",
+            )
+        ],
+    )
+
+    await repo.save(artifact, project_id=project_id, tenant_id=tenant_id)
+    active = await repo.list_active_for_project(
+        project_id=project_id,
+        tenant_id=tenant_id,
+    )
+
+    assert len(active) == 1
+    risk = active[0].extracted_risks[0]
+    assert risk.severity is Severity.CRITICAL
+    assert risk.impact is Severity.CRITICAL
+    assert risk.likelihood is Severity.HIGH

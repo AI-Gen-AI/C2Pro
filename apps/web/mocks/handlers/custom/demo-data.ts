@@ -274,11 +274,43 @@ export const demoDataHandlers = [
   // ── WBS ───────────────────────────────────────────────────
   http.get("*/api/v1/projects/:projectId/wbs", ({ params }) => {
     const projectId = String(params.projectId);
-    const items = db.wbsItem.findMany({
-      where: { projectId: { equals: projectId } },
-    });
+    // Same shape as the authoritative GET /projects/{project_id}/wbs contract (IR-4).
+    const items = db.wbsItem
+      .findMany({ where: { projectId: { equals: projectId } } })
+      .map((row) => ({
+        id: row.id,
+        project_id: row.projectId,
+        code: row.code,
+        name: row.name,
+        level: row.level,
+        description: null,
+        parent_code: null,
+        item_type: null,
+        budget_allocated: null,
+        budget_spent: 0,
+        planned_start: null,
+        planned_end: null,
+        actual_start: null,
+        actual_end: null,
+        source_clause_id: null,
+        version: 1,
+        metadata: {},
+        children: [],
+      }));
 
-    return HttpResponse.json(items);
+    return HttpResponse.json({
+      project_id: projectId,
+      items,
+      coverage: {
+        total_items: items.length,
+        items_with_budget: 0,
+        items_with_dates: 0,
+        items_with_alerts: 0,
+        completion_average: 0,
+      },
+      alerts: [],
+      total_items: items.length,
+    });
   }),
 
   // ── Coherence Dashboard ─────────────────────────────────

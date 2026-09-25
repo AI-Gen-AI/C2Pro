@@ -17,6 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database import Base
 from src.core.json_types import JsonDict
+from src.projects.domain.models import ProjectType
 
 
 def _utcnow_naive() -> datetime:
@@ -39,7 +40,7 @@ class ProjectORM(Base):
     # Project classification - using PostgreSQL enum types (native values)
     project_type: Mapped[str] = mapped_column(
         Enum(
-            "construction", "engineering", "industrial", "infrastructure", "other",
+            *[member.value for member in ProjectType],
             name="projecttype",
             create_type=False,
         ),
