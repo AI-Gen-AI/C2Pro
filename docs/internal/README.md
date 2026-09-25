@@ -5,6 +5,7 @@ This section is for internal reference material that is still useful, but is not
 ## Contents
 
 - [Lessons learned](./LESSONS_LEARNED.md)
+- [Codex authentication and workspace 401 runbook](./CODEX_AUTH_WORKSPACE_401_RUNBOOK.md)
 - [Swagger endpoint workbook](./SWAGGER_ENDPOINT_WORKBOOK.md)
 
 ## Related Sections
