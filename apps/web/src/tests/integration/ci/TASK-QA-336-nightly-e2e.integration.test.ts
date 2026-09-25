@@ -36,8 +36,20 @@ describe("TASK-QA-336 nightly full E2E lane", () => {
     );
     expect(smokeJob).not.toContain("pk_test_Y2xlcmsubW9jay5sb2NhbCQ");
     expect(smokeJob).toContain("Set repo variable RUN_FULL_E2E=true to make this gate blocking.");
+    expect(smokeJob).toContain("- name: Build frontend for E2E smoke");
+    expect(smokeJob).toContain("run: pnpm build");
+    expect(smokeJob).toContain("PLAYWRIGHT_WEBSERVER_MODE: production");
     expect(workflow).not.toContain(
       "run: pnpm test:e2e -- src/tests/e2e/coherence-v1.spec.ts src/tests/e2e/journeys/journey-3-wedge.spec.ts --project=chromium",
     );
+  });
+
+  it("[TASK-QA-336-RED-03] keeps dev as the Playwright default but supports production smoke", () => {
+    const configPath = resolve(process.cwd(), "playwright.config.ts");
+    const config = readFileSync(configPath, "utf8");
+
+    expect(config).toContain('process.env.PLAYWRIGHT_WEBSERVER_MODE === "production"');
+    expect(config).toContain('"pnpm start --hostname localhost --port 3100"');
+    expect(config).toContain('"pnpm dev --hostname localhost --port 3100 --webpack"');
   });
 });
