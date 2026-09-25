@@ -2,6 +2,10 @@ import { defineConfig, devices } from "@playwright/test";
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3100";
 const useManagedWebServer = process.env.PLAYWRIGHT_SKIP_WEBSERVER !== "1";
+const useProductionWebServer = process.env.PLAYWRIGHT_WEBSERVER_MODE === "production";
+const webServerCommand = useProductionWebServer
+  ? "pnpm start --hostname localhost --port 3100"
+  : "pnpm dev --hostname localhost --port 3100 --webpack";
 
 export default defineConfig({
   testDir: "./src/tests/e2e",
@@ -14,7 +18,7 @@ export default defineConfig({
   },
   webServer: useManagedWebServer
     ? {
-        command: "pnpm dev --hostname localhost --port 3100 --webpack",
+        command: webServerCommand,
         url: baseURL,
         reuseExistingServer: false,
         timeout: 120_000,

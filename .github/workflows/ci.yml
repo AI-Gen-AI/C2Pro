@@ -1054,12 +1054,22 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
 
+      # The blocking real-backend smoke validates the shipped Next runtime, not
+      # the development HMR loop. Local/nightly Playwright keeps the default
+      # `next dev` server unless PLAYWRIGHT_WEBSERVER_MODE is explicitly set.
+      - name: Build frontend for E2E smoke
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
+        working-directory: apps/web
+        run: pnpm build
+
       # QA-338/FRT-192: keep this required lane opt-in until an operator enables
       # the repository variable after the live run is certified. The seeded
       # backend covers auth/proxy availability without using a real Claude call.
       - name: E2E smoke tests
         if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         working-directory: apps/web
+        env:
+          PLAYWRIGHT_WEBSERVER_MODE: production
         run: |
           ./node_modules/.bin/playwright test src/tests/e2e/coherence-v1.spec.ts --project=chromium
           ./node_modules/.bin/playwright test src/tests/e2e/journeys/journey-3-wedge.spec.ts --grep '@real-backend' --project=chromium
