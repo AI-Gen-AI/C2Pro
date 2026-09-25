@@ -72,6 +72,18 @@ def test_high_risks_reduce_score_and_confidence_tracks_extraction_quality() -> N
     assert len(signal.evidence) == 3
 
 
+def test_critical_risk_uses_canonical_critical_penalty() -> None:
+    signal = score_risk_dimension(
+        [_risk(Severity.CRITICAL, "risk-critical")],
+        assessment_ran=True,
+        extraction_quality=0.9,
+    )
+
+    assert signal.score == 55
+    assert signal.band is HealthBand.AT_RISK
+    assert signal.evidence[0].ref_id == "risk-critical"
+
+
 def test_poor_extraction_quality_is_unknown_not_clean() -> None:
     signal = score_risk_dimension([], assessment_ran=True, extraction_quality=0.2)
 
