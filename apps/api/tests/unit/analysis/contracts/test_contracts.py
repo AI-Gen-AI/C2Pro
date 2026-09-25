@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from src.analysis.adapters.graph.nodes import _risk_contract_item, _risk_contract_payload
 from src.analysis.domain.contracts import (
     PAYLOAD_CONTRACT_VERSION,
     BudgetItem,
@@ -45,6 +46,39 @@ class TestRiskItem:
     def test_explicit_severity_wins_over_impact(self):
         r = RiskItem(title="T", description="D", severity="LOW", impact="HIGH")
         assert r.severity is Severity.LOW
+
+    def test_critical_impact_normalizes_to_canonical_critical(self):
+        """Issue #637: CRITICAL must cross the canonical RiskItem boundary losslessly."""
+        r = RiskItem(
+            category="LEGAL",
+            title="Uncapped liability",
+            description="Liability exposure requires immediate attention",
+            impact="CRITICAL",
+        )
+        assert r.severity is Severity.CRITICAL
+        assert r.impact is Severity.CRITICAL
+
+    def test_n4_boundary_preserves_critical_production_shape(self):
+        """Issue #637: N4 legacy extractor output retains CRITICAL with no HIGH coercion."""
+        raw = {
+            "category": "LEGAL",
+            "title": "Uncapped liability",
+            "summary": "Liability exposure requires immediate attention",
+            "probability": "HIGH",
+            "impact": "CRITICAL",
+            "source_quote": "The Contractor shall bear unlimited liability for all consequential losses.",
+            "risk_score": 12,
+            "immediate_alert": True,
+        }
+
+        item = _risk_contract_item(raw)
+        payload = _risk_contract_payload(raw)
+
+        assert item.severity is Severity.CRITICAL
+        assert item.impact is Severity.CRITICAL
+        assert item.likelihood is Severity.HIGH
+        assert payload["severity"] is Severity.CRITICAL
+        assert payload["impact"] is Severity.CRITICAL
 
     def test_extra_key_rejected(self):
         with pytest.raises(ValidationError):
