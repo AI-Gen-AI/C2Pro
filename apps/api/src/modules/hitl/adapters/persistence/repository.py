@@ -9,10 +9,10 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Select, case, select
+from sqlalchemy import ColumnElement, Select, case, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.modules.hitl.adapters.persistence.models import ReviewItemORM
+from src.modules.hitl.adapters.persistence.models import ResumeOperationORM, ReviewItemORM
 from src.modules.hitl.application.ports import ReviewQueueRepository
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewItem, ReviewStatus
 
@@ -150,18 +150,55 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
             else_=1,
         )
 
+    @staticmethod
+    def _v3_finalized() -> ColumnElement[bool]:
+        """True when a durable V3 resume operation FINALIZED this exact row.
+
+        C2PRO #649: resume_operations.review_row_id is the strongest
+        provenance there is for "this row carries the effective human
+        decision" -- it is written per EXACT row and reaches a FINALIZED
+        phase in the same fenced transaction that flips the review's
+        status. Operations that never finalized (RUNNING, FAILED_RETRYABLE,
+        OPERATOR_REQUIRED, ...) prove nothing about the decision and do not
+        count.
+        """
+        return exists().where(
+            ResumeOperationORM.review_row_id == ReviewItemORM.id,
+            ResumeOperationORM.tenant_id == ReviewItemORM.tenant_id,
+            ResumeOperationORM.phase.in_(["FINALIZED_APPROVED", "FINALIZED_REJECTED"]),
+        )
+
     @classmethod
     def _canonical_tiebreakers(cls) -> tuple[Any, ...]:
-        """Ordering to apply *within* a `_canonical_priority()` tier: prefer
-        the resumable (real thread_id) row, then the most recently created.
+        """Full canonical ordering among rows sharing one item_id.
+
+        1. ACTIVE before decided (`_canonical_priority()`) -- unchanged.
+        2. C2PRO #649: among decided rows, a row finalized by a durable V3
+           operation before any legacy row. Once the active row B is
+           finalized it ties on status with historical APPROVED rows; the
+           old created_at tiebreak then surfaced a historical row A that
+           merely happened to be created later ("Reviewed: Sep 20" shown
+           for a Sep 24 decision).
+        3. Among V3-finalized rows, the most recent finalization
+           (approved_at, stamped by that same transaction) -- a re-review's
+           decision supersedes the earlier one. NULL for every other row,
+           so it never reorders pending or legacy rows.
+        4. Legacy fallback, unchanged: the resumable (real thread_id) row,
+           then the most recently created.
+        5. Primary key, so exact ties resolve identically on every call.
+
         Shared by every call site that must resolve "the" canonical row for
         an item_id, so the queue list, single-item lookup, and mutation
         targeting can never disagree about which row that is.
         """
+        finalized = cls._v3_finalized()
         return (
             cls._canonical_priority(),
+            case((finalized, 0), else_=1),
+            case((finalized, ReviewItemORM.approved_at), else_=None).desc().nulls_last(),
             ReviewItemORM.thread_id.isnot(None).desc(),
             ReviewItemORM.created_at.desc(),
+            ReviewItemORM.id.desc(),
         )
 
     async def add_review_item(self, item: ReviewItem) -> UUID:
@@ -209,6 +246,29 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         )
         orm = result.scalars().first()
         return self._to_domain(orm) if orm else None
+
+    async def get_review_item_by_row_id(
+        self, review_row_id: UUID, *, for_update: bool = False
+    ) -> ReviewItem | None:
+        """Exact tenant-scoped recovery identity; never fall back to item_id."""
+        if self.tenant_id is None:
+            raise ValueError("Exact review recovery requires a tenant")
+        stmt = select(ReviewItemORM).where(
+            ReviewItemORM.id == review_row_id,
+            ReviewItemORM.tenant_id == self.tenant_id,
+        )
+        if for_update:
+            stmt = stmt.with_for_update()
+        orm = (await self.session.execute(
+            stmt.execution_options(populate_existing=True)
+        )).scalar_one_or_none()
+        if orm is None:
+            return None
+        review = self._to_domain(orm)
+        # Recovery distinguishes explicit empty plaintext from unknown.
+        if orm.review_decision is not None:
+            review.metadata["review_decision"] = orm.review_decision
+        return review
 
     async def update_review_item(self, item: ReviewItem) -> None:
         row_id_raw = item.metadata.get("row_id")
@@ -304,7 +364,10 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         )
         if self.tenant_id is not None:
             stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
-        stmt = stmt.order_by(ReviewItemORM.created_at.desc())
+        # Same precedence as every other canonical lookup (C2PRO #649), so
+        # the routing idempotency guard and the queue agree on which pending
+        # row is "the" active one.
+        stmt = stmt.order_by(*self._canonical_tiebreakers())
         result = await self.session.execute(stmt)
         orm = result.scalars().first()
         return self._to_domain(orm) if orm else None
