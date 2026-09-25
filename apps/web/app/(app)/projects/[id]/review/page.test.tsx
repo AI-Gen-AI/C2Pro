@@ -2,7 +2,7 @@
  * Test Suite ID: TS-FRT-HITL-QUEUE-001
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ReviewPage from './page';
 
@@ -363,6 +363,111 @@ describe('ReviewPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Resume failed: workflow error (502)');
     expect(screen.getByText('Reject Review Item')).toBeInTheDocument();
     expect(mockShowToast).toHaveBeenCalledWith('Resume failed: workflow error (502)');
+  });
+
+  // C2PRO #649: one human decision must produce ONE request. The backend is
+  // idempotent on its own (a replay adds no audit event), but the page must
+  // not rely on that: a slow resume invites repeated clicks.
+  describe('double-submit protection (#649)', () => {
+    function deferred<T>() {
+      let resolve!: (value: T) => void;
+      let reject!: (reason: unknown) => void;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    }
+
+    it('sends exactly one approve request for rapid repeated Confirm clicks while in flight', async () => {
+      setupMock();
+      const inFlight = deferred<object>();
+      mockApproveMutate.mockReturnValue(inFlight.promise);
+      render(<ReviewPage />);
+
+      await userEvent.click(screen.getByTestId('approve-item-1'));
+      const confirm = screen.getByRole('button', { name: /confirm approve/i });
+      fireEvent.click(confirm);
+      fireEvent.click(confirm);
+      fireEvent.click(confirm);
+      await userEvent.click(confirm);
+
+      expect(mockApproveMutate).toHaveBeenCalledTimes(1);
+      // Visible, non-actionable pending state; the dialog cannot be dismissed
+      // (and re-opened for a second submit) while the decision is in flight.
+      expect(confirm).toBeDisabled();
+      expect(screen.getByRole('status')).toHaveTextContent(/approving/i);
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled();
+      await userEvent.keyboard('{Escape}');
+      expect(screen.getByText('Approve Review Item')).toBeInTheDocument();
+
+      await act(async () => {
+        inFlight.resolve({});
+        await inFlight.promise;
+      });
+      expect(mockApproveMutate).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the decided item non-actionable after success, before the queue refresh lands', async () => {
+      // refetch() returns but the cached queue still shows item-1 PENDING --
+      // exactly the window in which a second Approve used to be possible.
+      setupMock();
+      mockApproveMutate.mockResolvedValue({});
+      render(<ReviewPage />);
+
+      await userEvent.click(screen.getByTestId('approve-item-1'));
+      await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
+      await waitFor(() => expect(screen.queryByText('Approve Review Item')).not.toBeInTheDocument());
+
+      expect(screen.getByTestId('approve-item-1')).toBeDisabled();
+      expect(screen.getByTestId('reject-item-1')).toBeDisabled();
+      await userEvent.click(screen.getByTestId('approve-item-1'));
+      expect(screen.queryByText('Approve Review Item')).not.toBeInTheDocument();
+      expect(mockApproveMutate).toHaveBeenCalledTimes(1);
+      expect(mockRefetch).toHaveBeenCalled();
+    });
+
+    it('restores retry truthfully after a failed approve', async () => {
+      setupMock();
+      mockApproveMutate
+        .mockRejectedValueOnce(new Error('Resuming the analysis workflow failed'))
+        .mockResolvedValueOnce({});
+      render(<ReviewPage />);
+
+      await userEvent.click(screen.getByTestId('approve-item-1'));
+      await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('Resuming the analysis workflow failed');
+
+      const retry = screen.getByRole('button', { name: /confirm approve/i });
+      expect(retry).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: /cancel/i })).not.toBeDisabled();
+      await userEvent.click(retry);
+      await waitFor(() => expect(mockApproveMutate).toHaveBeenCalledTimes(2));
+    });
+
+    it('sends exactly one reject request for rapid repeated Confirm clicks while in flight', async () => {
+      setupMock();
+      const inFlight = deferred<object>();
+      mockRejectMutate.mockReturnValue(inFlight.promise);
+      render(<ReviewPage />);
+
+      await userEvent.click(screen.getByTestId('reject-item-1'));
+      await userEvent.type(screen.getByPlaceholderText(/explain why/i), 'Bad extraction');
+      const confirm = screen.getByRole('button', { name: /confirm reject/i });
+      fireEvent.click(confirm);
+      fireEvent.click(confirm);
+      await userEvent.click(confirm);
+
+      expect(mockRejectMutate).toHaveBeenCalledTimes(1);
+      expect(confirm).toBeDisabled();
+      expect(screen.getByRole('status')).toHaveTextContent(/rejecting/i);
+
+      await act(async () => {
+        inFlight.resolve({});
+        await inFlight.promise;
+      });
+      expect(mockRejectMutate).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('renders one card per deduped queue item (no duplicate legacy rows shown)', () => {

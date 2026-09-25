@@ -305,6 +305,12 @@ async def approve_item(
     if existing.metadata.get("thread_id"):
         # Graph-gated review (analysis_critique): approval must resume the
         # SAME LangGraph thread/checkpoint this review was created from.
+        #
+        # C2PRO #649: no hitl.correction is appended here. The V3
+        # finalization commits it atomically with the decision, keyed by
+        # resume_operation_id, so this response -- which is ALSO what every
+        # idempotent replay (double click, lost-response retry) returns --
+        # must never add another one.
         item = await _approve_and_resume_workflow(
             item_id=item_id,
             reviewer_name=current_user.full_name,
@@ -321,14 +327,16 @@ async def approve_item(
         except ValueError as exc:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
 
-    await _record_hitl_correction_snapshot(
-        item_id=item.item_id,
-        item_data=item.item_data,
-        metadata=item.metadata,
-        tenant_id=_tenant_id,
-        decision=item.current_status,
-        reviewer=item.approved_by,
-    )
+        # Non-graph review: approve_item() refuses anything not pending, so
+        # reaching this line means THIS request made the decision.
+        await _record_hitl_correction_snapshot(
+            item_id=item.item_id,
+            item_data=item.item_data,
+            metadata=item.metadata,
+            tenant_id=_tenant_id,
+            decision=item.current_status,
+            reviewer=item.approved_by,
+        )
     logger.info("hitl_item_approved", item_id=str(item_id), reviewer=current_user.full_name)
     return _to_review_item_response(item)
 
@@ -373,13 +381,16 @@ async def reject_item(
         # again -- see _approve_and_resume_workflow's matching comment for
         # why re-resolving by item_id after the status flip can return a
         # different, historical row sharing this item_id.
+        #
+        # C2PRO #649: read-only. The rejection reason is written once, by the
+        # V3 finalization, from the operation's own feedback. Rewriting it
+        # here let an idempotent replay with a different reason mutate an
+        # already-finalized decision; a replay now returns the STORED row.
         existing_row_id = existing.metadata.get("row_id")
         lookup_id = UUID(existing_row_id) if existing_row_id else item_id
         item = await service.review_queue_repo.get_review_item(lookup_id)
         if item is None:  # pragma: no cover - execute() above already confirmed the row exists
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
-        item.metadata["rejection_reason"] = payload.reason
-        await service.review_queue_repo.update_review_item(item)
     else:
         if existing.current_status not in {
             ReviewStatus.PENDING_REVIEW_REQUIRED,
@@ -400,14 +411,16 @@ async def reject_item(
         item.metadata["rejection_reason"] = payload.reason
         await service.review_queue_repo.update_review_item(item)
 
-    await _record_hitl_correction_snapshot(
-        item_id=item.item_id,
-        item_data=item.item_data,
-        metadata=item.metadata,
-        tenant_id=_tenant_id,
-        decision=item.current_status,
-        reviewer=item.approved_by,
-    )
+        # Non-graph review only; graph-gated rejections record their single
+        # hitl.correction inside the V3 finalization (C2PRO #649).
+        await _record_hitl_correction_snapshot(
+            item_id=item.item_id,
+            item_data=item.item_data,
+            metadata=item.metadata,
+            tenant_id=_tenant_id,
+            decision=item.current_status,
+            reviewer=item.approved_by,
+        )
     logger.info("hitl_item_rejected", item_id=str(item_id), reviewer=current_user.full_name)
     return _to_review_item_response(item)
 

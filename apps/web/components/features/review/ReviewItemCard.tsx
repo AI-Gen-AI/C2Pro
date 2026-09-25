@@ -25,6 +25,8 @@ type ReviewItemCardProps = {
   item: ReviewItemResponse;
   projectId: string;
   reviewerIdentityReady: boolean;
+  /** A decision for this row was already submitted; wait for the refreshed queue. */
+  actionsLocked?: boolean;
   onApprove: (item: ReviewItemResponse) => void;
   onReject: (item: ReviewItemResponse) => void;
 };
@@ -117,6 +119,7 @@ export function ReviewItemCard({
   item,
   projectId,
   reviewerIdentityReady,
+  actionsLocked = false,
   onApprove,
   onReject,
 }: ReviewItemCardProps) {
@@ -166,6 +169,13 @@ export function ReviewItemCard({
   // this review type" than a genuine zero out of a continuous confidence
   // distribution -- showing it as a real score would misrepresent it.
   const confidenceIsMeaningful = item.confidence > 0;
+
+  const actionsDisabled = !reviewerIdentityReady || actionsLocked;
+  const actionsTitle = actionsLocked
+    ? 'Decision submitted. Refreshing the queue...'
+    : !reviewerIdentityReady
+      ? 'Loading your identity...'
+      : undefined;
 
   return (
     <div className="rounded-lg border bg-card" data-testid={`review-item-${item.item_id}`}>
@@ -242,8 +252,8 @@ export function ReviewItemCard({
                 size="sm"
                 variant="outline"
                 className="text-green-600 hover:bg-green-50"
-                disabled={!reviewerIdentityReady}
-                title={!reviewerIdentityReady ? 'Loading your identity...' : undefined}
+                disabled={actionsDisabled}
+                title={actionsTitle}
                 onClick={() => onApprove(item)}
                 data-testid={`approve-${item.item_id}`}
               >
@@ -253,8 +263,8 @@ export function ReviewItemCard({
                 size="sm"
                 variant="outline"
                 className="text-red-600 hover:bg-red-50"
-                disabled={!reviewerIdentityReady}
-                title={!reviewerIdentityReady ? 'Loading your identity...' : undefined}
+                disabled={actionsDisabled}
+                title={actionsTitle}
                 onClick={() => onReject(item)}
                 data-testid={`reject-${item.item_id}`}
               >

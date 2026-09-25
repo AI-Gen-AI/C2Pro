@@ -22,12 +22,10 @@ It is bounded in every direction that matters:
 * after MAX_FAILURES_BEFORE_OPERATOR it becomes OPERATOR_REQUIRED and is
   never picked up again -- a halt, not an infinite retry.
 
-It intentionally drives the SAME `ResumeWorkflowUseCase.execute()` path a
-human retry would, with the decision the reviewer actually recorded. That
-keeps exactly one implementation of recovery: the use case already decides,
-from the durable phase, whether an operation needs a replay or only
-finalization, and the fence makes a collision with a live worker a
-deterministic refusal rather than a race.
+Recovery uses `ResumeWorkflowUseCase.recover()` with the exact scanned
+operation/row/decision/fence identity. Unlike human execute(), recovery can
+never author a decision revision. Both share the existing fenced graph
+executor after their separate acquisition transactions commit.
 """
 
 from __future__ import annotations
@@ -61,11 +59,12 @@ _RECOVERABLE_PHASES = (
 _CLAIMABLE_SQL = text(
     """
     SELECT o.id, o.tenant_id, o.review_row_id, o.phase, o.decision,
-           o.reviewer, o.failure_count, r.item_id
+           o.decision_hash, o.decision_revision, o.fencing_token
       FROM resume_operations o
-      JOIN review_items r ON r.id = o.review_row_id
+      JOIN review_items r ON r.id = o.review_row_id AND r.tenant_id = o.tenant_id
      WHERE o.phase = ANY(:phases)
-       AND (o.lease_expires_at IS NULL OR o.lease_expires_at <= clock_timestamp())
+       AND ((o.owner_token IS NULL AND o.lease_expires_at IS NULL)
+            OR o.lease_expires_at <= clock_timestamp())
        AND (o.next_attempt_at IS NULL OR o.next_attempt_at <= clock_timestamp())
        AND o.decision IS NOT NULL
      ORDER BY o.updated_at
@@ -90,9 +89,9 @@ async def _sweep_async(
         SqlAlchemyReviewQueueRepository,
     )
     from src.modules.hitl.application.resume_workflow_use_case import (
-        ResumeWorkflowRequest,
+        RecoveryOutcome,
+        ResumeRecoveryRequest,
         ResumeWorkflowUseCase,
-        WorkflowDecision,
     )
 
     if session_factory is None:
@@ -130,26 +129,26 @@ async def _sweep_async(
     for row in rows:
         tenant_id = UUID(str(row.tenant_id))
         try:
-            decision = WorkflowDecision(row.decision)
-        except ValueError:
-            logger.warning(
-                "hitl_resume_reconcile_unknown_decision",
-                operation_id=str(row.id),
-                decision=row.decision,
-            )
-            continue
-
-        try:
             async with session_factory(tenant_id) as session:
                 use_case = use_case_factory(session, tenant_id)
-                await use_case.execute(
-                    review_id=UUID(str(row.item_id)),
-                    request=ResumeWorkflowRequest(
-                        decision=decision,
-                        feedback="",
-                        approved_by=row.reviewer or "reconciler",
+                outcome = await use_case.recover(
+                    ResumeRecoveryRequest(
+                        operation_id=UUID(str(row.id)),
+                        review_row_id=UUID(str(row.review_row_id)),
+                        tenant_id=tenant_id,
+                        expected_decision=row.decision,
+                        expected_decision_hash=row.decision_hash,
+                        expected_decision_revision=row.decision_revision,
+                        expected_fencing_token=row.fencing_token,
                     ),
                 )
+            if outcome is not RecoveryOutcome.RECOVERED:
+                refused += 1
+                logger.info(
+                    "hitl_resume_reconcile_refused",
+                    operation_id=str(row.id), outcome=outcome.value,
+                )
+                continue
             recovered += 1
             logger.info(
                 "hitl_resume_reconciled",
