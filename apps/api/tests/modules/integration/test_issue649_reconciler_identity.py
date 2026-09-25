@@ -169,7 +169,11 @@ async def test_legacy_unknown_feedback_never_becomes_empty(
     assert N17_RUNS == []
 
 
-@pytest.mark.parametrize("changed", [True, False], ids=["human_revision", "live_owner"])
+@pytest.mark.parametrize(
+    "changed, released",
+    [(True, False), (False, False), (True, True)],
+    ids=["human_revision", "live_owner", "released_human_revision"],
+)
 async def test_scan_loses_to_new_human_owner(
     db,
     test_user,
@@ -178,6 +182,7 @@ async def test_scan_loses_to_new_human_owner(
     request_sessions,
     snapshot_enqueues,
     changed,
+    released,
 ):
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
@@ -210,12 +215,20 @@ async def test_scan_loses_to_new_human_owner(
     )
     try:
         await asyncio.wait_for(entered.wait(), 10)
-        await _claim(
+        human = await _claim(
             human_sessions,
             tenant,
             arranged,
             feedback="new human reason" if changed else "human reason",
         )
+        if released:
+            # The newer human attempt failed and released its lease, and its
+            # backoff is due: nothing but the exact-identity CAS (revision,
+            # hash, fence) now stands between the stale scan and the row.
+            await claims.record_failure(
+                ownership=human, error="human attempt lost", session_factory=independent_sessions
+            )
+            await _expire(independent_sessions, tenant, arranged.review_row_id)
         winner = await _operation(independent_sessions, tenant, arranged.review_row_id)
         assert set(scan_pids).isdisjoint(human_pids), "real separate PostgreSQL connections"
         proceed.set()
