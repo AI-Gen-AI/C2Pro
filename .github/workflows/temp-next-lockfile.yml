@@ -1,0 +1,52 @@
+name: Temporary Next lockfile regeneration
+
+on:
+  push:
+    branches:
+      - security/next-16.3.3-lockfile-fix-20260925
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate-lockfile:
+    if: contains(github.event.head_commit.message, 'next 16.3.6')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: security/next-16.3.3-lockfile-fix-20260925
+          fetch-depth: 0
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+      - name: Setup Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Regenerate lockfile for Next 16.3.6
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          pnpm --version
+          pnpm update next@16.3.6 --lockfile-only --no-save -r --config.minimumReleaseAge=0
+          if grep -q 'next@16\.2\.11\|next@16\.3\.3' pnpm-lock.yaml; then
+            echo "::error::pnpm-lock.yaml still contains an obsolete Next version"
+            exit 1
+          fi
+          grep -n 'next@16\.3\.6' pnpm-lock.yaml | head -20
+      - name: Commit regenerated lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- pnpm-lock.yaml; then
+            echo "::error::pnpm-lock.yaml did not change"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml
+          git commit -m "chore(security): regenerate lockfile for next 16.3.6"
+          git push origin HEAD:security/next-16.3.3-lockfile-fix-20260925
