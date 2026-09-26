@@ -242,11 +242,19 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
                 problems.append(f"{where}.status must be PASS or FAIL")
             else:
                 assertion_statuses[assertion_id] = status
+            note = row.get("note")
+            if note is not None and not isinstance(note, str):
+                problems.append(f"{where}.note must be a string or null")
             refs = row.get("evidence_refs")
             if not isinstance(refs, list) or not refs:
                 problems.append(f"{where}.evidence_refs must be non-empty")
             else:
                 for ref_id in refs:
+                    if not _non_empty_string(ref_id):
+                        problems.append(
+                            f"{where}.evidence_refs entries must be non-empty strings"
+                        )
+                        continue
                     if ref_id not in evidence_ids:
                         problems.append(
                             f"{where}.evidence_refs references unknown id {ref_id!r}"
@@ -316,6 +324,11 @@ def _validate_scenario(capability: str, scenario: Any) -> list[str]:
     if not isinstance(identifiers, dict):
         return problems + ["scenario.identifiers must be a mapping"]
 
+    for key, value in identifiers.items():
+        if not _non_empty_string(key) or not _non_empty_string(value):
+            problems.append(
+                "scenario.identifiers keys and values must be non-empty strings"
+            )
     for key in required_identifiers:
         if not _non_empty_string(identifiers.get(key)):
             problems.append(f"scenario.identifiers.{key} is required")
