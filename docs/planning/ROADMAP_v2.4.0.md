@@ -7,7 +7,14 @@
 **Autor:** Jesús - Strategic Procurement Director
 **Clasificación:** CONFIDENCIAL
 
-Actualización de estado (2026-03-20): este roadmap se conserva como plan maestro estratégico histórico. El estado real de ejecución y readiness actual debe consultarse en los documentos de planning/gates vigentes; varias capacidades y tareas operativas descritas aquí ya fueron refinadas, reordenadas o cerradas posteriormente.
+> **LEGACY / STRATEGIC HISTORICAL ROADMAP — NOT CURRENT STATUS AUTHORITY (reconciled 2026-09-26).**
+> This v2.4.0 document preserves the January 2026 strategic plan and should not be used to infer current
+> implementation, deployment or production-validation status. Current product-programme authority is:
+> - machine: `validation/product/c2pro-master-product-control-v1.yaml`
+> - human: `docs/product/00-c2pro-master-product-control-v1.md`
+> Development-execution hot state lives under `.c2pro/control/`.
+>
+> Do not update historical phase claims here to mimic current state; reconcile the canonical control plane instead.
 
 ---
 

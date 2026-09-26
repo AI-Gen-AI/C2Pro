@@ -115,7 +115,7 @@ def test_p0b_slice_statuses_are_canonical_and_parity_checked() -> None:
         "P0b-L4-2": "DONE",
         "P0b-L4-3": "DONE",
         "P0b-L4-4": "DONE",
-        "P0b-L4-5": "ACTIVE",
+        "P0b-L4-5": "PARTIAL",
     }
     canon = c.extract_canonical(c.load_yaml())
     md = c.parse_md_block(_MD_TEXT)
@@ -218,8 +218,8 @@ def test_r1_records_its_resolution_without_erasing_history() -> None:
     assert "DID block P0b-L4-5" in res["historical_truth"]
 
 
-def test_l4_5_is_active_and_carries_no_blocker_field() -> None:
-    """L4-5 is ACTIVE now that L4-4 is DONE, and it carries NO blocker field at all."""
+def test_l4_5_is_partial_and_carries_no_blocker_field() -> None:
+    """L4-5 is PARTIAL: merged/release-ready, but PROD validation is still the exit gate."""
     doc = c.load_yaml()
     slice_45 = next(
         sl for sl in doc["p0b_vertical_contract"]["slices"] if sl["id"] == "P0b-L4-5"
@@ -227,8 +227,9 @@ def test_l4_5_is_active_and_carries_no_blocker_field() -> None:
     slice_44 = next(
         sl for sl in doc["p0b_vertical_contract"]["slices"] if sl["id"] == "P0b-L4-4"
     )
-    assert slice_44["slice_status"] == "DONE", "L4-5 is only ACTIVE because L4-4 closed"
-    assert slice_45["slice_status"] == "ACTIVE"
+    assert slice_44["slice_status"] == "DONE", "L4-5 only advances after L4-4 closed"
+    assert slice_45["slice_status"] == "PARTIAL"
+    assert slice_45["slice_status"] != "DONE", "release-ready merge must not imply PROD validation"
     assert "blocked_by" not in slice_45, "an unblocked slice must not carry a blocker field"
 
 
@@ -249,7 +250,7 @@ def test_resolved_residual_is_not_the_current_blocker_and_l4_5_is_next() -> None
 
     assert p0b["next_slice"] == "P0b-L4-5"
     nxt = next(sl for sl in p0b["slices"] if sl["id"] == p0b["next_slice"])
-    assert nxt["slice_status"] == "ACTIVE"
+    assert nxt["slice_status"] == "PARTIAL"
 
 
 def test_next_slice_is_parity_checked() -> None:
