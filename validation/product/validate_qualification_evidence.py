@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import re
 import subprocess
-from datetime import datetime
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +20,12 @@ from yaml.constructor import ConstructorError
 SCHEMA_ID = "c2pro-product-qualification-evidence-v1"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+RFC3339_DATETIME_RE = re.compile(
+    r"^\\d{4}-\\d{2}-\\d{2}[Tt]"
+    r"(?:[01]\\d|2[0-3]):[0-5]\\d:(?:[0-5]\\d|60)"
+    r"(?:\\.\\d+)?"
+    r"(?:[Zz]|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$"
+)
 ALLOWED_KINDS = {
     "release_bundle",
     "deployment",
@@ -219,15 +225,13 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
     observed_at = doc.get("observed_at")
     if not _non_empty_string(observed_at):
         problems.append("observed_at is required")
+    elif not RFC3339_DATETIME_RE.fullmatch(observed_at):
+        problems.append("observed_at must be an RFC3339 date-time")
     else:
         try:
-            parsed_observed_at = datetime.fromisoformat(
-                observed_at.replace("Z", "+00:00")
-            )
-            if parsed_observed_at.tzinfo is None:
-                problems.append("observed_at must include a timezone")
+            date.fromisoformat(observed_at[:10])
         except ValueError:
-            problems.append("observed_at must be an ISO-8601 date-time")
+            problems.append("observed_at must contain a valid calendar date")
 
     if capability_valid:
         problems.extend(_validate_scenario(capability, doc.get("scenario")))
@@ -532,8 +536,24 @@ def main(control_loader: Any = load_control_at_commit) -> int:
         return 0
 
     failed = False
+    evidence_root = DEFAULT_EVIDENCE_DIR.resolve()
     for bundle_path in bundle_paths:
-        problems = validate_path(bundle_path, control_loader)
+        path_problems: list[str] = []
+        if bundle_path.is_symlink():
+            path_problems.append("bundle path must not be a symlink")
+        else:
+            try:
+                resolved_bundle = bundle_path.resolve(strict=True)
+                if not resolved_bundle.is_file():
+                    path_problems.append("bundle path must be a regular file")
+                elif resolved_bundle.parent != evidence_root:
+                    path_problems.append(
+                        "bundle path must resolve inside the fixed evidence directory"
+                    )
+            except OSError as exc:
+                path_problems.append(f"bundle path cannot be resolved: {exc}")
+
+        problems = path_problems or validate_path(bundle_path, control_loader)
         if problems:
             failed = True
             print(
