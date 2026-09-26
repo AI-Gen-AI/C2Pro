@@ -29,6 +29,14 @@ def test_work_queue_contains_only_open_work() -> None:
     assert all(item["work_id"] != "C2PRO-DEV-01" for item in queue["items"])
 
 
+def test_current_schema_allows_reconciled_idle_status() -> None:
+    current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
+    schema = validator.load_yaml(ROOT / ".c2pro" / "schemas" / "current.schema.yaml")
+    allowed = schema["properties"]["control_status"]["enum"]
+    assert current["control_status"] == "reconciled_idle"
+    assert "reconciled_idle" in allowed
+
+
 def test_idle_control_plane_does_not_keep_completed_work_hot() -> None:
     current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
     queue = validator.load_yaml(ROOT / ".c2pro" / "control" / "work-queue.yaml")
