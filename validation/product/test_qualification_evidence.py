@@ -82,6 +82,7 @@ def _doc(capability: str = "P0b") -> dict:
         "lifecycle_authority": False,
         "repository": "AI-Gen-AI/C2Pro",
         "control_ref": "validation/product/c2pro-master-product-control-v1.yaml",
+        "control_commit_sha": "3" * 40,
         "control_baseline_sha": "2" * 40,
         "capability_id": capability,
         "target_state": "PROD_VALIDATED",
@@ -224,23 +225,18 @@ def test_cli_separates_bundle_validity_from_failed_qualification_verdict() -> No
         evidence_dir = root / "evidence"
         evidence_dir.mkdir()
         bundle_path = evidence_dir / "p0b-failed.yaml"
-        control_path = root / "control.yaml"
         bundle_path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
-        control_path.write_text(yaml.safe_dump(_control(), sort_keys=False), encoding="utf-8")
 
         old_evidence_dir = q.DEFAULT_EVIDENCE_DIR
-        old_control_path = q.DEFAULT_CONTROL_PATH
         old_argv = sys.argv[:]
         try:
             q.DEFAULT_EVIDENCE_DIR = evidence_dir
-            q.DEFAULT_CONTROL_PATH = control_path
             sys.argv = ["validate_qualification_evidence.py"]
             output = io.StringIO()
             with redirect_stdout(output):
-                exit_code = q.main()
+                exit_code = q.main(control_loader=lambda _commit_sha: _control())
         finally:
             q.DEFAULT_EVIDENCE_DIR = old_evidence_dir
-            q.DEFAULT_CONTROL_PATH = old_control_path
             sys.argv = old_argv
 
     rendered = output.getvalue()
@@ -248,6 +244,42 @@ def test_cli_separates_bundle_validity_from_failed_qualification_verdict() -> No
     assert "PRODUCT_QUALIFICATION_EVIDENCE=VALID" in rendered
     assert "qualification_verdict=FAIL" in rendered
     assert "PRODUCT_QUALIFICATION_EVIDENCE=PASS" not in rendered
+
+
+
+def test_validate_path_uses_bundle_versioned_control_snapshot() -> None:
+    doc = _doc()
+    seen_commits: list[str] = []
+
+    def historical_control_loader(commit_sha: str) -> dict:
+        seen_commits.append(commit_sha)
+        return _control()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        bundle_path = Path(tmp) / "historical.yaml"
+        bundle_path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+        problems = q.validate_path(bundle_path, historical_control_loader)
+
+    assert problems == []
+    assert seen_commits == [doc["control_commit_sha"]]
+
+
+def test_historical_bundle_does_not_rebind_to_later_current_control() -> None:
+    doc = _doc()
+    historical_control = _control()
+    later_control = _control(reconciled_sha="9" * 40, runtime_sha="8" * 40)
+
+    assert q.validate_against_control(doc, historical_control) == []
+    later_problems = q.validate_against_control(doc, later_control)
+    assert any("control_baseline_sha does not match" in p for p in later_problems)
+    assert any("deployed_runtime_sha does not match" in p for p in later_problems)
+
+
+def test_invalid_control_commit_sha_fails_closed() -> None:
+    doc = _doc()
+    doc["control_commit_sha"] = "UNVERIFIED"
+    problems = q.validate_document(doc)
+    assert any("control_commit_sha" in problem for problem in problems)
 
 
 def test_unknown_assertion_field_fails_closed() -> None:
@@ -263,6 +295,7 @@ def test_product_control_workflow_watches_and_validates_qualification_evidence()
     )
     assert workflow.count('evidence/product-qualification/**') >= 2
     assert "python validation/product/validate_qualification_evidence.py" in workflow
+    assert "fetch-depth: 0" in workflow
 
 
 def test_cli_uses_fixed_repo_evidence_directory_and_control_path() -> None:
@@ -278,6 +311,7 @@ def test_schema_declares_evidence_not_authority() -> None:
     assert schema["additionalProperties"] is False
     assert schema["properties"]["lifecycle_authority"]["const"] is False
     assert schema["properties"]["control_ref"]["const"] == "validation/product/c2pro-master-product-control-v1.yaml"
+    assert schema["properties"]["control_commit_sha"]["pattern"] == "^[0-9a-f]{40}$"
     assert schema["properties"]["control_baseline_sha"]["pattern"] == "^[0-9a-f]{40}$"
     assert schema["properties"]["capability_id"]["enum"] == ["P0b", "P0c", "P0d"]
     for required_key in schema["required"]:
