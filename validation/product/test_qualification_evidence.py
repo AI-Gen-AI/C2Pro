@@ -102,6 +102,11 @@ def test_schema_declares_evidence_not_authority() -> None:
     assert schema["$id"] == q.SCHEMA_ID
     assert schema["additionalProperties"] is False
     assert schema["properties"]["lifecycle_authority"]["const"] is False
+    assert schema["properties"]["control_ref"]["const"] == "validation/product/c2pro-master-product-control-v1.yaml"
+    assert schema["properties"]["control_baseline_sha"]["pattern"] == "^[0-9a-f]{40}$"
+    assert schema["properties"]["capability_id"]["enum"] == ["P0b", "P0c", "P0d"]
+    for required_key in schema["required"]:
+        assert required_key in schema["properties"], required_key
 
 
 def test_p0b_positive_contract() -> None:
