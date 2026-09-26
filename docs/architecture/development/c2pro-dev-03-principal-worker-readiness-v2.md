@@ -38,6 +38,9 @@ At AI-Gen `2bc886a8c90bb5d67b955c9ed18d71946e321f34`:
 - route: `CODEX_OPENAI_DEFAULT`
 - observed qualification: `QUALIFIED_LIVE`
 - currently qualified Academy role: `BACKEND_ENGINEER`
+- current provider invocation state: `DEGRADED_EXTERNAL_AUTH_PATH`
+- current registry evidence: `/models` entitlement succeeds while `/responses` returns HTTP 401; route qualification itself is not revoked
+- live use therefore requires a fresh successful endpoint preflight before any provider invocation
 - authority model: job-bound / consumed / no standing provider authority
 
 ### Claude Code
@@ -109,8 +112,10 @@ For each principal record:
 
 Contradictions fail closed.
 
-### DEV-03R3 — Codex bounded implementation
-Requires a **fresh job/work authority** issued by the governing Agent Factory path.
+### DEV-03R3 — Codex endpoint preflight + bounded implementation
+The current recorded provider invocation path is degraded. Do not infer live readiness from `QUALIFIED_LIVE`.
+
+First require a fresh endpoint preflight that proves the actual invocation path is operational. Only then may a **fresh job/work authority** issued by the governing Agent Factory path be consumed.
 
 Prove:
 - isolated job-local workspace;
@@ -177,7 +182,34 @@ subordinate live route
 
 When no compatible principal route is available, preserve WORK and enter a controlled blocked/reassignment state.
 
-## 6. Activation rule
+## 6. C2Pro principal-review gate
+
+C2Pro and Agent Academy use different authority classes for assurance.
+
+Current Agent Academy truth:
+
+- `INDEPENDENT_REVIEW_LEAD` → `OPENCODE_NEMOTRON / NVIDIA_NEMOTRON3_SUPER` is `QUALIFIED_LIVE`;
+- under C2Pro authority, OpenCode/Nemotron remains **SUBORDINATE** and cannot satisfy the independent-principal promotion gate;
+- Claude Code is principal-capable but is qualified only for `SOFTWARE_ARCHITECT` and `SYSTEM_COHERENCE_REVIEWER`, not `INDEPENDENT_REVIEW_LEAD`;
+- Codex is principal-capable and qualified for `BACKEND_ENGINEER`; the same worker cannot independently approve its own material implementation.
+
+Therefore DEV-03 currently has a **real promotion blocker**:
+
+```text
+material Codex implementation
+    ↓
+requires different PRINCIPAL reviewer
+    ↓
+no compatible healthy principal-review route proven yet
+    ↓
+BLOCK
+```
+
+The existing Nemotron route remains valuable as challenger/assurance evidence, but it cannot be promoted into a C2Pro principal gate by relabeling it.
+
+Closure requires a fresh, explicit qualification of a compatible principal review route. Existing Claude coherence evidence may be supporting input but **qualification inheritance is forbidden**.
+
+## 7. Activation rule
 
 This branch intentionally does **not** edit:
 - `.c2pro/control/current.yaml`
@@ -191,7 +223,7 @@ After #669 becomes canonical on `main`:
 4. activate only the first authorized qualification slice;
 5. keep provider invocation separately job-authorized and consumed.
 
-## 7. DONE semantics
+## 8. DONE semantics
 
 DEV-03 must not collapse to one global `READY=true`.
 
@@ -211,4 +243,4 @@ HANDOFF_SEMANTICS_PROVEN?
 CURRENT_BLOCKERS?
 ```
 
-A blocked Claude route may remain an explicit residual if the accepted operating model still preserves the required C2Pro principal-review guarantees through a separately qualified compatible principal path. That acceptance is a control decision, never inferred from technical capability alone.
+A blocked Claude route may remain an explicit residual only if the accepted operating model still preserves the required C2Pro principal-review guarantees through a separately qualified compatible principal path. At this planning baseline, that compatible path is **not yet proven**, so material promotion remains blocked. That acceptance is a control decision, never inferred from technical capability alone.
