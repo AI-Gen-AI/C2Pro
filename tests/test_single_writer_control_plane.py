@@ -220,6 +220,7 @@ def test_worker_cannot_be_instructed_to_mutate_legacy_files():
 def test_live_guidance_does_not_restore_legacy_backlog_authority():
     """Current guidance must not re-promote legacy backlog files to canonical authority."""
     live_guidance = [
+        "agents.md",
         "CLAUDE.md",
         ".claude/rules/agents.md",
         ".claude/rules/DOCUMENTATION_STRUCTURE.md",
@@ -239,6 +240,9 @@ def test_live_guidance_does_not_restore_legacy_backlog_authority():
         "Backlog/task source of truth: `C2PRO_MASTER_BACKLOG.md`",
         "All tasks MUST be in C2PRO_MASTER_BACKLOG.md",
         "must be tracked in `C2PRO_MASTER_BACKLOG.md`",
+        "- Update `C2PRO_MASTER_BACKLOG.md`.",
+        "- Mark the task state in `C2PRO_MASTER_BACKLOG.md`.",
+        "cold read source of truth",
     )
     for relative in live_guidance:
         content = (ROOT / relative).read_text(encoding="utf-8")
@@ -274,7 +278,12 @@ def test_role_frontmatter_cannot_mutate_legacy_control_files():
             assert ".c2pro/work/<work_id>.yaml" in body
         elif role_path.name in review_roles:
             assert 'output_schema_ref: "../.c2pro/schemas/review-result.schema.yaml"' in frontmatter
+            assert "c2pro-review-result-v1" in frontmatter
+            assert "reviewed_pr" in frontmatter
+            assert "reviewed_head_sha" in frontmatter
             assert "c2pro-review-result-v1" in body
+            assert "reviewed_pr" in body
+            assert "reviewed_head_sha" in body
             assert ".c2pro/work/<work_id>.yaml" in body
         else:
             assert role_path.name == "role_planner.md"
@@ -289,6 +298,20 @@ def test_role_frontmatter_cannot_mutate_legacy_control_files():
             "register discovered tasks in backlogs/",
         ):
             assert forbidden not in body, f"{role_path.name} retains legacy operational instruction: {forbidden}"
+
+
+def test_review_result_schema_binds_exact_reviewed_head() -> None:
+    """Structured independent review evidence must identify the exact PR/head it reviewed."""
+    schema_path = ROOT / ".c2pro" / "schemas" / "review-result.schema.yaml"
+    schema = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
+
+    assert schema["$id"] == "c2pro-review-result-v1"
+    assert schema["additionalProperties"] is False
+    assert "reviewed_pr" in schema["required"]
+    assert "reviewed_head_sha" in schema["required"]
+    assert schema["properties"]["reviewed_pr"] == {"type": "integer", "minimum": 1}
+    assert schema["properties"]["reviewed_head_sha"]["type"] == "string"
+    assert schema["properties"]["reviewed_head_sha"]["pattern"] == "^[0-9a-f]{40}$"
 
 
 def test_documentation_structure_contains_no_legacy_write_protocol() -> None:
