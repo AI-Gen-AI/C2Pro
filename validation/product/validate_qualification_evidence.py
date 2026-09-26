@@ -226,7 +226,7 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
     if not _non_empty_string(observed_at):
         problems.append("observed_at is required")
     elif not RFC3339_DATETIME_RE.fullmatch(observed_at):
-        problems.append("observed_at must be an RFC3339 date-time")
+        problems.append("observed_at must be an RFC3339 / ISO-8601 date-time")
     else:
         try:
             date.fromisoformat(observed_at[:10])
