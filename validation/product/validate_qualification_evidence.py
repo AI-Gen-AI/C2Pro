@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +26,7 @@ ALLOWED_KINDS = {
     "ui_report",
     "runtime_log",
     "test_report",
-    "other",
+    "review",
 }
 FORBIDDEN_AUTHORITY_KEYS = {
     "prod_validation_status",
@@ -34,6 +35,28 @@ FORBIDDEN_AUTHORITY_KEYS = {
     "deployment_status",
     "work_status",
 }
+
+ALLOWED_TOP_LEVEL_KEYS = {
+    "schema",
+    "schema_version",
+    "lifecycle_authority",
+    "repository",
+    "control_ref",
+    "control_baseline_sha",
+    "capability_id",
+    "target_state",
+    "environment",
+    "deployed_runtime_sha",
+    "observed_at",
+    "scenario",
+    "assertions",
+    "evidence_refs",
+    "validator_verdict",
+}
+ASSERTION_KEYS = {"id", "status", "evidence_refs", "note"}
+EVIDENCE_REF_KEYS = {"id", "kind", "ref", "immutable", "sha256"}
+SCENARIO_KEYS = {"id", "identifiers"}
+DEFAULT_CONTROL_PATH = Path(__file__).with_name("c2pro-master-product-control-v1.yaml")
 
 REQUIRED_ASSERTIONS: dict[str, tuple[str, ...]] = {
     "P0b": (
@@ -91,6 +114,12 @@ def _non_empty_string(value: Any) -> bool:
 def validate_document(doc: dict[str, Any]) -> list[str]:
     problems: list[str] = []
 
+    unknown_top_level = set(doc) - ALLOWED_TOP_LEVEL_KEYS
+    if unknown_top_level:
+        problems.append(
+            "unexpected top-level fields: " + ", ".join(sorted(unknown_top_level))
+        )
+
     if doc.get("schema") != SCHEMA_ID:
         problems.append(f"schema must be {SCHEMA_ID}")
     if doc.get("schema_version") != 1:
@@ -126,8 +155,18 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
             "deployed_runtime_sha must be an exact observed 40-character SHA"
         )
 
-    if not _non_empty_string(doc.get("observed_at")):
+    observed_at = doc.get("observed_at")
+    if not _non_empty_string(observed_at):
         problems.append("observed_at is required")
+    else:
+        try:
+            parsed_observed_at = datetime.fromisoformat(
+                observed_at.replace("Z", "+00:00")
+            )
+            if parsed_observed_at.tzinfo is None:
+                problems.append("observed_at must include a timezone")
+        except ValueError:
+            problems.append("observed_at must be an ISO-8601 date-time")
 
     if capability in SCENARIO_CONTRACT:
         problems.extend(_validate_scenario(capability, doc.get("scenario")))
@@ -143,6 +182,12 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
             if not isinstance(ref, dict):
                 problems.append(f"{where} must be a mapping")
                 continue
+            extra_ref_fields = set(ref) - EVIDENCE_REF_KEYS
+            if extra_ref_fields:
+                problems.append(
+                    f"{where} has unexpected fields: "
+                    + ", ".join(sorted(extra_ref_fields))
+                )
             ref_id = ref.get("id")
             if not _non_empty_string(ref_id):
                 problems.append(f"{where}.id is required")
@@ -177,6 +222,12 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
             if not isinstance(row, dict):
                 problems.append(f"{where} must be a mapping")
                 continue
+            extra_assertion_fields = set(row) - ASSERTION_KEYS
+            if extra_assertion_fields:
+                problems.append(
+                    f"{where} has unexpected fields: "
+                    + ", ".join(sorted(extra_assertion_fields))
+                )
             assertion_id = row.get("id")
             if not _non_empty_string(assertion_id):
                 problems.append(f"{where}.id is required")
@@ -216,6 +267,14 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
                 problems.append(
                     f"validator_verdict PASS requires {required_kind} evidence"
                 )
+        if isinstance(evidence, list):
+            for index, ref in enumerate(evidence):
+                if not isinstance(ref, dict):
+                    continue
+                if ref.get("immutable") is not True and ref.get("sha256") is None:
+                    problems.append(
+                        f"evidence_refs[{index}] must be immutable or content-addressed for PASS"
+                    )
     if verdict not in {"PASS", "FAIL"}:
         problems.append("validator_verdict must be PASS or FAIL")
     elif verdict == "PASS":
@@ -239,6 +298,13 @@ def _validate_scenario(capability: str, scenario: Any) -> list[str]:
     if not isinstance(scenario, dict):
         return ["scenario must be a mapping"]
 
+    extra_scenario_fields = set(scenario) - SCENARIO_KEYS
+    if extra_scenario_fields:
+        problems.append(
+            "scenario has unexpected fields: "
+            + ", ".join(sorted(extra_scenario_fields))
+        )
+
     if scenario.get("id") != expected_id:
         problems.append(
             f"{capability} scenario.id must be {expected_id}"
@@ -261,16 +327,57 @@ def _validate_scenario(capability: str, scenario: Any) -> list[str]:
     return problems
 
 
-def validate_path(path: Path) -> list[str]:
-    return validate_document(load_yaml(path))
+def validate_against_control(
+    doc: dict[str, Any], control: dict[str, Any]
+) -> list[str]:
+    """Bind a non-authoritative evidence bundle to canonical Product Control truth."""
+    problems: list[str] = []
+    production = control.get("production_position")
+    if not isinstance(production, dict):
+        return ["Product Control production_position must be a mapping"]
+
+    control_sha = production.get("reconciled_against_main_sha")
+    if doc.get("control_baseline_sha") != control_sha:
+        problems.append(
+            "control_baseline_sha does not match Product Control "
+            "production_position.reconciled_against_main_sha"
+        )
+
+    control_runtime = production.get("deployed_runtime_sha")
+    if not isinstance(control_runtime, str) or not SHA_RE.fullmatch(control_runtime):
+        problems.append(
+            "Product Control deployed_runtime_sha must be an exact observed 40-character SHA"
+        )
+    elif doc.get("deployed_runtime_sha") != control_runtime:
+        problems.append(
+            "deployed_runtime_sha does not match Product Control production runtime"
+        )
+
+    return problems
+
+
+def validate_path(
+    path: Path, control_path: Path = DEFAULT_CONTROL_PATH
+) -> list[str]:
+    doc = load_yaml(path)
+    problems = validate_document(doc)
+    if not problems:
+        problems.extend(validate_against_control(doc, load_yaml(control_path)))
+    return problems
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("path", type=Path)
+    parser.add_argument(
+        "--control",
+        type=Path,
+        default=DEFAULT_CONTROL_PATH,
+        help="Canonical Product Control YAML used to bind baseline/runtime identity.",
+    )
     args = parser.parse_args()
 
-    problems = validate_path(args.path)
+    problems = validate_path(args.path, args.control)
     if problems:
         print("PRODUCT_QUALIFICATION_EVIDENCE=FAIL")
         for problem in problems:
