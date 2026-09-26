@@ -415,6 +415,38 @@ def test_schema_v7_initial_qualification_control_is_valid_and_non_promoted() -> 
         assert row["bundle_sha256"] is None
 
 
+def test_qualification_schema_version_rejects_boolean_true() -> None:
+    doc = c.load_yaml()
+    doc["qualification_control"]["schema_version"] = True
+    problems = c.validate_qualification_control(doc)
+    assert any("schema_version must be integer 1" in problem for problem in problems)
+
+
+def test_qualification_bundle_ref_rejects_symlink() -> None:
+    if sys.platform == "win32":
+        return
+    doc = c.load_yaml()
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        evidence_dir = root / "evidence" / "product-qualification"
+        evidence_dir.mkdir(parents=True)
+        target = evidence_dir / "target.yaml"
+        target.write_text("capability_id: P0b\nvalidator_verdict: PASS\n", encoding="utf-8")
+        link = evidence_dir / "p0b-qualification.yaml"
+        link.symlink_to(target.name)
+        row = doc["qualification_control"]["lanes"]["P0b"]
+        row["qualification_status"] = "PASS"
+        row["bundle_ref"] = "evidence/product-qualification/p0b-qualification.yaml"
+        row["bundle_sha256"] = hashlib.sha256(target.read_bytes()).hexdigest()
+        problems = c.validate_qualification_control(
+            doc,
+            root=root,
+            bundle_validator=_stub_validator,
+            bundle_loader=_stub_loader_for("P0b"),
+        )
+    assert any("must not be a symlink" in problem for problem in problems)
+
+
 def test_invalid_qualification_status_is_rejected() -> None:
     doc = c.load_yaml()
     doc["qualification_control"]["lanes"]["P0b"]["qualification_status"] = "AUTO_PASS"
