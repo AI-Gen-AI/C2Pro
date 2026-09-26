@@ -20,6 +20,7 @@ from yaml.constructor import ConstructorError
 SCHEMA_ID = "c2pro-product-qualification-evidence-v1"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+DEPLOYMENT_LOCATOR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$")
 RFC3339_DATETIME_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}[Tt]"
     r"(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d"
@@ -354,13 +355,20 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
                 deployment_record = evidence_record_by_id.get(deployment_ref, {})
                 artifact_ref = deployment_record.get("ref")
                 expected_prefix = f"{expected['provider']}:"
+                locator = None
+                if isinstance(artifact_ref, str) and artifact_ref.lower().startswith(
+                    expected_prefix
+                ):
+                    locator = artifact_ref[len(expected_prefix):]
                 if not (
-                    isinstance(artifact_ref, str)
-                    and artifact_ref.lower().startswith(expected_prefix)
+                    isinstance(locator, str)
+                    and bool(locator)
+                    and DEPLOYMENT_LOCATOR_RE.fullmatch(locator)
                 ):
                     problems.append(
                         f"{where}.deployment_evidence_ref must reference "
-                        f"{expected['provider']}-namespaced deployment evidence"
+                        f"{expected['provider']}-namespaced deployment evidence "
+                        "with a non-empty artifact locator"
                     )
 
         missing_planes = set(RUNTIME_BINDING_CONTRACT) - set(runtime_planes)
@@ -578,6 +586,24 @@ def _canonical_main_ref() -> str:
     raise ValueError("cannot verify canonical main ancestry: no origin/main or main ref")
 
 
+def require_runtime_commit_on_main(commit_sha: str) -> None:
+    """Fail closed unless a runtime commit belongs to canonical main history."""
+    if not isinstance(commit_sha, str) or not SHA_RE.fullmatch(commit_sha):
+        raise ValueError("runtime commit must be an exact 40-character SHA")
+    canonical_main = _canonical_main_ref()
+    ancestry = _git(
+        "merge-base",
+        "--is-ancestor",
+        commit_sha,
+        canonical_main,
+        check=False,
+    )
+    if ancestry.returncode != 0:
+        raise ValueError(
+            f"runtime commit {commit_sha} must be an ancestor of canonical main history"
+        )
+
+
 def load_control_at_commit(commit_sha: str) -> dict[str, Any]:
     """Load canonical Product Control from an immutable commit on main history."""
     if not isinstance(commit_sha, str) or not SHA_RE.fullmatch(commit_sha):
@@ -611,6 +637,7 @@ def load_control_at_commit(commit_sha: str) -> dict[str, Any]:
 def validate_path(
     path: Path,
     control_loader: Any = load_control_at_commit,
+    runtime_commit_checker: Any | None = None,
 ) -> list[str]:
     try:
         doc = load_yaml(path)
@@ -627,6 +654,19 @@ def validate_path(
         return [f"historical Product Control binding failed: {exc}"]
 
     problems.extend(validate_against_control(doc, control))
+
+    checker = runtime_commit_checker
+    if checker is None and control_loader is load_control_at_commit:
+        checker = require_runtime_commit_on_main
+    if checker is not None:
+        for binding in doc.get("runtime_bindings", []):
+            try:
+                checker(binding["commit_sha"])
+            except (KeyError, TypeError, ValueError) as exc:
+                plane = binding.get("plane", "unknown") if isinstance(binding, dict) else "unknown"
+                problems.append(
+                    f"{plane} runtime canonical-main binding failed: {exc}"
+                )
     return problems
 
 
