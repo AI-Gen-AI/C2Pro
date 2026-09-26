@@ -119,10 +119,15 @@ def _non_empty_string(value: Any) -> bool:
 def validate_document(doc: dict[str, Any]) -> list[str]:
     problems: list[str] = []
 
-    unknown_top_level = set(doc) - ALLOWED_TOP_LEVEL_KEYS
+    non_string_top_level = [key for key in doc if not isinstance(key, str)]
+    if non_string_top_level:
+        problems.append("top-level field names must be strings")
+    unknown_top_level = sorted(
+        key for key in doc if isinstance(key, str) and key not in ALLOWED_TOP_LEVEL_KEYS
+    )
     if unknown_top_level:
         problems.append(
-            "unexpected top-level fields: " + ", ".join(sorted(unknown_top_level))
+            "unexpected top-level fields: " + ", ".join(unknown_top_level)
         )
 
     if doc.get("schema") != SCHEMA_ID:
@@ -195,11 +200,15 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
             if not isinstance(ref, dict):
                 problems.append(f"{where} must be a mapping")
                 continue
-            extra_ref_fields = set(ref) - EVIDENCE_REF_KEYS
+            if any(not isinstance(key, str) for key in ref):
+                problems.append(f"{where} field names must be strings")
+            extra_ref_fields = sorted(
+                key for key in ref if isinstance(key, str) and key not in EVIDENCE_REF_KEYS
+            )
             if extra_ref_fields:
                 problems.append(
                     f"{where} has unexpected fields: "
-                    + ", ".join(sorted(extra_ref_fields))
+                    + ", ".join(extra_ref_fields)
                 )
             ref_id = ref.get("id")
             if not _non_empty_string(ref_id):
@@ -235,11 +244,15 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
             if not isinstance(row, dict):
                 problems.append(f"{where} must be a mapping")
                 continue
-            extra_assertion_fields = set(row) - ASSERTION_KEYS
+            if any(not isinstance(key, str) for key in row):
+                problems.append(f"{where} field names must be strings")
+            extra_assertion_fields = sorted(
+                key for key in row if isinstance(key, str) and key not in ASSERTION_KEYS
+            )
             if extra_assertion_fields:
                 problems.append(
                     f"{where} has unexpected fields: "
-                    + ", ".join(sorted(extra_assertion_fields))
+                    + ", ".join(extra_assertion_fields)
                 )
             assertion_id = row.get("id")
             if not _non_empty_string(assertion_id):
@@ -319,11 +332,15 @@ def _validate_scenario(capability: str, scenario: Any) -> list[str]:
     if not isinstance(scenario, dict):
         return ["scenario must be a mapping"]
 
-    extra_scenario_fields = set(scenario) - SCENARIO_KEYS
+    if any(not isinstance(key, str) for key in scenario):
+        problems.append("scenario field names must be strings")
+    extra_scenario_fields = sorted(
+        key for key in scenario if isinstance(key, str) and key not in SCENARIO_KEYS
+    )
     if extra_scenario_fields:
         problems.append(
             "scenario has unexpected fields: "
-            + ", ".join(sorted(extra_scenario_fields))
+            + ", ".join(extra_scenario_fields)
         )
 
     if scenario.get("id") != expected_id:
