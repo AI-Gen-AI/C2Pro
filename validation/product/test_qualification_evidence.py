@@ -200,6 +200,28 @@ def test_non_string_scenario_identifier_fails_closed() -> None:
 
 
 
+def test_non_string_mapping_keys_fail_closed_without_crashing() -> None:
+    doc = _doc()
+    doc[1] = "unexpected"
+    problems = q.validate_document(doc)
+    assert any("top-level field names must be strings" in problem for problem in problems)
+
+    doc = _doc()
+    doc["evidence_refs"][0][1] = "unexpected"
+    problems = q.validate_document(doc)
+    assert any("evidence_refs[0] field names must be strings" in problem for problem in problems)
+
+    doc = _doc()
+    doc["assertions"][0][1] = "unexpected"
+    problems = q.validate_document(doc)
+    assert any("assertions[0] field names must be strings" in problem for problem in problems)
+
+    doc = _doc()
+    doc["scenario"][1] = "unexpected"
+    problems = q.validate_document(doc)
+    assert any("scenario field names must be strings" in problem for problem in problems)
+
+
 def test_malformed_enum_types_fail_closed_without_crashing() -> None:
     malformed_cases = [
         ("capability_id", ["P0b"], "unknown capability_id"),
