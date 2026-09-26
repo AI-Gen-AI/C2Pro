@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
 **Status:** Reconciliation snapshot (read-only) · **Date:** 2026-09-26 · **Schema:** v6  
-**reconciled_against_main_sha:** `610184661b9e4a1509fa1a2241433247935ba0f9` · **deployed_runtime_sha:** `UNVERIFIED`  
+**reconciled_against_main_sha:** `1aecb4cf7ca454088e26046bb2ae8fa6b11bc518` · **deployed_runtime_sha:** `UNVERIFIED`  
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This document is the human projection of the machine product-control plane. It does not grant execution authority. Direct `main`, merge and production mutation remain governed outside this document.
@@ -10,7 +10,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=610184661b9e4a1509fa1a2241433247935ba0f9
+reconciled_against_main_sha=1aecb4cf7ca454088e26046bb2ae8fa6b11bc518
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
@@ -75,13 +75,13 @@ This resolves the earlier ambiguity that could have led the product toward paral
 
 Three facts remain deliberately separate:
 
-- `reconciled_against_main_sha = 610184661b9e4a1509fa1a2241433247935ba0f9` — repository baseline used for this reconciliation.
-- `deployed_runtime_sha = UNVERIFIED` — the latest deployed runtime has not been independently bound to the current `main`.
+- `reconciled_against_main_sha = 1aecb4cf7ca454088e26046bb2ae8fa6b11bc518` — repository baseline used for this reconciliation.
+- `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is now observed as a composite runtime with Railway backend `386cbbce74b2653a6039fdddd9fc9719c43b9ff9` (SUCCESS) and Vercel frontend `6186f2a06fb3957562aa338742f18838fac5993a` (READY). #678 records plane-specific non-authoritative evidence; #681 owns Product-Control promotion integration.
 - `product_value_delivered = false` — P0a reliability is closed and several product lanes are now wired on `main`, but the north-star P0b journey is still not PROD_VALIDATED.
 
 ### 2.1 What changed since the 2026-09-13 reconciliation
 
-The previous control snapshot was anchored to `454637863c502f6825d158af551511e0e9996d14`. Current `main` is **162 commits ahead**. Material product changes include:
+The previous control snapshot was anchored to `454637863c502f6825d158af551511e0e9996d14`. Current `main` is **276 commits ahead**. Material product changes include:
 
 - **P0b-L4-5:** the release-ready six-category Health UI/report implementation merged through #630. The PR explicitly states `PROD_VALIDATED=NO`; merge/release-readiness therefore advances realization, not the production exit gate.
 - **Durable Documents:** immutable tenant/project/document revision-object addressing is now on `main` (`fa58102d`).
@@ -90,8 +90,10 @@ The previous control snapshot was anchored to `454637863c502f6825d158af551511e0e
 - **ADR-025 Project Controls:** `wbs_nodes` is now the application-authoritative WBS store; parallel legacy writes are blocked; RACI/BOM/MCP and schedule/spend consumers are reconciled to the canonical WBS. The real production predecessor schema exposed a migration defect; #631 repaired it.
 - **HITL:** #633/#638/#641/#646/#650 materially hardened pause/resume, exact review identity, fenced recovery and final-decision audit idempotency.
 - **Trust/operability:** Next.js security moved to 16.3.6 (#654), the blocking E2E gate now runs against the production Next runtime (#655), and CRITICAL severity is preserved end-to-end (#656).
+- **Qualification evidence:** #678 is merged. P0b/P0c/P0d evidence bundles are machine-validated, historically bound and explicitly non-authoritative; Product Control still owns lifecycle promotion.
+- **Deployment identity:** Railway backend Watch Paths are live-proven (`#678` and `#699` main commits were `SKIPPED` while backend-changing #697 deployed). Vercel frontend filtering is merged via #699; live skip verification is pending the current Vercel daily-quota reset.
 
-None of those facts permits inference of the current production SHA. The immediate user-value gap remains **P0b-L4-5 production evidence**: one uploaded document must reach a truthful six-category Health surface with findings, missing evidence and actionable gaps on the actual deployed runtime.
+None of those facts permits collapsing the current production deployment into one repository SHA. The immediate user-value gap remains **P0b-L4-5 production evidence**: one uploaded document must reach a truthful six-category Health surface with findings, missing evidence and actionable gaps across the exact backend/frontend deployments exercised.
 
 ## 3. Three product signals that must not be conflated
 
