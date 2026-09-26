@@ -80,6 +80,8 @@ reconciliation_delta_2026_09_26:
     - "HITL resume evolved through #633/#638/#641/#646/#650 to V3 fenced, recoverable, idempotent final-decision semantics"
     - "Next.js security baseline advanced to 16.3.6 via #654; blocking E2E runs against production Next runtime via #655"
     - "CI action maintenance through #665/#668 is present in the observed main baseline but remains execution work owned outside this product-control reconciliation"
+    - "Qualification evidence Phase A merged via #678: P0b/P0c/P0d evidence bundles are machine-validated, historically bound and non-authoritative; lifecycle promotion remains Product Control only"
+    - "Composite deployment filtering advanced via #695/#699: Railway backend filtering is live-proven; Vercel frontend ignore logic is merged and awaits live skip verification after quota reset"
   control_conclusion: >
     Main is materially ahead of the 2026-09-13 reconciliation. Several former candidate lanes are
     now wired in repository code, but merge status is still distinct from deployment and PROD_VALIDATED.
