@@ -10,12 +10,14 @@ on:
   pull_request:
     paths:
       - "validation/product/**"
+      - "evidence/product-qualification/**"
       - "docs/product/00-c2pro-master-product-control-v1.md"
       - ".github/workflows/c2pro-product-control-guard.yml"
   push:
     branches: [main]
     paths:
       - "validation/product/**"
+      - "evidence/product-qualification/**"
       - "docs/product/00-c2pro-master-product-control-v1.md"
 
 permissions:
@@ -37,3 +39,5 @@ jobs:
         run: python validation/product/test_control_parity.py
       - name: Product qualification evidence contract tests
         run: python validation/product/test_qualification_evidence.py
+      - name: Validate committed product qualification evidence bundles
+        run: python validation/product/validate_qualification_evidence.py
