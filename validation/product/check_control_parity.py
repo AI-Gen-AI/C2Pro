@@ -249,21 +249,67 @@ def validate_enums(doc: dict) -> list[str]:
 
 
 # ── schema-v7 Product Qualification promotion guard ───────────────────────────
+def _qualification_adr_row(doc: dict, target_id: str) -> dict:
+    """Resolve exactly one canonical ADR family member for a qualification target."""
+    rows = doc.get("adr_realization")
+    if not isinstance(rows, list):
+        raise KeyError("adr_realization is not a list")
+    matches = [
+        row
+        for row in rows
+        if isinstance(row, dict)
+        and (
+            row.get("adr") == target_id
+            or (
+                isinstance(row.get("adr"), str)
+                and row["adr"].startswith(target_id + "-")
+            )
+        )
+    ]
+    if len(matches) != 1:
+        raise KeyError(
+            f"qualification ADR target {target_id} must resolve exactly once; found {len(matches)}"
+        )
+    return matches[0]
+
+
+def _qualification_wbs_row(doc: dict, target_id: str) -> dict:
+    rows = doc.get("product_wbs")
+    if not isinstance(rows, list):
+        raise KeyError("product_wbs is not a list")
+    matches = [
+        row for row in rows if isinstance(row, dict) and row.get("id") == target_id
+    ]
+    if len(matches) != 1:
+        raise KeyError(
+            f"qualification WBS target {target_id} must resolve exactly once; found {len(matches)}"
+        )
+    return matches[0]
+
+
 def _p0b_slice(doc: dict, slice_id: str) -> dict:
-    for row in doc["p0b_vertical_contract"]["slices"]:
-        if row.get("id") == slice_id:
-            return row
-    raise KeyError(f"P0b slice {slice_id} not found")
+    p0b = doc.get("p0b_vertical_contract")
+    rows = p0b.get("slices") if isinstance(p0b, dict) else None
+    if not isinstance(rows, list):
+        raise KeyError("p0b_vertical_contract.slices is not a list")
+    matches = [
+        row for row in rows if isinstance(row, dict) and row.get("id") == slice_id
+    ]
+    if len(matches) != 1:
+        raise KeyError(
+            f"qualification P0b slice target {slice_id} must resolve exactly once; found {len(matches)}"
+        )
+    return matches[0]
 
 
 def _qualification_target_value(doc: dict, target: dict) -> object:
     kind = target["kind"]
     if kind == "adr":
-        return _adr_row(doc, target["id"])[target["field"]]
+        return _qualification_adr_row(doc, target["id"])[target["field"]]
     if kind == "p0b_slice":
         return _p0b_slice(doc, target["id"])[target["field"]]
     if kind == "wbs_subtrack":
-        return _wbs_row(doc, target["id"])["subtracks"][target["subtrack"]][target["field"]]
+        return _qualification_wbs_row(doc, target["id"])["subtracks"][target["subtrack"]][target["field"]]
     raise KeyError(f"unsupported qualification target kind: {kind}")
 
 
@@ -305,11 +351,17 @@ def validate_qualification_control(
         bundle_loader = qualification_evidence.load_yaml
 
     allowed_status = set(doc["status_enums"]["qualification_status"])
-    evidence_root = root / "evidence" / "product-qualification"
-    evidence_root_is_symlink = evidence_root.is_symlink()
+    evidence_parent = root / "evidence"
+    evidence_root = evidence_parent / "product-qualification"
+    evidence_path_has_symlink = any(
+        component.is_symlink()
+        for component in (evidence_parent, evidence_root)
+    )
     expected_root = evidence_root.resolve()
-    if evidence_root_is_symlink:
-        problems.append("qualification_control.evidence_directory must not be a symlink")
+    if evidence_path_has_symlink:
+        problems.append(
+            "qualification_control.evidence_directory path components must not be symlinks"
+        )
 
     for lane in _QUALIFICATION_LANES:
         row = lanes[lane]
@@ -421,7 +473,9 @@ def validate_qualification_control(
 # ── (fix 1) exact critical-value extraction from the parsed YAML ──────────────
 def extract_canonical(doc: dict) -> dict[str, str]:
     pp = doc["production_position"]
-    qc = doc["qualification_control"]
+    qc = doc.get("qualification_control")
+    if not isinstance(qc, dict):
+        qc = {}
     ns = doc["north_star"]
     ps = doc["product_semantics"]
     pcm = doc["project_controls_model"]
@@ -467,14 +521,25 @@ def extract_canonical(doc: dict) -> dict[str, str]:
     canon["wbs.PWBS-EXEC-REPORTING.current_state.prod_validation"] = _s(
         exec_current["prod_validation_status"]
     )
+    lanes = qc.get("lanes")
+    lanes = lanes if isinstance(lanes, dict) else {}
     for lane in _QUALIFICATION_LANES:
-        row = qc["lanes"][lane]
+        row = lanes.get(lane)
+        if not isinstance(row, dict):
+            canon[f"qualification.{lane}.status"] = "INVALID"
+            canon[f"qualification.{lane}.bundle_ref"] = "INVALID"
+            canon[f"qualification.{lane}.evidence_digest"] = "INVALID"
+            canon[f"qualification.{lane}.targets_digest"] = "INVALID"
+            continue
         bundle_ref = row.get("bundle_ref")
         bundle_sha = row.get("bundle_sha256")
-        targets_digest = hashlib.sha256(
-            yaml.safe_dump(row["lifecycle_targets"], sort_keys=True).encode()
-        ).hexdigest()[:16]
-        canon[f"qualification.{lane}.status"] = _s(row["qualification_status"])
+        targets = row.get("lifecycle_targets")
+        targets_digest = (
+            hashlib.sha256(yaml.safe_dump(targets, sort_keys=True).encode()).hexdigest()[:16]
+            if isinstance(targets, list)
+            else "INVALID"
+        )
+        canon[f"qualification.{lane}.status"] = _s(row.get("qualification_status", "INVALID"))
         canon[f"qualification.{lane}.bundle_ref"] = _s(bundle_ref) if bundle_ref else "NONE"
         canon[f"qualification.{lane}.evidence_digest"] = (
             _s(bundle_sha)[:16] if bundle_sha else "NONE"
