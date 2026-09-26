@@ -167,6 +167,27 @@ def test_untyped_other_evidence_kind_is_rejected() -> None:
     assert any("kind is invalid" in problem for problem in problems)
 
 
+def test_non_string_assertion_evidence_ref_fails_without_crashing() -> None:
+    doc = _doc()
+    doc["assertions"][0]["evidence_refs"] = [{"not": "an-id"}]
+    problems = q.validate_document(doc)
+    assert any("entries must be non-empty strings" in problem for problem in problems)
+
+
+def test_non_string_assertion_note_fails_closed() -> None:
+    doc = _doc()
+    doc["assertions"][0]["note"] = {"unexpected": "mapping"}
+    problems = q.validate_document(doc)
+    assert any(".note must be a string or null" in problem for problem in problems)
+
+
+def test_non_string_scenario_identifier_fails_closed() -> None:
+    doc = _doc()
+    doc["scenario"]["identifiers"]["extra"] = {"nested": "value"}
+    problems = q.validate_document(doc)
+    assert any("keys and values must be non-empty strings" in problem for problem in problems)
+
+
 def test_unknown_assertion_field_fails_closed() -> None:
     doc = _doc()
     doc["assertions"][0]["promotes_lifecycle"] = True
