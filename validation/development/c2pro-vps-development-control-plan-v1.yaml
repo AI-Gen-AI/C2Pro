@@ -2,7 +2,7 @@ schema: c2pro-vps-development-control-plan-v1
 status: OWNER_APPROVED_IMPLEMENTATION_PLAN
 approved_at: 2026-08-24
 reconciled_at: 2026-09-26
-reconciled_against_main_sha: 610184661b9e4a1509fa1a2241433247935ba0f9
+reconciled_against_main_sha: 1aecb4cf7ca454088e26046bb2ae8fa6b11bc518
 repository: AI-Gen-AI/C2Pro
 approved_baseline_main: be9603be6b40da135123aee6e1489365378e163e
 human_plan_ref: docs/architecture/development/c2pro-vps-development-control-plan-v1.md
@@ -233,7 +233,7 @@ work_packages:
   - id: C2PRO-DEV-03
     title: Claude and Codex principal worker readiness
     status: READY_RESTART_REQUIRED
-    note: "PR #565 closed without merge; qualification evidence was not promoted to canonical state. Restart from current VPS/runtime evidence, do not resurrect the stale branch."
+    note: "DEV-03 restart/readiness package merged via PR #676, but that package grants no provider execution authority and does not prove principal readiness. Execute fresh bounded qualification from current VPS/runtime evidence before DEV-04."
     tasks:
       - inventory_vps_installation_auth_session_state
       - install_or_update_only_if_required
@@ -352,7 +352,7 @@ next_action:
   mode: RESTART_PRINCIPAL_READINESS_QUALIFICATION
   product_behavior_change: false
   owner_micro_approval_required_during_qualification: false
-  reason: "DEV-00/01/02 are merged DONE; DEV-03 PR #565 closed without merge and remains the gate for DEV-04."
+  reason: "DEV-00/01/02 are merged DONE; the DEV-03 restart package is merged via #676, while principal worker qualification and fresh job-bound provider authority remain the gate for DEV-04."
   outputs:
     - current_vps_principal_inventory
     - claude_code_qualification_evidence
