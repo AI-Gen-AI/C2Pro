@@ -94,18 +94,25 @@ Current governance view:
 
 ---
 
-## Agent Instructions
+## Active Agent / Role Instructions
 
-| Agent         | Path                                           | Purpose                   |
-| ------------- | ---------------------------------------------- | ------------------------- |
-| Planner       | `context/working/agents/agent_planner.md`      | Architecture and planning |
-| QA            | `context/working/agents/agent_qa.md`           | Test design and audit     |
-| Backend TDD   | `context/working/agents/agent_backend_tdd.md`  | Python implementation     |
-| Frontend TDD  | `context/working/agents/agent_frontend_tdd.md` | React implementation      |
-| Security      | `context/working/agents/agent_security.md`     | Security audits           |
-| DevOps        | `context/working/agents/agent_devops.md`       | CI/CD and infra           |
-| Documentation | `context/working/agents/agent_doc.md`          | Doc management            |
-| Product       | `context/working/agents/agent_product.md`      | User stories              |
+Active agent authority is **not** stored under `context/working/agents/`.
+
+Use:
+
+| Role | Active profile |
+| --- | --- |
+| Planner | `roles/role_planner.md` + `.c2pro/roles/orchestrator.yaml` as applicable |
+| Backend implementation | `roles/role_backend.md` |
+| Frontend implementation | `roles/role_frontend.md` |
+| AI implementation | `roles/role_ai.md` |
+| QA | `roles/role_qa.md` |
+| Independent review | `roles/role_reviewer.md` |
+| Security | `roles/role_security.md` |
+| DevOps / infrastructure | `roles/role_devops.md` / `roles/role_infra.md` |
+
+The historical files under `context/working/agents/agent_*.md` are **RETIRED / NON-OPERATIONAL compatibility pointers**. They must not be selected as executable instructions and grant no backlog/control write authority.
+
 
 ---
 
