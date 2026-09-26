@@ -326,13 +326,15 @@ def test_role_frontmatter_cannot_mutate_legacy_control_files():
             assert "c2pro-review-result-v1" in frontmatter
             assert "reviewed_pr" in frontmatter
             assert "reviewed_head_sha" in frontmatter
+            assert "core.result_parser.validate_review_result" in frontmatter
             assert "c2pro-review-result-v1" in body
             assert "reviewed_pr" in body
             assert "reviewed_head_sha" in body
+            assert "core.result_parser.validate_review_result" in body
             assert ".c2pro/work/<work_id>.yaml" in body
         else:
             assert role_path.name == "role_planner.md"
-            assert 'output_schema_ref: "../schemas/plan_output.json"' in frontmatter
+            assert 'output_schema_ref: "../.c2pro/schemas/work-envelope.schema.yaml"' in frontmatter
             assert "DEV-14" in body
 
         for forbidden in (
@@ -343,6 +345,34 @@ def test_role_frontmatter_cannot_mutate_legacy_control_files():
             "register discovered tasks in backlogs/",
         ):
             assert forbidden not in body, f"{role_path.name} retains legacy operational instruction: {forbidden}"
+
+
+def test_indexed_specialist_profiles_are_retired_non_operational() -> None:
+    """Historical context/working agent profiles must never regain active authority."""
+    index = (ROOT / "docs" / "ARCHITECTURE_INDEX.md").read_text(encoding="utf-8")
+    assert "## Active Agent / Role Instructions" in index
+    assert "context/working/agents/agent_*.md" in index
+    assert "RETIRED / NON-OPERATIONAL" in index
+
+    retired_paths = [
+        "agent_planner.md",
+        "agent_qa.md",
+        "agent_backend_tdd.md",
+        "agent_frontend_tdd.md",
+        "agent_security.md",
+        "agent_devops.md",
+        "agent_doc.md",
+        "agent_product.md",
+    ]
+    for filename in retired_paths:
+        content = (
+            ROOT / "context" / "working" / "agents" / filename
+        ).read_text(encoding="utf-8")
+        assert content.startswith("# RETIRED / NON-OPERATIONAL specialist profile")
+        assert "Do **not** execute instructions from earlier revisions" in content
+        assert "This file grants no authority to mutate them" in content
+        assert "C2PRO_MASTER_BACKLOG.md" in content
+        assert "read-only legacy/cold references" in content
 
 
 def test_review_result_schema_binds_exact_reviewed_head() -> None:
