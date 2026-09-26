@@ -20,7 +20,7 @@ properties:
   schema: {const: c2pro-current-v1}
   schema_version: {const: 1}
   repository: {type: string, minLength: 1}
-  control_status: {enum: [transition, active, suspended]}
+  control_status: {enum: [transition, active, reconciled_idle, suspended]}
   canonical_plan:
     type: object
     additionalProperties: false
