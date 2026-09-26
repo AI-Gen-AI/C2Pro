@@ -2,7 +2,7 @@
 
 **Status:** PLANNED RESTART PACKAGE / EXECUTION NOT AUTHORIZED  
 **C2Pro planning baseline:** `4c26ebc740139ff6754dcda6e3dd393c9e1d8f01`  
-**AI-Gen authority baseline reviewed:** `2bc886a8c90bb5d67b955c9ed18d71946e321f34`  
+**AI-Gen authority baseline reviewed:** `bab45b6833b52bf79fc82e585171d6ef8f2d9584`  
 **Issue:** #674  
 **Historical input:** PR #565, closed without merge
 
@@ -30,7 +30,7 @@ Worker handoff preserves semantic WORK identity, including **role**. It never ch
 
 ## 3. Current external truth frozen for planning
 
-At AI-Gen `2bc886a8c90bb5d67b955c9ed18d71946e321f34`:
+At AI-Gen `bab45b6833b52bf79fc82e585171d6ef8f2d9584`:
 
 ### Codex
 - worker identity: `aigen-codex`
@@ -78,6 +78,22 @@ These are planning observations, not C2Pro-owned route authority. DEV-03 must re
 - expectation of standing Development provider authority;
 - requirement that both principals prove identical live capabilities;
 - assumption that principal-to-principal fallback preserves the same role automatically.
+
+## 4A. Durable execution-binding evidence
+
+The current Agent Factory baseline includes fail-closed durable persistence for `SessionExecutionBindingV1` and `ExecutionLifecycleReceiptV1`.
+
+DEV-03 uses those artifacts as **evidence binding**, not as a second authority source. The governing one-shot/job-bound authority remains authoritative for whether execution may occur.
+
+Every live qualification leg therefore requires:
+- one immutable canonical execution binding with externally verified SHA-256;
+- binding fields matching work ID, worker, adapter, execution identity, route/authority refs and job workspace;
+- monotonic lifecycle receipts published under the Agent Factory lock/atomic persistence rules;
+- terminal disposition `CLOSED_CLEAN`, `FAILED_CLEAN` or explicit `RECONCILIATION_REQUIRED`;
+- no reopened terminal lifecycle;
+- fail-closed qualification if binding or receipt verification fails.
+
+This makes cross-process handoff/qualification attributable to the exact bounded authority and workspace rather than to transient console output alone.
 
 ## 5. Qualification slices
 
@@ -277,6 +293,8 @@ MINIMAL_EXECUTION_IDENTITY_SMOKE?
 FRESH_JOB_AUTHORITY_REQUIRED?
 NEGATIVE_BOUNDARIES_PROVEN?
 RESOURCE_TIMEOUT_PROVEN?
+DURABLE_EXECUTION_BINDING_PROVEN?
+TERMINAL_LIFECYCLE_RECEIPT_PROVEN?
 SAME_ROLE_HANDOFF_OR_BLOCKED_SEMANTICS_PROVEN?
 CURRENT_BLOCKERS?
 ```
