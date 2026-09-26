@@ -68,7 +68,7 @@ These are planning observations, not C2Pro-owned route authority. DEV-03 must re
 ### REVALIDATE
 - host OS/resources;
 - worker accounts, groups and HOME modes;
-- CLI path/version/owner/mode/hash;
+- CLI path/version/owner/mode/hash and active executable installation root;
 - typed auth state;
 - sandbox primitives;
 - route health.
@@ -84,15 +84,24 @@ These are planning observations, not C2Pro-owned route authority. DEV-03 must re
 ### DEV-03R0 — Rebind baselines
 Freeze exact C2Pro and AI-Gen SHAs and re-read current routing/authority records before execution.
 
-### DEV-03R1 — Host / identity refresh
+### DEV-03R1 — Host / identity / active-executable refresh
 Read-only, non-secret inventory only.
 
 Record:
 - OS identity;
 - CLI binary path/version/provenance;
+- the **resolved active executable** and installation root (`command -v` + `readlink -f` or equivalent);
 - owner/group/mode;
 - sandbox/resource primitives;
-- typed auth state: `AUTHENTICATED | NOT_AUTHENTICATED | REAUTH_REQUIRED | UNKNOWN`.
+- typed auth state: `AUTHENTICATED | NOT_AUTHENTICATED | REAUTH_REQUIRED | UNKNOWN`;
+- a minimal bounded execution-identity smoke result.
+
+Two recent C2Pro Codex lessons are mandatory:
+
+1. **Login state is not execution proof.** A healthy `codex login status` / typed ChatGPT auth state does not prove a real request will use the same credential identity. Qualification requires a minimal bounded execution smoke in the exact job workspace. Evidence records only typed/redacted outcome metadata, never tokens.
+2. **Update target is not executable provenance.** A generic package update can modify a different installation from the binary reached by the C2Pro toolchain. Resolve the active executable root before any update, version assertion or qualification.
+
+If a request works in a clean disposable Git workspace but fails in the bounded C2Pro job workspace, classify it as workspace/runtime-context evidence before concluding authentication itself is broken. Feature isolation may diagnose the interaction, but a temporary mitigation does not become policy automatically.
 
 Never emit token, cookie, API key, session payload, email, organization identifier or environment dump.
 
@@ -263,6 +272,8 @@ CURRENT_ROUTE?
 QUALIFIED_ROLES?
 ROUTE_HEALTH?
 TYPED_AUTH_STATE?
+ACTIVE_EXECUTABLE_PROVENANCE?
+MINIMAL_EXECUTION_IDENTITY_SMOKE?
 FRESH_JOB_AUTHORITY_REQUIRED?
 NEGATIVE_BOUNDARIES_PROVEN?
 RESOURCE_TIMEOUT_PROVEN?
