@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from yaml.constructor import ConstructorError
 
 SCHEMA_ID = "c2pro-product-qualification-evidence-v1"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -105,8 +106,50 @@ SCENARIO_CONTRACT: dict[str, tuple[str, tuple[str, ...]]] = {
 }
 
 
+class _NoDuplicateSafeLoader(yaml.SafeLoader):
+    """Safe YAML loader that rejects duplicate or unhashable mapping keys."""
+
+
+def _construct_unique_mapping(
+    loader: _NoDuplicateSafeLoader,
+    node: yaml.nodes.MappingNode,
+    deep: bool = False,
+) -> dict[Any, Any]:
+    mapping: dict[Any, Any] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        try:
+            duplicate = key in mapping
+        except TypeError as exc:
+            raise ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                "mapping keys must be hashable",
+                key_node.start_mark,
+            ) from exc
+        if duplicate:
+            raise ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                f"duplicate mapping key: {key!r}",
+                key_node.start_mark,
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_NoDuplicateSafeLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_unique_mapping,
+)
+
+
 def load_yaml(path: Path) -> dict[str, Any]:
-    value = yaml.safe_load(path.read_text(encoding="utf-8"))
+    try:
+        raw = path.read_text(encoding="utf-8")
+        value = yaml.load(raw, Loader=_NoDuplicateSafeLoader)
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        raise ValueError(f"cannot parse qualification YAML: {exc}") from exc
     if not isinstance(value, dict):
         raise ValueError("qualification evidence must be a mapping")
     return value
@@ -451,7 +494,11 @@ def validate_path(
     path: Path,
     control_loader: Any = load_control_at_commit,
 ) -> list[str]:
-    doc = load_yaml(path)
+    try:
+        doc = load_yaml(path)
+    except ValueError as exc:
+        return [str(exc)]
+
     problems = validate_document(doc)
     if problems:
         return problems
