@@ -267,9 +267,17 @@ make typecheck         # Type checking
 | `REDIS_URL` | `None` | Redis for cache + Celery |
 | `ANTHROPIC_API_KEY` | `None` | Claude API for AI features |
 | `STORAGE_PROVIDER` | `r2` | `r2` / `s3` / `local` |
-| `CORS_ORIGINS` | `localhost:3000,3001` | Allowed CORS origins (CSV) |
+| `CORS_ORIGINS` | `["http://localhost:3000","http://localhost:3001"]` | Allowed CORS origins (JSON array) |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Max file upload size |
 | `SENTRY_DSN` | `None` | Error tracking |
+
+**Complex settings are JSON only.** `CORS_ORIGINS`, `CORS_METHODS`, `CORS_HEADERS`, `ALLOWED_DOCUMENT_TYPES`, `BUDGET_ALERT_ADMIN_EMAILS` (JSON arrays) and `INTEGRATION_API_KEYS` (JSON object, API key → tenant_id) are JSON-decoded from the environment and `.env` before validation; a CSV or empty value fails at startup. Use `[]` / `{}` for empty. Quote for your shell:
+
+- bash: `export CORS_ORIGINS='["http://localhost:3000","http://localhost:3001"]'`
+- PowerShell: `$env:CORS_ORIGINS = '["http://localhost:3000","http://localhost:3001"]'`
+- `.env`: `CORS_ORIGINS=["http://localhost:3000","http://localhost:3001"]`
+
+Exception: `PLATFORM_OPERATOR_USER_IDS` is a CSV of Clerk user IDs (`user_abc,user_def`); a JSON array is rejected.
 
 ### Frontend
 

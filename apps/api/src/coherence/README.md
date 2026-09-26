@@ -73,7 +73,7 @@ $env:JWT_SECRET_KEY = 'a-very-long-and-secure-jwt-secret-key-for-testing-purpose
 $env:SUPABASE_URL = 'http://localhost:8000'; `
 $env:SUPABASE_ANON_KEY = 'dummy_supabase_anon_key_for_testing'; `
 $env:SUPABASE_SERVICE_ROLE_KEY = 'dummy_supabase_service_role_key_for_testing'; `
-$env:CORS_ORIGINS = 'http://localhost:3000,http://localhost:3001'; `
+$env:CORS_ORIGINS = '["http://localhost:3000","http://localhost:3001"]'; `
 pytest apps/api/tests/coherence/
 ```
 
