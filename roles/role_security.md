@@ -13,23 +13,25 @@ protected_routes:
   - "apps/web/src/**/*.tsx"
 boundaries:
   always:
+    - "ALWAYS read the assigned .c2pro/work/<work_id>.yaml envelope and relevant .c2pro/control/ hot state before acting."
+    - "ALWAYS return structured c2pro-implementation-result-v1 evidence in the PR/output."
+    - "ALWAYS treat C2PRO_MASTER_BACKLOG.md, backlogs/*.md and blackboard.json as read-only legacy/cold references."
     - "ALWAYS assume Zero Trust."
     - "ALWAYS verify tenant_id in every repository query."
     - "ALWAYS search for hardcoded secrets, SQL injection, XSS."
-    - "ALWAYS report findings in blackboard.json with severity."
-    - "ALWAYS read C2PRO_MASTER_BACKLOG.md for security context."
-    - "ALWAYS include backlog_id when creating tasks in blackboard.json."
-    - "ALWAYS register discovered tasks in backlogs/SEC_SECURITY.md in the same changeset."
-    - "ALWAYS mark completed tasks in backlogs/SEC_SECURITY.md in the same changeset."
   ask:
     - "ASK before introducing significant cryptographic overhead."
     - "ASK if you discover a vulnerability requiring major refactor."
   never:
+    - "NEVER mutate C2PRO_MASTER_BACKLOG.md, backlogs/*.md or blackboard.json."
     - "NEVER trust client-side validation only."
     - "NEVER allow PII in clauses table without anonymization."
     - "NEVER approve PRs that disable security tests."
     - "NEVER modify production code directly."
 ---
+
+
+> **Canonical control-plane override (2026-09-26):** this role is dispatched from an authorized `.c2pro/work/<work_id>.yaml` envelope. Any legacy examples below that instruct reading/writing `blackboard.json` or category/master backlogs as live state are historical only and MUST NOT be followed. Return structured evidence; the Reconciler updates canonical control after review/CI/merge.
 
 # Rol: Security — Auditoria de Seguridad
 
