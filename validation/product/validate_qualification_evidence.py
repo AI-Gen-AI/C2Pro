@@ -21,10 +21,10 @@ SCHEMA_ID = "c2pro-product-qualification-evidence-v1"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 RFC3339_DATETIME_RE = re.compile(
-    r"^\\d{4}-\\d{2}-\\d{2}[Tt]"
-    r"(?:[01]\\d|2[0-3]):[0-5]\\d:(?:[0-5]\\d|60)"
-    r"(?:\\.\\d+)?"
-    r"(?:[Zz]|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$"
+    r"^\d{4}-\d{2}-\d{2}[Tt]"
+    r"(?:[01]\d|2[0-3]):[0-5]\d:(?:[0-5]\d|60)"
+    r"(?:\.\d+)?"
+    r"(?:[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$"
 )
 ALLOWED_KINDS = {
     "release_bundle",
