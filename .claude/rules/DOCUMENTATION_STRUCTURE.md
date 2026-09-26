@@ -1,5 +1,7 @@
 # Documentation Structure - MUST FOLLOW
 
+> **2026-09-26 control-plane override:** current execution state is canonical under `.c2pro/`; product lifecycle state is canonical in the product-control YAML/Markdown pair. `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` and `blackboard.json` are read-only legacy/cold references. Any older instruction below that implies writing current task state to those legacy files is superseded by this rule.
+
 ## ⚠️ CRITICAL RULE - NO EXCEPTIONS ⚠️
 
 **NEVER create additional task-specific documentation files.**
@@ -112,8 +114,8 @@ This rule is enforced by:
 
 ## Related Rules
 
-- `.claude/rules/CRITICAL_BACKLOG_REQUIREMENT.md` - All tasks MUST be in C2PRO_MASTER_BACKLOG.md
-- This file - All task documentation MUST be in backlogs/ or blackboard/ ONLY
+- `.claude/rules/CRITICAL_BACKLOG_REQUIREMENT.md` - legacy backlog/blackboard files are read-only; current control writes go through `.c2pro`
+- This file - durable current execution evidence belongs in authorized work envelopes/PR evidence; legacy backlog/blackboard files are not write targets
 
 ---
 
