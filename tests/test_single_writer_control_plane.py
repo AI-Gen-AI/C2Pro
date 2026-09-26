@@ -9,6 +9,7 @@ import yaml
 
 from core.result_parser import (
     validate_result,
+    validate_review_result,
 )
 from core.supervisor import (
     es_nuevo_control_work_id,
@@ -204,6 +205,50 @@ def test_head_sha_mismatch():
     # Mismatched expected SHA should fail
     with pytest.raises(ValueError, match="head_sha mismatch"):
         validate_result(data, expected_head_sha="0000000000000000000000000000000000000000")
+
+
+def _valid_review_result(
+    reviewed_pr: int = 673,
+    reviewed_head_sha: str = "8" * 40,
+) -> dict:
+    return {
+        "schema": "c2pro-review-result-v1",
+        "schema_version": 1,
+        "work_id": "C2PRO-DEV-03",
+        "role": "independent_reviewer",
+        "worker_id": "codex",
+        "reviewed_pr": reviewed_pr,
+        "reviewed_head_sha": reviewed_head_sha,
+        "verdict": "PASS",
+        "blocking": [],
+        "non_blocking": [],
+        "architecture_drift": False,
+        "security_concern": False,
+        "scope_deviation": False,
+        "recommended_action": "approve",
+    }
+
+
+def test_review_result_requires_live_pr_identity_match() -> None:
+    head = "8" * 40
+    data = _valid_review_result(reviewed_pr=673, reviewed_head_sha=head)
+    validate_review_result(data, expected_pr=673, expected_head_sha=head)
+
+    stale_pr = _valid_review_result(reviewed_pr=672, reviewed_head_sha=head)
+    with pytest.raises(ValueError, match="reviewed_pr mismatch"):
+        validate_review_result(stale_pr, expected_pr=673, expected_head_sha=head)
+
+    stale_head = _valid_review_result(reviewed_pr=673, reviewed_head_sha="7" * 40)
+    with pytest.raises(ValueError, match="reviewed_head_sha mismatch"):
+        validate_review_result(stale_head, expected_pr=673, expected_head_sha=head)
+
+
+def test_review_result_expected_identity_must_be_exact() -> None:
+    data = _valid_review_result()
+    with pytest.raises(ValueError, match="Invalid expected PR number"):
+        validate_review_result(data, expected_pr=True, expected_head_sha="8" * 40)
+    with pytest.raises(ValueError, match="Invalid expected PR head SHA"):
+        validate_review_result(data, expected_pr=673, expected_head_sha="short")
 
 
 def test_worker_cannot_be_instructed_to_mutate_legacy_files():
