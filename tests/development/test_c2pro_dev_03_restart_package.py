@@ -105,6 +105,7 @@ def test_dev03_handoff_preserves_work_but_does_not_launder_role() -> None:
 
     for field in (
         "work_id",
+        "role",
         "base_sha",
         "objective",
         "scope",
@@ -120,9 +121,14 @@ def test_dev03_handoff_preserves_work_but_does_not_launder_role() -> None:
 
     reassignment = handoff["reassignment"]
     assert reassignment["worker_change_requires_explicit_transition"] is True
-    assert reassignment["role_change_requires_explicit_transition"] is True
-    assert reassignment["receiving_route_must_support_role"] is True
+    assert reassignment["role_is_immutable_within_same_work"] is True
+    assert reassignment["role_change_requires_new_or_child_work_identity"] is True
+    assert reassignment["receiving_route_must_support_same_role"] is True
     assert reassignment["silent_scope_change"] is False
+    assert (
+        readiness["qualification_slices"]["DEV_03R7_SAME_ROLE_PRINCIPAL_HANDOFF"]
+        == "BLOCKED_NO_SHARED_QUALIFIED_ROLE_ROUTE_PROVEN"
+    )
 
 
 def test_dev03_work_envelope_keeps_both_principals_eligible_without_selecting_one() -> None:
