@@ -23,6 +23,13 @@ def _evidence() -> list[dict]:
             "sha256": None,
         },
         {
+            "id": "entity",
+            "kind": "persisted_entity",
+            "ref": "project:project-1/document:document-1/revision:revision-1",
+            "immutable": True,
+            "sha256": None,
+        },
+        {
             "id": "api",
             "kind": "api_capture",
             "ref": "artifact:api-health",
@@ -71,6 +78,8 @@ def _doc(capability: str = "P0b") -> dict:
         "schema_version": 1,
         "lifecycle_authority": False,
         "repository": "AI-Gen-AI/C2Pro",
+        "control_ref": "validation/product/c2pro-master-product-control-v1.yaml",
+        "control_baseline_sha": "2" * 40,
         "capability_id": capability,
         "target_state": "PROD_VALIDATED",
         "environment": "production",
@@ -105,6 +114,25 @@ def test_p0c_positive_contract() -> None:
 
 def test_p0d_positive_contract() -> None:
     assert q.validate_document(_doc("P0d")) == []
+
+
+def test_missing_control_baseline_sha_fails() -> None:
+    doc = _doc()
+    doc["control_baseline_sha"] = "UNVERIFIED"
+    problems = q.validate_document(doc)
+    assert any("control_baseline_sha" in problem for problem in problems)
+
+
+def test_pass_requires_deployment_and_persisted_entity_evidence() -> None:
+    doc = _doc()
+    doc["evidence_refs"] = [
+        ref for ref in doc["evidence_refs"] if ref["kind"] not in {"deployment", "persisted_entity"}
+    ]
+    for assertion in doc["assertions"]:
+        assertion["evidence_refs"] = ["api", "ui"]
+    problems = q.validate_document(doc)
+    assert any("requires deployment evidence" in problem for problem in problems)
+    assert any("requires persisted_entity evidence" in problem for problem in problems)
 
 
 def test_unverified_runtime_sha_fails() -> None:
