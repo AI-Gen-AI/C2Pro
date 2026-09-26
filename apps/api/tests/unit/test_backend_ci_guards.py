@@ -230,7 +230,8 @@ def test_backend_requirements_include_langchain_anthropic_compatible_sdk() -> No
 
     assert "langchain-anthropic==1.4.8" in contents
     assert "anthropic>=0.120.0,<1.0.0" in contents
-    assert "pydantic-settings>=2.10.1,<3.0.0" in contents
+    assert "pydantic-settings>=2.15.0,<3.0.0" in contents
+    assert "pydantic-settings>=2.15.0,<3.0.0" in sprint_contents
     assert "supabase==2.31.0" in contents
     assert "httpx>=0.28.1,<1.0.0" in contents
     assert "uvicorn[standard]>=0.52.1,<1.0.0" in contents
