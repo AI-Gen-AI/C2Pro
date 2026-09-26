@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,7 @@ ALLOWED_TOP_LEVEL_KEYS = {
     "lifecycle_authority",
     "repository",
     "control_ref",
+    "control_commit_sha",
     "control_baseline_sha",
     "capability_id",
     "target_state",
@@ -56,6 +58,7 @@ ALLOWED_TOP_LEVEL_KEYS = {
 ASSERTION_KEYS = {"id", "status", "evidence_refs", "note"}
 EVIDENCE_REF_KEYS = {"id", "kind", "ref", "immutable", "sha256"}
 SCENARIO_KEYS = {"id", "identifiers"}
+CONTROL_REF = "validation/product/c2pro-master-product-control-v1.yaml"
 DEFAULT_CONTROL_PATH = Path(__file__).with_name("c2pro-master-product-control-v1.yaml")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_EVIDENCE_DIR = REPO_ROOT / "evidence" / "product-qualification"
@@ -130,8 +133,14 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
         problems.append("lifecycle_authority must be false")
     if doc.get("repository") != "AI-Gen-AI/C2Pro":
         problems.append("repository must be AI-Gen-AI/C2Pro")
-    if doc.get("control_ref") != "validation/product/c2pro-master-product-control-v1.yaml":
+    if doc.get("control_ref") != CONTROL_REF:
         problems.append("control_ref must point to the canonical Product Control YAML")
+    control_commit_sha = doc.get("control_commit_sha")
+    if (
+        not isinstance(control_commit_sha, str)
+        or not SHA_RE.fullmatch(control_commit_sha)
+    ):
+        problems.append("control_commit_sha must be an exact 40-character SHA")
     control_sha = doc.get("control_baseline_sha")
     if not isinstance(control_sha, str) or not SHA_RE.fullmatch(control_sha):
         problems.append("control_baseline_sha must be an exact 40-character SHA")
@@ -372,17 +381,73 @@ def validate_against_control(
     return problems
 
 
+def _git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=REPO_ROOT,
+        check=check,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _canonical_main_ref() -> str:
+    for candidate in ("origin/main", "main"):
+        result = _git("rev-parse", "--verify", "--quiet", candidate, check=False)
+        if result.returncode == 0:
+            return candidate
+    raise ValueError("cannot verify canonical main ancestry: no origin/main or main ref")
+
+
+def load_control_at_commit(commit_sha: str) -> dict[str, Any]:
+    """Load canonical Product Control from an immutable commit on main history."""
+    if not SHA_RE.fullmatch(commit_sha):
+        raise ValueError("control_commit_sha must be an exact 40-character SHA")
+
+    canonical_main = _canonical_main_ref()
+    ancestry = _git(
+        "merge-base",
+        "--is-ancestor",
+        commit_sha,
+        canonical_main,
+        check=False,
+    )
+    if ancestry.returncode != 0:
+        raise ValueError(
+            "control_commit_sha must be an ancestor of canonical main history"
+        )
+
+    snapshot = _git("show", f"{commit_sha}:{CONTROL_REF}", check=False)
+    if snapshot.returncode != 0:
+        raise ValueError(
+            "control_commit_sha does not contain the canonical Product Control YAML"
+        )
+
+    control = yaml.safe_load(snapshot.stdout)
+    if not isinstance(control, dict):
+        raise ValueError("historical Product Control snapshot must be a mapping")
+    return control
+
+
 def validate_path(
-    path: Path, control_path: Path = DEFAULT_CONTROL_PATH
+    path: Path,
+    control_loader: Any = load_control_at_commit,
 ) -> list[str]:
     doc = load_yaml(path)
     problems = validate_document(doc)
-    if not problems:
-        problems.extend(validate_against_control(doc, load_yaml(control_path)))
+    if problems:
+        return problems
+
+    try:
+        control = control_loader(doc["control_commit_sha"])
+    except (KeyError, TypeError, ValueError) as exc:
+        return [f"historical Product Control binding failed: {exc}"]
+
+    problems.extend(validate_against_control(doc, control))
     return problems
 
 
-def main() -> int:
+def main(control_loader: Any = load_control_at_commit) -> int:
     parser = argparse.ArgumentParser(
         description=(
             "Validate committed product-qualification evidence bundles from "
@@ -403,7 +468,7 @@ def main() -> int:
 
     failed = False
     for bundle_path in bundle_paths:
-        problems = validate_path(bundle_path, DEFAULT_CONTROL_PATH)
+        problems = validate_path(bundle_path, control_loader)
         if problems:
             failed = True
             print(
