@@ -601,7 +601,7 @@ def test_runtime_bindings_require_distinct_deployment_artifacts() -> None:
     frontend_evidence = next(
         ref for ref in doc["evidence_refs"] if ref["id"] == "deploy-frontend"
     )
-    frontend_evidence["ref"] = "railway:deployment:backend-prod"
+    frontend_evidence["ref"] = "vercel:deployment:backend-prod"
     problems = q.validate_document(doc)
     assert any(
         "backend and frontend runtime bindings must reference distinct deployment artifacts"
