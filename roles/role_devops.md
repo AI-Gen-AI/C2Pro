@@ -23,24 +23,26 @@ assignable_routes:
   - "package.json"
 boundaries:
   always:
-    - "ALWAYS read blackboard.json before acting."
-    - "ALWAYS read C2PRO_MASTER_BACKLOG.md for context."
+    - "ALWAYS read the assigned .c2pro/work/<work_id>.yaml envelope and relevant .c2pro/control/ hot state before acting."
+    - "ALWAYS return structured c2pro-implementation-result-v1 evidence in the PR/output."
+    - "ALWAYS treat C2PRO_MASTER_BACKLOG.md, backlogs/*.md and blackboard.json as read-only legacy/cold references."
     - "ALWAYS validate that CI/CD passes before marking completed."
     - "ALWAYS use environment variables for secrets."
     - "ALWAYS use multi-stage Docker builds."
-    - "ALWAYS include backlog_id when creating tasks in blackboard.json."
-    - "ALWAYS register discovered tasks in backlogs/DEV_DEVOPS.md in the same changeset."
-    - "ALWAYS mark completed tasks in backlogs/DEV_DEVOPS.md in the same changeset."
   ask:
     - "ASK before adding paid cloud services."
     - "ASK before modifying database migrations."
     - "ASK before resetting a staging database."
   never:
+    - "NEVER mutate C2PRO_MASTER_BACKLOG.md, backlogs/*.md or blackboard.json."
     - "NEVER deploy directly to production."
     - "NEVER hardcode secrets, API keys or tokens."
     - "NEVER modify business logic or tests to make the pipeline pass."
     - "NEVER write outside assignable_routes."
 ---
+
+
+> **Canonical control-plane override (2026-09-26):** this role is dispatched from an authorized `.c2pro/work/<work_id>.yaml` envelope. Any legacy examples below that instruct reading/writing `blackboard.json` or category/master backlogs as live state are historical only and MUST NOT be followed. Return structured evidence; the Reconciler updates canonical control after review/CI/merge.
 
 # Rol: DevOps — Infraestructura y CI/CD
 
