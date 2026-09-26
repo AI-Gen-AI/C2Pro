@@ -1,0 +1,139 @@
+schema: c2pro-dev-03-principal-worker-readiness-v2
+status: PLANNED_RESTART_PACKAGE_EXECUTION_NOT_AUTHORIZED
+date: '2026-09-26'
+repository: AI-Gen-AI/C2Pro
+baseline_main: 4c26ebc740139ff6754dcda6e3dd393c9e1d8f01
+work_ref: .c2pro/work/C2PRO-DEV-03.yaml
+evidence_ref: .c2pro/evidence/C2PRO-DEV-03.yaml
+runbook_ref: docs/architecture/development/c2pro-dev-03-principal-worker-readiness-v2.md
+
+activation:
+  canonical_current_state_mutated: false
+  canonical_queue_work_ref_mutated: false
+  worker_execution_authorized: false
+  provider_invocation_authorized: false
+  standing_authority_authorized: false
+  merge_authority: HUMAN_ONLY
+  rule: merge_or_presence_of_this_package_does_not_authorize_live_execution
+
+historical_input:
+  pr: 565
+  merged: false
+  use: DESIGN_AND_EVIDENCE_INPUT_ONLY
+  stale_baseline: true
+  stale_authority_model: true
+  reuse_policy:
+    KEEP:
+      - principal_capable_workers_are_claude_code_and_codex
+      - worker_identity_is_distinct_from_role_and_route
+      - raw_credentials_never_enter_git_evidence
+      - negative_boundary_and_resource_proofs_are_required
+      - work_identity_survives_governed_handoff
+    REVALIDATE:
+      - vps_host_resources
+      - os_execution_identities
+      - cli_paths_versions_owners_modes_and_hashes
+      - typed_auth_state
+      - route_health
+      - sandbox_and_resource_primitives
+    REPLACE:
+      - mr_dev_01c_next_blocks_all_live_dev03
+      - standing_live_authority_is_expected
+      - both_principals_require_identical_role_capability
+      - handoff_means_role_symmetry
+
+ai_gen_dependency:
+  repository: AI-Gen-AI/2SB
+  observed_main: 2bc886a8c90bb5d67b955c9ed18d71946e321f34
+  af_dev_01: DONE
+  mr_dev_01c: DONE_QUALIFIED_REVIEWED
+  mr_dev_01c_bounded_authority: CONSUMED
+  standing_provider_authority: false
+  academy_authority_model: JOB_BOUND_CONSUMED_NO_STANDING_AUTHORITY
+  future_provider_invocation_requires_fresh_job_authority: true
+
+principles:
+  principal_capability_is_not_route_qualification: true
+  route_qualification_is_not_role_eligibility: true
+  role_eligibility_is_not_current_job_authority: true
+  principal_status_does_not_bypass_route_health: true
+  subordinate_live_route_does_not_satisfy_principal_gate: true
+  handoff_may_not_launder_role_or_scope: true
+
+principal_workers:
+  codex:
+    principal_capable: true
+    execution_identity_expected: aigen-codex
+    identity_state: REVALIDATE_REQUIRED
+    auth_state: REVALIDATE_REQUIRED
+    adapter: codex_cli
+    current_route: CODEX_OPENAI_DEFAULT
+    route_qualification_observed: QUALIFIED_LIVE
+    current_qualified_roles: [BACKEND_ENGINEER]
+    standing_authority: false
+    fresh_job_authority_required: true
+    required_dev03_result: BOUNDED_IMPLEMENTATION_QUALIFIED_OR_EXPLICITLY_BLOCKED
+  claude_code:
+    principal_capable: true
+    execution_identity_expected: aigen-claude
+    identity_state: REVALIDATE_REQUIRED
+    auth_state: REVALIDATE_REQUIRED
+    adapter: claude_code
+    current_route: CLAUDE_ANTHROPIC_OPUS5_TARGET
+    route_qualification_observed: QUALIFIED_BOUNDED
+    current_qualified_roles: [SOFTWARE_ARCHITECT, SYSTEM_COHERENCE_REVIEWER]
+    exact_model_observed: claude-opus-5
+    workspace_ceiling_observed: JOB_LOCAL_READ_ONLY
+    route_health_observed: BLOCKED_REQUALIFICATION
+    live_routable_observed: false
+    standing_authority: false
+    fresh_job_authority_required: true
+    required_dev03_result: BOUNDED_ARCHITECTURE_COHERENCE_QUALIFIED_OR_EXPLICITLY_BLOCKED
+
+handoff_contract:
+  preserve:
+    - work_id
+    - base_sha
+    - objective
+    - scope
+    - out_of_scope
+    - invariants
+    - acceptance_criteria
+    - completed_work
+    - remaining_work
+    - findings
+    - evidence_refs
+  reassignment:
+    worker_change_requires_explicit_transition: true
+    role_change_requires_explicit_transition: true
+    receiving_route_must_support_role: true
+    unavailable_compatible_route_action: BLOCK_OR_REASSIGN
+    silent_scope_change: false
+
+qualification_slices:
+  DEV_03R0_REBIND_BASELINES: PLANNED
+  DEV_03R1_HOST_IDENTITY_REFRESH: PLANNED
+  DEV_03R2_ROUTE_ROLE_RECONCILIATION: PLANNED
+  DEV_03R3_CODEX_BOUNDED_IMPLEMENTATION: PLANNED_NOT_AUTHORIZED
+  DEV_03R4_CLAUDE_ARCH_COHERENCE: BLOCKED_PENDING_ROUTE_HEALTH_REVALIDATION
+  DEV_03R5_NEGATIVE_BOUNDARIES: PLANNED_NOT_AUTHORIZED
+  DEV_03R6_RESOURCE_TIMEOUT: PLANNED_NOT_AUTHORIZED
+  DEV_03R7_ROLE_COMPATIBLE_HANDOFF: PLANNED_NOT_AUTHORIZED
+  DEV_03R8_FINAL_RECONCILIATION: BLOCKED_BY_PRIOR_SLICES
+
+done_definition:
+  boolean_ready_field_for_all_principals_forbidden: true
+  per_principal_per_role_state_required: true
+  exact_baselines_required: true
+  fresh_authority_evidence_required_for_live_runs: true
+  negative_boundary_evidence_required: true
+  resource_timeout_evidence_required: true
+  handoff_evidence_required: true
+  independent_principal_review_required: true
+  owner_human_merge_required: true
+
+next_action:
+  type: CONTROL_ACTIVATION_AFTER_MASTER_RECONCILIATION
+  blocked_by:
+    - PR_669_CANONICAL_RECONCILIATION_NOT_YET_MERGED
+  action: after PR 669 is canonical on main refresh baseline then bind C2PRO-DEV-03 into current and work-queue without changing qualification semantics
