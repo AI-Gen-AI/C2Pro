@@ -9,7 +9,7 @@ references:
     sha256: null
     summary: C2Pro restart planning baseline before DEV-03 activation.
   - kind: git_commit
-    locator: AI-Gen-AI/2SB@2bc886a8c90bb5d67b955c9ed18d71946e321f34
+    locator: AI-Gen-AI/2SB@bab45b6833b52bf79fc82e585171d6ef8f2d9584
     immutable: true
     sha256: null
     summary: Current AI-Gen Agent Factory authority and route-qualification baseline reviewed by Line B.
@@ -28,3 +28,8 @@ references:
     immutable: false
     sha256: null
     summary: Current C2Pro evidence source for login-vs-runtime identity proof, active executable provenance and workspace isolation.
+  - kind: audit
+    locator: AI-Gen-AI/2SB@bab45b6833b52bf79fc82e585171d6ef8f2d9584:ai-gen-agent-os/control-plane/execution_binding/persistence_v1.py
+    immutable: true
+    sha256: null
+    summary: Fail-closed durable SessionExecutionBindingV1 and monotonic ExecutionLifecycleReceiptV1 persistence used by live DEV-03 qualification evidence.
