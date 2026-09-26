@@ -241,6 +241,38 @@ def test_observed_at_rejects_permissive_non_rfc3339_forms() -> None:
     assert not any("observed_at" in problem for problem in q.validate_document(doc))
 
 
+def test_cli_rejects_symlinked_evidence_root() -> None:
+    doc = _doc()
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        outside = root / "outside"
+        outside.mkdir()
+        (outside / "valid.yaml").write_text(
+            yaml.safe_dump(doc, sort_keys=False),
+            encoding="utf-8",
+        )
+        evidence_dir = root / "evidence-link"
+        evidence_dir.symlink_to(outside, target_is_directory=True)
+
+        old_evidence_dir = q.DEFAULT_EVIDENCE_DIR
+        old_argv = sys.argv[:]
+        try:
+            q.DEFAULT_EVIDENCE_DIR = evidence_dir
+            sys.argv = ["validate_qualification_evidence.py"]
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = q.main(control_loader=lambda _commit_sha: _control())
+        finally:
+            q.DEFAULT_EVIDENCE_DIR = old_evidence_dir
+            sys.argv = old_argv
+
+    rendered = output.getvalue()
+    assert exit_code == 1
+    assert "PRODUCT_QUALIFICATION_EVIDENCE=INVALID_ROOT" in rendered
+    assert "evidence directory must not be a symlink" in rendered
+    assert "PRODUCT_QUALIFICATION_EVIDENCE=VALID" not in rendered
+
+
 def test_cli_rejects_symlink_bundle_without_reading_target() -> None:
     doc = _doc()
     with tempfile.TemporaryDirectory() as tmp:
@@ -558,6 +590,13 @@ def test_pass_cannot_hide_failed_assertion() -> None:
     doc["assertions"][0]["status"] = "FAIL"
     problems = q.validate_document(doc)
     assert any("PASS contradicts failed assertions" in problem for problem in problems)
+
+
+def test_assertion_rejects_duplicate_evidence_reference() -> None:
+    doc = _doc()
+    doc["assertions"][0]["evidence_refs"] = ["api", "api"]
+    problems = q.validate_document(doc)
+    assert any("contains duplicate id 'api'" in problem for problem in problems)
 
 
 def test_assertion_requires_known_evidence_reference() -> None:
