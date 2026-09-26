@@ -148,7 +148,8 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
         )
 
     capability = doc.get("capability_id")
-    if capability not in REQUIRED_ASSERTIONS:
+    capability_valid = isinstance(capability, str) and capability in REQUIRED_ASSERTIONS
+    if not capability_valid:
         problems.append(f"unknown capability_id: {capability!r}")
 
     runtime_sha = doc.get("deployed_runtime_sha")
@@ -170,7 +171,7 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
         except ValueError:
             problems.append("observed_at must be an ISO-8601 date-time")
 
-    if capability in SCENARIO_CONTRACT:
+    if capability_valid:
         problems.extend(_validate_scenario(capability, doc.get("scenario")))
 
     evidence = doc.get("evidence_refs")
@@ -198,7 +199,7 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
             else:
                 evidence_ids.add(ref_id)
             kind = ref.get("kind")
-            if kind not in ALLOWED_KINDS:
+            if not isinstance(kind, str) or kind not in ALLOWED_KINDS:
                 problems.append(f"{where}.kind is invalid")
             else:
                 evidence_kinds.add(kind)
@@ -216,7 +217,7 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
     assertion_statuses: dict[str, str] = {}
     if not isinstance(assertion_rows, list) or not assertion_rows:
         problems.append("assertions must be a non-empty list")
-    elif capability in REQUIRED_ASSERTIONS:
+    elif capability_valid:
         expected = set(REQUIRED_ASSERTIONS[capability])
         seen: set[str] = set()
         for index, row in enumerate(assertion_rows):
@@ -238,7 +239,7 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
                 problems.append(f"duplicate assertion id: {assertion_id}")
             seen.add(assertion_id)
             status = row.get("status")
-            if status not in {"PASS", "FAIL"}:
+            if not isinstance(status, str) or status not in {"PASS", "FAIL"}:
                 problems.append(f"{where}.status must be PASS or FAIL")
             else:
                 assertion_statuses[assertion_id] = status
@@ -285,7 +286,7 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
                     problems.append(
                         f"evidence_refs[{index}] must be immutable or content-addressed for PASS"
                     )
-    if verdict not in {"PASS", "FAIL"}:
+    if not isinstance(verdict, str) or verdict not in {"PASS", "FAIL"}:
         problems.append("validator_verdict must be PASS or FAIL")
     elif verdict == "PASS":
         failed = sorted(
@@ -406,7 +407,7 @@ def main() -> int:
         if problems:
             failed = True
             print(
-                "PRODUCT_QUALIFICATION_EVIDENCE=FAIL "
+                "PRODUCT_QUALIFICATION_EVIDENCE=INVALID "
                 f"bundle={bundle_path.name}"
             )
             for problem in problems:
@@ -415,9 +416,10 @@ def main() -> int:
 
         doc = load_yaml(bundle_path)
         print(
-            "PRODUCT_QUALIFICATION_EVIDENCE=PASS "
+            "PRODUCT_QUALIFICATION_EVIDENCE=VALID "
             f"bundle={bundle_path.name} "
             f"capability={doc['capability_id']} "
+            f"qualification_verdict={doc['validator_verdict']} "
             f"runtime_sha={doc['deployed_runtime_sha']}"
         )
 
