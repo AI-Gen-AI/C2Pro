@@ -70,6 +70,9 @@ principal_workers:
     current_route: CODEX_OPENAI_DEFAULT
     route_qualification_observed: QUALIFIED_LIVE
     current_qualified_roles: [BACKEND_ENGINEER]
+    provider_invocation_state_observed: DEGRADED_EXTERNAL_AUTH_PATH
+    provider_invocation_observation: "/models entitlement succeeds while /responses returns 401; route qualification is not revoked but invocation must fail closed"
+    fresh_endpoint_preflight_required: true
     standing_authority: false
     fresh_job_authority_required: true
     required_dev03_result: BOUNDED_IMPLEMENTATION_QUALIFIED_OR_EXPLICITLY_BLOCKED
@@ -89,6 +92,24 @@ principal_workers:
     standing_authority: false
     fresh_job_authority_required: true
     required_dev03_result: BOUNDED_ARCHITECTURE_COHERENCE_QUALIFIED_OR_EXPLICITLY_BLOCKED
+
+principal_review_gate:
+  c2pro_policy_requirement: independent_principal_review_required_for_material_work
+  current_status: BLOCKED_NO_COMPATIBLE_LIVE_PRINCIPAL_REVIEW_ROUTE_PROVEN
+  evidence:
+    academy_independent_review_lead: OPENCODE_NEMOTRON
+    academy_independent_review_route: NVIDIA_NEMOTRON3_SUPER
+    academy_independent_review_route_state: QUALIFIED_LIVE
+    c2pro_authority_class_of_academy_reviewer: SUBORDINATE
+    subordinate_may_satisfy_c2pro_principal_gate: false
+    claude_independent_review_lead_qualification: NOT_QUALIFIED
+    claude_system_coherence_review_qualification: QUALIFIED_BOUNDED
+    codex_default_qualified_role: BACKEND_ENGINEER
+    material_same_worker_self_review_forbidden: true
+  closure_requirement: >-
+    qualify and health-check a compatible C2Pro principal review route under fresh bounded authority;
+    existing subordinate Academy review remains useful challenger/evidence but cannot promote material work.
+  qualification_inheritance_forbidden: true
 
 handoff_contract:
   preserve:
@@ -114,12 +135,13 @@ qualification_slices:
   DEV_03R0_REBIND_BASELINES: PLANNED
   DEV_03R1_HOST_IDENTITY_REFRESH: PLANNED
   DEV_03R2_ROUTE_ROLE_RECONCILIATION: PLANNED
-  DEV_03R3_CODEX_BOUNDED_IMPLEMENTATION: PLANNED_NOT_AUTHORIZED
+  DEV_03R3_CODEX_BOUNDED_IMPLEMENTATION: BLOCKED_PENDING_FRESH_ENDPOINT_PREFLIGHT
   DEV_03R4_CLAUDE_ARCH_COHERENCE: BLOCKED_PENDING_ROUTE_HEALTH_REVALIDATION
   DEV_03R5_NEGATIVE_BOUNDARIES: PLANNED_NOT_AUTHORIZED
   DEV_03R6_RESOURCE_TIMEOUT: PLANNED_NOT_AUTHORIZED
   DEV_03R7_ROLE_COMPATIBLE_HANDOFF: PLANNED_NOT_AUTHORIZED
-  DEV_03R8_FINAL_RECONCILIATION: BLOCKED_BY_PRIOR_SLICES
+  DEV_03R8_PRINCIPAL_REVIEW_ROUTE: BLOCKED_NO_COMPATIBLE_ROUTE_PROVEN
+  DEV_03R9_FINAL_RECONCILIATION: BLOCKED_BY_PRIOR_SLICES
 
 done_definition:
   boolean_ready_field_for_all_principals_forbidden: true
@@ -130,6 +152,7 @@ done_definition:
   resource_timeout_evidence_required: true
   handoff_evidence_required: true
   independent_principal_review_required: true
+  compatible_principal_review_route_proof_required: true
   owner_human_merge_required: true
 
 next_action:
