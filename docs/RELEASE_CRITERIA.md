@@ -11,12 +11,9 @@
 
 This document defines release thresholds and evidence requirements. It does not own task execution state.
 
-Any open release work derived from this document must be tracked in `C2PRO_MASTER_BACKLOG.md`.
+Open release work derived from this document must be represented in the canonical development control plane under `.c2pro/`. Product release-readiness and production-validation state are canonical only in the product-control YAML/Markdown pair.
 
-Current related backlog items:
-
-- `REL-RC1-01`
-- `REL-RC1-02`
+Historical IDs such as `REL-RC1-01` and `REL-RC1-02` remain legacy references unless explicitly reconciled into current `.c2pro` work.
 
 ---
 
@@ -194,7 +191,7 @@ RELEASE APPROVER CHECKLIST:
 □ evidence/releases/<release-id>/signoff.md completed
 ```
 
-Execution status for the manual release tasks above is canonical only in `C2PRO_MASTER_BACKLOG.md`.
+Execution status for manual release work is canonical only in `.c2pro/control/` plus its work envelopes. Product deployment/PROD_VALIDATED claims require the separate product-control evidence gate.
 
 ---
 
