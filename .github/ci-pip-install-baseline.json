@@ -199,16 +199,16 @@
     {
       "behavior": {
         "env": {},
-        "run": "python -m pip install -r .github/scripts/requirements-pip-install-guard.txt",
+        "run": "python -m pip install --only-binary=:all: --require-hashes -r .github/scripts/requirements-pip-install-guard.txt",
         "shell": null,
         "working_directory": null
       },
       "context": ".github/workflows/install-drift-guard.yml::jobs.install-drift-guard::id:guard-deps",
       "file": ".github/workflows/install-drift-guard.yml",
       "owner": "@AI-Gen-AI",
-      "reason": "Guard-only bootstrap: installs the exact PyYAML==6.0.3 pin from .github/scripts/requirements-pip-install-guard.txt so the drift guard can parse workflows. Baselined like any other block; no special case in guard code.",
+      "reason": "Guard-only bootstrap: installs exact PyYAML==6.0.3 wheel-only (--only-binary=:all:) with --require-hashes against the PyPI-published sha256 digests of its CPython 3.11 wheels in .github/scripts/requirements-pip-install-guard.txt, so the drift guard can parse workflows. Baselined like any other block; no special case in guard code.",
       "remediation_issue": "#685",
-      "sha256": "3a7befdb9bab4c6a86ff01c78aa027fa6355b1c8186d7a380397f639316484d6"
+      "sha256": "1c2dfd523c11295511db1f4967c8dcc3004942a2ab779053765f6a6111f20879"
     },
     {
       "behavior": {

@@ -30,7 +30,8 @@ GUARD_SCRIPT = HERE / "install_drift_guard.py"
 GUARD_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "install-drift-guard.yml"
 GUARD_REQUIREMENTS = HERE / "requirements-pip-install-guard.txt"
 BOOTSTRAP_RUN = (
-    "python -m pip install -r .github/scripts/requirements-pip-install-guard.txt"
+    "python -m pip install --only-binary=:all: --require-hashes"
+    " -r .github/scripts/requirements-pip-install-guard.txt"
 )
 
 APP_WORKFLOW = """\
@@ -1187,7 +1188,28 @@ class RealRepositoryTests(unittest.TestCase):
         entries = [e for e in manifest["entries"] if e["file"] == wf_rel]
         self.assertEqual(len(entries), 1, entries)
         self.assertEqual(entries[0]["behavior"]["run"].rstrip("\n"), BOOTSTRAP_RUN)
-        self.assertEqual(GUARD_REQUIREMENTS.read_bytes(), b"PyYAML==6.0.3\n")
+
+    def test_guard_bootstrap_is_wheel_only_and_hash_verified(self):
+        # the bootstrap installs only binary wheels and refuses any artifact
+        # whose sha256 is not pinned in the guard-only requirements file
+        self.assertIn("--only-binary=:all:", BOOTSTRAP_RUN.split())
+        self.assertIn("--require-hashes", BOOTSTRAP_RUN.split())
+        wf = guard.load_yaml(GUARD_WORKFLOW.read_bytes().decode("utf-8"))
+        runs = [s.get("run", "") for j in wf["jobs"].values() for s in j["steps"]]
+        self.assertIn(BOOTSTRAP_RUN, runs)
+
+        text = GUARD_REQUIREMENTS.read_bytes().decode("utf-8")
+        logical = " ".join(
+            line.rstrip("\\").strip()
+            for line in text.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ).split()
+        self.assertEqual(logical[0], "PyYAML==6.0.3")  # exact pin, single package
+        hashes = logical[1:]
+        self.assertGreaterEqual(len(hashes), 1)
+        for option in hashes:
+            self.assertRegex(option, r"^--hash=sha256:[0-9a-f]{64}$")
+        self.assertEqual(len(hashes), len(set(hashes)))
 
     def test_guard_has_no_special_case_for_its_own_workflow(self):
         source = GUARD_SCRIPT.read_text(encoding="utf-8")
