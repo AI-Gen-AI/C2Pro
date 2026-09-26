@@ -10,6 +10,7 @@ scope:
   - refresh non-secret VPS host identity binary provenance and typed auth readiness for Claude Code and Codex
   - resolve the active CLI executable to its actual installation root before version or qualification claims
   - prove a minimal real execution uses the expected identity; login status alone is not sufficient
+  - bind every live qualification attempt to a durable SessionExecutionBindingV1 + monotonic ExecutionLifecycleReceiptV1 chain
   - reconcile C2Pro principal-capable semantics against current AI-Gen Agent Factory route role qualification and live invocation health
   - prepare fresh job-bound Codex implementation qualification only after a fresh provider-endpoint preflight closes the current degraded invocation path
   - prepare Claude architecture and system-coherence qualification only after current route-health revalidation
@@ -69,6 +70,9 @@ evidence_required:
   - current_worker_identity_and_binary_provenance
   - active_executable_resolution_and_installation_root
   - minimal_execution_identity_smoke_without_secret_disclosure
+  - immutable_execution_binding_sha256
+  - monotonic_lifecycle_receipt_chain
+  - terminal_authority_consumption_or_reconciliation_disposition
   - typed_auth_state_without_secret_material
   - current_route_role_qualification_matrix
   - fresh_job_authority_and_consumption_evidence
