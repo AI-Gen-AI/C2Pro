@@ -28,7 +28,8 @@ A validated evidence bundle is an input to a later Product-Control reconciliatio
 
 Every bundle binds to:
 
-- the exact `production_position.reconciled_against_main_sha` recorded by canonical Product Control;
+- an exact immutable `control_commit_sha` from canonical `main` history that contains the Product Control state used for qualification;
+- the exact `production_position.reconciled_against_main_sha` recorded by Product Control at that commit;
 - the exact observed production runtime SHA recorded by canonical Product Control;
 - capability: `P0b | P0c | P0d`;
 - concrete production scenario identifiers;
@@ -37,7 +38,9 @@ Every bundle binds to:
 - typed evidence references;
 - validator verdict.
 
-The validator compares both bindings against the canonical Product Control YAML. A syntactically valid 40-character SHA is not sufficient if it does not match canonical control truth.
+The validator loads Product Control from `control_commit_sha` using repository Git history, verifies that commit is an ancestor of canonical `main`, then compares the recorded baseline/runtime bindings against that immutable historical control state. A syntactically valid 40-character SHA is not sufficient if it is not canonical main history or does not match control truth at that commit.
+
+This versioned binding deliberately preserves retained failed runs and earlier successful evidence after Product Control or the deployed runtime later advances. Historical bundles are never rebound to the current singleton control file.
 
 A branch SHA, merge SHA, preview deployment or CI green is not a substitute for an observed production runtime SHA.
 
@@ -144,9 +147,10 @@ Before any production interaction:
 
 1. verify current Product Control baseline SHA;
 2. verify current deployed runtime SHA through deployment/runtime evidence and reconcile that SHA into canonical Product Control before a PASS bundle can validate;
-3. confirm the planned scenario is within existing production authority;
-4. avoid any consequential mutation not already part of the approved user journey;
-5. freeze the target project/document/revision identifiers.
+3. record the exact canonical-main commit containing that reconciled Product Control state as `control_commit_sha`;
+4. confirm the planned scenario is within existing production authority;
+5. avoid any consequential mutation not already part of the approved user journey;
+6. freeze the target project/document/revision identifiers.
 
 During the run:
 
@@ -167,9 +171,10 @@ python validation/product/validate_qualification_evidence.py
 
 The CLI intentionally accepts **no arbitrary filesystem path**. It scans only committed `*.yaml` bundles in that fixed directory and always binds them against the canonical Product Control YAML at `validation/product/c2pro-master-product-control-v1.yaml`.
 
-3. the validator binds each bundle to the canonical Product Control baseline/runtime, not merely to SHA syntax;
+3. the validator binds each bundle to the versioned canonical Product Control snapshot named by `control_commit_sha`, not merely to SHA syntax or today's singleton control state;
 4. independently review the bundle;
-5. only then open a separate Product-Control reconciliation that references the validated evidence.
+5. retain failed and superseded bundles unchanged; later control/runtime advances do not rewrite their historical binding;
+6. only then open a separate Product-Control reconciliation that references the validated evidence.
 
 ## 8. Promotion rule
 
