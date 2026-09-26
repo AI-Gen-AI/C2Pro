@@ -122,7 +122,7 @@ Expected for ChatGPT auth:
 - id/access tokens are JWT-like
 - no API-key-like access token
 
-### 4.2 Check environment without showing values
+### 4.2 Check environment without showing values (Bash)
 
 ```bash
 for v in \
@@ -172,6 +172,8 @@ This is the final proof that the runtime is using a valid identity.
 
 If Codex says ChatGPT login is healthy but a request returns 401 with a different credential identity, use a direct backend A/B test without displaying the token.
 
+> **Sensitive diagnostic — owner-only.** Run this only as the credential owner on that owner's host. Never modify it to print or log `token` or `account_id`. The `chatgpt.com/backend-api/codex/responses` endpoint is private/undocumented and may change. The helper below redacts common key/JWT/account-id patterns, but review all output before sharing it anywhere.
+
 ```bash
 python3 - <<'PY'
 import json
@@ -196,7 +198,11 @@ req = urllib.request.Request(
 )
 
 def redact(s):
-    return re.sub(r"sk-[A-Za-z0-9_-]+", "sk-...REDACTED", s)
+    s = re.sub(r"sk-[A-Za-z0-9_-]+", "sk-...REDACTED", s)
+    s = re.sub(r"eyJ[A-Za-z0-9._-]+", "JWT_REDACTED", s)
+    if account_id:
+        s = s.replace(account_id, "ACCOUNT_ID_REDACTED")
+    return s
 
 try:
     with urllib.request.urlopen(req, timeout=30) as r:
@@ -315,7 +321,16 @@ npm install -g @openai/codex
 
 could update a different installation from the one actually executed.
 
-The incident update used:
+Before any update, discover the active executable and npm roots:
+
+```bash
+readlink -f "$(command -v codex)"
+npm prefix -g
+npm root -g
+codex --version
+```
+
+Then target the package root that actually backs the active Codex executable and use the **currently approved Codex version**. During this incident, the approved target was 0.157.0 and the command used was:
 
 ```bash
 npm install -g \
@@ -323,7 +338,9 @@ npm install -g \
   @openai/codex@0.157.0
 ```
 
-Always verify:
+That version pin is historical evidence, not a standing recommendation; reusing it later could downgrade Codex.
+
+After any update, verify:
 
 ```bash
 hash -r
@@ -410,4 +427,4 @@ If the incident recurs:
 5. inspect snapshot/workspace state without exposing secrets;
 6. only then decide whether to clean cache/state or file an upstream bug.
 
-Related lesson: [LL-002](./LESSONS_LEARNED.md#ll-002-codex-puede-mostrar-login-chatgpt-correcto-y-aun-usar-una-credencial-obsoleta-en-un-workspace).
+Related lesson: [LL-002](./LESSONS_LEARNED.md).
