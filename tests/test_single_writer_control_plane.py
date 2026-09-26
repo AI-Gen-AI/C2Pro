@@ -217,6 +217,54 @@ def test_worker_cannot_be_instructed_to_mutate_legacy_files():
     assert "ALWAYS provide structured worker evidence (fenced YAML result block matching c2pro-implementation-result-v1)" in content
 
 
+def test_live_guidance_does_not_restore_legacy_backlog_authority():
+    """Current guidance must not re-promote legacy backlog files to canonical authority."""
+    live_guidance = [
+        "CLAUDE.md",
+        ".claude/rules/agents.md",
+        ".claude/rules/DOCUMENTATION_STRUCTURE.md",
+        "docs/ARCHITECTURE_INDEX.md",
+        "docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md",
+        "docs/RELEASE_CRITERIA.md",
+        "docs/internal/RELEASE_SIGNOFF_POLICY.md",
+        "docs/testing/README.md",
+        "docs/testing/C2PRO_TDD_BACKLOG_v1.0.md",
+        "docs/skills/c2pro-patterns.md",
+    ]
+    forbidden = (
+        "C2PRO_MASTER_BACKLOG.md` is the single source of truth",
+        "C2PRO_MASTER_BACKLOG.md` owns active task status",
+        "Backlog/task source of truth: `C2PRO_MASTER_BACKLOG.md`",
+        "All tasks MUST be in C2PRO_MASTER_BACKLOG.md",
+        "must be tracked in `C2PRO_MASTER_BACKLOG.md`",
+    )
+    for relative in live_guidance:
+        content = (ROOT / relative).read_text(encoding="utf-8")
+        for phrase in forbidden:
+            assert phrase not in content, f"{relative} restores legacy authority via: {phrase}"
+
+
+def test_role_frontmatter_cannot_mutate_legacy_control_files():
+    """Machine-readable role boundaries must use work envelopes, never legacy state writes."""
+    for role_path in sorted((ROOT / "roles").glob("role_*.md")):
+        content = role_path.read_text(encoding="utf-8")
+        parts = content.split("---", 2)
+        assert len(parts) == 3, f"missing YAML frontmatter: {role_path.name}"
+        frontmatter = parts[1]
+        assert "ALWAYS update blackboard.json" not in frontmatter
+        assert "ALWAYS register discovered tasks in backlogs/" not in frontmatter
+        assert "ALWAYS mark completed tasks in backlogs/" not in frontmatter
+        assert "NEVER mutate C2PRO_MASTER_BACKLOG.md, backlogs/*.md or blackboard.json." in frontmatter
+        assert ".c2pro/work/<work_id>.yaml" in frontmatter or role_path.name == "role_planner.md"
+
+
+def test_reconciler_targets_canonical_control_not_legacy_backlog():
+    """The active reconciler role writes canonical control, not the retired Markdown backlog."""
+    content = (ROOT / ".claude" / "rules" / "agents.md").read_text(encoding="utf-8")
+    assert "Edit `C2PRO_MASTER_BACKLOG.md`" not in content
+    assert "Reconcile canonical `.c2pro` execution state" in content
+
+
 def test_planner_master_retains_canonical_write_authority():
     """Assert that CRITICAL_BACKLOG_REQUIREMENT.md declares Planner/Master as sole canonical write authority."""
     req_path = ROOT / ".claude" / "rules" / "CRITICAL_BACKLOG_REQUIREMENT.md"
