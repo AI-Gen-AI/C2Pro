@@ -28,6 +28,8 @@ from pathlib import Path
 
 import yaml
 
+import validate_qualification_evidence as qualification_evidence
+
 _ROOT = Path(__file__).resolve().parents[2]
 _YAML = _ROOT / "validation" / "product" / "c2pro-master-product-control-v1.yaml"
 _MD = _ROOT / "docs" / "product" / "00-c2pro-master-product-control-v1.md"
@@ -40,6 +42,27 @@ _WBS_IDS = [
     "PWBS-ALERTS-ACTIONS-HITL", "PWBS-PROJECT-CONTROLS", "PWBS-PROCUREMENT",
     "PWBS-EXEC-REPORTING", "PWBS-OPS-TRUST",
 ]
+
+_QUALIFICATION_LANES = ("P0b", "P0c", "P0d")
+_EXPECTED_QUALIFICATION_TARGETS = {
+    "P0b": [
+        {"kind": "adr", "id": "ADR-024", "field": "prod_validation_status", "promote_to": "PROD_VALIDATED"},
+        {"kind": "p0b_slice", "id": "P0b-L4-5", "field": "slice_status", "promote_to": "DONE"},
+    ],
+    "P0c": [
+        {"kind": "adr", "id": "ADR-015", "field": "prod_validation_status", "promote_to": "PROD_VALIDATED"},
+        {"kind": "adr", "id": "ADR-016", "field": "prod_validation_status", "promote_to": "PROD_VALIDATED"},
+    ],
+    "P0d": [
+        {
+            "kind": "wbs_subtrack",
+            "id": "PWBS-EXEC-REPORTING",
+            "subtrack": "current_state",
+            "field": "prod_validation_status",
+            "promote_to": "PROD_VALIDATED",
+        },
+    ],
+}
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -145,6 +168,7 @@ def validate_enums(doc: dict) -> list[str]:
     prod = set(enums["prod_validation_status"])
     work = set(enums["work_status"])
     union_rd = real | dep
+    qualification = set(enums["qualification_status"])
 
     def _chk(where: str, field: str, value: object, allowed: set[str]) -> None:
         if value is None:
@@ -198,13 +222,193 @@ def validate_enums(doc: dict) -> list[str]:
         _chk(f"wbs[{wid}]", "realization_status", row.get("realization_status"), real)
         _chk(f"wbs[{wid}]", "work_status", row.get("work_status"), work)
         for tk, tv in (row.get("subtracks") or {}).items():
-            _chk(f"wbs[{wid}].subtrack[{tk}]", "value", tv, union_rd)
+            if isinstance(tv, dict):
+                for field, allowed in (
+                    ("realization_status", real),
+                    ("deployment_status", dep),
+                    ("prod_validation_status", prod),
+                ):
+                    if field in tv:
+                        _chk(f"wbs[{wid}].subtrack[{tk}]", field, tv[field], allowed)
+            else:
+                _chk(f"wbs[{wid}].subtrack[{tk}]", "value", tv, union_rd)
+
+    lanes = ((doc.get("qualification_control") or {}).get("lanes") or {})
+    for lane in _QUALIFICATION_LANES:
+        row = lanes.get(lane)
+        if not isinstance(row, dict):
+            problems.append(f"qualification[{lane}]: missing lane mapping")
+        else:
+            _chk(
+                f"qualification[{lane}]",
+                "qualification_status",
+                row.get("qualification_status"),
+                qualification,
+            )
+    return problems
+
+
+# ── schema-v7 Product Qualification promotion guard ───────────────────────────
+def _p0b_slice(doc: dict, slice_id: str) -> dict:
+    for row in doc["p0b_vertical_contract"]["slices"]:
+        if row.get("id") == slice_id:
+            return row
+    raise KeyError(f"P0b slice {slice_id} not found")
+
+
+def _qualification_target_value(doc: dict, target: dict) -> object:
+    kind = target["kind"]
+    if kind == "adr":
+        return _adr_row(doc, target["id"])[target["field"]]
+    if kind == "p0b_slice":
+        return _p0b_slice(doc, target["id"])[target["field"]]
+    if kind == "wbs_subtrack":
+        return _wbs_row(doc, target["id"])["subtracks"][target["subtrack"]][target["field"]]
+    raise KeyError(f"unsupported qualification target kind: {kind}")
+
+
+def validate_qualification_control(
+    doc: dict,
+    *,
+    root: Path = _ROOT,
+    bundle_validator=None,
+    bundle_loader=None,
+) -> list[str]:
+    """Validate compact Product-Control refs and fail closed on lifecycle promotion.
+
+    Phase-A bundles remain evidence only. This guard makes a structurally valid,
+    capability-matched PASS bundle necessary for a mapped lifecycle promotion,
+    but never mutates/promotes lifecycle state itself.
+    """
+    problems: list[str] = []
+    qc = doc.get("qualification_control")
+    if not isinstance(qc, dict):
+        return ["qualification_control: missing mapping"]
+    if qc.get("schema_version") != 1:
+        problems.append("qualification_control.schema_version must be integer 1")
+    if qc.get("evidence_contract") != "c2pro-product-qualification-evidence-v1":
+        problems.append("qualification_control.evidence_contract must bind Phase-A v1")
+    if qc.get("evidence_directory") != "evidence/product-qualification":
+        problems.append("qualification_control.evidence_directory must use the fixed Phase-A directory")
+    if qc.get("validator") != "validation/product/validate_qualification_evidence.py":
+        problems.append("qualification_control.validator must bind the canonical Phase-A validator")
+
+    lanes = qc.get("lanes")
+    if not isinstance(lanes, dict) or set(lanes) != set(_QUALIFICATION_LANES):
+        problems.append("qualification_control.lanes must contain exactly P0b, P0c and P0d")
+        return problems
+
+    if bundle_validator is None:
+        bundle_validator = qualification_evidence.validate_path
+    if bundle_loader is None:
+        bundle_loader = qualification_evidence.load_yaml
+
+    allowed_status = set(doc["status_enums"]["qualification_status"])
+    expected_root = (root / "evidence" / "product-qualification").resolve()
+
+    for lane in _QUALIFICATION_LANES:
+        row = lanes[lane]
+        where = f"qualification[{lane}]"
+        status = row.get("qualification_status")
+        if status not in allowed_status:
+            problems.append(f"{where}: invalid qualification_status={status!r}")
+
+        targets = row.get("lifecycle_targets")
+        if targets != _EXPECTED_QUALIFICATION_TARGETS[lane]:
+            problems.append(f"{where}: lifecycle_targets do not match the canonical capability mapping")
+            targets = _EXPECTED_QUALIFICATION_TARGETS[lane]
+
+        bundle_ref = row.get("bundle_ref")
+        bundle_sha = row.get("bundle_sha256")
+        bundle_doc = None
+        bundle_valid = False
+
+        if status in {"REQUIRED", "COLLECTING"}:
+            if bundle_ref is not None or bundle_sha is not None:
+                problems.append(
+                    f"{where}: {status} must not claim an accepted bundle_ref/bundle_sha256"
+                )
+        elif status in {"PASS", "FAIL"}:
+            if not isinstance(bundle_ref, str) or not bundle_ref.strip():
+                problems.append(f"{where}: {status} requires bundle_ref")
+            if (
+                not isinstance(bundle_sha, str)
+                or not qualification_evidence.SHA256_RE.fullmatch(bundle_sha)
+            ):
+                problems.append(f"{where}: {status} requires a lowercase 64-hex bundle_sha256")
+
+        if isinstance(bundle_ref, str) and bundle_ref.strip():
+            rel = Path(bundle_ref)
+            if (
+                rel.is_absolute()
+                or ".." in rel.parts
+                or rel.parent != Path("evidence/product-qualification")
+                or rel.suffix != ".yaml"
+            ):
+                problems.append(
+                    f"{where}: bundle_ref must be one YAML file in evidence/product-qualification"
+                )
+            else:
+                path = (root / rel).resolve()
+                if path.parent != expected_root:
+                    problems.append(f"{where}: bundle_ref resolves outside the fixed evidence directory")
+                elif not path.exists() or path.is_symlink() or not path.is_file():
+                    problems.append(f"{where}: bundle_ref must resolve to a regular non-symlink file")
+                else:
+                    actual_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+                    if isinstance(bundle_sha, str) and actual_sha != bundle_sha:
+                        problems.append(f"{where}: bundle_sha256 does not match bundle bytes")
+                    bundle_problems = list(bundle_validator(path))
+                    if bundle_problems:
+                        problems.extend(
+                            f"{where}: Phase-A bundle invalid: {problem}"
+                            for problem in bundle_problems
+                        )
+                    else:
+                        bundle_doc = bundle_loader(path)
+                        if bundle_doc.get("capability_id") != lane:
+                            problems.append(
+                                f"{where}: bundle capability_id={bundle_doc.get('capability_id')!r} "
+                                f"does not match {lane}"
+                            )
+                        expected_verdict = "PASS" if status == "PASS" else "FAIL"
+                        if status in {"PASS", "FAIL"} and bundle_doc.get("validator_verdict") != expected_verdict:
+                            problems.append(
+                                f"{where}: {status} requires Phase-A validator_verdict={expected_verdict}"
+                            )
+                        bundle_valid = (
+                            bundle_doc.get("capability_id") == lane
+                            and (
+                                status not in {"PASS", "FAIL"}
+                                or bundle_doc.get("validator_verdict") == expected_verdict
+                            )
+                        )
+
+        promoted = []
+        for target in targets:
+            try:
+                promoted.append(
+                    _s(_qualification_target_value(doc, target)) == _s(target["promote_to"])
+                )
+            except (KeyError, TypeError) as exc:
+                problems.append(f"{where}: lifecycle target cannot be resolved: {exc}")
+                promoted.append(False)
+
+        if any(promoted):
+            if not all(promoted):
+                problems.append(f"{where}: mapped lifecycle targets must promote atomically")
+            if status != "PASS":
+                problems.append(f"{where}: lifecycle promotion requires qualification_status=PASS")
+            if not bundle_valid:
+                problems.append(f"{where}: lifecycle promotion requires a validated PASS Phase-A bundle")
+
     return problems
 
 
 # ── (fix 1) exact critical-value extraction from the parsed YAML ──────────────
 def extract_canonical(doc: dict) -> dict[str, str]:
     pp = doc["production_position"]
+    qc = doc["qualification_control"]
     ns = doc["north_star"]
     ps = doc["product_semantics"]
     pcm = doc["project_controls_model"]
@@ -240,6 +444,29 @@ def extract_canonical(doc: dict) -> dict[str, str]:
         "p0b.invariant_ids": ",".join(_s(x) for x in p0b["invariant_ids"]),
         "p0b.next_slice": _s(p0b["next_slice"]),
     }
+    exec_current = _wbs_row(doc, "PWBS-EXEC-REPORTING")["subtracks"]["current_state"]
+    canon["wbs.PWBS-EXEC-REPORTING.current_state.realization"] = _s(
+        exec_current["realization_status"]
+    )
+    canon["wbs.PWBS-EXEC-REPORTING.current_state.deployment"] = _s(
+        exec_current["deployment_status"]
+    )
+    canon["wbs.PWBS-EXEC-REPORTING.current_state.prod_validation"] = _s(
+        exec_current["prod_validation_status"]
+    )
+    for lane in _QUALIFICATION_LANES:
+        row = qc["lanes"][lane]
+        bundle_ref = row.get("bundle_ref")
+        bundle_sha = row.get("bundle_sha256")
+        targets_digest = hashlib.sha256(
+            yaml.safe_dump(row["lifecycle_targets"], sort_keys=True).encode()
+        ).hexdigest()[:16]
+        canon[f"qualification.{lane}.status"] = _s(row["qualification_status"])
+        canon[f"qualification.{lane}.bundle_ref"] = _s(bundle_ref) if bundle_ref else "NONE"
+        canon[f"qualification.{lane}.evidence_digest"] = (
+            _s(bundle_sha)[:16] if bundle_sha else "NONE"
+        )
+        canon[f"qualification.{lane}.targets_digest"] = targets_digest
     for sl in p0b["slices"]:
         canon[f"p0b.slice.{_s(sl['id'])}.status"] = _s(sl["slice_status"])
     canon["p0b.residual_ids"] = ",".join(_s(r["id"]) for r in p0b["residuals"])
@@ -302,6 +529,7 @@ def compare(yaml_canon: dict[str, str], md_canon: dict[str, str]) -> list[str]:
 def run(yaml_path: Path = _YAML, md_path: Path = _MD) -> list[str]:
     doc = load_yaml(yaml_path)
     problems = validate_enums(doc)
+    problems += validate_qualification_control(doc, root=yaml_path.resolve().parents[2])
     problems += compare(extract_canonical(doc), parse_md_block(md_path.read_text(encoding="utf-8")))
     return problems
 
