@@ -1,0 +1,35 @@
+schema: c2pro-evidence-reference-v1
+schema_version: 1
+work_id: C2PRO-DEV-03
+status: collecting
+references:
+  - kind: git_commit
+    locator: AI-Gen-AI/C2Pro@4c26ebc740139ff6754dcda6e3dd393c9e1d8f01
+    immutable: true
+    sha256: null
+    summary: C2Pro restart planning baseline before DEV-03 activation.
+  - kind: git_commit
+    locator: AI-Gen-AI/2SB@bab45b6833b52bf79fc82e585171d6ef8f2d9584
+    immutable: true
+    sha256: null
+    summary: Current AI-Gen Agent Factory authority and route-qualification baseline reviewed by Line B.
+  - kind: pull_request
+    locator: AI-Gen-AI/C2Pro#565
+    immutable: false
+    sha256: null
+    summary: Historical unmerged DEV-03 design and VPS evidence; reuse only under KEEP REVALIDATE REPLACE classification.
+  - kind: audit
+    locator: AI-Gen-AI/C2Pro#674
+    immutable: false
+    sha256: null
+    summary: Line B restart package and authority reinterpretation for current Agent Factory semantics.
+  - kind: audit
+    locator: AI-Gen-AI/C2Pro@d7d1e6c2a2491feaafa56ccb41aafd86d9df2a4d:docs/internal/CODEX_AUTH_WORKSPACE_401_RUNBOOK.md
+    immutable: true
+    sha256: null
+    summary: Current C2Pro evidence source for login-vs-runtime identity proof, active executable provenance and workspace isolation.
+  - kind: audit
+    locator: AI-Gen-AI/2SB@bab45b6833b52bf79fc82e585171d6ef8f2d9584:ai-gen-agent-os/control-plane/execution_binding/persistence_v1.py
+    immutable: true
+    sha256: null
+    summary: Fail-closed durable SessionExecutionBindingV1 and monotonic ExecutionLifecycleReceiptV1 persistence used by live DEV-03 qualification evidence.

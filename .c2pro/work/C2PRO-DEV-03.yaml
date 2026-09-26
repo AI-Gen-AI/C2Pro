@@ -1,0 +1,89 @@
+schema: c2pro-work-envelope-v1
+schema_version: 1
+work_id: C2PRO-DEV-03
+campaign_id: LINE-B-DEV03-RESTART-20260926
+role: orchestrator
+base_sha: 4c26ebc740139ff6754dcda6e3dd393c9e1d8f01
+branch: docs/dev-03-principal-readiness-restart-20260926
+risk_class: material
+scope:
+  - refresh non-secret VPS host identity binary provenance and typed auth readiness for Claude Code and Codex
+  - resolve the active CLI executable to its actual installation root before version or qualification claims
+  - prove a minimal real execution uses the expected identity; login status alone is not sufficient
+  - bind every live qualification attempt to a durable SessionExecutionBindingV1 + monotonic ExecutionLifecycleReceiptV1 chain
+  - reconcile C2Pro principal-capable semantics against current AI-Gen Agent Factory route role qualification and live invocation health
+  - prepare fresh job-bound Codex implementation qualification only after a fresh provider-endpoint preflight closes the current degraded invocation path
+  - prepare Claude architecture and system-coherence qualification only after current route-health revalidation
+  - prove canonical main Product Runtime secrets and cross-workspace negative boundaries
+  - prove timeout and resource ceilings under the governed Agent Factory execution plane
+  - prove same-role identity-preserving principal handoff when a second principal has a compatible qualified route
+  - close or explicitly block the C2Pro independent-principal review route with a compatible qualified principal surface
+  - freeze compact evidence sufficient for canonical DEV-03 reconciliation
+out_of_scope:
+  - any provider invocation without fresh bounded job authority
+  - standing provider worker merge deployment or Product Runtime authority
+  - credential token cookie session-payload or secret disclosure
+  - silent credential rotation or provider account mutation
+  - broadening Agent Factory role registry or route eligibility
+  - Gemini CLI Antigravity OpenCode or Nemotron promotion to C2Pro principal
+  - direct mutation of canonical main
+  - automated merge
+allowed_tools:
+  - github_repository_read
+  - scoped_repository_write
+  - vps_read_only_inventory
+  - local_cli_version_help
+  - ai_gen_agent_factory_read
+  - af_dev_job_bound_qualification_harness
+  - focused_python_tests
+  - github_ci_read
+forbidden_paths:
+  - production_runtime/**
+  - secrets/**
+  - personal/**
+  - knowledge/**
+acceptance_criteria:
+  - principal capability is recorded separately from role eligibility route qualification and current job authority
+  - Claude Code and Codex host identity binary and auth readiness are freshly evidenced rather than inherited from PR 565
+  - Codex qualification uses only a fresh bounded job-authority envelope after a fresh endpoint preflight and creates no standing provider authority
+  - Claude live use is fail-closed while its governing route health is blocked or requires requalification
+  - no principal inherits a role qualification from the other principal
+  - canonical main Product Runtime secrets credential custody and cross-workspace boundaries remain denied
+  - resource and timeout enforcement is evidenced
+  - same-work handoff preserves work_id role base_sha scope out_of_scope and acceptance criteria; a role change requires a separate linked work or review stage
+  - no subordinate result can satisfy an independent principal gate
+  - material-work promotion remains blocked until a compatible independent principal review route is qualified healthy and separately authorized
+  - no secret material is written to Git evidence
+required_tests:
+  - DEV-03R0 exact-baseline and authority-model contract
+  - DEV-03R1 non-secret host identity active-executable provenance and minimal execution-identity smoke
+  - DEV-03R2 route-role eligibility reconciliation
+  - DEV-03R3 Codex provider-endpoint preflight and bounded implementation qualification
+  - DEV-03R4 Claude bounded architecture-coherence qualification or explicit blocked result
+  - DEV-03R5 canonical-main Runtime secrets and cross-workspace denial
+  - DEV-03R6 timeout and resource-limit enforcement
+  - DEV-03R7 same-role identity-preserving principal handoff or explicit no-shared-route blocked result
+  - DEV-03R8 independent principal review route closure or explicit blocked result
+evidence_required:
+  - exact_c2pro_main_sha
+  - exact_ai_gen_main_sha
+  - current_worker_identity_and_binary_provenance
+  - active_executable_resolution_and_installation_root
+  - minimal_execution_identity_smoke_without_secret_disclosure
+  - immutable_execution_binding_sha256
+  - monotonic_lifecycle_receipt_chain
+  - terminal_authority_consumption_or_reconciliation_disposition
+  - typed_auth_state_without_secret_material
+  - current_route_role_qualification_matrix
+  - fresh_job_authority_and_consumption_evidence
+  - negative_boundary_results
+  - timeout_resource_results
+  - same_role_handoff_or_blocked_result
+  - independent_principal_review
+review_policy: independent_principal
+worker_selection:
+  preferred: null
+  eligible_principals: [claude_code, codex]
+  eligible_subordinates: []
+  selected: null
+timeout_resource_policy: reuse_ai_gen_af_dev_job_bound_resource_policy

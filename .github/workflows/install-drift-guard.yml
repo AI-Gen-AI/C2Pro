@@ -1,0 +1,49 @@
+# Install drift guard (#685, design #684, parent #600).
+#
+# Verifies that every install-relevant `run:` block in .github/workflows/** and
+# .github/actions/** matches an exact, human-reviewed entry (context + behavior
+# + SHA-256) in .github/ci-pip-install-baseline.json. Verify-only: CI never
+# regenerates or commits the baseline.
+#
+# No `paths:` filter on purpose: a required status check behind a path filter
+# never reports on unrelated PRs. The guard is cheap.
+#
+# This is a drift detector, not a malicious-author security boundary.
+
+name: Install Drift Guard
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  install-drift-guard:
+    name: Install Drift Guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Install guard dependencies
+        id: guard-deps
+        run: 'python -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r .github/scripts/requirements-pip-install-guard.txt'
+
+      - name: Guard unit tests
+        id: guard-tests
+        run: python -m unittest discover -s .github/scripts -p 'test_install_drift_guard.py' -v
+
+      - name: Verify install baseline
+        id: guard-verify
+        run: python .github/scripts/install_drift_guard.py

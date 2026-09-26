@@ -1,0 +1,9 @@
+# Guard-only dependency for .github/scripts/install_drift_guard.py (#685).
+# Exact pin locked to one verified artifact:
+#   pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+# sha256 checked in a local `pip download` (Linux, CPython 3.11, x86_64) and
+# against PyPI release metadata; it is the wheel the ubuntu-latest / Python 3.11
+# runner installs. Installed by .github/workflows/install-drift-guard.yml with
+# --only-binary=:all: --require-hashes.
+PyYAML==6.0.3 \
+    --hash=sha256:b8bb0864c5a28024fac8a632c443c87c5aa6f215c0b126c449ae1a150412f31d
