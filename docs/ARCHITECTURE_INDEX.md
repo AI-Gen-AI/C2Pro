@@ -60,8 +60,8 @@ Current governance view:
 | Document                  | Path                                                    | Updated    | Purpose                   |
 | ------------------------- | ------------------------------------------------------- | ---------- | ------------------------- |
 | Master Roadmap v2.4.0     | `docs/planning/ROADMAP_v2.4.0.md`                       | 2026-01-05 | Strategic product roadmap |
-| Executive Status Report   | `docs/planning/EXECUTIVE_STATUS_REPORT_2026-03-19.md`   | 2026-03-19 | Current project status    |
-| Production Readiness Gate | `docs/planning/PRODUCTION_READINESS_GATE_2026-03-19.md` | 2026-03-19 | Go/no-go criteria         |
+| Executive Status Report   | `docs/planning/EXECUTIVE_STATUS_REPORT_2026-03-19.md`   | 2026-03-19 | Historical status snapshot |
+| Production Readiness Gate | `docs/planning/PRODUCTION_READINESS_GATE_2026-03-19.md` | 2026-03-19 | Historical gate snapshot; current evidence/control lives elsewhere |
 | LangGraph Audit Report    | `docs/planning/LANGGRAPH_AUDIT_REPORT_2026-03-21.md`    | 2026-03-21 | AI orchestration audit    |
 | Coherence Score Plan      | `docs/planning/COHERENCE_SCORE_IMPLEMENTATION_PLAN.md`  | -          | Coherence engine roadmap  |
 | Product Control (machine) | `validation/product/c2pro-master-product-control-v1.yaml` | current | Canonical product lifecycle/programme state |
