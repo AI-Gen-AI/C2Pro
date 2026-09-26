@@ -179,8 +179,16 @@ class _UniqueKeyLoader(yaml.SafeLoader):
 
 
 def load_yaml(text: str) -> Any:
-    """Parse exactly one YAML document; duplicate keys raise YAMLError."""
-    return yaml.load(text, Loader=_UniqueKeyLoader)
+    """Parse exactly one YAML document; duplicate keys raise YAMLError.
+
+    Drives the SafeLoader subclass directly (what ``yaml.load`` does
+    internally), so only safe constructors are ever reachable.
+    """
+    loader = _UniqueKeyLoader(text)
+    try:
+        return loader.get_single_data()
+    finally:
+        loader.dispose()
 
 
 # --------------------------------------------------------------- relevance
@@ -820,12 +828,18 @@ def build_manifest(repo_root: Path, existing: dict[str, Any] | None) -> dict[str
 
     entries = []
     for block in blocks:
+        digest = behavior_digest(block.behavior)
         old = previous.get(block.context, {})
+        # Review fields vouch for one exact behavior: reuse them only when the
+        # stored behavior and digest still match; a changed block needs a new
+        # human reason (TODO placeholders fail verification).
+        if old.get("behavior") != block.behavior or old.get("sha256") != digest:
+            old = {}
         entries.append(
             {
                 "context": block.context,
                 "file": block.file,
-                "sha256": behavior_digest(block.behavior),
+                "sha256": digest,
                 "behavior": block.behavior,
                 "reason": keep(
                     old,

