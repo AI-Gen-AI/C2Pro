@@ -1,6 +1,6 @@
 # C2Pro Master Product Programme Control — v1
 
-**Status:** Reconciliation snapshot (read-only) · **Date:** 2026-09-26 · **Schema:** v6  
+**Status:** Reconciliation snapshot (read-only) · **Date:** 2026-09-26 · **Schema:** v7  
 **reconciled_against_main_sha:** `1aecb4cf7ca454088e26046bb2ae8fa6b11bc518` · **deployed_runtime_sha:** `UNVERIFIED`  
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
@@ -32,6 +32,21 @@ adr.ADR-025.prod_validation=NONE
 p0b.done_digest=b43576250582d032
 p0b.invariant_ids=INV-1,INV-UX,INV-COH
 p0b.next_slice=P0b-L4-5
+wbs.PWBS-EXEC-REPORTING.current_state.realization=WIRED
+wbs.PWBS-EXEC-REPORTING.current_state.deployment=NONE
+wbs.PWBS-EXEC-REPORTING.current_state.prod_validation=NONE
+qualification.P0b.status=REQUIRED
+qualification.P0b.bundle_ref=NONE
+qualification.P0b.evidence_digest=NONE
+qualification.P0b.targets_digest=4e87140a2424a0aa
+qualification.P0c.status=REQUIRED
+qualification.P0c.bundle_ref=NONE
+qualification.P0c.evidence_digest=NONE
+qualification.P0c.targets_digest=460b46a6bd750f0d
+qualification.P0d.status=REQUIRED
+qualification.P0d.bundle_ref=NONE
+qualification.P0d.evidence_digest=NONE
+qualification.P0d.targets_digest=5d60e81c739dc1ea
 p0b.slice.P0b-L4-1.status=DONE
 p0b.slice.P0b-L4-2.status=DONE
 p0b.slice.P0b-L4-3.status=DONE
@@ -94,6 +109,19 @@ The previous control snapshot was anchored to `454637863c502f6825d158af551511e0e
 - **Deployment identity:** Railway backend Watch Paths are live-proven (`#678` and `#699` main commits were `SKIPPED` while backend-changing #697 deployed). Vercel frontend filtering is merged via #699; live skip verification is pending the current Vercel daily-quota reset.
 
 None of those facts permits collapsing the current production deployment into one repository SHA. The immediate user-value gap remains **P0b-L4-5 production evidence**: one uploaded document must reach a truthful six-category Health surface with findings, missing evidence and actionable gaps across the exact backend/frontend deployments exercised.
+
+### 2.2 Qualification Control v1 — evidence is necessary, never self-promoting
+
+Schema v7 adds a compact Product-Control integration for P0b, P0c and P0d. Detailed runtime/scenario/assertion evidence remains in the non-authoritative Phase-A bundles introduced by #678. Product Control stores only the qualification status, accepted bundle reference/hash and the fixed capability → lifecycle mapping.
+
+Initial state is deliberately non-promoted:
+
+- **P0b:** `REQUIRED`; no accepted bundle. A future PASS may support ADR-024 `prod_validation_status=PROD_VALIDATED` plus P0b-L4-5 `DONE`. ADR-018 is intentionally not auto-promoted.
+- **P0c:** `REQUIRED`; no accepted bundle. A future PASS maps atomically to ADR-015 and ADR-016 production validation.
+- **P0d:** `REQUIRED`; no accepted bundle. Qualification maps only to `PWBS-EXEC-REPORTING.current_state`; the deferred `executive_portfolio` subtrack remains independent.
+
+A valid PASS evidence bundle may exist without changing lifecycle state. Conversely, if any mapped lifecycle target is promoted, the control checker fails closed unless the compact lane is PASS and references a hash-matching, capability-matching Phase-A PASS bundle. Merge/CI/deployment metadata alone cannot perform the transition.
+
 
 ## 3. Three product signals that must not be conflated
 

@@ -1,5 +1,5 @@
 schema: c2pro-product-control-v1
-schema_version: 6
+schema_version: 7
 repository: AI-Gen-AI/C2Pro
 generated: "2026-09-26"
 control_status: reconciliation
@@ -25,6 +25,8 @@ parity:
     - "adr(ADR-018,ADR-024,ADR-025).{realization_status,deployment_status,prod_validation_status}"
     - p0b_vertical_contract.done_definition (sha256-16 digest)
     - p0b_vertical_contract.invariant_ids
+    - "qualification_control.lanes[*].{qualification_status,bundle_ref,bundle_sha256,lifecycle_targets}"
+    - "PWBS-EXEC-REPORTING.subtracks.current_state.{realization_status,deployment_status,prod_validation_status}"
 
 status_enums:
   design_status: [Accepted, Proposed, Implemented, Deferred]
@@ -35,6 +37,7 @@ status_enums:
   slice_status: [NOT_STARTED, ACTIVE, PARTIAL, DONE, BLOCKED, DEFERRED]
   residual_status: [PLANNED, ACTIVE, BLOCKED, DEFERRED, RESOLVED]
   residual_blocking: [BLOCKING, NON_BLOCKING]
+  qualification_status: [REQUIRED, COLLECTING, PASS, FAIL]
 
 development_execution_authority:
   plane: .c2pro/
@@ -66,6 +69,37 @@ production_position:
     - "P0d Current State Reporting is WIRED on main but deployment/prod-validation is not proven"
     - "ADR-025 now has canonical-WBS authority and several cross-domain links wired on main, but one-logical-root, baseline/change governance, remaining alert/evidence/change linkage and production journey are not fully proven"
     - "Procurement Plan -> BoQ/RFQ -> award -> governed stakeholder communications is not delivered end-to-end"
+
+qualification_control:
+  schema_version: 1
+  evidence_contract: c2pro-product-qualification-evidence-v1
+  evidence_directory: evidence/product-qualification
+  validator: validation/product/validate_qualification_evidence.py
+  note: >
+    This block is lifecycle-control metadata only. Detailed scenario/assertion/runtime evidence lives
+    in non-authoritative Phase-A bundles. A validated bundle is necessary but never auto-promotes
+    lifecycle state; Product Control changes remain an explicit reviewed action.
+  lanes:
+    P0b:
+      qualification_status: REQUIRED
+      bundle_ref: null
+      bundle_sha256: null
+      lifecycle_targets:
+        - {kind: adr, id: ADR-024, field: prod_validation_status, promote_to: PROD_VALIDATED}
+        - {kind: p0b_slice, id: P0b-L4-5, field: slice_status, promote_to: DONE}
+    P0c:
+      qualification_status: REQUIRED
+      bundle_ref: null
+      bundle_sha256: null
+      lifecycle_targets:
+        - {kind: adr, id: ADR-015, field: prod_validation_status, promote_to: PROD_VALIDATED}
+        - {kind: adr, id: ADR-016, field: prod_validation_status, promote_to: PROD_VALIDATED}
+    P0d:
+      qualification_status: REQUIRED
+      bundle_ref: null
+      bundle_sha256: null
+      lifecycle_targets:
+        - {kind: wbs_subtrack, id: PWBS-EXEC-REPORTING, subtrack: current_state, field: prod_validation_status, promote_to: PROD_VALIDATED}
 
 reconciliation_delta_2026_09_26:
   previous_main_sha: 454637863c502f6825d158af551511e0e9996d14
@@ -335,7 +369,9 @@ product_wbs:
     user_value: "Truthful current-state and evolution reporting, then executive/portfolio roll-up"
     realization_status: PARTIAL
     work_status: ACTIVE
-    subtracks: {current_state: WIRED, executive_portfolio: SCAFFOLDED}
+    subtracks:
+      current_state: {realization_status: WIRED, deployment_status: NONE, prod_validation_status: NONE}
+      executive_portfolio: {realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE}
     planning_note: "P0d Current State Reporting is wired on main but not deployment/prod-validated; executive/PMO/portfolio extension remains deferred."
     exit_gate: "merged/deployed/prod-validated current-state/evolution reporting, then briefing/portfolio extension"
     evidence_for_done: "executive reads evidence-backed current/evolution view with drill-down"
