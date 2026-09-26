@@ -481,6 +481,84 @@ def test_invalid_qualification_status_is_rejected() -> None:
     assert any("AUTO_PASS" in problem or "invalid qualification_status" in problem for problem in problems)
 
 
+def test_shadow_lifecycle_target_records_are_rejected() -> None:
+    # ADR family collision: target id ADR-024 must resolve to one canonical row only.
+    doc = c.load_yaml()
+    shadow_adr = dict(c._adr_row(doc, "ADR-024"))
+    shadow_adr["adr"] = "ADR-024-shadow"
+    shadow_adr["prod_validation_status"] = "PROD_VALIDATED"
+    doc["adr_realization"].append(shadow_adr)
+    problems = c.validate_qualification_control(doc)
+    assert any(
+        "qualification ADR target ADR-024 must resolve exactly once" in problem
+        for problem in problems
+    )
+
+    # Exact P0b slice duplicate must also fail closed.
+    doc = c.load_yaml()
+    shadow_slice = dict(c._p0b_slice(doc, "P0b-L4-5"))
+    shadow_slice["slice_status"] = "DONE"
+    doc["p0b_vertical_contract"]["slices"].append(shadow_slice)
+    problems = c.validate_qualification_control(doc)
+    assert any(
+        "qualification P0b slice target P0b-L4-5 must resolve exactly once" in problem
+        for problem in problems
+    )
+
+    # Exact WBS duplicate cannot hide a promoted P0d current_state subtrack.
+    doc = c.load_yaml()
+    source_wbs = c._wbs_row(doc, "PWBS-EXEC-REPORTING")
+    shadow_wbs = {
+        **source_wbs,
+        "subtracks": {
+            "current_state": {
+                "realization_status": "WIRED",
+                "deployment_status": "NONE",
+                "prod_validation_status": "PROD_VALIDATED",
+            },
+            "executive_portfolio": dict(source_wbs["subtracks"]["executive_portfolio"]),
+        },
+    }
+    doc["product_wbs"].append(shadow_wbs)
+    problems = c.validate_qualification_control(doc)
+    assert any(
+        "qualification WBS target PWBS-EXEC-REPORTING must resolve exactly once" in problem
+        for problem in problems
+    )
+
+
+def test_qualification_evidence_parent_symlink_is_rejected() -> None:
+    if sys.platform == "win32":
+        return
+    doc = c.load_yaml()
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        external = root / "external"
+        (external / "product-qualification").mkdir(parents=True)
+        (root / "evidence").symlink_to(external, target_is_directory=True)
+        problems = c.validate_qualification_control(doc, root=root)
+    assert any("path components must not be symlinks" in problem for problem in problems)
+
+
+def test_run_reports_malformed_lane_without_traceback() -> None:
+    doc = c.load_yaml()
+    doc["qualification_control"]["lanes"]["P0b"] = []
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        yaml_path = root / "validation" / "product" / "control.yaml"
+        md_path = root / "docs" / "product" / "control.md"
+        yaml_path.parent.mkdir(parents=True)
+        md_path.parent.mkdir(parents=True)
+        yaml_path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+        md_path.write_text(_MD_TEXT, encoding="utf-8")
+        problems = c.run(yaml_path=yaml_path, md_path=md_path)
+    assert any("qualification[P0b]" in problem for problem in problems)
+    assert any(
+        "qualification.P0b.status" in problem
+        for problem in problems
+    )
+
+
 def test_capability_lifecycle_mapping_is_fixed_not_self_authored() -> None:
     doc = c.load_yaml()
     doc["qualification_control"]["lanes"]["P0b"]["lifecycle_targets"] = [
