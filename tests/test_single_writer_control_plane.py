@@ -230,6 +230,7 @@ def test_live_guidance_does_not_restore_legacy_backlog_authority():
         "docs/testing/README.md",
         "docs/testing/C2PRO_TDD_BACKLOG_v1.0.md",
         "docs/skills/c2pro-patterns.md",
+        "docs/C2_6_PLATFORM_OPERATOR_AUTHORIZATION_BOUNDARY.md",
     ]
     forbidden = (
         "C2PRO_MASTER_BACKLOG.md` is the single source of truth",
