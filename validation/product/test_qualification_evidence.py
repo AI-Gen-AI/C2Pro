@@ -95,6 +95,85 @@ def _doc(capability: str = "P0b") -> dict:
     }
 
 
+def _control(
+    reconciled_sha: str = "2" * 40,
+    runtime_sha: str = "1" * 40,
+) -> dict:
+    return {
+        "production_position": {
+            "reconciled_against_main_sha": reconciled_sha,
+            "deployed_runtime_sha": runtime_sha,
+        }
+    }
+
+
+
+def test_positive_bundle_binds_to_canonical_product_control() -> None:
+    doc = _doc()
+    assert q.validate_document(doc) == []
+    assert q.validate_against_control(doc, _control()) == []
+
+
+def test_control_baseline_sha_must_match_canonical_product_control() -> None:
+    doc = _doc()
+    problems = q.validate_against_control(doc, _control(reconciled_sha="3" * 40))
+    assert any("control_baseline_sha does not match" in problem for problem in problems)
+
+
+def test_runtime_sha_must_match_canonical_product_control() -> None:
+    doc = _doc()
+    problems = q.validate_against_control(doc, _control(runtime_sha="4" * 40))
+    assert any("deployed_runtime_sha does not match" in problem for problem in problems)
+
+
+def test_unverified_canonical_runtime_blocks_qualification() -> None:
+    problems = q.validate_against_control(_doc(), _control(runtime_sha="UNVERIFIED"))
+    assert any("Product Control deployed_runtime_sha" in problem for problem in problems)
+
+
+def test_unknown_top_level_field_fails_closed() -> None:
+    doc = _doc()
+    doc["innocent_but_noncanonical"] = True
+    problems = q.validate_document(doc)
+    assert any("unexpected top-level fields" in problem for problem in problems)
+
+
+def test_invalid_observed_at_fails() -> None:
+    doc = _doc()
+    doc["observed_at"] = "yesterday"
+    problems = q.validate_document(doc)
+    assert any("ISO-8601" in problem for problem in problems)
+
+
+def test_naive_observed_at_fails() -> None:
+    doc = _doc()
+    doc["observed_at"] = "2026-09-26T10:00:00"
+    problems = q.validate_document(doc)
+    assert any("timezone" in problem for problem in problems)
+
+
+def test_pass_evidence_must_be_immutable_or_content_addressed() -> None:
+    doc = _doc()
+    doc["evidence_refs"][0]["immutable"] = False
+    doc["evidence_refs"][0]["sha256"] = None
+    problems = q.validate_document(doc)
+    assert any("immutable or content-addressed" in problem for problem in problems)
+
+
+def test_untyped_other_evidence_kind_is_rejected() -> None:
+    doc = _doc()
+    doc["evidence_refs"][0]["kind"] = "other"
+    problems = q.validate_document(doc)
+    assert any("kind is invalid" in problem for problem in problems)
+
+
+def test_unknown_assertion_field_fails_closed() -> None:
+    doc = _doc()
+    doc["assertions"][0]["promotes_lifecycle"] = True
+    problems = q.validate_document(doc)
+    assert any("unexpected fields" in problem for problem in problems)
+
+
 def test_schema_declares_evidence_not_authority() -> None:
     schema = yaml.safe_load(
         (HERE / "qualification-evidence.schema.yaml").read_text(encoding="utf-8")
