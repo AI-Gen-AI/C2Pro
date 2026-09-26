@@ -45,7 +45,7 @@ acceptance_criteria:
   - Codex qualification uses only a fresh bounded job-authority envelope after a fresh endpoint preflight and creates no standing provider authority
   - Claude live use is fail-closed while its governing route health is blocked or requires requalification
   - no principal inherits a role qualification from the other principal
-  - cross-project parent authority Product Runtime secrets canonical main and cross-workspace boundaries remain denied
+  - canonical main Product Runtime secrets credential custody and cross-workspace boundaries remain denied
   - resource and timeout enforcement is evidenced
   - handoff preserves work identity while any role or worker reassignment is explicit and route-compatible
   - no subordinate result can satisfy an independent principal gate
