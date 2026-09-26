@@ -10,12 +10,14 @@ on:
   pull_request:
     paths:
       - "validation/product/**"
+      - "evidence/product-qualification/**"
       - "docs/product/00-c2pro-master-product-control-v1.md"
       - ".github/workflows/c2pro-product-control-guard.yml"
   push:
     branches: [main]
     paths:
       - "validation/product/**"
+      - "evidence/product-qualification/**"
       - "docs/product/00-c2pro-master-product-control-v1.md"
 
 permissions:
@@ -26,6 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # Historical evidence resolves canonical Product Control at its immutable main commit.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -35,3 +39,7 @@ jobs:
         run: python validation/product/check_control_parity.py
       - name: Positive + negative drift-detection tests
         run: python validation/product/test_control_parity.py
+      - name: Product qualification evidence contract tests
+        run: python validation/product/test_qualification_evidence.py
+      - name: Validate committed product qualification evidence bundles
+        run: python validation/product/validate_qualification_evidence.py

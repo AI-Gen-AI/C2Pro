@@ -1,0 +1,138 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: c2pro-product-qualification-evidence-v1
+type: object
+additionalProperties: false
+required:
+  - schema
+  - schema_version
+  - lifecycle_authority
+  - repository
+  - control_ref
+  - control_commit_sha
+  - control_baseline_sha
+  - capability_id
+  - target_state
+  - environment
+  - runtime_bindings
+  - observed_at
+  - scenario
+  - assertions
+  - evidence_refs
+  - validator_verdict
+properties:
+  schema:
+    const: c2pro-product-qualification-evidence-v1
+  schema_version:
+    type: integer
+    const: 1
+  lifecycle_authority:
+    const: false
+  repository:
+    const: AI-Gen-AI/C2Pro
+  control_ref:
+    const: validation/product/c2pro-master-product-control-v1.yaml
+  control_commit_sha:
+    type: string
+    pattern: '^[0-9a-f]{40}$'
+  control_baseline_sha:
+    type: string
+    pattern: '^[0-9a-f]{40}$'
+  capability_id:
+    enum: [P0b, P0c, P0d]
+  target_state:
+    const: PROD_VALIDATED
+  environment:
+    const: production
+  runtime_bindings:
+    type: array
+    minItems: 2
+    maxItems: 2
+    uniqueItems: true
+    items:
+      type: object
+      additionalProperties: false
+      required: [plane, provider, commit_sha, terminal_state, deployment_evidence_ref]
+      properties:
+        plane:
+          enum: [backend, frontend]
+        provider:
+          enum: [railway, vercel]
+        commit_sha:
+          type: string
+          pattern: '^[0-9a-f]{40}$'
+        terminal_state:
+          enum: [SUCCESS, READY]
+        deployment_evidence_ref:
+          type: string
+          minLength: 1
+  observed_at:
+    type: string
+    format: date-time
+  scenario:
+    type: object
+    additionalProperties: false
+    required: [id, identifiers]
+    properties:
+      id:
+        enum: [single_document_health, what_changed_two_revisions, current_state_report]
+      identifiers:
+        type: object
+        minProperties: 1
+        additionalProperties:
+          type: string
+          minLength: 1
+  assertions:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, status, evidence_refs]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        status:
+          enum: [PASS, FAIL]
+        evidence_refs:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+        note:
+          type: [string, 'null']
+  evidence_refs:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, kind, ref, immutable]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        kind:
+          enum:
+            - release_bundle
+            - deployment
+            - persisted_entity
+            - api_capture
+            - ui_report
+            - runtime_log
+            - test_report
+            - review
+        ref:
+          type: string
+          minLength: 1
+        immutable:
+          type: boolean
+        sha256:
+          type: [string, 'null']
+          pattern: '^[0-9a-f]{64}$'
+  validator_verdict:
+    enum: [PASS, FAIL]
