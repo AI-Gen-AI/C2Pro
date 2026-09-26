@@ -60,7 +60,7 @@ ALLOWED_TOP_LEVEL_KEYS = {
     "capability_id",
     "target_state",
     "environment",
-    "deployed_runtime_sha",
+    "runtime_bindings",
     "observed_at",
     "scenario",
     "assertions",
@@ -70,6 +70,17 @@ ALLOWED_TOP_LEVEL_KEYS = {
 ASSERTION_KEYS = {"id", "status", "evidence_refs", "note"}
 EVIDENCE_REF_KEYS = {"id", "kind", "ref", "immutable", "sha256"}
 SCENARIO_KEYS = {"id", "identifiers"}
+RUNTIME_BINDING_KEYS = {
+    "plane",
+    "provider",
+    "commit_sha",
+    "terminal_state",
+    "deployment_evidence_ref",
+}
+RUNTIME_BINDING_CONTRACT = {
+    "backend": {"provider": "railway", "terminal_state": "SUCCESS"},
+    "frontend": {"provider": "vercel", "terminal_state": "READY"},
+}
 CONTROL_REF = "validation/product/c2pro-master-product-control-v1.yaml"
 DEFAULT_CONTROL_PATH = Path(__file__).with_name("c2pro-master-product-control-v1.yaml")
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -221,12 +232,6 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
     if not capability_valid:
         problems.append(f"unknown capability_id: {capability!r}")
 
-    runtime_sha = doc.get("deployed_runtime_sha")
-    if not isinstance(runtime_sha, str) or not SHA_RE.fullmatch(runtime_sha):
-        problems.append(
-            "deployed_runtime_sha must be an exact observed 40-character SHA"
-        )
-
     observed_at = doc.get("observed_at")
     if not _non_empty_string(observed_at):
         problems.append("observed_at is required")
@@ -246,6 +251,7 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
     evidence = doc.get("evidence_refs")
     evidence_ids: set[str] = set()
     evidence_kinds: set[str] = set()
+    evidence_kind_by_id: dict[str, str] = {}
     if not isinstance(evidence, list) or not evidence:
         problems.append("evidence_refs must be a non-empty list")
     else:
@@ -276,6 +282,8 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
                 problems.append(f"{where}.kind is invalid")
             else:
                 evidence_kinds.add(kind)
+                if _non_empty_string(ref_id):
+                    evidence_kind_by_id[ref_id] = kind
             if not _non_empty_string(ref.get("ref")):
                 problems.append(f"{where}.ref is required")
             if not isinstance(ref.get("immutable"), bool):
@@ -285,6 +293,67 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
                 not isinstance(sha256, str) or not SHA256_RE.fullmatch(sha256)
             ):
                 problems.append(f"{where}.sha256 must be 64 lowercase hex chars")
+
+    runtime_bindings = doc.get("runtime_bindings")
+    runtime_planes: dict[str, dict[str, Any]] = {}
+    if not isinstance(runtime_bindings, list) or len(runtime_bindings) != 2:
+        problems.append("runtime_bindings must contain exactly backend and frontend bindings")
+    else:
+        for index, binding in enumerate(runtime_bindings):
+            where = f"runtime_bindings[{index}]"
+            if not isinstance(binding, dict):
+                problems.append(f"{where} must be a mapping")
+                continue
+            if any(not isinstance(key, str) for key in binding):
+                problems.append(f"{where} field names must be strings")
+            extra_binding_fields = sorted(
+                key
+                for key in binding
+                if isinstance(key, str) and key not in RUNTIME_BINDING_KEYS
+            )
+            if extra_binding_fields:
+                problems.append(
+                    f"{where} has unexpected fields: "
+                    + ", ".join(extra_binding_fields)
+                )
+
+            plane = binding.get("plane")
+            if not isinstance(plane, str) or plane not in RUNTIME_BINDING_CONTRACT:
+                problems.append(f"{where}.plane must be backend or frontend")
+                continue
+            if plane in runtime_planes:
+                problems.append(f"duplicate runtime binding plane: {plane}")
+            else:
+                runtime_planes[plane] = binding
+
+            expected = RUNTIME_BINDING_CONTRACT[plane]
+            if binding.get("provider") != expected["provider"]:
+                problems.append(
+                    f"{where}.provider must be {expected['provider']} for {plane}"
+                )
+            commit_sha = binding.get("commit_sha")
+            if not isinstance(commit_sha, str) or not SHA_RE.fullmatch(commit_sha):
+                problems.append(
+                    f"{where}.commit_sha must be an exact observed 40-character SHA"
+                )
+            if binding.get("terminal_state") != expected["terminal_state"]:
+                problems.append(
+                    f"{where}.terminal_state must be "
+                    f"{expected['terminal_state']} for {plane}"
+                )
+            deployment_ref = binding.get("deployment_evidence_ref")
+            if not _non_empty_string(deployment_ref):
+                problems.append(f"{where}.deployment_evidence_ref is required")
+            elif evidence_kind_by_id.get(deployment_ref) != "deployment":
+                problems.append(
+                    f"{where}.deployment_evidence_ref must reference deployment evidence"
+                )
+
+        missing_planes = set(RUNTIME_BINDING_CONTRACT) - set(runtime_planes)
+        if missing_planes:
+            problems.append(
+                "missing runtime binding planes: " + ", ".join(sorted(missing_planes))
+            )
 
     assertion_rows = doc.get("assertions")
     assertion_statuses: dict[str, str] = {}
@@ -440,15 +509,10 @@ def validate_against_control(
             "production_position.reconciled_against_main_sha"
         )
 
-    control_runtime = production.get("deployed_runtime_sha")
-    if not isinstance(control_runtime, str) or not SHA_RE.fullmatch(control_runtime):
-        problems.append(
-            "Product Control deployed_runtime_sha must be an exact observed 40-character SHA"
-        )
-    elif doc.get("deployed_runtime_sha") != control_runtime:
-        problems.append(
-            "deployed_runtime_sha does not match Product Control production runtime"
-        )
+    # Runtime identity is intentionally validated inside the evidence bundle as a
+    # composite backend/frontend binding. Product Control integration of those
+    # plane-specific bindings belongs to the later promotion guard (#681), not
+    # to this non-authoritative evidence-plane validator.
 
     return problems
 
@@ -577,7 +641,8 @@ def main(control_loader: Any = load_control_at_commit) -> int:
             f"bundle={bundle_path.name} "
             f"capability={doc['capability_id']} "
             f"qualification_verdict={doc['validator_verdict']} "
-            f"runtime_sha={doc['deployed_runtime_sha']}"
+            f"backend_sha={next(b['commit_sha'] for b in doc['runtime_bindings'] if b['plane'] == 'backend')} "
+            f"frontend_sha={next(b['commit_sha'] for b in doc['runtime_bindings'] if b['plane'] == 'frontend')}"
         )
 
     return 1 if failed else 0
