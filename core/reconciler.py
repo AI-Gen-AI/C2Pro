@@ -31,6 +31,100 @@ def default_now_fn() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
+def _validate_reconciliation_reviews(
+    review_results: list[dict[str, Any]] | None,
+    *,
+    review_policy: str,
+    work_id: str,
+    expected_pr: object,
+    expected_head_sha: object,
+) -> None:
+    """Enforce queue review policy and reject supplied blocking review evidence."""
+    if review_policy not in {"optional", "independent_principal", "principal_and_challenger"}:
+        raise ValidationError(f"Unsupported review_policy for '{work_id}': {review_policy!r}")
+
+    if review_results is None:
+        if review_policy == "optional":
+            return
+        raise ValidationError(
+            f"Work '{work_id}' review_policy={review_policy} requires structured review evidence."
+        )
+    if not isinstance(review_results, list) or not review_results:
+        raise ValidationError("Structured review evidence must be a non-empty list when supplied.")
+    if not isinstance(expected_pr, int) or isinstance(expected_pr, bool) or expected_pr < 1:
+        raise ValidationError(
+            "Missing or invalid live pr_number for structured review reconciliation."
+        )
+    if not isinstance(expected_head_sha, str):
+        raise ValidationError(
+            "Missing live pr_head_sha for structured review reconciliation."
+        )
+
+    principal_reviews: list[dict[str, Any]] = []
+    challenger_reviews: list[dict[str, Any]] = []
+    for review in review_results:
+        try:
+            validate_review_result(
+                review,
+                expected_pr=expected_pr,
+                expected_head_sha=expected_head_sha,
+            )
+        except (ValueError, TypeError) as exc:
+            raise ValidationError(
+                f"Structured review identity validation failed: {exc}"
+            ) from exc
+
+        if review.get("work_id") != work_id:
+            raise ValidationError(
+                f"Structured review work_id mismatch: {review.get('work_id')!r} != {work_id!r}."
+            )
+        if review.get("verdict") == "BLOCK":
+            raise ValidationError(
+                f"Structured review BLOCK prevents reconciliation for '{work_id}'."
+            )
+        if review.get("blocking"):
+            raise ValidationError(
+                f"Structured review has blocking findings for '{work_id}'."
+            )
+        if review.get("scope_deviation") is not False:
+            raise ValidationError(
+                f"Structured review reports scope deviation for '{work_id}'."
+            )
+        if review.get("recommended_action") != "approve":
+            raise ValidationError(
+                f"Structured review recommended_action must be 'approve' for '{work_id}'."
+            )
+        if review.get("verdict") not in {"PASS", "PASS_WITH_FINDINGS"}:
+            raise ValidationError(
+                f"Structured review verdict does not permit reconciliation for '{work_id}'."
+            )
+
+        if review.get("role") == "independent_reviewer":
+            principal_reviews.append(review)
+        elif review.get("role") == "specialist":
+            challenger_reviews.append(review)
+
+    if review_policy in {"independent_principal", "principal_and_challenger"}:
+        if not principal_reviews:
+            raise ValidationError(
+                f"Work '{work_id}' requires an approved independent principal review."
+            )
+
+    if review_policy == "principal_and_challenger":
+        if not challenger_reviews:
+            raise ValidationError(
+                f"Work '{work_id}' requires an approved challenger specialist review."
+            )
+        principal_workers = {review.get("worker_id") for review in principal_reviews}
+        if not any(
+            review.get("worker_id") not in principal_workers
+            for review in challenger_reviews
+        ):
+            raise ValidationError(
+                f"Work '{work_id}' challenger must use a worker distinct from the principal reviewer."
+            )
+
+
 def reconcile_result(
     result_text: str,
     remote_evidence: dict[str, Any],
@@ -98,40 +192,6 @@ def reconcile_result(
         validate_result(result)
     except (ValidationError, ValueError, TypeError) as e:
         raise ValidationError(f"Result schema validation failed: {e}") from e
-
-    # 3b. Structured review evidence is identity-bound at reconciliation time.
-    # Shape-only schema validity is insufficient because a PR may advance after
-    # the review was produced.
-    if review_results is not None:
-        if not isinstance(review_results, list) or not review_results:
-            raise ValidationError(
-                "Structured review evidence must be a non-empty list when supplied."
-            )
-        expected_pr = remote_evidence.get("pr_number")
-        expected_head_sha = remote_evidence.get("pr_head_sha")
-        if (
-            not isinstance(expected_pr, int)
-            or isinstance(expected_pr, bool)
-            or expected_pr < 1
-        ):
-            raise ValidationError(
-                "Missing or invalid live pr_number for structured review reconciliation."
-            )
-        if not isinstance(expected_head_sha, str):
-            raise ValidationError(
-                "Missing live pr_head_sha for structured review reconciliation."
-            )
-        for review in review_results:
-            try:
-                validate_review_result(
-                    review,
-                    expected_pr=expected_pr,
-                    expected_head_sha=expected_head_sha,
-                )
-            except (ValueError, TypeError) as exc:
-                raise ValidationError(
-                    f"Structured review identity validation failed: {exc}"
-                ) from exc
 
     # Validate pr_url specifically for G2
     pr_url = result.get("pr_url")
@@ -284,6 +344,16 @@ def reconcile_result(
     work_item = next((item for item in items if item.get("work_id") == work_id), None)
     if not work_item:
         raise ValidationError(f"Unknown work_id: '{work_id}' is not registered in the active work queue.")
+
+    # Review authorization is evaluated only after immutable Git/CI/merge evidence and
+    # the canonical queue item are known, but before any canonical-state mutation.
+    _validate_reconciliation_reviews(
+        review_results,
+        review_policy=work_item.get("review_policy"),
+        work_id=work_id,
+        expected_pr=remote_evidence.get("pr_number"),
+        expected_head_sha=remote_evidence.get("pr_head_sha"),
+    )
 
     # Process and classify findings based on Quality Delta Rule
     findings = result.get("findings", [])
