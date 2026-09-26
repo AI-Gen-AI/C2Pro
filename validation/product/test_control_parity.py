@@ -447,6 +447,33 @@ def test_qualification_bundle_ref_rejects_symlink() -> None:
     assert any("must not be a symlink" in problem for problem in problems)
 
 
+def test_malformed_qualification_lane_and_status_types_fail_closed() -> None:
+    doc = c.load_yaml()
+    doc["qualification_control"]["lanes"]["P0b"] = []
+    problems = c.validate_qualification_control(doc)
+    assert any("lane must be a mapping" in problem for problem in problems)
+
+    doc = c.load_yaml()
+    doc["qualification_control"]["lanes"]["P0b"]["qualification_status"] = []
+    problems = c.validate_qualification_control(doc)
+    assert any("invalid qualification_status" in problem for problem in problems)
+
+
+def test_qualification_evidence_directory_rejects_symlink() -> None:
+    if sys.platform == "win32":
+        return
+    doc = c.load_yaml()
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        external = root / "external"
+        external.mkdir()
+        evidence_parent = root / "evidence"
+        evidence_parent.mkdir()
+        (evidence_parent / "product-qualification").symlink_to(external, target_is_directory=True)
+        problems = c.validate_qualification_control(doc, root=root)
+    assert any("evidence_directory must not be a symlink" in problem for problem in problems)
+
+
 def test_invalid_qualification_status_is_rejected() -> None:
     doc = c.load_yaml()
     doc["qualification_control"]["lanes"]["P0b"]["qualification_status"] = "AUTO_PASS"
