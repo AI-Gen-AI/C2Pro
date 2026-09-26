@@ -24,19 +24,7 @@ properties:
   role: {enum: [independent_reviewer, qa, security, specialist]}
   worker_id: {type: string, minLength: 1}
   reviewed_pr: {type: integer, minimum: 1}
-  reviewed_head_sha: {type: string, pattern: '^[0-9a-f]{40}  blocking:
-    type: array
-    uniqueItems: true
-    items: {type: string, minLength: 1}
-  non_blocking:
-    type: array
-    uniqueItems: true
-    items: {type: string, minLength: 1}
-  architecture_drift: {type: boolean}
-  security_concern: {type: boolean}
-  scope_deviation: {type: boolean}
-  recommended_action: {enum: [approve, remediate, escalate]}
-}
+  reviewed_head_sha: {type: string, pattern: '^[0-9a-f]{40}$'}
   verdict: {enum: [PASS, PASS_WITH_FINDINGS, BLOCK]}
   blocking:
     type: array
