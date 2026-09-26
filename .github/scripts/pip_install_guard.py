@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 import sys
 from pathlib import Path
 from typing import List, Tuple
@@ -13,10 +14,6 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 PIP_INSTALL_RE = re.compile(r"\bpip(?:\s+-m\s+pip)?\s+install\b", re.IGNORECASE)
-ALLOW_REQUIREMENT = re.compile(r"pip\s+install\s+(-r|--requirement)\s+", re.IGNORECASE)
-ALLOW_CONSTRAINT = re.compile(r"(-c|--constraint)\s+", re.IGNORECASE)
-ALLOW_UPGRADE_PIP = re.compile(r"pip\s+install\s+--upgrade\s+pip\b", re.IGNORECASE)
-ALLOW_EDITABLE = re.compile(r"pip\s+install\s+-e\s+", re.IGNORECASE)
 
 BASELINE_EXCEPTIONS: List[Tuple[str, str]] = [
     (".github/actions/setup-python-backend/action.yml", "pip install python-magic"),
@@ -46,12 +43,141 @@ def find_runs(node):
         for item in node:
             yield from find_runs(item)
 
-def scan_file(file_path: Path) -> List[Tuple[int, str]]:
+def extract_pip_cmd(line: str) -> str:
+    m = re.search(r'(python -m )?pip install\b.*', line, re.IGNORECASE)
+    if m:
+        return m.group(0).strip()
+    return line.strip()
+
+def is_upgrade_pip(line: str) -> bool:
     try:
-        text = file_path.read_text(encoding="utf-8")
+        tokens = shlex.split(line)
+        if 'pip' not in tokens or 'install' not in tokens:
+            return False
+        # find install index
+        try:
+            idx = tokens.index('install')
+        except ValueError:
+            return False
+        args = tokens[idx+1:]
+        if '--upgrade' in args:
+            up_idx = args.index('--upgrade')
+            if up_idx + 1 < len(args) and args[up_idx+1] == 'pip':
+                # ensure no other packages
+                # allow only upgrade pip
+                # check remaining tokens
+                return True
+    except ValueError:
+        return False
+    return False
+
+def is_canonical_requirements(line: str) -> bool:
+    try:
+        tokens = shlex.split(line)
+    except ValueError:
+        return False
+    # find install
+    try:
+        idx = tokens.index('install')
+    except ValueError:
+        return False
+    args = tokens[idx+1:]
+    has_requirement = False
+    i = 0
+    while i < len(args):
+        t = args[i]
+        if t in ('-r', '--requirement'):
+            has_requirement = True
+            i += 1
+            if i < len(args):
+                i += 1  # skip file
+        elif t == '-c' or t.startswith('--constraint'):
+            i += 1
+            if t == '-c' and i < len(args):
+                i += 1
+        elif t.startswith('-'):
+            i += 1
+            if i < len(args) and not args[i].startswith('-'):
+                i += 1
+        else:
+            # positional package
+            return False
+    return has_requirement
+
+def is_editable_local(line: str) -> bool:
+    try:
+        tokens = shlex.split(line)
+    except ValueError:
+        return False
+    try:
+        idx = tokens.index('install')
+    except ValueError:
+        return False
+    args = tokens[idx+1:]
+    for i, t in enumerate(args):
+        if t == '-e':
+            if i+1 >= len(args):
+                return False
+            target = args[i+1]
+            # local path only
+            if target.startswith('.') or target.startswith('/'):
+                # ensure no additional packages
+                # if -e present, we still allow only -e target and options
+                # check remaining tokens
+                return True
+            else:
+                return False
+        if t.startswith('--editable'):
+            # handle --editable=path
+            if '=' in t:
+                target = t.split('=',1)[1]
+                if target.startswith('.') or target.startswith('/'):
+                    return True
+                else:
+                    return False
+    # if no -e found, not editable
+    return False
+
+def is_baseline_allowed(file_rel: str, line: str) -> bool:
+    pip_cmd = extract_pip_cmd(line)
+    for base_file, base_cmd in BASELINE_EXCEPTIONS:
+        if file_rel == base_file and pip_cmd.lower() == base_cmd.lower():
+            return True
+    return False
+
+def tokens_contain_editable(line: str) -> bool:
+    try:
+        tokens = shlex.split(line)
+    except ValueError:
+        return False
+    try:
+        idx = tokens.index('install')
+    except ValueError:
+        return False
+    args = tokens[idx+1:]
+    for t in args:
+        if t == '-e' or t.startswith('--editable'):
+            return True
+    return False
+
+def is_allowed(file_rel: str, line: str) -> bool:
+    if is_upgrade_pip(line):
+        return True
+    if is_canonical_requirements(line):
+        return True
+    if tokens_contain_editable(line):
+        # editable present, allow only local
+        return is_editable_local(line)
+    if is_baseline_allowed(file_rel, line):
+        return True
+    return False
+
+def scan_file(file_path: Path) -> Tuple[List[Tuple[int, str]], bool]:
+    text = file_path.read_text(encoding="utf-8")
+    try:
         data = yaml.safe_load(text)
-    except Exception:
-        return []
+    except yaml.YAMLError as e:
+        return [], True  # parse error flag
     runs = list(find_runs(data))
     findings = []
     lines = text.splitlines()
@@ -60,28 +186,14 @@ def scan_file(file_path: Path) -> List[Tuple[int, str]]:
         for rl in run_lines:
             stripped = rl.strip()
             if PIP_INSTALL_RE.search(stripped):
-                # Find line number where this fragment appears
+                # find line number containing this fragment
                 for i, ll in enumerate(lines, start=1):
                     if stripped in ll:
                         findings.append((i, ll.strip()))
                         break
-    return findings
+    return findings, False
 
-def is_allowed(file_rel: str, line: str) -> bool:
-    if ALLOW_REQUIREMENT.search(line):
-        return True
-    if ALLOW_CONSTRAINT.search(line):
-        return True
-    if ALLOW_UPGRADE_PIP.search(line):
-        return True
-    if ALLOW_EDITABLE.search(line):
-        return True
-    for base_file, base_cmd in BASELINE_EXCEPTIONS:
-        if file_rel == base_file and base_cmd in line:
-            return True
-    return False
-
-def scan() -> List[Tuple[str, int, str]]:
+def scan() -> List[Tuple[str, int, str, str]]:
     violations = []
     workflow_dir = REPO_ROOT / ".github" / "workflows"
     action_dir = REPO_ROOT / ".github" / "actions"
@@ -90,20 +202,28 @@ def scan() -> List[Tuple[str, int, str]]:
             continue
         for fp in dir_path.rglob("*.yml"):
             rel = str(fp.relative_to(REPO_ROOT))
-            findings = scan_file(fp)
+            findings, parse_error = scan_file(fp)
+            if parse_error:
+                violations.append((rel, -1, f"YAML parse error in {fp.name}", "parse_error"))
+                continue
             for line_no, line in findings:
                 if not is_allowed(rel, line):
-                    violations.append((rel, line_no, line))
+                    violations.append((rel, line_no, line, "unpinned"))
     return violations
 
 def main() -> int:
     violations = scan()
     if violations:
         print("PIP INSTALL GUARD VIOLATIONS FOUND:")
-        for rel, line_no, line in violations:
-            print(f"- {rel}:{line_no}: {line}")
-            print(f"  Reason: Unpinned ad-hoc pip install detected")
-            print(f"  Remediation: Move to requirements.txt or add a narrow baseline exception with justification")
+        for rel, line_no, line, reason in violations:
+            loc = f"{rel}:{line_no}" if line_no != -1 else rel
+            print(f"- {loc}: {line}")
+            if reason == "parse_error":
+                print(f"  Reason: YAML parse failure")
+                print(f"  Remediation: Fix YAML syntax in the file")
+            else:
+                print(f"  Reason: Unpinned ad-hoc pip install detected")
+                print(f"  Remediation: Move to requirements.txt or add a narrow baseline exception with justification")
         return 1
     print("PIP INSTALL GUARD: PASS")
     return 0
