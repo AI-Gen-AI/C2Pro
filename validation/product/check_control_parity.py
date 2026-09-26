@@ -284,7 +284,8 @@ def validate_qualification_control(
     qc = doc.get("qualification_control")
     if not isinstance(qc, dict):
         return ["qualification_control: missing mapping"]
-    if qc.get("schema_version") != 1:
+    qc_schema_version = qc.get("schema_version")
+    if type(qc_schema_version) is not int or qc_schema_version != 1:
         problems.append("qualification_control.schema_version must be integer 1")
     if qc.get("evidence_contract") != "c2pro-product-qualification-evidence-v1":
         problems.append("qualification_control.evidence_contract must bind Phase-A v1")
@@ -349,40 +350,44 @@ def validate_qualification_control(
                     f"{where}: bundle_ref must be one YAML file in evidence/product-qualification"
                 )
             else:
-                path = (root / rel).resolve()
-                if path.parent != expected_root:
-                    problems.append(f"{where}: bundle_ref resolves outside the fixed evidence directory")
-                elif not path.exists() or path.is_symlink() or not path.is_file():
-                    problems.append(f"{where}: bundle_ref must resolve to a regular non-symlink file")
+                candidate = root / rel
+                if candidate.is_symlink():
+                    problems.append(f"{where}: bundle_ref must not be a symlink")
                 else:
-                    actual_sha = hashlib.sha256(path.read_bytes()).hexdigest()
-                    if isinstance(bundle_sha, str) and actual_sha != bundle_sha:
-                        problems.append(f"{where}: bundle_sha256 does not match bundle bytes")
-                    bundle_problems = list(bundle_validator(path))
-                    if bundle_problems:
-                        problems.extend(
-                            f"{where}: Phase-A bundle invalid: {problem}"
-                            for problem in bundle_problems
-                        )
+                    path = candidate.resolve()
+                    if path.parent != expected_root:
+                        problems.append(f"{where}: bundle_ref resolves outside the fixed evidence directory")
+                    elif not path.exists() or not path.is_file():
+                        problems.append(f"{where}: bundle_ref must resolve to a regular file")
                     else:
-                        bundle_doc = bundle_loader(path)
-                        if bundle_doc.get("capability_id") != lane:
-                            problems.append(
-                                f"{where}: bundle capability_id={bundle_doc.get('capability_id')!r} "
-                                f"does not match {lane}"
+                        actual_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+                        if isinstance(bundle_sha, str) and actual_sha != bundle_sha:
+                            problems.append(f"{where}: bundle_sha256 does not match bundle bytes")
+                        bundle_problems = list(bundle_validator(path))
+                        if bundle_problems:
+                            problems.extend(
+                                f"{where}: Phase-A bundle invalid: {problem}"
+                                for problem in bundle_problems
                             )
-                        expected_verdict = "PASS" if status == "PASS" else "FAIL"
-                        if status in {"PASS", "FAIL"} and bundle_doc.get("validator_verdict") != expected_verdict:
-                            problems.append(
-                                f"{where}: {status} requires Phase-A validator_verdict={expected_verdict}"
+                        else:
+                            bundle_doc = bundle_loader(path)
+                            if bundle_doc.get("capability_id") != lane:
+                                problems.append(
+                                    f"{where}: bundle capability_id={bundle_doc.get('capability_id')!r} "
+                                    f"does not match {lane}"
+                                )
+                            expected_verdict = "PASS" if status == "PASS" else "FAIL"
+                            if status in {"PASS", "FAIL"} and bundle_doc.get("validator_verdict") != expected_verdict:
+                                problems.append(
+                                    f"{where}: {status} requires Phase-A validator_verdict={expected_verdict}"
+                                )
+                            bundle_valid = (
+                                bundle_doc.get("capability_id") == lane
+                                and (
+                                    status not in {"PASS", "FAIL"}
+                                    or bundle_doc.get("validator_verdict") == expected_verdict
+                                )
                             )
-                        bundle_valid = (
-                            bundle_doc.get("capability_id") == lane
-                            and (
-                                status not in {"PASS", "FAIL"}
-                                or bundle_doc.get("validator_verdict") == expected_verdict
-                            )
-                        )
 
         promoted = []
         for target in targets:
