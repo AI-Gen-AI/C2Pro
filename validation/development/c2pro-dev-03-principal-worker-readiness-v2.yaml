@@ -39,7 +39,8 @@ principal_workers:
 
 gates:
   DEV_03R0_AUTHORITY_REBIND: PLANNED
-  DEV_03R1_HOST_IDENTITY_REFRESH: NOT_RUN
+  DEV_03R1_HOST_IDENTITY_ACTIVE_BINARY_REFRESH: NOT_RUN
+  DEV_03R1_MINIMAL_EXECUTION_IDENTITY_SMOKE: NOT_RUN
   DEV_03R2_ROUTE_ROLE_RECONCILIATION: NOT_RUN
   DEV_03R3_CODEX_BOUNDED_IMPLEMENTATION: NOT_RUN
   DEV_03R4_CLAUDE_BOUNDED_ARCHITECTURE_COHERENCE: BLOCKED_PENDING_ROUTE_HEALTH_REVALIDATION
@@ -54,3 +55,9 @@ non_authorizations:
   deployment: false
   product_runtime: false
   secret_or_credential_change: false
+
+diagnostic_invariants:
+  login_status_alone_is_not_execution_identity_proof: true
+  active_executable_must_be_resolved_before_update_or_qualification: true
+  raw_auth_payload_must_never_be_recorded: true
+  workspace_specific_failure_must_be_isolated_before_auth_conclusion: true
