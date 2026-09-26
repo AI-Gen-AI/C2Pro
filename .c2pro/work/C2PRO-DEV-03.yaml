@@ -8,12 +8,13 @@ branch: docs/dev-03-principal-readiness-restart-20260926
 risk_class: material
 scope:
   - refresh non-secret VPS host identity binary provenance and typed auth readiness for Claude Code and Codex
-  - reconcile C2Pro principal-capable semantics against current AI-Gen Agent Factory route and role qualification
-  - prepare fresh job-bound Codex implementation qualification without creating standing authority
+  - reconcile C2Pro principal-capable semantics against current AI-Gen Agent Factory route role qualification and live invocation health
+  - prepare fresh job-bound Codex implementation qualification only after a fresh provider-endpoint preflight closes the current degraded invocation path
   - prepare Claude architecture and system-coherence qualification only after current route-health revalidation
   - prove canonical main Product Runtime secrets and cross-workspace negative boundaries
   - prove timeout and resource ceilings under the governed Agent Factory execution plane
   - prove identity-preserving role-compatible principal handoff without role laundering
+  - close or explicitly block the C2Pro independent-principal review route with a compatible qualified principal surface
   - freeze compact evidence sufficient for canonical DEV-03 reconciliation
 out_of_scope:
   - any provider invocation without fresh bounded job authority
@@ -41,23 +42,25 @@ forbidden_paths:
 acceptance_criteria:
   - principal capability is recorded separately from role eligibility route qualification and current job authority
   - Claude Code and Codex host identity binary and auth readiness are freshly evidenced rather than inherited from PR 565
-  - Codex qualification uses only a fresh bounded job-authority envelope and creates no standing provider authority
+  - Codex qualification uses only a fresh bounded job-authority envelope after a fresh endpoint preflight and creates no standing provider authority
   - Claude live use is fail-closed while its governing route health is blocked or requires requalification
   - no principal inherits a role qualification from the other principal
   - cross-project parent authority Product Runtime secrets canonical main and cross-workspace boundaries remain denied
   - resource and timeout enforcement is evidenced
   - handoff preserves work identity while any role or worker reassignment is explicit and route-compatible
   - no subordinate result can satisfy an independent principal gate
+  - material-work promotion remains blocked until a compatible independent principal review route is qualified healthy and separately authorized
   - no secret material is written to Git evidence
 required_tests:
   - DEV-03R0 exact-baseline and authority-model contract
   - DEV-03R1 non-secret host identity and binary refresh
   - DEV-03R2 route-role eligibility reconciliation
-  - DEV-03R3 Codex bounded implementation qualification
+  - DEV-03R3 Codex provider-endpoint preflight and bounded implementation qualification
   - DEV-03R4 Claude bounded architecture-coherence qualification or explicit blocked result
   - DEV-03R5 canonical-main Runtime secrets and cross-workspace denial
   - DEV-03R6 timeout and resource-limit enforcement
   - DEV-03R7 identity-preserving role-compatible handoff
+  - DEV-03R8 independent principal review route closure or explicit blocked result
 evidence_required:
   - exact_c2pro_main_sha
   - exact_ai_gen_main_sha
