@@ -262,15 +262,16 @@ def scan() -> List[Tuple[str,int,str,str]]:
     for root in roots:
         if not root.exists():
             continue
-        for fp in root.rglob("*.yml"):
-            rel = str(fp.relative_to(REPO_ROOT))
-            findings, parse_err = scan_file(fp)
-            if parse_err:
-                violations.append((rel, -1, f"YAML parse error in {fp.name}", "parse_error"))
-                continue
-            for line_no, pip_cmd in findings:
-                if not evaluate_pip_command(rel, pip_cmd):
-                    violations.append((rel, line_no, pip_cmd, "unpinned"))
+        for ext in ("*.yml","*.yaml"):
+            for fp in root.rglob(ext):
+                rel = str(fp.relative_to(REPO_ROOT))
+                findings, parse_err = scan_file(fp)
+                if parse_err:
+                    violations.append((rel, -1, f"YAML parse error in {fp.name}", "parse_error"))
+                    continue
+                for line_no, pip_cmd in findings:
+                    if not evaluate_pip_command(rel, pip_cmd):
+                        violations.append((rel, line_no, pip_cmd, "unpinned"))
     return violations
 
 def main():
