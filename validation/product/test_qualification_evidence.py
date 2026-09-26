@@ -135,6 +135,13 @@ def test_unverified_canonical_runtime_blocks_qualification() -> None:
     assert any("Product Control deployed_runtime_sha" in problem for problem in problems)
 
 
+def test_boolean_schema_version_is_rejected() -> None:
+    doc = _doc()
+    doc["schema_version"] = True
+    problems = q.validate_document(doc)
+    assert any("schema_version must be integer 1" in problem for problem in problems)
+
+
 def test_unknown_top_level_field_fails_closed() -> None:
     doc = _doc()
     doc["innocent_but_noncanonical"] = True
