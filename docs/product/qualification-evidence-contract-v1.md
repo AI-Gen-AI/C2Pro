@@ -55,10 +55,11 @@ A branch SHA, merge SHA, preview deployment or CI green is not a substitute for 
 A PASS requires at least:
 
 - two typed `deployment` references: one for backend/Railway and one for frontend/Vercel;
+- each deployment evidence locator is provider-namespaced (`railway:...` / `vercel:...`) and the two locators must identify distinct deployment artifacts, not aliases of the same receipt;
 - one `persisted_entity` reference;
 - evidence for every required assertion;
 - every evidence record to be immutable or content-addressed by SHA-256;
-- a timezone-aware ISO-8601 observation timestamp.
+- a timezone-aware RFC3339 / ISO-8601 observation timestamp; this evidence profile deliberately rejects second `60` rather than accepting unverifiable leap-second timestamps.
 
 Additional typed evidence kinds:
 
