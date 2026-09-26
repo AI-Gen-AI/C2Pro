@@ -9,6 +9,7 @@ risk_class: architecture
 scope:
   - rebind DEV-03 to current C2Pro and AI-Gen Agent Factory authority truth
   - revalidate Claude Code and Codex principal identities without exposing secret material
+  - prove the active CLI executable resolves to the intended installation root and version before qualification
   - reconcile principal class separately from role eligibility route qualification and job authority
   - qualify Codex only through compatible bounded implementation roles
   - qualify Claude only through compatible bounded architecture or coherence-review roles after route-health revalidation
@@ -49,7 +50,7 @@ acceptance_criteria:
   - no raw credential session or identity-sensitive payload is committed
 required_tests:
   - DEV-03R0 exact-baseline and authority-model reconciliation
-  - DEV-03R1 non-secret host identity and binary provenance refresh
+  - DEV-03R1 non-secret host identity active-binary provenance and workspace-isolation refresh
   - DEV-03R2 route role eligibility contradiction check
   - DEV-03R3 Codex bounded implementation qualification
   - DEV-03R4 Claude bounded architecture or coherence qualification
@@ -61,6 +62,8 @@ evidence_required:
   - ai_gen_exact_main_sha
   - worker_identity_and_binary_provenance
   - typed_auth_state_without_secret_material
+  - active_binary_resolution_and_installation_root
+  - minimal_execution_identity_smoke_without_secret_disclosure
   - route_role_eligibility_snapshot
   - fresh_job_authority_and_consumption
   - structured_worker_results
