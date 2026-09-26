@@ -21,7 +21,9 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
         cache: pip
-        cache-dependency-path: apps/api/requirements.txt
+        cache-dependency-path: |
+          apps/api/requirements.txt
+          apps/api/constraints.txt
 
     - name: Install system dependencies
       if: inputs.install-system-deps == 'true'
@@ -48,5 +50,9 @@ runs:
       working-directory: apps/api
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        if [ "${{ inputs.python-version }}" = "3.11" ] && [ -f constraints.txt ]; then
+          pip install -r requirements.txt -c constraints.txt
+        else
+          pip install -r requirements.txt
+        fi
         pip install python-magic

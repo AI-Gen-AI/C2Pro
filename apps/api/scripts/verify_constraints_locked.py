@@ -9,7 +9,6 @@ REQ = ROOT / "requirements.txt"
 CONSTRAINTS = ROOT / "constraints.txt"
 
 def run_uv_compile():
-    # uv pip compile writes to stdout when -o is not used? Use output file.
     import tempfile
     with tempfile.NamedTemporaryFile(mode="w+", delete=False) as tmp:
         tmp_path = Path(tmp.name)
@@ -17,39 +16,33 @@ def run_uv_compile():
         "uv", "pip", "compile",
         str(REQ),
         "--python-version", "3.11",
-        "--python-platform", "linux",
+        "--python-platform", "x86_64-unknown-linux-gnu",
+        "--no-annotate",
         "--output-file", str(tmp_path),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print("uv compile failed:", result.stderr, file=sys.stderr)
         sys.exit(1)
+    # Verify uv version matches pinned
+    ver = subprocess.run(["uv", "--version"], capture_output=True, text=True)
+    print(f"UV_VERSION={ver.stdout.strip()}", file=sys.stderr)
     return tmp_path
-
-def normalize(content: str) -> str:
-    lines = []
-    for line in content.splitlines():
-        if line.startswith("#"):
-            continue
-        # keep blank lines for readability but they don't matter
-        lines.append(line.strip())
-    # remove empty
-    lines = [l for l in lines if l]
-    return "\n".join(lines)
 
 def main():
     if not CONSTRAINTS.exists():
         print("constraints.txt missing", file=sys.stderr)
         sys.exit(1)
     fresh = run_uv_compile()
-    current_norm = normalize(CONSTRAINTS.read_text())
-    generated_norm = normalize(fresh.read_text())
-    if current_norm == generated_norm:
+    # Byte-for-byte comparison – no normalization
+    current_bytes = CONSTRAINTS.read_bytes()
+    generated_bytes = fresh.read_bytes()
+    if current_bytes == generated_bytes:
         print("constraints.txt is up-to-date")
         sys.exit(0)
     else:
         print("constraints.txt is stale – regenerate with:")
-        print("uv pip compile apps/api/requirements.txt --python-version 3.11 --python-platform linux --output-file apps/api/constraints.txt")
+        print("uv pip compile apps/api/requirements.txt --python-version 3.11 --python-platform x86_64-unknown-linux-gnu --no-annotate --output-file apps/api/constraints.txt")
         sys.exit(1)
 
 if __name__ == "__main__":

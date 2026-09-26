@@ -28,9 +28,9 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Install Python dependencies
-COPY requirements.txt .
+COPY requirements.txt constraints.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt -c constraints.txt
 
 # SEC-002: Spanish spaCy NER model for src.core.privacy.anonymizer's Presidio
 # PERSON/LOCATION/PHONE_NUMBER recognizers (GATE 8, AnthropicWrapper). Pinned
