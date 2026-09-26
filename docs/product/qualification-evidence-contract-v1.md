@@ -158,14 +158,16 @@ During the run:
 
 After the run:
 
-1. create the evidence YAML;
+1. create the evidence YAML under the fixed repository directory `evidence/product-qualification/`;
 2. run:
 
 ```bash
-python validation/product/validate_qualification_evidence.py <bundle.yaml>
+python validation/product/validate_qualification_evidence.py
 ```
 
-3. the validator binds the bundle to the canonical Product Control baseline/runtime, not merely to SHA syntax;
+The CLI intentionally accepts **no arbitrary filesystem path**. It scans only committed `*.yaml` bundles in that fixed directory and always binds them against the canonical Product Control YAML at `validation/product/c2pro-master-product-control-v1.yaml`.
+
+3. the validator binds each bundle to the canonical Product Control baseline/runtime, not merely to SHA syntax;
 4. independently review the bundle;
 5. only then open a separate Product-Control reconciliation that references the validated evidence.
 
