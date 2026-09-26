@@ -561,6 +561,17 @@ def test_runtime_binding_requires_matching_provider_and_terminal_state() -> None
     assert any("terminal_state must be SUCCESS for backend" in problem for problem in problems)
 
 
+def test_runtime_bindings_require_distinct_deployment_evidence() -> None:
+    doc = _doc()
+    doc["runtime_bindings"][1]["deployment_evidence_ref"] = "deploy-backend"
+    problems = q.validate_document(doc)
+    assert any(
+        "backend and frontend runtime bindings must reference distinct deployment evidence"
+        in problem
+        for problem in problems
+    )
+
+
 def test_runtime_binding_requires_deployment_evidence_reference() -> None:
     doc = _doc()
     doc["runtime_bindings"][0]["deployment_evidence_ref"] = "api"
