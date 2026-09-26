@@ -9,7 +9,7 @@
 
 A qualification evidence bundle answers:
 
-> Did this exact capability produce its required user outcome on this exact deployed production runtime?
+> Did this exact capability produce its required user outcome on this exact observed composite production runtime?
 
 It does **not** answer:
 
@@ -30,7 +30,9 @@ Every bundle binds to:
 
 - an exact immutable `control_commit_sha` from canonical `main` history that contains the Product Control state used for qualification;
 - the exact `production_position.reconciled_against_main_sha` recorded by Product Control at that commit;
-- the exact observed production runtime SHA recorded by canonical Product Control;
+- an exact composite runtime binding for the production planes exercised by the user journey:
+  - backend: Railway deployment ID/evidence + exact Git commit SHA + terminal `SUCCESS`;
+  - frontend: Vercel deployment ID/evidence + exact Git commit SHA + terminal `READY`;
 - capability: `P0b | P0c | P0d`;
 - concrete production scenario identifiers;
 - observed timestamp;
@@ -38,17 +40,21 @@ Every bundle binds to:
 - typed evidence references;
 - validator verdict.
 
-The validator loads Product Control from `control_commit_sha` using repository Git history, verifies that commit is an ancestor of canonical `main`, then compares the recorded baseline/runtime bindings against that immutable historical control state. A syntactically valid 40-character SHA is not sufficient if it is not canonical main history or does not match control truth at that commit.
+The validator loads Product Control from `control_commit_sha` using repository Git history, verifies that commit is an ancestor of canonical `main`, and compares the recorded control baseline against that immutable historical control state.
 
-This versioned binding deliberately preserves retained failed runs and earlier successful evidence after Product Control or the deployed runtime later advances. Historical bundles are never rebound to the current singleton control file.
+Runtime identity is deliberately **plane-specific**. Backend and frontend SHAs may be equal or different because a backend-only change need not redeploy the frontend and vice versa. A bundle is valid only when both required plane bindings are exact, provider-correct and backed by typed `deployment` evidence.
 
-A branch SHA, merge SHA, preview deployment or CI green is not a substitute for an observed production runtime SHA.
+The legacy singleton `production_position.deployed_runtime_sha` is not used by this Phase-A evidence validator to collapse the two planes. Product-Control promotion integration of the composite runtime belongs to #681. That split prevents a non-authoritative evidence file from inventing lifecycle/runtime authority.
+
+This versioned binding preserves retained failed runs and earlier successful evidence after Product Control or either deployed runtime plane later advances. Historical bundles are never rebound to today's singleton control file.
+
+A branch SHA, merge SHA, preview deployment or CI green is not a substitute for observed production deployment identities.
 
 ## 3. Minimum evidence floor
 
 A PASS requires at least:
 
-- one `deployment` reference;
+- two typed `deployment` references: one for backend/Railway and one for frontend/Vercel;
 - one `persisted_entity` reference;
 - evidence for every required assertion;
 - every evidence record to be immutable or content-addressed by SHA-256;
@@ -92,7 +98,8 @@ Required proof:
 
 Recommended evidence:
 
-- deployment receipt/runtime SHA;
+- Railway backend deployment receipt + exact commit SHA;
+- Vercel frontend production deployment receipt + exact commit SHA;
 - persisted project/document/revision IDs;
 - bounded API capture;
 - user-visible Health report/screenshot artifact;
@@ -146,11 +153,12 @@ Required proof:
 Before any production interaction:
 
 1. verify current Product Control baseline SHA;
-2. verify current deployed runtime SHA through deployment/runtime evidence and reconcile that SHA into canonical Product Control before a PASS bundle can validate;
-3. record the exact canonical-main commit containing that reconciled Product Control state as `control_commit_sha`;
-4. confirm the planned scenario is within existing production authority;
-5. avoid any consequential mutation not already part of the approved user journey;
-6. freeze the target project/document/revision identifiers.
+2. independently observe the current backend Railway production deployment and frontend Vercel production deployment;
+3. record exact commit SHA + terminal deployment state + typed deployment evidence for each plane; do **not** require artificial SHA equality;
+4. record the exact canonical-main commit containing the Product Control baseline used for the run as `control_commit_sha`;
+5. confirm the planned scenario is within existing production authority;
+6. avoid any consequential mutation not already part of the approved user journey;
+7. freeze the target project/document/revision identifiers.
 
 During the run:
 
@@ -186,7 +194,7 @@ Promotion still requires:
 - guarded Markdown projection update;
 - lifecycle/parity guard;
 - evidence reference/digest;
-- exact production runtime binding;
+- exact composite production runtime binding, reconciled into Product Control by the Phase-B promotion guard (#681);
 - human-controlled merge.
 
 No automation should infer `PROD_VALIDATED` merely because an evidence file exists.
@@ -197,4 +205,24 @@ A failed qualification is useful evidence.
 
 Keep `validator_verdict=FAIL` and the failed assertions/evidence. Do not rewrite a failed run into PASS.
 
-A rerun must create new evidence bound to its own observed time/runtime/scenario as appropriate.
+A rerun must create new evidence bound to its own observed time, backend/frontend deployment identities and scenario as appropriate.
+
+## 10. Composite runtime example
+
+A valid bundle may intentionally record different repository SHAs for the two planes:
+
+```yaml
+runtime_bindings:
+  - plane: backend
+    provider: railway
+    commit_sha: d2189da1d1f580d97bad417a42db849822483895
+    terminal_state: SUCCESS
+    deployment_evidence_ref: deploy-backend
+  - plane: frontend
+    provider: vercel
+    commit_sha: 670a71524f82071c1f609055d332b883538691a7
+    terminal_state: READY
+    deployment_evidence_ref: deploy-frontend
+```
+
+That is truthful when the backend changed after the last frontend-relevant deploy. Product qualification must prove the actual UI+API combination exercised, not manufacture a same-SHA invariant that the deployment topology does not provide.
