@@ -76,7 +76,7 @@ Durante la refactorización para sincronizar tipos entre frontend/backend:
 
 ---
 
-## LL-002: Codex Puede Mostrar Login ChatGPT Correcto y Aun Usar una Credencial Obsoleta en un Workspace
+## LL-002: Codex Puede Mostrar Login ChatGPT Correcto y Aun Así Presentar Otra Credencial en un Workspace
 
 **Fecha:** 2026-09-26
 **Severidad:** Alta
@@ -106,7 +106,7 @@ aunque todos los indicadores locales de autenticación eran correctos:
 - `auth.json` contenía tokens JWT de ChatGPT, no una API key
 - la red y el handshake WebSocket pasaban en `codex doctor`
 
-El login por Device Code, incluida la validación con llave de seguridad, finalizaba correctamente pero el runtime seguía intentando usar una credencial `sk-svcac…` antigua.
+El login por Device Code, incluida la validación con llave de seguridad, finalizaba correctamente pero el runtime seguía presentando una credencial `sk-svcac…` de origen no determinado.
 
 ### Impacto
 
@@ -217,7 +217,7 @@ codex doctor --json
 - Incorporar `codex doctor` a verificaciones tras upgrades del toolchain.
 - Para sesiones críticas, ejecutar una smoke test:
   `codex exec "Reply with only: CODEX_AUTH_OK"`
-- No persistir secretos de service accounts en snapshots/workspace metadata.
+- Si reaparece una discrepancia de identidad, verificar explícitamente si snapshots o metadata del workspace contienen credenciales antes de concluir que existe persistencia de secretos.
 - Si reaparece el patrón, usar temporalmente `features.shell_snapshot=false` y abrir investigación separada antes de limpiar estado.
 - Documentar cualquier eliminación de snapshots/cachés y hacer backup previo si contienen evidencia diagnóstica.
 
@@ -240,9 +240,11 @@ codex doctor --json
 
 Varias PRs mostraron CI rojo por causas distintas de su diff:
 
-- SQLAlchemy 2.1 / `greenlet` durante bootstrap.
-- vulnerabilidades críticas de Next.js 16.2.11 en el baseline.
-- P0b que agotó timeout porque el Celery worker murió durante la cadena asíncrona.
+- **#653:** fallos de bootstrap en instalaciones frescas por SQLAlchemy 2.1 / `greenlet`, tratados como deriva de dependencia y no como regresión funcional de #650.
+- **#654:** Dependency Audit rojo por vulnerabilidades críticas de Next.js 16.2.11 presentes en el baseline, corregidas en una lane separada.
+- **#656:** P0b agotó timeout después de pérdida del worker durante la cadena asíncrona; el diagnóstico provino de logs/artifacts de GitHub Actions y el rerun pasó sin cambios funcionales en #656.
+
+Estos ejemplos deben leerse como incidentes concretos de CI observados en sus PR/runs correspondientes, no como una regla de que todo fallo parecido tenga la misma causa.
 
 Modificar la PR funcional para “poner todo verde” habría mezclado alcances y ocultado la causa real.
 
@@ -307,7 +309,7 @@ Cada lección debe incluir:
 
 ---
 
-Last Updated: 2026-02-13
+Last Updated: 2026-09-26
 
 Changelog:
 - 2026-09-26: Added LL-002 (Codex auth/workspace 401) and LL-003 (CI root-cause classification).
