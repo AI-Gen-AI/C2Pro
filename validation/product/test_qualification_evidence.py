@@ -610,6 +610,26 @@ def test_runtime_bindings_require_distinct_deployment_artifacts() -> None:
     )
 
 
+def test_runtime_bindings_reject_provider_aliases_of_same_artifact_locator() -> None:
+    doc = _doc()
+    backend_evidence = next(
+        ref for ref in doc["evidence_refs"] if ref["id"] == "deploy-backend"
+    )
+    frontend_evidence = next(
+        ref for ref in doc["evidence_refs"] if ref["id"] == "deploy-frontend"
+    )
+    backend_evidence["ref"] = "railway:receipt:123"
+    frontend_evidence["ref"] = "vercel:receipt:123"
+
+    problems = q.validate_document(doc)
+
+    assert any(
+        "backend and frontend runtime bindings must reference distinct deployment artifacts"
+        in problem
+        for problem in problems
+    )
+
+
 def test_runtime_binding_requires_provider_namespaced_deployment_evidence() -> None:
     doc = _doc()
     backend_evidence = next(
