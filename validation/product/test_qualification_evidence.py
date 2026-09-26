@@ -200,6 +200,50 @@ def test_non_string_scenario_identifier_fails_closed() -> None:
 
 
 
+def test_observed_at_rejects_permissive_non_rfc3339_forms() -> None:
+    for value in (
+        "2026-09-26Q10:00:00+00:00",
+        "20260926T100000+0000",
+    ):
+        doc = _doc()
+        doc["observed_at"] = value
+        problems = q.validate_document(doc)
+        assert any("RFC3339" in problem for problem in problems)
+
+    doc = _doc()
+    doc["observed_at"] = "2026-09-26T10:00:00.123+02:00"
+    assert not any("observed_at" in problem for problem in q.validate_document(doc))
+
+
+def test_cli_rejects_symlink_bundle_without_reading_target() -> None:
+    doc = _doc()
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        evidence_dir = root / "evidence"
+        evidence_dir.mkdir()
+        outside = root / "outside.yaml"
+        outside.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+        (evidence_dir / "external.yaml").symlink_to(outside)
+
+        old_evidence_dir = q.DEFAULT_EVIDENCE_DIR
+        old_argv = sys.argv[:]
+        try:
+            q.DEFAULT_EVIDENCE_DIR = evidence_dir
+            sys.argv = ["validate_qualification_evidence.py"]
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = q.main(control_loader=lambda _commit_sha: _control())
+        finally:
+            q.DEFAULT_EVIDENCE_DIR = old_evidence_dir
+            sys.argv = old_argv
+
+    rendered = output.getvalue()
+    assert exit_code == 1
+    assert "PRODUCT_QUALIFICATION_EVIDENCE=INVALID bundle=external.yaml" in rendered
+    assert "bundle path must not be a symlink" in rendered
+    assert "PRODUCT_QUALIFICATION_EVIDENCE=VALID" not in rendered
+
+
 def test_malformed_yaml_is_reported_as_bundle_problem() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         bundle_path = Path(tmp) / "malformed.yaml"
