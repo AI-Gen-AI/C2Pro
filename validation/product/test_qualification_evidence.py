@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import copy
+import io
 import sys
+import tempfile
+from contextlib import redirect_stdout
 from pathlib import Path
 
 import yaml
@@ -186,6 +189,65 @@ def test_non_string_scenario_identifier_fails_closed() -> None:
     doc["scenario"]["identifiers"]["extra"] = {"nested": "value"}
     problems = q.validate_document(doc)
     assert any("keys and values must be non-empty strings" in problem for problem in problems)
+
+
+
+def test_malformed_enum_types_fail_closed_without_crashing() -> None:
+    malformed_cases = [
+        ("capability_id", ["P0b"], "unknown capability_id"),
+        ("validator_verdict", ["PASS"], "validator_verdict must be PASS or FAIL"),
+    ]
+    for field, value, expected_problem in malformed_cases:
+        doc = _doc()
+        doc[field] = value
+        problems = q.validate_document(doc)
+        assert any(expected_problem in problem for problem in problems)
+
+    doc = _doc()
+    doc["evidence_refs"][0]["kind"] = ["deployment"]
+    problems = q.validate_document(doc)
+    assert any("kind is invalid" in problem for problem in problems)
+
+    doc = _doc()
+    doc["assertions"][0]["status"] = ["PASS"]
+    problems = q.validate_document(doc)
+    assert any(".status must be PASS or FAIL" in problem for problem in problems)
+
+
+def test_cli_separates_bundle_validity_from_failed_qualification_verdict() -> None:
+    doc = _doc()
+    doc["assertions"][0]["status"] = "FAIL"
+    doc["validator_verdict"] = "FAIL"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        evidence_dir = root / "evidence"
+        evidence_dir.mkdir()
+        bundle_path = evidence_dir / "p0b-failed.yaml"
+        control_path = root / "control.yaml"
+        bundle_path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+        control_path.write_text(yaml.safe_dump(_control(), sort_keys=False), encoding="utf-8")
+
+        old_evidence_dir = q.DEFAULT_EVIDENCE_DIR
+        old_control_path = q.DEFAULT_CONTROL_PATH
+        old_argv = sys.argv[:]
+        try:
+            q.DEFAULT_EVIDENCE_DIR = evidence_dir
+            q.DEFAULT_CONTROL_PATH = control_path
+            sys.argv = ["validate_qualification_evidence.py"]
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = q.main()
+        finally:
+            q.DEFAULT_EVIDENCE_DIR = old_evidence_dir
+            q.DEFAULT_CONTROL_PATH = old_control_path
+            sys.argv = old_argv
+
+    rendered = output.getvalue()
+    assert exit_code == 0
+    assert "PRODUCT_QUALIFICATION_EVIDENCE=VALID" in rendered
+    assert "qualification_verdict=FAIL" in rendered
+    assert "PRODUCT_QUALIFICATION_EVIDENCE=PASS" not in rendered
 
 
 def test_unknown_assertion_field_fails_closed() -> None:
