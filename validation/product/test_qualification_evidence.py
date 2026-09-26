@@ -174,6 +174,14 @@ def test_unknown_assertion_field_fails_closed() -> None:
     assert any("unexpected fields" in problem for problem in problems)
 
 
+def test_product_control_workflow_watches_and_validates_qualification_evidence() -> None:
+    workflow = (HERE.parent.parent / ".github" / "workflows" / "c2pro-product-control-guard.yml").read_text(
+        encoding="utf-8"
+    )
+    assert workflow.count('evidence/product-qualification/**') >= 2
+    assert "python validation/product/validate_qualification_evidence.py" in workflow
+
+
 def test_cli_uses_fixed_repo_evidence_directory_and_control_path() -> None:
     assert q.DEFAULT_EVIDENCE_DIR == q.REPO_ROOT / "evidence" / "product-qualification"
     assert q.DEFAULT_CONTROL_PATH == HERE / "c2pro-master-product-control-v1.yaml"
