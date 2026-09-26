@@ -6,7 +6,7 @@ type: "review"
 allowed_skills:
   - analyze_code
   - read_db_schema
-output_schema_ref: "../schemas/qa_report_schema.json"
+output_schema_ref: "../.c2pro/schemas/implementation-result.schema.yaml"
 protected_routes:
   - "apps/api/src/**/*.py"
   - "apps/web/src/**/*.tsx"
