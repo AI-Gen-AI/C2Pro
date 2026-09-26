@@ -30,8 +30,15 @@ GUARD_SCRIPT = HERE / "install_drift_guard.py"
 GUARD_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "install-drift-guard.yml"
 GUARD_REQUIREMENTS = HERE / "requirements-pip-install-guard.txt"
 BOOTSTRAP_RUN = (
-    "python -m pip install --only-binary=:all: --require-hashes"
-    " -r .github/scripts/requirements-pip-install-guard.txt"
+    "python -m pip install --disable-pip-version-check --only-binary=:all:"
+    " --require-hashes -r .github/scripts/requirements-pip-install-guard.txt"
+)
+# sha256 of pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64
+# .manylinux_2_28_x86_64.whl: identical in a local `pip download` on Linux /
+# CPython 3.11 x86_64 and in PyPI's release metadata; it is the artifact the
+# ubuntu-latest / Python 3.11 runner installs.
+VERIFIED_PYYAML_SHA256 = (
+    "b8bb0864c5a28024fac8a632c443c87c5aa6f215c0b126c449ae1a150412f31d"
 )
 
 APP_WORKFLOW = """\
@@ -1192,8 +1199,12 @@ class RealRepositoryTests(unittest.TestCase):
     def test_guard_bootstrap_is_wheel_only_and_hash_verified(self):
         # the bootstrap installs only binary wheels and refuses any artifact
         # whose sha256 is not pinned in the guard-only requirements file
-        self.assertIn("--only-binary=:all:", BOOTSTRAP_RUN.split())
-        self.assertIn("--require-hashes", BOOTSTRAP_RUN.split())
+        for flag in (
+            "--only-binary=:all:",
+            "--require-hashes",
+            "--disable-pip-version-check",
+        ):
+            self.assertIn(flag, BOOTSTRAP_RUN.split())
         wf = guard.load_yaml(GUARD_WORKFLOW.read_bytes().decode("utf-8"))
         runs = [s.get("run", "") for j in wf["jobs"].values() for s in j["steps"]]
         self.assertIn(BOOTSTRAP_RUN, runs)
@@ -1204,12 +1215,17 @@ class RealRepositoryTests(unittest.TestCase):
             for line in text.splitlines()
             if line.strip() and not line.lstrip().startswith("#")
         ).split()
-        self.assertEqual(logical[0], "PyYAML==6.0.3")  # exact pin, single package
-        hashes = logical[1:]
-        self.assertGreaterEqual(len(hashes), 1)
-        for option in hashes:
-            self.assertRegex(option, r"^--hash=sha256:[0-9a-f]{64}$")
-        self.assertEqual(len(hashes), len(set(hashes)))
+        # exactly one requirement, exact pin, locked to the verified artifact:
+        # no un-hashed or additional guard dependency can slip in
+        self.assertEqual(
+            logical, ["PyYAML==6.0.3", f"--hash=sha256:{VERIFIED_PYYAML_SHA256}"]
+        )
+        requirement_lines = [
+            line
+            for line in text.splitlines()
+            if line.strip() and not line.lstrip().startswith(("#", "--hash"))
+        ]
+        self.assertEqual(len(requirement_lines), 1, requirement_lines)
 
     def test_guard_has_no_special_case_for_its_own_workflow(self):
         source = GUARD_SCRIPT.read_text(encoding="utf-8")
