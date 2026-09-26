@@ -7,7 +7,7 @@ allowed_skills:
   - analyze_code
   - git_interactions
   - execute_pytest
-output_schema_ref: "../schemas/backend_output.json"
+output_schema_ref: "../.c2pro/schemas/implementation-result.schema.yaml"
 protected_routes:
   - "apps/api/src/**/*.py"
   - "apps/web/src/**/*.tsx"
