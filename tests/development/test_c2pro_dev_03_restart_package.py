@@ -70,6 +70,35 @@ def test_dev03_claude_route_health_fails_closed() -> None:
     )
 
 
+def test_dev03_codex_route_qualification_does_not_hide_provider_degradation() -> None:
+    readiness = _load(READINESS)
+    codex = readiness["principal_workers"]["codex"]
+
+    assert codex["route_qualification_observed"] == "QUALIFIED_LIVE"
+    assert codex["provider_invocation_state_observed"] == "DEGRADED_EXTERNAL_AUTH_PATH"
+    assert codex["fresh_endpoint_preflight_required"] is True
+    assert (
+        readiness["qualification_slices"]["DEV_03R3_CODEX_BOUNDED_IMPLEMENTATION"]
+        == "BLOCKED_PENDING_FRESH_ENDPOINT_PREFLIGHT"
+    )
+
+
+def test_dev03_material_promotion_is_blocked_without_principal_review_route() -> None:
+    readiness = _load(READINESS)
+    gate = readiness["principal_review_gate"]
+
+    assert gate["current_status"] == "BLOCKED_NO_COMPATIBLE_LIVE_PRINCIPAL_REVIEW_ROUTE_PROVEN"
+    assert gate["c2pro_authority_class_of_academy_reviewer"] == "SUBORDINATE"
+    assert gate["subordinate_may_satisfy_c2pro_principal_gate"] is False
+    assert gate["claude_independent_review_lead_qualification"] == "NOT_QUALIFIED"
+    assert gate["material_same_worker_self_review_forbidden"] is True
+    assert gate["qualification_inheritance_forbidden"] is True
+    assert (
+        readiness["qualification_slices"]["DEV_03R8_PRINCIPAL_REVIEW_ROUTE"]
+        == "BLOCKED_NO_COMPATIBLE_ROUTE_PROVEN"
+    )
+
+
 def test_dev03_handoff_preserves_work_but_does_not_launder_role() -> None:
     readiness = _load(READINESS)
     handoff = readiness["handoff_contract"]
