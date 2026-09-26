@@ -28,14 +28,16 @@ A validated evidence bundle is an input to a later Product-Control reconciliatio
 
 Every bundle binds to:
 
-- exact Product Control baseline commit SHA;
-- exact observed production runtime SHA;
+- the exact `production_position.reconciled_against_main_sha` recorded by canonical Product Control;
+- the exact observed production runtime SHA recorded by canonical Product Control;
 - capability: `P0b | P0c | P0d`;
 - concrete production scenario identifiers;
 - observed timestamp;
 - capability-specific assertions;
 - typed evidence references;
 - validator verdict.
+
+The validator compares both bindings against the canonical Product Control YAML. A syntactically valid 40-character SHA is not sufficient if it does not match canonical control truth.
 
 A branch SHA, merge SHA, preview deployment or CI green is not a substitute for an observed production runtime SHA.
 
@@ -45,15 +47,20 @@ A PASS requires at least:
 
 - one `deployment` reference;
 - one `persisted_entity` reference;
-- evidence for every required assertion.
+- evidence for every required assertion;
+- every evidence record to be immutable or content-addressed by SHA-256;
+- a timezone-aware ISO-8601 observation timestamp.
 
-Additional useful evidence kinds:
+Additional typed evidence kinds:
 
 - `api_capture`;
 - `ui_report`;
 - `runtime_log`;
 - `test_report`;
+- `review`;
 - `release_bundle`.
+
+There is deliberately no generic `other` kind in a PASS contract. Extend the schema explicitly when a new evidence class becomes legitimate.
 
 A release bundle may be referenced, but does not become lifecycle authority.
 
@@ -136,7 +143,7 @@ Required proof:
 Before any production interaction:
 
 1. verify current Product Control baseline SHA;
-2. verify current deployed runtime SHA through deployment/runtime evidence;
+2. verify current deployed runtime SHA through deployment/runtime evidence and reconcile that SHA into canonical Product Control before a PASS bundle can validate;
 3. confirm the planned scenario is within existing production authority;
 4. avoid any consequential mutation not already part of the approved user journey;
 5. freeze the target project/document/revision identifiers.
@@ -158,8 +165,9 @@ After the run:
 python validation/product/validate_qualification_evidence.py <bundle.yaml>
 ```
 
-3. independently review the bundle;
-4. only then open a separate Product-Control reconciliation that references the validated evidence.
+3. the validator binds the bundle to the canonical Product Control baseline/runtime, not merely to SHA syntax;
+4. independently review the bundle;
+5. only then open a separate Product-Control reconciliation that references the validated evidence.
 
 ## 8. Promotion rule
 
