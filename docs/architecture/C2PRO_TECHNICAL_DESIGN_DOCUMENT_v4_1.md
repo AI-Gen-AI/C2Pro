@@ -17,7 +17,9 @@ It replaces the earlier frontend-heavy v4.0 document as the primary technical de
 
 This document must be read together with:
 
-- `C2PRO_MASTER_BACKLOG.md`
+- `validation/product/c2pro-master-product-control-v1.yaml`
+- `docs/product/00-c2pro-master-product-control-v1.md`
+- `.c2pro/control/current.yaml` and `.c2pro/control/work-queue.yaml`
 - `docs/architecture/decisions/006-post-reorganization-architecture.md`
 - `docs/testing/PHASE4_TDD_IMPLEMENTATION_ROADMAP.md`
 - `docs/testing/C2PRO_TEST_SUITES_INDEX_v1.1.md`
@@ -28,10 +30,11 @@ This document must be read together with:
 
 ### 2.1 Delivery Governance
 
-- `C2PRO_MASTER_BACKLOG.md` is the single source of truth for all open work.
-- Any newly discovered task must be added there with a stable ID.
-- Any completed task must be marked complete there when the implementing change lands.
-- Supporting documents may describe scope, evidence, or history, but they do not own task state.
+- Product-programme lifecycle state is canonical in `validation/product/c2pro-master-product-control-v1.yaml`, with the guarded human projection in `docs/product/00-c2pro-master-product-control-v1.md`.
+- Active development execution is canonical under `.c2pro/control/` and assigned `.c2pro/work/` envelopes.
+- Worker completion is non-canonical until review, CI, merge and Master/Planner reconciliation.
+- `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` and `blackboard.json` are legacy/cold references and MUST NOT be mutated by ordinary workers.
+- Supporting documents may describe scope, evidence, or history, but they do not own current programme/task state.
 
 ### 2.2 Technical Governance
 
@@ -42,8 +45,9 @@ This document must be read together with:
 ### 2.3 Current Project State
 
 - C2Pro is a monorepo with `apps/api` and `apps/web`.
-- Delivery status is approximately 90% complete.
-- The architecture is mature enough for release-candidate hardening; the remaining work is concentrated in release execution, evidence, and targeted hardening rather than core platform invention.
+- This technical-design document does **not** own percentage-complete, deployment or production-validation claims.
+- Current lifecycle state must be read from the canonical product-control plane; current development work must be read from `.c2pro`.
+- Architectural maturity does not imply product completion or PROD_VALIDATED user value.
 
 ---
 
@@ -206,7 +210,7 @@ The current phase is not foundational design. It is controlled completion.
 
 Primary near-term focus:
 
-- close remaining release blockers from `C2PRO_MASTER_BACKLOG.md`
+- close remaining authorized release blockers from the canonical product/development control planes
 - finish final release evidence and signoff work
 - continue golden evaluation expansion
 - preserve architecture consistency while shipping targeted improvements
@@ -229,7 +233,7 @@ It should no longer be treated as the sole technical design for the full platfor
 ## 10. Document Maintenance Rules
 
 - Update this document when platform-wide architecture or governance changes.
-- Update `C2PRO_MASTER_BACKLOG.md` when task status changes.
+- Return structured implementation evidence; the Master/Planner reconciler updates canonical `.c2pro` / product-control state after review, CI and merge.
 - Do not create competing status registers.
 - If a document introduces active work, that work must also be recorded in the master backlog.
 
