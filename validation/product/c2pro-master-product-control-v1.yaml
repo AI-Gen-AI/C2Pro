@@ -272,7 +272,8 @@ product_wbs:
     user_value: "Know what changed, why it matters and which project/WBS objects are affected"
     realization_status: WIRED
     work_status: ACTIVE
-    note: "Temporal/change runtime, HTTP and What Changed UI are merged on main; deployment/prod validation remain open."\n    exit_gate: "runtime timeline + revision comparison + user-visible What Changed journey"
+    note: "Temporal/change runtime, HTTP and What Changed UI are merged on main; deployment/prod validation remain open."
+    exit_gate: "runtime timeline + revision comparison + user-visible What Changed journey"
     evidence_for_done: "production revision produces durable, queryable change timeline/report"
   - id: PWBS-ALERTS-ACTIONS-HITL
     plane: ALERTS-ACTIONS-HITL
@@ -330,7 +331,8 @@ product_wbs:
     user_value: "Truthful current-state and evolution reporting, then executive/portfolio roll-up"
     realization_status: PARTIAL
     work_status: ACTIVE
-    subtracks: {current_state: WIRED, executive_portfolio: SCAFFOLDED}\n    planning_note: "P0d Current State Reporting is wired on main but not deployment/prod-validated; executive/PMO/portfolio extension remains deferred."
+    subtracks: {current_state: WIRED, executive_portfolio: SCAFFOLDED}
+    planning_note: "P0d Current State Reporting is wired on main but not deployment/prod-validated; executive/PMO/portfolio extension remains deferred."
     exit_gate: "merged/deployed/prod-validated current-state/evolution reporting, then briefing/portfolio extension"
     evidence_for_done: "executive reads evidence-backed current/evolution view with drill-down"
   - id: PWBS-OPS-TRUST
