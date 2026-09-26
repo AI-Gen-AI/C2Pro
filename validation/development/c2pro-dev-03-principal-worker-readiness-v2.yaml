@@ -1,0 +1,56 @@
+schema: c2pro-dev-03-principal-worker-readiness-v2
+status: PLANNED_RESTART_NOT_EXECUTED
+date: '2026-09-26'
+repository: AI-Gen-AI/C2Pro
+baseline_main: d7d1e6c2a2491feaafa56ccb41aafd86d9df2a4d
+work_ref: .c2pro/work/C2PRO-DEV-03.yaml
+runbook_ref: docs/architecture/development/c2pro-dev-03-principal-worker-readiness-v2.md
+historical_pr: 565
+historical_pr_promotable_as_current_evidence: false
+
+external_authority:
+  repository: AI-Gen-AI/2SB
+  observed_main: 2bc886a8c90bb5d67b955c9ed18d71946e321f34
+  af_dev_01: DONE
+  mr_dev_01c: DONE_QUALIFIED_REVIEWED_AUTHORITY_CONSUMED
+  authority_model: JOB_BOUND_CONSUMED_NO_STANDING_AUTHORITY
+  standing_provider_authority: false
+
+principal_workers:
+  codex:
+    authority_class: PRINCIPAL_CAPABLE
+    execution_identity: aigen-codex
+    adapter: codex_cli
+    route: CODEX_OPENAI_DEFAULT
+    observed_route_qualification: QUALIFIED_LIVE
+    observed_roles: [BACKEND_ENGINEER]
+    current_readiness: REVALIDATION_REQUIRED
+  claude_code:
+    authority_class: PRINCIPAL_CAPABLE
+    execution_identity: aigen-claude
+    adapter: claude_code
+    route: CLAUDE_ANTHROPIC_OPUS5_TARGET
+    observed_route_qualification: QUALIFIED_BOUNDED
+    observed_roles: [SOFTWARE_ARCHITECT, SYSTEM_COHERENCE_REVIEWER]
+    observed_model: claude-opus-5
+    observed_route_health: BLOCKED_REQUALIFICATION
+    observed_live_routable: false
+    current_readiness: BLOCKED_PENDING_ROUTE_HEALTH_REVALIDATION
+
+gates:
+  DEV_03R0_AUTHORITY_REBIND: PLANNED
+  DEV_03R1_HOST_IDENTITY_REFRESH: NOT_RUN
+  DEV_03R2_ROUTE_ROLE_RECONCILIATION: NOT_RUN
+  DEV_03R3_CODEX_BOUNDED_IMPLEMENTATION: NOT_RUN
+  DEV_03R4_CLAUDE_BOUNDED_ARCHITECTURE_COHERENCE: BLOCKED_PENDING_ROUTE_HEALTH_REVALIDATION
+  DEV_03R5_GOVERNED_HANDOFF: NOT_RUN
+  DEV_03R6_FINAL_RECONCILIATION: NOT_RUN
+
+non_authorizations:
+  provider_invocation: false
+  standing_worker_execution: false
+  direct_main_write: false
+  merge: false
+  deployment: false
+  product_runtime: false
+  secret_or_credential_change: false
