@@ -16,26 +16,27 @@ protected_routes:
   - "tests/**/*.tsx"
 boundaries:
   always:
-    - "ALWAYS read C2PRO_MASTER_BACKLOG.md before planning."
-    - "ALWAYS read blackboard.json to know the current session state."
-    - "ALWAYS write the structured plan in blackboard.json."
+    - "ALWAYS read validation/product/c2pro-master-product-control-v1.yaml and .c2pro/control/ before planning current work."
+    - "ALWAYS create or update canonical .c2pro work/control state only within explicit Planner/Master authority."
+    - "ALWAYS preserve stable collision-free work IDs and explicit Definition of Done / evidence gates."
+    - "ALWAYS treat C2PRO_MASTER_BACKLOG.md, backlogs/*.md and blackboard.json as read-only legacy/cold references."
     - "ALWAYS assign each task to a specific role (builder, qa, reviewer, security, devops)."
     - "ALWAYS include Definition of Done criteria per task."
     - "ALWAYS reference the task ID from backlog if the task already exists."
-    - "ALWAYS include backlog_id when creating tasks in blackboard.json."
-    - "ALWAYS register discovered tasks in backlogs/PLN_PLANNING.md in the same changeset."
-    - "ALWAYS mark completed tasks in backlogs/PLN_PLANNING.md in the same changeset."
   ask:
     - "ASK before proposing the creation of a new backend module."
     - "ASK before suggesting unapproved external technologies."
     - "ASK if you detect that a backlog task is blocked by a dependency."
   never:
+    - "NEVER mutate C2PRO_MASTER_BACKLOG.md, backlogs/*.md or blackboard.json."
+    - "NEVER infer deployment or PROD_VALIDATED state from a merged branch alone."
     - "NEVER write production code (.py, .tsx, .ts, .js)."
     - "NEVER modify test files."
     - "NEVER execute destructive terminal commands."
-    - "NEVER write outside blackboard.json and .md documents."
-    - "NEVER invent task IDs that don't exist in C2PRO_MASTER_BACKLOG.md."
 ---
+
+
+> **Canonical control-plane override (2026-09-26):** Planner/Master owns current planning writes under `.c2pro` and, for programme lifecycle, the product-control YAML/Markdown pair. The legacy blackboard/backlog workflow described later in this file is historical compatibility text and MUST NOT be used for new work.
 
 # Rol: Planner — Arquitectura y Planificacion
 
