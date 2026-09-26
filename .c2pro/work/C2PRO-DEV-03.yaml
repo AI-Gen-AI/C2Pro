@@ -1,0 +1,79 @@
+schema: c2pro-work-envelope-v1
+schema_version: 1
+work_id: C2PRO-DEV-03
+campaign_id: DEV03R-20260926
+role: orchestrator
+base_sha: d7d1e6c2a2491feaafa56ccb41aafd86d9df2a4d
+branch: docs/dev03-restart-package-20260926
+risk_class: architecture
+scope:
+  - rebind DEV-03 to current C2Pro and AI-Gen Agent Factory authority truth
+  - revalidate Claude Code and Codex principal identities without exposing secret material
+  - reconcile principal class separately from role eligibility route qualification and job authority
+  - qualify Codex only through compatible bounded implementation roles
+  - qualify Claude only through compatible bounded architecture or coherence-review roles after route-health revalidation
+  - prove identity-preserving governed handoff without role laundering
+  - record negative boundary timeout resource and authority-consumption evidence
+out_of_scope:
+  - production or Product Runtime mutation
+  - standing provider authority
+  - direct mutation or merge of canonical main
+  - provider credential or account changes
+  - Gemini OpenCode Nemotron or Antigravity promotion to C2Pro principal
+  - broad Agent Factory role-registry changes
+  - deployment or runtime restart
+allowed_tools:
+  - github_repository_read
+  - github_branch_write
+  - vps_read_only_inventory
+  - local_cli_version_help
+  - ai_gen_agent_factory_read
+  - bounded_job_authority_harness
+  - af_dev_qualification_harness
+  - focused_python_tests
+forbidden_paths:
+  - production_runtime/**
+  - secrets/**
+  - personal/**
+  - knowledge/**
+acceptance_criteria:
+  - current C2Pro and AI-Gen baselines are exact and immutable in qualification evidence
+  - historical PR 565 observations are classified as historical and not promoted without revalidation
+  - Claude Code and Codex remain principal-capable without implying identical role qualification
+  - Codex qualification is bound to a currently eligible implementation role and fresh job authority
+  - Claude qualification is bound to a currently eligible architecture or coherence-review role and fresh bounded authority
+  - a blocked or unavailable target route fails closed without silently changing work role or scope
+  - handoff preserves work identity baseline objective invariants acceptance criteria findings and evidence refs
+  - canonical main Product Runtime secrets and cross-workspace boundaries are negatively proved
+  - timeout and resource ceilings are proved
+  - no raw credential session or identity-sensitive payload is committed
+required_tests:
+  - DEV-03R0 exact-baseline and authority-model reconciliation
+  - DEV-03R1 non-secret host identity and binary provenance refresh
+  - DEV-03R2 route role eligibility contradiction check
+  - DEV-03R3 Codex bounded implementation qualification
+  - DEV-03R4 Claude bounded architecture or coherence qualification
+  - DEV-03R5 identity-preserving handoff and blocked-route negative case
+  - canonical main Product Runtime secrets and cross-workspace denial
+  - timeout and resource-limit enforcement
+evidence_required:
+  - c2pro_exact_main_sha
+  - ai_gen_exact_main_sha
+  - worker_identity_and_binary_provenance
+  - typed_auth_state_without_secret_material
+  - route_role_eligibility_snapshot
+  - fresh_job_authority_and_consumption
+  - structured_worker_results
+  - negative_boundary_results
+  - timeout_resource_results
+  - handoff_continuity_result
+  - independent_review
+review_policy: independent_principal
+worker_selection:
+  preferred: null
+  eligible_principals:
+    - claude_code
+    - codex
+  eligible_subordinates: []
+  selected: null
+timeout_resource_policy: reuse_ai_gen_af_dev_job_bound_policy
