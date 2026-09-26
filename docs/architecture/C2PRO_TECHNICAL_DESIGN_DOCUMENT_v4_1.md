@@ -235,7 +235,7 @@ It should no longer be treated as the sole technical design for the full platfor
 - Update this document when platform-wide architecture or governance changes.
 - Return structured implementation evidence; the Master/Planner reconciler updates canonical `.c2pro` / product-control state after review, CI and merge.
 - Do not create competing status registers.
-- If a document introduces active work, that work must also be recorded in the master backlog.
+- If a document introduces executable work, reconcile it into canonical `.c2pro` control/work state before execution; do not create a parallel status register.
 
 ---
 
@@ -243,4 +243,5 @@ It should no longer be treated as the sole technical design for the full platfor
 
 | Version | Date | Change |
 |---------|------|--------|
-| 4.1 | 2026-03-29 | Created platform-wide technical design and aligned governance to a single canonical backlog. |
+| 4.1 | 2026-03-29 | Created platform-wide technical design; its original backlog-governance statements were later superseded by the Single-Writer Control Plane. |
+| 4.1-control | 2026-09-26 | Reconciled active-work governance to `.c2pro` and product lifecycle governance to the product-control plane. |
