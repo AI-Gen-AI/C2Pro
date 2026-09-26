@@ -7,7 +7,7 @@ allowed_skills:
   - analyze_code
   - execute_pytest
   - read_db_schema
-output_schema_ref: "../schemas/backend_output.json"
+output_schema_ref: "../.c2pro/schemas/implementation-result.schema.yaml"
 protected_routes:
   - "apps/web/src/**"
   - "tests/**/*.py"
