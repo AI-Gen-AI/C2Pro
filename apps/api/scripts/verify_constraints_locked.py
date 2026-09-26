@@ -18,6 +18,7 @@ def run_uv_compile():
         "--python-version", "3.11",
         "--python-platform", "x86_64-unknown-linux-gnu",
         "--no-annotate",
+        "--no-header",
         "--output-file", str(tmp_path),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -42,7 +43,7 @@ def main():
         sys.exit(0)
     else:
         print("constraints.txt is stale – regenerate with:")
-        print("uv pip compile apps/api/requirements.txt --python-version 3.11 --python-platform x86_64-unknown-linux-gnu --no-annotate --output-file apps/api/constraints.txt")
+        print("uv pip compile apps/api/requirements.txt --python-version 3.11 --python-platform x86_64-unknown-linux-gnu --no-annotate --no-header --output-file apps/api/constraints.txt")
         sys.exit(1)
 
 if __name__ == "__main__":
