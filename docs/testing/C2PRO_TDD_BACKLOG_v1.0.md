@@ -6,7 +6,7 @@
 > **Alineado con:** PLAN_ARQUITECTURA_v2.1.md, Diagrama Maestro v2.2.1  
 > **Metodología:** TDD Estricto (Red → Green (Fake It) → Refactor (Triangulation))
 
-> **Governance Note:** This file is the detailed testing backlog and suite-traceability reference. It is not the single source of truth for overall project task status. Cross-cutting active work and completion state must also be tracked in `C2PRO_MASTER_BACKLOG.md`.
+> **Governance Note (reconciled 2026-09-26):** This file is a detailed testing backlog and suite-traceability reference, not current execution authority. Cross-cutting active work is canonical in `.c2pro/control/`; product lifecycle/readiness is canonical in the product-control YAML/Markdown pair. `C2PRO_MASTER_BACKLOG.md` remains a read-only legacy/cold reference.
 
 ---
 
