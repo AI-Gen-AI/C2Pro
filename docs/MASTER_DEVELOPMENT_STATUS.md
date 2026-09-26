@@ -1,23 +1,51 @@
 # MASTER_DEVELOPMENT_STATUS.md
 
-> **Deprecated as the canonical task register**
-> **Last Updated:** 2026-03-29
+> **Deprecated as a canonical status register**
+> **Reconciled:** 2026-09-26
 
-`C2PRO_MASTER_BACKLOG.md` at the repository root is now the single source of truth for:
+This file remains only as a compatibility pointer for older references. It must not become a
+second status authority.
 
-- open tasks
-- in-progress work
-- release blockers
-- completed backlog items that still need traceability
+## Current authority
 
-This file remains only as a compatibility pointer for older references.
+### Product programme — what C2Pro is delivering
 
-Use:
+- **Machine source of truth:** `validation/product/c2pro-master-product-control-v1.yaml`
+- **Human projection:** `docs/product/00-c2pro-master-product-control-v1.md`
+- Their exact critical values are guarded by `validation/product/check_control_parity.py`.
 
-- `C2PRO_MASTER_BACKLOG.md` for execution status
-- `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md` for the current platform-wide technical design
-- `docs/architecture/decisions/006-post-reorganization-architecture.md` for the canonical repo-structure baseline
+These files distinguish **design**, **realization**, **deployment** and **production validation**.
+A merged PR does not by itself prove deployed or PROD_VALIDATED product value.
 
-Historical note:
+### Development execution — what the agent/control plane may work on now
 
-- The previous detailed status register was intentionally retired to eliminate split ownership of project status.
+- **Hot state:** `.c2pro/control/current.yaml`
+- **Open queue:** `.c2pro/control/work-queue.yaml`
+- **Work envelopes:** `.c2pro/work/`
+- **Canonical development plan:** `docs/architecture/development/c2pro-vps-development-control-plan-v1.md`
+- **Machine plan:** `validation/development/c2pro-vps-development-control-plan-v1.yaml`
+
+The hot queue contains open work only. Completed work belongs in Git/PR/CI/evidence history, not in
+bootstrap state.
+
+## Legacy / cold references
+
+- `C2PRO_MASTER_BACKLOG.md` — historical/cold backlog reference; **not** current product truth.
+- `backlogs/*.md` — category history / legacy compatibility.
+- `docs/planning/ROADMAP_v2.4.0.md` — historical strategic roadmap, not current lifecycle status.
+- `blackboard.json` — non-canonical legacy execution state.
+
+## Current planning hinge
+
+At the 2026-09-26 reconciliation:
+
+- product north-star remains **P0b single-document Health**, with L4-5 implementation merged but
+  production validation still open;
+- P0c What Changed and P0d Current State are wired on main and need runtime qualification rather
+  than reconstruction as candidate lanes;
+- P1 Project Controls is ACTIVE/PARTIAL;
+- development control DEV-00/01/02 are DONE; DEV-03 principal worker readiness is the next
+  unresolved control-plane gate.
+
+Historical detailed status previously stored here was intentionally retired to prevent split
+ownership of programme state.

@@ -29,26 +29,28 @@ def test_work_queue_contains_only_open_work() -> None:
     assert all(item["work_id"] != "C2PRO-DEV-01" for item in queue["items"])
 
 
-def test_active_work_identity_is_model_independent() -> None:
+def test_current_schema_allows_reconciled_idle_status() -> None:
     current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
-    queue = validator.load_yaml(ROOT / ".c2pro" / "control" / "work-queue.yaml")
-    active_id = current["active_work"][0]
-    item = next(item for item in queue["items"] if item["work_id"] == active_id)
-    work = validator.load_yaml(ROOT / item["work_ref"])
-    assert work["work_id"] == active_id
-    assert work["base_sha"] == current["baseline"]["main_sha"]
-    assert work["worker_selection"]["selected"] is None
-    assert work["role"] == item["role"]
-    assert "model" not in work
-    assert "provider" not in work
+    schema = validator.load_yaml(ROOT / ".c2pro" / "schemas" / "current.schema.yaml")
+    allowed = schema["properties"]["control_status"]["enum"]
+    assert current["control_status"] == "reconciled_idle"
+    assert "reconciled_idle" in allowed
 
 
-def test_same_work_can_move_between_principals_without_identity_change() -> None:
+def test_idle_control_plane_does_not_keep_completed_work_hot() -> None:
     current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
     queue = validator.load_yaml(ROOT / ".c2pro" / "control" / "work-queue.yaml")
-    active_id = current["active_work"][0]
-    item = next(item for item in queue["items"] if item["work_id"] == active_id)
-    work = validator.load_yaml(ROOT / item["work_ref"])
+    assert current["active_work"] == []
+    assert "C2PRO-DEV-02" not in {item["work_id"] for item in queue["items"]}
+    validator.validate_identity_preserving_principal_handoff(
+        current,
+        queue,
+        validator.validate_routing(validator.validate_role_profiles()),
+    )
+
+
+def test_work_identity_can_move_between_principals_without_model_coupling() -> None:
+    work = validator.load_yaml(ROOT / ".c2pro" / "work" / "C2PRO-DEV-02.yaml")
     initial_identity = validator.stable_work_identity(work)
 
     claude_assignment = copy.deepcopy(work)
@@ -59,6 +61,8 @@ def test_same_work_can_move_between_principals_without_identity_change() -> None
     assert validator.stable_work_identity(claude_assignment) == initial_identity
     assert validator.stable_work_identity(codex_assignment) == initial_identity
     assert claude_assignment["worker_selection"]["selected"] != codex_assignment["worker_selection"]["selected"]
+    assert "model" not in work
+    assert "provider" not in work
 
 
 def test_canonical_roles_are_model_and_worker_neutral() -> None:

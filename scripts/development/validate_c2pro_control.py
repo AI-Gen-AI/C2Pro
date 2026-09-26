@@ -304,7 +304,10 @@ def validate_review_policy() -> dict[str, Any]:
 
 def validate_identity_preserving_principal_handoff(current: dict[str, Any], queue: dict[str, Any], routing: dict[str, Any]) -> None:
     active_ids = current.get("active_work", [])
-    require(bool(active_ids), "handoff proof: at least one active work item required")
+    # An idle control plane is valid. Completed work is forbidden from remaining hot merely
+    # to provide a handoff fixture; the identity proof applies only when work is actually active.
+    if not active_ids:
+        return
     active_id = active_ids[0]
     item = next(item for item in queue["items"] if item["work_id"] == active_id)
     require(item.get("work_ref") is not None, "handoff proof: active work requires work_ref")
