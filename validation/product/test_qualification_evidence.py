@@ -200,6 +200,61 @@ def test_non_string_scenario_identifier_fails_closed() -> None:
 
 
 
+def test_malformed_yaml_is_reported_as_bundle_problem() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        bundle_path = Path(tmp) / "malformed.yaml"
+        bundle_path.write_text("schema: [unterminated\n", encoding="utf-8")
+        problems = q.validate_path(bundle_path, lambda _commit_sha: _control())
+
+    assert any("cannot parse qualification YAML" in problem for problem in problems)
+
+
+def test_duplicate_authority_key_is_rejected() -> None:
+    doc = _doc()
+    rendered = yaml.safe_dump(doc, sort_keys=False)
+    rendered += "validator_verdict: FAIL\n"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        bundle_path = Path(tmp) / "duplicate.yaml"
+        bundle_path.write_text(rendered, encoding="utf-8")
+        problems = q.validate_path(bundle_path, lambda _commit_sha: _control())
+
+    assert any("duplicate mapping key" in problem for problem in problems)
+
+
+def test_cli_continues_after_malformed_bundle() -> None:
+    valid_doc = _doc()
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        evidence_dir = root / "evidence"
+        evidence_dir.mkdir()
+        (evidence_dir / "00-malformed.yaml").write_text(
+            "schema: [unterminated\n",
+            encoding="utf-8",
+        )
+        (evidence_dir / "01-valid.yaml").write_text(
+            yaml.safe_dump(valid_doc, sort_keys=False),
+            encoding="utf-8",
+        )
+
+        old_evidence_dir = q.DEFAULT_EVIDENCE_DIR
+        old_argv = sys.argv[:]
+        try:
+            q.DEFAULT_EVIDENCE_DIR = evidence_dir
+            sys.argv = ["validate_qualification_evidence.py"]
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = q.main(control_loader=lambda _commit_sha: _control())
+        finally:
+            q.DEFAULT_EVIDENCE_DIR = old_evidence_dir
+            sys.argv = old_argv
+
+    rendered = output.getvalue()
+    assert exit_code == 1
+    assert "PRODUCT_QUALIFICATION_EVIDENCE=INVALID bundle=00-malformed.yaml" in rendered
+    assert "PRODUCT_QUALIFICATION_EVIDENCE=VALID bundle=01-valid.yaml" in rendered
+
+
 def test_non_string_mapping_keys_fail_closed_without_crashing() -> None:
     doc = _doc()
     doc[1] = "unexpected"
