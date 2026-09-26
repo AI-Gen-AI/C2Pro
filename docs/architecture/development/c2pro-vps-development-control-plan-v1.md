@@ -1,5 +1,7 @@
 # C2Pro VPS Development Control Plan v1
 
+> **2026-09-26 reconciliation:** DEV-00 (#561), DEV-01 (#563) and DEV-02 (#564) are merged **DONE**. DEV-03 remains the next principal-readiness gate because PR #565 closed without merge; restart it from current VPS evidence rather than reviving the stale branch. DEV-04 remains blocked by DEV-03. The machine hot state is intentionally idle until a new DEV-03 work envelope is authorized. A previously mis-keyed product-envelope debt that reused DEV-05 has been reassigned to DEV-14; DEV-05 continues to mean AF-DEV integration.
+
 **Status:** OWNER APPROVED / IMPLEMENTATION PLAN
 **Date:** 2026-08-24
 **Repository:** `AI-Gen-AI/C2Pro`
@@ -498,6 +500,8 @@ The PC remains useful for IDE/Remote SSH and manual inspection, but is no longer
 
 ### C2PRO-DEV-00 — Governance and context audit
 
+**Current status (2026-09-26): DONE — merged via #561.**
+
 **Goal:** determine what is genuinely useful in the current agent/backlog/supervisor system before migration.
 
 Tasks:
@@ -514,6 +518,8 @@ Tasks:
 
 ### C2PRO-DEV-01 — Minimal YAML control model
 
+**Current status (2026-09-26): DONE — merged via #563.**
+
 **Goal:** implement the smallest viable hot-state representation.
 
 Tasks:
@@ -527,6 +533,8 @@ Tasks:
 **Exit gate:** deterministic parse/validation and context-size target met.
 
 ### C2PRO-DEV-02 — Role model and authority hierarchy
+
+**Current status (2026-09-26): DONE — merged via #564.**
 
 **Goal:** separate role authority from worker/model identity.
 
@@ -542,6 +550,8 @@ Tasks:
 **Exit gate:** same work envelope can move between Claude/Codex without changing task identity.
 
 ### C2PRO-DEV-03 — Claude/Codex principal worker readiness
+
+**Current status (2026-09-26): READY_RESTART_REQUIRED — PR #565 closed without merge; qualification was not promoted to canonical state.**
 
 **Goal:** make Claude Code and Codex the first operational principal workers on the VPS.
 
@@ -561,6 +571,8 @@ Tasks:
 **Exit gate:** both workers individually qualified for bounded Development work.
 
 ### C2PRO-DEV-04 — Development Orchestrator role
+
+**Current status (2026-09-26): BLOCKED_BY_C2PRO-DEV-03.**
 
 **Goal:** replace the ineffective legacy supervisor behavior with role-driven orchestration.
 
@@ -749,6 +761,18 @@ Tasks:
 **Interim rule (until resolved):** P0b-L4-5 local validation must use explicit/quoted Vitest
 commands matching CI and must **not** cite `pnpm test:all` alone as proof. Non-blocking for
 L4-5 because CI remains authoritative. Do not fix this inside the L4-5 product PR.
+
+---
+
+### C2PRO-DEV-14 — Product work-envelope namespace extension
+
+**Registered:** 2026-09-26 control reconciliation. **Priority:** P2 development-control debt.
+
+This item was previously carried in `.c2pro/control/work-queue.yaml` under the id `C2PRO-DEV-05`. That was invalid because DEV-05 is already canonically **AF-DEV integration**. DEV-14 preserves the open debt without giving one work id two meanings.
+
+**Goal:** allow canonical product slices to use machine-validated work envelopes without abusing the `C2PRO-DEV-xx` control namespace.
+
+**Exit gate:** product work envelopes have a collision-free identity contract, schema and validator coverage.
 
 ---
 
