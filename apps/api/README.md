@@ -229,9 +229,36 @@ JWT_SECRET_KEY=your-secret-key-min-32-chars
 JWT_ALGORITHM=HS256
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
 
-# CORS
-CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+# CORS (JSON array; single quotes keep the inner double quotes in bash and are valid in .env)
+CORS_ORIGINS='["http://localhost:3000","http://localhost:3001"]'
 ```
+
+#### Settings complejas: solo JSON
+
+Los campos lista/diccionario se decodifican como **JSON** desde el entorno y desde `.env` antes de cualquier validador de C2Pro; un valor CSV (o vacío) falla al arrancar con `SettingsError`. Aplica a `CORS_ORIGINS`, `CORS_METHODS`, `CORS_HEADERS`, `ALLOWED_DOCUMENT_TYPES`, `BUDGET_ALERT_ADMIN_EMAILS` (arrays) e `INTEGRATION_API_KEYS` (objeto clave → tenant_id). Para vaciar una lista usa `[]` (o `{}` para el objeto).
+
+```bash
+# bash / zsh
+export CORS_ORIGINS='["http://localhost:3000","http://localhost:3001"]'
+export BUDGET_ALERT_ADMIN_EMAILS='["admin@example.com"]'
+export INTEGRATION_API_KEYS='{"key":"tenant"}'
+```
+
+```powershell
+# PowerShell (comillas simples = literal)
+$env:CORS_ORIGINS = '["http://localhost:3000","http://localhost:3001"]'
+$env:BUDGET_ALERT_ADMIN_EMAILS = '["admin@example.com"]'
+$env:INTEGRATION_API_KEYS = '{"key":"tenant"}'
+```
+
+```env
+# .env (python-dotenv: sin comillas o con comillas simples)
+CORS_ORIGINS=["http://localhost:3000","http://localhost:3001"]
+BUDGET_ALERT_ADMIN_EMAILS=["admin@example.com"]
+INTEGRATION_API_KEYS={"key":"tenant"}
+```
+
+Excepción deliberada: `PLATFORM_OPERATOR_USER_IDS` es **CSV** de IDs de usuario de Clerk (`PLATFORM_OPERATOR_USER_IDS=user_abc,user_def`); un array JSON se rechaza.
 
 ### Opcionales (para funcionalidad completa)
 
