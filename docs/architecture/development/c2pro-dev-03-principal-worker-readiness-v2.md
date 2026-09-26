@@ -26,7 +26,7 @@ A worker can be principal-capable while no currently healthy route exists for th
 
 A subordinate worker can have a live-qualified route and still be unable to satisfy a C2Pro principal gate.
 
-Worker handoff preserves semantic WORK identity. It never silently changes role, scope or acceptance criteria to make a route appear eligible.
+Worker handoff preserves semantic WORK identity, including **role**. It never changes role, scope or acceptance criteria to make a route appear eligible. A role change is a separate linked work/review stage, not a handoff of the same WORK.
 
 ## 3. Current external truth frozen for planning
 
@@ -154,24 +154,51 @@ Prove fail-closed behavior for:
 ### DEV-03R6 — Resource/timeout
 Reuse the qualified Agent Factory job-bound resource policy. Evidence must show the actual enforced timeout/resource result, not only configuration text.
 
-### DEV-03R7 — Role-compatible handoff
-Valid examples:
+### DEV-03R7 — Same-role principal handoff
+
+A same-WORK handoff is valid only when the replacement principal has a qualified, healthy route for the **same canonical role**.
+
+The immutable handoff identity is:
 
 ```text
-Codex BACKEND_ENGINEER implementation
-  -> Claude SYSTEM_COHERENCE_REVIEWER
-     only when Claude route is currently qualified/healthy for that role
-
-Claude architecture finding
-  -> Codex BACKEND_ENGINEER remediation
-     through explicit role reassignment + fresh compatible authority
+work_id
+role
+base_sha
+scope
+out_of_scope
+acceptance_criteria
 ```
+
+Example of a valid handoff shape:
+
+```text
+WORK(role=implementation_lead, worker=principal-A)
+  -> provider/quota failure
+  -> WORK(role=implementation_lead, worker=principal-B)
+```
+
+but only when principal-B is actually route-qualified and authorized for `implementation_lead`.
+
+A cross-role flow is **not** a handoff:
+
+```text
+implementation WORK
+  -> independent review WORK/stage
+  -> remediation WORK/stage
+```
+
+Those stages must be linked explicitly to the source work/campaign while keeping their own role identity.
+
+At the current Agent Factory baseline, Codex is qualified for `BACKEND_ENGINEER` while Claude is qualified for `SOFTWARE_ARCHITECT` / `SYSTEM_COHERENCE_REVIEWER`. No shared exact qualified role between the two principals is currently proven. Therefore the reciprocal same-role handoff gate is honestly **BLOCKED**, not inferred from C2Pro's abstract eligibility table.
 
 Invalid:
 
 ```text
 Claude route unavailable
-  -> silently relabel role so fallback can run
+  -> silently relabel the same WORK to a Claude-qualified role
+
+Codex implementation
+  -> call Claude coherence review a handoff of the implementation WORK
 
 Codex implementation qualification
   -> infer Claude implementation qualification
@@ -180,7 +207,7 @@ subordinate live route
   -> satisfy principal review gate
 ```
 
-When no compatible principal route is available, preserve WORK and enter a controlled blocked/reassignment state.
+When no compatible same-role principal route exists, preserve the original WORK unchanged and enter a controlled blocked state or create a separately authorized linked stage.
 
 ## 6. C2Pro principal-review gate
 
@@ -239,7 +266,7 @@ TYPED_AUTH_STATE?
 FRESH_JOB_AUTHORITY_REQUIRED?
 NEGATIVE_BOUNDARIES_PROVEN?
 RESOURCE_TIMEOUT_PROVEN?
-HANDOFF_SEMANTICS_PROVEN?
+SAME_ROLE_HANDOFF_OR_BLOCKED_SEMANTICS_PROVEN?
 CURRENT_BLOCKERS?
 ```
 
