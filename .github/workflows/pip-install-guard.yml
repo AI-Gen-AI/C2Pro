@@ -3,13 +3,24 @@ on:
   pull_request:
     paths:
       - '.github/workflows/**'
+      - '.github/workflows/**.yaml'
       - '.github/actions/**'
+      - '.github/actions/**.yaml'
+      - '.github/scripts/pip_install_guard.py'
+      - '.github/scripts/test_pip_install_guard.py'
   push:
     branches:
       - main
     paths:
       - '.github/workflows/**'
+      - '.github/workflows/**.yaml'
       - '.github/actions/**'
+      - '.github/actions/**.yaml'
+      - '.github/scripts/pip_install_guard.py'
+      - '.github/scripts/test_pip_install_guard.py'
+
+permissions:
+  contents: read
 
 jobs:
   guard:
