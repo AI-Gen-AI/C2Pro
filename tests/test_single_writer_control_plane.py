@@ -257,6 +257,19 @@ def test_role_frontmatter_cannot_mutate_legacy_control_files():
         assert "ALWAYS mark completed tasks in backlogs/" not in frontmatter
         assert "NEVER mutate C2PRO_MASTER_BACKLOG.md, backlogs/*.md or blackboard.json." in frontmatter
         assert ".c2pro/work/<work_id>.yaml" in frontmatter or role_path.name == "role_planner.md"
+        if role_path.name != "role_planner.md":
+            assert 'output_schema_ref: "../.c2pro/schemas/implementation-result.schema.yaml"' in frontmatter
+            assert "c2pro-implementation-result-v1" in frontmatter
+
+
+def test_documentation_structure_contains_no_legacy_write_protocol() -> None:
+    """Critical documentation rule must contain one operational protocol, not conflicting legacy writes."""
+    content = (ROOT / ".claude" / "rules" / "DOCUMENTATION_STRUCTURE.md").read_text(encoding="utf-8")
+    assert "ALL task documentation MUST go in exactly TWO locations" not in content
+    assert "Add to backlogs/BCK_BACKEND.md" not in content
+    assert "Use blackboard/SESSION_*.md for active work" not in content
+    assert "Ordinary workers MUST NOT mutate them" in content
+    assert "c2pro-implementation-result-v1" in content
 
 
 def test_reconciler_targets_canonical_control_not_legacy_backlog():
