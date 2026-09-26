@@ -23,3 +23,8 @@ references:
     immutable: false
     sha256: null
     summary: Line B restart package and authority reinterpretation for current Agent Factory semantics.
+  - kind: audit
+    locator: docs/internal/CODEX_AUTH_WORKSPACE_401_RUNBOOK.md
+    immutable: false
+    sha256: null
+    summary: Current C2Pro evidence source for login-vs-runtime identity proof, active executable provenance and workspace isolation.
