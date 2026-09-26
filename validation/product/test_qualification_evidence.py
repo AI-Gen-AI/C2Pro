@@ -230,6 +230,7 @@ def test_observed_at_rejects_permissive_non_rfc3339_forms() -> None:
     for value in (
         "2026-09-26Q10:00:00+00:00",
         "20260926T100000+0000",
+        "2026-09-26T10:00:60Z",
     ):
         doc = _doc()
         doc["observed_at"] = value
@@ -569,6 +570,32 @@ def test_runtime_bindings_require_distinct_deployment_evidence() -> None:
         "backend and frontend runtime bindings must reference distinct deployment evidence"
         in problem
         for problem in problems
+    )
+
+
+def test_runtime_bindings_require_distinct_deployment_artifacts() -> None:
+    doc = _doc()
+    frontend_evidence = next(
+        ref for ref in doc["evidence_refs"] if ref["id"] == "deploy-frontend"
+    )
+    frontend_evidence["ref"] = "railway:deployment:backend-prod"
+    problems = q.validate_document(doc)
+    assert any(
+        "backend and frontend runtime bindings must reference distinct deployment artifacts"
+        in problem
+        for problem in problems
+    )
+
+
+def test_runtime_binding_requires_provider_namespaced_deployment_evidence() -> None:
+    doc = _doc()
+    backend_evidence = next(
+        ref for ref in doc["evidence_refs"] if ref["id"] == "deploy-backend"
+    )
+    backend_evidence["ref"] = "vercel:deployment:wrong-plane"
+    problems = q.validate_document(doc)
+    assert any(
+        "railway-namespaced deployment evidence" in problem for problem in problems
     )
 
 
