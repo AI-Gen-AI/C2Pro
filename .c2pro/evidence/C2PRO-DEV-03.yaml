@@ -1,0 +1,25 @@
+schema: c2pro-evidence-reference-v1
+schema_version: 1
+work_id: C2PRO-DEV-03
+status: collecting
+references:
+  - kind: git_commit
+    locator: AI-Gen-AI/C2Pro@4c26ebc740139ff6754dcda6e3dd393c9e1d8f01
+    immutable: true
+    sha256: null
+    summary: C2Pro restart planning baseline before DEV-03 activation.
+  - kind: git_commit
+    locator: AI-Gen-AI/2SB@2bc886a8c90bb5d67b955c9ed18d71946e321f34
+    immutable: true
+    sha256: null
+    summary: Current AI-Gen Agent Factory authority and route-qualification baseline reviewed by Line B.
+  - kind: pull_request
+    locator: AI-Gen-AI/C2Pro#565
+    immutable: false
+    sha256: null
+    summary: Historical unmerged DEV-03 design and VPS evidence; reuse only under KEEP REVALIDATE REPLACE classification.
+  - kind: audit
+    locator: AI-Gen-AI/C2Pro#674
+    immutable: false
+    sha256: null
+    summary: Line B restart package and authority reinterpretation for current Agent Factory semantics.
