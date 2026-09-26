@@ -26,6 +26,11 @@ RFC3339_DATETIME_RE = re.compile(
     r"(?:\.\d+)?"
     r"(?:[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$"
 )
+RFC3339_LOCAL_DATETIME_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[Tt]"
+    r"(?:[01]\d|2[0-3]):[0-5]\d:(?:[0-5]\d|60)"
+    r"(?:\.\d+)?$"
+)
 ALLOWED_KINDS = {
     "release_bundle",
     "deployment",
@@ -225,6 +230,8 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
     observed_at = doc.get("observed_at")
     if not _non_empty_string(observed_at):
         problems.append("observed_at is required")
+    elif RFC3339_LOCAL_DATETIME_RE.fullmatch(observed_at):
+        problems.append("observed_at must include a timezone")
     elif not RFC3339_DATETIME_RE.fullmatch(observed_at):
         problems.append("observed_at must be an RFC3339 / ISO-8601 date-time")
     else:
