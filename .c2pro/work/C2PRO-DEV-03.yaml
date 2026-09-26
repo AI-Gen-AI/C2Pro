@@ -13,7 +13,7 @@ scope:
   - prepare Claude architecture and system-coherence qualification only after current route-health revalidation
   - prove canonical main Product Runtime secrets and cross-workspace negative boundaries
   - prove timeout and resource ceilings under the governed Agent Factory execution plane
-  - prove identity-preserving role-compatible principal handoff without role laundering
+  - prove same-role identity-preserving principal handoff when a second principal has a compatible qualified route
   - close or explicitly block the C2Pro independent-principal review route with a compatible qualified principal surface
   - freeze compact evidence sufficient for canonical DEV-03 reconciliation
 out_of_scope:
@@ -47,7 +47,7 @@ acceptance_criteria:
   - no principal inherits a role qualification from the other principal
   - canonical main Product Runtime secrets credential custody and cross-workspace boundaries remain denied
   - resource and timeout enforcement is evidenced
-  - handoff preserves work identity while any role or worker reassignment is explicit and route-compatible
+  - same-work handoff preserves work_id role base_sha scope out_of_scope and acceptance criteria; a role change requires a separate linked work or review stage
   - no subordinate result can satisfy an independent principal gate
   - material-work promotion remains blocked until a compatible independent principal review route is qualified healthy and separately authorized
   - no secret material is written to Git evidence
@@ -59,7 +59,7 @@ required_tests:
   - DEV-03R4 Claude bounded architecture-coherence qualification or explicit blocked result
   - DEV-03R5 canonical-main Runtime secrets and cross-workspace denial
   - DEV-03R6 timeout and resource-limit enforcement
-  - DEV-03R7 identity-preserving role-compatible handoff
+  - DEV-03R7 same-role identity-preserving principal handoff or explicit no-shared-route blocked result
   - DEV-03R8 independent principal review route closure or explicit blocked result
 evidence_required:
   - exact_c2pro_main_sha
@@ -70,7 +70,7 @@ evidence_required:
   - fresh_job_authority_and_consumption_evidence
   - negative_boundary_results
   - timeout_resource_results
-  - handoff_result
+  - same_role_handoff_or_blocked_result
   - independent_principal_review
 review_policy: independent_principal
 worker_selection:
