@@ -46,7 +46,7 @@ historical_input:
 
 ai_gen_dependency:
   repository: AI-Gen-AI/2SB
-  observed_main: 2bc886a8c90bb5d67b955c9ed18d71946e321f34
+  observed_main: bab45b6833b52bf79fc82e585171d6ef8f2d9584
   af_dev_01: DONE
   mr_dev_01c: DONE_QUALIFIED_REVIEWED
   mr_dev_01c_bounded_authority: CONSUMED
@@ -159,6 +159,8 @@ done_definition:
   active_executable_provenance_required: true
   minimal_execution_identity_smoke_required: true
   fresh_authority_evidence_required_for_live_runs: true
+  durable_execution_binding_required_for_live_runs: true
+  terminal_lifecycle_receipt_required_for_live_runs: true
   negative_boundary_evidence_required: true
   resource_timeout_evidence_required: true
   same_role_handoff_or_explicit_blocked_evidence_required: true
@@ -177,3 +179,17 @@ diagnostic_invariants:
   active_executable_must_be_resolved_before_update_or_qualification: true
   raw_auth_payload_must_never_be_recorded: true
   workspace_specific_failure_must_be_isolated_before_auth_conclusion: true
+
+durable_execution_binding:
+  source: AI-Gen-AI/2SB@bab45b6833b52bf79fc82e585171d6ef8f2d9584
+  contract: SessionExecutionBindingV1
+  lifecycle_contract: ExecutionLifecycleReceiptV1
+  persistence: FAIL_CLOSED_DURABLE
+  lifecycle_authority_source: false
+  requirements:
+    immutable_binding_sha256: REQUIRED
+    canonical_schema_validation: REQUIRED
+    monotonic_lifecycle_receipts: REQUIRED
+    terminal_receipt_cannot_reopen: REQUIRED
+    terminal_dispositions: [CLOSED_CLEAN, FAILED_CLEAN, RECONCILIATION_REQUIRED]
+    pass_without_verified_binding: FORBIDDEN
