@@ -33,7 +33,9 @@ historical_input:
       - vps_host_resources
       - os_execution_identities
       - cli_paths_versions_owners_modes_and_hashes
+      - active_executable_installation_root
       - typed_auth_state
+      - minimal_execution_identity_smoke
       - route_health
       - sandbox_and_resource_primitives
     REPLACE:
@@ -65,7 +67,9 @@ principal_workers:
     principal_capable: true
     execution_identity_expected: aigen-codex
     identity_state: REVALIDATE_REQUIRED
+    active_executable_provenance_state: REVALIDATE_REQUIRED
     auth_state: REVALIDATE_REQUIRED
+    minimal_execution_identity_smoke_required: true
     adapter: codex_cli
     current_route: CODEX_OPENAI_DEFAULT
     route_qualification_observed: QUALIFIED_LIVE
@@ -80,7 +84,9 @@ principal_workers:
     principal_capable: true
     execution_identity_expected: aigen-claude
     identity_state: REVALIDATE_REQUIRED
+    active_executable_provenance_state: REVALIDATE_REQUIRED
     auth_state: REVALIDATE_REQUIRED
+    minimal_execution_identity_smoke_required: true
     adapter: claude_code
     current_route: CLAUDE_ANTHROPIC_OPUS5_TARGET
     route_qualification_observed: QUALIFIED_BOUNDED
@@ -135,7 +141,8 @@ handoff_contract:
 
 qualification_slices:
   DEV_03R0_REBIND_BASELINES: PLANNED
-  DEV_03R1_HOST_IDENTITY_REFRESH: PLANNED
+  DEV_03R1_HOST_IDENTITY_ACTIVE_EXECUTABLE_REFRESH: PLANNED
+  DEV_03R1_MINIMAL_EXECUTION_IDENTITY_SMOKE: PLANNED_NOT_AUTHORIZED
   DEV_03R2_ROUTE_ROLE_RECONCILIATION: PLANNED
   DEV_03R3_CODEX_BOUNDED_IMPLEMENTATION: BLOCKED_PENDING_FRESH_ENDPOINT_PREFLIGHT
   DEV_03R4_CLAUDE_ARCH_COHERENCE: BLOCKED_PENDING_ROUTE_HEALTH_REVALIDATION
@@ -149,6 +156,8 @@ done_definition:
   boolean_ready_field_for_all_principals_forbidden: true
   per_principal_per_role_state_required: true
   exact_baselines_required: true
+  active_executable_provenance_required: true
+  minimal_execution_identity_smoke_required: true
   fresh_authority_evidence_required_for_live_runs: true
   negative_boundary_evidence_required: true
   resource_timeout_evidence_required: true
@@ -162,3 +171,9 @@ next_action:
   blocked_by:
     - PR_669_CANONICAL_RECONCILIATION_NOT_YET_MERGED
   action: after PR 669 is canonical on main refresh baseline then bind C2PRO-DEV-03 into current and work-queue without changing qualification semantics
+
+diagnostic_invariants:
+  login_status_alone_is_not_execution_identity_proof: true
+  active_executable_must_be_resolved_before_update_or_qualification: true
+  raw_auth_payload_must_never_be_recorded: true
+  workspace_specific_failure_must_be_isolated_before_auth_conclusion: true
