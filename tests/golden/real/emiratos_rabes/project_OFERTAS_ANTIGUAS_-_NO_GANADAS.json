@@ -1,0 +1,75 @@
+{
+  "project_metadata": {
+    "id": "P-100035",
+    "name": "Ofertas antiguas - no ganadas",
+    "type": "Industrial",
+    "complexity": "Complex",
+    "language": "es"
+  },
+  "input_documents": {
+    "contract_text": "CONTRATO DE ADJUDICACIÓN Y OBRA para Ofertas antiguas - no ganadas (Emiratos Árabes). El contratista se compromete a realizar los trabajos completos según las bases de licitación. El importe total de adjudicación asciende a 53,750,000.00 EUR sin IVA. El plazo de ejecución será de 24 meses, contados a partir de la firma del acta de replanteo.",
+    "risk_analysis_text": "ANÁLISIS DE RIESGOS INICIAL (FORMG-121) - Ofertas antiguas - no ganadas. Se identifican riesgos críticos de aprovisionamiento en la región que podrían demorar la entrega 30 meses. El desvío de costes estimado es de 5,375,000.00 EUR debido al encarecimiento de materias primas.",
+    "schedule_summary": {
+      "execution_period_months": 24,
+      "total_period_months": 36,
+      "contract_duration_months": 24,
+      "forecast_duration_months": 24
+    },
+    "budget_summary": {
+      "total_value": 53750000,
+      "budget_total": 45687500.0,
+      "line_items": [
+        {
+          "name": "Civil & Installation",
+          "cost": 27412500.0
+        },
+        {
+          "name": "Equipment & Materials",
+          "cost": 18275000.0
+        }
+      ],
+      "contract_total": 53750000,
+      "currency": "EUR",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "Normal 15% execution margin."
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-OBJ-01",
+        "type": "scope",
+        "text": "Ofertas antiguas - no ganadas",
+        "metadata": {
+          "location": "Emiratos Árabes"
+        }
+      },
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "24",
+        "metadata": {
+          "duration_months": 24
+        }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "Abengoa Inabensa",
+        "mention": "contratista",
+        "role": "Main Contractor",
+        "quadrant": "Responsible"
+      }
+    ],
+    "coherence_alerts": [],
+    "expert_score": 100,
+    "per_category_scores": {
+      "SCOPE": 100,
+      "BUDGET": 100,
+      "TIME": 100,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
+  }
+}

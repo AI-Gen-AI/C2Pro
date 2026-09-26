@@ -37,6 +37,7 @@ from src.core.security import (
 # TEST FIXTURES
 # ===========================================
 
+
 @pytest.fixture
 def app():
     """Create a simple FastAPI app for testing."""
@@ -49,7 +50,9 @@ def app():
     @app.get("/protected")
     async def protected(request: Request):
         return {
-            "tenant_id": str(request.state.tenant_id) if hasattr(request.state, "tenant_id") else None,
+            "tenant_id": str(request.state.tenant_id)
+            if hasattr(request.state, "tenant_id")
+            else None,
             "user_id": str(request.state.user_id) if hasattr(request.state, "user_id") else None,
         }
 
@@ -68,10 +71,7 @@ def app():
 def valid_token(test_user, test_tenant):
     """Generate a valid JWT token."""
     return create_access_token(
-        user_id=test_user.id,
-        tenant_id=test_tenant.id,
-        email=test_user.email,
-        role=test_user.role
+        user_id=test_user.id, tenant_id=test_tenant.id, email=test_user.email, role=test_user.role
     )
 
 
@@ -95,6 +95,7 @@ def test_user(test_tenant):
 # ===========================================
 # TENANT ISOLATION MIDDLEWARE TESTS
 # ===========================================
+
 
 class TestTenantIsolationMiddleware:
     """Tests for TenantIsolationMiddleware."""
@@ -194,7 +195,7 @@ class TestTenantIsolationMiddleware:
             user_id=test_user.id,
             tenant_id=test_tenant.id,
             email=test_user.email,
-            role=test_user.role
+            role=test_user.role,
         )
 
         # Create mock request
@@ -221,7 +222,7 @@ class TestTenantIsolationMiddleware:
         token = jwt.encode(
             {"email": "test@example.com", "role": "user"},
             settings.jwt_secret_key,
-            algorithm=settings.jwt_algorithm
+            algorithm=settings.jwt_algorithm,
         )
 
         request = Mock(spec=Request)
@@ -272,7 +273,7 @@ class TestTenantIsolationMiddleware:
             user_id=test_user.id,
             tenant_id=test_tenant.id,
             email=test_user.email,
-            role=test_user.role
+            role=test_user.role,
         )
 
         request = Mock(spec=Request)
@@ -302,13 +303,17 @@ class TestTenantIsolationMiddleware:
         assert middleware._is_public_path("/protected") is False
 
     @pytest.mark.asyncio
-    async def test_middleware_binds_to_logging_context(self, app, valid_token, test_tenant, test_user):
+    async def test_middleware_binds_to_logging_context(
+        self, app, valid_token, test_tenant, test_user
+    ):
         """
         Should bind tenant_id and user_id to structured logging context.
         """
         app.add_middleware(TenantIsolationMiddleware)
 
-        with patch('src.core.middleware.tenant_isolation.structlog.contextvars.bind_contextvars') as mock_bind:
+        with patch(
+            "src.core.middleware.tenant_isolation.structlog.contextvars.bind_contextvars"
+        ) as mock_bind:
             client = TestClient(app)
             client.get("/protected", headers={"Authorization": f"Bearer {valid_token}"})
 
@@ -374,19 +379,149 @@ class TestTenantIsolationMiddleware:
         async def _session():
             yield AsyncMock()
 
-        with patch("src.core.middleware.tenant_isolation.get_raw_session", _session), patch(
-            "src.core.middleware.tenant_isolation.lookup_user_by_clerk_user_id",
-            new=AsyncMock(return_value=record),
-        ) as mock_lookup:
+        with (
+            patch("src.core.middleware.tenant_isolation.get_raw_session", _session),
+            patch(
+                "src.core.middleware.tenant_isolation.lookup_user_by_clerk_user_id",
+                new=AsyncMock(return_value=record),
+            ) as mock_lookup,
+        ):
             tenant_id = await middleware._get_tenant_for_clerk_user("clerk_user_123")
 
         assert tenant_id == expected_tenant_id
         mock_lookup.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_extract_auth_context_returns_internal_uuid_for_clerk_user(self):
+        """
+        Regression: the Clerk auth path must put the INTERNAL user UUID into
+        request.state.user_id, not the Clerk "user_..." string. The string form
+        breaks UUID-typed persistence (e.g. documents.created_by -> 500 on upload).
+        """
+        middleware = TenantIsolationMiddleware(app=Mock())
+        internal_uuid = uuid4()
+        tenant_uuid = uuid4()
+        record = SimpleNamespace(user_id=internal_uuid, tenant_id=tenant_uuid, is_active=True)
+
+        request = SimpleNamespace(
+            headers={"Authorization": "Bearer clerk.jwt.token"},
+            url=SimpleNamespace(path="/api/v1/projects/x/documents"),
+            query_params={},
+        )
+
+        @asynccontextmanager
+        async def _session():
+            yield AsyncMock()
+
+        with (
+            patch(
+                "src.core.middleware.tenant_isolation.is_token_revoked_async",
+                new=AsyncMock(return_value=False),
+            ),
+            patch(
+                "src.core.middleware.tenant_isolation.verify_clerk_token",
+                new=AsyncMock(return_value={"sub": "clerk_user_123"}),
+            ),
+            patch("src.core.middleware.tenant_isolation.get_raw_session", _session),
+            patch(
+                "src.core.middleware.tenant_isolation.lookup_user_by_clerk_user_id",
+                new=AsyncMock(return_value=record),
+            ),
+        ):
+            (
+                tenant_id,
+                user_id,
+                require_validation,
+                error_message,
+                _reason,
+            ) = await middleware._extract_auth_context(request)
+
+        assert user_id == internal_uuid
+        assert user_id != "clerk_user_123"
+        assert tenant_id == tenant_uuid
+        assert require_validation is True
+        assert error_message is None
+
+    @pytest.mark.asyncio
+    async def test_get_clerk_user_record_returns_none_on_lookup_failure(self):
+        """A lookup failure must degrade to None (no tenant) rather than raise."""
+        middleware = TenantIsolationMiddleware(app=Mock())
+
+        @asynccontextmanager
+        async def _session():
+            yield AsyncMock()
+
+        with (
+            patch("src.core.middleware.tenant_isolation.get_raw_session", _session),
+            patch(
+                "src.core.middleware.tenant_isolation.lookup_user_by_clerk_user_id",
+                new=AsyncMock(side_effect=RuntimeError("db down")),
+            ),
+        ):
+            result = await middleware._get_clerk_user_record("clerk_user_123")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_clerk_user_record_reraises_bootstrap_blocked(self):
+        """BootstrapFallbackBlockedError must propagate (policy), not degrade to None."""
+        from src.core.auth.bootstrap_lookup import BootstrapFallbackBlockedError
+
+        middleware = TenantIsolationMiddleware(app=Mock())
+
+        @asynccontextmanager
+        async def _session():
+            yield AsyncMock()
+
+        with (
+            patch("src.core.middleware.tenant_isolation.get_raw_session", _session),
+            patch(
+                "src.core.middleware.tenant_isolation.lookup_user_by_clerk_user_id",
+                new=AsyncMock(side_effect=BootstrapFallbackBlockedError()),
+            ),
+        ):
+            with pytest.raises(BootstrapFallbackBlockedError):
+                await middleware._get_clerk_user_record("clerk_user_123")
+
+    @pytest.mark.asyncio
+    async def test_extract_auth_context_unprovisioned_clerk_user_keeps_clerk_id(self):
+        """Not-yet-provisioned Clerk user: no tenant, keep clerk id for later provisioning."""
+        middleware = TenantIsolationMiddleware(app=Mock())
+        request = SimpleNamespace(
+            headers={"Authorization": "Bearer clerk.jwt.token"},
+            url=SimpleNamespace(path="/api/v1/projects/x/documents"),
+            query_params={},
+        )
+
+        with (
+            patch(
+                "src.core.middleware.tenant_isolation.is_token_revoked_async",
+                new=AsyncMock(return_value=False),
+            ),
+            patch(
+                "src.core.middleware.tenant_isolation.verify_clerk_token",
+                new=AsyncMock(return_value={"sub": "clerk_user_123"}),
+            ),
+            patch.object(middleware, "_get_clerk_user_record", new=AsyncMock(return_value=None)),
+        ):
+            (
+                tenant_id,
+                user_id,
+                require_validation,
+                error_message,
+                _reason,
+            ) = await middleware._extract_auth_context(request)
+
+        assert tenant_id is None
+        assert user_id == "clerk_user_123"
+        assert require_validation is False
+        assert error_message is None
+
 
 # ===========================================
 # REQUEST LOGGING MIDDLEWARE TESTS
 # ===========================================
+
 
 class TestRequestLoggingMiddleware:
     """Tests for RequestLoggingMiddleware."""
@@ -443,13 +578,14 @@ class TestRequestLoggingMiddleware:
         """
         app.add_middleware(RequestLoggingMiddleware)
 
-        with patch('src.core.middleware.logger.info') as mock_log:
+        with patch("src.core.middleware.logger.info") as mock_log:
             client = TestClient(app)
             client.get("/health")
 
             # Find the request_started log call
-            started_calls = [call for call in mock_log.call_args_list
-                           if call[0][0] == "request_started"]
+            started_calls = [
+                call for call in mock_log.call_args_list if call[0][0] == "request_started"
+            ]
             assert len(started_calls) >= 1
 
             # Verify log contains expected fields
@@ -463,13 +599,14 @@ class TestRequestLoggingMiddleware:
         """
         app.add_middleware(RequestLoggingMiddleware)
 
-        with patch('src.core.middleware.logger.info') as mock_log:
+        with patch("src.core.middleware.logger.info") as mock_log:
             client = TestClient(app)
             client.get("/health")
 
             # Find the request_completed log call
-            completed_calls = [call for call in mock_log.call_args_list
-                             if call[0][0] == "request_completed"]
+            completed_calls = [
+                call for call in mock_log.call_args_list if call[0][0] == "request_completed"
+            ]
             assert len(completed_calls) >= 1
 
             call_kwargs = completed_calls[0][1]
@@ -487,13 +624,14 @@ class TestRequestLoggingMiddleware:
         async def not_found():
             raise HTTPException(status_code=404, detail="Not found")
 
-        with patch('src.core.middleware.logger.warning') as mock_warning:
+        with patch("src.core.middleware.logger.warning") as mock_warning:
             client = TestClient(app)
             client.get("/not-found")
 
             # Should log as warning for 4xx/5xx status
-            warning_calls = [call for call in mock_warning.call_args_list
-                           if call[0][0] == "request_completed"]
+            warning_calls = [
+                call for call in mock_warning.call_args_list if call[0][0] == "request_completed"
+            ]
             assert len(warning_calls) >= 1
 
     def test_get_client_ip_from_x_forwarded_for(self):
@@ -557,6 +695,7 @@ class TestRequestLoggingMiddleware:
 # RATE LIMIT MIDDLEWARE TESTS
 # ===========================================
 
+
 class TestRateLimitMiddleware:
     """Tests for RateLimitMiddleware."""
 
@@ -580,7 +719,7 @@ class TestRateLimitMiddleware:
         client = TestClient(app)
 
         # Mock settings to have low rate limit for testing
-        with patch('src.core.middleware.settings.rate_limit_per_minute', 5):
+        with patch("src.core.middleware.settings.rate_limit_per_minute", 5):
             # Make requests up to limit
             for _ in range(5):
                 response = client.get("/public")
@@ -670,6 +809,7 @@ class TestRateLimitMiddleware:
 # SECURITY DEPENDENCY TESTS
 # ===========================================
 
+
 class TestSecurityDependencies:
     """Tests for security dependency functions."""
 
@@ -694,7 +834,7 @@ class TestSecurityDependencies:
         """
         request = Mock(spec=Request)
         # Create a state object without tenant_id attribute
-        request.state = Mock(spec=['user_id'])  # Only has user_id, not tenant_id
+        request.state = Mock(spec=["user_id"])  # Only has user_id, not tenant_id
 
         with pytest.raises(TenantNotFoundError):
             await get_current_tenant_id(request)
@@ -720,7 +860,7 @@ class TestSecurityDependencies:
         """
         request = Mock(spec=Request)
         # Create a state object without user_id attribute
-        request.state = Mock(spec=['tenant_id'])  # Only has tenant_id, not user_id
+        request.state = Mock(spec=["tenant_id"])  # Only has tenant_id, not user_id
 
         with pytest.raises(AuthenticationError, match="User not authenticated"):
             await get_current_user_id(request)
@@ -746,7 +886,7 @@ class TestSecurityDependencies:
         """
         request = Mock(spec=Request)
         # Create a state object without user_id attribute
-        request.state = Mock(spec=['tenant_id'])  # Only has tenant_id, not user_id
+        request.state = Mock(spec=["tenant_id"])  # Only has tenant_id, not user_id
 
         result = await get_optional_user_id(request)
 
@@ -756,6 +896,7 @@ class TestSecurityDependencies:
 # ===========================================
 # PERMISSIONS CLASS TESTS
 # ===========================================
+
 
 class TestPermissions:
     """Tests for Permissions class."""
@@ -769,8 +910,7 @@ class TestPermissions:
 
         # Should not raise exception
         await Permissions.verify_project_access(
-            project_tenant_id=tenant_id,
-            current_tenant_id=tenant_id
+            project_tenant_id=tenant_id, current_tenant_id=tenant_id
         )
 
     @pytest.mark.asyncio
@@ -783,8 +923,7 @@ class TestPermissions:
 
         with pytest.raises(HTTPException) as exc_info:
             await Permissions.verify_project_access(
-                project_tenant_id=project_tenant_id,
-                current_tenant_id=current_tenant_id
+                project_tenant_id=project_tenant_id, current_tenant_id=current_tenant_id
             )
 
         # Should return 404 (not 403) to not reveal existence
@@ -800,8 +939,7 @@ class TestPermissions:
 
         # Should not raise exception
         await Permissions.verify_document_access(
-            document_tenant_id=tenant_id,
-            current_tenant_id=tenant_id
+            document_tenant_id=tenant_id, current_tenant_id=tenant_id
         )
 
     @pytest.mark.asyncio
@@ -814,8 +952,7 @@ class TestPermissions:
 
         with pytest.raises(HTTPException) as exc_info:
             await Permissions.verify_document_access(
-                document_tenant_id=document_tenant_id,
-                current_tenant_id=current_tenant_id
+                document_tenant_id=document_tenant_id, current_tenant_id=current_tenant_id
             )
 
         assert exc_info.value.status_code == 404
@@ -829,11 +966,10 @@ class TestPermissions:
         project_tenant_id = uuid4()
         current_tenant_id = uuid4()
 
-        with patch('src.core.security.logger.warning') as mock_log:
+        with patch("src.core.security.logger.warning") as mock_log:
             with suppress(HTTPException):
                 await Permissions.verify_project_access(
-                    project_tenant_id=project_tenant_id,
-                    current_tenant_id=current_tenant_id
+                    project_tenant_id=project_tenant_id, current_tenant_id=current_tenant_id
                 )
 
             # Verify warning was logged

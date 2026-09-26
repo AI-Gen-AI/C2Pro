@@ -1,0 +1,75 @@
+{
+  "project_metadata": {
+    "id": "P-100012",
+    "name": "Ofertas antiguas - no ganadas",
+    "type": "Industrial",
+    "complexity": "Complex",
+    "language": "pt"
+  },
+  "input_documents": {
+    "contract_text": "CONTRATO DE EXECUÇÃO DE OBRA para Ofertas antiguas - no ganadas (Brasil). O contratante assume o compromisso de entrega no prazo de 12 meses. O valor global do contrato é de R$ 25,000,000.00 sem impostos.",
+    "risk_analysis_text": "ANALISE DE RISCOS DE PROJETO (FORMG-121) - Ofertas antiguas - no ganadas. Risco de atraso nas licenças ambientais locais com impacto crítico estimado de 24 meses no cronograma global.",
+    "schedule_summary": {
+      "execution_period_months": 12,
+      "total_period_months": 24,
+      "contract_duration_months": 12,
+      "forecast_duration_months": 12
+    },
+    "budget_summary": {
+      "total_value": 25000000,
+      "budget_total": 21250000.0,
+      "line_items": [
+        {
+          "name": "Civil & Installation",
+          "cost": 12750000.0
+        },
+        {
+          "name": "Equipment & Materials",
+          "cost": 8500000.0
+        }
+      ],
+      "contract_total": 25000000,
+      "currency": "EUR",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "Normal 15% execution margin."
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-OBJ-01",
+        "type": "scope",
+        "text": "Ofertas antiguas - no ganadas",
+        "metadata": {
+          "location": "Brasil"
+        }
+      },
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "12",
+        "metadata": {
+          "duration_months": 12
+        }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "Abengoa Inabensa",
+        "mention": "contratista",
+        "role": "Main Contractor",
+        "quadrant": "Responsible"
+      }
+    ],
+    "coherence_alerts": [],
+    "expert_score": 100,
+    "per_category_scores": {
+      "SCOPE": 100,
+      "BUDGET": 100,
+      "TIME": 100,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
+  }
+}

@@ -13,11 +13,13 @@ All tests now use authenticated_client fixture for proper JWT authentication.
 """
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
-from uuid import uuid4
+from types import SimpleNamespace
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
+from sqlalchemy import text
 
 from src.core.auth.models import Tenant
 from src.documents.adapters.persistence.models import DocumentORM
@@ -37,9 +39,25 @@ class _FakeCheckpointService:
     def __init__(self) -> None:
         self.loaded: list[tuple[str, str]] = []
 
-    async def load_checkpoint(self, thread_id: str, checkpoint_id: str) -> dict[str, str]:
+    async def load_checkpoint(self, thread_id: str, checkpoint_id: str | None = None) -> dict[str, str]:
         self.loaded.append((thread_id, checkpoint_id))
         return {"thread_id": thread_id, "checkpoint_id": checkpoint_id}
+
+    async def restore_checkpoint(self, thread_id: str, checkpoint_id: str | None = None):
+        """C2PRO P0b true-resume hotfix: the resume layer needs the exact
+        checkpoint CONFIG (thread_id + checkpoint_ns + checkpoint_id), not
+        just the checkpoint body."""
+        from src.modules.hitl.adapters.checkpoint_service import CheckpointRestore
+
+        self.loaded.append((thread_id, checkpoint_id))
+        configurable: dict[str, object] = {"thread_id": thread_id, "checkpoint_ns": ""}
+        if checkpoint_id:
+            configurable["checkpoint_id"] = checkpoint_id
+        return CheckpointRestore(
+            checkpoint={"thread_id": thread_id, "checkpoint_id": checkpoint_id},
+            config={"configurable": configurable},
+            metadata={},
+        )
 
     def extract_state(self, checkpoint: dict[str, str]) -> dict[str, object]:
         return {
@@ -51,24 +69,122 @@ class _FakeCheckpointService:
 class _FakeGraphApp:
     """Records state updates and resume invocations without real LangGraph runtime."""
 
-    def __init__(self) -> None:
+    def __init__(self, tenant_id: UUID) -> None:
         self.updates: list[tuple[dict[str, object], dict[str, object]]] = []
         self.invocations: list[tuple[object, dict[str, object]]] = []
+        self.resume_decisions: list[str | None] = []
+        # In production the tenant comes from the graph STATE, which this
+        # fake has no checkpoint to carry; the fixture supplies it instead.
+        self._tenant_id = tenant_id
+        self._ran = False
 
     async def aupdate_state(
         self,
         config: dict[str, object],
         state: dict[str, object],
-    ) -> None:
+    ) -> dict[str, object]:
+        """Fork the given checkpoint, as real LangGraph does.
+
+        C2PRO P0b crash-safe resume V3: each attempt resumes a CHILD of the
+        interrupt checkpoint, because re-resuming a checkpoint re-delivers
+        the FIRST attempt's payload. Returning the new config is part of
+        that contract, so the fake has to return one too.
+        """
         self.updates.append((config, dict(state)))
+        configurable = dict(config.get("configurable") or {})
+        parent = configurable.get("checkpoint_id") or "cp"
+        configurable["checkpoint_id"] = f"{parent}-fork-{len(self.updates)}"
+        return {**config, "configurable": configurable}
+
+    async def aget_state(self, config: dict[str, object]) -> object:
+        """Report terminality the way the use case verifies it.
+
+        `ainvoke` returning is NOT evidence the graph finished, so the use
+        case asks LangGraph for the thread's state and treats an empty
+        `next`/`tasks` as END. Before any resume has run, this thread is
+        still sitting at its interrupt.
+        """
+        configurable = dict(config.get("configurable") or {})
+        if not self._ran:
+            return SimpleNamespace(
+                next=("human_interrupt",), tasks=(), config={"configurable": configurable}
+            )
+        configurable["checkpoint_id"] = "cp-terminal"
+        return SimpleNamespace(next=(), tasks=(), config={"configurable": configurable})
 
     async def ainvoke(
         self,
         state: object,
         config: dict[str, object],
     ) -> dict[str, object]:
+        """C2PRO P0b true-resume hotfix: resume arrives as
+        Command(resume={"decision": ..., "feedback": ...}); the decision is
+        read FROM it, mirroring interrupt()'s return value in the real node.
+        """
+        from tests.support.hitl_resume_fakes import decision_from_resume
+
         self.invocations.append((state, config))
-        return {"analysis_id": "analysis-resumed"}
+        self._ran = True
+        decision, feedback = decision_from_resume(state)
+        self.resume_decisions.append(decision)
+        if decision == "reject":
+            return {
+                "human_decision": "reject",
+                "human_approval_required": False,
+                "workflow_terminated": True,
+                "termination_reason": feedback,
+            }
+        analysis_id = await self._run_real_n17(state)
+        return {"analysis_id": str(analysis_id), "human_decision": decision}
+
+    async def _run_real_n17(self, resume_signal: object) -> object:
+        """Persist for real, exactly as the production N17 node does.
+
+        This fake stands in for the LangGraph RUNTIME, not for durability.
+        Returning a made-up analysis_id would assert a fiction: under V3 an
+        approval is only finalized when the analysis is genuinely durable
+        for this operation, so a fake that persists nothing would prove the
+        endpoint can report a success that never happened -- the exact
+        failure this design removes.
+        """
+        from src.analysis.application.persist_resume_analysis import (
+            ResumeProvenance,
+            persist_resume_analysis_atomically,
+        )
+        from src.core.database import get_session_with_tenant
+
+        payload = getattr(resume_signal, "resume", None) or {}
+        raw = payload.get("resume_provenance") or {}
+        provenance = ResumeProvenance.from_state(
+            {"resume_provenance": raw, "tenant_id": str(self._tenant_id)}
+        )
+        assert provenance is not None, "the resume must carry attempt provenance"
+
+        # The operation row is the authority for what this resume is about.
+        async with get_session_with_tenant(provenance.tenant_id) as session:
+            row = (
+                await session.execute(
+                    text(
+                        "SELECT project_id, document_id FROM resume_operations "
+                        " WHERE id = cast(:op as uuid)"
+                    ),
+                    {"op": str(provenance.operation_id)},
+                )
+            ).first()
+
+        result = await persist_resume_analysis_atomically(
+            state={
+                "project_id": str(row.project_id),
+                "document_id": str(row.document_id),
+                "tenant_id": str(provenance.tenant_id),
+                "extracted_risks": [],
+                "extracted_wbs": [],
+                "coherence_score": 90,
+                "coherence_breakdown": {"overall": 90},
+            },
+            provenance=provenance,
+        )
+        return result.analysis_id
 
 
 @pytest_asyncio.fixture
@@ -79,7 +195,7 @@ async def hitl_resume_override(
 ) -> AsyncGenerator[tuple[_FakeCheckpointService, _FakeGraphApp], None]:
     """Override the resume workflow dependency with deterministic collaborators."""
     checkpoint_service = _FakeCheckpointService()
-    graph_app = _FakeGraphApp()
+    graph_app = _FakeGraphApp(tenant_id=test_user.tenant_id)
 
     def _override_use_case() -> ResumeWorkflowUseCase:
         repo = SqlAlchemyReviewQueueRepository(session=db, tenant_id=test_user.tenant_id)
@@ -258,8 +374,11 @@ class TestApprovalFlow:
         assert "review_id" in data
         assert "status" in data
         assert data["status"] == "resumed" or data["status"] == "approved"
-        assert graph_app.invocations, "Approve must invoke LangGraph after state update"
-        assert graph_app.invocations[-1][0] is None
+        assert graph_app.invocations, "Approve must invoke LangGraph to resume"
+        # C2PRO P0b true-resume hotfix: the first argument is no longer
+        # None (which did NOT resume) -- it is a Command carrying the
+        # decision.
+        assert graph_app.resume_decisions[-1] == "approve"
 
     async def test_approval_updates_review_status(
         self,
@@ -424,6 +543,53 @@ class TestCheckpointRestoration:
 
         assert response.status_code in [400, 500], "Should fail without checkpoint_id"
 
+    async def test_resume_succeeds_with_thread_id_but_no_checkpoint_id(
+        self,
+        authenticated_client: AsyncClient,
+        db,
+        test_project,
+        test_document,
+        test_tenant,
+        hitl_resume_override,
+    ):
+        """C2PRO P0b HITL resume hotfix (section 2/5): thread_id alone must
+        be sufficient to resume. checkpoint_id, when never captured for any
+        reason, must never permanently block a legitimate pending review --
+        CheckpointService.load_checkpoint already falls back to the latest
+        checkpoint for a thread, which for a freshly-interrupted thread IS
+        the interrupt point.
+        """
+        item_id = uuid4()
+        review = ReviewItemORM(
+            id=item_id,
+            item_id=item_id,
+            item_type="test_review",
+            tenant_id=test_tenant.id,
+            current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+            impact_level=ImpactLevel.HIGH,
+            confidence=0.2,
+            sla_due_date=datetime.now(UTC).replace(tzinfo=None),
+            item_data={},
+            review_metadata={},
+            project_id=test_project.id,
+            document_id=test_document.id,
+            review_type="analysis_critique",
+            checkpoint_id=None,  # never captured -- must not be fatal
+            thread_id=f"document:{test_document.id}:analysis",
+        )
+        db.add(review)
+        await db.commit()
+
+        response = await authenticated_client.post(
+            f"/api/v1/hitl/resume/{review.id}",
+            json={"decision": "approve", "feedback": "thread_id alone is sufficient"},
+        )
+
+        assert response.status_code == 200, (
+            f"Resume must succeed on thread_id alone: {response.text}"
+        )
+        assert response.json()["status"] in {"resumed", "APPROVED"}
+
 
 class TestStateInjection:
     """Test approval/rejection data injection into workflow state."""
@@ -444,9 +610,15 @@ class TestStateInjection:
         )
 
         assert response.status_code == 200, "Approval with feedback should succeed"
-        assert graph_app.updates[-1][1]["human_feedback"] == feedback
-        assert graph_app.updates[-1][1]["human_decision"] == "approve"
-        assert graph_app.updates[-1][1]["human_approval_required"] is False
+        # C2PRO P0b true-resume hotfix: the decision is no longer injected
+        # into stored state via aupdate_state -- it travels in
+        # Command(resume=...), which is what interrupt() returns inside the
+        # node. Assert the real carrier.
+        from tests.support.hitl_resume_fakes import decision_from_resume
+
+        resumed_decision, resumed_feedback = decision_from_resume(graph_app.invocations[-1][0])
+        assert resumed_decision == "approve"
+        assert resumed_feedback == feedback
 
     async def test_rejection_injects_termination_reason(
         self,
@@ -464,9 +636,14 @@ class TestStateInjection:
         )
 
         assert response.status_code == 200, "Rejection with reason should succeed"
-        assert graph_app.updates[-1][1]["human_decision"] == "reject"
-        assert graph_app.updates[-1][1]["workflow_terminated"] is True
-        assert graph_app.updates[-1][1]["termination_reason"] == reason
+        # See the approve case: the rejection now travels in the resume
+        # command and the graph itself terminates, rather than a
+        # "workflow_terminated" flag being patched into stored state.
+        from tests.support.hitl_resume_fakes import decision_from_resume
+
+        resumed_decision, resumed_feedback = decision_from_resume(graph_app.invocations[-1][0])
+        assert resumed_decision == "reject"
+        assert resumed_feedback == reason
 
 
 class TestErrorCases:

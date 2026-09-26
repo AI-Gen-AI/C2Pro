@@ -88,7 +88,7 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
 
       // Status should be one of the known values
       const text = await statusBadge.textContent();
-      const validStatuses = ["Analyzed", "Processing", "Uploaded", "Error"];
+      const validStatuses = ["Uploaded", "Processing", "Parsed", "Analysis pending", "Analyzed", "Error"];
       const hasValidStatus = validStatuses.some(
         (s) => text?.toLowerCase().includes(s.toLowerCase())
       );

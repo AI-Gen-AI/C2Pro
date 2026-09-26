@@ -1,0 +1,37 @@
+name: C2Pro Product-Control Guard
+
+# Enforces the product-control plane's integrity on any change to the control files:
+#   - MD <-> YAML exact value parity (contradiction / missing canonical block => fail)
+#   - per-field status-enum validity (including work_status)
+#   - positive + negative drift-detection tests
+# Docs/control only: NO backend/frontend/database setup; the sole dependency is PyYAML.
+
+on:
+  pull_request:
+    paths:
+      - "validation/product/**"
+      - "docs/product/00-c2pro-master-product-control-v1.md"
+      - ".github/workflows/c2pro-product-control-guard.yml"
+  push:
+    branches: [main]
+    paths:
+      - "validation/product/**"
+      - "docs/product/00-c2pro-master-product-control-v1.md"
+
+permissions:
+  contents: read
+
+jobs:
+  product-control-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install minimal dependency (PyYAML only)
+        run: python -m pip install --disable-pip-version-check "pyyaml==6.0.3"
+      - name: Parity + enum guard (MD<->YAML exact values; status enums)
+        run: python validation/product/check_control_parity.py
+      - name: Positive + negative drift-detection tests
+        run: python validation/product/test_control_parity.py

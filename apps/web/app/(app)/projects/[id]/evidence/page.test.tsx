@@ -8,6 +8,7 @@ const useDocumentEntitiesMock = vi.fn();
 const useDocumentAlertsMock = vi.fn();
 const useDocumentHistoryMock = vi.fn();
 const useDocumentRelationshipExplanationMock = vi.fn();
+const useDocumentDetailMock = vi.fn();
 const reviewApprovalMutateAsyncMock = vi.fn();
 const reviewAlertMutateAsyncMock = vi.fn();
 const resolveAlertMutateAsyncMock = vi.fn();
@@ -50,6 +51,11 @@ vi.mock("@/hooks/useDocumentHistory", () => ({
 vi.mock("@/hooks/useDocumentRelationshipExplanation", () => ({
   useDocumentRelationshipExplanation: (...args: unknown[]) =>
     useDocumentRelationshipExplanationMock(...args),
+}));
+
+vi.mock("@/lib/api/generated/documents/documents", () => ({
+  useGetDocumentEndpointApiV1DocumentsDocumentIdGet: (...args: unknown[]) =>
+    useDocumentDetailMock(...args),
 }));
 
 vi.mock("@/lib/api/generated/approvals/approvals", () => ({
@@ -181,6 +187,7 @@ describe("EvidencePage highlight mapping", () => {
     useDocumentAlertsMock.mockReset();
     useDocumentHistoryMock.mockReset();
     useDocumentRelationshipExplanationMock.mockReset();
+    useDocumentDetailMock.mockReset();
     reviewApprovalMutateAsyncMock.mockReset();
     reviewAlertMutateAsyncMock.mockReset();
     resolveAlertMutateAsyncMock.mockReset();
@@ -260,6 +267,10 @@ describe("EvidencePage highlight mapping", () => {
       error: null,
       refetch: vi.fn(),
     });
+    useDocumentDetailMock.mockReturnValue({
+      data: { clauses: [] },
+      isLoading: false,
+    });
     reviewApprovalMutateAsyncMock.mockResolvedValue({ status: "APPROVED" });
     reviewAlertMutateAsyncMock.mockResolvedValue({
       id: "alert-1",
@@ -285,6 +296,181 @@ describe("EvidencePage highlight mapping", () => {
     expect(screen.getByTestId("viewer-active-highlight")).toHaveTextContent(
       "highlight-clause-1",
     );
+  });
+
+  describe("Health → Evidence deep link", () => {
+    const documents = [
+      { id: "doc-a", name: "Contract A.pdf", type: "contract", created_at: "2026-01-20T09:00:00Z", updated_at: "2026-01-21T09:00:00Z" },
+      { id: "doc-b", name: "Contract B.pdf", type: "contract", created_at: "2026-01-22T09:00:00Z", updated_at: "2026-01-23T09:00:00Z" },
+    ];
+
+    function linkTo(params: Record<string, string>) {
+      useSearchParamsMock.mockReturnValue({ get: (key: string) => params[key] ?? null });
+      useProjectDocumentsMock.mockReturnValue({ documents, loading: false, error: null, refetch: vi.fn() });
+      // Stable objects per document, like the real hooks: a fresh array on every render would
+      // re-trigger the page's derived-state effects without end.
+      const perDocument = new Map(
+        [null, "doc-a", "doc-b"].map((documentId) => {
+          const clause = documentId === "doc-b" ? "clause-b" : documentId === "doc-a" ? "clause-a" : null;
+          return [
+            documentId,
+            {
+              entities: clause ? [{ id: clause, type: "stakeholder", text: `Clause of ${documentId}`, confidence: 95, page: 1 }] : [],
+              highlights: clause
+                ? [{ id: `highlight-${clause}`, entityId: clause, page: 1, color: "green", label: `Clause of ${documentId}`, rects: [] }]
+                : [],
+              loading: false,
+              error: null,
+              refetch: vi.fn(),
+            },
+          ] as const;
+        }),
+      );
+      useDocumentEntitiesMock.mockImplementation((documentId: string | null) => perDocument.get(documentId) ?? perDocument.get(null));
+      const noAlerts = { alerts: [], loading: false, error: null, refetch: vi.fn() };
+      useDocumentAlertsMock.mockReturnValue(noAlerts);
+      useDocumentDetailMock.mockImplementation((documentId: string) => ({
+        data: { id: documentId, clauses: [] },
+        isLoading: false,
+      }));
+    }
+
+    it("selects the linked document B and activates its exact clause", () => {
+      linkTo({ documentId: "doc-b", highlightId: "clause-b" });
+
+      render(<EvidencePage />);
+
+      const requestedDocuments = useDocumentEntitiesMock.mock.calls.map(([documentId]) => documentId);
+      expect(requestedDocuments).toContain("doc-b");
+      expect(requestedDocuments).not.toContain("doc-a");
+      expect(screen.getByTestId("active-entity-id")).toHaveTextContent("clause-b");
+      expect(screen.getByTestId("viewer-active-highlight")).toHaveTextContent("highlight-clause-b");
+    });
+
+    it("fails closed when the linked document is not in the project: no other document is opened", () => {
+      linkTo({ documentId: "doc-missing", highlightId: "clause-b" });
+
+      render(<EvidencePage />);
+
+      const requestedDocuments = useDocumentEntitiesMock.mock.calls.map(([documentId]) => documentId);
+      expect(requestedDocuments).not.toContain("doc-a");
+      expect(requestedDocuments).not.toContain("doc-b");
+      expect(screen.getByTestId("evidence-link-unavailable")).toHaveTextContent(/linked document is not available/i);
+      expect(screen.getByTestId("active-entity-id")).toHaveTextContent("none");
+    });
+
+    it("states that the linked evidence is missing instead of activating something else", () => {
+      linkTo({ documentId: "doc-b", highlightId: "clause-unknown" });
+
+      render(<EvidencePage />);
+
+      expect(screen.getByTestId("evidence-link-unavailable")).toHaveTextContent(/linked evidence was not found in this document/i);
+      expect(screen.getByTestId("active-entity-id")).toHaveTextContent("none");
+      expect(useDocumentEntitiesMock.mock.calls.map(([documentId]) => documentId)).not.toContain("doc-a");
+    });
+
+    it("activates a source clause from the authoritative document when no semantic sidebar entity represents it", async () => {
+      linkTo({ documentId: "doc-b", highlightId: "source-clause-b" });
+      const noSemanticEntities = {
+        entities: [],
+        highlights: [],
+        loading: false,
+        error: null,
+        refetch: vi.fn(),
+      };
+      const sourceClauseDocument = {
+        data: {
+          id: "doc-b",
+          clauses: [
+            {
+              id: "source-clause-b",
+              clause_code: "7.1",
+              title: "Delay penalties",
+              full_text: "The contractor shall pay delay penalties.",
+              text_start_offset: 120,
+              text_end_offset: 164,
+              extracted_entities: {
+                evidence_location: { page_number: 4 },
+              },
+            },
+          ],
+        },
+        isLoading: false,
+      };
+      const noSourceClauseDocument = {
+        data: { id: "", clauses: [] },
+        isLoading: false,
+      };
+      useDocumentEntitiesMock.mockReturnValue(noSemanticEntities);
+      useDocumentDetailMock.mockImplementation((documentId: string) =>
+        documentId === "doc-b" ? sourceClauseDocument : noSourceClauseDocument,
+      );
+
+      render(<EvidencePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("active-entity-id")).toHaveTextContent(
+          "source-clause-b",
+        );
+      });
+      expect(screen.getByTestId("viewer-active-highlight")).toHaveTextContent(
+        "source-clause-source-clause-b",
+      );
+      expect(screen.getByTestId("viewer-highlight-ids")).toHaveTextContent(
+        "source-clause-source-clause-b",
+      );
+      expect(screen.getByTestId("evidence-link-source-clause")).toHaveTextContent(
+        /showing source clause 7\.1/i,
+      );
+      expect(screen.queryByTestId("evidence-link-unavailable")).not.toBeInTheDocument();
+    });
+
+    it("keeps the linked document selected with an explanation when a known source clause has no resolvable span", async () => {
+      linkTo({ documentId: "doc-b", highlightId: "source-clause-without-page" });
+      const noSemanticEntities = {
+        entities: [],
+        highlights: [],
+        loading: false,
+        error: null,
+        refetch: vi.fn(),
+      };
+      const sourceOnlyDocument = {
+        data: {
+          id: "doc-b",
+          clauses: [
+            {
+              id: "source-clause-without-page",
+              clause_code: "8.2",
+              title: "Source context is available",
+              full_text: "The source document contains the referenced obligation.",
+              text_start_offset: null,
+              text_end_offset: null,
+              extracted_entities: {},
+            },
+          ],
+        },
+        isLoading: false,
+      };
+      const noSourceClauseDocument = {
+        data: { id: "", clauses: [] },
+        isLoading: false,
+      };
+      useDocumentEntitiesMock.mockReturnValue(noSemanticEntities);
+      useDocumentDetailMock.mockImplementation((documentId: string) =>
+        documentId === "doc-b" ? sourceOnlyDocument : noSourceClauseDocument,
+      );
+
+      render(<EvidencePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("evidence-link-document-fallback")).toHaveTextContent(
+          /showing its source document/i,
+        );
+      });
+      expect(screen.getByTestId("active-entity-id")).toHaveTextContent("none");
+      expect(screen.getByTestId("viewer-active-highlight")).toHaveTextContent("none");
+      expect(screen.queryByTestId("evidence-link-unavailable")).not.toBeInTheDocument();
+    });
   });
 
   it("maps viewer highlight clicks back to the entity id", () => {
@@ -476,11 +662,12 @@ describe("EvidencePage highlight mapping", () => {
           comment: "",
         },
       });
+      // Resolver identity is always the authenticated session's user_id
+      // (EPIC-OPS-DOCFLOW Stream C); the client must never supply resolved_by.
       expect(resolveAlertMutateAsyncMock).toHaveBeenCalledWith({
         alertId: "alert-1",
         data: {
           resolution: "Resolved from evidence viewer",
-          resolved_by: "jane@acme.com",
           root_cause: "other",
         },
       });

@@ -101,6 +101,17 @@ async def _provision_clerk_user(
     Auto-provision a user from Clerk claims.
     Creates tenant and user if they don't exist.
     """
+    if clerk_org_id and clerk_org_id == settings.platform_operator_org_id:
+        logger.error(
+            "platform_operator_org_bootstrap_blocked",
+            clerk_org_id=clerk_org_id,
+            clerk_user_id=clerk_user_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operator organization cannot be provisioned as a tenant",
+        )
+
     target_tenant_id: UUID
     logger.debug(
         "auth_bootstrap_policy",

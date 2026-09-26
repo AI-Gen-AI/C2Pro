@@ -157,7 +157,7 @@ test.describe("TS-E2E-J2-001: Weekly Project Review Journey", () => {
     /**
      * RED Phase: PM checks WBS item completion status
      *
-     * Expected: WBS tree with progress bars and percentages
+     * Expected: read-only WBS tree with planned windows (no invented progress)
      */
     // Navigate to WBS page
     await page.goto(
@@ -171,15 +171,9 @@ test.describe("TS-E2E-J2-001: Weekly Project Review Journey", () => {
     await expect(page.locator('[data-testid="wbs-item-1"]')).toBeVisible();
     await expect(page.locator('text="1 - Project Management"')).toBeVisible();
 
-    // Should show progress bars
-    await expect(
-      page.locator('[data-testid="wbs-item-1-progress"]'),
-    ).toBeVisible();
-
-    // Should show completion percentages
-    await expect(
-      page.locator('[data-testid="wbs-item-1-completion"]'),
-    ).toContainText("75%");
+    // No progress bars or completion %: the authoritative WBS contract carries no progress (IR-4)
+    await expect(page.locator('[data-testid="wbs-item-1-completion"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="wbs-item-1-planned"]')).toBeVisible();
 
     // Can expand child items
     await page.click('[data-testid="wbs-expand-1"]');
@@ -260,49 +254,20 @@ test.describe("TS-E2E-J2-001: Weekly Project Review Journey", () => {
     ).toBeVisible();
   });
 
-  test("should update WBS item completion [TEST-07]", async ({ page }) => {
+  test("should present the WBS read-only [TEST-07]", async ({ page }) => {
     /**
-     * RED Phase: PM updates WBS item completion percentage
+     * IR-4: no served endpoint persists WBS edits, so the page offers none.
      *
-     * Expected: Completion updated and saved
+     * Expected: no edit, add or completion controls
      */
-    // Navigate to WBS page
     await page.goto(
       "http://localhost:3000/projects/test-project-id/wbs",
     );
 
-    // Find WBS item and click edit
-    await page.click('[data-testid="wbs-edit-1.1"]');
-
-    // Should open edit modal
-    await expect(page.locator('[data-testid="wbs-edit-modal"]')).toBeVisible();
-
-    // Update completion percentage
-    await page.fill('[data-testid="completion-input"]', "85");
-
-    // Add note
-    await page.fill(
-      '[data-testid="completion-note"]',
-      "Foundation work 85% complete - awaiting final inspection",
-    );
-
-    // Save changes
-    await page.click('[data-testid="save-wbs-changes"]');
-
-    // Modal should close
-    await expect(
-      page.locator('[data-testid="wbs-edit-modal"]'),
-    ).not.toBeVisible();
-
-    // Should show success message
-    await expect(page.locator('[data-testid="success-toast"]')).toContainText(
-      "Progress updated successfully",
-    );
-
-    // Updated completion should be visible
-    await expect(
-      page.locator('[data-testid="wbs-item-1.1-completion"]'),
-    ).toContainText("85%");
+    await expect(page.locator('[data-testid="wbs-tree-view"]')).toBeVisible();
+    await expect(page.locator('[data-testid="wbs-edit-1.1"]')).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /add item/i })).toHaveCount(0);
+    await expect(page.locator('[data-testid="completion-input"]')).toHaveCount(0);
   });
 
   test("should mark alert as resolved [TEST-08]", async ({ page }) => {

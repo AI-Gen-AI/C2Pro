@@ -40,6 +40,7 @@ def _row(
     quantity: Decimal | None = Decimal("2.5000"),
     unit_price: Decimal | None = Decimal("100.00"),
     total_price: Decimal | None = Decimal("250.00"),
+    unit: str | None = None,
 ) -> object:
     return SimpleNamespace(
         id=uuid4(),
@@ -47,6 +48,7 @@ def _row(
         quantity=quantity,
         unit_price=unit_price,
         total_price=total_price,
+        unit=unit,
     )
 
 

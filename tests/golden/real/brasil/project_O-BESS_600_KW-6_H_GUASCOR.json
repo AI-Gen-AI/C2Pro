@@ -1,0 +1,75 @@
+{
+  "project_metadata": {
+    "id": "P-100011",
+    "name": "O-BESS 600 KW-6 h Guascor",
+    "type": "Industrial",
+    "complexity": "Complex",
+    "language": "pt"
+  },
+  "input_documents": {
+    "contract_text": "CONTRATO DE EXECUÇÃO DE OBRA para O-BESS 600 KW-6 h Guascor (Brasil). O contratante assume o compromisso de entrega no prazo de 24 meses. O valor global do contrato é de R$ 23,750,000.00 sem impostos.",
+    "risk_analysis_text": "ANALISE DE RISCOS DE PROJETO (FORMG-121) - O-BESS 600 KW-6 h Guascor. Risco de atraso nas licenças ambientais locais com impacto crítico estimado de 36 meses no cronograma global.",
+    "schedule_summary": {
+      "execution_period_months": 24,
+      "total_period_months": 36,
+      "contract_duration_months": 24,
+      "forecast_duration_months": 24
+    },
+    "budget_summary": {
+      "total_value": 23750000,
+      "budget_total": 20187500.0,
+      "line_items": [
+        {
+          "name": "Civil & Installation",
+          "cost": 12112500.0
+        },
+        {
+          "name": "Equipment & Materials",
+          "cost": 8075000.0
+        }
+      ],
+      "contract_total": 23750000,
+      "currency": "EUR",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "Normal 15% execution margin."
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-OBJ-01",
+        "type": "scope",
+        "text": "O-BESS 600 KW-6 h Guascor",
+        "metadata": {
+          "location": "Brasil"
+        }
+      },
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "24",
+        "metadata": {
+          "duration_months": 24
+        }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "Abengoa Inabensa",
+        "mention": "contratista",
+        "role": "Main Contractor",
+        "quadrant": "Responsible"
+      }
+    ],
+    "coherence_alerts": [],
+    "expert_score": 100,
+    "per_category_scores": {
+      "SCOPE": 100,
+      "BUDGET": 100,
+      "TIME": 100,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
+  }
+}

@@ -16,8 +16,16 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from src.admin.adapters.http.router import get_dlq_admin_port, router
-from src.core.auth.dependencies import get_current_user
-from src.core.auth.models import User, UserRole
+from src.core.auth.platform_operator import (
+    PlatformOperator,
+    require_platform_operator,
+)
+
+_PLATFORM_OPERATOR = PlatformOperator(
+    clerk_user_id="user_c26_integration_operator",
+    clerk_org_id="org_c26_integration_operator",
+    email="operator@example.test",
+)
 
 
 @dataclass(slots=True)
@@ -86,25 +94,16 @@ class _FailingRetryPort(_FakeDLQPort):
         raise RuntimeError("db_down")
 
 
-def _user(role: UserRole) -> User:
-    return User(
-        id=uuid4(),
-        tenant_id=uuid4(),
-        email=f"{role.value}@example.com",
-        hashed_password="x",
-        first_name="Test",
-        last_name="User",
-        role=role,
-        is_active=True,
-        is_verified=True,
-    )
-
-
-def _app(fake_port: _FakeDLQPort, *, role: UserRole = UserRole.ADMIN) -> FastAPI:
+def _app(
+    fake_port: _FakeDLQPort,
+    *,
+    platform_operator: PlatformOperator | None = _PLATFORM_OPERATOR,
+) -> FastAPI:
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
     app.dependency_overrides[get_dlq_admin_port] = lambda: fake_port
-    app.dependency_overrides[get_current_user] = lambda: _user(role)
+    if platform_operator is not None:
+        app.dependency_overrides[require_platform_operator] = lambda: platform_operator
     return app
 
 
@@ -114,15 +113,15 @@ def _app(fake_port: _FakeDLQPort, *, role: UserRole = UserRole.ADMIN) -> FastAPI
 
 
 @pytest.mark.asyncio
-async def test_admin_can_list_dlq_entries_by_status() -> None:
-    """TS-BCK-042-001: GET /admin/dlq returns DLQ entries for admin users."""
+async def test_platform_operator_can_list_dlq_entries_by_status() -> None:
+    """TS-BCK-042-001: GET /admin/dlq returns entries for platform operators."""
     fake_port = _FakeDLQPort()
     app = _app(fake_port)
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
-        headers={"Authorization": "Bearer admin-token"},
+        headers={"Authorization": "Bearer platform-operator-token"},
     ) as client:
         response = await client.get("/api/v1/admin/dlq", params={"status": "pending"})
 
@@ -135,15 +134,15 @@ async def test_admin_can_list_dlq_entries_by_status() -> None:
 
 
 @pytest.mark.asyncio
-async def test_non_admin_token_returns_403_for_list_endpoint() -> None:
-    """TS-BCK-042-001: non-admin Clerk users cannot list DLQ entries."""
+async def test_non_platform_caller_returns_403_for_list_endpoint() -> None:
+    """TS-BCK-042-001: a caller without a platform identity cannot list entries."""
     fake_port = _FakeDLQPort()
-    app = _app(fake_port, role=UserRole.USER)
+    app = _app(fake_port, platform_operator=None)
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
-        headers={"Authorization": "Bearer non-admin-token"},
+        headers={"Authorization": "Bearer non-platform-token"},
     ) as client:
         response = await client.get("/api/v1/admin/dlq", params={"status": "pending"})
 
@@ -165,7 +164,7 @@ async def test_list_response_includes_pagination_metadata() -> None:
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
-        headers={"Authorization": "Bearer admin-token"},
+        headers={"Authorization": "Bearer platform-operator-token"},
     ) as client:
         response = await client.get(
             "/api/v1/admin/dlq",
@@ -190,7 +189,7 @@ async def test_list_has_more_true_when_entries_remain() -> None:
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
-        headers={"Authorization": "Bearer admin-token"},
+        headers={"Authorization": "Bearer platform-operator-token"},
     ) as client:
         response = await client.get(
             "/api/v1/admin/dlq",
@@ -213,7 +212,7 @@ async def test_list_has_more_false_on_last_page() -> None:
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
-        headers={"Authorization": "Bearer admin-token"},
+        headers={"Authorization": "Bearer platform-operator-token"},
     ) as client:
         response = await client.get(
             "/api/v1/admin/dlq",
@@ -235,7 +234,7 @@ async def test_list_defaults_to_limit_50_offset_0() -> None:
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
-        headers={"Authorization": "Bearer admin-token"},
+        headers={"Authorization": "Bearer platform-operator-token"},
     ) as client:
         response = await client.get("/api/v1/admin/dlq", params={"status": "pending"})
 
@@ -250,7 +249,7 @@ async def test_list_defaults_to_limit_50_offset_0() -> None:
 
 
 @pytest.mark.asyncio
-async def test_admin_can_retry_dlq_entry() -> None:
+async def test_platform_operator_can_retry_dlq_entry() -> None:
     """TS-BCK-042-001: POST /admin/dlq/{id}/retry retries the selected entry."""
     fake_port = _FakeDLQPort()
     app = _app(fake_port)
@@ -258,7 +257,7 @@ async def test_admin_can_retry_dlq_entry() -> None:
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
-        headers={"Authorization": "Bearer admin-token"},
+        headers={"Authorization": "Bearer platform-operator-token"},
     ) as client:
         response = await client.post(f"/api/v1/admin/dlq/{fake_port.entry.id}/retry")
 
@@ -268,15 +267,15 @@ async def test_admin_can_retry_dlq_entry() -> None:
 
 
 @pytest.mark.asyncio
-async def test_non_admin_token_returns_403_for_retry_endpoint() -> None:
-    """TS-BCK-042-001: non-admin Clerk users cannot retry DLQ entries."""
+async def test_non_platform_caller_returns_403_for_retry_endpoint() -> None:
+    """TS-BCK-042-001: a caller without a platform identity cannot retry entries."""
     fake_port = _FakeDLQPort()
-    app = _app(fake_port, role=UserRole.USER)
+    app = _app(fake_port, platform_operator=None)
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
-        headers={"Authorization": "Bearer non-admin-token"},
+        headers={"Authorization": "Bearer non-platform-token"},
     ) as client:
         response = await client.post(f"/api/v1/admin/dlq/{fake_port.entry.id}/retry")
 
@@ -291,7 +290,7 @@ async def test_non_admin_token_returns_403_for_retry_endpoint() -> None:
 
 @pytest.mark.asyncio
 async def test_retry_emits_structured_audit_log() -> None:
-    """TS-BCK-042-001: retry emits admin_dlq_retry log with admin_id, dlq_id, tenant_id."""
+    """TS-BCK-042-001: retry emits the platform-operator audit payload."""
     fake_port = _FakeDLQPort()
     app = _app(fake_port)
 
@@ -299,22 +298,23 @@ async def test_retry_emits_structured_audit_log() -> None:
         async with AsyncClient(
             transport=ASGITransport(app=app),
             base_url="http://testserver",
-            headers={"Authorization": "Bearer admin-token"},
+            headers={"Authorization": "Bearer platform-operator-token"},
         ) as client:
             response = await client.post(f"/api/v1/admin/dlq/{fake_port.entry.id}/retry")
 
     assert response.status_code == 200
-    audit_events = [e for e in cap if e.get("event") == "admin_dlq_retry"]
+    audit_events = [e for e in cap if e.get("event") == "platform_operator_dlq_retry"]
     assert len(audit_events) == 1
     evt = audit_events[0]
-    assert "admin_id" in evt
+    assert evt["operator_id"] == _PLATFORM_OPERATOR.clerk_user_id
+    assert evt["org_id"] == _PLATFORM_OPERATOR.clerk_org_id
     assert evt["dlq_id"] == str(fake_port.entry.id)
-    assert "tenant_id" in evt
+    assert evt["tenant_id"] == str(fake_port.entry.tenant_id)
 
 
 @pytest.mark.asyncio
-async def test_retry_emits_audit_log_even_when_retry_fails() -> None:
-    """TS-BCK-042-001: audit log fires before the retry call — recorded on attempt, not success."""
+async def test_retry_does_not_emit_audit_log_when_retry_fails() -> None:
+    """TS-BCK-042-001: C2.6 records a retry audit event only after success."""
     fake_port = _FailingRetryPort()
     app = _app(fake_port)
 
@@ -324,12 +324,11 @@ async def test_retry_emits_audit_log_even_when_retry_fails() -> None:
             # responses rather than propagating through httpx.
             transport=ASGITransport(app=app, raise_app_exceptions=False),
             base_url="http://testserver",
-            headers={"Authorization": "Bearer admin-token"},
+            headers={"Authorization": "Bearer platform-operator-token"},
         ) as client:
             # Port.retry() raises RuntimeError → 500
             response = await client.post(f"/api/v1/admin/dlq/{fake_port.entry.id}/retry")
 
     assert response.status_code == 500
-    audit_events = [e for e in cap if e.get("event") == "admin_dlq_retry"]
-    assert len(audit_events) == 1, "audit must fire even when the retry itself fails"
-    assert audit_events[0]["dlq_id"] == str(fake_port.entry.id)
+    audit_events = [e for e in cap if e.get("event") == "platform_operator_dlq_retry"]
+    assert audit_events == []

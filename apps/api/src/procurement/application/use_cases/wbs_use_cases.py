@@ -79,6 +79,51 @@ class CreateWBSItemUseCase:
 
         return await self.wbs_repository.create(tenant_id, wbs_item)
 
+    async def replace_for_source_document(
+        self,
+        *,
+        project_id: UUID,
+        source_document_id: UUID,
+        wbs_items: list[WBSItemCreate],
+        tenant_id: TenantId,
+    ) -> list[WBSItem]:
+        """Replace parsed WBS rows for one source document in a single operation.
+
+        Makes schedule re-parsing idempotent: the rows produced by this document
+        are replaced instead of appended, so regenerated codes (e.g. SCH-001) no
+        longer collide on ``uq_procurement_wbs_project_code``.
+        """
+        domain_items = [
+            WBSItem(
+                project_id=item.project_id,
+                code=item.wbs_code,
+                name=item.name,
+                description=item.description,
+                level=item.level,
+                parent_code=None,
+                item_type=item.item_type,
+                budget_allocated=item.budget_allocated,
+                budget_spent=item.budget_spent,
+                planned_start=item.planned_start,
+                planned_end=item.planned_end,
+                actual_start=item.actual_start,
+                actual_end=item.actual_end,
+                source_clause_id=item.funded_by_clause_id,
+                source_document_id=source_document_id,
+                wbs_metadata={
+                    **item.wbs_metadata,
+                    "source_document_id": str(source_document_id),
+                },
+            )
+            for item in wbs_items
+        ]
+        return await self.wbs_repository.replace_for_source_document(
+            project_id=project_id,
+            source_document_id=source_document_id,
+            wbs_items=domain_items,
+            tenant_id=tenant_id,
+        )
+
 
 class ListWBSItemsUseCase:
     """Use case for listing WBS items for a project."""

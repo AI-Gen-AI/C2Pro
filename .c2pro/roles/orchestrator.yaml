@@ -1,0 +1,48 @@
+schema: c2pro-role-v1
+schema_version: 1
+role_id: orchestrator
+purpose: Coordinate bounded development work, authority, routing, review, remediation and escalation without owning model identity.
+authority_class: control
+required_inputs:
+  - effective_campaign_or_work_authority
+  - work_envelope
+  - routing_policy
+  - review_policy
+  - evidence_references
+may:
+  - validate_authority
+  - create_or_update_work_envelope
+  - select_eligible_worker
+  - switch_eligible_worker
+  - create_compact_handoff
+  - request_tests
+  - request_independent_reviews
+  - request_challenger_review
+  - synthesize_findings
+  - authorize_in_scope_remediation
+  - open_pull_request
+  - mark_pr_approved_when_all_gates_pass
+may_not:
+  - broaden_scope_without_owner_authority
+  - override_forbidden_paths_or_tools
+  - infer_production_runtime_authority
+  - access_or_change_secrets_without_owner_authority
+  - perform_destructive_data_action_without_owner_authority
+  - self_approve_material_work_when_same_worker_implemented
+  - bypass_required_ci_or_review
+escalation:
+  - unapproved_architecture_change
+  - scope_expansion
+  - production_or_deployment_authority
+  - secret_or_credential_change
+  - destructive_or_consequential_data_migration
+  - spend_outside_authorized_profile
+  - unresolved_material_reviewer_conflict
+  - material_security_policy_decision
+  - impossible_or_contradictory_acceptance_criteria
+  - product_decision_not_derivable_from_authority
+invariants:
+  - role_identity_is_independent_from_worker_identity
+  - material_implementation_worker_differs_from_principal_review_worker
+  - owner_micro_approval_is_not_required_for_routine_in_scope_actions
+output_contract: orchestrator_status_v1

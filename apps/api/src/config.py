@@ -7,11 +7,11 @@ Soporta múltiples ambientes (dev, staging, prod).
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Annotated, Any, ClassVar, Literal, Self
 from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -73,6 +73,42 @@ class Settings(BaseSettings):
     )
     db_echo: bool = Field(default=False, description="Log SQL queries")
 
+    # LangGraph checkpoint runtime DSN (Option-C C2: checkpoint role boundary).
+    #
+    # TRANSITIONAL: when unset, the checkpointer falls back to `database_url`
+    # (src/analysis/adapters/graph/workflow.py logs this fallback explicitly at
+    # checkpointer build time — it is never silent). This setting exists so a
+    # future dedicated `c2pro_checkpoint` credential (C3 cutover) can be wired
+    # in per environment without another code change; until that credential
+    # exists, the fallback is expected and safe (today's runtime role already
+    # owns the checkpoint tables). Remove the fallback once every environment
+    # sets CHECKPOINT_DATABASE_URL.
+    checkpoint_database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("CHECKPOINT_DATABASE_URL"),
+        description=(
+            "Dedicated PostgreSQL DSN for LangGraph checkpoint runtime access "
+            "(the restricted c2pro_checkpoint role). TRANSITIONAL fallback to "
+            "database_url when unset -- see checkpoint_database_url_async."
+        ),
+    )
+
+    # Cross-tenant admin operations DSN (C2.5: admin role boundary).
+    #
+    # NO FALLBACK: missing/invalid credential must fail closed.
+    # Points to a LOGIN principal that is a MEMBER OF c2pro_admin_ops capability role.
+    # The capability role is NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, non-owner.
+    # Do not fallback to DATABASE_URL or owner credential.
+    admin_ops_database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ADMIN_OPS_DATABASE_URL"),
+        description=(
+            "Dedicated PostgreSQL DSN for cross-tenant admin operations "
+            "(the c2pro_admin_ops capability role via LOGIN principal member). "
+            "REQUIRED for admin DLQ endpoints — no fallback."
+        ),
+    )
+
     @field_validator("database_url")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
@@ -121,6 +157,20 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="AUTH_BOOTSTRAP_EMIT_METRICS",
         description="Emit structured telemetry for auth bootstrap resolution paths",
+    )
+
+    # C2.6 platform operator authorization boundary. These values are only
+    # authorization configuration; they never enable the C2.5 database
+    # credential or a persistent LOGIN principal.
+    platform_operator_org_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PLATFORM_OPERATOR_ORG_ID"),
+        description="Exact Clerk organization ID permitted for platform operators",
+    )
+    platform_operator_user_ids: Annotated[list[str], NoDecode] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("PLATFORM_OPERATOR_USER_IDS"),
+        description="Optional exact CSV allowlist that can only narrow platform operators",
     )
 
     # ===========================================
@@ -176,6 +226,20 @@ class Settings(BaseSettings):
 
     redis_url: str | None = Field(
         default=None, description="Redis connection URL (redis:// or rediss://)"
+    )
+
+    # Celery may use a dedicated Redis (broker + result backend) separate from the
+    # application Redis above. Prefer these explicit URLs; both fall back to
+    # redis_url when unset so dev/test/CI keep working with a single Redis.
+    celery_broker_url: str | None = Field(
+        default=None,
+        validation_alias="CELERY_BROKER_URL",
+        description="Celery broker URL; falls back to redis_url when unset.",
+    )
+    celery_result_backend_url: str | None = Field(
+        default=None,
+        validation_alias="CELERY_RESULT_BACKEND_URL",
+        description="Celery result backend URL; falls back to redis_url when unset.",
     )
 
     cache_ttl_default: int = Field(default=300, ge=0, description="TTL por defecto en segundos")
@@ -238,6 +302,10 @@ class Settings(BaseSettings):
     ai_use_cache: bool = True
     ai_cache_ttl: int = Field(default=3600, ge=0)  # 1 hora
     ai_mock: bool = Field(default=False, validation_alias="C2PRO_AI_MOCK")
+    # Deterministic embeddings for the P0b acceptance journey. The journey has to
+    # persist REAL RAG chunks -- that is the seam that failed in production -- so
+    # only the provider network call is replaced, never the chunking or the write.
+    embeddings_mock: bool = Field(default=False, validation_alias="C2PRO_EMBEDDINGS_MOCK")
 
     # ===========================================
     # DOCUMENT PROCESSING
@@ -395,13 +463,53 @@ class Settings(BaseSettings):
         """Tamaño máximo de upload en bytes."""
         return self.max_upload_size_mb * 1024 * 1024
 
-    @property
-    def database_url_async(self) -> str:
-        """URL de base de datos para asyncpg."""
-        url = self.database_url
+    @staticmethod
+    def _normalize_asyncpg_dsn(url: str) -> str:
+        """Normaliza un DSN postgresql:// a postgresql+asyncpg:// para asyncpg."""
         if url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
             return url.replace("postgresql://", "postgresql+asyncpg://", 1)
         return url
+
+    @property
+    def database_url_async(self) -> str:
+        """URL de base de datos para asyncpg."""
+        return self._normalize_asyncpg_dsn(self.database_url)
+
+    @property
+    def checkpoint_database_url_is_fallback(self) -> bool:
+        """True when no dedicated CHECKPOINT_DATABASE_URL is configured (TRANSITIONAL)."""
+        return not self.checkpoint_database_url
+
+    @property
+    def checkpoint_database_url_async(self) -> str:
+        """LangGraph checkpoint runtime DSN, normalized like database_url_async.
+
+        TRANSITIONAL: falls back to database_url_async when checkpoint_database_url
+        is unset. Callers that care about the distinction should check
+        checkpoint_database_url_is_fallback and log it (see
+        src/analysis/adapters/graph/workflow.py::_build_checkpointer) --
+        this property itself does not log, since it may be read more than
+        once per process.
+        """
+        url = self.checkpoint_database_url or self.database_url
+        return self._normalize_asyncpg_dsn(url)
+
+    @property
+    def admin_ops_database_url_async(self) -> str:
+        """Cross-tenant admin operations DSN, normalized for asyncpg.
+
+        NO FALLBACK: raises if ADMIN_OPS_DATABASE_URL is not configured.
+        This enforces fail-closed for cross-tenant admin operations (C2.5).
+        """
+        url = self.admin_ops_database_url
+        if not url:
+            raise RuntimeError(
+                "ADMIN_OPS_DATABASE_URL is not configured. "
+                "Cross-tenant admin operations require a dedicated credential "
+                "(the c2pro_admin_ops capability role via LOGIN principal member). "
+                "No fallback to DATABASE_URL or owner credential is permitted."
+            )
+        return self._normalize_asyncpg_dsn(url)
 
     # ===========================================
     # VALIDATION
@@ -438,14 +546,21 @@ class Settings(BaseSettings):
 
         return expanded
 
+    C2PRO_ORIGIN: ClassVar[str] = "c2pro.io"
+    C2PRO_WWW_ORIGIN: ClassVar[str] = "www.c2pro.io"
+
     @staticmethod
     def _paired_c2pro_origin(origin: str) -> str | None:
         parts = urlsplit(origin)
         hostname = parts.hostname
-        if hostname not in {"c2pro.io", "www.c2pro.io"}:
+        if hostname not in {Settings.C2PRO_ORIGIN, Settings.C2PRO_WWW_ORIGIN}:
             return None
 
-        paired_hostname = "www.c2pro.io" if hostname == "c2pro.io" else "c2pro.io"
+        paired_hostname = (
+            Settings.C2PRO_WWW_ORIGIN
+            if hostname == Settings.C2PRO_ORIGIN
+            else Settings.C2PRO_ORIGIN
+        )
         netloc = paired_hostname
         if parts.port:
             netloc = f"{paired_hostname}:{parts.port}"
@@ -468,12 +583,23 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_security_posture(self) -> Self:
+        self._validate_production_mocks()
+        self._validate_supabase_credentials()
+        self._validate_cors_origins()
+        self._validate_auth_bootstrap_fallback()
+        return self
+
+    def _validate_production_mocks(self) -> None:
         if self.environment == "production" and self.ai_mock:
             raise ValueError("C2PRO_AI_MOCK cannot be enabled in production")
 
+        if self.environment == "production" and self.embeddings_mock:
+            raise ValueError("C2PRO_EMBEDDINGS_MOCK cannot be enabled in production")
+
+    def _validate_supabase_credentials(self) -> None:
         if self.environment == "test":
             if self.supabase_url is None:
-                self.supabase_url = "http://test.supabase.local"
+                self.supabase_url = "https://test.supabase.local"
             if self.supabase_anon_key is None:
                 self.supabase_anon_key = "test-anon-key"
             if self.supabase_service_role_key is None:
@@ -490,21 +616,25 @@ class Settings(BaseSettings):
                 "supabase_url, supabase_anon_key, and supabase_service_role_key are required outside test"
             )
 
-        if self.environment in {"production", "staging"}:
-            if any(origin == "*" for origin in self.cors_origins):
-                raise ValueError("wildcard CORS is not allowed outside development/test")
+    def _validate_cors_origins(self) -> None:
+        if self.environment not in {"production", "staging"}:
+            return
 
-            localhost_markers = ("localhost", "127.0.0.1")
-            if any(
-                any(marker in origin for marker in localhost_markers)
-                for origin in self.cors_origins
-            ):
-                raise ValueError("localhost origins are not allowed outside development/test")
+        if any(origin == "*" for origin in self.cors_origins):
+            raise ValueError("wildcard CORS is not allowed outside development/test")
 
-            if self.auth_bootstrap_fallback_mode == "non_production":
-                self.auth_bootstrap_fallback_mode = "deny"
+        localhost_markers = ("localhost", "127.0.0.1")
+        if any(
+            any(marker in origin for marker in localhost_markers) for origin in self.cors_origins
+        ):
+            raise ValueError("localhost origins are not allowed outside development/test")
 
-        return self
+    def _validate_auth_bootstrap_fallback(self) -> None:
+        if (
+            self.environment in {"production", "staging"}
+            and self.auth_bootstrap_fallback_mode == "non_production"
+        ):
+            self.auth_bootstrap_fallback_mode = "deny"
 
     @field_validator("ai_budget_monthly_default")
     @classmethod
@@ -524,6 +654,30 @@ class Settings(BaseSettings):
         if isinstance(v, list):
             return [str(email).strip() for email in v if str(email).strip()]
         return []
+
+    @field_validator("platform_operator_user_ids", mode="before")
+    @classmethod
+    def parse_platform_operator_user_ids(cls, v: Any) -> list[str]:
+        """Accept only the documented comma-separated immutable Clerk user IDs."""
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return []
+        # Pydantic validates the default_factory output too. Accept that one
+        # empty internal representation without accepting a JSON/list env form.
+        if isinstance(v, list) and not v:
+            return []
+        if not isinstance(v, str):
+            raise ValueError("PLATFORM_OPERATOR_USER_IDS must be a CSV of Clerk user IDs")
+
+        user_ids: list[str] = []
+        for raw_user_id in v.split(","):
+            user_id = raw_user_id.strip()
+            if not user_id:
+                continue
+            if not user_id.startswith("user_"):
+                raise ValueError("PLATFORM_OPERATOR_USER_IDS must contain only Clerk user IDs")
+            if user_id not in user_ids:
+                user_ids.append(user_id)
+        return user_ids
 
 
 # ===========================================

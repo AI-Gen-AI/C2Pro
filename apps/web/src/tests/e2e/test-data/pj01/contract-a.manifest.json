@@ -1,0 +1,206 @@
+{
+  "schema": "c2pro-pj01-contract-fixture/v1",
+  "fixture_id": "PJ01-CONTRACT-A",
+  "derived_from": "apps/web/src/tests/e2e/test-data/sample-contract.pdf (same parties, facts and wording, restructured into one clause per Health category)",
+  "document_type": "contract",
+  "files": {
+    "pdf": "contract-a.pdf",
+    "source_text": "contract-a.source.txt"
+  },
+  "generator": "apps/api/scripts/generate_pj01_contract_fixture.py",
+  "clauses": [
+    {
+      "ordinal": 0,
+      "heading": "SAMPLE CONSTRUCTION CONTRACT (PJ-01 CONTRACT A)",
+      "categories": []
+    },
+    {
+      "ordinal": 1,
+      "heading": "1. - SCOPE OF WORK, DELIVERABLES AND EXCLUSIONS",
+      "categories": ["SCOPE"],
+      "evidence_anchor": "The deliverables are the renovated building, the as-built records and the operation and maintenance manuals."
+    },
+    {
+      "ordinal": 2,
+      "heading": "2. - CONTRACT PRICE, PAYMENT TERMS AND INVOICING",
+      "categories": ["BUDGET"],
+      "evidence_anchor": "The total contract price is 2,400,000.00 EUR"
+    },
+    {
+      "ordinal": 3,
+      "heading": "3. - TIME FOR COMPLETION, MILESTONES AND PROGRAMME",
+      "categories": ["TIME"],
+      "evidence_anchor": "shall achieve Practical Completion no later than 31/12/2025"
+    },
+    {
+      "ordinal": 4,
+      "heading": "4. - TECHNICAL SPECIFICATIONS, STANDARDS AND DRAWINGS",
+      "categories": ["TECHNICAL"],
+      "evidence_anchor": "All structural steel shall comply with EN 1090-2 execution class EXC3"
+    },
+    {
+      "ordinal": 5,
+      "heading": "5. - QUALITY PLAN, INSPECTION AND TEST PLAN",
+      "categories": ["QUALITY"],
+      "evidence_anchor": "documented Quality Plan certified to ISO 9001"
+    },
+    {
+      "ordinal": 6,
+      "heading": "6. - LIABILITY, INSURANCE, TERMINATION AND GOVERNING LAW",
+      "categories": ["LEGAL"],
+      "evidence_anchor": "This Contract is governed by Spanish law"
+    }
+  ],
+  "expected_health": {
+    "granularity": "clause",
+    "categories": {
+      "SCOPE": { "state": "present", "evidence_clause_ordinals": [1] },
+      "BUDGET": { "state": "present", "evidence_clause_ordinals": [2] },
+      "TIME": { "state": "present", "evidence_clause_ordinals": [3] },
+      "TECHNICAL": { "state": "present", "evidence_clause_ordinals": [4] },
+      "QUALITY": { "state": "present", "evidence_clause_ordinals": [5] },
+      "LEGAL": { "state": "present", "evidence_clause_ordinals": [6] }
+    }
+  },
+  "facts": [
+    {
+      "key": "contract_price",
+      "category": "BUDGET",
+      "clause_ordinal": 2,
+      "text": "The total contract price is 2,400,000.00 EUR",
+      "value": { "amount": 2400000.0, "currency": "EUR" }
+    },
+    {
+      "key": "payment_period_days",
+      "category": "BUDGET",
+      "clause_ordinal": 2,
+      "text": "within thirty (30) days of certification",
+      "value": 30
+    },
+    {
+      "key": "retention_percent",
+      "category": "BUDGET",
+      "clause_ordinal": 2,
+      "text": "A retention of 5%",
+      "value": 5
+    },
+    {
+      "key": "scope_deliverables",
+      "category": "SCOPE",
+      "clause_ordinal": 1,
+      "text": "the renovated building, the as-built records and the operation and maintenance manuals",
+      "value": ["renovated building", "as-built records", "operation and maintenance manuals"]
+    },
+    {
+      "key": "commencement_date",
+      "category": "TIME",
+      "clause_ordinal": 3,
+      "text": "commence on 01/06/2025",
+      "value": "2025-06-01"
+    },
+    {
+      "key": "practical_completion_date",
+      "category": "TIME",
+      "clause_ordinal": 3,
+      "text": "no later than 31/12/2025",
+      "value": "2025-12-31"
+    },
+    {
+      "key": "structural_milestone_days",
+      "category": "TIME",
+      "clause_ordinal": 3,
+      "text": "within 120 days of commencement",
+      "value": 120
+    },
+    {
+      "key": "steel_execution_standard",
+      "category": "TECHNICAL",
+      "clause_ordinal": 4,
+      "text": "EN 1090-2 execution class EXC3",
+      "value": "EN 1090-2 EXC3"
+    },
+    {
+      "key": "concrete_strength_class",
+      "category": "TECHNICAL",
+      "clause_ordinal": 4,
+      "text": "C30/37",
+      "value": "C30/37"
+    },
+    {
+      "key": "reinforcement_cover_mm",
+      "category": "TECHNICAL",
+      "clause_ordinal": 4,
+      "text": "minimum reinforcement cover of 40 mm",
+      "value": 40
+    },
+    {
+      "key": "quality_certification",
+      "category": "QUALITY",
+      "clause_ordinal": 5,
+      "text": "certified to ISO 9001",
+      "value": "ISO 9001"
+    },
+    {
+      "key": "defect_rectification_days",
+      "category": "QUALITY",
+      "clause_ordinal": 5,
+      "text": "within fourteen (14) days of written notice",
+      "value": 14
+    },
+    {
+      "key": "liability_cap",
+      "category": "LEGAL",
+      "clause_ordinal": 6,
+      "text": "aggregate liability shall not exceed the total contract price",
+      "value": "contract_price"
+    },
+    {
+      "key": "termination_cure_days",
+      "category": "LEGAL",
+      "clause_ordinal": 6,
+      "text": "not remedied within thirty (30) days of written notice",
+      "value": 30
+    },
+    {
+      "key": "governing_law",
+      "category": "LEGAL",
+      "clause_ordinal": 6,
+      "text": "governed by Spanish law",
+      "value": "Spain"
+    }
+  ],
+  "revision_contract": {
+    "owner": "Codex (What Changed fixture/spec). This manifest only fixes the shared vocabulary and anchors.",
+    "change_cause_vocabulary": ["BUSINESS_STATE_CHANGED", "NEWLY_DISCOVERED", "NO_CHANGE"],
+    "mutable_fact_keys": [
+      "contract_price",
+      "payment_period_days",
+      "retention_percent",
+      "practical_completion_date",
+      "structural_milestone_days",
+      "defect_rectification_days"
+    ],
+    "no_change_control_fact_keys": ["governing_law", "steel_execution_standard", "quality_certification"],
+    "rules": [
+      "A revision of Contract A keeps every clause heading and ordinal, so persisted clauses and evidence anchors stay comparable.",
+      "A revision changes facts only by editing the wording of the fact `text` listed in this manifest; every other sentence stays byte-identical.",
+      "Facts listed in no_change_control_fact_keys must not change and must not be reported as changed (NO_CHANGE controls).",
+      "A revision must keep all six categories PRESENT unless it declares an explicit expected_health override, proven by the backend conformance test.",
+      "A revision manifest reuses this schema, fixture vocabulary and category names; it must not introduce parallel category or change-cause names."
+    ]
+  },
+  "current_state_expectations": {
+    "owner": "Claude (PJ-01 lead)",
+    "report": "GET /api/v1/projects/{project_id}/reports/current-state (P0d; Report tab, mode=current-state)",
+    "documents_section": {
+      "total": 1,
+      "by_type": { "contract": 1 },
+      "lifecycle_after_analysis": "analyzed"
+    },
+    "health_section": {
+      "source": "latest project snapshot (HealthVector.dimensions: contract, risk, documentation, governance, schedule, cost, deliverables)",
+      "assert": "status available; source_as_of is not older than the latest analysed revision; unknown bands are never rendered as zero",
+      "not_asserted_here": "the six single-document categories are NOT projected by the Current State report; they are asserted on the Health page"
+    }
+  }
+}

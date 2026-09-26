@@ -1,8 +1,5 @@
-"""WBS persistence adapters."""
+"""WBS persistence adapters (canonical wbs_nodes)."""
 
-from src.wbs.adapters.persistence.in_memory_repository import (
-    InMemoryWBSRepository,
-    get_wbs_repository,
-)
+from src.wbs.adapters.persistence.models import WBSNodeORM
 
-__all__ = ["InMemoryWBSRepository", "get_wbs_repository"]
+__all__ = ["WBSNodeORM"]

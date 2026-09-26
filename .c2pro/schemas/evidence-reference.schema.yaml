@@ -1,0 +1,27 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: c2pro-evidence-reference-v1
+type: object
+additionalProperties: false
+required:
+  - schema
+  - schema_version
+  - work_id
+  - status
+  - references
+properties:
+  schema: {const: c2pro-evidence-reference-v1}
+  schema_version: {const: 1}
+  work_id: {type: string, minLength: 1}
+  status: {enum: [collecting, complete, invalid]}
+  references:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [kind, locator, immutable]
+      properties:
+        kind: {enum: [git_commit, pull_request, ci_run, ci_artifact, test_report, review, audit]}
+        locator: {type: string, minLength: 1}
+        immutable: {type: boolean}
+        sha256: {type: [string, 'null'], pattern: '^[0-9a-f]{64}$'}
+        summary: {type: [string, 'null'], maxLength: 500}

@@ -1,0 +1,49 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: c2pro-handoff-v1
+type: object
+additionalProperties: false
+required:
+  - schema
+  - schema_version
+  - work_id
+  - role
+  - base_sha
+  - current_head
+  - current_worker
+  - handoff_reason
+  - completed
+  - remaining
+  - files_changed
+  - required_tests_remaining
+  - known_findings
+  - forbidden_scope_reminder
+  - next_worker
+properties:
+  schema: {const: c2pro-handoff-v1}
+  schema_version: {const: 1}
+  work_id: {type: string, minLength: 1}
+  role: {type: string, minLength: 1}
+  base_sha: {type: string, pattern: '^[0-9a-f]{40}$'}
+  current_head: {type: string, pattern: '^[0-9a-f]{40}$'}
+  current_worker: {type: string, minLength: 1}
+  handoff_reason: {enum: [quota_exhausted, token_exhausted, provider_failure, transport_failure, bounded_reassignment, owner_directed]}
+  completed:
+    type: array
+    items: {type: string, minLength: 1}
+  remaining:
+    type: array
+    items: {type: string, minLength: 1}
+  files_changed:
+    type: array
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  required_tests_remaining:
+    type: array
+    items: {type: string, minLength: 1}
+  known_findings:
+    type: array
+    items: {type: string, minLength: 1}
+  forbidden_scope_reminder:
+    type: array
+    items: {type: string, minLength: 1}
+  next_worker: {type: string, minLength: 1}

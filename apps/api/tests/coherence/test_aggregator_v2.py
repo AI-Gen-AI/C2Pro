@@ -98,6 +98,41 @@ def test_active_weight_above_min_returns_weighted_score(
 
 
 @pytest.mark.unit
+def test_open_critical_caps_headline_at_calibrated_ceiling(
+    aggregator: GlobalAggregatorV2,
+) -> None:
+    """§C envelope: an open critical still caps a high mean — at the 2026-08-18
+    expert-calibrated ceiling (85), not the over-penalizing interim 60 (ADR-009 §G.1)."""
+    categories = [
+        _scored("LEGAL", 100.0),
+        _scored("BUDGET", 100.0),
+        _scored("SCOPE", 100.0),
+        _scored("TIME", 100.0),
+        _scored("TECHNICAL", 100.0),
+        _scored("QUALITY", 100.0),
+    ]
+    g = aggregator.aggregate(categories, worst_open_severity="critical")
+    assert g.coherence_score == pytest.approx(85.0)
+    assert g.score_reason == "critical_risk_capped:critical"
+
+
+@pytest.mark.unit
+def test_envelope_only_lowers_never_raises(aggregator: GlobalAggregatorV2) -> None:
+    """If the mean already sits below the cap, the envelope does not fire."""
+    categories = [
+        _scored("LEGAL", 40.0),
+        _scored("BUDGET", 40.0),
+        _scored("SCOPE", 40.0),
+        _insufficient("TIME"),
+        _insufficient("TECHNICAL"),
+        _insufficient("QUALITY"),
+    ]
+    g = aggregator.aggregate(categories, worst_open_severity="critical")
+    assert g.coherence_score == pytest.approx(40.0)
+    assert g.score_reason == "scored_categories_only"
+
+
+@pytest.mark.unit
 def test_not_applicable_excluded_from_active_weight(
     aggregator: GlobalAggregatorV2,
 ) -> None:

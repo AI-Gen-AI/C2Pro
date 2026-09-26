@@ -46,6 +46,25 @@ class HumanInTheLoopService:
         item_data: dict[str, Any],
         metadata: dict[str, Any] | None = None,
     ) -> ReviewStatus:
+        metadata = metadata or {}
+
+        # TASK P0b HITL resume hotfix: idempotency. A document whose graph
+        # is re-invoked (e.g. a worker retry) while a review is already
+        # pending must never create a second active review -- at most one
+        # active review may exist per tenant+document+review_type. Guarded
+        # with getattr so repositories/fakes that predate this port method
+        # keep working unchanged.
+        document_id_raw = metadata.get("document_id")
+        review_type = metadata.get("review_type")
+        find_active_review = getattr(self.review_queue_repo, "find_active_review", None)
+        if find_active_review is not None and document_id_raw and review_type:
+            existing = await find_active_review(
+                document_id=UUID(str(document_id_raw)),
+                review_type=review_type,
+            )
+            if existing is not None:
+                return ReviewStatus(existing.current_status)
+
         status = self.confidence_router.determine_review_status(
             confidence, impact_level
         )

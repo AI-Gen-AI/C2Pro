@@ -126,6 +126,9 @@ export function EntityValidationCard({
           entity.validationStatus === "rejected" && "opacity-50",
         )}
         onClick={() => onEntityClick?.(entity)}
+        data-testid="evidence-entity-card"
+        data-entity-id={entity.id}
+        data-active={isActive ? "true" : "false"}
       >
         <CardContent className="p-4 space-y-3">
           {/* Header with type and status */}

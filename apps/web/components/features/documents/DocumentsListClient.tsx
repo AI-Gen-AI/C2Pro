@@ -36,6 +36,7 @@ import type {
   ProjectDocumentsGroup,
 } from "@/lib/api/contracts";
 import { statusToToken } from "@/lib/ui/severity-tokens";
+import type { DocumentLifecycleStatus } from "@/types/document";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -43,20 +44,39 @@ interface DocumentsListClientProps {
   groups: ProjectDocumentsGroup[];
 }
 
-const STATUS_LABELS: Record<DocumentPollingStatus, string> = {
-  parsed: "Analyzed",
+const LIFECYCLE_LABELS: Record<DocumentLifecycleStatus, string> = {
+  uploaded: "Uploaded",
   processing: "Processing",
-  queued: "Queued",
+  parsed: "Parsed",
+  analysis_pending: "Analysis pending",
+  analyzed: "Analyzed",
   error: "Error",
 };
 
-function getStatusIcon(status: DocumentPollingStatus) {
+const LIFECYCLE_ORDER = Object.keys(LIFECYCLE_LABELS) as DocumentLifecycleStatus[];
+
+/**
+ * The backend lifecycle state when present. Older payloads only carry the polling status,
+ * whose "parsed" bucket includes documents never analyzed, so they never resolve to "analyzed".
+ */
+function lifecycleOf(doc: {
+  status: DocumentPollingStatus;
+  lifecycle_status?: string | null;
+}): DocumentLifecycleStatus {
+  const lifecycle = doc.lifecycle_status;
+  if (lifecycle && Object.prototype.hasOwnProperty.call(LIFECYCLE_LABELS, lifecycle)) {
+    return lifecycle as DocumentLifecycleStatus;
+  }
+  return doc.status === "queued" ? "uploaded" : doc.status;
+}
+
+function getStatusIcon(status: DocumentLifecycleStatus) {
   switch (status) {
-    case "parsed":
+    case "analyzed":
       return CheckCircle2;
     case "processing":
       return Clock;
-    case "queued":
+    case "uploaded":
       return Loader2;
     case "error":
       return AlertTriangle;
@@ -65,8 +85,9 @@ function getStatusIcon(status: DocumentPollingStatus) {
   }
 }
 
-function getStatusColor(status: DocumentPollingStatus) {
-  return statusToToken(status);
+function getStatusColor(status: DocumentLifecycleStatus) {
+  // Parsed / pending documents are not finished: keep them neutral, not success-green.
+  return statusToToken(status === "parsed" || status === "analysis_pending" ? "uploaded" : status);
 }
 
 function getTypeColor(docType: string | null | undefined) {
@@ -132,7 +153,7 @@ export function DocumentsListClient({ groups }: DocumentsListClientProps) {
           .toLowerCase()
           .includes(searchQuery.toLowerCase());
         const matchesStatus =
-          statusFilter === "all" || doc.status === statusFilter;
+          statusFilter === "all" || lifecycleOf(doc) === statusFilter;
         return matchesSearch && matchesStatus;
       }),
     }))
@@ -164,10 +185,11 @@ export function DocumentsListClient({ groups }: DocumentsListClientProps) {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="parsed">Analyzed</SelectItem>
-            <SelectItem value="processing">Processing</SelectItem>
-            <SelectItem value="queued">Queued</SelectItem>
-            <SelectItem value="error">Error</SelectItem>
+            {LIFECYCLE_ORDER.map((lifecycle) => (
+              <SelectItem key={lifecycle} value={lifecycle}>
+                {LIFECYCLE_LABELS[lifecycle]}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -180,8 +202,8 @@ export function DocumentsListClient({ groups }: DocumentsListClientProps) {
         </div>
         <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Analyzed</p>
-          <p className="text-2xl font-bold text-green-600">
-            {allDocuments.filter((d) => d.status === "parsed").length}
+          <p className="text-2xl font-bold text-green-600" aria-label="Analyzed documents">
+            {allDocuments.filter((d) => lifecycleOf(d) === "analyzed").length}
           </p>
         </div>
         <div className="rounded-lg border bg-card p-4">
@@ -189,7 +211,7 @@ export function DocumentsListClient({ groups }: DocumentsListClientProps) {
           <p className="text-2xl font-bold text-blue-600">
             {
               allDocuments.filter(
-                (d) => d.status === "processing" || d.status === "queued",
+                (d) => ["uploaded", "processing"].includes(lifecycleOf(d)),
               ).length
             }
           </p>
@@ -252,7 +274,8 @@ export function DocumentsListClient({ groups }: DocumentsListClientProps) {
                       <tbody className="divide-y">
                         {group.documents.map((doc) => {
                           const Icon = getFileIcon(doc.filename);
-                          const StatusIcon = getStatusIcon(doc.status);
+                          const lifecycle = lifecycleOf(doc);
+                          const StatusIcon = getStatusIcon(lifecycle);
                           return (
                             <tr
                               key={doc.id}
@@ -293,10 +316,10 @@ export function DocumentsListClient({ groups }: DocumentsListClientProps) {
                               <td className="px-4 py-3">
                                 <Badge
                                   variant="outline"
-                                  className={getStatusColor(doc.status)}
+                                  className={getStatusColor(lifecycle)}
                                 >
                                   <StatusIcon className="mr-1 h-3 w-3" />
-                                  {STATUS_LABELS[doc.status] ?? doc.status}
+                                  {LIFECYCLE_LABELS[lifecycle]}
                                 </Badge>
                               </td>
                               <td className="px-4 py-3 text-sm text-muted-foreground">

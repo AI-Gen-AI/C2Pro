@@ -13,6 +13,11 @@ from celery import Celery
 
 import src.analysis.adapters.ai.tools  # noqa: F401 - registers @register_tool classes for workers
 from src.config import settings
+from src.core.tasks.redis_urls import (
+    redis_ssl_options,
+    resolve_broker_url,
+    resolve_result_backend_url,
+)
 
 # --- Celery Application Instance ---
 
@@ -22,10 +27,19 @@ from src.config import settings
 #
 # The -P gevent flag is recommended for I/O bound tasks (like API calls).
 
+# Celery uses a dedicated broker/result-backend Redis when CELERY_BROKER_URL /
+# CELERY_RESULT_BACKEND_URL are set, otherwise falls back to the application
+# redis_url. TLS is derived independently per URL: a rediss:// URL (e.g. Upstash)
+# requires explicit ssl_cert_reqs or kombu raises at connection time and EVERY
+# .delay() fails silently (document parsing, coherence, alerts, snapshots); a
+# plaintext redis:// broker (e.g. a Railway Redis on private networking) uses no SSL.
+_broker_url = resolve_broker_url(settings)
+_backend_url = resolve_result_backend_url(settings)
+
 celery_app = Celery(
     "c2pro_worker",
-    broker=settings.redis_url,
-    backend=settings.redis_url,
+    broker=_broker_url,
+    backend=_backend_url,
     include=[
         "src.analysis.adapters.ai.tools",
         "src.core.tasks.ingestion_tasks",
@@ -33,14 +47,21 @@ celery_app = Celery(
         "src.core.tasks.project_graph_tasks",
         "src.core.tasks.snapshot_tasks",
         "src.core.tasks.snapshot_retention",
+        "src.core.tasks.hitl_resume_reconciler",
     ],
 )
 
 # --- Configuration ---
 
 celery_app.conf.update(
-    # Broker settings
+    # Broker settings. broker_connection_retry_on_startup keeps the worker alive,
+    # retrying with kombu's incremental backoff when the broker is briefly
+    # unreachable (it does not exit, so start.sh's 5s restart loop is not amplified
+    # during an outage). The durable fix for the outage is the uncapped broker.
     broker_connection_retry_on_startup=True,
+    # TLS derived independently per broker/backend URL (None = no SSL for redis://).
+    broker_use_ssl=redis_ssl_options(_broker_url),
+    redis_backend_use_ssl=redis_ssl_options(_backend_url),
     # Task settings
     task_default_queue="document_parsing",
     task_default_exchange="document_parsing",
@@ -65,6 +86,14 @@ celery_app.conf.update(
         "project-snapshots-retention": {
             "task": "project_snapshots.retention",
             "schedule": 86400.0,
+        },
+        # A resume is driven by an HTTP request, so a worker that dies takes
+        # the retry with it. This sweep is what makes crash recovery actually
+        # happen; it is bounded per run and skips operations whose lease is
+        # still being renewed.
+        "hitl-resume-reconcile": {
+            "task": "hitl_resume.reconcile",
+            "schedule": 60.0,
         },
     },
 )

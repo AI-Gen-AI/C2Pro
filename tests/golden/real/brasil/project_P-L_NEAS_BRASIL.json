@@ -1,0 +1,75 @@
+{
+  "project_metadata": {
+    "id": "P-100014",
+    "name": "P-Líneas Brasil",
+    "type": "Industrial",
+    "complexity": "Complex",
+    "language": "pt"
+  },
+  "input_documents": {
+    "contract_text": "CONTRATO DE EXECUÇÃO DE OBRA para P-Líneas Brasil (Brasil). O contratante assume o compromisso de entrega no prazo de 24 meses. O valor global do contrato é de R$ 27,500,000.00 sem impostos.",
+    "risk_analysis_text": "ANALISE DE RISCOS DE PROJETO (FORMG-121) - P-Líneas Brasil. Risco de atraso nas licenças ambientais locais com impacto crítico estimado de 36 meses no cronograma global.",
+    "schedule_summary": {
+      "execution_period_months": 24,
+      "total_period_months": 36,
+      "contract_duration_months": 24,
+      "forecast_duration_months": 24
+    },
+    "budget_summary": {
+      "total_value": 27500000,
+      "budget_total": 23375000.0,
+      "line_items": [
+        {
+          "name": "Civil & Installation",
+          "cost": 14025000.0
+        },
+        {
+          "name": "Equipment & Materials",
+          "cost": 9350000.0
+        }
+      ],
+      "contract_total": 27500000,
+      "currency": "EUR",
+      "budget_gap_classification": "normal_margin",
+      "budget_gap_reason": "Normal 15% execution margin."
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-OBJ-01",
+        "type": "scope",
+        "text": "P-Líneas Brasil",
+        "metadata": {
+          "location": "Brasil"
+        }
+      },
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "24",
+        "metadata": {
+          "duration_months": 24
+        }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "Abengoa Inabensa",
+        "mention": "contratista",
+        "role": "Main Contractor",
+        "quadrant": "Responsible"
+      }
+    ],
+    "coherence_alerts": [],
+    "expert_score": 100,
+    "per_category_scores": {
+      "SCOPE": 100,
+      "BUDGET": 100,
+      "TIME": 100,
+      "TECHNICAL": 100,
+      "LEGAL": 100,
+      "QUALITY": 100
+    }
+  }
+}

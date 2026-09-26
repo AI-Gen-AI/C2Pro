@@ -1,13 +1,24 @@
 """
-Use Case for deleting a document and its associated file.
+Use Case for deleting a document and its stored revision objects (P0b).
+
+The database delete goes first: append-only history (``project_events`` referencing the
+document's revisions) may refuse it, and then no byte may be removed. Only after the delete
+is committed are the document's own objects removed — its document-scoped revision prefix
+and any legacy ``{id}{ext}`` object. Keys are document-scoped, so this never touches another
+document's or tenant's bytes. A storage failure at that point leaves unreferenced objects
+behind (logged for cleanup) instead of a live document without bytes.
 """
-from pathlib import Path
 from uuid import UUID
+
+import structlog
 
 from src.core.tenants.types import require_tenant_id
 from src.documents.application.get_document_use_case import GetDocumentUseCase  # Reuse use case
+from src.documents.domain.storage_keys import document_object_prefix, legacy_document_object_key
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
+
+logger = structlog.get_logger()
 
 
 class DeleteDocumentUseCase:
@@ -23,21 +34,32 @@ class DeleteDocumentUseCase:
 
     async def execute(self, document_id: UUID, user_id: UUID, tenant_id: UUID) -> None:
         """
-        Deletes a document record and its associated file from storage.
+        Deletes a document record, then the objects that only that document owned.
         """
         scoped_tenant_id = require_tenant_id(tenant_id)
         document = await self.get_document_use_case.execute(document_id, user_id, scoped_tenant_id)
 
-        # Assuming storage_url will be based on document.id and its extension
-        file_name_in_storage = f"{document.id}{Path(document.filename).suffix}"
-
-        try:
-            await self.storage_service.delete_file(file_name_in_storage)
-        except Exception as e:
-            # Log error but proceed with DB deletion if file delete fails
-            # or handle more gracefully based on business rules
-            print(f"Warning: Failed to delete file {file_name_in_storage} from storage: {e}")
-            # raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete file from storage: {e}")
-
         await self.document_repository.delete(scoped_tenant_id, document_id)
         await self.document_repository.commit()
+
+        prefix = document_object_prefix(scoped_tenant_id, document.project_id, document.id)
+        try:
+            await self.storage_service.delete_prefix(prefix)
+        except Exception as exc:
+            logger.warning(
+                "document_revision_objects_not_deleted",
+                document_id=str(document.id),
+                prefix=prefix,
+                error=str(exc),
+            )
+
+        legacy_key = legacy_document_object_key(document.id, document.filename)
+        try:
+            await self.storage_service.delete_file(legacy_key)
+        except Exception as exc:
+            logger.warning(
+                "document_legacy_object_not_deleted",
+                document_id=str(document.id),
+                key=legacy_key,
+                error=str(exc),
+            )

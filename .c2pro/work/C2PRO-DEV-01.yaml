@@ -1,0 +1,52 @@
+schema: c2pro-work-envelope-v1
+schema_version: 1
+work_id: C2PRO-DEV-01
+campaign_id: null
+role: implementation_lead
+base_sha: a03d4d09f0a32b0d3e5d54f0f3c68f398b06fa0b
+branch: feat/c2pro-dev-01-minimal-yaml-control-v2
+risk_class: normal
+scope:
+  - .c2pro/**
+  - scripts/development/validate_c2pro_control.py
+  - tests/development/test_c2pro_control_plane.py
+  - validation/development/c2pro-dev-01-minimal-yaml-control-v1.yaml
+  - docs/architecture/development/c2pro-dev-01-minimal-yaml-control-v1.md
+out_of_scope:
+  - product runtime behavior
+  - production deployment
+  - credentials or secrets
+  - AF-DEV or MR-DEV authority changes
+  - deletion of legacy governance files
+  - role authority hierarchy implementation reserved for C2PRO-DEV-02
+allowed_tools:
+  - repository_read
+  - scoped_repository_write
+  - tests
+  - lint
+  - git_branch
+  - pull_request
+forbidden_paths:
+  - .env
+  - .env.*
+  - production/**
+acceptance_criteria:
+  - current state parses deterministically and contains no completed history
+  - work queue contains only open states
+  - work identity is independent from worker/model identity
+  - handoff preserves work_id and immutable baseline
+  - evidence is referenced rather than embedding raw CI logs
+  - legacy blackboard and Markdown backlogs remain readable but non-canonical
+  - bootstrap hot context is at most 16384 bytes
+  - validation rejects malformed or policy-violating fixtures
+required_tests:
+  - python -m pytest -q tests/development/test_c2pro_control_plane.py
+evidence_required:
+  - validation/development/c2pro-dev-01-minimal-yaml-control-v1.yaml
+review_policy: independent_principal
+worker_selection:
+  preferred: null
+  eligible_principals: [claude_code, codex]
+  eligible_subordinates: [gemini_cli, antigravity, opencode]
+  selected: null
+timeout_resource_policy: deferred_to_C2PRO_DEV_03

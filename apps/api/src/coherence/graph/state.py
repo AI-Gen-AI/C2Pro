@@ -117,6 +117,9 @@ class EvaluationConfig:
     low_budget_mode: bool = False
     parallel_evaluation: bool = True
     include_cross_clause: bool = True
+    # ADR-017-style flag: run the LLM cross-clause contradiction depth pass. Resolved
+    # per-tenant by the router (default off); the always-on deterministic floor is separate.
+    llm_crosscheck_enabled: bool = False
     include_rag_similarity: bool = True
     poor_extraction_quality: bool = False
     missing_dimensions: list[str] | None = None
@@ -125,6 +128,8 @@ class EvaluationConfig:
     max_cross_pairs: int = 20
     tenant_id: str | None = None
     project_id: str | None = None
+    # Project name/identity — enables the project-identity (LOC-MISMATCH) comparator.
+    project_name: str | None = None
 
 
 # =============================================================================

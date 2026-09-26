@@ -26,6 +26,7 @@ from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session
+from src.core.security import CurrentTenantId
 from src.documents.adapters.persistence.models import DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
 
@@ -336,10 +337,13 @@ async def analyze_document(
 async def stream_project_processing(
     project_id: UUID,
     _request: RequestType,
-    current_user: Annotated[User, Depends(get_current_user)],
+    # SSE: the browser's EventSource cannot set an Authorization header, so it
+    # passes the token via ?access_token=. TenantIsolationMiddleware reads that
+    # for /process/stream and populates request.state; CurrentTenantId consumes
+    # it. (get_current_user only reads the Authorization header -> 401 for SSE.)
+    tenant_id: CurrentTenantId,
     db: Annotated[AsyncSession, Depends(get_session)],
 ) -> StreamingResponse:
-    tenant_id = current_user.tenant_id
 
     document_count, global_score, completed_at = await _resolve_processing_summary(
         db,

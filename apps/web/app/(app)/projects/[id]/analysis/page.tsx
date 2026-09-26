@@ -6,11 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AnalysisProgressTracker } from "@/components/features/analysis/AnalysisProgressTracker";
+import {
+  SingleDocumentHealth,
+  coherenceSubscoreIsIncorporated,
+} from "@/components/features/health/SingleDocumentHealth";
 import { deriveTripletChecklist } from "@/components/features/documents/TripletChecklist";
 import { useProjectCoherenceActions } from "@/hooks/useProjectCoherenceActions";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
 import { useListProjectAlertsApiV1AlertsProjectsProjectIdGet } from "@/lib/api/generated/alerts/alerts";
 import { useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet } from "@/lib/api/generated/coherence-dashboard/coherence-dashboard";
+import { useGetProjectHealthApiV1ProjectsProjectIdHealthGet } from "@/lib/api/generated/project-health/project-health";
 import type { AlertResponse } from "@/lib/api/generated/models";
 
 type DashboardExtras = {
@@ -53,6 +58,45 @@ function errorMessage(
  * Test Suite ID: TASK-1347, TASK-OPS-DOCFLOW-010
  * Route Coverage: Project analysis route uses generated backend queries.
  */
+/**
+ * Why a Coherence readout is suppressed.
+ *
+ * The Health contract records only whether a coherence subscore was
+ * INCORPORATED; it does not say why one was not. Absence can mean insufficient
+ * evidence, not evaluated, evaluated and failed, or simply not incorporated --
+ * so a loaded vector without that evidence licenses only "unavailable", never a
+ * verdict on this analysis. Loading or an error means we do not know yet, which
+ * is a different thing again.
+ *
+ * A richer contract (availability / eligible_pair_count / scope /
+ * reason_if_unavailable) is a governed P1 follow-up; until it exists this stays
+ * neutral rather than asserting more than the contract proves.
+ */
+type CoherenceSuppressionReason = "loading" | "unverified" | "coherence_unavailable";
+
+function resolveCoherenceSuppressionReason({
+  loading,
+  errored,
+  hasVector,
+}: {
+  loading: boolean;
+  errored: boolean;
+  hasVector: boolean;
+}): CoherenceSuppressionReason {
+  if (loading) return "loading";
+  if (!errored && hasVector) return "coherence_unavailable";
+  return "unverified";
+}
+
+/** One copy string per reason, so the mapping stays exhaustive by type. */
+const COHERENCE_SUPPRESSION_COPY: Record<CoherenceSuppressionReason, string> = {
+  loading: "Checking whether Coherence is available for this project…",
+  unverified: "Coherence availability could not be verified.",
+  coherence_unavailable:
+    "Coherence is not available for this analysis yet. Availability depends on " +
+    "having enough reconcilable evidence to evaluate consistency.",
+};
+
 export default function AnalysisPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
@@ -62,6 +106,21 @@ export default function AnalysisPage() {
     isLoading: dashboardLoading,
     error: dashboardError,
   } = useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet(id);
+  // INV-COH: a Coherence number may be shown ONLY on positive evidence that a subscore
+  // was actually incorporated. Absence of that evidence — for ANY reason — is not
+  // permission to show one, so loading and error suppress the readouts too rather than
+  // falling through to the legacy dashboard number.
+  const {
+    data: healthVector,
+    isLoading: healthLoading,
+    isError: healthErrored,
+  } = useGetProjectHealthApiV1ProjectsProjectIdHealthGet(id);
+  const showCoherence = coherenceSubscoreIsIncorporated(healthVector);
+  const coherenceSuppressionReason = resolveCoherenceSuppressionReason({
+    loading: healthLoading,
+    errored: healthErrored,
+    hasVector: healthVector != null,
+  });
   const {
     data: alertsResponse,
     isLoading: alertsLoading,
@@ -112,12 +171,16 @@ export default function AnalysisPage() {
   const formattedScoreVersion = scoreVersion?.replaceAll("_", " ");
 
   const statCards = [
-    {
-      label: "Coherence Score",
-      value: String(coherenceScore),
-      icon: Gauge,
-      tone: "text-primary",
-    },
+    ...(showCoherence
+      ? [
+          {
+            label: "Coherence Score",
+            value: String(coherenceScore),
+            icon: Gauge,
+            tone: "text-primary",
+          },
+        ]
+      : []),
     {
       label: "Open Alerts",
       value: String(openAlerts.length),
@@ -125,7 +188,7 @@ export default function AnalysisPage() {
       tone: "text-warning",
     },
     {
-      label: "Documents Analyzed",
+      label: "Documents",
       value: String(documentCount),
       icon: RadioTower,
       tone: "text-chart-quality",
@@ -175,6 +238,8 @@ export default function AnalysisPage() {
 
       <AnalysisProgressTracker projectId={id} />
 
+      <SingleDocumentHealth projectId={id} />
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {statCards.map((stat) => {
           const Icon = stat.icon;
@@ -207,12 +272,25 @@ export default function AnalysisPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
-              <span>Current coherence</span>
-              <span className="font-mono font-semibold text-foreground">
-                {coherenceScore}
-              </span>
-            </div>
+            {showCoherence ? (
+              <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                <span>Current coherence</span>
+                <span
+                  data-testid="analysis-coherence-score"
+                  className="font-mono font-semibold text-foreground"
+                >
+                  {coherenceScore}
+                </span>
+              </div>
+            ) : (
+              <p
+                data-testid="analysis-coherence-unavailable"
+                data-reason={coherenceSuppressionReason}
+                className="rounded-md border bg-muted/30 px-3 py-2 text-xs"
+              >
+                {COHERENCE_SUPPRESSION_COPY[coherenceSuppressionReason]}
+              </p>
+            )}
             <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
               <span>Open remediation items</span>
               <span className="font-mono font-semibold text-foreground">

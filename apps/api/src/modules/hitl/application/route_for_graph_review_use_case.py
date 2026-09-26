@@ -1,11 +1,12 @@
 """
-HITL graph routing use case.
+HITL graph routing use case (ADR-020, TASK-V3-020-02).
 
-Determines impact level from confidence, routes through existing
-ConfidenceRouter + HumanInTheLoopService. The LangGraph Interrupt
-stays in the node — this use case handles only domain/application work.
+Routes graph extraction results through HITL based on a per-tenant /
+per-doc-type RoutingPolicy rather than hardcoded thresholds. The
+LangGraph Interrupt stays in the node; this use case handles only
+domain/application work.
 
-Refers to TASK-IMPL-010.6.
+Refers to TASK-IMPL-010.6, TASK-V3-020-02.
 """
 
 from __future__ import annotations
@@ -14,10 +15,14 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+from src.modules.hitl.adapters.in_memory_routing_policy_repository import (
+    InMemoryRoutingPolicyRepository,
+)
 from src.modules.hitl.application.human_in_the_loop_service import (
     HumanInTheLoopService,
 )
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
+from src.modules.hitl.ports.routing_policy_repository import IRoutingPolicyRepository
 
 
 @dataclass(frozen=True)
@@ -44,22 +49,35 @@ class GraphReviewResult:
 class RouteForGraphReviewUseCase:
     """Routes graph extraction results through HITL for human review.
 
-    Uses existing ConfidenceRouter (inside HumanInTheLoopService) for
-    review status determination. Impact level is derived from confidence.
+    Policy is resolved per (tenant_id, doc_type) via IRoutingPolicyRepository.
+    When doc_type is in policy.auto_approve_item_types the item is approved
+    immediately without calling the HITL service (automation boundary, ADR-020).
     """
 
     def __init__(
         self,
         hitl_service: HumanInTheLoopService,
-        high_impact_threshold: float = 0.5,
+        policy_repository: IRoutingPolicyRepository | None = None,
     ) -> None:
         self._hitl = hitl_service
-        self._high_impact_threshold = high_impact_threshold
+        self._policy_repo: IRoutingPolicyRepository = (
+            policy_repository if policy_repository is not None
+            else InMemoryRoutingPolicyRepository()
+        )
 
     async def execute(self, command: GraphReviewCommand) -> GraphReviewResult:
+        policy = await self._policy_repo.get_policy(command.tenant_id, command.doc_type)
+
+        # Automation boundary: low-risk item types skip human review entirely.
+        if command.doc_type in policy.auto_approve_item_types:
+            return GraphReviewResult(
+                review_status=ReviewStatus.APPROVED,
+                impact_level=ImpactLevel.LOW,
+            )
+
         impact = (
             ImpactLevel.HIGH
-            if command.confidence < self._high_impact_threshold
+            if command.confidence < policy.high_impact_threshold
             else ImpactLevel.MEDIUM
         )
 
