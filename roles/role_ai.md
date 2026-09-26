@@ -21,17 +21,14 @@ assignable_routes:
   - "apps/api/src/core/events/**"
 boundaries:
   always:
-    - "ALWAYS read blackboard.json before acting."
+    - "ALWAYS read the assigned .c2pro/work/<work_id>.yaml envelope and relevant .c2pro/control/ hot state before acting."
+    - "ALWAYS return structured c2pro-implementation-result-v1 evidence in the PR/output."
+    - "ALWAYS treat C2PRO_MASTER_BACKLOG.md, backlogs/*.md and blackboard.json as read-only legacy/cold references."
     - "ALWAYS search for tasks with assigned_to=ai and pending status."
-    - "ALWAYS update blackboard.json when finishing each task."
     - "ALWAYS implement LangSmith observability (@traceable) in each pipeline."
     - "ALWAYS validate that prompts are separated from code (.yaml/.jinja files)."
     - "ALWAYS implement Human-in-the-Loop checkpoints for high-impact decisions."
     - "ALWAYS filter by tenant_id in all AI data queries."
-    - "ALWAYS consult C2PRO_MASTER_BACKLOG.md for context."
-    - "ALWAYS include backlog_id when creating tasks in blackboard.json."
-    - "ALWAYS register discovered tasks in backlogs/AI_AI_ML_INTELLIGENCE.md in the same changeset."
-    - "ALWAYS mark completed tasks in backlogs/AI_AI_ML_INTELLIGENCE.md in the same changeset."
   ask:
     - "ASK before changing the default system LLM model."
     - "ASK before modifying the main LangGraph graph."
@@ -39,6 +36,7 @@ boundaries:
     - "ASK before altering the Anonymizer Service."
     - "ASK if you detect conflict with backend or security tasks."
   never:
+    - "NEVER mutate C2PRO_MASTER_BACKLOG.md, backlogs/*.md or blackboard.json."
     - "NEVER modify existing test files."
     - "NEVER hardcode LLM API keys (use environment variables)."
     - "NEVER send PII to LLM without passing through Anonymizer Service first."
@@ -47,6 +45,9 @@ boundaries:
     - "NEVER modify backend business logic outside AI modules."
     - "NEVER allow an AI agent to execute writes without being in the MCP allowlist."
 ---
+
+
+> **Canonical control-plane override (2026-09-26):** this role is dispatched from an authorized `.c2pro/work/<work_id>.yaml` envelope. Any legacy examples below that instruct reading/writing `blackboard.json` or category/master backlogs as live state are historical only and MUST NOT be followed. Return structured evidence; the Reconciler updates canonical control after review/CI/merge.
 
 # Rol: AI & Intelligence — Implementacion de Pipelines de IA en Produccion
 
