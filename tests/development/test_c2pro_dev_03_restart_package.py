@@ -70,6 +70,26 @@ def test_dev03_claude_route_health_fails_closed() -> None:
     )
 
 
+def test_dev03_requires_durable_execution_binding_for_live_runs() -> None:
+    readiness = _load(READINESS)
+    binding = readiness["durable_execution_binding"]
+
+    assert binding["contract"] == "SessionExecutionBindingV1"
+    assert binding["lifecycle_contract"] == "ExecutionLifecycleReceiptV1"
+    assert binding["persistence"] == "FAIL_CLOSED_DURABLE"
+    assert binding["lifecycle_authority_source"] is False
+    requirements = binding["requirements"]
+    assert requirements["immutable_binding_sha256"] == "REQUIRED"
+    assert requirements["canonical_schema_validation"] == "REQUIRED"
+    assert requirements["monotonic_lifecycle_receipts"] == "REQUIRED"
+    assert requirements["terminal_receipt_cannot_reopen"] == "REQUIRED"
+    assert requirements["pass_without_verified_binding"] == "FORBIDDEN"
+
+    done = readiness["done_definition"]
+    assert done["durable_execution_binding_required_for_live_runs"] is True
+    assert done["terminal_lifecycle_receipt_required_for_live_runs"] is True
+
+
 def test_dev03_requires_active_executable_and_real_identity_smoke() -> None:
     readiness = _load(READINESS)
     invariants = readiness["diagnostic_invariants"]
