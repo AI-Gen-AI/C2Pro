@@ -224,14 +224,17 @@ def test_backend_requirements_include_langchain_anthropic_compatible_sdk() -> No
 
     repo_root = Path(__file__).resolve().parents[4]
     requirements = repo_root / "apps" / "api" / "requirements.txt"
+    sprint_requirements = repo_root / "apps" / "api" / "requirements-sprint1.txt"
     contents = requirements.read_text(encoding="utf-8")
+    sprint_contents = sprint_requirements.read_text(encoding="utf-8")
 
     assert "langchain-anthropic==1.4.8" in contents
     assert "anthropic>=0.120.0,<1.0.0" in contents
     assert "pydantic-settings>=2.10.1,<3.0.0" in contents
     assert "supabase==2.31.0" in contents
     assert "httpx>=0.28.1,<1.0.0" in contents
-    assert "uvicorn[standard]>=0.51.0,<1.0.0" in contents
+    assert "uvicorn[standard]>=0.52.1,<1.0.0" in contents
+    assert "uvicorn[standard]>=0.52.1,<1.0.0" in sprint_contents
     assert "websockets>=13.0.0,<17.0" in contents
     assert "anthropic==0.18.1" not in contents
     assert "pydantic-settings==2.1.0" not in contents
