@@ -5,6 +5,7 @@ Configuración centralizada usando Pydantic Settings.
 Soporta múltiples ambientes (dev, staging, prod).
 """
 
+import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any, ClassVar, Literal, Self
@@ -515,21 +516,33 @@ class Settings(BaseSettings):
     # VALIDATION
     # ===========================================
 
+    # Complex settings contract (#667). From env/.env, list/dict fields are
+    # JSON-decoded by pydantic-settings BEFORE these mode="before" validators
+    # run: a raw CSV or empty value fails there with SettingsError and never
+    # reaches C2Pro code. The string branches below serve direct constructor
+    # input only. A value of the wrong shape fails closed instead of being
+    # coerced to empty. PLATFORM_OPERATOR_USER_IDS is the deliberate CSV
+    # exception (NoDecode) and is handled separately.
+
+    @staticmethod
+    def _string_list_input(v: Any, name: str) -> list[str]:
+        """Return the raw items of a list setting (JSON array, or CSV constructor string)."""
+        if isinstance(v, str):
+            stripped = v.strip()
+            if not stripped:
+                return []
+            if not stripped.startswith(("[", "{")):
+                return v.split(",")
+            v = json.loads(stripped)
+        if not isinstance(v, list):
+            raise ValueError(f"{name} must be a JSON array of strings")
+        return [str(item) for item in v]
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: Any) -> list[str]:
-        """Parse CORS origins from string or list."""
-        if isinstance(v, str):
-            if not v.strip():  # Handle empty string
-                return []
-            if v.strip().startswith("["):
-                import json
-
-                return cls._expand_cors_origin_variants(list(json.loads(v)))
-            return cls._expand_cors_origin_variants([origin.strip() for origin in v.split(",")])
-        if isinstance(v, list):
-            return cls._expand_cors_origin_variants([str(origin) for origin in v])
-        return []
+        """Normalize CORS origins (env: JSON array only; constructor: list or CSV/JSON string)."""
+        return cls._expand_cors_origin_variants(cls._string_list_input(v, "CORS_ORIGINS"))
 
     @staticmethod
     def _expand_cors_origin_variants(origins: list[str]) -> list[str]:
@@ -570,16 +583,16 @@ class Settings(BaseSettings):
     @field_validator("integration_api_keys", mode="before")
     @classmethod
     def parse_integration_api_keys(cls, v: Any) -> dict[str, str]:
-        if v in (None, "", {}):
+        """Normalize API key -> tenant_id (env: JSON object only; constructor: dict or JSON string)."""
+        if v is None or (isinstance(v, str) and not v.strip()):
             return {}
         if isinstance(v, str):
-            import json
-
-            raw = json.loads(v)
-            return {str(key): str(value) for key, value in dict(raw).items()}
-        if isinstance(v, dict):
-            return {str(key): str(value) for key, value in v.items()}
-        return {}
+            v = json.loads(v)
+        if not isinstance(v, dict):
+            raise ValueError(
+                "INTEGRATION_API_KEYS must be a JSON object mapping API key to tenant_id"
+            )
+        return {str(key): str(value) for key, value in v.items()}
 
     @model_validator(mode="after")
     def validate_security_posture(self) -> Self:
@@ -647,13 +660,9 @@ class Settings(BaseSettings):
     @field_validator("budget_alert_admin_emails", mode="before")
     @classmethod
     def parse_budget_alert_admin_emails(cls, v: Any) -> list[str]:
-        if isinstance(v, str):
-            if not v.strip():
-                return []
-            return [email.strip() for email in v.split(",") if email.strip()]
-        if isinstance(v, list):
-            return [str(email).strip() for email in v if str(email).strip()]
-        return []
+        """Normalize admin emails (env: JSON array only; constructor: list or CSV/JSON string)."""
+        emails = cls._string_list_input(v, "BUDGET_ALERT_ADMIN_EMAILS")
+        return [email.strip() for email in emails if email.strip()]
 
     @field_validator("platform_operator_user_ids", mode="before")
     @classmethod
