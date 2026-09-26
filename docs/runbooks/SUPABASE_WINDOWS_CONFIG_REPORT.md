@@ -45,14 +45,14 @@ Tablas con RLS: 19
 **Archivo:** `.env`
 
 ```env
-DATABASE_URL=postgresql://postgres.tcxedmnvebazcsaridge:1TcIs1wJkKjQwn@aws-1-eu-north-1.pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://postgres.tcxedmnvebazcsaridge:<DB_PASSWORD>@aws-1-eu-north-1.pooler.supabase.com:6543/postgres
 ```
 
 **Componentes:**
 - **Host:** `aws-1-eu-north-1.pooler.supabase.com`
 - **Puerto:** `6543` (Connection Pooler - ✅ Correcto)
 - **Usuario:** `postgres.tcxedmnvebazcsaridge`
-- **Password:** `1TcIs1wJkKjQwn`
+- **Password:** `<DB_PASSWORD>`
 - **Database:** `postgres`
 
 **DNS Resuelto:**
@@ -82,7 +82,7 @@ IPs: 51.21.18.29, 13.60.102.132
 
 ```python
 conn = await asyncpg.connect(
-    'postgresql://postgres.tcxedmnvebazcsaridge:...@aws-1-eu-north-1.pooler.supabase.com:6543/postgres'
+    'postgresql://postgres.tcxedmnvebazcsaridge:<DB_PASSWORD>@aws-1-eu-north-1.pooler.supabase.com:6543/postgres'
 )
 ```
 
@@ -102,7 +102,7 @@ conn = await asyncpg.connect(
     host='aws-1-eu-north-1.pooler.supabase.com',
     port=6543,
     user='postgres.tcxedmnvebazcsaridge',
-    password='1TcIs1wJkKjQwn',
+    password="<DB_PASSWORD>",
     database='postgres',
     statement_cache_size=0,  # IMPORTANTE para pgbouncer
     timeout=15
@@ -162,13 +162,13 @@ def create_supabase_engine():
 
 ```env
 # Método 1: URL completa (funciona con SQLAlchemy)
-DATABASE_URL=postgresql://postgres.tcxedmnvebazcsaridge:1TcIs1wJkKjQwn@aws-1-eu-north-1.pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://postgres.tcxedmnvebazcsaridge:<DB_PASSWORD>@aws-1-eu-north-1.pooler.supabase.com:6543/postgres
 
 # Método 2: Variables separadas (alternativa para asyncpg directo)
 DB_HOST=aws-1-eu-north-1.pooler.supabase.com
 DB_PORT=6543
 DB_USER=postgres.tcxedmnvebazcsaridge
-DB_PASSWORD=1TcIs1wJkKjQwn
+DB_PASSWORD=<DB_PASSWORD>
 DB_NAME=postgres
 ```
 
@@ -211,11 +211,11 @@ LOG_LEVEL=INFO
 
 # Supabase (Cloud)
 SUPABASE_URL=https://tcxedmnvebazcsaridge.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjeGVkbW52ZWJhemNzYXJpZGdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcwMzA3NjUsImV4cCI6MjA4MjYwNjc2NX0.jjuG6zkFBdlevTjqqvbQI4yFnNpKMz5rq8001nB639Q
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjeGVkbW52ZWJhemNzYXJpZGdlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NzAzMDc2NSwiZXhwIjoyMDgyNjA2NzY1fQ.rP_YmXGj2WOVD8a2SfXnn0BZ-EtjfpwstNaSO_J-r2o
+SUPABASE_ANON_KEY=<REDACTED>
+SUPABASE_SERVICE_ROLE_KEY=<REDACTED>
 
 # Database - Connection Pooler (IPv4 compatible)
-DATABASE_URL=postgresql://postgres.tcxedmnvebazcsaridge:1TcIs1wJkKjQwn@aws-1-eu-north-1.pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://postgres.tcxedmnvebazcsaridge:<DB_PASSWORD>@aws-1-eu-north-1.pooler.supabase.com:6543/postgres
 
 # Storage
 STORAGE_PROVIDER=local
@@ -228,7 +228,7 @@ AI_MODEL_FAST=claude-haiku-4-20250514
 AI_MAX_TOKENS_OUTPUT=4096
 
 # JWT
-JWT_SECRET_KEY=c2pro-dev-secret-key-change-in-production-min-32-chars-required
+JWT_SECRET_KEY=<REDACTED>
 JWT_ALGORITHM=HS256
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
 
@@ -259,13 +259,13 @@ LOG_LEVEL=INFO
 
 # Supabase (mismo que development)
 SUPABASE_URL=https://tcxedmnvebazcsaridge.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjeGVkbW52ZWJhemNzYXJpZGdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcwMzA3NjUsImV4cCI6MjA4MjYwNjc2NX0.jjuG6zkFBdlevTjqqvbQI4yFnNpKMz5rq8001nB639Q
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjeGVkbW52ZWJhemNzYXJpZGdlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NzAzMDc2NSwiZXhwIjoyMDgyNjA2NzY1fQ.rP_YmXGj2WOVD8a2SfXnn0BZ-EtjfpwstNaSO_J-r2o
+SUPABASE_ANON_KEY=<REDACTED>
+SUPABASE_SERVICE_ROLE_KEY=<REDACTED>
 
 # Database - Connection Pooler
-DATABASE_URL=postgresql://postgres.tcxedmnvebazcsaridge:1TcIs1wJkKjQwn@aws-1-eu-north-1.pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://postgres.tcxedmnvebazcsaridge:<DB_PASSWORD>@aws-1-eu-north-1.pooler.supabase.com:6543/postgres
 
-JWT_SECRET_KEY=c2pro-staging-secret-key-change-in-production-min-32-chars-required-v2-4-0
+JWT_SECRET_KEY=<REDACTED>
 
 FEATURE_COHERENCE_ANALYSIS=true
 FEATURE_WBS_GENERATION=true
@@ -327,7 +327,7 @@ async def test_supabase():
             host='aws-1-eu-north-1.pooler.supabase.com',
             port=6543,
             user='postgres.tcxedmnvebazcsaridge',
-            password='1TcIs1wJkKjQwn',
+            password="<DB_PASSWORD>",
             database='postgres',
             statement_cache_size=0,
             timeout=15
@@ -468,7 +468,7 @@ FATAL: sorry, too many clients already
 
 ```env
 # ✅ Correcto - Connection Pooler (puerto 6543)
-DATABASE_URL=postgresql://user:pass@aws-1-eu-north-1.pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://user:<DB_PASSWORD>@aws-1-eu-north-1.pooler.supabase.com:6543/postgres
 ```
 
 ### ❌ DON'T: Usar Direct Connection
@@ -476,7 +476,7 @@ DATABASE_URL=postgresql://user:pass@aws-1-eu-north-1.pooler.supabase.com:6543/po
 ```env
 # ❌ Evitar - Direct Connection (puerto 5432)
 # Puede tener problemas en Windows con IPv6
-DATABASE_URL=postgresql://user:pass@aws-1-eu-north-1.aws.com:5432/postgres
+DATABASE_URL=postgresql://user:<DB_PASSWORD>@aws-1-eu-north-1.aws.com:5432/postgres
 ```
 
 ### ✅ DO: Agregar statement_cache_size=0
