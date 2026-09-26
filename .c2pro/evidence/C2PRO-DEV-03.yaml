@@ -1,0 +1,30 @@
+schema: c2pro-evidence-reference-v1
+schema_version: 1
+work_id: C2PRO-DEV-03
+status: collecting
+references:
+  - kind: git_commit
+    locator: d7d1e6c2a2491feaafa56ccb41aafd86d9df2a4d
+    immutable: true
+    sha256: null
+    summary: Exact C2Pro main baseline at DEV-03 restart materialization.
+  - kind: audit
+    locator: docs/architecture/development/c2pro-dev-03-principal-worker-readiness-v2.md
+    immutable: false
+    sha256: null
+    summary: Current DEV-03 principal readiness and governed handoff contract.
+  - kind: test_report
+    locator: validation/development/c2pro-dev-03-principal-worker-readiness-v2.yaml
+    immutable: false
+    sha256: null
+    summary: Machine-readable planned readiness state; no live qualification inferred.
+  - kind: audit
+    locator: AI-Gen-AI/2SB@2bc886a8c90bb5d67b955c9ed18d71946e321f34
+    immutable: true
+    sha256: null
+    summary: Agent Factory authority and route-role baseline reviewed for the restart package.
+  - kind: pull_request
+    locator: AI-Gen-AI/C2Pro#565
+    immutable: true
+    sha256: null
+    summary: Historical unmerged DEV-03 design and evidence input; not current readiness proof.
