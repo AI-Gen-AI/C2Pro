@@ -434,6 +434,29 @@ def test_cli_separates_bundle_validity_from_failed_qualification_verdict() -> No
 
 
 
+def test_validate_path_rejects_runtime_sha_outside_canonical_main() -> None:
+    doc = _doc()
+    with tempfile.TemporaryDirectory() as tmp:
+        bundle_path = Path(tmp) / "bundle.yaml"
+        bundle_path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+
+        def checker(commit_sha: str) -> None:
+            if commit_sha == "4" * 40:
+                raise ValueError("not canonical main history")
+
+        problems = q.validate_path(
+            bundle_path,
+            lambda _commit_sha: _control(),
+            runtime_commit_checker=checker,
+        )
+
+    assert any(
+        "frontend runtime canonical-main binding failed: not canonical main history"
+        in problem
+        for problem in problems
+    )
+
+
 def test_validate_path_uses_bundle_versioned_control_snapshot() -> None:
     doc = _doc()
     seen_commits: list[str] = []
@@ -597,6 +620,26 @@ def test_runtime_binding_requires_provider_namespaced_deployment_evidence() -> N
     assert any(
         "railway-namespaced deployment evidence" in problem for problem in problems
     )
+
+
+def test_runtime_binding_requires_non_empty_provider_artifact_locator() -> None:
+    doc = _doc()
+    backend_evidence = next(
+        ref for ref in doc["evidence_refs"] if ref["id"] == "deploy-backend"
+    )
+    backend_evidence["ref"] = "railway:"
+    problems = q.validate_document(doc)
+    assert any("non-empty artifact locator" in problem for problem in problems)
+
+
+def test_runtime_binding_rejects_invalid_provider_artifact_locator() -> None:
+    doc = _doc()
+    frontend_evidence = next(
+        ref for ref in doc["evidence_refs"] if ref["id"] == "deploy-frontend"
+    )
+    frontend_evidence["ref"] = "vercel:deployment id with spaces"
+    problems = q.validate_document(doc)
+    assert any("non-empty artifact locator" in problem for problem in problems)
 
 
 def test_runtime_binding_requires_deployment_evidence_reference() -> None:
