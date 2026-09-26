@@ -10,9 +10,9 @@
       "context": ".github/actions/setup-python-backend/action.yml::runs.steps::name:Install Python dependencies",
       "file": ".github/actions/setup-python-backend/action.yml",
       "owner": "@AI-Gen-AI",
-      "reason": "Python 3.11 CI consumes production constraints lock per ISSUE #696; Python 3.12 remains forward-canary unlocked. Baseline updated from sha 7f1fb489 to b2dd8d9b.",
+      "reason": "Python 3.11 CI consumes production constraints lock per ISSUE #696 with wheel-only install --only-binary=:all:; Python 3.12 remains forward-canary unlocked. Baseline re-reviewed for wheel-only hardening.",
       "remediation_issue": "#696",
-      "sha256": "c841dbfb3b8c0143f74298e5eb2726d318098722ebe8bf1486a63a1793721ccf"
+      "sha256": "3392ee19b86d0b366802cbe55cbc22cb002efc3dceb5c996c1bd888c0c16431d"
     },
     {
       "behavior": {
