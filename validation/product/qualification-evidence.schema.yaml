@@ -23,6 +23,7 @@ properties:
   schema:
     const: c2pro-product-qualification-evidence-v1
   schema_version:
+    type: integer
     const: 1
   lifecycle_authority:
     const: false
