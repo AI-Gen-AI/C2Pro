@@ -305,13 +305,21 @@ def validate_qualification_control(
         bundle_loader = qualification_evidence.load_yaml
 
     allowed_status = set(doc["status_enums"]["qualification_status"])
-    expected_root = (root / "evidence" / "product-qualification").resolve()
+    evidence_root = root / "evidence" / "product-qualification"
+    evidence_root_is_symlink = evidence_root.is_symlink()
+    expected_root = evidence_root.resolve()
+    if evidence_root_is_symlink:
+        problems.append("qualification_control.evidence_directory must not be a symlink")
 
     for lane in _QUALIFICATION_LANES:
         row = lanes[lane]
         where = f"qualification[{lane}]"
+        if not isinstance(row, dict):
+            problems.append(f"{where}: lane must be a mapping")
+            continue
         status = row.get("qualification_status")
-        if status not in allowed_status:
+        status_value = status if isinstance(status, str) else ""
+        if not isinstance(status, str) or status not in allowed_status:
             problems.append(f"{where}: invalid qualification_status={status!r}")
 
         targets = row.get("lifecycle_targets")
@@ -324,12 +332,12 @@ def validate_qualification_control(
         bundle_doc = None
         bundle_valid = False
 
-        if status in {"REQUIRED", "COLLECTING"}:
+        if status_value in {"REQUIRED", "COLLECTING"}:
             if bundle_ref is not None or bundle_sha is not None:
                 problems.append(
                     f"{where}: {status} must not claim an accepted bundle_ref/bundle_sha256"
                 )
-        elif status in {"PASS", "FAIL"}:
+        elif status_value in {"PASS", "FAIL"}:
             if not isinstance(bundle_ref, str) or not bundle_ref.strip():
                 problems.append(f"{where}: {status} requires bundle_ref")
             if (
@@ -379,12 +387,12 @@ def validate_qualification_control(
                             expected_verdict = "PASS" if status == "PASS" else "FAIL"
                             if status in {"PASS", "FAIL"} and bundle_doc.get("validator_verdict") != expected_verdict:
                                 problems.append(
-                                    f"{where}: {status} requires Phase-A validator_verdict={expected_verdict}"
+                                    f"{where}: {status_value} requires Phase-A validator_verdict={expected_verdict}"
                                 )
                             bundle_valid = (
                                 bundle_doc.get("capability_id") == lane
                                 and (
-                                    status not in {"PASS", "FAIL"}
+                                    status_value not in {"PASS", "FAIL"}
                                     or bundle_doc.get("validator_verdict") == expected_verdict
                                 )
                             )
@@ -402,7 +410,7 @@ def validate_qualification_control(
         if any(promoted):
             if not all(promoted):
                 problems.append(f"{where}: mapped lifecycle targets must promote atomically")
-            if status != "PASS":
+            if status_value != "PASS":
                 problems.append(f"{where}: lifecycle promotion requires qualification_status=PASS")
             if not bundle_valid:
                 problems.append(f"{where}: lifecycle promotion requires a validated PASS Phase-A bundle")
