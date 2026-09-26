@@ -22,13 +22,13 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 RFC3339_DATETIME_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}[Tt]"
-    r"(?:[01]\d|2[0-3]):[0-5]\d:(?:[0-5]\d|60)"
+    r"(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d"
     r"(?:\.\d+)?"
     r"(?:[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$"
 )
 RFC3339_LOCAL_DATETIME_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}[Tt]"
-    r"(?:[01]\d|2[0-3]):[0-5]\d:(?:[0-5]\d|60)"
+    r"(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d"
     r"(?:\.\d+)?$"
 )
 ALLOWED_KINDS = {
@@ -252,6 +252,7 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
     evidence_ids: set[str] = set()
     evidence_kinds: set[str] = set()
     evidence_kind_by_id: dict[str, str] = {}
+    evidence_record_by_id: dict[str, dict[str, Any]] = {}
     if not isinstance(evidence, list) or not evidence:
         problems.append("evidence_refs must be a non-empty list")
     else:
@@ -277,6 +278,7 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
                 problems.append(f"duplicate evidence id: {ref_id}")
             else:
                 evidence_ids.add(ref_id)
+                evidence_record_by_id[ref_id] = ref
             kind = ref.get("kind")
             if not isinstance(kind, str) or kind not in ALLOWED_KINDS:
                 problems.append(f"{where}.kind is invalid")
@@ -348,6 +350,18 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
                 problems.append(
                     f"{where}.deployment_evidence_ref must reference deployment evidence"
                 )
+            else:
+                deployment_record = evidence_record_by_id.get(deployment_ref, {})
+                artifact_ref = deployment_record.get("ref")
+                expected_prefix = f"{expected['provider']}:"
+                if not (
+                    isinstance(artifact_ref, str)
+                    and artifact_ref.lower().startswith(expected_prefix)
+                ):
+                    problems.append(
+                        f"{where}.deployment_evidence_ref must reference "
+                        f"{expected['provider']}-namespaced deployment evidence"
+                    )
 
         missing_planes = set(RUNTIME_BINDING_CONTRACT) - set(runtime_planes)
         if missing_planes:
@@ -360,10 +374,22 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
             for binding in runtime_planes.values()
             if _non_empty_string(binding.get("deployment_evidence_ref"))
         ]
-        if len(deployment_binding_refs) == 2 and len(set(deployment_binding_refs)) != 2:
-            problems.append(
-                "backend and frontend runtime bindings must reference distinct deployment evidence"
-            )
+        if len(deployment_binding_refs) == 2:
+            if len(set(deployment_binding_refs)) != 2:
+                problems.append(
+                    "backend and frontend runtime bindings must reference distinct deployment evidence"
+                )
+            deployment_artifact_refs = [
+                evidence_record_by_id.get(ref_id, {}).get("ref")
+                for ref_id in deployment_binding_refs
+            ]
+            if (
+                all(_non_empty_string(ref) for ref in deployment_artifact_refs)
+                and len(set(deployment_artifact_refs)) != 2
+            ):
+                problems.append(
+                    "backend and frontend runtime bindings must reference distinct deployment artifacts"
+                )
 
     assertion_rows = doc.get("assertions")
     assertion_statuses: dict[str, str] = {}
