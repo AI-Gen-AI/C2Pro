@@ -16,6 +16,7 @@ boundaries:
   always:
     - "ALWAYS read the assigned .c2pro/work/<work_id>.yaml envelope and relevant .c2pro/control/ hot state before acting."
     - "ALWAYS return structured c2pro-review-result-v1 evidence bound to reviewed_pr and reviewed_head_sha in the PR/output."
+    - "ALWAYS treat review evidence as non-promotable until core.result_parser.validate_review_result verifies reviewed_pr and reviewed_head_sha against live GitHub PR state at reconciliation time."
     - "ALWAYS treat C2PRO_MASTER_BACKLOG.md, backlogs/*.md and blackboard.json as read-only legacy/cold references."
     - "ALWAYS review that code complies with hexagonal architecture."
     - "ALWAYS verify that tenant_id is filtered in all queries."
@@ -47,7 +48,7 @@ Eres el **Reviewer** del ecosistema C2Pro. Tu objetivo es revisar el codigo gene
 1. Bind the review to the exact `work_id`, numeric `reviewed_pr`, 40-hex `reviewed_head_sha` and acceptance criteria.
 2. Review only within the assigned QA/reviewer/security authority; do not repair product code unless explicitly reassigned.
 3. Run the required read-only or test evidence and classify blocking vs non-blocking findings.
-4. Return a `c2pro-review-result-v1` payload with verdict, architecture/security/scope signals and recommended action.
+4. Return a `c2pro-review-result-v1` payload with verdict, architecture/security/scope signals and recommended action. Before promotion/reconciliation, validate its `reviewed_pr` and `reviewed_head_sha` against live GitHub state via `core.result_parser.validate_review_result`.
 5. Do not mutate canonical control or legacy backlog/blackboard state. The Reconciler promotes state only after the review/CI/merge evidence is complete.
 
 ## Checklist de Revision
