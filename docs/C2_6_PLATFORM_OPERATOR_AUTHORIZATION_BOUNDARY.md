@@ -299,7 +299,7 @@ E1 must be deployed **before** the operator org is first used (§15.1), or a sin
 | **NEW** | `apps/api/tests/security/test_c26_admin_ops_disposable_harness.py` | §13.5 disposable-harness cases (H01–H03), extending/importing the lifecycle of `apps/api/scripts/c25_admin_ops_gate.py` (never reimplemented): synthetic DB, restricted LOGIN, temporary DSN, ownership-tracked preservation of any pre-existing `c2pro_admin_ops` role, HTTP-layer cross-tenant proofs, teardown proof. |
 | **NEW** | `apps/api/tests/security/test_c26_admin_ops_authz_boundary.py` | Successor to the reviewer-local `test_c25_admin_ops_authz_boundary.py`, which documented the permissive behavior and is **not present on base `32eba943`**. Must assert denial, not acceptance. |
 | **EDIT** | `docs/api/openapi.yaml` | Regenerate via `make openapi` — generated artifact, never hand-edited. |
-| **EDIT** | `C2PRO_MASTER_BACKLOG.md`, `backlogs/BCK_BACKEND.md` | **Reconciler role only**, separate `docs(backlog)` PR, never bundled into the code PR. |
+| **RECONCILE** | `.c2pro/control/` + assigned work envelope; product-control YAML/MD only if lifecycle maturity changes | **Reconciler role only**, separate control PR after review/CI/merge; legacy backlog files remain read-only. |
 
 **Explicitly NOT touched:** `apps/api/src/core/database.py` · `apps/api/alembic/versions/20260907_0001_c25_admin_ops_dlq.py` · `apps/api/scripts/admin_ops_bootstrap.py` · `apps/api/scripts/c25_admin_ops_gate.py` (unmodified — its lifecycle/ownership/teardown functions are **reused/imported** by the new C2.6 disposable-harness test per §1.3 B, and its capability/grant/RLS proofs are **re-run, not reimplemented**). C2.6 introduces **no** Alembic migration and **no** persistent environment-configuration change (AC16).
 

@@ -1,8 +1,15 @@
 # Agent Orchestration Guide
 
+> **LEGACY ORCHESTRATION MODEL — historical compatibility reference (2026-09-26).**
+> The blackboard/backlog write workflow documented below predates the Single-Writer Control Plane.
+> For current work, use `.c2pro/control/` + assigned `.c2pro/work/` envelopes; product lifecycle
+> truth lives in the product-control YAML/Markdown pair. `blackboard.json`, `C2PRO_MASTER_BACKLOG.md`
+> and `backlogs/*.md` are read-only legacy/cold references. Do not execute the legacy write steps below
+> for new work.
+
 **Version**: 1.0.0
 **Last Updated**: 2026-04-04
-**Status**: Production-Ready ✅
+**Status**: LEGACY COMPATIBILITY REFERENCE
 
 ---
 

@@ -155,14 +155,13 @@ blackboard/    — SESSION_*.md active session notes
 
 ## Project-Specific Rules (CRITICAL)
 
-These rules in `.claude/rules/` override general defaults. Backlog/task source of truth: `C2PRO_MASTER_BACKLOG.md` (root) and `backlogs/BCK_*.md` (per-domain, e.g. `backlogs/BCK_BACKEND.md`).
+These rules in `.claude/rules/` override general defaults.
 
-1. **`CRITICAL_BACKLOG_REQUIREMENT.md`** — Every task (created, updated, or completed) MUST be reflected in `C2PRO_MASTER_BACKLOG.md`. Update `[ ] → [x]` with verification details and append to the Change Log.
+**Canonical control:** active development execution is owned by `.c2pro/control/` + assigned `.c2pro/work/` envelopes. Product lifecycle state is owned by `validation/product/c2pro-master-product-control-v1.yaml` and its guarded Markdown projection. `C2PRO_MASTER_BACKLOG.md`, `backlogs/BCK_*.md` and `blackboard.json` are read-only legacy/cold references.
 
-2. **`DOCUMENTATION_STRUCTURE.md`** — **Never create task-specific standalone markdown files** (no `TASK-XXX_SUMMARY.md`, no `FEATURE_*_PLAN.md`). All task documentation goes in exactly two places:
-   - `backlogs/BCK_*.md` — specs, status, implementation details (inline).
-   - `blackboard/SESSION_*.md` — active session scratch notes; consolidate back into backlogs when done.
-   The root has many legacy `TASK-*`, `UNIFY-*`, `SPRINT_*` files — these predate the rule. Do not add new ones.
+1. **`CRITICAL_BACKLOG_REQUIREMENT.md`** — Ordinary workers MUST NOT mutate legacy backlog/blackboard files. Return structured `c2pro-implementation-result-v1` evidence; completion becomes canonical only after review, CI, merge and Master/Planner reconciliation.
+
+2. **`DOCUMENTATION_STRUCTURE.md`** — **Never create task-specific standalone markdown files** merely to report completion. Use the authorized work envelope + PR evidence for current execution. Historical backlog/session files may be read when needed for reconciliation but are not current write targets. The root has many legacy `TASK-*`, `UNIFY-*`, `SPRINT_*` files — these predate the rule. Do not add new ones.
 
 3. **Commit attribution** disabled globally — do not add Co-Authored-By trailers.
 

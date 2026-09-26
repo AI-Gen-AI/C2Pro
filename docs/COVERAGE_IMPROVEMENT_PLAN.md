@@ -1,6 +1,6 @@
 # Plan to Reach 70% Document Adapter Coverage
 
-> **Governance Note:** This document is a technical planning artifact. Active task ownership and completion state must be tracked in `C2PRO_MASTER_BACKLOG.md`.
+> **Governance Note (reconciled 2026-09-26):** This is a historical technical planning artifact. Any still-relevant work must be reconciled into canonical `.c2pro` execution state; the legacy master/category backlogs are read-only references.
 
 ## Current Coverage: 37%
 
@@ -219,7 +219,7 @@ Add tests for:
 
 Current backlog rule:
 
-- If any of the success criteria are still open in reality, the corresponding work must exist in `C2PRO_MASTER_BACKLOG.md`.
+- If any success criterion is still open in reality, reconcile it into canonical `.c2pro` work before execution.
 - Do not use this file as the authoritative execution tracker.
 
 ## Files to Create
@@ -237,4 +237,4 @@ tests/unit/adapters/documents/
 ---
 
 **Created**: 2026-03-27  
-**Status**: Historical plan; refer to `C2PRO_MASTER_BACKLOG.md` for active status
+**Status**: Historical plan; refer to `.c2pro/control/` for active execution status

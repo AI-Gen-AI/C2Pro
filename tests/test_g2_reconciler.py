@@ -121,6 +121,74 @@ pr_url: https://github.com/AI-Gen-AI/C2Pro/pull/597
 """
 
 
+def test_reconciler_rejects_stale_structured_review_identity(
+    mock_control_plane,
+    valid_worker_result,
+):
+    """Structured review evidence must match the live PR number and head."""
+    live_head = "7c3a8347a5bea0c28f2e540559bd515f9afd282a"
+    stale_review = {
+        "schema": "c2pro-review-result-v1",
+        "schema_version": 1,
+        "work_id": "C2PRO-DEV-02",
+        "role": "independent_reviewer",
+        "worker_id": "codex",
+        "reviewed_pr": 597,
+        "reviewed_head_sha": "0" * 40,
+        "verdict": "PASS",
+        "blocking": [],
+        "non_blocking": [],
+        "architecture_drift": False,
+        "security_concern": False,
+        "scope_deviation": False,
+        "recommended_action": "approve",
+    }
+
+    with pytest.raises(
+        ValidationError,
+        match="Structured review identity validation failed: reviewed_head_sha mismatch",
+    ):
+        reconcile_result(
+            valid_worker_result,
+            remote_evidence={"pr_number": 597, "pr_head_sha": live_head},
+            ci_evidence={},
+            control_dir=mock_control_plane,
+            review_results=[stale_review],
+        )
+
+
+def test_reconciler_rejects_review_without_live_pr_number(
+    mock_control_plane,
+    valid_worker_result,
+):
+    """Review evidence cannot be reconciled without a live PR number."""
+    live_head = "7c3a8347a5bea0c28f2e540559bd515f9afd282a"
+    review = {
+        "schema": "c2pro-review-result-v1",
+        "schema_version": 1,
+        "work_id": "C2PRO-DEV-02",
+        "role": "independent_reviewer",
+        "worker_id": "codex",
+        "reviewed_pr": 597,
+        "reviewed_head_sha": live_head,
+        "verdict": "PASS",
+        "blocking": [],
+        "non_blocking": [],
+        "architecture_drift": False,
+        "security_concern": False,
+        "scope_deviation": False,
+        "recommended_action": "approve",
+    }
+
+    with pytest.raises(ValidationError, match="Missing or invalid live pr_number"):
+        reconcile_result(
+            valid_worker_result,
+            remote_evidence={"pr_head_sha": live_head},
+            ci_evidence={},
+            control_dir=mock_control_plane,
+            review_results=[review],
+        )
+
 def test_reconciliation_happy_path(mock_control_plane, valid_worker_result):
     """Test successful G2 reconciliation flow with valid evidence, PR merged, reachable merge commit."""
     remote_evidence = {

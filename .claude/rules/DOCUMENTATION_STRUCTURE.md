@@ -1,122 +1,82 @@
-# Documentation Structure - MUST FOLLOW
+# Documentation Structure — Canonical Control Rules
 
-## ⚠️ CRITICAL RULE - NO EXCEPTIONS ⚠️
+> **Effective:** 2026-09-26  
+> **Severity:** CRITICAL  
+> **Purpose:** prevent documentation sprawl and split-brain programme/task state.
 
-**NEVER create additional task-specific documentation files.**
+## 1. Current authorities
 
-This is MANDATORY to:
-- Avoid unnecessary work
-- Keep context unified
-- Maintain single source of truth
-- Prevent documentation sprawl
+Current execution state is canonical only in:
 
----
+- `.c2pro/control/current.yaml`
+- `.c2pro/control/work-queue.yaml`
+- authorized `.c2pro/work/<work_id>.yaml` envelopes
 
-## The Rule
+Product-programme lifecycle state is canonical only in:
 
-**ALL task documentation MUST go in exactly TWO locations:**
+- `validation/product/c2pro-master-product-control-v1.yaml`
+- `docs/product/00-c2pro-master-product-control-v1.md` as its guarded human projection
 
-1. **`backlogs/BCK_*.md`** - Task specifications, completion status, implementation details
-2. **`blackboard/SESSION_*.md`** - Active session work, scratch notes, temporary analysis
+## 2. Legacy surfaces are read-only
 
-**NEVER create files like:**
-- ❌ `TASK-BCK-027_ORCHESTRATION_AUDIT_REPORT.md`
-- ❌ `TASK-BCK-026_ALERT_UNIFICATION_PLAN.md`
-- ❌ `FEATURE_XYZ_IMPLEMENTATION_GUIDE.md`
-- ❌ Any other task-specific standalone files
+The following are historical / reconciliation inputs, not current write targets:
 
----
+- `C2PRO_MASTER_BACKLOG.md`
+- `backlogs/*.md`
+- `blackboard.json`
+- `blackboard/SESSION_*.md`
 
-## Correct Approach
+Ordinary workers MUST NOT mutate them. Historical documents may keep their original statements, but current guidance must clearly classify them as legacy/cold reference.
 
-### For Task Documentation
-```
-✅ Add to backlogs/BCK_BACKEND.md under the task section
-✅ Include all findings, decisions, and implementation details inline
-✅ Update completion checklists directly in the backlog
-```
+## 3. Do not create task-summary sprawl
 
-### For Session Work
-```
-✅ Use blackboard/SESSION_*.md for active work
-✅ Consolidate findings back into backlogs/ when task completes
-✅ Delete or archive session notes after consolidation
-```
+Do **not** create standalone files merely to report that a task was planned, implemented, reviewed or completed, for example:
 
----
+- `TASK-XXX_SUMMARY.md`
+- `FEATURE_X_IMPLEMENTATION_PLAN.md`
+- `*_COMPLETION_REPORT.md`
 
-## Why This Matters
+For current work:
 
-1. **Context Efficiency**: All task info in one place = faster lookups
-2. **No Duplication**: Single source of truth for each task
-3. **Less Noise**: Fewer files = clearer project structure
-4. **Token Savings**: Claude doesn't need to read multiple files for one task
-5. **Maintenance**: Updates happen in one place, not scattered across files
+1. scope and acceptance criteria belong in the authorized work envelope or approved product slice;
+2. implementation/review evidence belongs in the PR and structured `c2pro-implementation-result-v1` output;
+3. current execution state changes only through Master/Planner/Reconciler control-plane reconciliation after review/CI/merge;
+4. product lifecycle changes only through the product-control YAML/Markdown pair with explicit evidence.
 
----
+A durable architecture decision, runbook, policy, ADR, user-facing specification or reusable technical reference is **not** a task-summary file and may be created when its durable purpose is explicit.
 
-## Examples
+## 4. Worker protocol
 
-### ❌ WRONG - Multiple Files
-```
-TASK-BCK-027/
-├── ORCHESTRATION_AUDIT_REPORT.md (485 lines)
-├── IMPLEMENTATION_PLAN.md (320 lines)
-└── COMPLETION_SUMMARY.md (150 lines)
+Workers:
 
-backlogs/BCK_BACKEND.md:
-- Brief reference to external files
-```
+- read the assigned `.c2pro/work/<work_id>.yaml`;
+- read only the hot control context needed for that work;
+- implement inside authorized scope;
+- return structured evidence;
+- do **not** self-promote completion into canonical control;
+- do **not** write legacy backlog/blackboard state.
 
-**Problem**: 955 lines scattered across 3 files + backlog. Context fragmented.
+Planner/Master/Reconciler owns canonical planning/control mutations within its explicit authority.
 
-### ✅ CORRECT - Unified Documentation
-```
-backlogs/BCK_BACKEND.md:
-#### TASK-BCK-027: Orchestration System Reconciliation
+## 5. Historical evidence
 
-**Implementation Status**: ✅ Completed (Module Deleted)
+Do not rewrite historical reports so they appear current. When a historical file is operationally ambiguous, add a clear legacy/historical banner or pointer to current authority. Preserve original evidence and dates.
 
-**Audit Finding**:
-- core/ai/orchestration/ had ZERO production usage
-- analysis/adapters/graph/ is active N1-N17 pipeline
-- No overlap - different purposes
-- Decision: DELETE unused module instead of consolidating
+## 6. Anti-duplication rule
 
-**Files Deleted**:
-- apps/api/src/core/ai/orchestration/ (4 files)
-- apps/api/tests/unit/core/ai/orchestration/ (3 files)
+Before creating a new planning/status/control document, verify that the information does not already belong in:
 
-**Verification**: 85/85 core AI tests passing
+- product-control YAML/MD;
+- `.c2pro` control/work envelope;
+- an existing ADR;
+- an existing durable runbook/policy/specification.
 
-**Checklist**:
-- [x] Audit completed
-- [x] Module deleted
-- [x] Tests passing
-```
+If it belongs there, update the canonical owner instead of creating a parallel register.
 
-**Result**: All information in one place, ~150 lines total in backlog.
+## Related rules
 
----
+- `.claude/rules/CRITICAL_BACKLOG_REQUIREMENT.md`
+- `.claude/rules/agents.md`
+- `.c2pro/control/legacy-compatibility.yaml`
 
-## Enforcement
-
-This rule is enforced by:
-1. ✅ Project rules in `.claude/rules/DOCUMENTATION_STRUCTURE.md`
-2. ✅ Manual review before marking tasks complete
-3. ✅ Claude session instructions (this file)
-
-**Violation = Immediate correction required**
-
----
-
-## Related Rules
-
-- `.claude/rules/CRITICAL_BACKLOG_REQUIREMENT.md` - All tasks MUST be in C2PRO_MASTER_BACKLOG.md
-- This file - All task documentation MUST be in backlogs/ or blackboard/ ONLY
-
----
-
-*Last Updated*: 2026-04-06
-*Severity*: **CRITICAL**
-*Violation Impact*: Wasted effort, context fragmentation, maintenance burden
+No older instruction authorizes writing legacy control surfaces.

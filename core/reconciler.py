@@ -10,7 +10,12 @@ from typing import Any
 import yaml
 
 from core.merge_gate_policy import evaluate_merge_gates
-from core.result_parser import extract_result_block, parse_result_yaml, validate_result
+from core.result_parser import (
+    extract_result_block,
+    parse_result_yaml,
+    validate_result,
+    validate_review_result,
+)
 
 
 class ReconciliationError(Exception):
@@ -31,7 +36,8 @@ def reconcile_result(
     remote_evidence: dict[str, Any],
     ci_evidence: dict[str, Any],
     control_dir: Path | None = None,
-    now_fn: Callable[[], str] | None = None
+    now_fn: Callable[[], str] | None = None,
+    review_results: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Reconciles accepted worker result evidence into canonical .c2pro control state.
 
@@ -42,6 +48,7 @@ def reconcile_result(
               - 'branch': actual remote branch name
               - 'remote_head_sha': actual SHA of remote branch (worker HEAD)
               - 'pr_head_sha': actual SHA of Pull Request on GitHub (must match remote_head_sha)
+              - 'pr_number': live Pull Request number when structured review evidence is supplied
               - 'pr_base_sha': immutable baseline base SHA of the PR
               - 'pr_base_branch': base branch of the PR (must be 'main')
               - 'pr_state': state of PR ('open', 'closed_unmerged', 'merged')
@@ -91,6 +98,40 @@ def reconcile_result(
         validate_result(result)
     except (ValidationError, ValueError, TypeError) as e:
         raise ValidationError(f"Result schema validation failed: {e}") from e
+
+    # 3b. Structured review evidence is identity-bound at reconciliation time.
+    # Shape-only schema validity is insufficient because a PR may advance after
+    # the review was produced.
+    if review_results is not None:
+        if not isinstance(review_results, list) or not review_results:
+            raise ValidationError(
+                "Structured review evidence must be a non-empty list when supplied."
+            )
+        expected_pr = remote_evidence.get("pr_number")
+        expected_head_sha = remote_evidence.get("pr_head_sha")
+        if (
+            not isinstance(expected_pr, int)
+            or isinstance(expected_pr, bool)
+            or expected_pr < 1
+        ):
+            raise ValidationError(
+                "Missing or invalid live pr_number for structured review reconciliation."
+            )
+        if not isinstance(expected_head_sha, str):
+            raise ValidationError(
+                "Missing live pr_head_sha for structured review reconciliation."
+            )
+        for review in review_results:
+            try:
+                validate_review_result(
+                    review,
+                    expected_pr=expected_pr,
+                    expected_head_sha=expected_head_sha,
+                )
+            except (ValueError, TypeError) as exc:
+                raise ValidationError(
+                    f"Structured review identity validation failed: {exc}"
+                ) from exc
 
     # Validate pr_url specifically for G2
     pr_url = result.get("pr_url")

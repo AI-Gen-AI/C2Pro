@@ -14,6 +14,11 @@
 
 ---
 
+> **2026-09-26 governance override:** v4.0 remains a supporting frontend-era technical reference.
+> Its March backlog/readiness ownership statements are historical. Current product lifecycle authority is the
+> product-control YAML/Markdown pair; current execution authority is `.c2pro`. v4.1 + accepted ADRs take precedence.
+
+
 ## Governance Addendum — 2026-03-29
 
 This document remains useful, but it is no longer sufficient as the standalone platform specification.

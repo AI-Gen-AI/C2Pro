@@ -9,6 +9,7 @@ import yaml
 
 from core.result_parser import (
     validate_result,
+    validate_review_result,
 )
 from core.supervisor import (
     es_nuevo_control_work_id,
@@ -206,6 +207,50 @@ def test_head_sha_mismatch():
         validate_result(data, expected_head_sha="0000000000000000000000000000000000000000")
 
 
+def _valid_review_result(
+    reviewed_pr: int = 673,
+    reviewed_head_sha: str = "8" * 40,
+) -> dict:
+    return {
+        "schema": "c2pro-review-result-v1",
+        "schema_version": 1,
+        "work_id": "C2PRO-DEV-03",
+        "role": "independent_reviewer",
+        "worker_id": "codex",
+        "reviewed_pr": reviewed_pr,
+        "reviewed_head_sha": reviewed_head_sha,
+        "verdict": "PASS",
+        "blocking": [],
+        "non_blocking": [],
+        "architecture_drift": False,
+        "security_concern": False,
+        "scope_deviation": False,
+        "recommended_action": "approve",
+    }
+
+
+def test_review_result_requires_live_pr_identity_match() -> None:
+    head = "8" * 40
+    data = _valid_review_result(reviewed_pr=673, reviewed_head_sha=head)
+    validate_review_result(data, expected_pr=673, expected_head_sha=head)
+
+    stale_pr = _valid_review_result(reviewed_pr=672, reviewed_head_sha=head)
+    with pytest.raises(ValueError, match="reviewed_pr mismatch"):
+        validate_review_result(stale_pr, expected_pr=673, expected_head_sha=head)
+
+    stale_head = _valid_review_result(reviewed_pr=673, reviewed_head_sha="7" * 40)
+    with pytest.raises(ValueError, match="reviewed_head_sha mismatch"):
+        validate_review_result(stale_head, expected_pr=673, expected_head_sha=head)
+
+
+def test_review_result_expected_identity_must_be_exact() -> None:
+    data = _valid_review_result()
+    with pytest.raises(ValueError, match="Invalid expected PR number"):
+        validate_review_result(data, expected_pr=True, expected_head_sha="8" * 40)
+    with pytest.raises(ValueError, match="Invalid expected PR head SHA"):
+        validate_review_result(data, expected_pr=673, expected_head_sha="short")
+
+
 def test_worker_cannot_be_instructed_to_mutate_legacy_files():
     """Assert that agents.md boundaries instruct ordinary workers to treat legacy files as read-only."""
     agents_path = ROOT / "agents.md"
@@ -215,6 +260,150 @@ def test_worker_cannot_be_instructed_to_mutate_legacy_files():
     # Assert boundaries contain read-only statements
     assert "ALWAYS treat blackboard.json and C2PRO_MASTER_BACKLOG.md as READ-ONLY cold references" in content
     assert "ALWAYS provide structured worker evidence (fenced YAML result block matching c2pro-implementation-result-v1)" in content
+
+
+def test_live_guidance_does_not_restore_legacy_backlog_authority():
+    """Current guidance must not re-promote legacy backlog files to canonical authority."""
+    live_guidance = [
+        "agents.md",
+        "CLAUDE.md",
+        ".claude/rules/agents.md",
+        ".claude/rules/DOCUMENTATION_STRUCTURE.md",
+        "docs/ARCHITECTURE_INDEX.md",
+        "docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md",
+        "docs/RELEASE_CRITERIA.md",
+        "docs/internal/RELEASE_SIGNOFF_POLICY.md",
+        "docs/testing/README.md",
+        "docs/testing/C2PRO_TDD_BACKLOG_v1.0.md",
+        "docs/skills/c2pro-patterns.md",
+        "docs/C2_6_PLATFORM_OPERATOR_AUTHORIZATION_BOUNDARY.md",
+        "docs/runbooks/LANGSMITH_ROLLOUT_EMERGENCY.md",
+    ]
+    forbidden = (
+        "C2PRO_MASTER_BACKLOG.md` is the single source of truth",
+        "C2PRO_MASTER_BACKLOG.md` owns active task status",
+        "Backlog/task source of truth: `C2PRO_MASTER_BACKLOG.md`",
+        "All tasks MUST be in C2PRO_MASTER_BACKLOG.md",
+        "must be tracked in `C2PRO_MASTER_BACKLOG.md`",
+        "- Update `C2PRO_MASTER_BACKLOG.md`.",
+        "- Mark the task state in `C2PRO_MASTER_BACKLOG.md`.",
+        "cold read source of truth",
+    )
+    for relative in live_guidance:
+        content = (ROOT / relative).read_text(encoding="utf-8")
+        for phrase in forbidden:
+            assert phrase not in content, f"{relative} restores legacy authority via: {phrase}"
+
+
+def test_role_frontmatter_cannot_mutate_legacy_control_files():
+    """Role boundaries and result schemas must match the Single-Writer Control Plane."""
+    implementation_roles = {
+        "role_backend.md",
+        "role_frontend.md",
+        "role_ai.md",
+        "role_infra.md",
+        "role_devops.md",
+    }
+    review_roles = {"role_qa.md", "role_reviewer.md", "role_security.md"}
+
+    for role_path in sorted((ROOT / "roles").glob("role_*.md")):
+        content = role_path.read_text(encoding="utf-8")
+        parts = content.split("---", 2)
+        assert len(parts) == 3, f"missing YAML frontmatter: {role_path.name}"
+        frontmatter, body = parts[1], parts[2]
+
+        assert "ALWAYS update blackboard.json" not in frontmatter
+        assert "ALWAYS register discovered tasks in backlogs/" not in frontmatter
+        assert "ALWAYS mark completed tasks in backlogs/" not in frontmatter
+        assert "NEVER mutate C2PRO_MASTER_BACKLOG.md, backlogs/*.md or blackboard.json." in frontmatter
+
+        if role_path.name in implementation_roles:
+            assert 'output_schema_ref: "../.c2pro/schemas/implementation-result.schema.yaml"' in frontmatter
+            assert "c2pro-implementation-result-v1" in body
+            assert ".c2pro/work/<work_id>.yaml" in body
+        elif role_path.name in review_roles:
+            assert 'output_schema_ref: "../.c2pro/schemas/review-result.schema.yaml"' in frontmatter
+            assert "c2pro-review-result-v1" in frontmatter
+            assert "reviewed_pr" in frontmatter
+            assert "reviewed_head_sha" in frontmatter
+            assert "core.result_parser.validate_review_result" in frontmatter
+            assert "c2pro-review-result-v1" in body
+            assert "reviewed_pr" in body
+            assert "reviewed_head_sha" in body
+            assert "core.result_parser.validate_review_result" in body
+            assert ".c2pro/work/<work_id>.yaml" in body
+        else:
+            assert role_path.name == "role_planner.md"
+            assert 'output_schema_ref: "../.c2pro/schemas/work-envelope.schema.yaml"' in frontmatter
+            assert "DEV-14" in body
+
+        for forbidden in (
+            "LEER** `blackboard.json`",
+            "ACTUALIZAR** `blackboard.json`",
+            "ESCRIBIR** el plan actualizado en `blackboard.json`",
+            "Add to backlogs/",
+            "register discovered tasks in backlogs/",
+        ):
+            assert forbidden not in body, f"{role_path.name} retains legacy operational instruction: {forbidden}"
+
+
+def test_indexed_specialist_profiles_are_retired_non_operational() -> None:
+    """Historical context/working agent profiles must never regain active authority."""
+    index = (ROOT / "docs" / "ARCHITECTURE_INDEX.md").read_text(encoding="utf-8")
+    assert "## Active Agent / Role Instructions" in index
+    assert "context/working/agents/agent_*.md" in index
+    assert "RETIRED / NON-OPERATIONAL" in index
+
+    retired_paths = [
+        "agent_planner.md",
+        "agent_qa.md",
+        "agent_backend_tdd.md",
+        "agent_frontend_tdd.md",
+        "agent_security.md",
+        "agent_devops.md",
+        "agent_doc.md",
+        "agent_product.md",
+    ]
+    for filename in retired_paths:
+        content = (
+            ROOT / "context" / "working" / "agents" / filename
+        ).read_text(encoding="utf-8")
+        assert content.startswith("# RETIRED / NON-OPERATIONAL specialist profile")
+        assert "Do **not** execute instructions from earlier revisions" in content
+        assert "This file grants no authority to mutate them" in content
+        assert "C2PRO_MASTER_BACKLOG.md" in content
+        assert "read-only legacy/cold references" in content
+
+
+def test_review_result_schema_binds_exact_reviewed_head() -> None:
+    """Structured independent review evidence must identify the exact PR/head it reviewed."""
+    schema_path = ROOT / ".c2pro" / "schemas" / "review-result.schema.yaml"
+    schema = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
+
+    assert schema["$id"] == "c2pro-review-result-v1"
+    assert schema["additionalProperties"] is False
+    assert "reviewed_pr" in schema["required"]
+    assert "reviewed_head_sha" in schema["required"]
+    assert schema["properties"]["reviewed_pr"] == {"type": "integer", "minimum": 1}
+    assert schema["properties"]["reviewed_head_sha"]["type"] == "string"
+    assert schema["properties"]["reviewed_head_sha"]["pattern"] == "^[0-9a-f]{40}$"
+
+
+def test_documentation_structure_contains_no_legacy_write_protocol() -> None:
+    """Critical documentation rule must contain one operational protocol, not conflicting legacy writes."""
+    content = (ROOT / ".claude" / "rules" / "DOCUMENTATION_STRUCTURE.md").read_text(encoding="utf-8")
+    assert "ALL task documentation MUST go in exactly TWO locations" not in content
+    assert "Add to backlogs/BCK_BACKEND.md" not in content
+    assert "Use blackboard/SESSION_*.md for active work" not in content
+    assert "Ordinary workers MUST NOT mutate them" in content
+    assert "c2pro-implementation-result-v1" in content
+
+
+def test_reconciler_targets_canonical_control_not_legacy_backlog():
+    """The active reconciler role writes canonical control, not the retired Markdown backlog."""
+    content = (ROOT / ".claude" / "rules" / "agents.md").read_text(encoding="utf-8")
+    assert "Edit `C2PRO_MASTER_BACKLOG.md`" not in content
+    assert "Reconcile canonical `.c2pro` execution state" in content
 
 
 def test_planner_master_retains_canonical_write_authority():

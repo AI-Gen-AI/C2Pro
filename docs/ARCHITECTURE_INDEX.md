@@ -14,11 +14,15 @@ This index provides a consolidated view of all canonical architecture documents 
 
 Architecture decisions for C2Pro should be read in this order:
 
-1. `C2PRO_MASTER_BACKLOG.md`
-   - Delivery and production-readiness source of truth.
-2. `docs/MASTER_DEVELOPMENT_STATUS.md`
+1. `validation/product/c2pro-master-product-control-v1.yaml`
+   - Machine source of truth for product-programme lifecycle state.
+2. `docs/product/00-c2pro-master-product-control-v1.md`
+   - Guarded human projection of the product control plane.
+3. `.c2pro/control/`
+   - Canonical development-execution hot state and open work queue.
+4. `docs/MASTER_DEVELOPMENT_STATUS.md`
    - Compatibility pointer only.
-3. `docs/architecture/decisions/006-post-reorganization-architecture.md`
+5. `docs/architecture/decisions/006-post-reorganization-architecture.md`
    - Canonical repo-structure baseline after the February reorganization.
 4. `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md`
    - Canonical platform-wide technical design.
@@ -29,11 +33,12 @@ Architecture decisions for C2Pro should be read in this order:
 7. `docs/testing/PHASE4_TDD_IMPLEMENTATION_ROADMAP.md` and `docs/testing/C2PRO_TEST_SUITES_INDEX_v1.1.md`
    - TDD execution and test-traceability baseline.
 
-Current executive view as of 2026-03-29:
+Current governance view:
 
 - C2Pro is an API-first, multi-tenant SaaS platform with `apps/api` and `apps/web`.
-- `C2PRO_MASTER_BACKLOG.md` is the canonical task register.
-- Remaining production blockers are concentrated in release evidence, governance, and final security hardening rather than foundational architecture creation.
+- Product maturity is canonical only in the product-control YAML + guarded Markdown projection.
+- Active development execution is canonical only in `.c2pro/control/` and assigned work envelopes.
+- `C2PRO_MASTER_BACKLOG.md`, category backlogs and `blackboard.json` are read-only legacy/cold references; they do not own current programme truth.
 
 ---
 
@@ -55,12 +60,15 @@ Current executive view as of 2026-03-29:
 | Document                  | Path                                                    | Updated    | Purpose                   |
 | ------------------------- | ------------------------------------------------------- | ---------- | ------------------------- |
 | Master Roadmap v2.4.0     | `docs/planning/ROADMAP_v2.4.0.md`                       | 2026-01-05 | Strategic product roadmap |
-| Executive Status Report   | `docs/planning/EXECUTIVE_STATUS_REPORT_2026-03-19.md`   | 2026-03-19 | Current project status    |
-| Production Readiness Gate | `docs/planning/PRODUCTION_READINESS_GATE_2026-03-19.md` | 2026-03-19 | Go/no-go criteria         |
+| Executive Status Report   | `docs/planning/EXECUTIVE_STATUS_REPORT_2026-03-19.md`   | 2026-03-19 | Historical status snapshot |
+| Production Readiness Gate | `docs/planning/PRODUCTION_READINESS_GATE_2026-03-19.md` | 2026-03-19 | Historical gate snapshot; current evidence/control lives elsewhere |
 | LangGraph Audit Report    | `docs/planning/LANGGRAPH_AUDIT_REPORT_2026-03-21.md`    | 2026-03-21 | AI orchestration audit    |
 | Coherence Score Plan      | `docs/planning/COHERENCE_SCORE_IMPLEMENTATION_PLAN.md`  | -          | Coherence engine roadmap  |
-| Master Backlog           | `C2PRO_MASTER_BACKLOG.md`                               | 2026-03-29 | Canonical open-task and readiness register |
-| Legacy Status Pointer    | `docs/MASTER_DEVELOPMENT_STATUS.md`                     | 2026-03-29 | Compatibility pointer to the canonical backlog |
+| Product Control (machine) | `validation/product/c2pro-master-product-control-v1.yaml` | current | Canonical product lifecycle/programme state |
+| Product Control (human) | `docs/product/00-c2pro-master-product-control-v1.md` | current | Guarded human projection |
+| Development Hot State | `.c2pro/control/` | current | Canonical active execution state |
+| Legacy Master Backlog | `C2PRO_MASTER_BACKLOG.md` | historical | Read-only reconciliation/cold reference |
+| Legacy Status Pointer | `docs/MASTER_DEVELOPMENT_STATUS.md` | current | Compatibility pointer to current authorities |
 | Planning README           | `docs/planning/README.md`                               | -          | Planning section index    |
 
 ### Testing
@@ -86,18 +94,25 @@ Current executive view as of 2026-03-29:
 
 ---
 
-## Agent Instructions
+## Active Agent / Role Instructions
 
-| Agent         | Path                                           | Purpose                   |
-| ------------- | ---------------------------------------------- | ------------------------- |
-| Planner       | `context/working/agents/agent_planner.md`      | Architecture and planning |
-| QA            | `context/working/agents/agent_qa.md`           | Test design and audit     |
-| Backend TDD   | `context/working/agents/agent_backend_tdd.md`  | Python implementation     |
-| Frontend TDD  | `context/working/agents/agent_frontend_tdd.md` | React implementation      |
-| Security      | `context/working/agents/agent_security.md`     | Security audits           |
-| DevOps        | `context/working/agents/agent_devops.md`       | CI/CD and infra           |
-| Documentation | `context/working/agents/agent_doc.md`          | Doc management            |
-| Product       | `context/working/agents/agent_product.md`      | User stories              |
+Active agent authority is **not** stored under `context/working/agents/`.
+
+Use:
+
+| Role | Active profile |
+| --- | --- |
+| Planner | `roles/role_planner.md` + `.c2pro/roles/orchestrator.yaml` as applicable |
+| Backend implementation | `roles/role_backend.md` |
+| Frontend implementation | `roles/role_frontend.md` |
+| AI implementation | `roles/role_ai.md` |
+| QA | `roles/role_qa.md` |
+| Independent review | `roles/role_reviewer.md` |
+| Security | `roles/role_security.md` |
+| DevOps / infrastructure | `roles/role_devops.md` / `roles/role_infra.md` |
+
+The historical files under `context/working/agents/agent_*.md` are **RETIRED / NON-OPERATIONAL compatibility pointers**. They must not be selected as executable instructions and grant no backlog/control write authority.
+
 
 ---
 
@@ -115,5 +130,6 @@ Current executive view as of 2026-03-29:
 
 | Version | Date       | Changes                                                                                                                                     | Author       |
 | ------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| 1.1.0   | 2026-03-29 | Added governance baseline, promoted `C2PRO_MASTER_BACKLOG.md` as the canonical task register, introduced the v4.1 platform technical design, and clarified the role of the v4.0 technical design. | CIO review |
+| 1.2.0   | 2026-09-26 | Reconciled governance pointers to product-control YAML/MD and `.c2pro`; demoted the legacy backlog from current authority. | Line B control reconciliation |
+| 1.1.0   | 2026-03-29 | Historical: promoted `C2PRO_MASTER_BACKLOG.md` as canonical task register before the single-writer control-plane migration. | CIO review |
 | 1.0.0   | 2026-03-22 | Initial creation. Consolidated architecture documentation, created decision log, deleted experimental duplicates, updated agent references. | SDD Pipeline |

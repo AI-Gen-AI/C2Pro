@@ -1,5 +1,9 @@
 # C2Pro Production Readiness Gate
 
+> **HISTORICAL READINESS SNAPSHOT — 2026-03-19.**
+> Preserve this document as evidence of the March gate model; do not use its backlog ownership claims as current authority.
+> Current execution state is canonical under `.c2pro/`; product lifecycle/readiness is canonical in the product-control YAML/Markdown pair.
+
 Date: `2026-03-19`
 Status: `OPEN`
 Owner: `Senior Staff Architect / Engineering Leadership`
