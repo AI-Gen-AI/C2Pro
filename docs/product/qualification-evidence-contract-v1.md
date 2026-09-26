@@ -33,6 +33,7 @@ Every bundle binds to:
 - an exact composite runtime binding for the production planes exercised by the user journey:
   - backend: Railway deployment ID/evidence + exact Git commit SHA + terminal `SUCCESS`;
   - frontend: Vercel deployment ID/evidence + exact Git commit SHA + terminal `READY`;
+- each runtime Git SHA must be reachable from canonical `main` history; a syntactically valid 40-hex value alone is insufficient;
 - capability: `P0b | P0c | P0d`;
 - concrete production scenario identifiers;
 - observed timestamp;
@@ -55,7 +56,7 @@ A branch SHA, merge SHA, preview deployment or CI green is not a substitute for 
 A PASS requires at least:
 
 - two typed `deployment` references: one for backend/Railway and one for frontend/Vercel;
-- each deployment evidence locator is provider-namespaced (`railway:...` / `vercel:...`) and the two locators must identify distinct deployment artifacts, not aliases of the same receipt;
+- each deployment evidence locator is provider-namespaced (`railway:<artifact-locator>` / `vercel:<artifact-locator>`), must contain a non-empty bounded locator after the namespace, and the two locators must identify distinct deployment artifacts rather than aliases of the same receipt;
 - one `persisted_entity` reference;
 - evidence for every required assertion;
 - every evidence record to be immutable or content-addressed by SHA-256;
