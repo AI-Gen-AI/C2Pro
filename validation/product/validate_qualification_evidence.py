@@ -401,7 +401,7 @@ def _canonical_main_ref() -> str:
 
 def load_control_at_commit(commit_sha: str) -> dict[str, Any]:
     """Load canonical Product Control from an immutable commit on main history."""
-    if not SHA_RE.fullmatch(commit_sha):
+    if not isinstance(commit_sha, str) or not SHA_RE.fullmatch(commit_sha):
         raise ValueError("control_commit_sha must be an exact 40-character SHA")
 
     canonical_main = _canonical_main_ref()
