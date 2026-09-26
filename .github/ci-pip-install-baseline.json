@@ -1,0 +1,301 @@
+{
+  "entries": [
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install --upgrade pip\npip install -r requirements.txt\npip install python-magic\n",
+        "shell": "bash",
+        "working_directory": "apps/api"
+      },
+      "context": ".github/actions/setup-python-backend/action.yml::runs.steps::name:Install Python dependencies",
+      "file": ".github/actions/setup-python-backend/action.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "7f1fb489ec2f0df2a03f84aac205d8933f43a2dbc41aed775ddb65e1e07470f9"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "pip install \"pyyaml==6.0.3\" \"pytest>=9.0.3\"",
+        "shell": null,
+        "working_directory": null
+      },
+      "context": ".github/workflows/c2pro-development-control.yml::jobs.validate-control::name:Install minimal validation dependencies",
+      "file": ".github/workflows/c2pro-development-control.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "05ad7aaf0eb745f1b304444fac12ed35a5f3b422d5fcdc0e5d7c9f735e252e3e"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install --disable-pip-version-check \"pyyaml==6.0.3\"",
+        "shell": null,
+        "working_directory": null
+      },
+      "context": ".github/workflows/c2pro-product-control-guard.yml::jobs.product-control-guard::name:Install minimal dependency (PyYAML only)",
+      "file": ".github/workflows/c2pro-product-control-guard.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "9b7c9e9229f49e1cc07eb06a1729e31e61ba9ad062458201952e11e761bd3c23"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "pip install \"$(grep -E '^ruff==' apps/api/requirements.txt)\"",
+        "shell": null,
+        "working_directory": null
+      },
+      "context": ".github/workflows/ci.yml::jobs.backend-lint::name:Install ruff (version from requirements.txt)",
+      "file": ".github/workflows/ci.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "d43b3772d308d717bc4307aa3a1326269ad65eff1eaa792b4684589c7c55e5d9"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "pip install \"https://github.com/explosion/spacy-models/releases/download/es_core_news_md-3.7.0/es_core_news_md-3.7.0-py3-none-any.whl\"",
+        "shell": null,
+        "working_directory": null
+      },
+      "context": ".github/workflows/ci.yml::jobs.backend-presidio-ner::name:Install es_core_news_md 3.7.0 wheel (pinned, mirrors Dockerfile:39)",
+      "file": ".github/workflows/ci.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "bc8e86412eff72e20d71f78b6cbf1907f81cafbe4dd6a3154049e19f2bda3775"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "set -o pipefail\npip-audit -r apps/api/requirements.txt 2>&1 | tee pip-audit.log || AUDIT_FAILED=1\n{\n  echo \"## pip-audit (advisory)\"\n  echo \"\"\n  echo '```'\n  tail -n 50 pip-audit.log\n  echo '```'\n} >> \"$GITHUB_STEP_SUMMARY\"\nexit \"${AUDIT_FAILED:-0}\"\n",
+        "shell": null,
+        "working_directory": null
+      },
+      "context": ".github/workflows/dependency-audit.yml::jobs.pip-audit::name:Audit backend requirements",
+      "file": ".github/workflows/dependency-audit.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "49aab84bf79a7dd0457304ffb6c5cc6580bf1f69c43ad8f7d8fd6054bf40c7dc"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "pip install pip-audit",
+        "shell": null,
+        "working_directory": null
+      },
+      "context": ".github/workflows/dependency-audit.yml::jobs.pip-audit::name:Install pip-audit",
+      "file": ".github/workflows/dependency-audit.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "87ff603b0db1f7224e4538694d17551e7f2c9086529c5665cd000ae4c4127b2f"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install --upgrade pip\npip install -r requirements.txt\n",
+        "shell": null,
+        "working_directory": "apps/api"
+      },
+      "context": ".github/workflows/evaluation-regression.yml::jobs.coherence-eval::name:Install dependencies",
+      "file": ".github/workflows/evaluation-regression.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "c683d4b689ff509b06c158c572b942363a5594527ce2918ad571e8be8a3237e0"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install --upgrade pip\npip install -r requirements.txt\npip install pyyaml\n",
+        "shell": null,
+        "working_directory": "apps/api"
+      },
+      "context": ".github/workflows/evaluation-regression.yml::jobs.drift-check::name:Install dependencies",
+      "file": ".github/workflows/evaluation-regression.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "872308711abf04f3a07462095256430e3481b191e67db2f119e871c670c35241"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install --upgrade pip\npip install -r requirements.txt\n",
+        "shell": null,
+        "working_directory": "apps/api"
+      },
+      "context": ".github/workflows/evaluation-regression.yml::jobs.extraction-eval::name:Install dependencies",
+      "file": ".github/workflows/evaluation-regression.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "c683d4b689ff509b06c158c572b942363a5594527ce2918ad571e8be8a3237e0"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install --upgrade pip\npip install -r requirements.txt\n",
+        "shell": null,
+        "working_directory": "apps/api"
+      },
+      "context": ".github/workflows/evaluation-regression.yml::jobs.golden-dataset-eval::name:Install dependencies",
+      "file": ".github/workflows/evaluation-regression.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "c683d4b689ff509b06c158c572b942363a5594527ce2918ad571e8be8a3237e0"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install --upgrade pip\npip install -r requirements.txt\n",
+        "shell": null,
+        "working_directory": "apps/api"
+      },
+      "context": ".github/workflows/evaluation-regression.yml::jobs.retrieval-eval::name:Install dependencies",
+      "file": ".github/workflows/evaluation-regression.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "c683d4b689ff509b06c158c572b942363a5594527ce2918ad571e8be8a3237e0"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install --upgrade pip\npip install pyyaml \"pydantic>=2.0\" pytest\n",
+        "shell": null,
+        "working_directory": null
+      },
+      "context": ".github/workflows/golden-corpus-evals.yml::jobs.run-corpus::name:Install corpus dependencies",
+      "file": ".github/workflows/golden-corpus-evals.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "5b6300ebd01e541c3f5935fca76725ca97e344fe3be23129940b49233537bc95"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install --upgrade pip\npip install -r requirements.txt\npip install python-magic\n",
+        "shell": null,
+        "working_directory": "apps/api"
+      },
+      "context": ".github/workflows/i13-real-e2e-scheduled.yml::jobs.i13-real-e2e-reliability::name:Install dependencies",
+      "file": ".github/workflows/i13-real-e2e-scheduled.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "e895ad92f9f4a8be1fa70db2a84f8de947221450de4f1623d393acea16825c4b"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install -r .github/scripts/requirements-pip-install-guard.txt",
+        "shell": null,
+        "working_directory": null
+      },
+      "context": ".github/workflows/install-drift-guard.yml::jobs.install-drift-guard::id:guard-deps",
+      "file": ".github/workflows/install-drift-guard.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Guard-only bootstrap: installs the exact PyYAML==6.0.3 pin from .github/scripts/requirements-pip-install-guard.txt so the drift guard can parse workflows. Baselined like any other block; no special case in guard code.",
+      "remediation_issue": "#685",
+      "sha256": "3a7befdb9bab4c6a86ff01c78aa027fa6355b1c8186d7a380397f639316484d6"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install --upgrade pip\npip install -r requirements.txt\npip install pyyaml\n",
+        "shell": null,
+        "working_directory": "apps/api"
+      },
+      "context": ".github/workflows/openapi-drift.yml::jobs.openapi-drift::name:Install dependencies",
+      "file": ".github/workflows/openapi-drift.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "872308711abf04f3a07462095256430e3481b191e67db2f119e871c670c35241"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install --upgrade pip\npip install -r requirements.txt\npip install python-magic\n",
+        "shell": null,
+        "working_directory": "apps/api"
+      },
+      "context": ".github/workflows/qa-swarm.yml::jobs.generate-coverage::name:Install Python dependencies",
+      "file": ".github/workflows/qa-swarm.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "e895ad92f9f4a8be1fa70db2a84f8de947221450de4f1623d393acea16825c4b"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install --upgrade pip\npip install -r scripts/agents/requirements.txt\npip install -r scripts/agents/qa_swarm/requirements.txt\n",
+        "shell": null,
+        "working_directory": null
+      },
+      "context": ".github/workflows/qa-swarm.yml::jobs.qa-swarm::name:Install agent dependencies",
+      "file": ".github/workflows/qa-swarm.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "e1dd962166a607a5990c9794f36706c1a75e3e15f3846ee24c4a0e465ee1762a"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install --upgrade pip\npip install -r requirements.txt\npip install python-magic\n",
+        "shell": null,
+        "working_directory": "apps/api"
+      },
+      "context": ".github/workflows/real-document-operability.yml::jobs.real-document-gate::name:Install backend dependencies",
+      "file": ".github/workflows/real-document-operability.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "e895ad92f9f4a8be1fa70db2a84f8de947221450de4f1623d393acea16825c4b"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "BUNDLE_DIR=\"evidence/releases/${TAG}\"\nif [ -d \"$BUNDLE_DIR\" ]; then\n  echo \"Found evidence bundle at $BUNDLE_DIR — validating.\"\n  python -m pip install --quiet pyyaml\n  python scripts/validate_release_evidence.py \\\n    --bundle-dir \"$BUNDLE_DIR\" \\\n    --commit-sha \"$(git rev-parse HEAD)\"\nelse\n  echo \"::notice::No Gate 7 evidence bundle at $BUNDLE_DIR — skipping evidence validation.\"\nfi\n",
+        "shell": null,
+        "working_directory": null
+      },
+      "context": ".github/workflows/release.yml::jobs.certify::name:Validate Gate 7 evidence bundle (if present)",
+      "file": ".github/workflows/release.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "56d2516d231b45f2aebde71fc6cacdecb777007ecddd5227f71ed162370c25c0"
+    },
+    {
+      "behavior": {
+        "env": {
+          "PYTHONPATH": "apps/api"
+        },
+        "run": "python -m pip install --upgrade pip\npip install -r requirements.txt\npip install pytest pyyaml\n",
+        "shell": null,
+        "working_directory": "apps/api"
+      },
+      "context": ".github/workflows/scheduled-drift-checks.yml::jobs.drift-checks::name:Install dependencies",
+      "file": ".github/workflows/scheduled-drift-checks.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
+      "remediation_issue": "#600",
+      "sha256": "0555b485575eb7f0615bb7bf0c3f0236a6f083c6ed9a1a91380bb5799a0ab385"
+    }
+  ],
+  "schema": "c2pro-ci-install-drift-baseline/v1"
+}
