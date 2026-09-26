@@ -114,6 +114,7 @@ principal_review_gate:
 handoff_contract:
   preserve:
     - work_id
+    - role
     - base_sha
     - objective
     - scope
@@ -126,9 +127,10 @@ handoff_contract:
     - evidence_refs
   reassignment:
     worker_change_requires_explicit_transition: true
-    role_change_requires_explicit_transition: true
-    receiving_route_must_support_role: true
-    unavailable_compatible_route_action: BLOCK_OR_REASSIGN
+    role_is_immutable_within_same_work: true
+    role_change_requires_new_or_child_work_identity: true
+    receiving_route_must_support_same_role: true
+    unavailable_compatible_route_action: BLOCK_OR_NEW_LINKED_STAGE
     silent_scope_change: false
 
 qualification_slices:
@@ -139,7 +141,7 @@ qualification_slices:
   DEV_03R4_CLAUDE_ARCH_COHERENCE: BLOCKED_PENDING_ROUTE_HEALTH_REVALIDATION
   DEV_03R5_NEGATIVE_BOUNDARIES: PLANNED_NOT_AUTHORIZED
   DEV_03R6_RESOURCE_TIMEOUT: PLANNED_NOT_AUTHORIZED
-  DEV_03R7_ROLE_COMPATIBLE_HANDOFF: PLANNED_NOT_AUTHORIZED
+  DEV_03R7_SAME_ROLE_PRINCIPAL_HANDOFF: BLOCKED_NO_SHARED_QUALIFIED_ROLE_ROUTE_PROVEN
   DEV_03R8_PRINCIPAL_REVIEW_ROUTE: BLOCKED_NO_COMPATIBLE_ROUTE_PROVEN
   DEV_03R9_FINAL_RECONCILIATION: BLOCKED_BY_PRIOR_SLICES
 
@@ -150,7 +152,7 @@ done_definition:
   fresh_authority_evidence_required_for_live_runs: true
   negative_boundary_evidence_required: true
   resource_timeout_evidence_required: true
-  handoff_evidence_required: true
+  same_role_handoff_or_explicit_blocked_evidence_required: true
   independent_principal_review_required: true
   compatible_principal_review_route_proof_required: true
   owner_human_merge_required: true
