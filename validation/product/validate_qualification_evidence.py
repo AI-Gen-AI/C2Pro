@@ -99,6 +99,11 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
         problems.append("lifecycle_authority must be false")
     if doc.get("repository") != "AI-Gen-AI/C2Pro":
         problems.append("repository must be AI-Gen-AI/C2Pro")
+    if doc.get("control_ref") != "validation/product/c2pro-master-product-control-v1.yaml":
+        problems.append("control_ref must point to the canonical Product Control YAML")
+    control_sha = doc.get("control_baseline_sha")
+    if not isinstance(control_sha, str) or not SHA_RE.fullmatch(control_sha):
+        problems.append("control_baseline_sha must be an exact 40-character SHA")
     if doc.get("target_state") != "PROD_VALIDATED":
         problems.append("target_state must be PROD_VALIDATED")
     if doc.get("environment") != "production":
@@ -129,6 +134,7 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
 
     evidence = doc.get("evidence_refs")
     evidence_ids: set[str] = set()
+    evidence_kinds: set[str] = set()
     if not isinstance(evidence, list) or not evidence:
         problems.append("evidence_refs must be a non-empty list")
     else:
@@ -144,8 +150,11 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
                 problems.append(f"duplicate evidence id: {ref_id}")
             else:
                 evidence_ids.add(ref_id)
-            if ref.get("kind") not in ALLOWED_KINDS:
+            kind = ref.get("kind")
+            if kind not in ALLOWED_KINDS:
                 problems.append(f"{where}.kind is invalid")
+            else:
+                evidence_kinds.add(kind)
             if not _non_empty_string(ref.get("ref")):
                 problems.append(f"{where}.ref is required")
             if not isinstance(ref.get("immutable"), bool):
@@ -201,6 +210,12 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
             )
 
     verdict = doc.get("validator_verdict")
+    if verdict == "PASS":
+        for required_kind in ("deployment", "persisted_entity"):
+            if required_kind not in evidence_kinds:
+                problems.append(
+                    f"validator_verdict PASS requires {required_kind} evidence"
+                )
     if verdict not in {"PASS", "FAIL"}:
         problems.append("validator_verdict must be PASS or FAIL")
     elif verdict == "PASS":
