@@ -246,20 +246,48 @@ def test_live_guidance_does_not_restore_legacy_backlog_authority():
 
 
 def test_role_frontmatter_cannot_mutate_legacy_control_files():
-    """Machine-readable role boundaries must use work envelopes, never legacy state writes."""
+    """Role boundaries and result schemas must match the Single-Writer Control Plane."""
+    implementation_roles = {
+        "role_backend.md",
+        "role_frontend.md",
+        "role_ai.md",
+        "role_infra.md",
+        "role_devops.md",
+    }
+    review_roles = {"role_qa.md", "role_reviewer.md", "role_security.md"}
+
     for role_path in sorted((ROOT / "roles").glob("role_*.md")):
         content = role_path.read_text(encoding="utf-8")
         parts = content.split("---", 2)
         assert len(parts) == 3, f"missing YAML frontmatter: {role_path.name}"
-        frontmatter = parts[1]
+        frontmatter, body = parts[1], parts[2]
+
         assert "ALWAYS update blackboard.json" not in frontmatter
         assert "ALWAYS register discovered tasks in backlogs/" not in frontmatter
         assert "ALWAYS mark completed tasks in backlogs/" not in frontmatter
         assert "NEVER mutate C2PRO_MASTER_BACKLOG.md, backlogs/*.md or blackboard.json." in frontmatter
-        assert ".c2pro/work/<work_id>.yaml" in frontmatter or role_path.name == "role_planner.md"
-        if role_path.name != "role_planner.md":
+
+        if role_path.name in implementation_roles:
             assert 'output_schema_ref: "../.c2pro/schemas/implementation-result.schema.yaml"' in frontmatter
-            assert "c2pro-implementation-result-v1" in frontmatter
+            assert "c2pro-implementation-result-v1" in body
+            assert ".c2pro/work/<work_id>.yaml" in body
+        elif role_path.name in review_roles:
+            assert 'output_schema_ref: "../.c2pro/schemas/review-result.schema.yaml"' in frontmatter
+            assert "c2pro-review-result-v1" in body
+            assert ".c2pro/work/<work_id>.yaml" in body
+        else:
+            assert role_path.name == "role_planner.md"
+            assert 'output_schema_ref: "../schemas/plan_output.json"' in frontmatter
+            assert "DEV-14" in body
+
+        for forbidden in (
+            "LEER** `blackboard.json`",
+            "ACTUALIZAR** `blackboard.json`",
+            "ESCRIBIR** el plan actualizado en `blackboard.json`",
+            "Add to backlogs/",
+            "register discovered tasks in backlogs/",
+        ):
+            assert forbidden not in body, f"{role_path.name} retains legacy operational instruction: {forbidden}"
 
 
 def test_documentation_structure_contains_no_legacy_write_protocol() -> None:
