@@ -57,6 +57,8 @@ ASSERTION_KEYS = {"id", "status", "evidence_refs", "note"}
 EVIDENCE_REF_KEYS = {"id", "kind", "ref", "immutable", "sha256"}
 SCENARIO_KEYS = {"id", "identifiers"}
 DEFAULT_CONTROL_PATH = Path(__file__).with_name("c2pro-master-product-control-v1.yaml")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_EVIDENCE_DIR = REPO_ROOT / "evidence" / "product-qualification"
 
 REQUIRED_ASSERTIONS: dict[str, tuple[str, ...]] = {
     "P0b": (
@@ -367,30 +369,46 @@ def validate_path(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("path", type=Path)
-    parser.add_argument(
-        "--control",
-        type=Path,
-        default=DEFAULT_CONTROL_PATH,
-        help="Canonical Product Control YAML used to bind baseline/runtime identity.",
+    parser = argparse.ArgumentParser(
+        description=(
+            "Validate committed product-qualification evidence bundles from "
+            "evidence/product-qualification/. Arbitrary filesystem paths are "
+            "intentionally unsupported."
+        )
     )
-    args = parser.parse_args()
+    parser.parse_args()
 
-    problems = validate_path(args.path, args.control)
-    if problems:
-        print("PRODUCT_QUALIFICATION_EVIDENCE=FAIL")
-        for problem in problems:
-            print(f"  - {problem}")
-        return 1
+    if not DEFAULT_EVIDENCE_DIR.exists():
+        print("PRODUCT_QUALIFICATION_EVIDENCE=NO_BUNDLES")
+        return 0
 
-    doc = load_yaml(args.path)
-    print(
-        "PRODUCT_QUALIFICATION_EVIDENCE=PASS "
-        f"capability={doc['capability_id']} "
-        f"runtime_sha={doc['deployed_runtime_sha']}"
-    )
-    return 0
+    bundle_paths = sorted(DEFAULT_EVIDENCE_DIR.glob("*.yaml"))
+    if not bundle_paths:
+        print("PRODUCT_QUALIFICATION_EVIDENCE=NO_BUNDLES")
+        return 0
+
+    failed = False
+    for bundle_path in bundle_paths:
+        problems = validate_path(bundle_path, DEFAULT_CONTROL_PATH)
+        if problems:
+            failed = True
+            print(
+                "PRODUCT_QUALIFICATION_EVIDENCE=FAIL "
+                f"bundle={bundle_path.name}"
+            )
+            for problem in problems:
+                print(f"  - {problem}")
+            continue
+
+        doc = load_yaml(bundle_path)
+        print(
+            "PRODUCT_QUALIFICATION_EVIDENCE=PASS "
+            f"bundle={bundle_path.name} "
+            f"capability={doc['capability_id']} "
+            f"runtime_sha={doc['deployed_runtime_sha']}"
+        )
+
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
