@@ -153,7 +153,9 @@ class TestRepositoryMappers:
         )
 
         now = datetime.now(UTC)
+        row_id = uuid4()
         orm = ReviewItemORM(
+            id=row_id,
             item_id=uuid4(),
             item_type="coherence_alert",
             current_status=ReviewStatus.APPROVED,
@@ -177,7 +179,12 @@ class TestRepositoryMappers:
         assert domain.impact_level == ImpactLevel.HIGH
         assert domain.approved_by == "reviewer-a"
         assert domain.item_data == {"foo": "bar"}
-        assert domain.metadata == {"source": "test"}
+        # C2PRO P0b HITL persist hotfix: _to_domain now also carries the
+        # persistent row's own primary key (row_id) through metadata --
+        # update_review_item() needs it to update the exact row it was
+        # given, since item_id alone is a business identifier, not a
+        # guaranteed-unique one (see repository.py's _to_domain).
+        assert domain.metadata == {"source": "test", "row_id": str(row_id)}
 
 
 # ── End-to-end HITL service (mocked repo) ────────────────────────────────────

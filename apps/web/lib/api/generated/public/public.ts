@@ -50,6 +50,8 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
+import type { RootGet200 } from "../models";
+
 import { orvalApiClient } from "../../client";
 
 const withQueryKey = <T extends object, K>(
@@ -77,7 +79,7 @@ const withQueryKey = <T extends object, K>(
  * @summary Root
  */
 export const rootGet = (signal?: AbortSignal) => {
-  return orvalApiClient<unknown>({ url: `/`, method: "GET", signal });
+  return orvalApiClient<RootGet200>({ url: `/`, method: "GET", signal });
 };
 
 export const getRootGetQueryKey = () => {

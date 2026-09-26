@@ -12,8 +12,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.procurement.adapters.persistence.models import BudgetItemORM, WBSItemORM
+from src.procurement.adapters.persistence.models import BudgetItemORM
 from src.projects.adapters.persistence.models import ProjectORM
+from src.wbs.adapters.persistence.models import WBSNodeORM
 
 
 class SQLAlchemyBudgetRepository:
@@ -23,12 +24,11 @@ class SQLAlchemyBudgetRepository:
         self.session = session
 
     async def get_total_spent_by_project(self, project_id: UUID, tenant_id: UUID) -> Decimal:
-        """Get the total spent amount for all WBS items in a project with tenant isolation."""
+        """Total spend recorded on the project's canonical WBS nodes, tenant-isolated (ADR-025)."""
         stmt = (
-            select(func.sum(WBSItemORM.budget_spent))
-            .join(ProjectORM, ProjectORM.id == WBSItemORM.project_id)
-            .where(WBSItemORM.project_id == project_id)
-            .where(ProjectORM.tenant_id == tenant_id)
+            select(func.sum(WBSNodeORM.budget_spent))
+            .where(WBSNodeORM.project_id == project_id)
+            .where(WBSNodeORM.tenant_id == tenant_id)
         )
         result = await self.session.execute(stmt)
         total_spent = result.scalar() or Decimal("0.00")

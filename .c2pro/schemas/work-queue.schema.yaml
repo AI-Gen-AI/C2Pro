@@ -1,0 +1,33 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: c2pro-work-queue-v1
+type: object
+additionalProperties: false
+required: [schema, schema_version, queue_policy, items]
+properties:
+  schema: {const: c2pro-work-queue-v1}
+  schema_version: {const: 1}
+  queue_policy:
+    type: object
+    additionalProperties: false
+    required: [open_only, completed_items_forbidden, historical_source]
+    properties:
+      open_only: {const: true}
+      completed_items_forbidden: {const: true}
+      historical_source: {type: string, minLength: 1}
+  items:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [work_id, status, role, work_ref, priority, depends_on, review_policy]
+      properties:
+        work_id: {type: string, pattern: '^C2PRO-DEV-[0-9]{2}$'}
+        status: {enum: [ready, in_progress, blocked, awaiting_review, awaiting_owner]}
+        role: {type: string, minLength: 1}
+        work_ref: {type: [string, 'null']}
+        priority: {enum: [P0, P1, P2, P3]}
+        depends_on:
+          type: array
+          uniqueItems: true
+          items: {type: string, minLength: 1}
+        review_policy: {enum: [optional, independent_principal, principal_and_challenger]}

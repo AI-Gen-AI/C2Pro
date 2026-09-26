@@ -168,6 +168,23 @@ function statusForStage(stage: ProgressStage, currentStage: ProgressStage | null
   return stage.range[1] < currentStage.range[0] ? "completed" : "pending";
 }
 
+function statusBadgeLabel(hasError: boolean, isComplete: boolean): string {
+  if (hasError) return "Failed";
+  if (isComplete) return "Completed";
+  return "In Progress";
+}
+
+function progressHeadline(
+  error: string | null,
+  isComplete: boolean,
+  currentStage: ProgressStage | null,
+): string {
+  if (error) return error;
+  if (isComplete) return "Completed";
+  if (currentStage) return `Currently: ${currentStage.name}`;
+  return "Starting...";
+}
+
 interface AnalysisProgressTrackerProps {
   projectId: string;
   onComplete?: (result: unknown) => void;
@@ -182,10 +199,18 @@ export function AnalysisProgressTracker({
   const [nodes, setNodes] = useState<AnalysisNode[]>(NODES);
   const [currentStage, setCurrentStage] = useState<ProgressStage | null>(null);
   const [overallProgress, setOverallProgress] = useState(0);
+  const [isComplete, setIsComplete] = useState(false);
   const [error, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
+
+    // Re-initialise per (re)connect so a new analysis never inherits a prior run's state.
+    setNodes(NODES);
+    setCurrentStage(null);
+    setOverallProgress(0);
+    setIsComplete(false);
+    setLocalError(null);
 
     const { token } = useAuthStore.getState();
     const eventSource = new EventSource(
@@ -211,15 +236,26 @@ export function AnalysisProgressTracker({
     });
 
     eventSource.addEventListener("complete", (event) => {
+      // The terminal state must NEVER depend on the payload parsing. `JSON.parse` used to be
+      // the first statement inside this try, so a malformed/empty `complete` payload threw
+      // before ANY setter ran: isComplete stayed false and the UI was left asserting
+      // "Currently: Finalizing" at 100% with a live spinner, even though the analysis had
+      // finished. A `stage` event for step 16-17 already puts the UI at Finalizing/100 while
+      // still RUNNING (which is correct during final assembly), so `complete` is the only
+      // signal that flips the run to COMPLETED — it has to be unconditional.
+      let data: unknown = null;
       try {
-        const data = JSON.parse(event.data);
-        setOverallProgress(100);
-        setCurrentStage(USER_FACING_STAGES[USER_FACING_STAGES.length - 1]);
-        if (onComplete) onComplete(data);
-        eventSource.close();
+        data = JSON.parse(event.data);
       } catch (e) {
         console.error("Error parsing completion data", e);
       }
+
+      setOverallProgress(100);
+      setCurrentStage(USER_FACING_STAGES[USER_FACING_STAGES.length - 1]);
+      setIsComplete(true);
+      setNodes((prev) => prev.map((node) => ({ ...node, status: "completed" })));
+      if (onComplete) onComplete(data);
+      eventSource.close();
     });
 
     eventSource.onerror = () => {
@@ -256,22 +292,14 @@ export function AnalysisProgressTracker({
           variant={error ? "destructive" : "outline"}
           className="px-3 py-1"
         >
-          {error
-            ? "Failed"
-            : overallProgress === 100
-              ? "Completed"
-              : "In Progress"}
+          {statusBadgeLabel(Boolean(error), isComplete)}
         </Badge>
       </div>
 
       <div className="space-y-2">
         <div className="flex justify-between text-sm font-medium">
           <span>
-            {error
-              ? error
-              : currentStage
-                ? `Currently: ${currentStage.name}`
-                : "Starting..."}
+            {progressHeadline(error, isComplete, currentStage)}
           </span>
           <span>{Math.round(overallProgress)}%</span>
         </div>
@@ -280,7 +308,7 @@ export function AnalysisProgressTracker({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {USER_FACING_STAGES.map((stage) => {
-          const status = statusForStage(stage, currentStage);
+          const status = isComplete ? "completed" : statusForStage(stage, currentStage);
 
           return (
             <div

@@ -30,13 +30,18 @@ def get_golden_projects():
 
 
 def test_golden_dataset_includes_curated_real_projects():
-    """The regression dataset must include the curated Spain real-project batch."""
+    """The regression dataset must include the curated real-project batches."""
     files = get_golden_project_files()
     names = {path.name for path in files}
 
     assert "project_LA_ROBLA.json" in names
     assert "project_TRANVIA_GRANADA.json" in names
-    assert len(files) >= 18
+    assert "project_QUERETARO.json" in names
+    assert "project_RIO_SP.json" in names
+    assert "project_TEXAS_GRID.json" in names
+    assert "project_RIYADH_METRO.json" in names
+    assert "project_AL_ZOUR.json" in names
+    assert len(files) >= 23
 
 def simulate_ai_analysis(project_data: dict) -> float:
     """

@@ -1,5 +1,7 @@
-"""WBS HTTP adapters."""
+"""WBS HTTP adapters.
 
-from src.wbs.adapters.http.router import router
+The canonical project WBS is served by the projects router (GET/POST /projects/{id}/wbs) through the
+canonical WBS repository. ``wbs_node_router`` is not mounted.
+"""
 
-__all__ = ["router"]
+__all__: list[str] = []

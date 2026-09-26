@@ -26,6 +26,7 @@ from src.core.resilience import (
 )
 from src.core.resilience.circuit_breaker import CircuitBreaker
 from src.core.resilience.config import get_circuit_breaker_settings
+from src.documents.domain.storage_keys import is_document_object_prefix
 from src.documents.ports.storage_service import IStorageService
 
 logger = structlog.get_logger()
@@ -35,6 +36,8 @@ class _R2Client(Protocol):
     async def put_object(self, **kwargs: Any) -> Any: ...
     async def get_object(self, **kwargs: Any) -> Any: ...
     async def delete_object(self, **kwargs: Any) -> Any: ...
+    async def list_objects_v2(self, **kwargs: Any) -> Any: ...
+    async def delete_objects(self, **kwargs: Any) -> Any: ...
 
 
 class R2StorageService(IStorageService):
@@ -89,7 +92,56 @@ class R2StorageService(IStorageService):
             raise StorageError(str(exc)) from exc
 
     async def download_file(self, file_name_in_storage: str) -> Path:
-        key = Path(file_name_in_storage).name
+        return await self._download_key(Path(file_name_in_storage).name)
+
+    async def download_object(self, key: str) -> Path:
+        """Download an immutable object by its exact key (never reduced to a basename)."""
+        if not key or key != key.strip() or key.startswith("/") or ".." in key.split("/"):
+            raise StorageError("Invalid immutable storage key")
+        return await self._download_key(key)
+
+    async def delete_prefix(self, prefix: str) -> None:
+        """Delete every object of one document, paging through the bucket listing."""
+        if not is_document_object_prefix(prefix):
+            raise StorageError("delete_prefix requires a single document prefix")
+        await self._check_circuit_breaker()
+
+        try:
+            deleted = 0
+            continuation: str | None = None
+            while True:
+                request: dict[str, Any] = {"Bucket": self._bucket, "Prefix": prefix}
+                if continuation:
+                    request["ContinuationToken"] = continuation
+                page = await self._client.list_objects_v2(**request)
+                keys = [
+                    str(item["Key"])
+                    for item in page.get("Contents", [])
+                    if str(item.get("Key", "")).startswith(prefix)
+                ]
+                if keys:
+                    result = await self._client.delete_objects(
+                        Bucket=self._bucket,
+                        Delete={"Objects": [{"Key": key} for key in keys], "Quiet": True},
+                    )
+                    if isinstance(result, dict) and result.get("Errors"):
+                        raise StorageError(f"{len(result['Errors'])} objects under {prefix} were not deleted")
+                    deleted += len(keys)
+                if not page.get("IsTruncated"):
+                    break
+                continuation = page.get("NextContinuationToken")
+            if self._circuit_breaker:
+                await self._circuit_breaker.record_success()
+            logger.debug("r2_prefix_delete_success", prefix=prefix, deleted=deleted)
+        except CircuitBreakerOpenError:
+            raise
+        except Exception as exc:
+            if self._circuit_breaker:
+                await self._circuit_breaker.record_failure(exc)
+            logger.warning("r2_prefix_delete_failed", prefix=prefix, error=str(exc))
+            raise StorageError(str(exc)) from exc
+
+    async def _download_key(self, key: str) -> Path:
         await self._check_circuit_breaker()
 
         try:

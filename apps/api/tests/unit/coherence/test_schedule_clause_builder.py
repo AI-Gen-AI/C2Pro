@@ -160,8 +160,8 @@ async def test_build_schedule_clauses_bounds_wbs_candidates() -> None:
 
 
 @pytest.mark.asyncio
-async def test_build_schedule_clauses_uses_tenant_scoped_legacy_schedule_fallback() -> None:
-    """TS-IA-COH-SCH-002: parsed legacy schedules remain visible only to their tenant."""
+async def test_build_schedule_clauses_has_no_parallel_wbs_fallback() -> None:
+    """ADR-025: an empty canonical WBS is not replaced by rows from a parallel WBS store."""
     project_id = uuid4()
     tenant_id = uuid4()
     session = _FallbackSession(
@@ -180,9 +180,8 @@ async def test_build_schedule_clauses_uses_tenant_scoped_legacy_schedule_fallbac
 
     clauses = await build_schedule_clauses(session, project_id, tenant_id)  # type: ignore[arg-type]
 
-    assert clauses[0].data["source"] == "procurement_wbs_items"
-    assert clauses[0].data["status"] == "delayed"
-    assert all(params["tenant_id"] == str(tenant_id) for params in session.params)
+    assert clauses == []
+    assert session.params == [{"project_id": str(project_id), "tenant_id": str(tenant_id), "limit": 50}]
 
 
 @pytest.mark.asyncio

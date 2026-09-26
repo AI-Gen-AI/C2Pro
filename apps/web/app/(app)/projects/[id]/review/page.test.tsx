@@ -2,7 +2,7 @@
  * Test Suite ID: TS-FRT-HITL-QUEUE-001
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ReviewPage from './page';
 
@@ -189,9 +189,11 @@ describe('ReviewPage', () => {
 
     await userEvent.click(screen.getByText('Confirm Approve'));
     await waitFor(() => {
+      // Reviewer identity is server-derived from the authenticated session
+      // (EPIC-OPS-DOCFLOW Stream C); the client must never supply it.
       expect(mockApproveMutate).toHaveBeenCalledWith({
         itemId: 'item-1',
-        data: { reviewer_name: 'jane@acme.com' },
+        data: {},
       });
     });
   });
@@ -229,10 +231,10 @@ describe('ReviewPage', () => {
     await userEvent.click(confirmBtn);
 
     await waitFor(() => {
+      // Reason only — reviewer identity is server-derived, never client-supplied.
       expect(mockRejectMutate).toHaveBeenCalledWith({
         itemId: 'item-1',
         data: {
-          reviewer_name: 'jane@acme.com',
           reason: 'Insufficient evidence',
         },
       });
@@ -248,5 +250,232 @@ describe('ReviewPage', () => {
     render(<ReviewPage />);
 
     expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument();
+  });
+
+  it('expands the page limit when load more is clicked', async () => {
+    const fullPage = Array.from({ length: 50 }, (_, index) => ({
+      ...MOCK_ITEMS[0],
+      item_id: `item-${index}`,
+    }));
+    setupMock({ data: { items: fullPage, total: 50 } });
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Load more' }));
+
+    await waitFor(() => {
+      expect(mockUseQueue).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 100 }),
+      );
+    });
+  });
+
+  it('targets item_id (not row_id) on approve even when a distinct row_id is present -- guards the journey-3-wedge URL contract', async () => {
+    setupMock({
+      data: {
+        items: [
+          { ...MOCK_ITEMS[0], row_id: 'row-distinct-999', resumable: true },
+        ],
+        total: 1,
+      },
+    });
+    mockApproveMutate.mockResolvedValue({});
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    await userEvent.click(screen.getByText('Confirm Approve'));
+
+    await waitFor(() => {
+      expect(mockApproveMutate).toHaveBeenCalledWith({
+        itemId: 'item-1',
+        data: {},
+      });
+    });
+    expect(mockApproveMutate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ itemId: 'row-distinct-999' }),
+    );
+  });
+
+  it('describes a resumable item approval as resuming the analysis workflow', async () => {
+    setupMock({
+      data: {
+        items: [{ ...MOCK_ITEMS[0], resumable: true }],
+        total: 1,
+      },
+    });
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    expect(
+      screen.getByText(/this will resume the analysis workflow/i),
+    ).toBeInTheDocument();
+  });
+
+  it('describes a non-resumable item approval as a plain status change', async () => {
+    setupMock({
+      data: {
+        items: [{ ...MOCK_ITEMS[0], resumable: false }],
+        total: 1,
+      },
+    });
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    expect(screen.getByText(/this will mark the item as approved/i)).toBeInTheDocument();
+  });
+
+  it('describes a resumable item rejection as terminating the workflow', async () => {
+    setupMock({
+      data: {
+        items: [{ ...MOCK_ITEMS[0], resumable: true }],
+        total: 1,
+      },
+    });
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('reject-item-1'));
+    expect(
+      screen.getByText(/this will terminate the analysis workflow/i),
+    ).toBeInTheDocument();
+  });
+
+  it('describes a non-resumable item rejection as a plain status change', async () => {
+    setupMock({
+      data: {
+        items: [{ ...MOCK_ITEMS[0], resumable: false }],
+        total: 1,
+      },
+    });
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('reject-item-1'));
+    expect(screen.getByText(/this will mark the item as rejected/i)).toBeInTheDocument();
+  });
+
+  it('keeps reject dialog open and surfaces the 502 resume-failure message', async () => {
+    setupMock();
+    mockRejectMutate.mockRejectedValue(new Error('Resume failed: workflow error (502)'));
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('reject-item-1'));
+    await userEvent.type(screen.getByPlaceholderText(/explain why/i), 'Bad extraction');
+    await userEvent.click(screen.getByText('Confirm Reject'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Resume failed: workflow error (502)');
+    expect(screen.getByText('Reject Review Item')).toBeInTheDocument();
+    expect(mockShowToast).toHaveBeenCalledWith('Resume failed: workflow error (502)');
+  });
+
+  // C2PRO #649: one human decision must produce ONE request. The backend is
+  // idempotent on its own (a replay adds no audit event), but the page must
+  // not rely on that: a slow resume invites repeated clicks.
+  describe('double-submit protection (#649)', () => {
+    function deferred<T>() {
+      let resolve!: (value: T) => void;
+      let reject!: (reason: unknown) => void;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    }
+
+    it('sends exactly one approve request for rapid repeated Confirm clicks while in flight', async () => {
+      setupMock();
+      const inFlight = deferred<object>();
+      mockApproveMutate.mockReturnValue(inFlight.promise);
+      render(<ReviewPage />);
+
+      await userEvent.click(screen.getByTestId('approve-item-1'));
+      const confirm = screen.getByRole('button', { name: /confirm approve/i });
+      fireEvent.click(confirm);
+      fireEvent.click(confirm);
+      fireEvent.click(confirm);
+      await userEvent.click(confirm);
+
+      expect(mockApproveMutate).toHaveBeenCalledTimes(1);
+      // Visible, non-actionable pending state; the dialog cannot be dismissed
+      // (and re-opened for a second submit) while the decision is in flight.
+      expect(confirm).toBeDisabled();
+      expect(screen.getByRole('status')).toHaveTextContent(/approving/i);
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled();
+      await userEvent.keyboard('{Escape}');
+      expect(screen.getByText('Approve Review Item')).toBeInTheDocument();
+
+      await act(async () => {
+        inFlight.resolve({});
+        await inFlight.promise;
+      });
+      expect(mockApproveMutate).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the decided item non-actionable after success, before the queue refresh lands', async () => {
+      // refetch() returns but the cached queue still shows item-1 PENDING --
+      // exactly the window in which a second Approve used to be possible.
+      setupMock();
+      mockApproveMutate.mockResolvedValue({});
+      render(<ReviewPage />);
+
+      await userEvent.click(screen.getByTestId('approve-item-1'));
+      await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
+      await waitFor(() => expect(screen.queryByText('Approve Review Item')).not.toBeInTheDocument());
+
+      expect(screen.getByTestId('approve-item-1')).toBeDisabled();
+      expect(screen.getByTestId('reject-item-1')).toBeDisabled();
+      await userEvent.click(screen.getByTestId('approve-item-1'));
+      expect(screen.queryByText('Approve Review Item')).not.toBeInTheDocument();
+      expect(mockApproveMutate).toHaveBeenCalledTimes(1);
+      expect(mockRefetch).toHaveBeenCalled();
+    });
+
+    it('restores retry truthfully after a failed approve', async () => {
+      setupMock();
+      mockApproveMutate
+        .mockRejectedValueOnce(new Error('Resuming the analysis workflow failed'))
+        .mockResolvedValueOnce({});
+      render(<ReviewPage />);
+
+      await userEvent.click(screen.getByTestId('approve-item-1'));
+      await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('Resuming the analysis workflow failed');
+
+      const retry = screen.getByRole('button', { name: /confirm approve/i });
+      expect(retry).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: /cancel/i })).not.toBeDisabled();
+      await userEvent.click(retry);
+      await waitFor(() => expect(mockApproveMutate).toHaveBeenCalledTimes(2));
+    });
+
+    it('sends exactly one reject request for rapid repeated Confirm clicks while in flight', async () => {
+      setupMock();
+      const inFlight = deferred<object>();
+      mockRejectMutate.mockReturnValue(inFlight.promise);
+      render(<ReviewPage />);
+
+      await userEvent.click(screen.getByTestId('reject-item-1'));
+      await userEvent.type(screen.getByPlaceholderText(/explain why/i), 'Bad extraction');
+      const confirm = screen.getByRole('button', { name: /confirm reject/i });
+      fireEvent.click(confirm);
+      fireEvent.click(confirm);
+      await userEvent.click(confirm);
+
+      expect(mockRejectMutate).toHaveBeenCalledTimes(1);
+      expect(confirm).toBeDisabled();
+      expect(screen.getByRole('status')).toHaveTextContent(/rejecting/i);
+
+      await act(async () => {
+        inFlight.resolve({});
+        await inFlight.promise;
+      });
+      expect(mockRejectMutate).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('renders one card per deduped queue item (no duplicate legacy rows shown)', () => {
+    setupMock();
+    render(<ReviewPage />);
+    // MOCK_ITEMS has 3 distinct item_ids; the backend queue list already
+    // dedups legacy duplicates, so the page must render exactly one card
+    // per item_id it receives, never more.
+    expect(screen.getAllByTestId(/^review-item-/)).toHaveLength(3);
   });
 });

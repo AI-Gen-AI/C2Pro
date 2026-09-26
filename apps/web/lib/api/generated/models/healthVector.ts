@@ -37,9 +37,12 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { ContractClarityFinding } from "./contractClarityFinding";
+import type { EvidenceGranularity } from "./evidenceGranularity";
 import type { HealthBand } from "./healthBand";
 import type { HealthSignal } from "./healthSignal";
 import type { HealthTrend } from "./healthTrend";
+import type { SingleDocumentCoverage } from "./singleDocumentCoverage";
 
 /**
  * Project-level health vector across supported dimensions.
@@ -52,4 +55,7 @@ export interface HealthVector {
   composite_band?: HealthBand;
   composite_trend?: HealthTrend;
   computed_at: string;
+  contract_clarity_findings?: ContractClarityFinding[];
+  single_document_coverage?: SingleDocumentCoverage | null;
+  single_document_evidence_granularity?: EvidenceGranularity | null;
 }

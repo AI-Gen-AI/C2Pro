@@ -6,6 +6,7 @@ dependency seams.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from types import SimpleNamespace
 from uuid import UUID, uuid4
@@ -15,6 +16,7 @@ from fastapi.testclient import TestClient
 
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User, UserRole
+from src.core.database import get_session
 from src.core.frontend_support.router import (
     _get_consent_repository,
     _get_disclaimer_repository,
@@ -94,15 +96,41 @@ def _current_user() -> User:
     )
 
 
-def _build_client() -> tuple[TestClient, User]:
+class _FakeSession:
+    """Minimal AsyncSession stand-in for the sample-project create/reuse flow."""
+
+    def __init__(self, existing: object | None = None) -> None:
+        self._existing = existing
+        self.added: list[object] = []
+
+    async def scalar(self, *_args: object, **_kwargs: object) -> object | None:
+        return self._existing
+
+    def add(self, obj: object) -> None:
+        self.added.append(obj)
+
+    async def commit(self) -> None:
+        return None
+
+    async def refresh(self, _obj: object) -> None:
+        return None
+
+
+def _build_client(session: _FakeSession | None = None) -> tuple[TestClient, User]:
     app = FastAPI()
     app.include_router(frontend_support_router, prefix="/api/v1")
     consent_repository = _FakeConsentRepository()
     disclaimer_repository = _FakeDisclaimerRepository()
     user = _current_user()
+    fake_session = session or _FakeSession()
+
+    async def _fake_get_session() -> AsyncIterator[_FakeSession]:
+        yield fake_session
+
     app.dependency_overrides[_get_consent_repository] = lambda: consent_repository
     app.dependency_overrides[_get_disclaimer_repository] = lambda: disclaimer_repository
     app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_session] = _fake_get_session
     return TestClient(app), user
 
 
@@ -263,16 +291,18 @@ def test_onboarding_sample_project_contract() -> None:
 
     start_response = client.post("/api/v1/onboarding/sample-project/start")
     assert start_response.status_code == 200
-    assert start_response.json() == {
-        "projectId": "proj_sample_001",
-        "route": "/dashboard/projects/proj_sample_001",
-        "reused": True,
-        "duplicateCreated": False,
-    }
+    start_body = start_response.json()
+    # Real contract (ADR-024): a genuine project UUID, never the old stub placeholder.
+    project_id = start_body["projectId"]
+    assert project_id != "proj_sample_001"
+    UUID(project_id)  # raises if not a real UUID
+    assert start_body["route"] == f"/dashboard/projects/{project_id}"
+    assert start_body["reused"] is False
+    assert start_body["duplicateCreated"] is True
 
     ready_response = client.get(
         "/api/v1/onboarding/sample-project/ready",
-        params={"projectId": "proj_sample_001"},
+        params={"projectId": project_id},
     )
     assert ready_response.status_code == 200
     assert ready_response.json() == {

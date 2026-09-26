@@ -9,6 +9,7 @@ from typing import cast
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.approval import ApprovalStatus
@@ -120,8 +121,8 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
             generated_automatically=assignment.generated_automatically,
             manually_verified=assignment.manually_verified,
             verified_by=assignment.verified_by,
-            verified_at=assignment.verified_at,
-            created_at=assignment.created_at,
+            verified_at=self._normalize_naive_utc(assignment.verified_at),
+            created_at=self._normalize_naive_utc(assignment.created_at),
         )
 
     async def add(self, stakeholder: Stakeholder, tenant_id: UUID) -> None:
@@ -248,7 +249,15 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
                 if proj_tenant is None or proj_tenant != tenant_id:
                     raise PermissionError("Cannot add RACI assignment for project outside tenant")
         self.session.add(self._to_raci_orm(assignment))
-        await self.session.flush()
+        try:
+            await self.session.flush()
+        except IntegrityError as exc:
+            # The task passed the use case's existence check but was deleted before this insert
+            # (check-then-insert race): report it like any missing task, never as a 500.
+            if "stakeholder_wbs_raci_wbs_item_id_fkey" not in str(exc.orig):
+                raise
+            await self.session.rollback()
+            raise ValueError("task_not_found") from exc
 
     async def list_raci_assignments(
         self, project_id: UUID, tenant_id: UUID
@@ -327,7 +336,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         orm.generated_automatically = assignment.generated_automatically
         orm.manually_verified = assignment.manually_verified
         orm.verified_by = assignment.verified_by
-        orm.verified_at = assignment.verified_at
+        orm.verified_at = self._normalize_naive_utc(assignment.verified_at)
         await self.session.flush()
 
     async def commit(self) -> None:

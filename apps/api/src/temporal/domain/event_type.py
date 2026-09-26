@@ -9,6 +9,16 @@ from __future__ import annotations
 KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
     {
         "revision.ingested",
+        "revision.changed",
+        "revision.analyzed",
+        "revision.analysis_failed",
+        "revision.reinterpreted",
+        # C2PRO P0b crash-safe resume V3: N17 durably persisting an analysis
+        # and the graph reaching its terminal state are DIFFERENT facts. N17
+        # emits analysis.persisted; only a verified terminal checkpoint emits
+        # graph.completed. Conflating them let a mid-graph crash look like a
+        # completed run.
+        "analysis.persisted",
         "graph.completed",
         "hitl.correction",
         "baseline.changed",

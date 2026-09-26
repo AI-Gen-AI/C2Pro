@@ -18,12 +18,21 @@ from src.core.database import (
 @pytest.mark.asyncio
 async def test_init_db():
     """Prueba la inicialización de la base de datos."""
+    # init_db() does `global _engine, _session_factory; _engine = create_async_engine(...)`.
+    # Without also patching the module globals it assigns, the plain MagicMock returned
+    # by the mocked create_async_engine() leaks into src.core.database._engine for the
+    # rest of the test session -- any later test whose code path calls close_db() then
+    # hits `await _engine.dispose()` on a non-async MagicMock. Patching the globals here
+    # restores them automatically when the `with` block exits, regardless of what init_db
+    # assigned inside it.
     with patch("src.core.database.create_async_engine") as mock_create_engine:
         with patch("src.core.database.async_sessionmaker") as mock_sessionmaker:
             with patch("src.config.settings.database_url", "postgresql://user:pass@localhost/db"):
-                await init_db()
-                mock_create_engine.assert_called_once()
-                mock_sessionmaker.assert_called_once()
+                with patch("src.core.database._engine", None):
+                    with patch("src.core.database._session_factory", None):
+                        await init_db()
+                        mock_create_engine.assert_called_once()
+                        mock_sessionmaker.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_init_db_sqlite():
@@ -31,8 +40,10 @@ async def test_init_db_sqlite():
     with patch("src.core.database.create_async_engine") as mock_create_engine:
         with patch("src.core.database.async_sessionmaker"):
             with patch("src.config.settings.database_url", "sqlite+aiosqlite:///test.db"):
-                await init_db()
-                mock_create_engine.assert_called_once()
+                with patch("src.core.database._engine", None):
+                    with patch("src.core.database._session_factory", None):
+                        await init_db()
+                        mock_create_engine.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_close_db():

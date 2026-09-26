@@ -25,6 +25,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     event,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -82,9 +83,32 @@ class ProjectEventORM(Base):
     evidence_refs: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    # C2PRO P0b crash-safe resume V3: exactly one analysis.persisted and one
+    # graph.completed per resume operation, enforced by a partial unique
+    # index rather than by hoping the emitter is not replayed.
+    resume_operation_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+    resume_attempt_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
 
     __table_args__ = (
-        Index("ix_project_events_project_occurred", "project_id", "occurred_at"),
+        Index(
+            "uq_project_events_resume_operation_type",
+            "resume_operation_id",
+            "event_type",
+            unique=True,
+            postgresql_where=text("resume_operation_id IS NOT NULL"),
+        ),
+        Index("ix_project_events_project_occurred", "project_id", "occurred_at", "event_id"),
+        Index(
+            "ix_project_events_tenant_project_occurred_event",
+            "tenant_id",
+            "project_id",
+            "occurred_at",
+            "event_id",
+        ),
         {"info": {"rls_policy": "tenant_isolation"}},
     )
 

@@ -1,19 +1,3 @@
-"""WBS application DTOs."""
+"""WBS application layer."""
 
-from src.wbs.application.dtos import (
-    CreateWBSItemRequest,
-    MoveWBSItemRequest,
-    UpdateWBSItemRequest,
-    WBSCoverage,
-    WBSItemDTO,
-    WBSResponse,
-)
-
-__all__ = [
-    "WBSItemDTO",
-    "CreateWBSItemRequest",
-    "UpdateWBSItemRequest",
-    "MoveWBSItemRequest",
-    "WBSResponse",
-    "WBSCoverage",
-]
+__all__: list[str] = []

@@ -1,0 +1,92 @@
+-- P0-SEC-D: close the one un-revoked SECURITY DEFINER EXECUTE grant.
+--
+-- CLASSIFICATION: DEFENSE_IN_DEPTH / privilege-boundary hardening, not a
+-- confirmed exploitable path. See "WHY THIS IS DEFENSE-IN-DEPTH" below for
+-- the reachability evidence that rules out CONFIRMED_BLOCKER.
+--
+-- WHAT THIS FIXES
+-- ----------------
+-- public.handle_new_user() is a SECURITY DEFINER trigger function (fires
+-- AFTER INSERT ON auth.users, syncing the new Supabase Auth user into
+-- public.users under whatever tenant_id its own metadata claims). Its owner
+-- (the project's Postgres role) carries BYPASSRLS in production, so this
+-- function's INSERT into public.users runs with RLS fully bypassed
+-- regardless of the caller.
+--
+-- Every other SECURITY DEFINER function in this codebase (public.
+-- create_tenant_and_owner, all 7 auth_bootstrap.* functions) explicitly
+-- revokes PUBLIC/anon/authenticated immediately after creation.
+-- handle_new_user() never did, for no documented reason. Catalog inspection
+-- (pg_proc.proacl) on a disposable database reproducing the production
+-- pg_default_acl posture (ALTER DEFAULT PRIVILEGES ... IN SCHEMA public
+-- GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role --
+-- captured 2026-09-02, see apps/api/tests/security/fixtures/
+-- p0_sec_a_prestate.sql) confirms this function's real-world ACL grants
+-- EXECUTE to PUBLIC, anon, authenticated, and service_role, none of it
+-- explicit or reviewed.
+--
+-- WHY THIS IS DEFENSE-IN-DEPTH (not a confirmed exploitable path)
+-- -----------------------------------------------------------------
+-- An EXECUTE grant on a SECURITY DEFINER trigger function only matters if
+-- something can actually use it to enter that function's execution
+-- context. Two independent things must both be true for that, and neither
+-- is, for anon/authenticated, in the current (post-P0-SEC-A) catalog:
+--
+--   1. Direct invocation (`SELECT public.handle_new_user()`) is rejected
+--      outright by PostgreSQL itself ("trigger functions can only be
+--      called as triggers") -- this is a language-level restriction, not
+--      an ACL check, so it applies regardless of EXECUTE.
+--
+--   2. Attaching the function to a *new* trigger (the only other way to
+--      invoke it) requires EXECUTE on the function AND either CREATE on
+--      some schema (to make a table to attach it to) or TRIGGER on some
+--      existing table -- confirmed empirically: `CREATE TRIGGER ...
+--      EXECUTE FUNCTION` fails with "permission denied for function" for
+--      a role holding neither. On a fresh Alembic-chain database with
+--      P0-SEC-A applied, `has_schema_privilege('authenticated', 'public',
+--      'CREATE')` is false and zero rows exist in
+--      information_schema.role_table_grants for anon/authenticated with
+--      privilege_type = 'TRIGGER'. Neither prerequisite is held.
+--
+-- No reachable path from the EXECUTE grant to the SECURITY DEFINER
+-- execution context is demonstrated. The REVOKE below is still justified
+-- as consistency and defense-in-depth: every sibling SECURITY DEFINER
+-- function already closes this off, and the ACL would become live risk
+-- the moment either missing prerequisite is ever (re)granted for an
+-- unrelated purpose -- exactly the kind of latent gap P0-SEC-D exists to
+-- close before the non-BYPASSRLS application-role rollout.
+--
+-- WHY THIS IS SAFE TO APPLY
+-- ---------------------------
+-- Trigger invocation does not check the trigger function's EXECUTE ACL --
+-- PostgreSQL fires BEFORE/AFTER triggers as part of the DML statement
+-- itself, independent of whether the DML-performing role could call the
+-- function directly. Revoking EXECUTE here does not change when or how the
+-- on_auth_user_created trigger fires. Verified empirically on a disposable
+-- database: after this exact REVOKE, an INSERT into auth.users performed
+-- as `authenticated` (a synthetic harness role chosen only to prove the
+-- mechanism as a non-owner, non-superuser role -- not a claim about which
+-- role or privilege model Supabase's own GoTrue service actually uses to
+-- write auth.users in production) still fires the trigger and produces
+-- the expected public.users row via the exact committed function body.
+--
+-- NO ALEMBIC COUNTERPART
+-- -----------------------
+-- public.handle_new_user() is Supabase Auth (GoTrue) integration glue --
+-- it exists only because auth.users exists, and auth.users is a
+-- Supabase-platform-managed table with no equivalent on the plain-Postgres
+-- Alembic path. There is nothing to revoke there because the function
+-- itself was never created there. This migration is Supabase-only by
+-- necessity, not by omission.
+DO $$
+BEGIN
+    -- to_regprocedure resolves the exact (schema, name, argument-type)
+    -- identity, not just the name -- so a future overload named
+    -- handle_new_user with different arguments cannot make this guard
+    -- true while the zero-argument function itself is absent, which a
+    -- proname-only existence check would have allowed.
+    IF to_regprocedure('public.handle_new_user()') IS NOT NULL THEN
+        REVOKE ALL ON FUNCTION public.handle_new_user()
+            FROM PUBLIC, anon, authenticated, service_role;
+    END IF;
+END $$;

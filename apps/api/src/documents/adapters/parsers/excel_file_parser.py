@@ -6,6 +6,7 @@ using the openpyxl library, encapsulating external library details.
 """
 
 import re
+import unicodedata
 from numbers import Number
 from pathlib import Path
 from typing import Any, cast
@@ -16,6 +17,7 @@ from openpyxl.utils.exceptions import InvalidFileException
 
 class ExcelParsingError(Exception):
     """Custom exception for Excel parsing errors."""
+
     pass
 
 
@@ -32,11 +34,40 @@ class BudgetRows(list[dict[str, Any]]):
         self.stated_total = stated_total
 
 
+# ---------------------------------------------------------------------------
+# Budget category inference (best-effort). Parallels the multi-factor detection
+# in coherence/rules_engine/deterministic.py, kept local to avoid a documents ->
+# coherence import. Time-priced rows are labor/rental (service); equipment nouns
+# are equipment; measured goods are material.
+# ---------------------------------------------------------------------------
+_TIME_UNIT_TOKENS = frozenset({
+    "mes", "meses", "month", "months", "mo", "h", "hr", "hora", "horas",
+    "hour", "hours", "hh", "jornada", "jornadas", "dia", "dias", "day", "days",
+    "semana", "semanas", "week", "weeks", "ano", "anio", "anios", "year", "years",
+})
+_LABOR_NAME_TOKENS = (
+    "soldador", "montador", "electricista", "ayudante", "peon", "peones",
+    "oficial", "operario", "operador", "encargado", "capataz", "ingeniero",
+    "tecnico", "jefe", "director", "administrativo", "auxiliar", "jornalero",
+    "maquinista", "conductor", "gruista", "mano de obra",
+)
+_EQUIPMENT_NAME_TOKENS = (
+    "bomba", "motor", "variador", "cuadro", "valvula", "grupo", "compresor",
+    "generador", "transformador", "ventilador", "equipo", "maquina",
+    "arrancador", "caldera", "carretilla",
+)
+_MATERIAL_UNIT_TOKENS = frozenset({
+    "ud", "u", "uds", "unidad", "m", "m2", "m3", "ml", "mm", "cm", "km",
+    "kg", "g", "gr", "t", "tn", "l", "lt",
+})
+
+
 class ExcelFileParser:
     """
     Adapter class for parsing Excel files.
     Encapsulates the logic specific to the Excel format and `openpyxl` library.
     """
+
     async def parse_schedule(self, file_path: Path) -> list[dict[str, Any]]:
         """
         Parses schedule data from a standard Excel file format.
@@ -86,60 +117,41 @@ class ExcelFileParser:
         except (InvalidFileException, FileNotFoundError) as e:
             raise ExcelParsingError(f"Failed to open or read Excel file: {e}")
         except Exception as e:
-            raise ExcelParsingError(f"An unexpected error occurred during Excel schedule parsing: {e}")
+            raise ExcelParsingError(
+                f"An unexpected error occurred during Excel schedule parsing: {e}"
+            )
         finally:
             workbook_to_close = locals().get("workbook")
             if workbook_to_close is not None and hasattr(workbook_to_close, "close"):
                 workbook_to_close.close()
 
     @staticmethod
-    def _find_schedule_headers(sheet: Any) -> tuple[int | None, list[str]]:
-        aliases = {
-            "task": {"task", "actividad"},
-            "start date": {"start date", "inicio"},
-            "end date": {"end date", "fin"},
-            "duration": {"duration", "duración", "duracion", "duración (días)", "duracion (dias)"},
+    def _schedule_header_aliases() -> dict[str, set[str]]:
+        return {
+            "task": {"task", "actividad", "tarea", "activity"},
+            "start date": {"start date", "inicio", "comienzo", "fecha inicio"},
+            "end date": {"end date", "fin", "termino", "fecha fin"},
+            "duration": {"duration", "duracion"},
             "wbs": {"wbs"},
             "predecessors": {"predecessors", "predecesoras"},
         }
 
+    @classmethod
+    def _find_schedule_headers(cls, sheet: Any) -> tuple[int | None, list[str]]:
+        aliases = cls._schedule_header_aliases()
+        required = {"task", "start date", "end date"}
+
         for row_index, row in enumerate(sheet.iter_rows(values_only=True), start=1):
-            normalized = [
-                str(value).strip().lower() if value is not None else ""
-                for value in row
-            ]
-            canonical_headers = [
-                next(
-                    (
-                        canonical
-                        for canonical, accepted in aliases.items()
-                        if header in accepted
-                    ),
-                    header,
-                )
-                for header in normalized
-            ]
-            required = {"task", "start date", "end date"}
+            canonical_headers = cls._canonicalize_headers(row, aliases)
             if required.issubset(set(canonical_headers)):
                 return row_index, canonical_headers
 
         first_row: Any = getattr(sheet, "__getitem__", lambda _: [])(1)
         fallback_headers = [
-            str(getattr(cell, "value", cell)).strip().lower() if cell is not None else ""
-            for cell in first_row
+            getattr(cell, "value", cell) if cell is not None else "" for cell in first_row
         ]
-        fallback_canonical_headers = [
-            next(
-                (
-                    canonical
-                    for canonical, accepted in aliases.items()
-                    if header in accepted
-                ),
-                header,
-            )
-            for header in fallback_headers
-        ]
-        if {"task", "start date", "end date"}.issubset(set(fallback_canonical_headers)):
+        fallback_canonical_headers = cls._canonicalize_headers(fallback_headers, aliases)
+        if required.issubset(set(fallback_canonical_headers)):
             return 1, fallback_canonical_headers
 
         return None, []
@@ -179,19 +191,40 @@ class ExcelFileParser:
             budget_data: BudgetRows = BudgetRows()
             for row in sheet.iter_rows(min_row=header_row_index + 1, values_only=True):
                 row_data = dict(zip(headers, row, strict=False))
-                if any(row_data.values()):
-                    stated_total = self._extract_declared_total(row_data)
-                    if stated_total is not None:
-                        budget_data.stated_total = stated_total
-                        continue
-                    budget_data.append(
-                        {
-                            "item": row_data.get("item"),
-                            "quantity": self._coerce_budget_number(row_data.get("quantity")),
-                            "unit_price": self._coerce_budget_number(row_data.get("unit price")),
-                            "total": self._coerce_budget_number(row_data.get("total")),
-                        }
-                    )
+                if not any(row_data.values()):
+                    continue
+                stated_total = self._extract_declared_total(row_data)
+                if stated_total is not None:
+                    budget_data.stated_total = stated_total
+                    continue
+                quantity = self._coerce_budget_number(row_data.get("quantity"))
+                unit_price = self._coerce_budget_number(row_data.get("unit price"))
+                total = self._coerce_budget_number(row_data.get("total"))
+                # Skip structural chapter/section subtotal rows. In a hierarchical
+                # budget (presupuesto por capítulos) chapters carry a rolled-up total
+                # with no quantity or unit price; emitting them as line items would
+                # double-count against their own leaf partidas. A genuine line item
+                # has a measured quantity and/or a unit price.
+                if quantity is None and unit_price is None:
+                    continue
+                unit_raw = row_data.get("unit")
+                unit_value = (
+                    str(unit_raw).strip()
+                    if unit_raw is not None and str(unit_raw).strip()
+                    else None
+                )
+                budget_data.append(
+                    {
+                        "item": row_data.get("item"),
+                        "quantity": quantity,
+                        "unit_price": unit_price,
+                        "total": total,
+                        "unit": unit_value,
+                        "category": self._infer_budget_category(
+                            row_data.get("item"), unit_value
+                        ),
+                    }
+                )
             return budget_data
 
         except ExcelParsingError:
@@ -199,7 +232,9 @@ class ExcelFileParser:
         except (InvalidFileException, FileNotFoundError) as e:
             raise ExcelParsingError(f"Failed to open or read Excel file: {e}")
         except Exception as e:
-            raise ExcelParsingError(f"An unexpected error occurred during Excel budget parsing: {e}")
+            raise ExcelParsingError(
+                f"An unexpected error occurred during Excel budget parsing: {e}"
+            )
         finally:
             workbook_to_close = locals().get("workbook")
             if workbook_to_close is not None and hasattr(workbook_to_close, "close"):
@@ -248,7 +283,40 @@ class ExcelFileParser:
                 "subtotal",
                 "coste",
             },
+            # Optional unit-of-measure column (not in `required`). Kept distinct
+            # from `quantity` ("ud"/"uds"/"unidades") and `unit price` ("precio
+            # unitario"); most-specific-alias-wins keeps "PRECIO UNIT." as price.
+            "unit": {
+                "unit",
+                "unidad",
+                "u.m.",
+                "u. m.",
+                "uom",
+                "medida",
+                "unidad de medida",
+            },
         }
+
+    @classmethod
+    def _infer_budget_category(cls, name: Any, unit: str | None) -> str | None:
+        """Best-effort BOM category (a BOMCategory value) from unit + item name.
+
+        Time-priced rows (``mes``, ``mes/h``, ``día``, ``h``) and personnel names
+        are labor/rental -> ``"service"``; equipment nouns -> ``"equipment"``;
+        measured goods -> ``"material"``. Returns ``None`` when undecidable (e.g.
+        ``"gl"`` lump-sum, ``"%"`` overhead). Heuristic; no external dependency.
+        """
+        unit_tokens = set(cls._normalize_header(unit).split()) if unit else set()
+        name_norm = cls._normalize_header(name)
+        if unit_tokens & _TIME_UNIT_TOKENS or any(
+            kw in name_norm for kw in _LABOR_NAME_TOKENS
+        ):
+            return "service"
+        if any(kw in name_norm for kw in _EQUIPMENT_NAME_TOKENS):
+            return "equipment"
+        if unit_tokens & _MATERIAL_UNIT_TOKENS:
+            return "material"
+        return None
 
     @classmethod
     def _find_budget_headers(cls, sheet: Any) -> tuple[int | None, list[str]]:
@@ -262,8 +330,7 @@ class ExcelFileParser:
 
         first_row: Any = getattr(sheet, "__getitem__", lambda _: [])(1)
         fallback_headers = [
-            getattr(cell, "value", cell) if cell is not None else ""
-            for cell in first_row
+            getattr(cell, "value", cell) if cell is not None else "" for cell in first_row
         ]
         fallback_canonical_headers = cls._canonicalize_headers(fallback_headers, aliases)
         if required.issubset(set(fallback_canonical_headers)):
@@ -272,22 +339,56 @@ class ExcelFileParser:
         return None, []
 
     @staticmethod
-    def _canonicalize_headers(row: Any, aliases: dict[str, set[str]]) -> list[str]:
-        normalized = [
-            str(value).strip().lower() if value is not None else ""
-            for value in row
-        ]
-        return [
-            next(
-                (
-                    canonical
-                    for canonical, accepted in aliases.items()
-                    if header in accepted
-                ),
-                header,
-            )
-            for header in normalized
-        ]
+    def _normalize_header(value: Any) -> str:
+        """Normalize a header cell for tolerant matching.
+
+        Lowercases, strips accents, drops parenthetical qualifiers (e.g. ``(€)``,
+        ``(Semana)``, ``(días)``), and reduces any punctuation/currency/symbols to
+        single spaces. This lets real-world headers like ``PRECIO UNIT. (€)`` or
+        ``Inicio (Semana)`` match their canonical aliases (``precio``, ``inicio``).
+        """
+        if value is None:
+            return ""
+        text = unicodedata.normalize("NFKD", str(value))
+        text = "".join(ch for ch in text if not unicodedata.combining(ch)).lower()
+        text = re.sub(r"\([^)]*\)", " ", text)  # drop parenthetical qualifiers
+        text = re.sub(r"[^a-z0-9]+", " ", text)  # currency/punctuation -> space
+        return " ".join(text.split())
+
+    @classmethod
+    def _match_canonical(cls, header_norm: str, aliases: dict[str, set[str]]) -> str | None:
+        """Return the canonical column for a normalized header, or ``None``.
+
+        A header matches an alias when every token of the (normalized) alias is
+        present in the header's tokens (subset match), so ``importe (€)`` matches
+        ``importe`` and ``precio unit. (€)`` matches ``precio``. When several
+        aliases match, the most specific one wins (more tokens, then longer),
+        which keeps ``importe unitario`` (unit price) from being read as ``importe``
+        (total). Iteration is sorted so ties resolve deterministically.
+        """
+        if not header_norm:
+            return None
+        header_tokens = set(header_norm.split())
+        best_score: tuple[int, int] = (0, 0)
+        best_canonical: str | None = None
+        for canonical, accepted in aliases.items():
+            for alias in sorted(accepted):
+                alias_tokens = cls._normalize_header(alias).split()
+                if alias_tokens and all(tok in header_tokens for tok in alias_tokens):
+                    score = (len(alias_tokens), len("".join(alias_tokens)))
+                    if score > best_score:
+                        best_score = score
+                        best_canonical = canonical
+        return best_canonical
+
+    @classmethod
+    def _canonicalize_headers(cls, row: Any, aliases: dict[str, set[str]]) -> list[str]:
+        canonical: list[str] = []
+        for value in row:
+            header_norm = cls._normalize_header(value)
+            match = cls._match_canonical(header_norm, aliases)
+            canonical.append(match if match is not None else header_norm)
+        return canonical
 
     @staticmethod
     def _coerce_budget_number(value: Any) -> float | None:

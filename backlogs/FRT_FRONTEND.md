@@ -30,14 +30,14 @@
 
 | Status | Priority | Task ID        | Depends On | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Source                                              |
 | ------ | -------- | -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| [ ]    | P3       | `TASK-FRT-041` | None       | Production email templates and sender verified in Clerk `[-] Blocked: Requires operator Clerk dashboard access. Verification checklist in docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md (TASK-1177). Steps: (1) Verify sender email is noreply@c2pro.app with verified domain, (2) Customize sign-in/sign-up/reset templates with C2Pro branding, (3) Test email delivery from production instance.` | `docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md`        |
+| [~]    | P3       | `TASK-FRT-041` | None       | WONT-DO: Clerk free tier does not allow email template customization. Original Clerk templates are retained. Domain c2pro.io is verified. Revisit if plan is upgraded to Clerk Pro. | `docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md`        |
 
 **Statistics**:
 
 - Total: 202 tasks
 - Active: 0 (0%)
 - Completed: 201 (99.5%)
-- Blocked: 1 (FRT-041, 0.5%)
+- WONT-DO: 1 (FRT-041, 0.5%)
 
 ---
 

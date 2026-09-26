@@ -32,8 +32,29 @@ class ProjectState(TypedDict):
     retry_count: int
     tenant_id: str | None
     thread_id: str | None
+    # C2PRO P0b HITL review UX hotfix: the document's own filename, already
+    # available on the Document row _run_analysis_graph_best_effort reads --
+    # threaded through so human_interrupt_node can give a HITL reviewer a
+    # real decision title ("Approve analysis of contract.pdf") instead of a
+    # bare document_id. Never fabricated; absent (None) if unknown.
+    document_filename: str | None
     analysis_id: str | None
     human_approval_required: bool
+    # C2PRO P0b true-resume hotfix: the explicit decision a human supplied
+    # via Command(resume=...), consumed from interrupt()'s return value in
+    # human_interrupt_node. "approve" | "reject" | "" (undecided). This is
+    # what routes N13's outgoing conditional edge -- previously a resumed
+    # run kept no record of the decision at all, so approval and rejection
+    # were indistinguishable downstream.
+    human_decision: str
+    workflow_terminated: bool
+    termination_reason: str
+    # C2PRO P0b crash-safe resume V3: which ATTEMPT of which operation this
+    # run belongs to (operation_id/attempt_id/owner_token/fencing_token/
+    # decision_revision). Every descendant checkpoint therefore belongs to
+    # exactly one attempt, so a superseded attempt's descendants can never
+    # be mistaken for the current one's.
+    resume_provenance: dict[str, str]
     force_full_pipeline: bool
 
     # ── N1: Document Ingestion ──
@@ -56,6 +77,12 @@ class ProjectState(TypedDict):
     coherence_reason: str | None
     coherence_missing_dimensions: list[str]
     coherence_breakdown: CoherenceBreakdown
+
+    # ── N8b: Single-document assessment (ADR-024 / P0b L4-3) ──
+    # Versioned artifact produced ONCE at N8 (where canonical Clause[] + FindingSignal[]
+    # coexist) and persisted verbatim by N17 into analyses.result_json.
+    # None => the assessment did not run for this document (honest unavailable).
+    single_document_assessment: dict[str, Any] | None
 
     # ── N9: Budget Parser (extended) ──
     bom_items: list[BomEntry]

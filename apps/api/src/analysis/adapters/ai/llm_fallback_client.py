@@ -98,7 +98,6 @@ class FallbackAIClient(IAIClient):
 
     async def extract_json(self, system_prompt: str, user_content: str, task_type: str) -> Any:
         if not self._circuit.is_open():
-            last_exc: Exception | None = None
             for attempt in range(self.max_retries + 1):
                 if attempt > 0:
                     delay = self.base_delay * (2 ** (attempt - 1))
@@ -107,8 +106,7 @@ class FallbackAIClient(IAIClient):
                     result = await self._primary.extract_json(system_prompt, user_content, task_type)
                     self._circuit.record_success()
                     return result
-                except Exception as exc:
+                except Exception:
                     self._circuit.record_failure()
-                    last_exc = exc  # noqa: F841 — kept for potential future logging
 
         return await self._fallback.extract_json(system_prompt, user_content, task_type)

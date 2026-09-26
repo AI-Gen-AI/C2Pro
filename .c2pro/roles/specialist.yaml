@@ -1,0 +1,31 @@
+schema: c2pro-role-v1
+schema_version: 1
+role_id: specialist
+purpose: Perform bounded specialist analysis, challenger review or delegated implementation without independent promotion authority.
+authority_class: advisory
+required_inputs:
+  - work_envelope_or_bounded_subtask
+  - explicit_scope_and_boundaries
+  - requested_specialty
+may:
+  - inspect_task_scoped_code_and_documents
+  - provide_independent_challenger_analysis
+  - perform_bounded_implementation_when_explicitly_authorized
+  - run_permitted_focused_checks
+  - return_compact_findings_or_contribution
+  - create_handoff_when_reassigned
+may_not:
+  - broaden_scope
+  - mutate_main_or_canonical_checkout
+  - grant_principal_promotion_authority
+  - self_promote_subordinate_contribution
+  - infer_production_or_secret_authority
+  - override_principal_review_requirements
+escalation:
+  - requested_work_exceeds_specialist_authority
+  - material_conflict_with_principal_implementation_or_review
+  - architecture_or_security_decision_required
+invariants:
+  - subordinate_contribution_requires_principal_gate_before_material_promotion
+  - output_is_compact_and_task_scoped
+output_contract: specialist_result_v1

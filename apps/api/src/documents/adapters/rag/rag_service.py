@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import os
 import re
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import httpx
@@ -41,6 +43,31 @@ class RagProviderUnavailableError(RuntimeError):
         self.status_code = status_code
 
 
+def _deterministic_embedding(text_value: str) -> list[float]:
+    """A stable unit-length vector derived from the text itself.
+
+    Same text -> same vector, different text -> different vector, so similarity
+    search stays meaningful in tests without any network call.
+    """
+    digest = hashlib.sha256(text_value.encode("utf-8")).digest()
+    raw = [
+        ((digest[index % len(digest)] + index) % 256) / 255.0
+        for index in range(EMBEDDING_DIMENSION)
+    ]
+    norm = math.sqrt(sum(value * value for value in raw)) or 1.0
+    return [value / norm for value in raw]
+
+
+class RagProviderMisconfiguredError(RuntimeError):
+    """TS-UD-RAG-ERR-002: the embedding provider is not usable as configured.
+
+    Distinct from :class:`RagProviderUnavailableError`: retrying will not help
+    until an operator changes configuration. Kept separate so a deployment
+    missing its embedding credentials degrades loudly instead of looking like a
+    document that simply had nothing to embed.
+    """
+
+
 class RagProjectNotFoundError(RuntimeError):
     """TS-UD-RAG-ERR-001: project is not visible in the current tenant."""
 
@@ -62,6 +89,9 @@ class RagService:
         if not chunks:
             return 0
 
+        # Embed before touching any existing row: a failed/unavailable
+        # provider must leave the document's current chunks untouched
+        # rather than deleting a working RAG index and inserting nothing.
         embeddings: list[list[float]] = await _embed_texts(chunks)
         chunk_metadata = metadata or {}
 
@@ -79,7 +109,21 @@ class RagService:
                 }
             )
 
-        await _insert_chunks(self.db_session, rows)
+        # C2PRO P0b RAG reprocess idempotency: replace, not append. Ingestion
+        # for a given document is idempotent by design -- reprocessing the
+        # same immutable document must leave document_chunks reflecting only
+        # the latest ingestion, never accumulating a second copy of every
+        # chunk per reprocess (production went 23 -> 46 chunks on a single
+        # reprocess before this fix). document_chunks carries no revision
+        # lineage of its own (unlike document_revisions/project_events) --
+        # it is a derived search index, not a historical record, so
+        # replacing it here weakens no revision/history semantics.
+        await _replace_chunks(
+            self.db_session,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            rows=rows,
+        )
         return len(rows)
 
     async def answer_question(
@@ -196,9 +240,16 @@ async def _embed_texts(texts: list[str]) -> list[list[float]]:
     Protected by circuit breaker to prevent cascading failures
     when OpenAI API is unavailable.
     """
+    if settings.embeddings_mock:
+        # Provider/network boundary only: chunking, vector shape and the chunk
+        # INSERT stay exactly as in production, so the acceptance journey still
+        # exercises the seam that silently produced zero chunks. Refused in
+        # production by validate_security_posture.
+        return [_deterministic_embedding(text_value) for text_value in texts]
+
     api_key = _resolve_openai_api_key()
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured.")
+        raise RagProviderMisconfiguredError("OPENAI_API_KEY is not configured.")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
@@ -221,9 +272,25 @@ async def _embed_texts(texts: list[str]) -> list[list[float]]:
     return embeddings
 
 
-async def _insert_chunks(db_session: AsyncSession, rows: list[dict[str, Any]]) -> None:
-    if not rows:
-        return
+async def _replace_chunks(
+    db_session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    rows: list[dict[str, Any]],
+) -> None:
+    """Delete this document's existing chunks, then insert the new batch,
+    as one transaction. Reprocessing an immutable document must be
+    idempotent on the chunk count -- the old chunks are superseded, not
+    accumulated alongside the new ones.
+    """
+    delete_stmt = text(
+        "DELETE FROM document_chunks WHERE tenant_id = CAST(:tenant_id AS uuid) "
+        "AND document_id = CAST(:document_id AS uuid)"
+    )
+    deleted = await db_session.execute(
+        delete_stmt, {"tenant_id": tenant_id, "document_id": document_id}
+    )
 
     # Use raw SQL with CAST syntax instead of :: to avoid asyncpg parser issues
     for row in rows:
@@ -243,7 +310,12 @@ async def _insert_chunks(db_session: AsyncSession, rows: list[dict[str, Any]]) -
         )
         await db_session.execute(stmt, row)
     await db_session.commit()
-    logger.info("rag_chunks_inserted", count=len(rows))
+    logger.info(
+        "rag_chunks_replaced",
+        inserted=len(rows),
+        deleted=cast(Any, deleted).rowcount or 0,
+        document_id=str(document_id),
+    )
 
 
 async def _retrieve_chunks(

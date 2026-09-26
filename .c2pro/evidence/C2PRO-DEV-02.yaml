@@ -1,0 +1,20 @@
+schema: c2pro-evidence-reference-v1
+schema_version: 1
+work_id: C2PRO-DEV-02
+status: collecting
+references:
+  - kind: git_commit
+    locator: 3fa846d60cecd14239ddb0a953be5e34bede463d
+    immutable: true
+    sha256: null
+    summary: Exact main baseline after merged C2PRO-DEV-01.
+  - kind: audit
+    locator: docs/architecture/development/c2pro-dev-02-role-authority-v1.md
+    immutable: false
+    sha256: null
+    summary: Human-readable role, routing, review and handoff authority design.
+  - kind: test_report
+    locator: validation/development/c2pro-dev-02-role-authority-v1.yaml
+    immutable: false
+    sha256: null
+    summary: Machine-readable DEV-02 implementation and validation state; CI references added by PR history.

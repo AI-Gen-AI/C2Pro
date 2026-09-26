@@ -91,8 +91,40 @@ async def enrich_modified_changes(
 ) -> ChangeSet:
     """Enrich modified changes when the tenant L2 flag is on."""
 
+    enriched, _ = await enrich_modified_changes_with_provenance(
+        changeset, tenant_id, llm=llm
+    )
+    return enriched
+
+
+def _model_provenance(llm: Any) -> dict[str, str | None]:
+    """Resolve the deterministic wrapper-selected L2 model before execution."""
+    try:
+        model_config = llm.model_router.select_model_with_budget_mode(
+            task_type=AITaskType.CLASSIFICATION,
+            low_budget_mode=False,
+            input_token_estimate=0,
+            force_tier=None,
+        )
+        return {
+            "provider": "anthropic",
+            "model": model_config.name,
+            "version": model_config.name,
+        }
+    except Exception:  # pragma: no cover - defensive compatibility for alternate wrappers
+        return {"provider": type(llm).__name__, "model": None, "version": None}
+
+
+async def enrich_modified_changes_with_provenance(
+    changeset: ChangeSet,
+    tenant_id: UUID,
+    *,
+    llm: Any | None = None,
+) -> tuple[ChangeSet, dict[str, str | None] | None]:
+    """Enrich L2 changes and return immutable provider/model/version provenance."""
+
     if not await is_change_semantic_llm_enabled(tenant_id):
-        return changeset
+        return changeset, None
 
     resolved_llm = llm or get_anthropic_wrapper()
     enriched_changes: list[SemanticChange] = []
@@ -117,7 +149,7 @@ async def enrich_modified_changes(
             )
             enriched_changes.append(change)
 
-    return changeset.model_copy(update={"changes": enriched_changes})
+    return changeset.model_copy(update={"changes": enriched_changes}), _model_provenance(resolved_llm)
 
 
-__all__ = ["enrich_modified_changes"]
+__all__ = ["enrich_modified_changes", "enrich_modified_changes_with_provenance"]

@@ -1,152 +1,122 @@
 /**
- * Test Suite ID: TASK-FRT-188
- * Route Coverage: project audit report export route.
+ * Test Suite ID: TS-P0D-REPORT-UI-003
+ * Report page: Current state is the default mode; the Audit export stays available
+ * and either mode can be opened directly through `?mode=`. The URL is the single
+ * source of truth for the selected mode.
+ * Audit composition coverage (TASK-FRT-188) lives in AuditReportMode.test.tsx.
  */
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { renderWithProviders, screen, waitFor } from "@/src/tests/test-utils";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { renderWithProviders, screen } from "@/src/tests/test-utils";
 import ProjectReportPage from "./page";
 
-const useParamsMock = vi.fn();
-const useProjectMock = vi.fn();
-const getDashboardSummaryMock = vi.fn();
-const useProjectAlertsMock = vi.fn();
-const useProjectDocumentsMock = vi.fn();
-const useReviewQueueMock = vi.fn();
+const PATHNAME = "/projects/proj-report-9/report";
 
-vi.mock("next/navigation", () => ({
-  useParams: () => useParamsMock(),
+// A tiny URL store standing in for the App Router: replace() updates the query and
+// re-renders subscribers, like a real same-route navigation.
+const url = vi.hoisted(() => {
+  let query = "";
+  const listeners = new Set<() => void>();
+  return {
+    get: () => query,
+    set(next: string) {
+      query = next;
+      listeners.forEach((listener) => listener());
+    },
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+});
+const replaceMock = vi.hoisted(() => vi.fn());
+
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+  return {
+    useParams: () => ({ id: "proj-report-9" }),
+    usePathname: () => PATHNAME,
+    useRouter: () => ({ replace: replaceMock }),
+    useSearchParams: () => new URLSearchParams(useSyncExternalStore(url.subscribe, url.get, url.get)),
+  };
+});
+
+vi.mock("@/components/features/report/current-state/CurrentStateReportMode", () => ({
+  CurrentStateReportMode: ({ projectId }: { projectId: string }) => (
+    <div data-testid="current-state-mode">current state for {projectId}</div>
+  ),
 }));
 
-vi.mock("@/hooks/useProject", () => ({
-  useProject: (...args: unknown[]) => useProjectMock(...args),
+vi.mock("@/components/features/report/AuditReportMode", () => ({
+  AuditReportMode: ({ projectId }: { projectId: string }) => (
+    <div data-testid="audit-mode">audit for {projectId}</div>
+  ),
 }));
 
-vi.mock("@/hooks/useProjectDocuments", () => ({
-  useProjectDocuments: (...args: unknown[]) => useProjectDocumentsMock(...args),
-}));
-
-vi.mock("@/lib/api/services/dashboard", () => ({
-  getDashboardSummary: (...args: unknown[]) => getDashboardSummaryMock(...args),
-}));
-
-vi.mock("@/lib/api/generated/alerts/alerts", () => ({
-  useListProjectAlertsApiV1AlertsProjectsProjectIdGet: (...args: unknown[]) =>
-    useProjectAlertsMock(...args),
-}));
-
-vi.mock("@/lib/api/generated/hitl/hitl", () => ({
-  useListReviewQueueApiV1HitlQueueGet: (...args: unknown[]) =>
-    useReviewQueueMock(...args),
-}));
+function openWithQuery(query: string) {
+  url.set(query);
+  renderWithProviders(<ProjectReportPage />);
+}
 
 describe("ProjectReportPage", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    useParamsMock.mockReturnValue({ id: "proj-188" });
-    useProjectMock.mockReturnValue({
-      data: {
-        id: "proj-188",
-        name: "Hospital North",
-        code: "HN-01",
-        status: "active",
-        created_at: "2026-07-01T00:00:00Z",
-        updated_at: "2026-07-10T00:00:00Z",
-      },
-      isLoading: false,
-      error: null,
-    });
-    getDashboardSummaryMock.mockResolvedValue({
-      project_id: "proj-188",
-      tenant_id: "tenant-188",
-      coherence_score: 88,
-      global_score: 88,
-      sub_scores: {},
-      weights_used: {},
-      alert_count: 1,
-      document_count: 1,
-      methodology_version: "v2",
-      score_version: "coherence-v2",
-      score_reason: null,
-      score_missing_dimensions: [],
-      last_updated: "2026-07-10T10:00:00Z",
-    });
-    useProjectAlertsMock.mockReturnValue({
-      data: {
-        items: [
-          {
-            id: "alert-1",
-            project_id: "proj-188",
-            tenant_id: "tenant-188",
-            rule_code: "DET-BUD-SUM",
-            category: "BUDGET",
-            severity: "high",
-            message: "Budget mismatch requires review.",
-            status: "open",
-            created_at: "2026-07-10T09:00:00Z",
-          },
-        ],
-        total: 1,
-      },
-      isLoading: false,
-      error: null,
-    });
-    useProjectDocumentsMock.mockReturnValue({
-      documents: [
-        {
-          id: "doc-budget",
-          name: "Budget.xlsx",
-          type: "budget",
-          extension: "xlsx",
-          url: "",
-          status: "parsed",
-        },
-      ],
-      loading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
-    useReviewQueueMock.mockReturnValue({
-      data: {
-        items: [
-          {
-            item_id: "review-1",
-            item_type: "final_decision_package",
-            current_status: "approved",
-            confidence: 0.95,
-            impact_level: "high",
-            approved_by: "Rosa Reviewer",
-            approved_at: "2026-07-11T10:00:00Z",
-            sla_due_date: "2026-07-12T10:00:00Z",
-            created_at: "2026-07-10T10:00:00Z",
-            item_data: { summary: "Decision package approved for release." },
-          },
-        ],
-        total: 1,
-      },
-      isLoading: false,
-      error: null,
+    url.set("");
+    replaceMock.mockReset();
+    replaceMock.mockImplementation((href: string) => {
+      url.set(href.includes("?") ? href.slice(href.indexOf("?") + 1) : "");
     });
   });
 
-  it("composes the audit report from project, dashboard, alerts, and document sources", async () => {
-    renderWithProviders(<ProjectReportPage />);
+  it("opens on the current state report for the project", () => {
+    openWithQuery("");
+    expect(screen.getByRole("tab", { name: "Current state" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("current-state-mode")).toHaveTextContent("current state for proj-report-9");
+    expect(screen.queryByTestId("audit-mode")).toBeNull();
+    expect(replaceMock).not.toHaveBeenCalled();
+  });
 
-    await waitFor(() => {
-      expect(getDashboardSummaryMock).toHaveBeenCalledWith("proj-188");
-    });
+  it("keeps the audit export reachable as a second mode and reflects it in the URL", async () => {
+    const user = userEvent.setup();
+    openWithQuery("");
+    await user.click(screen.getByRole("tab", { name: "Audit export" }));
+    expect(replaceMock).toHaveBeenLastCalledWith(`${PATHNAME}?mode=audit`, { scroll: false });
+    expect(screen.getByTestId("audit-mode")).toHaveTextContent("audit for proj-report-9");
+    expect(screen.queryByTestId("current-state-mode")).toBeNull();
+  });
 
-    expect(useProjectMock).toHaveBeenCalledWith("proj-188");
-    expect(useProjectAlertsMock).toHaveBeenCalledWith("proj-188", undefined);
-    expect(useProjectDocumentsMock).toHaveBeenCalledWith("proj-188");
-    expect(useReviewQueueMock).toHaveBeenCalledWith(
-      { project_id: "proj-188", limit: 200 },
-      { query: { enabled: true } },
-    );
-    expect(
-      await screen.findByRole("heading", { name: /audit report/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Hospital North")).toBeInTheDocument();
-    expect(screen.getByText("Budget mismatch requires review.")).toBeInTheDocument();
-    expect(screen.getByText("Decision package approved for release.")).toBeInTheDocument();
+  it("opens the audit export directly from ?mode=audit", () => {
+    openWithQuery("mode=audit");
+    expect(screen.getByRole("tab", { name: "Audit export" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("audit-mode")).toBeInTheDocument();
+  });
+
+  it("falls back to the current state report for an unknown mode", () => {
+    openWithQuery("mode=pdf");
+    expect(screen.getByRole("tab", { name: "Current state" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("drops the mode parameter when returning to the current state and keeps other parameters", async () => {
+    const user = userEvent.setup();
+    openWithQuery("mode=audit&ref=email");
+    await user.click(screen.getByRole("tab", { name: "Current state" }));
+    expect(replaceMock).toHaveBeenLastCalledWith(`${PATHNAME}?ref=email`, { scroll: false });
+    expect(screen.getByTestId("current-state-mode")).toBeInTheDocument();
+  });
+
+  it("follows the URL when it changes while the page stays mounted", () => {
+    openWithQuery("mode=audit");
+    expect(screen.getByTestId("audit-mode")).toBeInTheDocument();
+
+    // e.g. the Report tab link (no mode) is clicked while the audit export is open
+    act(() => url.set(""));
+    expect(screen.getByRole("tab", { name: "Current state" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("current-state-mode")).toBeInTheDocument();
+
+    // e.g. browser back to an audit-export entry
+    act(() => url.set("mode=audit"));
+    expect(screen.getByRole("tab", { name: "Audit export" })).toHaveAttribute("aria-selected", "true");
   });
 });

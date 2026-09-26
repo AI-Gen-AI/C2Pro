@@ -871,6 +871,11 @@ export const useAcceptLegalDisclaimerApiV1ProjectsProjectIdGatesGate8DisclaimerA
     );
   };
 /**
+ * Create (or idempotently reuse) a REAL seeded sample project for the tenant (ADR-024).
+ *
+ * The previous stub returned a non-UUID id (``proj_sample_001``) that 422'd every downstream
+ * call, breaking the new-user flow. This creates a real project so onboarding lands on
+ * working endpoints; a genuine UUID + route is returned.
  * @summary Start Sample Project
  */
 export const startSampleProjectApiV1OnboardingSampleProjectStartPost = (

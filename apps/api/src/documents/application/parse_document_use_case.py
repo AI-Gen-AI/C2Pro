@@ -2,7 +2,6 @@
 Use Case for parsing a document, extracting entities, and ingesting for RAG.
 """
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import cast
 from uuid import UUID
 
@@ -11,12 +10,14 @@ from fastapi import HTTPException, status
 
 from src.core.json_types import JsonDict
 from src.core.tenants.types import require_tenant_id
+from src.documents.application.document_source import fetch_source_file, resolve_source_revision
 from src.documents.domain.models import DocumentStatus
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.entity_extraction_service import IEntityExtractionService
 from src.documents.ports.file_parser_service import IFileParserService
 from src.documents.ports.rag_ingestion_service import IRagIngestionService
 from src.documents.ports.storage_service import IStorageService
+from src.temporal.ports.document_revision_repository import IDocumentRevisionRepository
 
 logger = structlog.get_logger()
 
@@ -122,12 +123,14 @@ class ParseDocumentUseCase:
         file_parser_service: IFileParserService,
         entity_extraction_service: IEntityExtractionService,
         rag_ingestion_service: IRagIngestionService,
+        revision_repository: IDocumentRevisionRepository | None = None,
     ):
         self.document_repository = document_repository
         self.storage_service = storage_service
         self.file_parser_service = file_parser_service
         self.entity_extraction_service = entity_extraction_service
         self.rag_ingestion_service = rag_ingestion_service
+        self.revision_repository = revision_repository
 
     async def execute(self, tenant_id: UUID, document_id: UUID, user_id: UUID) -> None:  # noqa: ARG002 — user_id reserved for future audit/permissions
         scoped_tenant_id = require_tenant_id(tenant_id)
@@ -143,11 +146,21 @@ class ParseDocumentUseCase:
         await self.document_repository.commit()
 
         try:
-            # 3. Download the file
-            # Assuming storage_url will be based on document.id and its extension
-            # For now, we mimic the original service's logic: extract filename from what would be storage_url
-            file_name_in_storage = f"{document.id}{Path(document.filename).suffix}" # Construct based on stored ID and original extension
-            file_path = await self.storage_service.download_file(file_name_in_storage)
+            # 3. Download the immutable bytes of the current revision (P0b); a document
+            # without revision lineage falls back to its legacy object.
+            revision = (
+                await resolve_source_revision(
+                    revision_repository=self.revision_repository,
+                    document_id=document.id,
+                    tenant_id=scoped_tenant_id,
+                    revision_id=None,
+                )
+                if self.revision_repository is not None
+                else None
+            )
+            file_path = await fetch_source_file(
+                storage=self.storage_service, document=document, revision=revision
+            )
 
             # 4. Parse the document file
             parsed_payload = await self.file_parser_service.parse_document_file(document, file_path)

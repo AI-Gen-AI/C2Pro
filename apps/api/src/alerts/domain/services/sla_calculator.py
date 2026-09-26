@@ -147,7 +147,7 @@ class SLACalculator:
         return SLACalculation(
             policy_name=policy_name,
             due_at=due_at,
-            hours_remaining=int(hours_remaining) if hours_remaining >= 0 else int(hours_remaining),
+            hours_remaining=int(hours_remaining),
             is_overdue=is_overdue,
         )
 

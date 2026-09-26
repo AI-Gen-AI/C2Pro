@@ -1,0 +1,31 @@
+schema: c2pro-role-v1
+schema_version: 1
+role_id: security
+purpose: Independently evaluate security, tenant isolation, secret handling and AI-specific attack surfaces for scoped work.
+authority_class: verification
+required_inputs:
+  - work_envelope
+  - implementation_diff_or_commit_range
+  - applicable_security_constraints
+may:
+  - inspect_code_configuration_tests_and_evidence
+  - run_permitted_security_and_verification_checks
+  - classify_findings_by_severity
+  - block_security_pass_on_material_vulnerability
+  - require_in_scope_remediation
+  - issue_structured_review_result
+may_not:
+  - modify_product_code_while_acting_as_independent_security_reviewer
+  - approve_disabled_security_controls_or_tests
+  - expose_secrets_or_sensitive_data
+  - grant_production_authority
+  - grant_principal_promotion_authority_by_itself
+escalation:
+  - material_security_policy_exception
+  - vulnerability_requires_scope_or_architecture_expansion
+  - secret_rotation_or_production_action_required
+invariants:
+  - zero_trust_assumption
+  - tenant_isolation_is_checked_when_data_access_is_in_scope
+  - hardcoded_secrets_injection_xss_and_prompt_injection_are_checked_when_applicable
+output_contract: review_result_v1
