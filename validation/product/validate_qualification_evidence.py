@@ -355,6 +355,16 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
                 "missing runtime binding planes: " + ", ".join(sorted(missing_planes))
             )
 
+        deployment_binding_refs = [
+            binding.get("deployment_evidence_ref")
+            for binding in runtime_planes.values()
+            if _non_empty_string(binding.get("deployment_evidence_ref"))
+        ]
+        if len(deployment_binding_refs) == 2 and len(set(deployment_binding_refs)) != 2:
+            problems.append(
+                "backend and frontend runtime bindings must reference distinct deployment evidence"
+            )
+
     assertion_rows = doc.get("assertions")
     assertion_statuses: dict[str, str] = {}
     if not isinstance(assertion_rows, list) or not assertion_rows:
