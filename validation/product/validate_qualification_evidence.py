@@ -127,8 +127,9 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
 
     if doc.get("schema") != SCHEMA_ID:
         problems.append(f"schema must be {SCHEMA_ID}")
-    if doc.get("schema_version") != 1:
-        problems.append("schema_version must be 1")
+    schema_version = doc.get("schema_version")
+    if type(schema_version) is not int or schema_version != 1:
+        problems.append("schema_version must be integer 1")
     if doc.get("lifecycle_authority") is not False:
         problems.append("lifecycle_authority must be false")
     if doc.get("repository") != "AI-Gen-AI/C2Pro":
