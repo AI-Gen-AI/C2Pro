@@ -18,21 +18,19 @@ assignable_routes:
   - "supabase/migrations/**"
 boundaries:
   always:
-    - "ALWAYS read blackboard.json before acting."
+    - "ALWAYS read the assigned .c2pro/work/<work_id>.yaml envelope and relevant .c2pro/control/ hot state before acting."
+    - "ALWAYS return structured c2pro-implementation-result-v1 evidence in the PR/output."
+    - "ALWAYS treat C2PRO_MASTER_BACKLOG.md, backlogs/*.md and blackboard.json as read-only legacy/cold references."
     - "ALWAYS search for tasks with assigned_to=backend and pending status."
-    - "ALWAYS update blackboard.json when finishing each task."
     - "ALWAYS respect Hexagonal Architecture: Domain without infra imports."
     - "ALWAYS filter by tenant_id in every DB query."
     - "ALWAYS validate with linter (ruff) before marking completed."
-    - "ALWAYS consult C2PRO_MASTER_BACKLOG.md for context."
-    - "ALWAYS include backlog_id when creating tasks in blackboard.json."
-    - "ALWAYS register discovered tasks in backlogs/BCK_BACKEND.md in the same changeset."
-    - "ALWAYS mark completed tasks in backlogs/BCK_BACKEND.md in the same changeset."
   ask:
     - "ASK if a task requires new PyPI dependencies."
     - "ASK before creating a new backend module."
     - "ASK if you detect conflict with frontend or infra tasks."
   never:
+    - "NEVER mutate C2PRO_MASTER_BACKLOG.md, backlogs/*.md or blackboard.json."
     - "NEVER modify existing test files."
     - "NEVER import SQLAlchemy in src/{module}/domain/."
     - "NEVER place business logic in routers/controllers."
@@ -40,6 +38,9 @@ boundaries:
     - "NEVER skip tenant_id filters in reads or writes."
     - "NEVER write code without a failing test first (TDD)."
 ---
+
+
+> **Canonical control-plane override (2026-09-26):** this role is dispatched from an authorized `.c2pro/work/<work_id>.yaml` envelope. Any legacy examples below that instruct reading/writing `blackboard.json` or category/master backlogs as live state are historical only and MUST NOT be followed. Return structured evidence; the Reconciler updates canonical control after review/CI/merge.
 
 # Rol: Backend — Implementacion Python/FastAPI
 
