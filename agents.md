@@ -216,25 +216,19 @@ When the user provides a Suite ID:
 2. `RED`: generate failing tests under `apps/api/tests/...`.
 3. `GREEN`: implement minimal code under `apps/api/src/...`.
 4. `REFACTOR`: improve only after passing tests.
-5. Update project tracking docs.
+5. Return structured completion evidence; canonical tracking is reconciled separately.
 
 ## Tracking Updates
 
-After completing a suite:
+After completing a suite or assigned work item:
 
-- Update `C2PRO_MASTER_BACKLOG.md`.
-- Update `docs/testing/C2PRO_TDD_BACKLOG_v1.0.md` when suite tracking changes.
-- Update `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md` when platform-level architecture changes.
-
-After completing any backlog task:
-
-- Mark the task state in `C2PRO_MASTER_BACKLOG.md`.
-- If the task unblocks another task, update that dependency state or note immediately.
+- **Do not update or mark** `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md`, or `blackboard.json`; they are legacy/cold references for modern `C2PRO-*` work.
+- Return the structured result required by the assigned role/work envelope, including completed work, tests, findings, residual risks, and dependency/unblock information.
+- Modify testing or architecture documentation only when that document is explicitly inside the assigned work scope; otherwise report the required documentation follow-up in structured evidence.
+- The Master Reconciler updates canonical `.c2pro` execution state after CI/merge evidence is complete.
 - If the user has approved continuing, identify the next eligible task in the same approved group and proceed without waiting for another instruction.
 
-Use this completion note format when applicable:
-
-- `[x] Implemented (Unit Tests & Domain Logic)`
+A human-readable completion note may accompany the structured result, but it never substitutes for canonical reconciliation.
 
 ## Agent Orchestration
 
@@ -279,8 +273,8 @@ Change the assignment at any time — no role files need modification.
 Shared state:
 
 - `blackboard.json` — ephemeral session state (active tasks, retries, errors, role assignments)
-- `C2PRO_MASTER_BACKLOG.md` — permanent project task register (cold read source of truth)
-- The Planner reads the Backlog for context, writes the session plan to the Blackboard.
+- `C2PRO_MASTER_BACKLOG.md` — legacy/cold historical task register; read-only context, **not current authority**
+- The Planner reads legacy material only for reconciliation context and writes modern planning/control state through the canonical `.c2pro` plane.
 
 ### Blackboard Integration & Task Lifecycle
 
