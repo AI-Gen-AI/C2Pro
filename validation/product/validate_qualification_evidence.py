@@ -396,12 +396,19 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
             if not isinstance(refs, list) or not refs:
                 problems.append(f"{where}.evidence_refs must be non-empty")
             else:
+                assertion_ref_ids: set[str] = set()
                 for ref_id in refs:
                     if not _non_empty_string(ref_id):
                         problems.append(
                             f"{where}.evidence_refs entries must be non-empty strings"
                         )
                         continue
+                    if ref_id in assertion_ref_ids:
+                        problems.append(
+                            f"{where}.evidence_refs contains duplicate id {ref_id!r}"
+                        )
+                    else:
+                        assertion_ref_ids.add(ref_id)
                     if ref_id not in evidence_ids:
                         problems.append(
                             f"{where}.evidence_refs references unknown id {ref_id!r}"
@@ -597,9 +604,19 @@ def main(control_loader: Any = load_control_at_commit) -> int:
     )
     parser.parse_args()
 
+    if DEFAULT_EVIDENCE_DIR.is_symlink():
+        print("PRODUCT_QUALIFICATION_EVIDENCE=INVALID_ROOT")
+        print("  - evidence directory must not be a symlink")
+        return 1
+
     if not DEFAULT_EVIDENCE_DIR.exists():
         print("PRODUCT_QUALIFICATION_EVIDENCE=NO_BUNDLES")
         return 0
+
+    if not DEFAULT_EVIDENCE_DIR.is_dir():
+        print("PRODUCT_QUALIFICATION_EVIDENCE=INVALID_ROOT")
+        print("  - evidence path must be a directory")
+        return 1
 
     bundle_paths = sorted(DEFAULT_EVIDENCE_DIR.glob("*.yaml"))
     if not bundle_paths:
