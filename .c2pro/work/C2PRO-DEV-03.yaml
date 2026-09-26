@@ -8,6 +8,8 @@ branch: docs/dev-03-principal-readiness-restart-20260926
 risk_class: material
 scope:
   - refresh non-secret VPS host identity binary provenance and typed auth readiness for Claude Code and Codex
+  - resolve the active CLI executable to its actual installation root before version or qualification claims
+  - prove a minimal real execution uses the expected identity; login status alone is not sufficient
   - reconcile C2Pro principal-capable semantics against current AI-Gen Agent Factory route role qualification and live invocation health
   - prepare fresh job-bound Codex implementation qualification only after a fresh provider-endpoint preflight closes the current degraded invocation path
   - prepare Claude architecture and system-coherence qualification only after current route-health revalidation
@@ -53,7 +55,7 @@ acceptance_criteria:
   - no secret material is written to Git evidence
 required_tests:
   - DEV-03R0 exact-baseline and authority-model contract
-  - DEV-03R1 non-secret host identity and binary refresh
+  - DEV-03R1 non-secret host identity active-executable provenance and minimal execution-identity smoke
   - DEV-03R2 route-role eligibility reconciliation
   - DEV-03R3 Codex provider-endpoint preflight and bounded implementation qualification
   - DEV-03R4 Claude bounded architecture-coherence qualification or explicit blocked result
@@ -65,6 +67,8 @@ evidence_required:
   - exact_c2pro_main_sha
   - exact_ai_gen_main_sha
   - current_worker_identity_and_binary_provenance
+  - active_executable_resolution_and_installation_root
+  - minimal_execution_identity_smoke_without_secret_disclosure
   - typed_auth_state_without_secret_material
   - current_route_role_qualification_matrix
   - fresh_job_authority_and_consumption_evidence
