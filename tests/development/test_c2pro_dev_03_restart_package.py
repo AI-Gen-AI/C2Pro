@@ -70,6 +70,25 @@ def test_dev03_claude_route_health_fails_closed() -> None:
     )
 
 
+def test_dev03_requires_active_executable_and_real_identity_smoke() -> None:
+    readiness = _load(READINESS)
+    invariants = readiness["diagnostic_invariants"]
+
+    assert invariants["login_status_alone_is_not_execution_identity_proof"] is True
+    assert invariants["active_executable_must_be_resolved_before_update_or_qualification"] is True
+    assert invariants["raw_auth_payload_must_never_be_recorded"] is True
+    assert invariants["workspace_specific_failure_must_be_isolated_before_auth_conclusion"] is True
+
+    for principal in ("codex", "claude_code"):
+        worker = readiness["principal_workers"][principal]
+        assert worker["active_executable_provenance_state"] == "REVALIDATE_REQUIRED"
+        assert worker["minimal_execution_identity_smoke_required"] is True
+
+    done = readiness["done_definition"]
+    assert done["active_executable_provenance_required"] is True
+    assert done["minimal_execution_identity_smoke_required"] is True
+
+
 def test_dev03_codex_route_qualification_does_not_hide_provider_degradation() -> None:
     readiness = _load(READINESS)
     codex = readiness["principal_workers"]["codex"]
