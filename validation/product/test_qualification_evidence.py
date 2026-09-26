@@ -19,9 +19,16 @@ import validate_qualification_evidence as q  # noqa: E402
 def _evidence() -> list[dict]:
     return [
         {
-            "id": "deploy",
+            "id": "deploy-backend",
             "kind": "deployment",
-            "ref": "deployment:prod:abc",
+            "ref": "railway:deployment:backend-prod",
+            "immutable": True,
+            "sha256": None,
+        },
+        {
+            "id": "deploy-frontend",
+            "kind": "deployment",
+            "ref": "vercel:deployment:frontend-prod",
             "immutable": True,
             "sha256": None,
         },
@@ -87,7 +94,22 @@ def _doc(capability: str = "P0b") -> dict:
         "capability_id": capability,
         "target_state": "PROD_VALIDATED",
         "environment": "production",
-        "deployed_runtime_sha": "1" * 40,
+        "runtime_bindings": [
+            {
+                "plane": "backend",
+                "provider": "railway",
+                "commit_sha": "1" * 40,
+                "terminal_state": "SUCCESS",
+                "deployment_evidence_ref": "deploy-backend",
+            },
+            {
+                "plane": "frontend",
+                "provider": "vercel",
+                "commit_sha": "4" * 40,
+                "terminal_state": "READY",
+                "deployment_evidence_ref": "deploy-frontend",
+            },
+        ],
         "observed_at": "2026-09-26T10:00:00Z",
         "scenario": scenario,
         "assertions": [
@@ -99,14 +121,11 @@ def _doc(capability: str = "P0b") -> dict:
     }
 
 
-def _control(
-    reconciled_sha: str = "2" * 40,
-    runtime_sha: str = "1" * 40,
-) -> dict:
+def _control(reconciled_sha: str = "2" * 40) -> dict:
     return {
         "production_position": {
             "reconciled_against_main_sha": reconciled_sha,
-            "deployed_runtime_sha": runtime_sha,
+            "deployed_runtime_sha": "UNVERIFIED",
         }
     }
 
@@ -124,15 +143,22 @@ def test_control_baseline_sha_must_match_canonical_product_control() -> None:
     assert any("control_baseline_sha does not match" in problem for problem in problems)
 
 
-def test_runtime_sha_must_match_canonical_product_control() -> None:
+def test_composite_runtime_shas_may_differ() -> None:
     doc = _doc()
-    problems = q.validate_against_control(doc, _control(runtime_sha="4" * 40))
-    assert any("deployed_runtime_sha does not match" in problem for problem in problems)
+    backend = next(
+        binding for binding in doc["runtime_bindings"] if binding["plane"] == "backend"
+    )
+    frontend = next(
+        binding for binding in doc["runtime_bindings"] if binding["plane"] == "frontend"
+    )
+    assert backend["commit_sha"] != frontend["commit_sha"]
+    assert q.validate_document(doc) == []
 
 
-def test_unverified_canonical_runtime_blocks_qualification() -> None:
-    problems = q.validate_against_control(_doc(), _control(runtime_sha="UNVERIFIED"))
-    assert any("Product Control deployed_runtime_sha" in problem for problem in problems)
+def test_product_control_legacy_runtime_singleton_does_not_rebind_evidence() -> None:
+    control = _control()
+    control["production_position"]["deployed_runtime_sha"] = "f" * 40
+    assert q.validate_against_control(_doc(), control) == []
 
 
 def test_boolean_schema_version_is_rejected() -> None:
@@ -395,12 +421,11 @@ def test_validate_path_uses_bundle_versioned_control_snapshot() -> None:
 def test_historical_bundle_does_not_rebind_to_later_current_control() -> None:
     doc = _doc()
     historical_control = _control()
-    later_control = _control(reconciled_sha="9" * 40, runtime_sha="8" * 40)
+    later_control = _control(reconciled_sha="9" * 40)
 
     assert q.validate_against_control(doc, historical_control) == []
     later_problems = q.validate_against_control(doc, later_control)
     assert any("control_baseline_sha does not match" in p for p in later_problems)
-    assert any("deployed_runtime_sha does not match" in p for p in later_problems)
 
 
 def test_invalid_control_commit_sha_fails_closed() -> None:
@@ -477,11 +502,41 @@ def test_pass_requires_deployment_and_persisted_entity_evidence() -> None:
     assert any("requires persisted_entity evidence" in problem for problem in problems)
 
 
-def test_unverified_runtime_sha_fails() -> None:
+def test_unverified_runtime_binding_sha_fails() -> None:
     doc = _doc()
-    doc["deployed_runtime_sha"] = "UNVERIFIED"
+    doc["runtime_bindings"][0]["commit_sha"] = "UNVERIFIED"
     problems = q.validate_document(doc)
-    assert any("40-character SHA" in problem for problem in problems)
+    assert any("commit_sha must be an exact observed 40-character SHA" in problem for problem in problems)
+
+
+def test_runtime_bindings_require_both_planes() -> None:
+    doc = _doc()
+    doc["runtime_bindings"] = [
+        binding
+        for binding in doc["runtime_bindings"]
+        if binding["plane"] == "backend"
+    ]
+    problems = q.validate_document(doc)
+    assert any("exactly backend and frontend" in problem for problem in problems)
+
+
+def test_runtime_binding_requires_matching_provider_and_terminal_state() -> None:
+    doc = _doc()
+    doc["runtime_bindings"][0]["provider"] = "vercel"
+    doc["runtime_bindings"][0]["terminal_state"] = "READY"
+    problems = q.validate_document(doc)
+    assert any("provider must be railway for backend" in problem for problem in problems)
+    assert any("terminal_state must be SUCCESS for backend" in problem for problem in problems)
+
+
+def test_runtime_binding_requires_deployment_evidence_reference() -> None:
+    doc = _doc()
+    doc["runtime_bindings"][0]["deployment_evidence_ref"] = "api"
+    problems = q.validate_document(doc)
+    assert any(
+        "deployment_evidence_ref must reference deployment evidence" in problem
+        for problem in problems
+    )
 
 
 def test_evidence_bundle_cannot_claim_lifecycle_state() -> None:
