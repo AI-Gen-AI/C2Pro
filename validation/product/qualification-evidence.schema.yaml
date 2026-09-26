@@ -31,7 +31,8 @@ properties:
     const: validation/product/c2pro-master-product-control-v1.yaml
   control_baseline_sha:
     type: string
-    pattern: '^[0-9a-f]{40}
+    pattern: '^[0-9a-f]{40}$'
+  capability_id:
     enum: [P0b, P0c, P0d]
   target_state:
     const: PROD_VALIDATED
