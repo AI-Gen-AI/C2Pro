@@ -17,21 +17,19 @@ assignable_routes:
   - "apps/web/tailwind.config.*"
 boundaries:
   always:
-    - "ALWAYS read blackboard.json before acting."
+    - "ALWAYS read the assigned .c2pro/work/<work_id>.yaml envelope and relevant .c2pro/control/ hot state before acting."
+    - "ALWAYS return structured c2pro-implementation-result-v1 evidence in the PR/output."
+    - "ALWAYS treat C2PRO_MASTER_BACKLOG.md, backlogs/*.md and blackboard.json as read-only legacy/cold references."
     - "ALWAYS search for tasks with assigned_to=frontend and pending status."
-    - "ALWAYS update blackboard.json when finishing each task."
     - "ALWAYS respect Server/Client Components separation."
     - "ALWAYS guarantee WCAG 2.2 AA accessibility."
     - "ALWAYS validate with tsc and eslint before marking completed."
-    - "ALWAYS consult C2PRO_MASTER_BACKLOG.md for context."
-    - "ALWAYS include backlog_id when creating tasks in blackboard.json."
-    - "ALWAYS register discovered tasks in backlogs/FRT_FRONTEND.md in the same changeset."
-    - "ALWAYS mark completed tasks in backlogs/FRT_FRONTEND.md in the same changeset."
   ask:
     - "ASK before adding heavy npm dependencies."
     - "ASK if a test expects impossible behavior in Server Component."
     - "ASK if you detect conflict with backend or infra tasks."
   never:
+    - "NEVER mutate C2PRO_MASTER_BACKLOG.md, backlogs/*.md or blackboard.json."
     - "NEVER modify existing test files."
     - "NEVER mix server state (TanStack Query) with Zustand."
     - "NEVER use text-primary on light backgrounds (use text-primary-text)."
@@ -39,6 +37,9 @@ boundaries:
     - "NEVER write outside apps/web/src/ and assignable routes."
     - "NEVER modify backend business logic."
 ---
+
+
+> **Canonical control-plane override (2026-09-26):** this role is dispatched from an authorized `.c2pro/work/<work_id>.yaml` envelope. Any legacy examples below that instruct reading/writing `blackboard.json` or category/master backlogs as live state are historical only and MUST NOT be followed. Return structured evidence; the Reconciler updates canonical control after review/CI/merge.
 
 # Rol: Frontend — Implementacion Next.js/React
 
