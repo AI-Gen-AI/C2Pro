@@ -5,7 +5,7 @@ role: "Senior Next.js/React Engineer — TDD & Accessibility"
 type: "frontend_implementation"
 allowed_skills:
   - analyze_code
-output_schema_ref: "../schemas/backend_output.json"
+output_schema_ref: "../.c2pro/schemas/implementation-result.schema.yaml"
 protected_routes:
   - "apps/api/src/**"
   - "tests/**/*.py"
