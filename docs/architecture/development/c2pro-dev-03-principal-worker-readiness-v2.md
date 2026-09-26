@@ -34,8 +34,15 @@ AI-Gen Agent Factory currently records:
 ### DEV-03R0 — exact authority rebind
 Freeze exact C2Pro and AI-Gen SHAs and the current Agent Factory route/role policy. Any later drift requires explicit reconciliation before qualification evidence is promoted.
 
-### DEV-03R1 — non-secret host refresh
+### DEV-03R1 — non-secret host / identity / active-binary refresh
 Revalidate only non-secret facts: OS identity, account/home metadata, CLI path/version/hash/provenance, sandbox/resource primitives and typed auth state. Never dump environment/session/token contents.
+
+Recent C2Pro Codex evidence adds two mandatory rules:
+
+1. **Login state is not execution proof.** A healthy `codex login status` / typed ChatGPT auth state does not prove a real request will use the same credential identity. Qualification requires a minimal bounded execution smoke under the exact job workspace, with only redacted/typed result metadata retained.
+2. **Update target is not executable provenance.** Resolve `command -v` + `readlink -f` (or equivalent) and record the active installation root/version/hash before any update or qualification. Do not assume a generic global npm install changes the binary actually invoked by the C2Pro toolchain.
+
+For workspace-specific failures, compare a clean disposable Git workspace with the bounded C2Pro job workspace before concluding authentication is broken. Workspace/session features may be isolated only as a diagnostic; a mitigation is not promoted to canonical policy without separate review.
 
 ### DEV-03R2 — route/role reconciliation
 Build one record per principal containing worker id, OS identity, adapter, eligible roles, route state, route health, tool/workspace/network ceiling, exact model binding when applicable and fresh-authority requirement. Contradictions fail closed.
