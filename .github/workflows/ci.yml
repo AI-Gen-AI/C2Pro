@@ -55,7 +55,7 @@ jobs:
       - name: Filter changed paths
         id: filter
         if: github.event_name != 'workflow_dispatch'
-        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
             backend:
@@ -741,7 +741,7 @@ jobs:
           path: apps/api/merged-coverage.xml
           retention-days: 14
       - name: Upload merged backend coverage to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: apps/api/merged-coverage.xml
           flags: backend
@@ -873,7 +873,7 @@ jobs:
         run: pnpm test:coverage
 
       - name: Upload frontend coverage to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: apps/web/coverage/lcov.info
           flags: frontend
