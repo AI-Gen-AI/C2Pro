@@ -299,6 +299,7 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
 
     runtime_bindings = doc.get("runtime_bindings")
     runtime_planes: dict[str, dict[str, Any]] = {}
+    deployment_locator_by_plane: dict[str, str] = {}
     if not isinstance(runtime_bindings, list) or len(runtime_bindings) != 2:
         problems.append("runtime_bindings must contain exactly backend and frontend bindings")
     else:
@@ -370,6 +371,8 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
                         f"{expected['provider']}-namespaced deployment evidence "
                         "with a non-empty artifact locator"
                     )
+                else:
+                    deployment_locator_by_plane[plane] = locator
 
         missing_planes = set(RUNTIME_BINDING_CONTRACT) - set(runtime_planes)
         if missing_planes:
@@ -387,13 +390,13 @@ def validate_document(doc: dict[str, Any]) -> list[str]:
                 problems.append(
                     "backend and frontend runtime bindings must reference distinct deployment evidence"
                 )
-            deployment_artifact_refs = [
-                evidence_record_by_id.get(ref_id, {}).get("ref")
-                for ref_id in deployment_binding_refs
+            deployment_locators = [
+                deployment_locator_by_plane.get("backend"),
+                deployment_locator_by_plane.get("frontend"),
             ]
             if (
-                all(_non_empty_string(ref) for ref in deployment_artifact_refs)
-                and len(set(deployment_artifact_refs)) != 2
+                all(_non_empty_string(locator) for locator in deployment_locators)
+                and len(set(deployment_locators)) != 2
             ):
                 problems.append(
                     "backend and frontend runtime bindings must reference distinct deployment artifacts"
