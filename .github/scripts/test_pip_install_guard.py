@@ -42,6 +42,12 @@ def test_editable_remote_reject():
 def test_pip_bootstrap_classified():
     assert is_allowed(".github/workflows/ci.yml", "python -m pip install --upgrade pip")
 
+def test_pip_bootstrap_append_reject():
+    assert not is_allowed(".github/workflows/ci.yml", "python -m pip install --upgrade pip evil-package")
+
+def test_editable_append_reject():
+    assert not is_allowed(".github/workflows/ci.yml", "pip install -e . evil-package")
+
 def test_pinned_direct_url_allowlisted():
     assert is_allowed(".github/workflows/ci.yml", 'pip install "https://github.com/explosion/spacy-models/releases/download/es_core_news_md-3.7.0/es_core_news_md-3.7.0-py3-none-any.whl"')
 
@@ -116,6 +122,33 @@ jobs:
     finally:
         f_path.unlink()
 
+def test_folded_yaml_detection():
+    yaml_content = """
+name: test
+on: push
+jobs:
+  job:
+    runs-on: ubuntu-latest
+    steps:
+      - run: >
+          pip install evil-package
+"""
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:
+        f.write(yaml_content)
+        f_path = pathlib.Path(f.name)
+    try:
+        findings, parse_err = scan_file(f_path)
+        assert not parse_err
+        assert len(findings) >= 1
+        line = findings[0][1]
+        assert not is_allowed("temp.yml", line)
+    finally:
+        f_path.unlink()
+
+def test_unknown_option_fail_closed():
+    # unknown install option should not be considered canonical
+    assert not is_allowed(".github/workflows/ci.yml", "pip install -r requirements.txt --evil-option")
+
 if __name__ == "__main__":
     import sys
     tests = [
@@ -131,10 +164,14 @@ if __name__ == "__main__":
         test_editable_local_allowed,
         test_editable_remote_reject,
         test_pip_bootstrap_classified,
+        test_pip_bootstrap_append_reject,
+        test_editable_append_reject,
         test_pinned_direct_url_allowlisted,
         test_multiline_ad_hoc_red,
         test_multiline_continuation_red,
         test_multiline_canonical_green,
+        test_folded_yaml_detection,
+        test_unknown_option_fail_closed,
     ]
     failed = []
     for t in tests:

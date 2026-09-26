@@ -32,6 +32,8 @@ BASELINE_EXCEPTIONS: List[Tuple[str, str]] = [
     (".github/workflows/evaluation-regression.yml", "pip install pyyaml"),
 ]
 
+ALLOWED_CANONICAL_OPTS = {'-r', '--requirement', '-c', '--constraint'}
+
 def find_runs(node):
     if isinstance(node, dict):
         for k, v in node.items():
@@ -49,44 +51,52 @@ def extract_pip_cmd(line: str) -> str:
         return m.group(0).strip()
     return line.strip()
 
-def is_upgrade_pip(line: str) -> bool:
-    try:
-        tokens = shlex.split(line)
-        if 'pip' not in tokens or 'install' not in tokens:
-            return False
-        # find install index
-        try:
-            idx = tokens.index('install')
-        except ValueError:
-            return False
-        args = tokens[idx+1:]
-        if '--upgrade' in args:
-            up_idx = args.index('--upgrade')
-            if up_idx + 1 < len(args) and args[up_idx+1] == 'pip':
-                # ensure no other packages
-                # allow only upgrade pip
-                # check remaining tokens
-                return True
-    except ValueError:
-        return False
-    return False
-
-def is_canonical_requirements(line: str) -> bool:
+def parse_pip_args(line: str):
     try:
         tokens = shlex.split(line)
     except ValueError:
-        return False
-    # find install
+        return None
     try:
         idx = tokens.index('install')
     except ValueError:
-        return False
+        return None
     args = tokens[idx+1:]
+    return args
+
+def is_upgrade_pip(line: str) -> bool:
+    args = parse_pip_args(line)
+    if args is None:
+        return False
+    # must contain --upgrade pip and nothing else positional
+    seen_upgrade = False
+    seen_pip_target = False
+    i = 0
+    while i < len(args):
+        t = args[i]
+        if t == '--upgrade':
+            if i+1 >= len(args) or args[i+1] != 'pip':
+                return False
+            seen_upgrade = True
+            seen_pip_target = True
+            i += 2
+            continue
+        if t.startswith('-'):
+            # allow other flags? fail closed for upgrade case
+            # only allow --upgrade
+            return False
+        # positional package not allowed
+        return False
+    return seen_upgrade and seen_pip_target
+
+def is_canonical_requirements(line: str) -> bool:
+    args = parse_pip_args(line)
+    if args is None:
+        return False
     has_requirement = False
     i = 0
     while i < len(args):
         t = args[i]
-        if t in ('-r', '--requirement'):
+        if t in ('-r','--requirement'):
             has_requirement = True
             i += 1
             if i < len(args):
@@ -96,6 +106,9 @@ def is_canonical_requirements(line: str) -> bool:
             if t == '-c' and i < len(args):
                 i += 1
         elif t.startswith('-'):
+            # unknown option -> fail closed
+            if t not in ALLOWED_CANONICAL_OPTS and not t.startswith('--constraint'):
+                return False
             i += 1
             if i < len(args) and not args[i].startswith('-'):
                 i += 1
@@ -105,37 +118,52 @@ def is_canonical_requirements(line: str) -> bool:
     return has_requirement
 
 def is_editable_local(line: str) -> bool:
-    try:
-        tokens = shlex.split(line)
-    except ValueError:
+    args = parse_pip_args(line)
+    if args is None:
         return False
-    try:
-        idx = tokens.index('install')
-    except ValueError:
-        return False
-    args = tokens[idx+1:]
-    for i, t in enumerate(args):
+    i = 0
+    seen_editable = False
+    editable_target = None
+    while i < len(args):
+        t = args[i]
         if t == '-e':
+            seen_editable = True
             if i+1 >= len(args):
                 return False
             target = args[i+1]
-            # local path only
-            if target.startswith('.') or target.startswith('/'):
-                # ensure no additional packages
-                # if -e present, we still allow only -e target and options
-                # check remaining tokens
-                return True
-            else:
+            if not (target.startswith('.') or target.startswith('/')):
                 return False
-        if t.startswith('--editable'):
-            # handle --editable=path
+            editable_target = target
+            i += 2
+        elif t.startswith('--editable'):
+            seen_editable = True
             if '=' in t:
                 target = t.split('=',1)[1]
-                if target.startswith('.') or target.startswith('/'):
-                    return True
-                else:
+            else:
+                if i+1 >= len(args):
                     return False
-    # if no -e found, not editable
+                target = args[i+1]
+                i += 1
+            if not (target.startswith('.') or target.startswith('/')):
+                return False
+            editable_target = target
+            i += 1
+        elif t.startswith('-'):
+            i += 1
+            if i < len(args) and not args[i].startswith('-'):
+                i += 1
+        else:
+            # positional package not allowed alongside editable
+            return False
+    return seen_editable and editable_target is not None
+
+def tokens_contain_editable(line: str) -> bool:
+    args = parse_pip_args(line)
+    if args is None:
+        return False
+    for t in args:
+        if t == '-e' or t.startswith('--editable'):
+            return True
     return False
 
 def is_baseline_allowed(file_rel: str, line: str) -> bool:
@@ -145,28 +173,12 @@ def is_baseline_allowed(file_rel: str, line: str) -> bool:
             return True
     return False
 
-def tokens_contain_editable(line: str) -> bool:
-    try:
-        tokens = shlex.split(line)
-    except ValueError:
-        return False
-    try:
-        idx = tokens.index('install')
-    except ValueError:
-        return False
-    args = tokens[idx+1:]
-    for t in args:
-        if t == '-e' or t.startswith('--editable'):
-            return True
-    return False
-
 def is_allowed(file_rel: str, line: str) -> bool:
     if is_upgrade_pip(line):
         return True
     if is_canonical_requirements(line):
         return True
     if tokens_contain_editable(line):
-        # editable present, allow only local
         return is_editable_local(line)
     if is_baseline_allowed(file_rel, line):
         return True
@@ -176,21 +188,32 @@ def scan_file(file_path: Path) -> Tuple[List[Tuple[int, str]], bool]:
     text = file_path.read_text(encoding="utf-8")
     try:
         data = yaml.safe_load(text)
-    except yaml.YAMLError as e:
-        return [], True  # parse error flag
+    except yaml.YAMLError:
+        return [], True
     runs = list(find_runs(data))
     findings = []
+    # Try to map findings to line numbers where possible
     lines = text.splitlines()
     for run in runs:
-        run_lines = run.splitlines()
-        for rl in run_lines:
-            stripped = rl.strip()
-            if PIP_INSTALL_RE.search(stripped):
-                # find line number containing this fragment
-                for i, ll in enumerate(lines, start=1):
-                    if stripped in ll:
-                        findings.append((i, ll.strip()))
-                        break
+        # find all pip install occurrences in run string
+        for m in PIP_INSTALL_RE.finditer(run):
+            # extract the command line fragment up to next newline
+            start = m.start()
+            # find end of logical line
+            snippet_end = run.find('\n', start)
+            if snippet_end == -1:
+                snippet = run[start:].strip()
+            else:
+                snippet = run[start:snippet_end].strip()
+            # attempt to locate snippet in raw file for line number
+            line_no = -1
+            src_line = snippet
+            for i, ll in enumerate(lines, start=1):
+                if snippet in ll:
+                    line_no = i
+                    src_line = ll.strip()
+                    break
+            findings.append((line_no, src_line))
     return findings, False
 
 def scan() -> List[Tuple[str, int, str, str]]:
