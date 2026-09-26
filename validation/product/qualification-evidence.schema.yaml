@@ -58,7 +58,13 @@ properties:
           enum: [railway, vercel]
         commit_sha:
           type: string
-          pattern: '^[0-9a-f]{40}  observed_at:
+          pattern: '^[0-9a-f]{40}$'
+        terminal_state:
+          enum: [SUCCESS, READY]
+        deployment_evidence_ref:
+          type: string
+          minLength: 1
+  observed_at:
     type: string
     format: date-time
   scenario:
