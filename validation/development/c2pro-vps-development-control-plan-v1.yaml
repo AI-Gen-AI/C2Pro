@@ -1,6 +1,8 @@
 schema: c2pro-vps-development-control-plan-v1
 status: OWNER_APPROVED_IMPLEMENTATION_PLAN
 approved_at: 2026-08-24
+reconciled_at: 2026-09-26
+reconciled_against_main_sha: 610184661b9e4a1509fa1a2241433247935ba0f9
 repository: AI-Gen-AI/C2Pro
 approved_baseline_main: be9603be6b40da135123aee6e1489365378e163e
 human_plan_ref: docs/architecture/development/c2pro-vps-development-control-plan-v1.md
@@ -187,7 +189,7 @@ pr_policy:
 work_packages:
   - id: C2PRO-DEV-00
     title: Governance and context audit
-    status: NEXT
+    status: DONE
     risk: LOW
     product_behavior_change: false
     tasks:
@@ -202,7 +204,7 @@ work_packages:
 
   - id: C2PRO-DEV-01
     title: Minimal YAML control model
-    status: BLOCKED_BY_C2PRO_DEV_00
+    status: DONE
     tasks:
       - define_current_state_schema
       - define_work_queue_schema
@@ -216,7 +218,7 @@ work_packages:
 
   - id: C2PRO-DEV-02
     title: Role model and authority hierarchy
-    status: BLOCKED_BY_C2PRO_DEV_01
+    status: DONE
     tasks:
       - define_orchestrator_role
       - define_implementation_role
@@ -230,7 +232,8 @@ work_packages:
 
   - id: C2PRO-DEV-03
     title: Claude and Codex principal worker readiness
-    status: READY_PARALLEL_AFTER_AUDIT_START
+    status: READY_RESTART_REQUIRED
+    note: "PR #565 closed without merge; qualification evidence was not promoted to canonical state. Restart from current VPS/runtime evidence, do not resurrect the stale branch."
     tasks:
       - inventory_vps_installation_auth_session_state
       - install_or_update_only_if_required
@@ -246,7 +249,7 @@ work_packages:
 
   - id: C2PRO-DEV-04
     title: Development Orchestrator role
-    status: BLOCKED_BY_C2PRO_DEV_02_AND_03
+    status: BLOCKED_BY_C2PRO_DEV_03
     tasks:
       - define_state_machine
       - accept_campaign_or_work_request
@@ -316,23 +319,46 @@ work_packages:
     status: BLOCKED_BY_C2PRO_DEV_11
     exit_gate: real_campaign_completed_with_escalation_only_owner_interaction
 
+  - id: C2PRO-DEV-13
+    title: Fix unreliable local web full-test runner
+    status: READY
+    risk: NORMAL
+    product_behavior_change: false
+    tasks:
+      - fix_shell_glob_expansion_in_vitest_runner
+      - prove_local_full_test_selection_matches_intent
+      - retain_ci_as_authoritative_until_fixed
+    exit_gate: local_full_test_runner_executes_the_intended_test_set_reliably
+
+  - id: C2PRO-DEV-14
+    title: Product work-envelope namespace extension
+    status: READY
+    risk: LOW
+    product_behavior_change: false
+    note: "Reconciled from a queue item that incorrectly reused C2PRO-DEV-05, which is canonically AF-DEV integration."
+    tasks:
+      - define_product_slice_work_identity_without_c2pro_dev_namespace_abuse
+      - extend_schema_and_validator
+      - migrate_future_product_work_envelopes_to_the_new_identity_contract
+    exit_gate: product_slices_can_use_machine_validated_work_envelopes_without_colliding_with_control_work_ids
+
 execution_order:
   control_track: [C2PRO-DEV-00, C2PRO-DEV-01, C2PRO-DEV-02, C2PRO-DEV-04]
   worker_track: [C2PRO-DEV-03]
   convergence: [C2PRO-DEV-05, C2PRO-DEV-06, C2PRO-DEV-07, C2PRO-DEV-08, C2PRO-DEV-09, C2PRO-DEV-10, C2PRO-DEV-11, C2PRO-DEV-12]
 
 next_action:
-  id: C2PRO-DEV-00
-  mode: READ_ONLY_AUDIT
+  id: C2PRO-DEV-03
+  mode: RESTART_PRINCIPAL_READINESS_QUALIFICATION
   product_behavior_change: false
-  owner_micro_approval_required_during_audit: false
+  owner_micro_approval_required_during_qualification: false
+  reason: "DEV-00/01/02 are merged DONE; DEV-03 PR #565 closed without merge and remains the gate for DEV-04."
   outputs:
-    - authoritative_inventory
-    - context_token_cost_diagnosis
-    - keep_rewrite_deprecate_archive_matrix
-    - proposed_compact_yaml_schemas
-    - migration_dependencies
-    - exact_next_implementation_slice
+    - current_vps_principal_inventory
+    - claude_code_qualification_evidence
+    - codex_qualification_evidence
+    - denial_and_resource_boundary_evidence
+    - canonical_DEV_03_work_envelope
 
 success_definition:
   - owner_can_issue_bounded_high_level_objective
