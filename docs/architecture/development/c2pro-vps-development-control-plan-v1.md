@@ -1,6 +1,6 @@
 # C2Pro VPS Development Control Plan v1
 
-> **2026-09-26 reconciliation:** DEV-00 (#561), DEV-01 (#563) and DEV-02 (#564) are merged **DONE**. DEV-03 remains the next principal-readiness gate because PR #565 closed without merge; restart it from current VPS evidence rather than reviving the stale branch. DEV-04 remains blocked by DEV-03. The machine hot state is intentionally idle until a new DEV-03 work envelope is authorized. A previously mis-keyed product-envelope debt that reused DEV-05 has been reassigned to DEV-14; DEV-05 continues to mean AF-DEV integration.
+> **2026-09-26 reconciliation:** DEV-00 (#561), DEV-01 (#563) and DEV-02 (#564) are merged **DONE**. The DEV-03 restart/readiness package is now merged via #676, but it grants no provider execution authority and does not itself qualify Claude/Codex principals; fresh bounded qualification remains the next gate before DEV-04. The machine hot state stays intentionally idle until a DEV-03 qualification work envelope has valid authority. A previously mis-keyed product-envelope debt that reused DEV-05 has been reassigned to DEV-14; DEV-05 continues to mean AF-DEV integration.
 
 **Status:** OWNER APPROVED / IMPLEMENTATION PLAN
 **Date:** 2026-08-24
@@ -551,7 +551,7 @@ Tasks:
 
 ### C2PRO-DEV-03 — Claude/Codex principal worker readiness
 
-**Current status (2026-09-26): READY_RESTART_REQUIRED — PR #565 closed without merge; qualification was not promoted to canonical state.**
+**Current status (2026-09-26): READY_RESTART_REQUIRED — restart/readiness package #676 is merged, but principal qualification has not been executed/promoted and standing provider authority remains closed.**
 
 **Goal:** make Claude Code and Codex the first operational principal workers on the VPS.
 
