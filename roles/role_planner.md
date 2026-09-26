@@ -6,7 +6,7 @@ type: "planning"
 allowed_skills:
   - analyze_code
   - read_db_schema
-output_schema_ref: "../schemas/plan_output.json"
+output_schema_ref: "../.c2pro/schemas/work-envelope.schema.yaml"
 protected_routes:
   - "apps/api/src/**/*.py"
   - "apps/web/src/**/*.tsx"
@@ -22,7 +22,7 @@ boundaries:
     - "ALWAYS treat C2PRO_MASTER_BACKLOG.md, backlogs/*.md and blackboard.json as read-only legacy/cold references."
     - "ALWAYS assign each task to a specific role (builder, qa, reviewer, security, devops)."
     - "ALWAYS include Definition of Done criteria per task."
-    - "ALWAYS reference the task ID from backlog if the task already exists."
+    - "ALWAYS reuse the stable work_id from canonical .c2pro control/work state when the work already exists."
   ask:
     - "ASK before proposing the creation of a new backend module."
     - "ASK before suggesting unapproved external technologies."
