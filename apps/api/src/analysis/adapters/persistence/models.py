@@ -600,6 +600,19 @@ class DocumentArtifactORM(Base):
     tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
     payload: Mapped[JsonDict] = mapped_column(JSONB, nullable=False)
     lifecycle_status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
+    # #714 trusted-state envelope, distinct from the frozen payload.
+    # "Persisted != trusted": only trust_state='trusted' rows are canonical
+    # (ProjectGraph / Health / trusted Coherence). Legacy rows predate the
+    # HITL gate and were already treated as canonical, hence the default.
+    artifact_version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default=text("1"), nullable=False
+    )
+    artifact_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    trust_state: Mapped[str] = mapped_column(
+        String(20), default="trusted", server_default=text("'trusted'"), nullable=False
+    )
+    # Canonical engine (N8) output for this run: {coherence_score, score_version}.
+    scoring: Mapped[JsonDict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=_utcnow,
@@ -612,12 +625,31 @@ class DocumentArtifactORM(Base):
             "lifecycle_status IN ('active','superseded')",
             name="ck_document_artifacts_lifecycle",
         ),
+        CheckConstraint(
+            "trust_state IN ('proposed','trusted','rejected','superseded')",
+            name="ck_document_artifacts_trust_state",
+        ),
+        Index(
+            "uq_document_artifacts_document_version",
+            "document_id",
+            "artifact_version",
+            unique=True,
+        ),
         Index("ix_document_artifacts_project_lifecycle", "project_id", "lifecycle_status"),
+        # One canonical (active + trusted) artifact per document.
         Index(
             "uq_document_artifacts_active_document",
             "document_id",
             unique=True,
-            postgresql_where=(lifecycle_status == "active"),
+            postgresql_where=text("lifecycle_status = 'active' AND trust_state = 'trusted'"),
+        ),
+        # At most one pending proposal per document; a correction or a
+        # re-analysis supersedes the previous one in the same transaction.
+        Index(
+            "uq_document_artifacts_proposed_document",
+            "document_id",
+            unique=True,
+            postgresql_where=text("trust_state = 'proposed'"),
         ),
         {"info": {"rls_policy": "tenant_isolation"}},
     )

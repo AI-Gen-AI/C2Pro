@@ -326,6 +326,31 @@ class ResumeWorkflowUseCase:
             )
 
     @staticmethod
+    async def _enqueue_trusted_project_graph(commit: Any) -> None:
+        """Canonical Tier-2 hand-off for a newly trusted candidate (#714).
+
+        Fail-open like other projection triggers: the trusted commit is
+        already durable and ProjectGraph rebuilds from trusted artifacts, so a
+        lost enqueue is repaired by the next trusted completion. Honours the
+        per-tenant ProjectGraph flag (a no-op when it is disabled).
+        """
+        from src.core.tasks.project_graph_tasks import enqueue_project_graph
+        from src.core.tenants.types import require_tenant_id
+
+        try:
+            await enqueue_project_graph(
+                project_id=commit.project_id,
+                tenant_id=require_tenant_id(str(commit.tenant_id)),
+            )
+        except Exception:  # noqa: BLE001 - never fail a recorded decision
+            logger.warning(
+                "hitl_trusted_project_graph_enqueue_failed",
+                artifact_id=str(commit.binding.artifact_id),
+                project_id=str(commit.project_id),
+                exc_info=True,
+            )
+
+    @staticmethod
     def _project_id_for(review_item: Any) -> UUID | None:
         """The project this review belongs to (evidence, not a key)."""
         raw = (review_item.metadata or {}).get("project_id") or (
@@ -789,6 +814,7 @@ class ResumeWorkflowUseCase:
         resumed_state: dict[str, Any] = {}
         terminal_checkpoint_id: str | None = None
         correction: FinalizedCorrection | None = None
+        trusted_commits: list[Any] = []
         heartbeat_task = asyncio.create_task(self._heartbeat_loop(ownership))
         try:
             if restored is None and phase is not Phase.GRAPH_COMPLETED:
@@ -906,6 +932,7 @@ class ResumeWorkflowUseCase:
                 review_item_id=review_item.item_id,
                 session_factory=self._claim_session_factory,
                 fault=self._fault,
+                trusted_commits_out=trusted_commits,
             )
 
         except Exception as e:
@@ -939,6 +966,11 @@ class ResumeWorkflowUseCase:
         # a replay returns above and never reaches this line.
         if correction is not None:
             self._enqueue_correction_snapshot(correction, tenant_id)
+        # C2PRO #714: the exact reviewed candidate became TRUSTED inside the
+        # finalization; only now may the canonical ProjectGraph see it. Same
+        # once-only guarantee as the correction above.
+        for commit in trusted_commits:
+            await self._enqueue_trusted_project_graph(commit)
 
         # Record success metrics + audit event
         duration = time.perf_counter() - start_time

@@ -837,6 +837,7 @@ async def finalize_v3(
     review_item_id: UUID | None = None,
     session_factory: Any = None,
     fault: Any = None,
+    trusted_commits_out: list[Any] | None = None,
 ) -> FinalizedCorrection | None:
     """Commit the whole post-graph outcome in ONE fenced transaction.
 
@@ -856,6 +857,14 @@ async def finalize_v3(
     and lost-response retries never reach this point, so they cannot append
     a second one; a genuinely new final decision is a new review row, hence
     a new operation, hence its own event.
+
+    C2PRO #714: the trusted-state transition rides the SAME transaction.
+    APPROVED promotes exactly the candidate bound to this review (id +
+    version + digest) to TRUSTED; REJECTED marks it REJECTED. A stale,
+    superseded or substituted binding raises and rolls the whole
+    finalization back (fail closed). A newly committed candidate is appended
+    to ``trusted_commits_out`` so the caller can enqueue the canonical
+    ProjectGraph AFTER commit, exactly once -- replays never get here.
     """
     async with _session(session_factory, ownership.tenant_id) as session:
         row = await verify_in_transaction(session, ownership)
@@ -897,6 +906,14 @@ async def finalize_v3(
             raise RuntimeError(
                 f"Finalization could not update review row {review_row_id}; nothing committed."
             )
+
+        trusted_commit = await _apply_trust_decision(
+            session,
+            tenant_id=ownership.tenant_id,
+            review_row_id=review_row_id,
+            document_id=document_id,
+            approved=approved,
+        )
 
         if approved:
             if fault is not None:
@@ -970,6 +987,8 @@ async def finalize_v3(
         )
         await session.flush()
 
+    if trusted_commit is not None and trusted_commits_out is not None:
+        trusted_commits_out.append(trusted_commit)
     logger.info(
         "hitl_resume_finalized_v3",
         operation_id=str(ownership.operation_id),
@@ -977,6 +996,89 @@ async def finalize_v3(
         correction_event_id=str(correction.event_id) if correction else None,
     )
     return correction
+
+
+_REVIEW_BINDING_SQL = text(
+    """
+    SELECT review_metadata -> :key
+      FROM review_items
+     WHERE id = cast(:review_row_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
+    """
+)
+
+
+async def _apply_trust_decision(
+    session: Any,
+    *,
+    tenant_id: UUID,
+    review_row_id: UUID,
+    document_id: UUID | None,
+    approved: bool,
+) -> Any:
+    """#714: apply the human decision to the exact bound candidate.
+
+    Returns the TrustedCommit when an approval newly promoted a candidate,
+    else None. Raises StaleCandidateError (rolling back the finalization)
+    when the approval cannot be bound to the current exact proposal.
+    """
+    from src.analysis.adapters.persistence.document_artifact_repository import (
+        SqlAlchemyDocumentArtifactRepository,
+    )
+    from src.analysis.domain.trust import (
+        REVIEW_BINDING_KEY,
+        CandidateBinding,
+        StaleCandidateError,
+        TrustedCommitOutcome,
+    )
+    from src.core.tenants.types import require_tenant_id
+
+    tenant = require_tenant_id(str(tenant_id))
+    raw = (
+        await session.execute(
+            _REVIEW_BINDING_SQL,
+            {
+                "key": REVIEW_BINDING_KEY,
+                "review_row_id": str(review_row_id),
+                "tenant_id": str(tenant_id),
+            },
+        )
+    ).scalar_one_or_none()
+    binding = CandidateBinding.from_json(raw)
+    repo = SqlAlchemyDocumentArtifactRepository(session)
+
+    if binding is None:
+        if raw is not None:
+            raise StaleCandidateError(
+                f"Review {review_row_id} carries a malformed candidate binding"
+            )
+        if (
+            approved
+            and document_id is not None
+            and await repo.has_proposed_candidate(document_id=document_id, tenant_id=tenant)
+        ):
+            # A proposal exists that this review never saw: approving would
+            # trust unreviewed content.
+            raise StaleCandidateError(
+                f"Review {review_row_id} is not bound to the pending proposal for "
+                f"document {document_id}; refusing to trust unreviewed content"
+            )
+        # Legacy review (pre-#714): nothing was proposed, nothing to commit.
+        logger.info("hitl_trusted_commit_no_candidate", review_row_id=str(review_row_id))
+        return None
+
+    if document_id is not None and binding.document_id != document_id:
+        raise StaleCandidateError(
+            f"Review {review_row_id} binding targets document {binding.document_id}, "
+            f"not {document_id}"
+        )
+    if not approved:
+        await repo.reject_candidate(binding, tenant_id=tenant)
+        return None
+    commit = await repo.commit_candidate(binding, tenant_id=tenant)
+    if commit.outcome is TrustedCommitOutcome.ALREADY_TRUSTED:
+        return None
+    return commit
 
 
 def _append_correction_event(
