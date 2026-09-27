@@ -175,13 +175,19 @@ export default function ReviewPage() {
     if (modal.kind !== 'approve' || !reviewerName) return;
     if (!beginSubmit('approve')) return;
     try {
+      const reviewRowId = modal.item.row_id;
+      if (!reviewRowId) {
+        throw new Error(
+          'Exact review identity is unavailable. Refresh the queue before deciding.',
+        );
+      }
+      // #714: decisions from the user-facing queue target the immutable
+      // review row, never the reusable business item_id. A stale V1 modal
+      // therefore reaches V1 (now CLOSED) and fails closed instead of
+      // resolving onto an unseen V2 review for the same document.
       await approveMutation.mutateAsync({
-        // Keep the URL contract as item_id, but pin the decision to the
-        // exact row this modal shows (C2PRO #714): a replacement review for
-        // a newer candidate shares item_id, so a decision from a stale modal
-        // must reach the row it was made on and fail closed there.
-        itemId: modal.item.item_id,
-        data: { row_id: modal.item.row_id ?? undefined },
+        itemId: reviewRowId,
+        data: {},
       });
       markDecided(modal.item);
       closeModal();
@@ -199,11 +205,16 @@ export default function ReviewPage() {
     if (modal.kind !== 'reject' || rejectReason.trim().length === 0 || !reviewerName) return;
     if (!beginSubmit('reject')) return;
     try {
+      const reviewRowId = modal.item.row_id;
+      if (!reviewRowId) {
+        throw new Error(
+          'Exact review identity is unavailable. Refresh the queue before deciding.',
+        );
+      }
       await rejectMutation.mutateAsync({
-        itemId: modal.item.item_id,
+        itemId: reviewRowId,
         data: {
           reason: rejectReason.trim(),
-          row_id: modal.item.row_id ?? undefined,
         },
       });
       markDecided(modal.item);

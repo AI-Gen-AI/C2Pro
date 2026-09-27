@@ -176,14 +176,18 @@ export function ReviewItemCard({
   // distribution -- showing it as a real score would misrepresent it.
   const confidenceIsMeaningful = item.confidence > 0;
 
-  const actionsDisabled = !reviewerIdentityReady || actionsLocked || candidatePending;
+  const exactIdentityMissing = !item.row_id;
+  const actionsDisabled =
+    !reviewerIdentityReady || actionsLocked || candidatePending || exactIdentityMissing;
   const actionsTitle = actionsLocked
     ? 'Decision submitted. Refreshing the queue...'
-    : candidatePending
-      ? 'Preparing the analysis candidate for review...'
-      : !reviewerIdentityReady
-        ? 'Loading your identity...'
-        : undefined;
+    : exactIdentityMissing
+      ? 'Exact review identity unavailable. Refresh the queue before deciding.'
+      : candidatePending
+        ? 'Preparing the analysis candidate for review...'
+        : !reviewerIdentityReady
+          ? 'Loading your identity...'
+          : undefined;
 
   return (
     <div className="rounded-lg border bg-card" data-testid={`review-item-${item.item_id}`}>
