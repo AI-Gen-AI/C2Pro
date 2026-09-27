@@ -16,6 +16,16 @@ from src.documents.adapters.storage.r2_storage_service import R2StorageService
 from src.documents.ports.storage_service import IStorageService
 
 
+class _AsyncBytesBody:
+    """Async body facade so R2 downloads never block the event loop."""
+
+    def __init__(self, data: bytes) -> None:
+        self._data = data
+
+    async def read(self) -> bytes:
+        return self._data
+
+
 class _AsyncBoto3S3Client:
     """Async facade over the already-pinned synchronous boto3 S3 client."""
 
@@ -26,7 +36,14 @@ class _AsyncBoto3S3Client:
         return await asyncio.to_thread(self._client.put_object, **kwargs)
 
     async def get_object(self, **kwargs: Any) -> Any:
-        return await asyncio.to_thread(self._client.get_object, **kwargs)
+        response = await asyncio.to_thread(self._client.get_object, **kwargs)
+        body = response.get("Body") if isinstance(response, dict) else None
+        read = getattr(body, "read", None)
+        if callable(read):
+            data = await asyncio.to_thread(read)
+            response = dict(response)
+            response["Body"] = _AsyncBytesBody(bytes(data))
+        return response
 
     async def delete_object(self, **kwargs: Any) -> Any:
         return await asyncio.to_thread(self._client.delete_object, **kwargs)
