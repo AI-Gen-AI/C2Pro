@@ -31,6 +31,20 @@ def default_now_fn() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
+def _load_review_routing(control_dir: Path) -> dict[str, Any]:
+    routing_path = control_dir / "routing.yaml"
+    if not routing_path.exists():
+        raise ValidationError("Missing .c2pro/control/routing.yaml for review authorization.")
+    try:
+        with open(routing_path, encoding="utf-8") as handle:
+            routing = yaml.safe_load(handle) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise ReconciliationError(f"Failed to load routing.yaml: {exc}") from exc
+    if not isinstance(routing, dict):
+        raise ValidationError("routing.yaml must be a mapping.")
+    return routing
+
+
 def _validate_reconciliation_reviews(
     review_results: list[dict[str, Any]] | None,
     *,
@@ -38,8 +52,10 @@ def _validate_reconciliation_reviews(
     work_id: str,
     expected_pr: object,
     expected_head_sha: object,
+    implementation_worker_id: object,
+    routing: dict[str, Any],
 ) -> None:
-    """Enforce queue review policy and reject supplied blocking review evidence."""
+    """Enforce trusted reviewer eligibility, independence, and queue review policy."""
     if review_policy not in {"optional", "independent_principal", "principal_and_challenger"}:
         raise ValidationError(f"Unsupported review_policy for '{work_id}': {review_policy!r}")
 
@@ -58,6 +74,27 @@ def _validate_reconciliation_reviews(
     if not isinstance(expected_head_sha, str):
         raise ValidationError(
             "Missing live pr_head_sha for structured review reconciliation."
+        )
+
+    workers = routing.get("workers")
+    principal_gate = routing.get("principal_gate")
+    if not isinstance(workers, dict) or not isinstance(principal_gate, dict):
+        raise ValidationError("routing.yaml review authority mappings are missing or malformed.")
+
+    principal_eligible = principal_gate.get("eligible_workers")
+    if not isinstance(principal_eligible, list) or any(
+        not isinstance(worker, str) for worker in principal_eligible
+    ):
+        raise ValidationError("routing.yaml principal_gate.eligible_workers is malformed.")
+    principal_eligible_set = set(principal_eligible)
+
+    if (
+        not isinstance(implementation_worker_id, str)
+        or not implementation_worker_id.strip()
+        or implementation_worker_id not in workers
+    ):
+        raise ValidationError(
+            "Missing, unknown, or invalid trusted implementation_worker_id for review reconciliation."
         )
 
     principal_reviews: list[dict[str, Any]] = []
@@ -99,9 +136,33 @@ def _validate_reconciliation_reviews(
                 f"Structured review verdict does not permit reconciliation for '{work_id}'."
             )
 
-        if review.get("role") == "independent_reviewer":
+        worker_id = review["worker_id"]
+        role = review["role"]
+        worker = workers.get(worker_id)
+        if not isinstance(worker, dict):
+            raise ValidationError(
+                f"Structured review worker '{worker_id}' is not a trusted routing worker."
+            )
+        eligible_roles = worker.get("eligible_roles")
+        if not isinstance(eligible_roles, list) or role not in eligible_roles:
+            raise ValidationError(
+                f"Structured review worker '{worker_id}' is not eligible for role '{role}'."
+            )
+
+        if role == "independent_reviewer":
+            if (
+                worker_id not in principal_eligible_set
+                or worker.get("principal_gate_eligible") is not True
+            ):
+                raise ValidationError(
+                    f"Structured principal reviewer '{worker_id}' is not principal-gate eligible."
+                )
+            if worker_id == implementation_worker_id:
+                raise ValidationError(
+                    f"Structured principal reviewer '{worker_id}' must differ from implementation worker."
+                )
             principal_reviews.append(review)
-        elif review.get("role") == "specialist":
+        elif role == "specialist":
             challenger_reviews.append(review)
 
     if review_policy in {"independent_principal", "principal_and_challenger"}:
@@ -115,14 +176,15 @@ def _validate_reconciliation_reviews(
             raise ValidationError(
                 f"Work '{work_id}' requires an approved challenger specialist review."
             )
-        principal_workers = {review.get("worker_id") for review in principal_reviews}
+        principal_workers = {review["worker_id"] for review in principal_reviews}
         if not any(
-            review.get("worker_id") not in principal_workers
+            review["worker_id"] not in principal_workers
             for review in challenger_reviews
         ):
             raise ValidationError(
                 f"Work '{work_id}' challenger must use a worker distinct from the principal reviewer."
             )
+
 
 
 def reconcile_result(
@@ -143,6 +205,7 @@ def reconcile_result(
               - 'remote_head_sha': actual SHA of remote branch (worker HEAD)
               - 'pr_head_sha': actual SHA of Pull Request on GitHub (must match remote_head_sha)
               - 'pr_number': live Pull Request number when structured review evidence is supplied
+              - 'implementation_worker_id': trusted execution worker identity used for reviewer independence
               - 'pr_base_sha': immutable baseline base SHA of the PR
               - 'pr_base_branch': base branch of the PR (must be 'main')
               - 'pr_state': state of PR ('open', 'closed_unmerged', 'merged')
@@ -347,12 +410,15 @@ def reconcile_result(
 
     # Review authorization is evaluated only after immutable Git/CI/merge evidence and
     # the canonical queue item are known, but before any canonical-state mutation.
+    review_routing = _load_review_routing(control_dir)
     _validate_reconciliation_reviews(
         review_results,
         review_policy=work_item.get("review_policy"),
         work_id=work_id,
         expected_pr=remote_evidence.get("pr_number"),
         expected_head_sha=remote_evidence.get("pr_head_sha"),
+        implementation_worker_id=remote_evidence.get("implementation_worker_id"),
+        routing=review_routing,
     )
 
     # Process and classify findings based on Quality Delta Rule
