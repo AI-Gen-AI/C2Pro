@@ -106,7 +106,7 @@ The previous control snapshot was anchored to `454637863c502f6825d158af551511e0e
 - **HITL:** #633/#638/#641/#646/#650 materially hardened pause/resume, exact review identity, fenced recovery and final-decision audit idempotency.
 - **Trust/operability:** Next.js security moved to 16.3.6 (#654), the blocking E2E gate now runs against the production Next runtime (#655), and CRITICAL severity is preserved end-to-end (#656).
 - **Qualification evidence:** #678 is merged. P0b/P0c/P0d evidence bundles are machine-validated, historically bound and explicitly non-authoritative; Product Control still owns lifecycle promotion.
-- **Deployment identity:** Railway backend Watch Paths are live-proven (`#678` and `#699` main commits were `SKIPPED` while backend-changing #697 deployed). Vercel frontend filtering is merged via #699; live skip verification is pending the current Vercel daily-quota reset.
+- **Deployment identity:** composite filtering is live-proven. Railway Watch Paths skip non-backend changes while backend-changing #697 deployed; after #699, docs/control-only main merges #669 and #701 did not advance Vercel production, which remains on #678.
 
 None of those facts permits collapsing the current production deployment into one repository SHA. The immediate user-value gap remains **P0b-L4-5 production evidence**: one uploaded document must reach a truthful six-category Health surface with findings, missing evidence and actionable gaps across the exact backend/frontend deployments exercised.
 
