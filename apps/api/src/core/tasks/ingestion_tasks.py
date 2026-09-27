@@ -406,24 +406,52 @@ _CLAUSE_BOUNDARY = re.compile(
 )
 
 
-def _split_contract_into_clauses(parsed_text: str) -> list[str]:
-    """Split a contract into clause-sized segments at clause-boundary markers.
+def _trimmed_clause_span(
+    parsed_text: str,
+    start_offset: int,
+    end_offset: int,
+) -> tuple[str, int, int] | None:
+    raw = parsed_text[start_offset:end_offset]
+    if not raw.strip():
+        return None
+    left_trim = len(raw) - len(raw.lstrip())
+    right_trim = len(raw) - len(raw.rstrip())
+    start = start_offset + left_trim
+    end = end_offset - right_trim
+    return parsed_text[start:end], start, end
 
-    Keeps each boundary marker with its clause body. Falls back to paragraph
-    blocks when no markers exist, so a contract is never fragmented into
-    per-sentence "clauses" (the old ``re.split`` on ``.!?`` produced hundreds of
-    meaningless one-line fragments).
-    """
-    boundaries = [m.start() for m in _CLAUSE_BOUNDARY.finditer(parsed_text)]
+
+def _split_contract_clause_spans(
+    parsed_text: str,
+) -> list[tuple[str, int, int]]:
+    """Split contract text while preserving exact source offsets."""
+    boundaries = [match.start() for match in _CLAUSE_BOUNDARY.finditer(parsed_text)]
+    spans: list[tuple[int, int]] = []
+
     if boundaries:
         cut_points = ([0] if boundaries[0] > 0 else []) + boundaries + [len(parsed_text)]
-        raw = [
-            parsed_text[cut_points[i] : cut_points[i + 1]]
-            for i in range(len(cut_points) - 1)
+        spans = [
+            (cut_points[index], cut_points[index + 1])
+            for index in range(len(cut_points) - 1)
         ]
     else:
-        raw = re.split(r"\n\s*\n+", parsed_text)
-    return [segment.strip() for segment in raw if segment.strip()]
+        cursor = 0
+        for separator in re.finditer(r"\n\s*\n+", parsed_text):
+            spans.append((cursor, separator.start()))
+            cursor = separator.end()
+        spans.append((cursor, len(parsed_text)))
+
+    result: list[tuple[str, int, int]] = []
+    for start, end in spans:
+        trimmed = _trimmed_clause_span(parsed_text, start, end)
+        if trimmed is not None:
+            result.append(trimmed)
+    return result
+
+
+def _split_contract_into_clauses(parsed_text: str) -> list[str]:
+    """Compatibility text-only view over the exact clause-span splitter."""
+    return [segment for segment, _, _ in _split_contract_clause_spans(parsed_text)]
 
 
 def _extract_contract_clauses(
@@ -439,24 +467,19 @@ def _extract_contract_clauses(
     # Build offset index from text blocks if available
     text_blocks = parsed_payload.get("text_blocks", []) if isinstance(parsed_payload, dict) else []
     block_index = _build_text_block_index(text_blocks) if text_blocks else []
-    # Map from offset to block for quick lookup
-    for index, segment in enumerate(_split_contract_into_clauses(parsed_text), start=1):
+    for index, (segment, start_offset, source_end_offset) in enumerate(
+        _split_contract_clause_spans(parsed_text),
+        start=1,
+    ):
         if len(segment) < 40:
             continue
         segment = segment[:4000]  # keep a clause clause-sized; guard OCR blobs
+        end_offset = min(source_end_offset, start_offset + len(segment))
         clause_type = _infer_contract_clause_type(segment)
-        # Find segment offset in parsed_text
-        start_offset = parsed_text.find(segment)
-        if start_offset == -1:
-            # Fallback: try stripped version
-            start_offset = parsed_text.find(segment.strip())
-        end_offset = None
-        if start_offset != -1:
-            end_offset = start_offset + len(segment)
         # Resolve overlapping blocks
         pages: list[int] = []
         bboxes: list[tuple[float, float, float, float]] = []
-        if start_offset is not None and end_offset is not None and block_index:
+        if block_index:
             for entry in block_index:
                 # Overlap check
                 if entry["end_offset"] <= start_offset or entry["start_offset"] >= end_offset:
@@ -507,8 +530,8 @@ def _extract_contract_clauses(
                 clause_type=clause_type,
                 title=segment[:80],
                 full_text=segment,
-                text_start_offset=start_offset if isinstance(start_offset, int) else None,
-                text_end_offset=end_offset if isinstance(end_offset, int) else None,
+                text_start_offset=start_offset,
+                text_end_offset=end_offset,
                 extracted_entities=extracted,
                 extraction_confidence=0.65,
                 extraction_model="deterministic-contract-ingestion",
