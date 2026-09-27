@@ -485,6 +485,36 @@ def test_live_guidance_does_not_repromote_legacy_authority() -> None:
     assert "Do not execute the legacy write steps below for new work." in legacy_guide
 
 
+
+
+
+def test_indexed_specialist_profiles_are_retired_non_operational() -> None:
+    """Historical context/working agent profiles must never regain active authority."""
+    index = (ROOT / "docs" / "ARCHITECTURE_INDEX.md").read_text(encoding="utf-8")
+    assert "## Active Agent / Role Instructions" in index
+    assert "context/working/agents/agent_*.md" in index
+    assert "RETIRED / NON-OPERATIONAL" in index
+
+    retired_paths = [
+        "agent_planner.md",
+        "agent_qa.md",
+        "agent_backend_tdd.md",
+        "agent_frontend_tdd.md",
+        "agent_security.md",
+        "agent_devops.md",
+        "agent_doc.md",
+        "agent_product.md",
+    ]
+    for filename in retired_paths:
+        content = (
+            ROOT / "context" / "working" / "agents" / filename
+        ).read_text(encoding="utf-8")
+        assert content.startswith("# RETIRED / NON-OPERATIONAL specialist profile")
+        assert "Do **not** execute instructions from earlier revisions" in content
+        assert "This file grants no authority to mutate them" in content
+        assert "C2PRO_MASTER_BACKLOG.md" in content
+        assert "read-only legacy/cold references" in content
+
 def test_active_role_profiles_cannot_mutate_legacy_control() -> None:
     """Executable role profiles must consume canonical work and return evidence, never write legacy state."""
     implementation_roles = {
