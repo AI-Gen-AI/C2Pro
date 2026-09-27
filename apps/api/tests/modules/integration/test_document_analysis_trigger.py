@@ -107,10 +107,12 @@ class TestIngestionSetsParsedPendingAnalysis:
             mock_trigger = stack.enter_context(
                 patch("src.core.tasks.ingestion_tasks.TriggerDocumentAnalysisUseCase")
             )
+            storage = Mock()
+            storage.download_file = AsyncMock(return_value=Path("contract.pdf"))
             stack.enter_context(
                 patch(
-                    "src.core.tasks.ingestion_tasks.storage.download_file",
-                    new=AsyncMock(return_value=Path("contract.pdf")),
+                    "src.core.tasks.ingestion_tasks.build_storage_service",
+                    return_value=storage,
                 )
             )
             stack.enter_context(
@@ -178,10 +180,12 @@ class TestAnalysisTriggerAfterIngestion:
             mock_trigger = stack.enter_context(
                 patch("src.core.tasks.ingestion_tasks.TriggerDocumentAnalysisUseCase")
             )
+            storage = Mock()
+            storage.download_file = AsyncMock(return_value=Path("contract.pdf"))
             stack.enter_context(
                 patch(
-                    "src.core.tasks.ingestion_tasks.storage.download_file",
-                    new=AsyncMock(return_value=Path("contract.pdf")),
+                    "src.core.tasks.ingestion_tasks.build_storage_service",
+                    return_value=storage,
                 )
             )
             stack.enter_context(
@@ -237,10 +241,12 @@ class TestAnalysisTriggerAfterIngestion:
             mock_trigger = stack.enter_context(
                 patch("src.core.tasks.ingestion_tasks.TriggerDocumentAnalysisUseCase")
             )
+            storage = Mock()
+            storage.download_file = AsyncMock(return_value=Path("contract.pdf"))
             stack.enter_context(
                 patch(
-                    "src.core.tasks.ingestion_tasks.storage.download_file",
-                    new=AsyncMock(return_value=Path("contract.pdf")),
+                    "src.core.tasks.ingestion_tasks.build_storage_service",
+                    return_value=storage,
                 )
             )
             stack.enter_context(
@@ -300,10 +306,12 @@ class TestAnalysisTriggerErrorHandling:
             mock_dlq_service = stack.enter_context(
                 patch("src.core.tasks.ingestion_tasks.DLQService")
             )
+            storage = Mock()
+            storage.download_file = AsyncMock(return_value=Path("contract.pdf"))
             stack.enter_context(
                 patch(
-                    "src.core.tasks.ingestion_tasks.storage.download_file",
-                    new=AsyncMock(return_value=Path("contract.pdf")),
+                    "src.core.tasks.ingestion_tasks.build_storage_service",
+                    return_value=storage,
                 )
             )
             stack.enter_context(
@@ -377,10 +385,12 @@ class TestAnalysisTriggerErrorHandling:
             mock_dlq_service = stack.enter_context(
                 patch("src.core.tasks.ingestion_tasks.DLQService")
             )
+            storage = Mock()
+            storage.download_file = AsyncMock(return_value=Path("contract.pdf"))
             stack.enter_context(
                 patch(
-                    "src.core.tasks.ingestion_tasks.storage.download_file",
-                    new=AsyncMock(return_value=Path("contract.pdf")),
+                    "src.core.tasks.ingestion_tasks.build_storage_service",
+                    return_value=storage,
                 )
             )
             stack.enter_context(
