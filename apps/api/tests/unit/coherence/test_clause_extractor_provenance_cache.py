@@ -22,6 +22,9 @@ def test_merge_cache_payload_preserves_evidence_location() -> None:
         {
             "payment_term_days": 30,
             "warranty_months": 24,
+            # An LLM must never be able to overwrite parser-owned provenance.
+            "evidence_location": {"page_number": 999},
+            "unexpected_model_field": "drop-me",
         },
     )
 
@@ -29,6 +32,7 @@ def test_merge_cache_payload_preserves_evidence_location() -> None:
     assert merged["legacy_field"] == "keep-me"
     assert merged["payment_term_days"] == 30
     assert merged["warranty_months"] == 24
+    assert "unexpected_model_field" not in merged
     assert existing["payment_term_days"] == 15
 
 
