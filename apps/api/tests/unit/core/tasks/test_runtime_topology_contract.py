@@ -28,6 +28,7 @@ def test_scheduler_entrypoint_execs_beat_without_worker_or_api() -> None:
     source = _read("scripts/run_scheduler.sh")
     assert "exec celery" in source
     assert " beat " in source.replace("\n", " ")
+    assert "/tmp/c2pro-celerybeat-schedule" in source
     assert "uvicorn" not in source
     assert "alembic" not in source
 
