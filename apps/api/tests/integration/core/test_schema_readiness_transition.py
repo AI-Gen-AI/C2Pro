@@ -1,8 +1,9 @@
 """#727 deterministic schema-readiness transition acceptance.
 
 Exercises the same run_worker.sh -> wait_for_schema.py path used in Railway.
-No migration is executed by the worker.  The test changes only alembic_version
-inside the disposable CI database and always restores the repository head.
+No migration is executed by the worker.  Each test receives an isolated
+scratch PostgreSQL database containing only an alembic_version table, so the
+acceptance cannot race with unrelated integration tests that recreate public.
 """
 
 from __future__ import annotations
@@ -10,7 +11,9 @@ from __future__ import annotations
 import asyncio
 import os
 from pathlib import Path
+from uuid import uuid4
 
+import asyncpg
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -26,6 +29,23 @@ def _async_url(raw: str) -> str:
     if raw.startswith("postgresql://"):
         return raw.replace("postgresql://", "postgresql+asyncpg://", 1)
     return raw
+
+
+def _asyncpg_url(raw: str) -> str:
+    if raw.startswith("postgresql+asyncpg://"):
+        return raw.replace("postgresql+asyncpg://", "postgresql://", 1)
+    return raw
+
+
+def _replace_database(raw: str, database: str) -> str:
+    prefix, separator, tail = raw.rpartition("/")
+    if not separator:
+        raise AssertionError("PostgreSQL DSN must include a database name")
+    query = ""
+    if "?" in tail:
+        _, query = tail.split("?", 1)
+    result = f"{prefix}/{database}"
+    return f"{result}?{query}" if query else result
 
 
 async def _set_heads(engine: AsyncEngine, heads: set[str]) -> None:
@@ -111,32 +131,53 @@ async def schema_gate_database() -> tuple[AsyncEngine, str, str]:
     if not raw:
         pytest.skip("integration database URL is required")
 
-    database_url = _async_url(raw)
-    engine = create_async_engine(
-        database_url,
-        pool_pre_ping=True,
-        connect_args={"statement_cache_size": 0},
-    )
     expected = expected_heads(API_ROOT)
     assert len(expected) == 1
     repository_head = next(iter(expected))
 
+    database_name = f"c2pro_727_{uuid4().hex[:16]}_test"
+    admin_url = _replace_database(_asyncpg_url(raw), "postgres")
+    scratch_raw_url = _replace_database(_asyncpg_url(raw), database_name)
+    scratch_async_url = _async_url(scratch_raw_url)
+
+    admin = await asyncpg.connect(admin_url)
     try:
-        # Bootstrap CI applies migrations before integration tests; assert the
-        # shared test DB starts at the same exact head before we perturb only
-        # the version marker.
-        async with engine.connect() as conn:
-            current = frozenset(
-                str(value)
-                for value in (
-                    await conn.execute(text("SELECT version_num FROM alembic_version"))
-                ).scalars().all()
-            )
-        assert current == {repository_head}
-        yield engine, database_url, repository_head
+        await admin.execute(f'CREATE DATABASE "{database_name}"')
     finally:
+        await admin.close()
+
+    engine = create_async_engine(
+        scratch_async_url,
+        pool_pre_ping=True,
+        connect_args={"statement_cache_size": 0},
+    )
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "CREATE TABLE alembic_version ("
+                    "version_num varchar(64) NOT NULL PRIMARY KEY"
+                    ")"
+                )
+            )
         await _set_heads(engine, {repository_head})
+        yield engine, scratch_raw_url, repository_head
+    finally:
         await engine.dispose()
+        admin = await asyncpg.connect(admin_url)
+        try:
+            await admin.execute(
+                """
+                SELECT pg_terminate_backend(pid)
+                  FROM pg_stat_activity
+                 WHERE datname = $1
+                   AND pid <> pg_backend_pid()
+                """,
+                database_name,
+            )
+            await admin.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
+        finally:
+            await admin.close()
 
 
 async def test_worker_waits_then_starts_when_api_advances_schema(
@@ -164,7 +205,7 @@ async def test_worker_waits_then_starts_when_api_advances_schema(
     assert not marker.exists()
     assert process.returncode is None
 
-    # Separate DB transaction represents the API migrator completing.
+    # Separate connection/transaction represents the API migrator completing.
     await _set_heads(engine, {repository_head})
 
     stdout_tail, stderr = await asyncio.wait_for(process.communicate(), timeout=5.0)
