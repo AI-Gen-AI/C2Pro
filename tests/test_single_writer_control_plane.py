@@ -297,6 +297,29 @@ def test_live_guidance_does_not_restore_legacy_backlog_authority():
             assert phrase not in content, f"{relative} restores legacy authority via: {phrase}"
 
 
+
+def test_all_worker_bootstrap_routes_evidence_to_role_schema():
+    """Every live all-worker bootstrap must distinguish implementation from review evidence."""
+    bootstrap_surfaces = [
+        "agents.md",
+        "CLAUDE.md",
+        ".claude/rules/CRITICAL_BACKLOG_REQUIREMENT.md",
+        ".claude/BACKLOG_UPDATE_MEMO.md",
+        ".claude/rules/DOCUMENTATION_STRUCTURE.md",
+    ]
+    forbidden_universal = (
+        "implementation/review evidence belongs in the PR and structured `c2pro-implementation-result-v1` output",
+        "You must use the fenced YAML block matching the `c2pro-implementation-result-v1` schema as the transport.",
+    )
+    for relative in bootstrap_surfaces:
+        content = (ROOT / relative).read_text(encoding="utf-8")
+        assert "c2pro-implementation-result-v1" in content, relative
+        assert "c2pro-review-result-v1" in content, relative
+        for phrase in forbidden_universal:
+            assert phrase not in content, f"{relative} forces review evidence through implementation schema"
+
+
+
 def test_role_frontmatter_cannot_mutate_legacy_control_files():
     """Role boundaries and result schemas must match the Single-Writer Control Plane."""
     implementation_roles = {
