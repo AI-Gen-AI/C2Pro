@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+echo "[run_worker.sh] Waiting for database schema readiness..."
+python scripts/wait_for_schema.py
 echo "[run_worker.sh] Starting Celery worker..."
 exec celery -A src.core.tasks.celery_app.celery_app worker \
   --loglevel="${CELERY_LOG_LEVEL:-info}" \
