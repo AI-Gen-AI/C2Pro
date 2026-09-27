@@ -105,6 +105,51 @@ describe("Highlight Mapping API Utilities", () => {
       expect(highlights[0].color).toBe("green"); // confidence 0.96 -> green
     });
 
+    it("keeps real page navigation when bbox is unavailable without inventing geometry", () => {
+      const entities: ProcessedEntity[] = [
+        {
+          id: "ent-page-only",
+          type: "clause",
+          text: "Known source page",
+          page: 4,
+          confidence: 0.9,
+          metadata: {
+            evidence_location: {
+              page_number: 4,
+              bbox: null,
+            },
+          },
+        },
+      ];
+
+      const highlights = createHighlightsFromEntities(entities);
+
+      expect(highlights).toHaveLength(1);
+      expect(highlights[0].page).toBe(4);
+      expect(highlights[0].rects).toEqual([]);
+    });
+
+    it("does not invent page 1 when exact page is unavailable", () => {
+      const entities: ProcessedEntity[] = [
+        {
+          id: "ent-text-only",
+          type: "clause",
+          text: "Source text without an exact page",
+          page: null,
+          confidence: 0.9,
+          metadata: {
+            evidence_location: {
+              page_number: null,
+              page_numbers: [1, 2],
+              bbox: null,
+            },
+          },
+        },
+      ];
+
+      expect(createHighlightsFromEntities(entities)).toEqual([]);
+    });
+
     it("should use default color if confidence is low", () => {
       const mockEntities: ProcessedEntity[] = [
         {
