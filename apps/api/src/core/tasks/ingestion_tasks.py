@@ -1107,6 +1107,24 @@ async def _run_document_analysis_task_lifecycle(
             document_id=document_id,
             automatic_retry_available=automatic_retry_available,
         )
+    except AnalysisIncompleteRetryableError as error:
+        primary_error = error
+        if not automatic_retry_available:
+            try:
+                await _push_trigger_failure_to_dlq(
+                    tenant_id=tenant_id,
+                    document_id=document_id,
+                    error=error,
+                )
+            except Exception:
+                logger.exception(
+                    "document_analysis_final_retry_dlq_persistence_failed",
+                    extra={
+                        "tenant_id": str(tenant_id),
+                        "document_id": str(document_id),
+                    },
+                )
+        raise
     except RagChunksUnavailableError as error:
         if not route_rag_unavailable_to_dlq:
             primary_error = error
