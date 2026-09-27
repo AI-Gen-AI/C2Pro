@@ -420,7 +420,10 @@ describe("EvidencePage highlight mapping", () => {
         "source-clause-source-clause-b",
       );
       expect(screen.getByTestId("evidence-link-source-clause")).toHaveTextContent(
-        /showing source clause 7\.1/i,
+        /showing source clause 7\.1 on page 4/i,
+      );
+      expect(screen.getByTestId("evidence-link-source-clause")).toHaveTextContent(
+        /exact highlight unavailable/i,
       );
       expect(screen.queryByTestId("evidence-link-unavailable")).not.toBeInTheDocument();
     });
@@ -464,11 +467,14 @@ describe("EvidencePage highlight mapping", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("evidence-link-document-fallback")).toHaveTextContent(
-          /showing its source document/i,
+          /exact highlight unavailable/i,
         );
       });
       expect(screen.getByTestId("active-entity-id")).toHaveTextContent("none");
       expect(screen.getByTestId("viewer-active-highlight")).toHaveTextContent("none");
+      expect(screen.getByTestId("viewer-highlight-ids")).not.toHaveTextContent(
+        "source-clause-source-clause-without-page",
+      );
       expect(screen.queryByTestId("evidence-link-unavailable")).not.toBeInTheDocument();
     });
   });
