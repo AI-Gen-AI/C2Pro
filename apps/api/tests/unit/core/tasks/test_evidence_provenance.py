@@ -34,6 +34,7 @@ def test_build_text_block_index_matches_double_newline_flattening() -> None:
         (14, 21),
     ]
     assert "\n\n".join(block["text"] for block in blocks)[14:21] == "charlie"
+    assert all(item["normalized"] is False for item in index)
 
 
 def test_single_page_single_block_clause_preserves_real_bbox_and_revision() -> None:
@@ -60,7 +61,7 @@ def test_single_page_single_block_clause_preserves_real_bbox_and_revision() -> N
         "page_number": 3,
         "page_numbers": [3],
         "bbox": [10.0, 20.0, 300.0, 90.0],
-        "normalized": True,
+        "normalized": False,
     }
 
 
@@ -170,6 +171,7 @@ async def test_sample_contract_fixture_proves_parser_to_clause_provenance() -> N
     assert scope_block["page"] == 1
     assert isinstance(scope_block["bbox"], tuple)
     assert len(scope_block["bbox"]) == 4
+    assert any(float(value) > 1.0 for value in scope_block["bbox"])
 
     parsed_text = "\n\n".join(
         str(block["text"]) for block in blocks if isinstance(block.get("text"), str)
@@ -196,3 +198,37 @@ async def test_sample_contract_fixture_proves_parser_to_clause_provenance() -> N
         == str(revision_id)
         for clause in located
     )
+    exact_geometry = [
+        clause.extracted_entities["evidence_location"]
+        for clause in located
+        if clause.extracted_entities["evidence_location"]["bbox"] is not None
+    ]
+    assert exact_geometry
+    assert all(location["normalized"] is False for location in exact_geometry)
+
+
+
+def test_explicit_normalized_geometry_is_preserved_for_future_producers() -> None:
+    revision_id = uuid4()
+    text = _long_clause("1.-")
+    blocks = [
+        {
+            "text": text,
+            "page": 4,
+            "bbox": (0.1, 0.2, 0.5, 0.08),
+            "normalized": True,
+        }
+    ]
+
+    clause = _extract_contract_clauses(
+        document_id=uuid4(),
+        project_id=uuid4(),
+        tenant_id=uuid4(),
+        parsed_text=text,
+        parsed_payload={"text_blocks": blocks},
+        revision_id=revision_id,
+    )[0]
+
+    location = clause.extracted_entities["evidence_location"]
+    assert location["bbox"] == [0.1, 0.2, 0.5, 0.08]
+    assert location["normalized"] is True
