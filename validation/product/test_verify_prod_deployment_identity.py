@@ -82,3 +82,55 @@ def test_missing_provider_commit_metadata_fails_closed():
     payload[0]["meta"] = {}
     with pytest.raises(IdentityError, match="metadata unavailable"):
         run(worker_payload=payload)
+
+
+
+def test_railway_public_graphql_shapes_are_supported():
+    api_graphql = {
+        "data": {
+            "deployment": {
+                "id": "dep_api",
+                "status": "SUCCESS",
+                "meta": {"commitHash": BACKEND},
+            }
+        }
+    }
+    worker_graphql = {
+        "data": {
+            "deployments": {
+                "edges": [
+                    {
+                        "node": {
+                            "id": "dep_worker",
+                            "status": "SUCCESS",
+                            "meta": {"commitHash": BACKEND},
+                        }
+                    }
+                ]
+            }
+        }
+    }
+    scheduler_graphql = {
+        "data": {
+            "deployments": {
+                "edges": [
+                    {
+                        "node": {
+                            "id": "dep_scheduler",
+                            "status": "SUCCESS",
+                            "meta": {"commitHash": BACKEND},
+                        }
+                    }
+                ]
+            }
+        }
+    }
+
+    result = run(
+        api_payload=api_graphql,
+        worker_payload=worker_graphql,
+        scheduler_payload=scheduler_graphql,
+    )
+    assert result["backend"]["api"]["deployment_id"] == "dep_api"
+    assert result["backend"]["worker"]["deployment_id"] == "dep_worker"
+    assert result["backend"]["scheduler"]["deployment_id"] == "dep_scheduler"
