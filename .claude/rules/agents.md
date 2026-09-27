@@ -39,7 +39,7 @@ One model may hold multiple roles; roles may be reassigned across terminals/mode
 ### Shared guardrails (all roles)
 
 - **No self-merge** — the Orchestrator gates and merges every PR after verifying scope, diff-vs-criteria, and CI-green on all required jobs.
-- **Backlog & markdown edits go only via the Reconciler** in a committed PR — never in-place, never bundled into a code PR (the shared worktree resets and wipes uncommitted edits).
+- **Canonical control mutations go only via the Reconciler** in a committed control PR: `.c2pro` for development execution state and the product-control YAML/Markdown pair for product lifecycle. `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` and `blackboard.json` are legacy/read-only and are never routed to the Reconciler for writes.
 - **Verify CI green** (all required jobs) before declaring any task done — local pass is not sufficient.
 - **Name the real role + assigned model** on every dispatch; never a generic "an LLM".
 - **High-blast-radius files** (`apps/api/tests/_bootstrap.py`, `conftest.py`, `.github/workflows/ci.yml`, `apps/api/alembic/env.py`, `pyproject.toml`, `requirements.txt`) get extra scrutiny and an explicit behavior-preserving check.
