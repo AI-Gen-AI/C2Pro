@@ -1,21 +1,51 @@
 # MASTER_DEVELOPMENT_STATUS.md
 
-> **Compatibility pointer only — not a canonical execution register**
-> **Updated:** 2026-09-27
+> **Deprecated as a canonical status register**
+> **Reconciled:** 2026-09-26
 
-This historical filename remains only so older links do not route operators back to retired authority.
+This file remains only as a compatibility pointer for older references. It must not become a
+second status authority.
 
-For current C2Pro state, use:
+## Current authority
 
-- `validation/product/c2pro-master-product-control-v1.yaml` — canonical machine-readable product lifecycle/programme state.
-- `docs/product/00-c2pro-master-product-control-v1.md` — guarded human projection of Product Control.
-- `.c2pro/control/` — canonical active development hot state and open work queue.
-- assigned `.c2pro/work/<work_id>.yaml` — bounded work envelope for active execution.
+### Product programme — what C2Pro is delivering
 
-The following are **read-only legacy/cold references** and do not own current status:
+- **Machine source of truth:** `validation/product/c2pro-master-product-control-v1.yaml`
+- **Human projection:** `docs/product/00-c2pro-master-product-control-v1.md`
+- Their exact critical values are guarded by `validation/product/check_control_parity.py`.
 
-- `C2PRO_MASTER_BACKLOG.md`
-- `backlogs/*.md`
-- `blackboard.json`
+These files distinguish **design**, **realization**, **deployment** and **production validation**.
+A merged PR does not by itself prove deployed or PROD_VALIDATED product value.
 
-Do not derive authorization, completion, lifecycle promotion, or next execution work from those legacy files. Completion becomes canonical only through the current review/CI/merge/reconciliation path, and product maturity changes only through the Product-Control YAML/Markdown pair.
+### Development execution — what the agent/control plane may work on now
+
+- **Hot state:** `.c2pro/control/current.yaml`
+- **Open queue:** `.c2pro/control/work-queue.yaml`
+- **Work envelopes:** `.c2pro/work/`
+- **Canonical development plan:** `docs/architecture/development/c2pro-vps-development-control-plan-v1.md`
+- **Machine plan:** `validation/development/c2pro-vps-development-control-plan-v1.yaml`
+
+The hot queue contains open work only. Completed work belongs in Git/PR/CI/evidence history, not in
+bootstrap state.
+
+## Legacy / cold references
+
+- `C2PRO_MASTER_BACKLOG.md` — historical/cold backlog reference; **not** current product truth.
+- `backlogs/*.md` — category history / legacy compatibility.
+- `docs/planning/ROADMAP_v2.4.0.md` — historical strategic roadmap, not current lifecycle status.
+- `blackboard.json` — non-canonical legacy execution state.
+
+## Current planning hinge
+
+At the 2026-09-26 reconciliation:
+
+- product north-star remains **P0b single-document Health**, with L4-5 implementation merged but
+  production validation still open;
+- P0c What Changed and P0d Current State are wired on main and need runtime qualification rather
+  than reconstruction as candidate lanes;
+- P1 Project Controls is ACTIVE/PARTIAL;
+- development control DEV-00/01/02 are DONE; DEV-03 principal worker readiness is the next
+  unresolved control-plane gate.
+
+Historical detailed status previously stored here was intentionally retired to prevent split
+ownership of programme state.
