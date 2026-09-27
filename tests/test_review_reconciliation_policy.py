@@ -152,6 +152,29 @@ def test_high_risk_review_requires_bound_orchestrator_synthesis() -> None:
     )
 
 
+def test_orchestrator_synthesis_cannot_be_approved_by_implementation_worker() -> None:
+    reviews = [
+        _review(role="independent_reviewer", worker_id="codex"),
+        _review(role="specialist", worker_id="gemini_cli"),
+    ]
+    with pytest.raises(
+        ValidationError,
+        match="synthesis worker must differ from implementation worker",
+    ):
+        _validate_reconciliation_reviews(
+            reviews,
+            review_policy="principal_and_challenger",
+            work_id=WORK_ID,
+            expected_pr=PR,
+            expected_head_sha=HEAD,
+            implementation_worker_id="claude_code",
+            routing=_routing(),
+            risk_class="architecture",
+            orchestrator_synthesis_required=True,
+            orchestrator_synthesis=_synthesis(orchestrator_worker_id="claude_code"),
+        )
+
+
 def test_orchestrator_synthesis_is_bound_to_exact_review_workers_and_head() -> None:
     reviews = [
         _review(role="independent_reviewer", worker_id="codex"),
@@ -201,6 +224,8 @@ def test_canonical_work_envelope_drives_high_risk_synthesis_policy(tmp_path) -> 
                 "schema_version: 1",
                 "risk_classes:",
                 "  architecture:",
+                "    independent_principal_review: required",
+                "    challenger: required",
                 "    orchestrator_synthesis: true",
                 "",
             )
