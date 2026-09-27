@@ -76,7 +76,8 @@ _CLAIM_SQL = text(
                   AND ri.tenant_id = d.tenant_id
                   AND ri.current_status::text IN (
                       'PENDING_REVIEW_REQUIRED',
-                      'PENDING_REVIEW_CONDITIONAL'
+                      'PENDING_REVIEW_CONDITIONAL',
+                      'ESCALATED'
                   )
            ) AS hitl_pending
       FROM documents d
