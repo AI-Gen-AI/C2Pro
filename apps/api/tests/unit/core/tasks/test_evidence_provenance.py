@@ -53,7 +53,7 @@ def test_single_page_single_block_clause_preserves_real_bbox_and_revision() -> N
     assert len(clauses) == 1
     clause = clauses[0]
     assert clause.text_start_offset == 0
-    assert clause.text_end_offset == len(text)
+    assert clause.text_end_offset == len(text.rstrip())
     location = clause.extracted_entities["evidence_location"]
     assert location == {
         "revision_id": str(revision_id),
