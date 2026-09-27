@@ -24,6 +24,22 @@ def _deployments(payload: Any) -> list[dict[str, Any]]:
     if isinstance(payload, list):
         return [row for row in payload if isinstance(row, dict)]
     if isinstance(payload, dict):
+        # Railway public GraphQL responses.
+        data = payload.get("data")
+        if isinstance(data, dict):
+            single = data.get("deployment")
+            if isinstance(single, dict):
+                return [single]
+            connection = data.get("deployments")
+            if isinstance(connection, dict):
+                edges = connection.get("edges")
+                if isinstance(edges, list):
+                    return [
+                        edge["node"]
+                        for edge in edges
+                        if isinstance(edge, dict) and isinstance(edge.get("node"), dict)
+                    ]
+        # Provider-normalized fixtures / future bounded adapters.
         rows = payload.get("deployments")
         if isinstance(rows, list):
             return [row for row in rows if isinstance(row, dict)]
