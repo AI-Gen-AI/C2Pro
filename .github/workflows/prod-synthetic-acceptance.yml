@@ -8,19 +8,19 @@ on:
         required: true
         type: string
       backend_commit_sha:
-        description: "Exact observed Railway production Git SHA."
+        description: "Expected Railway production Git SHA to certify (observed independently from Railway)."
         required: true
         type: string
       backend_deployment_id:
-        description: "Exact observed Railway production deployment ID."
+        description: "Expected C2Pro API Railway deployment ID to certify (verified independently)."
         required: true
         type: string
       frontend_commit_sha:
-        description: "Exact observed Vercel production Git SHA."
+        description: "Expected Vercel production Git SHA to certify (observed independently from Vercel)."
         required: true
         type: string
       frontend_deployment_id:
-        description: "Exact observed Vercel production deployment ID."
+        description: "Expected Vercel production deployment ID to certify (verified independently)."
         required: true
         type: string
       recovery_evidence_ref:
@@ -52,6 +52,13 @@ env:
   NODE_VERSION: "22"
   PROD_ACCEPTANCE_BASE_URL: "https://c2pro.io"
   PROD_ACCEPTANCE_FIXTURE_SHA256: "f0bc7170cf002570be58f9225f9affc534720a4756fa1da39ae7ad328d63a9b9"
+  PROD_ACCEPTANCE_RAILWAY_PROJECT_ID: "db60e356-d645-4561-a8c5-ddf5e5a2afa2"
+  PROD_ACCEPTANCE_RAILWAY_ENVIRONMENT_ID: "ecd39af1-2501-4b9b-8e2e-fafcc6a66570"
+  PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID: "dd372d3a-fb0a-4953-862b-63a10b9058ad"
+  PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID: "e2fac2e9-e9f7-42a8-b022-3c9309d0c763"
+  PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID: "d7952082-b1b3-46f4-b916-c66c8329452c"
+  PROD_ACCEPTANCE_VERCEL_TEAM_ID: "team_OD4wmtP2vMrbaA8K5C3WcVET"
+  PROD_ACCEPTANCE_VERCEL_PROJECT_ID: "prj_3CgujYjdedPU5ThQFi4JqHmnlwAr"
 
 jobs:
   production-acceptance:
@@ -80,6 +87,27 @@ jobs:
           [[ "${{ inputs.backend_commit_sha }}" =~ ^[0-9a-f]{40}$ ]] || exit 2
           [[ "${{ inputs.frontend_commit_sha }}" =~ ^[0-9a-f]{40}$ ]] || exit 2
 
+      - name: Fail closed on protected qualification prerequisites
+        env:
+          PROD_ACCEPTANCE_RAILWAY_API_TOKEN: ${{ secrets.PROD_ACCEPTANCE_RAILWAY_API_TOKEN }}
+          PROD_ACCEPTANCE_VERCEL_TOKEN: ${{ secrets.PROD_ACCEPTANCE_VERCEL_TOKEN }}
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+          PROD_ACCEPTANCE_CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_PASSWORD: ${{ secrets.PROD_ACCEPTANCE_CLERK_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in             PROD_ACCEPTANCE_RAILWAY_API_TOKEN             PROD_ACCEPTANCE_VERCEL_TOKEN             PROD_ACCEPTANCE_DATABASE_URL_READONLY             PROD_ACCEPTANCE_EXPECTED_TENANT_ID             PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID             PROD_ACCEPTANCE_CLERK_EMAIL             PROD_ACCEPTANCE_CLERK_PASSWORD
+          do
+            test -n "${!name:-}" || {
+              echo "Required protected qualification prerequisite is absent: $name" >&2
+              exit 2
+            }
+          done
+          echo "Protected qualification prerequisites are present (values withheld)."
+
       - name: Checkout exact control commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -94,6 +122,46 @@ jobs:
           test -f validation/product/c2pro-master-product-control-v1.yaml
           echo "CONTROL_COMMIT_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
           echo "PROD_ACCEPTANCE_RUN_ID=gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+
+      - name: Observe production deployment identities from providers
+        env:
+          PROD_ACCEPTANCE_RAILWAY_API_TOKEN: ${{ secrets.PROD_ACCEPTANCE_RAILWAY_API_TOKEN }}
+          PROD_ACCEPTANCE_VERCEL_TOKEN: ${{ secrets.PROD_ACCEPTANCE_VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/product-qualification/runtime/provider
+
+          railway_graphql() {
+            local payload="$1"
+            local output="$2"
+            curl --fail --silent --show-error               --request POST               --url "https://backboard.railway.com/graphql/v2"               --header "Authorization: Bearer ${PROD_ACCEPTANCE_RAILWAY_API_TOKEN}"               --header "Content-Type: application/json"               --data "$payload"               --output "$output"
+          }
+
+          api_payload="$(jq -cn             --arg q 'query deployment($id: String!) { deployment(id: $id) { id status meta } }'             --arg id '${{ inputs.backend_deployment_id }}'             '{query:$q,variables:{id:$id}}')"
+          railway_graphql "$api_payload"             evidence/product-qualification/runtime/provider/railway-api.json
+
+          list_query='query deployments($input: DeploymentListInput!, $first: Int) { deployments(input: $input, first: $first) { edges { node { id status meta } } } }'
+          for pair in             "worker:${PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID}"             "scheduler:${PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID}"
+          do
+            name="${pair%%:*}"
+            service_id="${pair#*:}"
+            payload="$(jq -cn               --arg q "$list_query"               --arg project "$PROD_ACCEPTANCE_RAILWAY_PROJECT_ID"               --arg environment "$PROD_ACCEPTANCE_RAILWAY_ENVIRONMENT_ID"               --arg service "$service_id"               '{query:$q,variables:{input:{projectId:$project,environmentId:$environment,serviceId:$service,status:{successfulOnly:true}},first:1}}')"
+            railway_graphql "$payload"               "evidence/product-qualification/runtime/provider/railway-${name}.json"
+          done
+
+          curl --fail --silent --show-error             --url "https://api.vercel.com/v13/deployments/${{ inputs.frontend_deployment_id }}?teamId=${PROD_ACCEPTANCE_VERCEL_TEAM_ID}"             --header "Authorization: Bearer ${PROD_ACCEPTANCE_VERCEL_TOKEN}"             --output evidence/product-qualification/runtime/provider/vercel-frontend.json
+
+      - name: Verify independently observed deployment identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          python validation/product/verify_prod_deployment_identity.py             --railway-api-json evidence/product-qualification/runtime/provider/railway-api.json             --railway-worker-json evidence/product-qualification/runtime/provider/railway-worker.json             --railway-scheduler-json evidence/product-qualification/runtime/provider/railway-scheduler.json             --vercel-json evidence/product-qualification/runtime/provider/vercel-frontend.json             --expected-backend-sha "${{ inputs.backend_commit_sha }}"             --expected-api-deployment "${{ inputs.backend_deployment_id }}"             --expected-frontend-sha "${{ inputs.frontend_commit_sha }}"             --expected-frontend-deployment "${{ inputs.frontend_deployment_id }}"             --output-json evidence/product-qualification/runtime/deployment-identity.json
+
+          backend_sha="$(python -c 'import json; print(json.load(open("evidence/product-qualification/runtime/deployment-identity.json"))["backend"]["api"]["commit_sha"])')"
+          frontend_sha="$(python -c 'import json; print(json.load(open("evidence/product-qualification/runtime/deployment-identity.json"))["frontend"]["commit_sha"])')"
+          echo "PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA=$backend_sha" >> "$GITHUB_ENV"
+          echo "PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA=$frontend_sha" >> "$GITHUB_ENV"
 
       - name: Setup Python backend
         uses: ./.github/actions/setup-python-backend
@@ -147,9 +215,9 @@ jobs:
           PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
           PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
           PROD_ACCEPTANCE_EXPECTED_BACKEND_SHA: ${{ inputs.backend_commit_sha }}
-          PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA: ${{ inputs.backend_commit_sha }}
+          PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA: ${{ env.PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA }}
           PROD_ACCEPTANCE_EXPECTED_FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
-          PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
+          PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: ${{ env.PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA }}
           PROD_ACCEPTANCE_REQUIRE_HITL: ${{ inputs.require_hitl }}
         working-directory: apps/web
         shell: bash
@@ -246,4 +314,5 @@ jobs:
           path: |
             apps/web/playwright/.prod-acceptance/run.json
             evidence/product-qualification/runtime/verifier.json
+            evidence/product-qualification/runtime/deployment-identity.json
             evidence/product-qualification/p0b-prod-gh-*.yaml
