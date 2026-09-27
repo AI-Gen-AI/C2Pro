@@ -20,7 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 API_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_TIMEOUT_SECONDS = 180.0
+DEFAULT_TIMEOUT_SECONDS = 300.0
 DEFAULT_POLL_SECONDS = 2.0
 
 
