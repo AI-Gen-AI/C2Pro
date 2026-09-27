@@ -537,6 +537,31 @@ def test_live_guidance_does_not_repromote_legacy_authority() -> None:
 
 
 
+
+def test_retired_executable_legacy_surfaces_are_bannered_non_operational() -> None:
+    """Old self-contained prompts/backlogs may remain only behind an explicit retirement boundary."""
+    retired_surfaces = [
+        "docs/planning/MASTER_ORCHESTRATION_BACKLOG_2026-03-19.md",
+        "docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md",
+        "docs/audits/C2Pro — Landing AI-Gen Sync Implementation Prompt_Fable5.md",
+    ]
+    for relative in retired_surfaces:
+        content = (ROOT / relative).read_text(encoding="utf-8")
+        header = "\n".join(content.splitlines()[:16])
+        assert "RETIRED / NON-OPERATIONAL" in header, relative
+        assert ".c2pro/control/work-queue.yaml" in header, relative
+        assert "validation/product/c2pro-master-product-control-v1.yaml" in header, relative
+        assert "Do not execute the legacy backlog-write" in header, relative
+
+    orchestration = (
+        ROOT / "docs" / "planning" / "MASTER_ORCHESTRATION_BACKLOG_2026-03-19.md"
+    ).read_text(encoding="utf-8")
+    assert "**Status:** RETIRED / NON-OPERATIONAL" in "\n".join(
+        orchestration.splitlines()[:16]
+    )
+
+
+
 def test_active_guidance_routes_structured_evidence_by_role() -> None:
     """Active guidance must not force implementation-result schema onto review roles."""
     surfaces = [
