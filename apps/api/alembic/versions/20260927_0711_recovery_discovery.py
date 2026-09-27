@@ -19,8 +19,9 @@ introduced.
 
 from collections.abc import Sequence
 
-from alembic import op
 from sqlalchemy import text
+
+from alembic import op
 
 revision: str = "20260927_0711"
 down_revision: str | None = "20260923_0001"
