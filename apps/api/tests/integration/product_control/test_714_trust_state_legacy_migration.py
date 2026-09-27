@@ -8,13 +8,7 @@ reclassify that legacy state truthfully:
   trusted artifact restored as canonical;
 * rejected review  -> candidate becomes REJECTED (never canonical), prior
   trusted restored;
-* pending review with several post-review artifacts -> the latest is the
-  bound PROPOSED candidate and earlier ones SUPERSEDED (fail closed: a gated
-  re-analysis reused the same review, so nothing proves a later row was
-  non-gated);
-* rejected review -> the latest artifact produced before the decision is
-  REJECTED; artifacts created after the decision are later runs;
-* approved review or no review -> unchanged.
+* approved review, no review, or a later non-gated re-analysis -> unchanged.
 
 Then downgrade must leave no proposal canonical, and upgrade must re-apply.
 
@@ -149,9 +143,9 @@ async def test_714_migration_reclassifies_legacy_hitl_candidates_and_round_trips
                           created=T0 + timedelta(hours=1), decided=T0 + timedelta(hours=3))
             await _artifact(conn, tenant=tenant, project=project, document=d,
                             title="rerun", lifecycle="active", at=T0 + timedelta(hours=4))
-            # pending_rerun: V1 trusted, review R pending, legacy unreviewed
-            # candidate V2, then a later V3 while R is still pending. A gated
-            # re-analysis reused R, so V3 cannot be proven non-gated.
+            # pending_rerun: V1 is provably pre-review trusted, while R remains
+            # pending across V2 and V3. Legacy timestamps cannot prove whether
+            # V3 was gated or non-gated, so BOTH post-review rows must fail closed.
             d = docs["pending_rerun"]
             await _artifact(conn, tenant=tenant, project=project, document=d,
                             title="V1", lifecycle="superseded", at=T0)
@@ -163,7 +157,7 @@ async def test_714_migration_reclassifies_legacy_hitl_candidates_and_round_trips
                             title="V2 unreviewed", lifecycle="superseded",
                             at=T0 + timedelta(hours=2))
             await _artifact(conn, tenant=tenant, project=project, document=d,
-                            title="V3 unproven", lifecycle="active", at=T0 + timedelta(hours=4))
+                            title="V3 ambiguous", lifecycle="active", at=T0 + timedelta(hours=4))
             # rejected_rerun: V1 trusted, review R, gated V2 then gated V3 both
             # before the rejection -> V3 is the rejected candidate.
             d = docs["rejected_rerun"]
@@ -207,20 +201,25 @@ async def test_714_migration_reclassifies_legacy_hitl_candidates_and_round_trips
             assert await _states(conn, docs["pending_rerun"]) == [
                 ("V1", "trusted", "active"),
                 ("V2 unreviewed", "superseded", "superseded"),
-                ("V3 unproven", "proposed", "active"),
-            ], "nothing produced under the pending gate stays canonical"
+                ("V3 ambiguous", "superseded", "superseded"),
+            ], (
+                "while the review is still pending, no post-review artifact may "
+                "become canonical merely because it is newer"
+            )
             pr = await conn.fetchrow(
                 "SELECT cast(current_status as text) AS status, review_metadata "
                 "FROM review_items WHERE id=$1",
                 pending_rerun_review,
             )
-            assert pr["status"] == "PENDING_REVIEW_REQUIRED", "the review stays actionable"
-            assert json.loads(pr["review_metadata"])["candidate_binding"]["artifact_version"] == 3
+            assert pr["status"] == "CLOSED", "ambiguous legacy review is closed fail-closed"
+            pr_meta = json.loads(pr["review_metadata"])
+            assert pr_meta["candidate_binding"]["artifact_version"] == 2
+            assert pr_meta["closed_reason"] == "legacy_post_review_ambiguous"
             assert await _states(conn, docs["rejected_rerun"]) == [
                 ("V1", "trusted", "active"),
                 ("V2", "superseded", "superseded"),
                 ("V3", "rejected", "superseded"),
-            ]
+            ], "no artifact produced under the rejected gate stays canonical"
             # Every current trusted artifact is queued once for projection.
             queued = await conn.fetch(
                 "SELECT a.document_id FROM system_recovery.trusted_projection_index o "
