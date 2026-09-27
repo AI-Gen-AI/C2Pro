@@ -34,7 +34,7 @@ def upgrade() -> None:
         LANGUAGE plpgsql
         SECURITY DEFINER
         SET search_path = public, pg_temp
-        AS $$
+        AS $recovery$
         BEGIN
             -- The Alembic application schema owns upload_status. The historic
             -- Supabase mirror baseline predates that column; keep mirror
