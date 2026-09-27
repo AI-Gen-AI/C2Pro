@@ -1,23 +1,21 @@
 # MASTER_DEVELOPMENT_STATUS.md
 
-> **Deprecated as the canonical task register**
-> **Last Updated:** 2026-03-29
+> **Compatibility pointer only — not a canonical execution register**
+> **Updated:** 2026-09-27
 
-`C2PRO_MASTER_BACKLOG.md` at the repository root is now the single source of truth for:
+This historical filename remains only so older links do not route operators back to retired authority.
 
-- open tasks
-- in-progress work
-- release blockers
-- completed backlog items that still need traceability
+For current C2Pro state, use:
 
-This file remains only as a compatibility pointer for older references.
+- `validation/product/c2pro-master-product-control-v1.yaml` — canonical machine-readable product lifecycle/programme state.
+- `docs/product/00-c2pro-master-product-control-v1.md` — guarded human projection of Product Control.
+- `.c2pro/control/` — canonical active development hot state and open work queue.
+- assigned `.c2pro/work/<work_id>.yaml` — bounded work envelope for active execution.
 
-Use:
+The following are **read-only legacy/cold references** and do not own current status:
 
-- `C2PRO_MASTER_BACKLOG.md` for execution status
-- `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md` for the current platform-wide technical design
-- `docs/architecture/decisions/006-post-reorganization-architecture.md` for the canonical repo-structure baseline
+- `C2PRO_MASTER_BACKLOG.md`
+- `backlogs/*.md`
+- `blackboard.json`
 
-Historical note:
-
-- The previous detailed status register was intentionally retired to eliminate split ownership of project status.
+Do not derive authorization, completion, lifecycle promotion, or next execution work from those legacy files. Completion becomes canonical only through the current review/CI/merge/reconciliation path, and product maturity changes only through the Product-Control YAML/Markdown pair.
