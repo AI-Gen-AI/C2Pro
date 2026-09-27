@@ -813,20 +813,17 @@ Do not activate autonomous product changes before C2PRO-DEV-00/01/02 define the 
 
 ## 14. Immediate next step
 
-The first execution step after this plan is merged is:
+The next unresolved execution gate is:
 
-**C2PRO-DEV-00 — Governance and context audit.**
+**C2PRO-DEV-03 — Claude and Codex principal worker readiness.**
 
-It must be read-only with respect to product behavior. The audit should produce:
+DEV-00, DEV-01 and DEV-02 are already DONE. The merged DEV-03 restart/readiness package (#676) is planning/evidence only: it does not grant provider execution authority and does not prove principal readiness.
 
-- authoritative inventory;
-- context/token-cost diagnosis;
-- KEEP / REWRITE / DEPRECATE / ARCHIVE matrix;
-- proposed compact YAML schemas;
-- migration dependencies;
-- exact next implementation slice.
+The next bounded step is therefore **DEV-03 activation**, not provider execution: refresh the post-#669 baseline, create/bind the canonical DEV-03 work envelope, set the queue/current `work_ref`, and obtain fresh job-bound authority. Standing provider authority remains closed.
 
-The owner should then be guided through the implementation one bounded step at a time, while the design progressively reduces manual approval frequency rather than increasing it.
+Only after that activation may the fresh DEV-03 qualification run against current VPS/runtime evidence, including isolated read-only and bounded write/commit jobs, canonical-main denial, runtime/secret denial, resource limits and frozen qualification evidence.
+
+DEV-04 remains blocked until both principals are qualified. Do not restart DEV-00/01/02, recreate their completed audit outputs, or invoke a provider before the fresh bounded DEV-03 authority is present.
 
 ---
 
