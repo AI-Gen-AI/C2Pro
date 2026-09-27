@@ -731,8 +731,22 @@ async def _run_document_analysis(
             graph_analysis_id=analysis_id,
         )
         await repo.update_status(tenant_id, document_id, status)
-        await session.commit()
         completed = status is DocumentStatus.ANALYZED
+        # #712: a genuinely incomplete, non-HITL outcome is what the Documents UI
+        # must show as "failed, retry me" rather than "analysis not started" --
+        # a HITL pause is a different, higher-priority truthful state (handled by
+        # the pending review_items row, not this flag) and is never marked here.
+        # _process() clears this flag at the start of every fresh parse pass, so
+        # it never survives a genuine re-upload/reprocess.
+        attempt_incomplete = not completed and not human_approval_required
+        current_metadata = dict(document.document_metadata or {})
+        if current_metadata.get("analysis_last_attempt_incomplete") != attempt_incomplete:
+            if attempt_incomplete:
+                current_metadata["analysis_last_attempt_incomplete"] = True
+            else:
+                current_metadata.pop("analysis_last_attempt_incomplete", None)
+            await repo.update_metadata(tenant_id, document_id, current_metadata)
+        await session.commit()
         logger.info(
             "document_analysis_task_finished",
             extra={
@@ -887,6 +901,10 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
             ).strip()
             contract_clause_count = 0
             metadata = dict(document.document_metadata or {})
+            # #712: a fresh parse pass supersedes whatever the last analysis
+            # attempt recorded -- a stale "failed, retry me" flag must not
+            # survive a genuine re-upload/reprocess.
+            metadata.pop("analysis_last_attempt_incomplete", None)
             # Enum value only -- provider messages can carry credentials and
             # never belong in document metadata. Recorded so an operator (or a
             # retry) can tell "nothing to embed" from "provider misconfigured".

@@ -58,6 +58,11 @@ class _DocumentRepository:
     ) -> None:
         self.updated_statuses.append(status)
 
+    async def update_metadata(
+        self, _tenant_id: object, _document_id: object, document_metadata: dict[str, object]
+    ) -> None:
+        self.document.document_metadata = dict(document_metadata)
+
 
 def _parsed_document() -> Document:
     return Document(

@@ -470,6 +470,7 @@ class TestDocumentAnalysisTask:
             mock_repo_instance = mock_repo.return_value
             mock_repo_instance.get_by_id = AsyncMock(return_value=document)
             mock_repo_instance.update_status = AsyncMock()
+            mock_repo_instance.update_metadata = AsyncMock()
 
             result = await _run_document_analysis(
                 tenant_id=tenant_id,
@@ -525,8 +526,9 @@ class TestDocumentAnalysisTask:
             mock_repo_instance = mock_repo.return_value
             mock_repo_instance.get_by_id = AsyncMock(return_value=document)
             mock_repo_instance.update_status = AsyncMock()
+            mock_repo_instance.update_metadata = AsyncMock()
 
-            with pytest.raises(Exception):  # AnalysisIncompleteRetryableError
+            with pytest.raises(AnalysisIncompleteRetryableError):
                 await _run_document_analysis(
                     tenant_id=tenant_id,
                     document_id=document_id,
@@ -587,6 +589,7 @@ class TestDocumentAnalysisTask:
             mock_repo_instance = mock_repo.return_value
             mock_repo_instance.get_by_id = AsyncMock(return_value=document)
             mock_repo_instance.update_status = AsyncMock()
+            mock_repo_instance.update_metadata = AsyncMock()
 
             await _run_document_analysis(
                 tenant_id=tenant_id,
@@ -642,6 +645,7 @@ class TestDocumentAnalysisTask:
             inst = mock_repo.return_value
             inst.get_by_id = AsyncMock(return_value=document)
             inst.update_status = AsyncMock()
+            inst.update_metadata = AsyncMock()
 
             result = await _run_document_analysis(
                 tenant_id=tenant_id, document_id=document_id, orchestrator=orchestrator
@@ -697,6 +701,7 @@ class TestDocumentAnalysisTask:
             inst = mock_repo.return_value
             inst.get_by_id = AsyncMock(return_value=document)
             inst.update_status = AsyncMock()
+            inst.update_metadata = AsyncMock()
 
             with pytest.raises(AnalysisIncompleteRetryableError):
                 await _run_document_analysis(

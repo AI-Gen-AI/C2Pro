@@ -98,6 +98,10 @@ _PROCESSING_STATUS_BY_UPLOAD_STATUS = {
     "parsed": DocumentPollingStatus.PARSED.value,
     "analyzed": DocumentPollingStatus.PARSED.value,
     "error": DocumentPollingStatus.ERROR.value,
+    # #712: a human rejection is durable attention, not still-processing --
+    # mirrors the router's NEEDS_CHANGES branch of
+    # _normalize_document_status_for_polling.
+    "needs_changes": DocumentPollingStatus.ERROR.value,
 }
 _LEVEL_RANK = {AttentionLevel.CRITICAL: 0, AttentionLevel.WARNING: 1, AttentionLevel.INFO: 2}
 
