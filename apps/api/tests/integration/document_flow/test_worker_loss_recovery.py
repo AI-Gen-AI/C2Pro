@@ -18,8 +18,8 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.tasks.document_recovery import (
-    MAX_RECOVERY_ATTEMPTS,
     _sweep_async,
+    MAX_RECOVERY_ATTEMPTS,
 )
 from src.documents.adapters.persistence.models import DocumentORM
 from src.documents.domain.models import DocumentStatus, DocumentType
@@ -28,15 +28,47 @@ from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
 
 
-# This acceptance validates a migration-owned trigger/projection. The default
-# integration fixture recreates public via Base.metadata.create_all(), which
-# intentionally cannot recreate Alembic triggers. Use the real migrated schema.
-pytestmark = pytest.mark.alembic_schema
-
-
+# The normal integration bootstrap recreates the public schema from ORM
+# metadata after Alembic. That is intentional, but PostgreSQL triggers are not
+# represented in ORM metadata, so the #711 documents trigger is removed while
+# its migration-owned function/projection in system_recovery remains. Restore
+# only that trigger here; Migrations Check independently proves the migration
+# creates the function/table/privileges from scratch.
 @pytest_asyncio.fixture(autouse=True)
-async def _isolate_recovery_documents(db: AsyncSession, test_user):
+async def _recovery_migration_surface(db: AsyncSession, test_user):
+    artifacts = (
+        await db.execute(
+            text(
+                """
+                SELECT
+                    to_regclass('system_recovery.document_work_index') AS work_index,
+                    to_regprocedure(
+                        'system_recovery.sync_document_work_index()'
+                    ) AS sync_function
+                """
+            )
+        )
+    ).one()
+    assert artifacts.work_index is not None
+    assert artifacts.sync_function is not None
+
+    await db.execute(
+        text("DROP TRIGGER IF EXISTS trg_documents_recovery_index ON public.documents")
+    )
+    await db.execute(
+        text(
+            """
+            CREATE TRIGGER trg_documents_recovery_index
+            AFTER INSERT OR UPDATE ON public.documents
+            FOR EACH ROW
+            EXECUTE FUNCTION system_recovery.sync_document_work_index()
+            """
+        )
+    )
+    await db.commit()
+
     yield
+
     await db.rollback()
     await db.execute(
         text("SELECT set_config('app.current_tenant', :tenant, true)"),
