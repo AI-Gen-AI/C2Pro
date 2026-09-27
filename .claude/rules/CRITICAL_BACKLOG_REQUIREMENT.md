@@ -32,16 +32,16 @@ Do NOT require reading the full legacy backlogs by default. Normal worker bootst
 If you complete a task or discover new work/risks:
 - **Do NOT update legacy markdown/JSON backlogs.**
 - **Do NOT commit result files to the repository.**
-- **DO provide structured evidence in your PR-body / standard output.** You must use the fenced YAML block matching the `c2pro-implementation-result-v1` schema as the transport.
+- **DO provide role-appropriate structured evidence in your PR-body / standard output.** Implementation roles use `c2pro-implementation-result-v1`; QA/reviewer/security roles use `c2pro-review-result-v1`; Planner/Reconciler use the applicable canonical planning/control schema.
 
 ### 3. Completion is Non-Canonical
 A task's completion is **NOT canonical** until it undergoes review, CI verification, is merged, and is reconciled on the master branch by the Master/Planner reconciler.
 
 ---
 
-## Structured Worker Result (c2pro-implementation-result-v1)
+## Structured Worker Results
 
-When returning evidence, include a fenced YAML block in your PR/output matching this structure exactly:
+The following block is an implementation-role example using `c2pro-implementation-result-v1`. QA/reviewer/security roles MUST use `c2pro-review-result-v1`; Planner/Reconciler use the applicable canonical planning/control schema.
 
 ```yaml
 ```yaml
