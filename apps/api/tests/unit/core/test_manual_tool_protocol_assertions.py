@@ -6,7 +6,7 @@ from tests.manual.test_tools_implementation import _assert_tool_protocol
 
 
 class IncompleteTool:
-    async def execute(self):
+    def execute(self):
         return None
 
     def __call__(self):
