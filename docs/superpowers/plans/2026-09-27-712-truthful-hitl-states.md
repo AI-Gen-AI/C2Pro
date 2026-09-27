@@ -94,6 +94,8 @@ Commit message: `fix(hitl): finalize reject into truthful document state`
 - FAILED_RETRYABLE shows Retry.
 
 - [ ] **Step 1: Write Vitest tests for rendered state/CTA/polling**
+
+Cover: one pending review links directly when a stable item id is exposed; multiple pending reviews route to the project review queue without guessing an item; terminal attention states stop the 5 s in-flight polling loop.
 - [ ] **Step 2: Verify RED**
 - [ ] **Step 3: Implement minimal UI mapping and CTA**
 - [ ] **Step 4: Run frontend unit/typecheck**
