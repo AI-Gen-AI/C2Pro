@@ -819,6 +819,12 @@ async def reprocess_document_endpoint(
     if not document or document.project_id != project_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found or access denied.")
 
+    # An explicit user retry starts a fresh bounded recovery budget while
+    # preserving every unrelated piece of document metadata.
+    metadata = dict(document.document_metadata or {})
+    if metadata.pop("processing_recovery", None) is not None:
+        await repo.update_metadata(tenant_id, document_id, metadata)
+
     await repo.update_status(tenant_id, document_id, DocumentStatus.UPLOADED, parsing_error=None)
     await repo.commit()
     await repo.refresh(document)
