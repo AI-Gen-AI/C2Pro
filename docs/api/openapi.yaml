@@ -5933,7 +5933,6 @@ components:
       - id
       - type
       - text
-      - page
       - confidence
       title: DocumentEntityResponse
       description: Entity extracted or derived from a persisted document.
