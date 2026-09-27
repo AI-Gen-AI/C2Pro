@@ -14,14 +14,12 @@ def test_api_dockerfile_binds_platform_port() -> None:
 
     assert 'HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \\' in content
     assert "localhost:${PORT:-8000}/health" in content
-    # CMD delegates to start.sh; verify start.sh binds $PORT
-    start_sh = Path(__file__).resolve().parents[2] / "start.sh"
-    startup = start_sh.read_text(encoding="utf-8") if start_sh.exists() else ""
-    uvicorn_in_dockerfile = "uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}" in content
-    uvicorn_in_start_sh = "uvicorn src.main:app --host 0.0.0.0" in startup and "${PORT:-8000}" in startup
-    assert uvicorn_in_dockerfile or uvicorn_in_start_sh, (
-        "Neither Dockerfile CMD nor start.sh binds uvicorn to ${PORT:-8000}"
-    )
+    # Docker defaults to the canonical API entrypoint after #710 cutover.
+    run_api = Path(__file__).resolve().parents[2] / "scripts" / "run_api.sh"
+    startup = run_api.read_text(encoding="utf-8")
+    assert 'CMD ["bash", "scripts/run_api.sh"]' in content
+    assert "uvicorn src.main:app --host 0.0.0.0" in startup
+    assert '"${PORT:-8000}"' in startup
 
 
 def test_api_runtime_requirements_include_pgvector() -> None:
