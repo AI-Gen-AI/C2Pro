@@ -60,7 +60,7 @@ def test_single_page_single_block_clause_preserves_real_bbox_and_revision() -> N
         "revision_id": str(revision_id),
         "page_number": 3,
         "page_numbers": [3],
-        "bbox": [10.0, 20.0, 300.0, 90.0],
+        "bbox": [10.0, 20.0, 290.0, 70.0],
         "normalized": False,
     }
 
@@ -208,27 +208,27 @@ async def test_sample_contract_fixture_proves_parser_to_clause_provenance() -> N
 
 
 
-def test_explicit_normalized_geometry_is_preserved_for_future_producers() -> None:
-    revision_id = uuid4()
-    text = _long_clause("1.-")
-    blocks = [
-        {
-            "text": text,
-            "page": 4,
-            "bbox": (0.1, 0.2, 0.5, 0.08),
-            "normalized": True,
-        }
-    ]
 
+def test_parser_bbox_is_converted_from_xyxy_to_viewer_rectangle() -> None:
+    text = _long_clause("1.-")
     clause = _extract_contract_clauses(
         document_id=uuid4(),
         project_id=uuid4(),
         tenant_id=uuid4(),
         parsed_text=text,
-        parsed_payload={"text_blocks": blocks},
-        revision_id=revision_id,
+        parsed_payload={
+            "text_blocks": [
+                {
+                    "text": text,
+                    "page": 5,
+                    "bbox": (12.5, 20.0, 112.5, 65.0),
+                }
+            ]
+        },
+        revision_id=uuid4(),
     )[0]
 
     location = clause.extracted_entities["evidence_location"]
-    assert location["bbox"] == [0.1, 0.2, 0.5, 0.08]
-    assert location["normalized"] is True
+    assert location["page_number"] == 5
+    assert location["bbox"] == [12.5, 20.0, 100.0, 45.0]
+    assert location["normalized"] is False
