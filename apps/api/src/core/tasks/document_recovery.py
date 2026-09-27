@@ -78,11 +78,17 @@ _CLAIM_SQL = text(
                   )
            ) AS hitl_pending
       FROM documents d
+      JOIN system_recovery.document_work_index recovery
+        ON recovery.document_id = d.id
+       AND recovery.tenant_id = d.tenant_id
      WHERE d.id = CAST(:document_id AS uuid)
        AND d.tenant_id = CAST(:tenant_id AS uuid)
        AND d.upload_status::text IN (:status_parsing, :status_analysis_pending)
-       AND d.updated_at <= clock_timestamp() - make_interval(secs => :stale_after)
-     FOR UPDATE OF d SKIP LOCKED
+       AND recovery.upload_status = d.upload_status::text
+       AND COALESCE(recovery.heartbeat_at, recovery.updated_at) <=
+           (clock_timestamp() AT TIME ZONE 'UTC')
+           - make_interval(secs => :stale_after)
+     FOR UPDATE OF d, recovery SKIP LOCKED
     """
 )
 
