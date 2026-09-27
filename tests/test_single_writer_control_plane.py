@@ -459,7 +459,12 @@ def test_live_guidance_does_not_repromote_legacy_authority() -> None:
         "docs/RELEASE_CRITERIA.md",
         "docs/testing/README.md",
         "docs/skills/c2pro-patterns.md",
+        "docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md",
         "docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md",
+        "docs/internal/RELEASE_SIGNOFF_POLICY.md",
+        "docs/runbooks/LANGSMITH_ROLLOUT_EMERGENCY.md",
+        "docs/planning/PRODUCTION_READINESS_GATE_2026-03-19.md",
+        "docs/COVERAGE_IMPROVEMENT_PLAN.md",
     ]
     forbidden = (
         "Backlog/task source of truth: `C2PRO_MASTER_BACKLOG.md`",
@@ -469,6 +474,12 @@ def test_live_guidance_does_not_repromote_legacy_authority() -> None:
         "Update `C2PRO_MASTER_BACKLOG.md`.",
         "Mark the task state in `C2PRO_MASTER_BACKLOG.md`.",
         "Edit `C2PRO_MASTER_BACKLOG.md` + docs markdown",
+        "Backlog & markdown edits go only via the Reconciler",
+        "`C2PRO_MASTER_BACKLOG.md` is the delivery and release source of truth",
+        "must be tracked in `C2PRO_MASTER_BACKLOG.md`",
+        "is marked done in `C2PRO_MASTER_BACKLOG.md` before rollout activation",
+        "`C2PRO_MASTER_BACKLOG.md` is now the primary engineering delivery backlog",
+        "Active task ownership and completion state must be tracked in `C2PRO_MASTER_BACKLOG.md`",
     )
 
     for relative in live_surfaces:
@@ -483,6 +494,17 @@ def test_live_guidance_does_not_repromote_legacy_authority() -> None:
     )
     assert "LEGACY ORCHESTRATION MODEL" in legacy_guide
     assert "Do not execute the legacy write steps below for new work." in legacy_guide
+
+
+    # Policy and operational runbook directories are active guidance categories,
+    # so they must not regain legacy control authority through a new file.
+    for directory in (ROOT / "docs" / "internal", ROOT / "docs" / "runbooks"):
+        for policy_path in directory.glob("*.md"):
+            operational = policy_path.read_text(encoding="utf-8")
+            for phrase in forbidden:
+                assert phrase not in operational, (
+                    f"{policy_path.relative_to(ROOT)} re-promotes legacy authority: {phrase}"
+                )
 
 
 
