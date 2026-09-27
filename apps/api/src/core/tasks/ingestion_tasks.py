@@ -73,10 +73,11 @@ RAG_READINESS_MAX_RETRIES = 3
 
 
 def _build_text_block_index(text_blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Build offset index for flattened parsed text.
+    """Build offset + coordinate-space index for flattened parsed text.
 
-    Returns entries with start_offset, end_offset, page, bbox, text.
-    Offsets correspond to the string produced by joining blocks with "\n\n".
+    Offsets correspond to the exact string produced by joining blocks with
+    "\n\n". PyMuPDF/OCR bboxes are absolute PDF-page coordinates; a future
+    producer may explicitly declare normalized geometry.
     """
     index: list[dict[str, Any]] = []
     pos = 0
@@ -84,18 +85,27 @@ def _build_text_block_index(text_blocks: list[dict[str, Any]]) -> list[dict[str,
         txt = block.get("text", "") if isinstance(block.get("text"), str) else ""
         start = pos
         end = start + len(txt)
-        page = block.get("page")
-        bbox = block.get("bbox")
-        index.append({
-            "start_offset": start,
-            "end_offset": end,
-            "page": page,
-            "bbox": bbox,
-            "text": txt,
-        })
+        raw_bbox = block.get("bbox")
+        has_bbox = isinstance(raw_bbox, (list, tuple)) and len(raw_bbox) == 4
+        explicit_normalized = block.get("normalized")
+        index.append(
+            {
+                "start_offset": start,
+                "end_offset": end,
+                "page": block.get("page"),
+                "bbox": raw_bbox,
+                "normalized": (
+                    explicit_normalized
+                    if isinstance(explicit_normalized, bool)
+                    else False
+                )
+                if has_bbox
+                else False,
+                "text": txt,
+            }
+        )
         pos = end
         if i < len(text_blocks) - 1:
-            # account for the "\n\n" separator used in _extract_parsed_text
             pos += 2
     return index
 
@@ -478,7 +488,7 @@ def _extract_contract_clauses(
         clause_type = _infer_contract_clause_type(segment)
         # Resolve overlapping blocks
         pages: list[int] = []
-        bboxes: list[tuple[float, float, float, float]] = []
+        bboxes: list[tuple[tuple[float, float, float, float], bool]] = []
         if block_index:
             for entry in block_index:
                 # Overlap check
@@ -495,28 +505,36 @@ def _extract_contract_clauses(
                 ):
                     bboxes.append(
                         (
-                            float(raw_bbox[0]),
-                            float(raw_bbox[1]),
-                            float(raw_bbox[2]),
-                            float(raw_bbox[3]),
+                            (
+                                float(raw_bbox[0]),
+                                float(raw_bbox[1]),
+                                float(raw_bbox[2]),
+                                float(raw_bbox[3]),
+                            ),
+                            bool(entry.get("normalized", False)),
                         )
                     )
         # Determine truthful location semantics
         unique_pages = sorted(set(pages))
         page_number: int | None = None
         bbox: list[float] | None = None
+        bbox_normalized = False
         if len(unique_pages) == 1:
             page_number = unique_pages[0]
             # A single source block has exact geometry. Multiple blocks keep
             # the real page but do not invent a merged rectangle.
-            bbox = list(bboxes[0]) if len(bboxes) == 1 else None
+            if len(bboxes) == 1:
+                bbox = list(bboxes[0][0])
+                bbox_normalized = bboxes[0][1]
+            else:
+                bbox = None
         # Build evidence_location
         evidence_location = {
             "revision_id": str(revision_id) if revision_id else None,
             "page_number": page_number,
             "page_numbers": unique_pages if unique_pages else [],
             "bbox": bbox,
-            "normalized": True,
+            "normalized": bbox_normalized if bbox is not None else False,
         }
         extracted = _build_contract_clause_data(segment, parsed_text)
         extracted["evidence_location"] = evidence_location
