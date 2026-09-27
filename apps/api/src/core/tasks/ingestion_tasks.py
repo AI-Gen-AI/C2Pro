@@ -550,16 +550,35 @@ def _extract_contract_clauses(
                 if isinstance(page, int):
                     pages.append(page)
                 raw_bbox = entry.get("bbox")
+                block_text = entry.get("text")
+                block_start = entry.get("start_offset")
+                block_end = entry.get("end_offset")
+                exact_block_span = False
                 if (
-                    isinstance(raw_bbox, (list, tuple))
+                    isinstance(block_text, str)
+                    and isinstance(block_start, int)
+                    and isinstance(block_end, int)
+                ):
+                    left_trim = len(block_text) - len(block_text.lstrip())
+                    right_trim = len(block_text) - len(block_text.rstrip())
+                    exact_block_span = (
+                        start_offset == block_start + left_trim
+                        and end_offset == block_end - right_trim
+                    )
+
+                if (
+                    exact_block_span
+                    and isinstance(raw_bbox, (list, tuple))
                     and len(raw_bbox) == 4
                     and all(isinstance(value, (int, float)) for value in raw_bbox)
                 ):
                     x0, y0, x1, y1 = (float(value) for value in raw_bbox)
                     if x1 >= x0 and y1 >= y0:
-                        # Parser-native PDF geometry is x0/y0/x1/y1.
-                        # The web Highlight rectangle contract is
-                        # left/top/width/height in the same coordinate space.
+                        # Parser-native PDF geometry describes the WHOLE text
+                        # block. It is exact evidence geometry only when the
+                        # clause span covers that complete source block. A
+                        # partial overlap keeps its truthful page + offsets
+                        # but MUST NOT inherit the block's full rectangle.
                         bboxes.append(
                             (
                                 (x0, y0, x1 - x0, y1 - y0),
