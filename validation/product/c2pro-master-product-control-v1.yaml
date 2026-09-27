@@ -59,7 +59,7 @@ production_position:
     - "PR #630 merged the P0b-L4-5 release-ready implementation; the PR explicitly recorded PROD_VALIDATED=NO"
     - "Production runtime identity is now observed per plane rather than inferred from main: Railway backend deployment 2bbaea5d-bc7f-4aeb-80ad-aba6d483141a is SUCCESS at 386cbbce74b2653a6039fdddd9fc9719c43b9ff9; Vercel frontend deployment dpl_GTC5eGxtn4m6e5p7Tsyet8jRDBfq is READY at 6186f2a06fb3957562aa338742f18838fac5993a"
     - "The legacy singleton deployed_runtime_sha remains UNVERIFIED because backend/frontend SHAs legitimately differ; merged #678 carries non-authoritative composite runtime evidence and #681 owns Product-Control promotion integration"
-    - "Railway Watch Paths /apps/api/** are live-proven: control-only #678 and frontend-only #699 main commits were SKIPPED while backend-changing #697 deployed SUCCESS; Vercel filtering is merged via #699 but live skip proof is pending platform quota reset"
+    - "Composite deployment filtering is live-proven: Railway Watch Paths /apps/api/** skip non-backend changes while backend-changing #697 deployed SUCCESS; after #699, docs/control-only main merges #669 and #701 did not advance Vercel production, which remains on #678"
     - "Production HITL incidents proved the real P0b journey reached human review; subsequent #633/#638/#641/#646/#650 hardening is merged on main, without implying P0b PROD_VALIDATED"
   reliability_operability_baseline: CLOSED
   product_value_delivered: false
@@ -115,7 +115,7 @@ reconciliation_delta_2026_09_26:
     - "Next.js security baseline advanced to 16.3.6 via #654; blocking E2E runs against production Next runtime via #655"
     - "CI action maintenance through #665/#668 is present in the observed main baseline but remains execution work owned outside this product-control reconciliation"
     - "Qualification evidence Phase A merged via #678: P0b/P0c/P0d evidence bundles are machine-validated, historically bound and non-authoritative; lifecycle promotion remains Product Control only"
-    - "Composite deployment filtering advanced via #695/#699: Railway backend filtering is live-proven; Vercel frontend ignore logic is merged and awaits live skip verification after quota reset"
+    - "Composite deployment filtering completed via #695/#699: Railway and Vercel filters are both live-verified against non-runtime main changes"
   control_conclusion: >
     Main is materially ahead of the 2026-09-13 reconciliation. Several former candidate lanes are
     now wired in repository code, but merge status is still distinct from deployment and PROD_VALIDATED.
@@ -197,7 +197,7 @@ corrected_current_claims:
   - claim: "Phase 1 COMPLETE / product functional for end users"
     truth: "P0a reliability/operability baseline is CLOSED; product value is not yet PROD_VALIDATED."
   - claim: "No open code work required for end users"
-    truth: "P0b user-visible production validation, P0c/P0d candidates, Project Controls, Procurement and later workflows remain open."
+    truth: "P0b/P0c/P0d user-visible production validation remains open; P0c and P0d are already WIRED_ON_MAIN_NOT_PROD_VALIDATED. Project Controls, Procurement and later workflows remain open."
   - claim: "Project Controls can be represented as multiple discipline WBSs"
     truth: "Rejected. One project has one canonical hierarchical WBS; disciplines are branches/levels."
   - claim: "Coherence Score, Health and Alerts are interchangeable project-health concepts"
