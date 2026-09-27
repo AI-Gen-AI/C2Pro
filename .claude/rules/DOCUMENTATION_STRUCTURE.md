@@ -39,7 +39,7 @@ Do **not** create standalone files merely to report that a task was planned, imp
 For current work:
 
 1. scope and acceptance criteria belong in the authorized work envelope or approved product slice;
-2. implementation/review evidence belongs in the PR and structured `c2pro-implementation-result-v1` output;
+2. evidence belongs in the PR using the schema assigned to the worker role: implementation roles use `c2pro-implementation-result-v1`; QA/reviewer/security roles use `c2pro-review-result-v1`;
 3. current execution state changes only through Master/Planner/Reconciler control-plane reconciliation after review/CI/merge;
 4. product lifecycle changes only through the product-control YAML/Markdown pair with explicit evidence.
 
@@ -52,7 +52,7 @@ Workers:
 - read the assigned `.c2pro/work/<work_id>.yaml`;
 - read only the hot control context needed for that work;
 - implement inside authorized scope;
-- return structured evidence;
+- return the role-appropriate structured evidence schema;
 - do **not** self-promote completion into canonical control;
 - do **not** write legacy backlog/blackboard state.
 
