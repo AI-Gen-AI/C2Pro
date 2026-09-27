@@ -107,6 +107,27 @@ async def test_incomplete_non_hitl_attempt_sets_the_retryable_flag(
 
 
 @pytest.mark.asyncio
+async def test_incomplete_attempt_does_not_claim_user_retry_while_auto_retry_remains(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document = _parsed_document()
+    repository = _install(monkeypatch, document)
+    orchestrator = _FakeOrchestrator(analysis_id=None, human_approval_required=False)
+
+    with pytest.raises(ingestion_tasks.AnalysisIncompleteRetryableError):
+        await ingestion_tasks._run_document_analysis(
+            tenant_id=document.tenant_id,
+            document_id=document.id,
+            orchestrator=orchestrator,
+            automatic_retry_available=True,
+        )
+
+    assert not repository.updated_metadata or "analysis_last_attempt_incomplete" not in (
+        repository.updated_metadata[-1]
+    )
+
+
+@pytest.mark.asyncio
 async def test_hitl_pause_never_sets_the_retryable_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     document = _parsed_document()
     repository = _install(monkeypatch, document)
