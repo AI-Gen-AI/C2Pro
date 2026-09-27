@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ProdPreflightError,
+  type ProdPreflightFailureCode,
   assertProdPreflight,
   requireProdAcceptanceEnv,
   syntheticProjectName,
@@ -32,7 +33,10 @@ function valid(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function expectCode(overrides: Record<string, unknown>, code: string) {
+function expectCode(
+  overrides: Record<string, unknown>,
+  code: ProdPreflightFailureCode,
+) {
   expect(() => assertProdPreflight(valid(overrides))).toThrowError(
     expect.objectContaining<Partial<ProdPreflightError>>({ code }),
   );
