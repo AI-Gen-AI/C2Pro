@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import text
@@ -175,18 +177,85 @@ async def _journey_checks(
     return checks
 
 
-async def verify(*, database_url: str, tenant_id: UUID, clerk_org_id: str, project_id: UUID | None, require_hitl: bool) -> list[Check]:
+async def _journey_identifiers(
+    conn: AsyncConnection, *, tenant_id: UUID, project_id: UUID
+) -> tuple[dict[str, str], Check]:
+    result = await conn.execute(
+        text(
+            """
+            SELECT d.id AS document_id, r.revision_id
+              FROM documents d
+              JOIN document_revisions r
+                ON r.document_id = d.id
+               AND r.tenant_id = d.tenant_id
+             WHERE d.project_id = :project_id
+               AND d.tenant_id = :tenant_id
+               AND r.project_id = :project_id
+               AND r.tenant_id = :tenant_id
+               AND r.valid_to IS NULL
+             ORDER BY r.rev_no DESC
+            """
+        ),
+        {"tenant_id": tenant_id, "project_id": project_id},
+    )
+    rows = result.all()
+    if len(rows) != 1:
+        return (
+            {"project_id": str(project_id)},
+            Check(
+                "source revision resolved",
+                False,
+                f"current_source_revisions={len(rows)}",
+            ),
+        )
+    row = rows[0]
+    return (
+        {
+            "project_id": str(project_id),
+            "document_id": str(row.document_id),
+            "source_revision_id": str(row.revision_id),
+        },
+        Check("source revision resolved", True, "current_source_revisions=1"),
+    )
+
+
+async def verify(
+    *,
+    database_url: str,
+    tenant_id: UUID,
+    clerk_org_id: str,
+    project_id: UUID | None,
+    require_hitl: bool,
+) -> tuple[list[Check], dict[str, str]]:
     engine = create_async_engine(_normalize_database_url(database_url))
+    identifiers: dict[str, str] = {}
     try:
         async with engine.connect() as conn:
             transaction = await conn.begin()
             try:
                 await conn.execute(text("SET TRANSACTION READ ONLY"))
-                checks = await _preflight_checks(conn, tenant_id=tenant_id, clerk_org_id=clerk_org_id)
+                checks = await _preflight_checks(
+                    conn,
+                    tenant_id=tenant_id,
+                    clerk_org_id=clerk_org_id,
+                )
                 if project_id is not None:
-                    checks.extend(await _journey_checks(conn, tenant_id=tenant_id, project_id=project_id, require_hitl=require_hitl))
+                    checks.extend(
+                        await _journey_checks(
+                            conn,
+                            tenant_id=tenant_id,
+                            project_id=project_id,
+                            require_hitl=require_hitl,
+                        )
+                    )
+                    identifiers, revision_check = await _journey_identifiers(
+                        conn,
+                        tenant_id=tenant_id,
+                        project_id=project_id,
+                    )
+                    checks.append(revision_check)
                 await transaction.rollback()
-                return checks
+                return checks, identifiers
             except Exception:
                 await transaction.rollback()
                 raise
@@ -201,6 +270,10 @@ def main() -> int:
     parser.add_argument("--clerk-org-id", default=os.getenv("PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"))
     parser.add_argument("--project-id", default=os.getenv("PROD_ACCEPTANCE_PROJECT_ID"))
     parser.add_argument("--require-hitl", action="store_true")
+    parser.add_argument(
+        "--output-json",
+        help="Optional bounded result JSON path (identifiers + check states only).",
+    )
     args = parser.parse_args()
     if not args.database_url or not args.tenant_id or not args.clerk_org_id:
         print("FAIL: required production acceptance configuration is missing.", file=sys.stderr)
@@ -208,7 +281,15 @@ def main() -> int:
     try:
         tenant_id = _uuid(args.tenant_id, "tenant id")
         project_id = _uuid(args.project_id, "project id") if args.project_id else None
-        checks = asyncio.run(verify(database_url=args.database_url, tenant_id=tenant_id, clerk_org_id=args.clerk_org_id, project_id=project_id, require_hitl=args.require_hitl))
+        checks, identifiers = asyncio.run(
+            verify(
+                database_url=args.database_url,
+                tenant_id=tenant_id,
+                clerk_org_id=args.clerk_org_id,
+                project_id=project_id,
+                require_hitl=args.require_hitl,
+            )
+        )
     except Exception as exc:
         print(f"FAIL: verifier execution failed ({type(exc).__name__}).", file=sys.stderr)
         return 2
@@ -217,6 +298,22 @@ def main() -> int:
         state = "PASS" if check.passed else "FAIL"
         print(f"{state}: {check.name} ({check.detail})")
         failed = failed or not check.passed
+
+    if args.output_json:
+        output = {
+            "verdict": "FAIL" if failed else "PASS",
+            "identifiers": identifiers,
+            "checks": [
+                {"name": check.name, "passed": check.passed, "detail": check.detail}
+                for check in checks
+            ],
+        }
+        output_path = Path(args.output_json)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(output, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
     return 1 if failed else 0
 
 
