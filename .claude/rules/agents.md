@@ -19,7 +19,7 @@ Always dispatch by **role + currently-assigned model** (e.g. "Test/QA → DeepSe
 | **DevOps / Infra** | CI (`.github/workflows`), Docker, deploy, dependency bumps (`requirements.txt`), migration lifecycle; push; open PRs. | No self-merge; never weaken security/CI gates or skip hooks without explicit Orchestrator sign-off. |
 | **Test / QA** | Tests only: `apps/api/tests` + test-infra (`_bootstrap.py`, `conftest.py`); run suites; RED-first; push; open PRs. | **No `src/` business-logic edits**; no self-merge; no backlog edits. |
 | **Verification Auditor** | **READ-ONLY.** Read code, run read-only checks, produce written findings/reports. | **NEVER edit, commit, or push ANY file; never merge; never edit the backlog.** Report only. |
-| **Reconciler** | Edit `C2PRO_MASTER_BACKLOG.md` + docs markdown via a committed `docs(backlog)` PR. Dispatched in-session by the Orchestrator. | No `src/` or `tests/` edits; no self-merge (Orchestrator gates). |
+| **Reconciler** | Reconcile canonical `.c2pro` execution state and, when product maturity changes, the product-control YAML/Markdown pair via a committed control PR. | Never mutate legacy backlog/blackboard files; no product runtime edits; no self-merge (Orchestrator gates). |
 
 ### Assignment (current — swappable)
 
