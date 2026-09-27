@@ -1,5 +1,11 @@
 # C2Pro — Landing × AI-Gen Brand Sync Implementation Prompt (patch-by-patch)
 
+> **RETIRED / NON-OPERATIONAL — historical execution artifact.**  
+> Do not execute the legacy backlog-write, priority, scheduling, or completion instructions below for new work.  
+> Current development execution authority is `.c2pro/control/work-queue.yaml` plus the assigned `.c2pro/work/<work_id>.yaml` envelope.  
+> Current product lifecycle/programme truth is `validation/product/c2pro-master-product-control-v1.yaml` with its guarded human projection.  
+> The remaining body is preserved only as historical context/evidence.
+
 **Date:** 2026-07-06 · **Epic:** `EPIC-FRT-LANDING-SYNC` · **Backlog IDs:** `TASK-FRT-198` … `TASK-FRT-202` (registered in `C2PRO_MASTER_BACKLOG.md` and `backlogs/FRT_FRONTEND.md`)
 **Brand reference:** the live https://www.ai-gen.ai site — repo `AI-Gen-AI/2SB`, local `C:\Users\esus_\Documents\2SB\02_PROYECTOS\03-AI-Gen` (static HTML; `assets/site.css` = **AI-Gen Design System v2 "Tech-Editorial B2B Premium"**). c2pro.io must read as the product arm of that ecosystem.
 
