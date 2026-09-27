@@ -70,6 +70,59 @@ from src.temporal.domain.document_revision import DocumentRevision
 logger = logging.getLogger(__name__)
 
 RAG_READINESS_MAX_RETRIES = 3
+PROCESSING_HEARTBEAT_INTERVAL_SECONDS = 60
+
+_PROCESSING_HEARTBEAT_SQL = text(
+    """
+    UPDATE system_recovery.document_work_index
+       SET heartbeat_at = clock_timestamp() AT TIME ZONE 'UTC'
+     WHERE document_id = CAST(:document_id AS uuid)
+       AND upload_status = :expected_status
+    """
+)
+
+
+async def _document_processing_heartbeat_loop(
+    *,
+    document_id: UUID,
+    expected_status: DocumentStatus,
+    interval_seconds: float = PROCESSING_HEARTBEAT_INTERVAL_SECONDS,
+) -> None:
+    """Refresh the internal recovery lease while this worker is alive."""
+    while True:
+        try:
+            async with get_raw_session() as heartbeat_session:
+                await heartbeat_session.execute(
+                    _PROCESSING_HEARTBEAT_SQL,
+                    {
+                        "document_id": str(document_id),
+                        "expected_status": expected_status.value,
+                    },
+                )
+                await heartbeat_session.commit()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # The primary task remains authoritative. A transient DB outage also
+            # prevents the reconciler from dispatching a competing task.
+            logger.exception(
+                "document_processing_heartbeat_failed",
+                extra={
+                    "document_id": str(document_id),
+                    "expected_status": expected_status.value,
+                },
+            )
+        await asyncio.sleep(interval_seconds)
+
+
+async def _stop_processing_heartbeat(task: asyncio.Task[None] | None) -> None:
+    if task is None:
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
 
 def _temporal_failure_code(error: Exception) -> str:
@@ -1061,6 +1114,23 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
             raise
 
 
+async def _run_document_processing_task_lifecycle(
+    *,
+    document_id: UUID,
+    revision_id: UUID | None,
+) -> dict[str, Any]:
+    heartbeat = asyncio.create_task(
+        _document_processing_heartbeat_loop(
+            document_id=document_id,
+            expected_status=DocumentStatus.PARSING,
+        )
+    )
+    try:
+        return await _process(document_id, revision_id)
+    finally:
+        await _stop_processing_heartbeat(heartbeat)
+
+
 @celery_app.task(
     bind=True,
     autoretry_for=(Exception,),
@@ -1090,7 +1160,10 @@ def process_document_async(
         revision_id,
     )
     return asyncio.run(
-        _process(UUID(document_id), UUID(revision_id) if revision_id is not None else None)
+        _run_document_processing_task_lifecycle(
+            document_id=UUID(document_id),
+            revision_id=UUID(revision_id) if revision_id is not None else None,
+        )
     )
 
 
@@ -1120,9 +1193,20 @@ async def _run_document_analysis_task_lifecycle(
     tenant_id: TenantId,
     document_id: UUID,
     route_rag_unavailable_to_dlq: bool,
+    enable_processing_heartbeat: bool = False,
 ) -> dict[str, Any]:
     """Own every loop-bound analysis resource for one Celery task invocation."""
     primary_error: Exception | None = None
+    heartbeat = (
+        asyncio.create_task(
+            _document_processing_heartbeat_loop(
+                document_id=document_id,
+                expected_status=DocumentStatus.PARSED_PENDING_ANALYSIS,
+            )
+        )
+        if enable_processing_heartbeat
+        else None
+    )
     try:
         return await _run_document_analysis(tenant_id=tenant_id, document_id=document_id)
     except RagChunksUnavailableError as error:
@@ -1165,6 +1249,7 @@ async def _run_document_analysis_task_lifecycle(
             )
         raise
     finally:
+        await _stop_processing_heartbeat(heartbeat)
         await _close_document_analysis_task_resources(primary_error=primary_error)
 
 
@@ -1190,6 +1275,7 @@ def process_document_analysis_async(self: Any, tenant_id: str, document_id: str)
                 tenant_id=normalized_tenant_id,
                 document_id=UUID(document_id),
                 route_rag_unavailable_to_dlq=retries >= RAG_READINESS_MAX_RETRIES,
+                enable_processing_heartbeat=True,
             )
         )
     except RagChunksUnavailableError as error:
