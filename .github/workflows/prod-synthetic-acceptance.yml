@@ -1,0 +1,249 @@
+name: Production Synthetic Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: "Type RUN-ISSUE-706 to acknowledge a real production user journey."
+        required: true
+        type: string
+      backend_commit_sha:
+        description: "Exact observed Railway production Git SHA."
+        required: true
+        type: string
+      backend_deployment_id:
+        description: "Exact observed Railway production deployment ID."
+        required: true
+        type: string
+      frontend_commit_sha:
+        description: "Exact observed Vercel production Git SHA."
+        required: true
+        type: string
+      frontend_deployment_id:
+        description: "Exact observed Vercel production deployment ID."
+        required: true
+        type: string
+      recovery_evidence_ref:
+        description: "Immutable test-report locator for merged #711/#727 recovery proof."
+        required: true
+        type: string
+      require_hitl:
+        description: "Final #706 GO run must exercise a real HITL decision."
+        required: true
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+      railway_staged_changes_clear:
+        description: "Operator verified Railway has no unreviewed staged API environment patch."
+        required: true
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c2pro-production-synthetic-acceptance
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "22"
+  PROD_ACCEPTANCE_BASE_URL: "https://c2pro.io"
+  PROD_ACCEPTANCE_FIXTURE_SHA256: "f0bc7170cf002570be58f9225f9affc534720a4756fa1da39ae7ad328d63a9b9"
+
+jobs:
+  production-acceptance:
+    name: "#706 real production end-user journey"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production-qualification
+
+    steps:
+      - name: Fail closed on operator intent and branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.confirm_production }}" = "RUN-ISSUE-706" || {
+            echo "Refusing production mutation: confirmation does not match." >&2
+            exit 2
+          }
+          test "${GITHUB_REF_NAME}" = "main" || {
+            echo "Refusing production qualification from non-main ref: ${GITHUB_REF_NAME}" >&2
+            exit 2
+          }
+          test "${{ inputs.railway_staged_changes_clear }}" = "true" || {
+            echo "Refusing production qualification while Railway staged changes are unreviewed." >&2
+            exit 2
+          }
+          [[ "${{ inputs.backend_commit_sha }}" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          [[ "${{ inputs.frontend_commit_sha }}" =~ ^[0-9a-f]{40}$ ]] || exit 2
+
+      - name: Checkout exact control commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Verify control commit belongs to canonical main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --quiet
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          test -f validation/product/c2pro-master-product-control-v1.yaml
+          echo "CONTROL_COMMIT_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "PROD_ACCEPTANCE_RUN_ID=gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+
+      - name: Setup Python backend
+        uses: ./.github/actions/setup-python-backend
+        with:
+          python-version: "3.11"
+          install-system-deps: "false"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install production-acceptance browser
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Verify production fixture digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(sha256sum apps/web/src/tests/e2e/test-data/sample-contract.pdf | awk '{print $1}')"
+          test "$actual" = "$PROD_ACCEPTANCE_FIXTURE_SHA256"
+
+      - name: Read-only synthetic tenant preflight
+        env:
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python apps/api/scripts/verify_prod_synthetic_journey.py \
+            --database-url "$PROD_ACCEPTANCE_DATABASE_URL_READONLY" \
+            --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
+            --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"
+          echo "PROD_ACCEPTANCE_TENANT_PREFLIGHT_VERIFIED=1" >> "$GITHUB_ENV"
+
+      - name: Execute real production browser journey
+        env:
+          PLAYWRIGHT_SKIP_WEBSERVER: "1"
+          PLAYWRIGHT_BASE_URL: "https://c2pro.io"
+          PROD_ACCEPTANCE_CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_PASSWORD: ${{ secrets.PROD_ACCEPTANCE_CLERK_PASSWORD }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+          PROD_ACCEPTANCE_EXPECTED_BACKEND_SHA: ${{ inputs.backend_commit_sha }}
+          PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA: ${{ inputs.backend_commit_sha }}
+          PROD_ACCEPTANCE_EXPECTED_FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
+          PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
+          PROD_ACCEPTANCE_REQUIRE_HITL: ${{ inputs.require_hitl }}
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec playwright test \
+            src/tests/e2e/prod-acceptance/706-production-synthetic.spec.ts \
+            --project=prod-acceptance \
+            --reporter=line \
+            --workers=1
+
+      - name: Resolve bounded run identifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_id="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('apps/web/playwright/.prod-acceptance/run.json').read_text())
+          value = data.get('project_id')
+          if not isinstance(value, str) or not value:
+              raise SystemExit(2)
+          print(value)
+          PY
+          )"
+          echo "PROD_ACCEPTANCE_PROJECT_ID=$project_id" >> "$GITHUB_ENV"
+
+      - name: Read-only durable post-run verification
+        env:
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/product-qualification/runtime
+          hitl=()
+          if [ "${{ inputs.require_hitl }}" = "true" ]; then hitl=(--require-hitl); fi
+          python apps/api/scripts/verify_prod_synthetic_journey.py \
+            --database-url "$PROD_ACCEPTANCE_DATABASE_URL_READONLY" \
+            --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
+            --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID" \
+            --project-id "$PROD_ACCEPTANCE_PROJECT_ID" \
+            --output-json evidence/product-qualification/runtime/verifier.json \
+            "${hitl[@]}"
+
+      - name: Build non-authoritative P0b evidence bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          hitl=()
+          if [ "${{ inputs.require_hitl }}" = "true" ]; then hitl=(--require-hitl); fi
+          output="evidence/product-qualification/p0b-prod-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.yaml"
+          python validation/product/build_p0b_prod_qualification_bundle.py \
+            --control-commit-sha "$CONTROL_COMMIT_SHA" \
+            --backend-commit-sha "${{ inputs.backend_commit_sha }}" \
+            --backend-deployment-id "${{ inputs.backend_deployment_id }}" \
+            --frontend-commit-sha "${{ inputs.frontend_commit_sha }}" \
+            --frontend-deployment-id "${{ inputs.frontend_deployment_id }}" \
+            --recovery-evidence-ref "${{ inputs.recovery_evidence_ref }}" \
+            --run-json apps/web/playwright/.prod-acceptance/run.json \
+            --verifier-json evidence/product-qualification/runtime/verifier.json \
+            --output "$output" \
+            "${hitl[@]}"
+          echo "QUALIFICATION_BUNDLE=$output" >> "$GITHUB_ENV"
+
+      - name: Validate qualification evidence contract
+        run: python validation/product/validate_qualification_evidence.py
+
+      - name: Emit bounded run summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## C2Pro #706 Production Synthetic Acceptance"
+            echo
+            echo "- control commit: \`$GITHUB_SHA\`"
+            echo "- backend deployment: \`${{ inputs.backend_deployment_id }}\`"
+            echo "- backend commit: \`${{ inputs.backend_commit_sha }}\`"
+            echo "- frontend deployment: \`${{ inputs.frontend_deployment_id }}\`"
+            echo "- frontend commit: \`${{ inputs.frontend_commit_sha }}\`"
+            echo "- require HITL: \`${{ inputs.require_hitl }}\`"
+            echo "- lifecycle authority: **false**"
+            echo
+            echo "No credential/token values are included in this summary."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload bounded qualification artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: c2pro-706-production-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: |
+            apps/web/playwright/.prod-acceptance/run.json
+            evidence/product-qualification/runtime/verifier.json
+            evidence/product-qualification/p0b-prod-gh-*.yaml
