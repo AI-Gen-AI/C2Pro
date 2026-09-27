@@ -91,7 +91,7 @@ This resolves the earlier ambiguity that could have led the product toward paral
 Three facts remain deliberately separate:
 
 - `reconciled_against_main_sha = ed2eabd636d56b68605e26791ca69c11ce3a2905` — repository baseline used for this reconciliation.
-- `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is now composite. Railway API `0eb8f250-24db-4305-98b9-cc7749afe728`, Worker `485927bd-60a6-465c-bc0b-b231e987e08c` and Scheduler `5725b969-7840-4d4b-bde6-f758a9790845` are SUCCESS at #717 `ed2eabd636d56b68605e26791ca69c11ce3a2905`; Vercel production remains READY at #707 `e7608723c72e391fa3ff12a50d433e4265e4ac94`. #678/#700 retain plane-specific evidence/promotion control.
+- `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is now composite. Railway API `23706959-89a7-4478-98e8-bd67fd425c72`, Worker `485927bd-60a6-465c-bc0b-b231e987e08c` and Scheduler `5725b969-7840-4d4b-bde6-f758a9790845` are SUCCESS at #717 `ed2eabd636d56b68605e26791ca69c11ce3a2905`; Vercel production remains READY at #707 `e7608723c72e391fa3ff12a50d433e4265e4ac94`. #678/#700 retain plane-specific evidence/promotion control.
 - `product_value_delivered = false` — P0a reliability is closed and several product lanes are now wired on `main`, but the north-star P0b journey is still not PROD_VALIDATED.
 
 ### 2.1 What changed since the previous 2026-09-27 control baseline
@@ -102,7 +102,7 @@ The previous control baseline was `863ac936cf36dac41c95e9e51f5e23d8dba1c419`. Cu
 - **Deterministic backend lock (#698):** Python 3.11 production dependency resolution is committed/guarded, improving reproducibility without proving user value.
 - **#706 architecture (#709):** the GOAL is explicitly the real deployed end-user journey, not CI green or services merely being up.
 - **#710–#715 plans (#716):** the final synthetic production acceptance (#715) is downstream of the required #710–#714 remediation set.
-- **Production runtime/storage (#717):** Railway now runs separate API, Worker and Scheduler services on the same #717 commit; live read-only checks show API health 200 and scheduled HITL recovery tasks repeatedly completing successfully.
+- **Production runtime/storage (#717):** Railway now runs separate API, Worker and Scheduler services on the same #717 commit; live read-only checks show the current API deployment completing uvicorn/Redis/LangGraph startup successfully and scheduled HITL recovery tasks repeatedly completing successfully.
 
 Production is still a composite runtime: Railway is on #717 while Vercel production remains on #707. That is legitimate and must be rebound exactly at qualification time.
 
