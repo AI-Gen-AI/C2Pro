@@ -1,0 +1,385 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
+import { expect, test, type Page, type Response } from "@playwright/test";
+
+import {
+  buildSyntheticProjectName,
+  PROD_ACCEPTANCE_FIXTURE,
+} from "./support/prod-preflight";
+import {
+  signInSyntheticProductionUser,
+  signOutThroughUi,
+} from "./support/prod-auth.synthetic";
+
+const RUN_OUTPUT = path.join(
+  process.cwd(),
+  "playwright",
+  ".prod-acceptance",
+  "run.json",
+);
+const JOURNEY_TIMEOUT_MS = 15 * 60_000;
+const PROCESSING_TIMEOUT_MS = 10 * 60_000;
+
+interface DocumentRecord {
+  id: string;
+  status?: string | null;
+  lifecycle_status?: string | null;
+  retryable?: boolean;
+  review_count?: number | null;
+  review_item_id?: string | null;
+}
+
+interface DocumentsPayload {
+  items?: DocumentRecord[];
+}
+
+interface CategoryAssessment {
+  category: string;
+  state: string;
+  evidence_clause_ids?: string[];
+}
+
+interface HealthVector {
+  single_document_coverage?: {
+    document_id?: string | null;
+    assessments?: CategoryAssessment[];
+  } | null;
+  single_document_evidence_granularity?: string | null;
+  trusted_score?: number | null;
+  projected_score?: number | null;
+  projected_delta?: number | null;
+  pending_review_count?: number | null;
+}
+
+const CANONICAL_CATEGORIES = new Set([
+  "SCOPE",
+  "BUDGET",
+  "TIME",
+  "TECHNICAL",
+  "LEGAL",
+  "QUALITY",
+]);
+
+function baseUrl(): string {
+  return process.env.PROD_ACCEPTANCE_BASE_URL ?? "https://c2pro.io";
+}
+
+function requireHitl(): boolean {
+  return process.env.PROD_ACCEPTANCE_REQUIRE_HITL === "1";
+}
+
+function responsePath(response: Response): string {
+  return new URL(response.url()).pathname;
+}
+
+function documentListResponse(response: Response, projectId: string): boolean {
+  const pathname = responsePath(response);
+  return (
+    response.request().method() === "GET" &&
+    response.status() === 200 &&
+    new RegExp(
+      `/api(?:/v1)?/projects/${projectId}/documents/?$`,
+    ).test(pathname)
+  );
+}
+
+async function loadDocument(
+  page: Page,
+  projectId: string,
+  documentId: string,
+): Promise<DocumentRecord> {
+  const responsePromise = page.waitForResponse(
+    (response) => documentListResponse(response, projectId),
+    { timeout: 60_000 },
+  );
+  await page.goto(`${baseUrl()}/projects/${projectId}/documents`);
+  const response = await responsePromise;
+  const payload = (await response.json()) as DocumentsPayload | DocumentRecord[];
+  const items = Array.isArray(payload) ? payload : (payload.items ?? []);
+  const record = items.find((item) => item.id === documentId);
+  if (!record) {
+    throw new Error(
+      `PROD_ACCEPTANCE_DOCUMENT_NOT_LISTED:${documentId}`,
+    );
+  }
+  return record;
+}
+
+async function waitForDocumentAttentionOrCompletion(
+  page: Page,
+  projectId: string,
+  documentId: string,
+): Promise<DocumentRecord> {
+  const deadline = Date.now() + PROCESSING_TIMEOUT_MS;
+  let latest = await loadDocument(page, projectId, documentId);
+
+  while (Date.now() < deadline) {
+    const lifecycle = String(latest.lifecycle_status ?? "").toLowerCase();
+    if (
+      [
+        "analyzed",
+        "review_required",
+        "failed_retryable",
+        "needs_changes",
+        "error",
+      ].includes(lifecycle)
+    ) {
+      return latest;
+    }
+    await page.waitForTimeout(5_000);
+    latest = await loadDocument(page, projectId, documentId);
+  }
+
+  throw new Error(
+    `PROD_ACCEPTANCE_PROCESSING_TIMEOUT:last_lifecycle=${latest.lifecycle_status ?? "null"};last_status=${latest.status ?? "null"}`,
+  );
+}
+
+async function waitForAnalyzed(
+  page: Page,
+  projectId: string,
+  documentId: string,
+): Promise<DocumentRecord> {
+  const deadline = Date.now() + PROCESSING_TIMEOUT_MS;
+  let latest = await loadDocument(page, projectId, documentId);
+  while (Date.now() < deadline) {
+    const lifecycle = String(latest.lifecycle_status ?? "").toLowerCase();
+    if (lifecycle === "analyzed") return latest;
+    if (["failed_retryable", "needs_changes", "error"].includes(lifecycle)) {
+      throw new Error(
+        `PROD_ACCEPTANCE_ANALYSIS_TERMINAL_FAILURE:${lifecycle}`,
+      );
+    }
+    await page.waitForTimeout(5_000);
+    latest = await loadDocument(page, projectId, documentId);
+  }
+  throw new Error("PROD_ACCEPTANCE_ANALYZED_TIMEOUT");
+}
+
+async function loadHealth(
+  page: Page,
+  projectId: string,
+): Promise<HealthVector> {
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "GET" &&
+      response.status() === 200 &&
+      new RegExp(
+        `/api(?:/v1)?/projects/${projectId}/health/?$`,
+      ).test(responsePath(response)),
+    { timeout: 60_000 },
+  );
+  await page.goto(`${baseUrl()}/projects/${projectId}/analysis`);
+  return (await responsePromise).json() as Promise<HealthVector>;
+}
+
+async function waitForHealth(
+  page: Page,
+  projectId: string,
+): Promise<HealthVector> {
+  const deadline = Date.now() + PROCESSING_TIMEOUT_MS;
+  let vector = await loadHealth(page, projectId);
+  while (!vector.single_document_coverage && Date.now() < deadline) {
+    await page.waitForTimeout(5_000);
+    vector = await loadHealth(page, projectId);
+  }
+  if (!vector.single_document_coverage) {
+    throw new Error("PROD_ACCEPTANCE_HEALTH_TIMEOUT");
+  }
+  return vector;
+}
+
+async function createProject(page: Page, projectName: string): Promise<string> {
+  await page.goto(`${baseUrl()}/projects`);
+  await page.getByRole("button", { name: /new project|create project/i }).first().click();
+  const input = page.getByTestId("project-name-input");
+  await expect(input).toBeEditable({ timeout: 20_000 });
+  await input.fill(projectName);
+  await page.getByRole("button", { name: "Next step" }).click();
+  await page.getByRole("button", { name: "Review project" }).click();
+  const create = page.getByTestId("create-project-button");
+  await expect(create).toBeEnabled({ timeout: 15_000 });
+  await create.click();
+  await page.waitForURL(/\/projects\/[0-9a-f-]{36}\/documents/, {
+    timeout: 60_000,
+  });
+  const id = page.url().match(/\/projects\/([0-9a-f-]{36})/)?.[1];
+  if (!id) throw new Error("PROD_ACCEPTANCE_PROJECT_ID_UNRESOLVED");
+  return id;
+}
+
+async function uploadFixture(
+  page: Page,
+  projectId: string,
+): Promise<{ documentId: string; taskId: string }> {
+  await expect(page.getByTestId("documents-page")).toBeVisible({
+    timeout: 30_000,
+  });
+  await page.getByRole("button", { name: /upload document/i }).click();
+  const surface = page.getByTestId("document-upload-surface");
+  await expect(surface).toBeVisible({ timeout: 15_000 });
+  await page.setInputFiles('input[type="file"]', PROD_ACCEPTANCE_FIXTURE);
+
+  const accepted = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new RegExp(
+        `/projects/${projectId}/documents/?$`,
+      ).test(responsePath(response)),
+    { timeout: 120_000 },
+  );
+  await page.getByRole("button", { name: /^upload 1 file$/i }).click();
+  const response = await accepted;
+  if (!response.ok()) {
+    throw new Error(`PROD_ACCEPTANCE_UPLOAD_REJECTED:${response.status()}`);
+  }
+  const payload = (await response.json()) as {
+    id?: string;
+    document_id?: string;
+    task_id?: string | null;
+  };
+  const documentId = payload.id ?? payload.document_id;
+  if (!documentId) throw new Error("PROD_ACCEPTANCE_UPLOAD_NO_DOCUMENT_ID");
+  if (!payload.task_id) throw new Error("PROD_ACCEPTANCE_UPLOAD_NOT_ENQUEUED");
+  await expect(surface).toBeHidden({ timeout: 60_000 });
+  return { documentId, taskId: payload.task_id };
+}
+
+async function approveExactDocumentReview(
+  page: Page,
+  projectId: string,
+  reviewItemId: string,
+): Promise<void> {
+  await page.goto(
+    `${baseUrl()}/projects/${projectId}/review?itemId=${encodeURIComponent(reviewItemId)}`,
+  );
+  const pageRoot = page.getByTestId("review-page");
+  await expect(pageRoot).toBeVisible({ timeout: 30_000 });
+
+  const card = page.getByTestId(`review-item-${reviewItemId}`);
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  const approve = card.getByTestId(`approve-${reviewItemId}`);
+  await expect(approve).toBeEnabled({ timeout: 30_000 });
+  await approve.click();
+
+  const dialog = page.getByRole("dialog", { name: /approve review item/i });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: /confirm approve/i }).click();
+  await expect(dialog).toBeHidden({ timeout: 120_000 });
+}
+
+function writeRunEvidence(value: Record<string, unknown>): void {
+  const directory = path.dirname(RUN_OUTPUT);
+  if (!existsSync(directory)) mkdirSync(directory, { recursive: true });
+  writeFileSync(RUN_OUTPUT, JSON.stringify(value, null, 2), "utf8");
+}
+
+test.describe("Issue #706 production synthetic acceptance", () => {
+  test.describe.configure({ mode: "serial", timeout: JOURNEY_TIMEOUT_MS });
+
+  test("real user completes the canonical production journey", async ({ page }) => {
+    const runId = process.env.PROD_ACCEPTANCE_RUN_ID;
+    if (!runId) throw new Error("PROD_ACCEPTANCE_MISSING_ENV:PROD_ACCEPTANCE_RUN_ID");
+
+    await signInSyntheticProductionUser(page);
+
+    const projectName = buildSyntheticProjectName();
+    const projectId = await createProject(page, projectName);
+    const upload = await uploadFixture(page, projectId);
+
+    writeRunEvidence({
+      run_id: runId,
+      project_id: projectId,
+      document_id: upload.documentId,
+      upload_task_id: upload.taskId,
+      hitl_exercised: false,
+    });
+
+    let terminal = await waitForDocumentAttentionOrCompletion(
+      page,
+      projectId,
+      upload.documentId,
+    );
+
+    let hitlExercised = false;
+    if (terminal.lifecycle_status === "review_required") {
+      if ((terminal.review_count ?? 0) !== 1 || !terminal.review_item_id) {
+        throw new Error(
+          "PROD_ACCEPTANCE_REVIEW_NOT_EXACTLY_ADDRESSABLE",
+        );
+      }
+      await approveExactDocumentReview(
+        page,
+        projectId,
+        terminal.review_item_id,
+      );
+      hitlExercised = true;
+      terminal = await waitForAnalyzed(page, projectId, upload.documentId);
+    } else if (requireHitl()) {
+      throw new Error(
+        `PROD_ACCEPTANCE_HITL_REQUIRED_NOT_REACHED:${terminal.lifecycle_status ?? "null"}`,
+      );
+    }
+
+    expect(terminal.lifecycle_status).toBe("analyzed");
+
+    const health = await waitForHealth(page, projectId);
+    const assessments = health.single_document_coverage?.assessments ?? [];
+    expect(assessments).toHaveLength(6);
+    expect(new Set(assessments.map((item) => item.category))).toEqual(
+      CANONICAL_CATEGORIES,
+    );
+
+    const healthRegion = page.getByRole("region", { name: "Document health" });
+    await expect(healthRegion).toBeVisible();
+    const evidenceLinks = healthRegion.getByTestId("health-evidence-link");
+    expect(
+      await evidenceLinks.count(),
+      "production qualification fixture must expose clause-level evidence",
+    ).toBeGreaterThan(0);
+
+    const evidenceLink = evidenceLinks.first();
+    const clauseId = await evidenceLink.getAttribute("data-clause-id");
+    if (!clauseId) throw new Error("PROD_ACCEPTANCE_EVIDENCE_CLAUSE_ID_MISSING");
+    await evidenceLink.click();
+    await page.waitForURL(
+      new RegExp(
+        `/projects/${projectId}/evidence\\?.*highlightId=${clauseId}`,
+      ),
+      { timeout: 30_000 },
+    );
+    const activeEvidence = page.locator(
+      '[data-testid="evidence-entity-card"][data-active="true"]',
+    );
+    await expect(activeEvidence).toBeVisible({ timeout: 30_000 });
+    await expect(activeEvidence).toContainText(/Page\s+\d+/);
+    await expect(activeEvidence).not.toContainText(/Exact location unavailable/i);
+
+    // Hard refresh must preserve the exact evidence address.
+    await page.reload();
+    await expect(activeEvidence).toBeVisible({ timeout: 30_000 });
+    await expect(activeEvidence).toHaveAttribute("data-entity-id", clauseId);
+
+    // Real UI sign-out and password sign-in again: no storageState restore.
+    await signOutThroughUi(page);
+    await signInSyntheticProductionUser(page);
+    const healthAfterRelogin = await waitForHealth(page, projectId);
+    expect(
+      healthAfterRelogin.single_document_coverage?.assessments?.map(
+        (item) => item.category,
+      ),
+    ).toEqual(expect.arrayContaining([...CANONICAL_CATEGORIES]));
+
+    writeRunEvidence({
+      run_id: runId,
+      project_id: projectId,
+      document_id: upload.documentId,
+      upload_task_id: upload.taskId,
+      health_categories: [...CANONICAL_CATEGORIES],
+      evidence_clause_id: clauseId,
+      hitl_exercised: hitlExercised,
+      relogin_verified: true,
+    });
+  });
+});
