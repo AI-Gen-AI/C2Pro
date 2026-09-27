@@ -446,3 +446,71 @@ def test_legacy_task_preserves_behavior(monkeypatch, tmp_path):
     # Prompt contains legacy instructions
     assert "Lee blackboard.json." in prompt
     assert "Genuine legacy task" in prompt
+
+
+def test_live_guidance_does_not_repromote_legacy_authority() -> None:
+    """Live guidance must point to canonical control, not retired backlog/blackboard authority."""
+    live_surfaces = [
+        "agents.md",
+        "CLAUDE.md",
+        ".claude/rules/DOCUMENTATION_STRUCTURE.md",
+        ".claude/rules/agents.md",
+        "docs/ARCHITECTURE_INDEX.md",
+        "docs/RELEASE_CRITERIA.md",
+        "docs/testing/README.md",
+        "docs/skills/c2pro-patterns.md",
+        "docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md",
+    ]
+    forbidden = (
+        "Backlog/task source of truth: `C2PRO_MASTER_BACKLOG.md`",
+        "`C2PRO_MASTER_BACKLOG.md` is the single source of truth for all open work",
+        "`C2PRO_MASTER_BACKLOG.md` owns active task status across the project",
+        "Execution status for the manual release tasks above is canonical only in `C2PRO_MASTER_BACKLOG.md`",
+        "Update `C2PRO_MASTER_BACKLOG.md`.",
+        "Mark the task state in `C2PRO_MASTER_BACKLOG.md`.",
+        "Edit `C2PRO_MASTER_BACKLOG.md` + docs markdown",
+    )
+
+    for relative in live_surfaces:
+        content = (ROOT / relative).read_text(encoding="utf-8")
+        # Historical changelog text may preserve old claims, but current instructions may not.
+        operational = content.split("## Changelog", 1)[0].split("Changelog:", 1)[0]
+        for phrase in forbidden:
+            assert phrase not in operational, f"{relative} re-promotes legacy authority: {phrase}"
+
+    legacy_guide = (ROOT / "docs/workflows/AGENT_ORCHESTRATION_GUIDE.md").read_text(
+        encoding="utf-8"
+    )
+    assert "LEGACY ORCHESTRATION MODEL" in legacy_guide
+    assert "Do not execute the legacy write steps below for new work." in legacy_guide
+
+
+def test_active_role_profiles_cannot_mutate_legacy_control() -> None:
+    """Executable role profiles must consume canonical work and return evidence, never write legacy state."""
+    implementation_roles = {
+        "role_backend.md",
+        "role_frontend.md",
+        "role_ai.md",
+        "role_infra.md",
+        "role_devops.md",
+    }
+    review_roles = {"role_qa.md", "role_reviewer.md", "role_security.md"}
+
+    for role_path in sorted((ROOT / "roles").glob("role_*.md")):
+        content = role_path.read_text(encoding="utf-8")
+        assert "register discovered tasks in backlogs/" not in content
+        assert "mark completed tasks in backlogs/" not in content
+        assert "ACTUALIZAR** `blackboard.json`" not in content
+        assert "ALWAYS update blackboard.json" not in content
+        assert "NEVER mutate C2PRO_MASTER_BACKLOG.md, backlogs/*.md or blackboard.json." in content
+
+        if role_path.name in implementation_roles:
+            assert 'output_schema_ref: "../.c2pro/schemas/implementation-result.schema.yaml"' in content
+            assert "c2pro-implementation-result-v1" in content
+        elif role_path.name in review_roles:
+            assert 'output_schema_ref: "../.c2pro/schemas/review-result.schema.yaml"' in content
+            assert "c2pro-review-result-v1" in content
+        else:
+            assert role_path.name == "role_planner.md"
+            assert 'output_schema_ref: "../.c2pro/schemas/work-envelope.schema.yaml"' in content
+            assert ".c2pro/work/<work_id>.yaml" in content
