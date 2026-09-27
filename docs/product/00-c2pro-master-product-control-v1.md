@@ -90,7 +90,7 @@ This resolves the earlier ambiguity that could have led the product toward paral
 
 Three facts remain deliberately separate:
 
-- `reconciled_against_main_sha = c04b5567ad579259abd73037fa6cca2aa33891fc` — repository baseline used for this reconciliation.
+- `reconciled_against_main_sha = 0db53883a8942f7097fe9ce2e0e6c63397948fbb` — repository baseline used for this reconciliation.
 - `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is composite. Railway API `ab0a2cfa-2565-4e74-bdc5-26b3066d4bdb`, Worker `7d2fdcb4-7606-4c80-836e-6dfd852e55a4` and Scheduler `5f59ff9f-9a78-4065-93f6-b9a3c8f5e4e3` are SUCCESS at #723 merge commit `0db53883a8942f7097fe9ce2e0e6c63397948fbb`. Vercel production `dpl_2z3ivCtezP7RKZ1b3wmDmAi7PUB5` is READY at #722 merge commit `6e98ec53f814bd29dee4607e375600c4560c7d70`. Backend and frontend SHAs therefore legitimately differ and must be rebound separately at qualification time.
 - Railway also reports one unresolved STAGED API environment patch `7fcd5228-be1b-4be5-8e72-9692c854ddbf`; the available read-only API does not expose its internal delta, so #715 must fail closed unless staged changes are zero or the exact delta is operator-reviewed and bound to the qualification evidence.
 - Fresh API logs report `coherence_analysis=True`; this proves production Coherence is enabled, but does not by itself prove the separate per-tenant ADR-017 ProjectGraph gate.
