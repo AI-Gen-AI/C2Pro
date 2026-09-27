@@ -1,10 +1,10 @@
-# C2Pro — Frontend Level-1 Implementation Prompt (patch-by-patch)
-
 > **RETIRED / NON-OPERATIONAL — historical execution artifact.**  
 > Do not execute the legacy backlog-write, priority, scheduling, or completion instructions below for new work.  
 > Current development execution authority is `.c2pro/control/work-queue.yaml` plus the assigned `.c2pro/work/<work_id>.yaml` envelope.  
 > Current product lifecycle/programme truth is `validation/product/c2pro-master-product-control-v1.yaml` with its guarded human projection.  
 > The remaining body is preserved only as historical context/evidence.
+
+# C2Pro — Frontend Level-1 Implementation Prompt (patch-by-patch)
 
 **Date:** 2026-07-04 · **Epic:** `EPIC-FRT-L1-WEDGE` · **Backlog IDs:** `TASK-FRT-175` … `TASK-FRT-197` (registered in `C2PRO_MASTER_BACKLOG.md` and `backlogs/FRT_FRONTEND.md`)
 **Source analysis:** `docs/audits/C2Pro — Frontend, Product, Marketing & End-User Analysis_Fable5.md` (2026-07-03). Every patch below cites the evidence that motivated it.
