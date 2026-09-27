@@ -109,7 +109,7 @@ export function assertProdPreflight(contract: ProdPreflightContract): void {
 }
 
 export function requireProdAcceptanceEnv(
-  env: NodeJS.ProcessEnv,
+  env: Readonly<Record<string, string | undefined>>,
   names: readonly string[],
 ): Record<string, string> {
   const values: Record<string, string> = {};
