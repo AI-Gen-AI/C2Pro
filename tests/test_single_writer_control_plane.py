@@ -539,25 +539,48 @@ def test_live_guidance_does_not_repromote_legacy_authority() -> None:
 
 
 def test_retired_executable_legacy_surfaces_are_bannered_non_operational() -> None:
-    """Old self-contained prompts/backlogs may remain only behind an explicit retirement boundary."""
+    """Executable legacy plans/prompts must start behind an explicit retirement boundary."""
     retired_surfaces = [
         "docs/planning/MASTER_ORCHESTRATION_BACKLOG_2026-03-19.md",
         "docs/audits/C2Pro — Frontend Level-1 Implementation Prompt_Fable5.md",
         "docs/audits/C2Pro — Landing AI-Gen Sync Implementation Prompt_Fable5.md",
+        "docs/architecture/decisions/C2Pro v3.0 — Execution-Grade Imp.md",
+        "docs/superpowers/plans/2026-05-17-honest-coherence-scoring.md",
+        "docs/superpowers/plans/2026-05-21-llm-semantic-layer-reenable.md",
+        "docs/superpowers/plans/2026-05-25-ecoa-v2-hotfix-and-cutover.md",
     ]
+    retirement_prefix = "> **RETIRED / NON-OPERATIONAL — historical execution artifact.**"
+
     for relative in retired_surfaces:
         content = (ROOT / relative).read_text(encoding="utf-8")
-        header = "\n".join(content.splitlines()[:16])
-        assert "RETIRED / NON-OPERATIONAL" in header, relative
+        assert content.startswith(retirement_prefix), (
+            f"{relative} must retire legacy execution authority before any title/status/directive"
+        )
+        header = "\n".join(content.splitlines()[:12])
         assert ".c2pro/control/work-queue.yaml" in header, relative
         assert "validation/product/c2pro-master-product-control-v1.yaml" in header, relative
         assert "Do not execute the legacy backlog-write" in header, relative
+
+    # Prevent future sibling execution plans from silently re-introducing legacy
+    # backlog authority outside the curated inventory.
+    for root in (
+        ROOT / "docs" / "superpowers" / "plans",
+        ROOT / "docs" / "architecture" / "decisions",
+    ):
+        for plan_path in root.glob("*.md"):
+            content = plan_path.read_text(encoding="utf-8")
+            if "C2PRO_MASTER_BACKLOG.md" not in content:
+                continue
+            assert content.startswith(retirement_prefix), (
+                f"{plan_path.relative_to(ROOT)} references the retired backlog from an "
+                "executable-plan surface without a prefix retirement boundary"
+            )
 
     orchestration = (
         ROOT / "docs" / "planning" / "MASTER_ORCHESTRATION_BACKLOG_2026-03-19.md"
     ).read_text(encoding="utf-8")
     assert "**Status:** RETIRED / NON-OPERATIONAL" in "\n".join(
-        orchestration.splitlines()[:16]
+        orchestration.splitlines()[:20]
     )
 
 
