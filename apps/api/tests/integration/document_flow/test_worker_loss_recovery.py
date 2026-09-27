@@ -161,9 +161,18 @@ async def test_stale_analysis_pending_requeues_analysis_not_parsing(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "review_status",
+    [
+        ReviewStatus.PENDING_REVIEW_REQUIRED,
+        ReviewStatus.PENDING_REVIEW_CONDITIONAL,
+        ReviewStatus.ESCALATED,
+    ],
+)
 async def test_pending_hitl_is_excluded_from_stale_analysis_recovery(
     db: AsyncSession,
     test_user,
+    review_status: ReviewStatus,
 ) -> None:
     project, document = await _seed_document(
         db,
@@ -176,7 +185,7 @@ async def test_pending_hitl_is_excluded_from_stale_analysis_recovery(
         id=uuid4(),
         item_id=uuid4(),
         item_type="analysis_finding",
-        current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+        current_status=review_status,
         confidence=0.5,
         impact_level=ImpactLevel.HIGH,
         tenant_id=test_user.tenant_id,
