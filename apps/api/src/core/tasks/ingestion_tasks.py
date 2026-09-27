@@ -72,6 +72,34 @@ logger = logging.getLogger(__name__)
 RAG_READINESS_MAX_RETRIES = 3
 
 
+def _build_text_block_index(text_blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build offset index for flattened parsed text.
+
+    Returns entries with start_offset, end_offset, page, bbox, text.
+    Offsets correspond to the string produced by joining blocks with "\n\n".
+    """
+    index: list[dict[str, Any]] = []
+    pos = 0
+    for i, block in enumerate(text_blocks):
+        txt = block.get("text", "") if isinstance(block.get("text"), str) else ""
+        start = pos
+        end = start + len(txt)
+        page = block.get("page")
+        bbox = block.get("bbox")
+        index.append({
+            "start_offset": start,
+            "end_offset": end,
+            "page": page,
+            "bbox": bbox,
+            "text": txt,
+        })
+        pos = end
+        if i < len(text_blocks) - 1:
+            # account for the "\n\n" separator used in _extract_parsed_text
+            pos += 2
+    return index
+
+
 def _temporal_failure_code(error: Exception) -> str:
     """Return a stable safe code; raw errors can contain storage/provider data."""
     if isinstance(error, RevisionSourceError) and str(error) == REVISION_HASH_MISMATCH:
@@ -404,13 +432,63 @@ def _extract_contract_clauses(
     project_id: UUID,
     tenant_id: TenantId,
     parsed_text: str,
+    parsed_payload: dict[str, Any] | None = None,
+    revision_id: UUID | None = None,
 ) -> list[Clause]:
     clauses: list[Clause] = []
+    # Build offset index from text blocks if available
+    text_blocks = parsed_payload.get("text_blocks", []) if isinstance(parsed_payload, dict) else []
+    block_index = _build_text_block_index(text_blocks) if text_blocks else []
+    # Map from offset to block for quick lookup
     for index, segment in enumerate(_split_contract_into_clauses(parsed_text), start=1):
         if len(segment) < 40:
             continue
         segment = segment[:4000]  # keep a clause clause-sized; guard OCR blobs
         clause_type = _infer_contract_clause_type(segment)
+        # Find segment offset in parsed_text
+        start_offset = parsed_text.find(segment)
+        if start_offset == -1:
+            # Fallback: try stripped version
+            start_offset = parsed_text.find(segment.strip())
+        end_offset = None
+        if start_offset != -1:
+            end_offset = start_offset + len(segment)
+        # Resolve overlapping blocks
+        pages: list[int] = []
+        bboxes: list[tuple[float, float, float, float] | None] = []
+        if start_offset is not None and end_offset is not None and block_index:
+            for entry in block_index:
+                # Overlap check
+                if entry["end_offset"] <= start_offset or entry["start_offset"] >= end_offset:
+                    continue
+                page = entry.get("page")
+                if isinstance(page, int):
+                    pages.append(page)
+                bbox = entry.get("bbox")
+                if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+                    bboxes.append(tuple(bbox))  # type: ignore
+        # Determine truthful location semantics
+        unique_pages = sorted(set(pages))
+        page_number: int | None = None
+        bbox: list[float] | None = None
+        if len(unique_pages) == 1:
+            page_number = unique_pages[0]
+            # If single block overlap, use its bbox; otherwise null for safety
+            if len(bboxes) == 1:
+                bbox = list(bboxes[0])
+            else:
+                # Multiple blocks same page: could compute union, but keep null to avoid heuristic
+                bbox = None
+        # Build evidence_location
+        evidence_location = {
+            "revision_id": str(revision_id) if revision_id else None,
+            "page_number": page_number,
+            "page_numbers": unique_pages if unique_pages else [],
+            "bbox": bbox,
+            "normalized": True,
+        }
+        extracted = _build_contract_clause_data(segment, parsed_text)
+        extracted["evidence_location"] = evidence_location
         clauses.append(
             Clause(
                 id=uuid4(),
@@ -421,7 +499,9 @@ def _extract_contract_clauses(
                 clause_type=clause_type,
                 title=segment[:80],
                 full_text=segment,
-                extracted_entities=_build_contract_clause_data(segment, parsed_text),
+                text_start_offset=start_offset if isinstance(start_offset, int) else None,
+                text_end_offset=end_offset if isinstance(end_offset, int) else None,
+                extracted_entities=extracted,
                 extraction_confidence=0.65,
                 extraction_model="deterministic-contract-ingestion",
             )
@@ -900,6 +980,8 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
                         project_id=document.project_id,
                         tenant_id=tenant_id,
                         parsed_text=parsed_text,
+                        parsed_payload=parsed_payload,
+                        revision_id=source_revision.revision_id if source_revision else None,
                     )
                     if not existing_clauses:
                         for clause in revision_clauses:

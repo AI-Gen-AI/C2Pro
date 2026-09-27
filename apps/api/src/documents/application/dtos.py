@@ -241,6 +241,6 @@ class DocumentEntityResponse(BaseModel):
     id: UUID
     type: str
     text: str
-    page: int
+    page: int | None = None
     confidence: float
     metadata: JsonDict = Field(default_factory=dict)

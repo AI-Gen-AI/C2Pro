@@ -672,16 +672,20 @@ async def get_document_entities_endpoint(
             if clause.extracted_entities
             else {},
         )
-        page_number = int(cast(str | int | float, evidence_location.get("page_number") or 1))
+        raw_page = evidence_location.get("page_number")
+        page_number = int(raw_page) if isinstance(raw_page, (int, float, str)) and str(raw_page).lstrip("-").isdigit() else None
+        bbox = evidence_location.get("bbox")
+        # Ensure bbox is a list of numbers or None
+        if not isinstance(bbox, list):
+            bbox = None
         metadata: JsonDict = {
             "clause_code": clause.clause_code,
             "clause_type": clause.clause_type.value if clause.clause_type is not None else None,
             "evidence_location": {
                 "page_number": page_number,
-                "bbox": cast(
-                    JsonValue,
-                    evidence_location.get("bbox") or [0.08, 0.12, 0.84, 0.06],
-                ),
+                "page_numbers": evidence_location.get("page_numbers") if isinstance(evidence_location.get("page_numbers"), list) else [],
+                "bbox": bbox,
+                "revision_id": evidence_location.get("revision_id"),
                 "normalized": bool(evidence_location.get("normalized", True)),
             },
         }
