@@ -94,19 +94,14 @@ Three facts remain deliberately separate:
 - `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is currently observed as Railway backend `386cbbce74b2653a6039fdddd9fc9719c43b9ff9` (SUCCESS) and Vercel frontend `e7608723c72e391fa3ff12a50d433e4265e4ac94` (READY). #678 records plane-specific evidence and merged #700/#681 owns the Product-Control promotion guard.
 - `product_value_delivered = false` — P0a reliability is closed and several product lanes are now wired on `main`, but the north-star P0b journey is still not PROD_VALIDATED.
 
-### 2.1 What changed since the 2026-09-13 reconciliation
+### 2.1 What changed since the 2026-09-26 control baseline
 
-The previous control snapshot was anchored to `454637863c502f6825d158af551511e0e9996d14`. Current `main` is **276 commits ahead**. Material product changes include:
+The previous control baseline was `1aecb4cf7ca454088e26046bb2ae8fa6b11bc518`. Current `main` is **40 commits ahead** at `863ac936cf36dac41c95e9e51f5e23d8dba1c419`. Material changes in this exact interval are:
 
-- **P0b-L4-5:** the release-ready six-category Health UI/report implementation merged through #630. The PR explicitly states `PROD_VALIDATED=NO`; merge/release-readiness therefore advances realization, not the production exit gate.
-- **Durable Documents:** immutable tenant/project/document revision-object addressing is now on `main` (`fa58102d`).
-- **P0c What Changed:** revision-bound events, semantic change projection, timeline/change-detail API and What Changed UI are on `main` (`d93ad4b5`).
-- **P0d Current State:** domain projection, API, six-category Health parity, export and UI are on `main`.
-- **ADR-025 Project Controls:** `wbs_nodes` is now the application-authoritative WBS store; parallel legacy writes are blocked; RACI/BOM/MCP and schedule/spend consumers are reconciled to the canonical WBS. The real production predecessor schema exposed a migration defect; #631 repaired it.
-- **HITL:** #633/#638/#641/#646/#650 materially hardened pause/resume, exact review identity, fenced recovery and final-decision audit idempotency.
-- **Trust/operability:** Next.js security moved to 16.3.6 (#654), the blocking E2E gate now runs against the production Next runtime (#655), and CRITICAL severity is preserved end-to-end (#656).
-- **Qualification evidence:** #678 is merged. P0b/P0c/P0d evidence bundles are machine-validated, historically bound and explicitly non-authoritative; Product Control still owns lifecycle promotion.
-- **Deployment identity:** composite filtering is live-proven. Railway Watch Paths skip non-backend changes while backend-changing #697 deployed. On Vercel, #707 became the first successful production baseline containing #699's ignore rule; subsequent control-only #700 was CANCELED/ignored and did not advance the READY frontend runtime.
+- **Security hygiene (#701):** committed credential examples were redacted from documentation/runbook surfaces. This does not advance product lifecycle.
+- **Control drift repair (#707):** DEV-03 activation and fresh job-bound authority now precede qualification, while P0c/P0d remain classified as already wired and not production-validated.
+- **Qualification Phase B (#700):** Product Control schema v7 now carries compact qualification refs/status plus fixed capability→lifecycle mappings and a fail-closed promotion guard. Merging it did not promote P0b, P0c or P0d.
+- **Deployment identity proof:** Railway skipped #707 and #700, keeping backend runtime at #697. Vercel #707 was the one-time activation deployment that first included #699's ignore rule; subsequent control-only #700 was CANCELED/ignored and did not advance the READY frontend runtime.
 
 None of those facts permits collapsing the current production deployment into one repository SHA. The immediate user-value gap remains **P0b-L4-5 production evidence**, but execution is now blocked first by **#690**: one dedicated non-customer production qualification identity/tenant must authenticate through the real Clerk path. Once that exists, #683 runs the actual upload → analysis → Health journey against the exact backend/frontend deployments observed at run time.
 
@@ -319,11 +314,7 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 1. **Immediate P0 prerequisite — #690:** establish one dedicated non-customer production qualification identity + tenant through the real Clerk/auth path. Do not reuse customer, personal or CI-only identities.
 2. **P0b — #683:** execute the real single-document upload → analysis → truthful six-category Health journey on the exact backend/frontend deployments observed immediately before the run. Rebind if either plane changed; do not redeploy merely to force SHA equality.
 3. **P0c/P0d — #686 then #687:** qualify What Changed and Current State on the same clean qualification project where practical; do not recreate already-wired lanes as feature work.
-4. **P1 Project Controls — ACTIVE/PARTIAL:** finish one-logical-root enforcement, WBS baseline/change governance and complete Budget/Schedule/Stakeholder/Alert/Evidence/Change linkage plus user drill-down.
-5. **P1 Coherence:** make the authoritative v2 cutover decision independently from Health and preserve coverage/Unknown semantics.
-6. Keep alert visibility/integration in P1; keep richer Action ownership/correlation/HITL automation in P2 despite the hardened HITL substrate.
-7. Build Procurement only on top of the completed canonical Project Controls backbone.
-8. Extend reporting to executive/portfolio only when Current State + Evolution + Project Controls are trustworthy.
-9. **Control-plane discipline:** reconcile this YAML/Markdown pair against an exact `main` SHA whenever a material product lane merges; branch completion never advances deployment or PROD_VALIDATED automatically.
+4. **Stop/reconcile after #687:** P1 Project Controls, Coherence, Alerts/Actions and Procurement remain planning context only. They require a fresh Line B reconciliation plus explicit authorization before implementation.
+5. **Control-plane discipline:** reconcile this YAML/Markdown pair against an exact `main` SHA whenever a material product lane merges; branch completion never advances deployment or PROD_VALIDATED automatically.
 
 **No direct `main` or production mutation is authorized by this reconciliation. Human-reviewed merge remains mandatory.**
