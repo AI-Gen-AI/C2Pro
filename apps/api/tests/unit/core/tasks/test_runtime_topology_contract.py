@@ -33,10 +33,10 @@ def test_scheduler_entrypoint_execs_beat_without_worker_or_api() -> None:
     assert "alembic" not in source
 
 
-def test_transitional_default_keeps_existing_worker_until_railway_cutover() -> None:
-    """#710 phase A must not remove the only prod worker before the new service exists."""
+def test_repository_defaults_match_independent_production_topology() -> None:
+    """After #710 cutover, no default entrypoint may recreate API+worker coupling."""
     start = _read("start.sh")
     docker = _read("Dockerfile")
-    assert "celery" in start.lower()
-    assert "uvicorn" in start.lower()
-    assert 'CMD ["bash", "start.sh"]' in docker
+    assert "scripts/run_api.sh" in start
+    assert "celery" not in start.lower()
+    assert 'CMD ["bash", "scripts/run_api.sh"]' in docker
