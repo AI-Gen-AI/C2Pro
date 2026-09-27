@@ -1,75 +1,114 @@
--- #711 narrow recovery discovery across FORCE-RLS documents.
+-- #711 durable recovery discovery index.
 -- Mirror of apps/api/alembic/versions/20260927_0711_recovery_discovery.py.
--- Alembic is authoritative.
+-- Alembic remains authoritative.
 
 CREATE SCHEMA IF NOT EXISTS system_recovery;
+REVOKE ALL ON SCHEMA system_recovery FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION system_recovery.list_stale_document_candidates(
-    p_stale_after_seconds integer,
-    p_limit integer
-)
-RETURNS TABLE (
-    document_id uuid,
-    tenant_id uuid
-)
+CREATE TABLE system_recovery.document_work_index (
+    document_id uuid PRIMARY KEY
+        REFERENCES public.documents(id) ON DELETE CASCADE,
+    tenant_id uuid NOT NULL,
+    upload_status text NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+CREATE INDEX ix_document_work_index_recovery_scan
+    ON system_recovery.document_work_index
+        (upload_status, updated_at, document_id);
+
+REVOKE ALL ON TABLE system_recovery.document_work_index FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION system_recovery.sync_document_work_index()
+RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = pg_catalog, system_recovery
 AS $recovery$
+DECLARE
+    row_json jsonb := to_jsonb(NEW);
+    row_updated_at timestamp without time zone;
 BEGIN
-    -- The Alembic application schema owns upload_status. The historic
-    -- Supabase mirror baseline predates that column; keep mirror migrations
-    -- replayable without weakening production semantics.
-    IF NOT EXISTS (
+    BEGIN
+        row_updated_at := NULLIF(row_json ->> 'updated_at', '')::timestamp;
+    EXCEPTION WHEN invalid_datetime_format THEN
+        row_updated_at := NULL;
+    END;
+
+    INSERT INTO system_recovery.document_work_index (
+        document_id,
+        tenant_id,
+        upload_status,
+        updated_at
+    )
+    VALUES (
+        NEW.id,
+        NEW.tenant_id,
+        row_json ->> 'upload_status',
+        COALESCE(row_updated_at, clock_timestamp() AT TIME ZONE 'UTC')
+    )
+    ON CONFLICT (document_id) DO UPDATE
+        SET tenant_id = EXCLUDED.tenant_id,
+            upload_status = EXCLUDED.upload_status,
+            updated_at = EXCLUDED.updated_at;
+    RETURN NEW;
+END
+$recovery$;
+
+REVOKE ALL ON FUNCTION system_recovery.sync_document_work_index() FROM PUBLIC;
+
+CREATE TRIGGER trg_documents_recovery_index
+AFTER INSERT OR UPDATE ON public.documents
+FOR EACH ROW
+EXECUTE FUNCTION system_recovery.sync_document_work_index();
+
+DO $backfill$
+DECLARE
+    has_upload_status boolean;
+    force_rls boolean;
+BEGIN
+    SELECT EXISTS (
         SELECT 1
           FROM pg_attribute
          WHERE attrelid = 'public.documents'::regclass
            AND attname = 'upload_status'
            AND NOT attisdropped
-    ) THEN
+    ) INTO has_upload_status;
+
+    IF NOT has_upload_status THEN
         RETURN;
     END IF;
 
-    RETURN QUERY EXECUTE
-        'SELECT d.id, d.tenant_id
-           FROM public.documents AS d
-          WHERE d.upload_status::text IN (''parsing'', ''parsed_pending_analysis'')
-            AND d.updated_at <=
-                clock_timestamp() - make_interval(secs => GREATEST($1, 1))
-          ORDER BY d.updated_at, d.id
-          LIMIT LEAST(GREATEST($2, 1), 100)'
-        USING p_stale_after_seconds, p_limit;
+    SELECT relforcerowsecurity
+      INTO force_rls
+      FROM pg_class
+     WHERE oid = 'public.documents'::regclass;
+
+    LOCK TABLE public.documents IN ACCESS EXCLUSIVE MODE;
+
+    IF force_rls THEN
+        EXECUTE 'ALTER TABLE public.documents NO FORCE ROW LEVEL SECURITY';
+    END IF;
+
+    BEGIN
+        EXECUTE
+            'INSERT INTO system_recovery.document_work_index '
+            '(document_id, tenant_id, upload_status, updated_at) '
+            'SELECT id, tenant_id, upload_status::text, updated_at '
+            'FROM public.documents '
+            'ON CONFLICT (document_id) DO UPDATE '
+            'SET tenant_id = EXCLUDED.tenant_id, '
+            'upload_status = EXCLUDED.upload_status, '
+            'updated_at = EXCLUDED.updated_at';
+    EXCEPTION WHEN OTHERS THEN
+        IF force_rls THEN
+            EXECUTE 'ALTER TABLE public.documents FORCE ROW LEVEL SECURITY';
+        END IF;
+        RAISE;
+    END;
+
+    IF force_rls THEN
+        EXECUTE 'ALTER TABLE public.documents FORCE ROW LEVEL SECURITY';
+    END IF;
 END
-$recovery$;
-
-REVOKE ALL ON SCHEMA system_recovery FROM PUBLIC;
-REVOKE ALL ON FUNCTION
-    system_recovery.list_stale_document_candidates(integer, integer)
-FROM PUBLIC;
-
-DO $$
-DECLARE role_name text;
-BEGIN
-    FOR role_name IN
-        SELECT rolname
-          FROM pg_roles
-         WHERE rolname IN ('anon', 'authenticated', 'service_role')
-    LOOP
-        EXECUTE format(
-            'REVOKE ALL ON SCHEMA system_recovery FROM %I',
-            role_name
-        );
-        EXECUTE format(
-            'REVOKE ALL ON FUNCTION '
-            'system_recovery.list_stale_document_candidates(integer, integer) '
-            'FROM %I',
-            role_name
-        );
-    END LOOP;
-END
-$$;
-
-COMMENT ON FUNCTION
-    system_recovery.list_stale_document_candidates(integer, integer)
-IS
-    'Issue #711: minimal cross-tenant discovery for stale document processing recovery. Returns identifiers only; all mutation is performed later under tenant-scoped RLS.';
+$backfill$;
