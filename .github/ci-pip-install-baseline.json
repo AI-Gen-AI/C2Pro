@@ -3,16 +3,16 @@
     {
       "behavior": {
         "env": {},
-        "run": "python -m pip install --upgrade pip\npip install -r requirements.txt\npip install python-magic\n",
+        "run": "python -m pip install --upgrade pip\nif [ \"${{ inputs.python-version }}\" = \"3.11\" ] && [ -f constraints.txt ]; then\n  pip install --only-binary=:all: -r requirements.txt -c constraints.txt\nelse\n  pip install -r requirements.txt\nfi\npip install python-magic\n",
         "shell": "bash",
         "working_directory": "apps/api"
       },
       "context": ".github/actions/setup-python-backend/action.yml::runs.steps::name:Install Python dependencies",
       "file": ".github/actions/setup-python-backend/action.yml",
       "owner": "@AI-Gen-AI",
-      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
-      "remediation_issue": "#600",
-      "sha256": "7f1fb489ec2f0df2a03f84aac205d8933f43a2dbc41aed775ddb65e1e07470f9"
+      "reason": "Python 3.11 CI consumes production constraints lock per ISSUE #696 with wheel-only install --only-binary=:all:; Python 3.12 remains forward-canary unlocked. Baseline re-reviewed for wheel-only hardening.",
+      "remediation_issue": "#696",
+      "sha256": "3392ee19b86d0b366802cbe55cbc22cb002efc3dceb5c996c1bd888c0c16431d"
     },
     {
       "behavior": {

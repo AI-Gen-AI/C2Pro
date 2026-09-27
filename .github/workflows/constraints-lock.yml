@@ -1,0 +1,36 @@
+name: Constraints Lock
+on:
+  pull_request:
+    paths:
+      - 'apps/api/requirements.txt'
+      - 'apps/api/constraints.txt'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/api/requirements.txt'
+      - 'apps/api/constraints.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.19"
+
+      - name: Verify constraints are up-to-date
+        working-directory: apps/api
+        run: python scripts/verify_constraints_locked.py
