@@ -503,6 +503,8 @@ def test_live_guidance_does_not_repromote_legacy_authority() -> None:
         "Active task ownership and completion state must be tracked in `C2PRO_MASTER_BACKLOG.md`",
         "execute tasks in backlog priority order",
         "backlog edits go only through the Reconciler role",
+        "delegates backlog reconciliation",
+        "never edit the backlog in-place (routes to Reconciler)",
         "`C2PRO_MASTER_BACKLOG.md`, `backlogs/BCK_BACKEND.md`",
         "| Release and production-readiness status | `C2PRO_MASTER_BACKLOG.md` |",
     )
