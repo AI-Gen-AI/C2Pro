@@ -13,11 +13,13 @@ approved version (finalize_v3).
 Legacy data is reclassified truthfully (see _reclassify_legacy_candidates).
 Before #714 a HITL-gated run stored its candidate as the ACTIVE (canonical)
 artifact. A document's latest graph-gated review is matched to its candidate
--- the first artifact created at/after the review row -- and later
-completions are never demoted. Pending candidates become PROPOSED and bound
-(or SUPERSEDED with the review closed, when a later completion exists);
-rejected candidates become REJECTED; only artifacts that provably predate the
-review are ever restored as canonical.
+-- the first artifact created at/after the review row. When an awaiting
+review has multiple post-review artifacts, legacy history cannot prove that
+any later completion bypassed the human gate legitimately; every post-review
+artifact is therefore quarantined/superseded and the review is closed as
+ambiguous. Pending candidates become PROPOSED only when they are the sole
+post-review artifact; rejected candidates become REJECTED; only artifacts
+that provably predate the review are ever restored as canonical.
 
 It also creates the durable trusted -> ProjectGraph obligation index
 (system_recovery.trusted_projection_index) and queues every current trusted
@@ -154,19 +156,21 @@ def _reclassify_legacy_candidates(bind: Any) -> None:
 
     For each document's latest graph-gated review R, its candidate C is the
     FIRST artifact created at/after R (the completion hook persisted it right
-    after the interrupt). Artifacts created after C are later completions
-    and stay as they are -- never demoted, because a legitimate non-gated
-    re-run may have superseded C.
+    after the interrupt).
 
-    * R awaiting a decision, C still the latest artifact -> C PROPOSED, bound
-      to R; the newest artifact that predates R is restored as canonical.
-    * R awaiting, but a later completion exists -> C SUPERSEDED (can never be
-      trusted), R bound to C and CLOSED; the later artifact stays canonical.
+    * R awaiting a decision and exactly one post-review artifact -> C becomes
+      PROPOSED and is bound to R; the newest provably pre-review artifact is
+      restored as canonical.
+    * R awaiting with MULTIPLE post-review artifacts -> legacy history cannot
+      prove that any later row is non-gated. Every post-review artifact is
+      quarantined as SUPERSEDED, R is bound to C and CLOSED with an explicit
+      ambiguous-history reason, and only a pre-review artifact may be restored.
     * R REJECTED and C created before the decision -> C REJECTED; the
       pre-review artifact is restored only if C was the canonical one.
     * R APPROVED -> unchanged.
 
-    Nothing created at/after R is ever restored as trusted (fail closed).
+    Nothing created at/after a still-pending R is ever left trusted merely
+    because it is newer (fail closed).
     """
     if not _table_exists(bind, "review_items"):
         return
@@ -211,14 +215,35 @@ def _reclassify_legacy_candidates(bind: Any) -> None:
                     bind, review.document_id, review.tenant_id, review.created_at
                 )
             else:
+                # Ambiguous legacy history: with more than one post-review
+                # completion we cannot prove that any of them bypassed the
+                # still-pending human gate legitimately. Quarantine ALL of
+                # them rather than silently trusting the newest row.
                 bind.execute(
                     text(
-                        "UPDATE document_artifacts SET trust_state = 'superseded', "
-                        "lifecycle_status = 'superseded' WHERE artifact_id = :a"
+                        "UPDATE document_artifacts "
+                        "SET trust_state = 'superseded', lifecycle_status = 'superseded' "
+                        "WHERE document_id = :d AND tenant_id = :t AND created_at >= :since"
                     ),
-                    {"a": candidate.artifact_id},
+                    {
+                        "d": review.document_id,
+                        "t": review.tenant_id,
+                        "since": review.created_at,
+                    },
                 )
                 _bind_review(bind, review.id, candidate, close=True)
+                bind.execute(
+                    text(
+                        "UPDATE review_items "
+                        "SET review_metadata = coalesce(review_metadata, '{}'::jsonb) "
+                        "|| jsonb_build_object('closed_reason', 'legacy_post_review_ambiguous') "
+                        "WHERE id = :r"
+                    ),
+                    {"r": review.id},
+                )
+                _restore_pre_review_trusted(
+                    bind, review.document_id, review.tenant_id, review.created_at
+                )
         elif review.status == "REJECTED":
             if review.approved_at is not None and candidate.created_at > review.approved_at:
                 continue  # not provably the rejected candidate
