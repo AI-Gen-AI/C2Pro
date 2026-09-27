@@ -226,12 +226,13 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
                 )
         return artifact
 
-    async def list_active_for_project(
+    async def list_trusted_for_project(
         self,
         *,
         project_id: UUID,
         tenant_id: TenantId,
     ) -> list[DocumentArtifact]:
+        """The canonical artifact set: current AND trusted, one per document."""
         result = await self._session.execute(
             select(DocumentArtifactORM)
             .where(
@@ -246,6 +247,16 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
             DocumentArtifact.model_validate(orm.payload)
             for orm in result.scalars().all()
         ]
+
+    async def list_active_for_project(
+        self,
+        *,
+        project_id: UUID,
+        tenant_id: TenantId,
+    ) -> list[DocumentArtifact]:
+        """Back-compat alias: "active" has meant canonical since ADR-017, and
+        since #714 canonical means trusted. Never returns a PROPOSED row."""
+        return await self.list_trusted_for_project(project_id=project_id, tenant_id=tenant_id)
 
     async def list_superseded_for_document(
         self,
@@ -391,6 +402,36 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
             project_id=row.project_id,
             tenant_id=row.tenant_id,
         )
+
+    async def verify_candidate(
+        self,
+        binding: CandidateBinding,
+        *,
+        tenant_id: TenantId,
+    ) -> None:
+        """Read-only pre-flight of :meth:`commit_candidate` (no lock, no write).
+
+        Lets an approval fail closed BEFORE the graph resumes and N17 persists
+        anything; the commit itself re-verifies under a row lock.
+        """
+        row: DocumentArtifactORM | None = (
+            await self._session.execute(
+                select(DocumentArtifactORM).where(
+                    DocumentArtifactORM.artifact_id == binding.artifact_id,
+                    DocumentArtifactORM.tenant_id == tenant_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if (
+            row is None
+            or not self._matches(row, binding)
+            or row.trust_state
+            not in {TrustState.PROPOSED.value, TrustState.TRUSTED.value}
+        ):
+            raise StaleCandidateError(
+                f"Candidate {binding.artifact_id} v{binding.artifact_version} is no "
+                "longer the reviewed proposal; refusing to approve"
+            )
 
     async def reject_candidate(
         self,

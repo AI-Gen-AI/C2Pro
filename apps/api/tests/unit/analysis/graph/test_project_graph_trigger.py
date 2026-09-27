@@ -25,7 +25,7 @@ class _FakeRepo:
     def __init__(self, artifacts: list[DocumentArtifact]) -> None:
         self.artifacts = artifacts
 
-    async def list_active_for_project(self, *, project_id, tenant_id):
+    async def list_trusted_for_project(self, *, project_id, tenant_id):
         return self.artifacts
 
 

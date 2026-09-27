@@ -37,7 +37,7 @@ class TrustState(StrEnum):
 TRUST_STATES: tuple[str, ...] = tuple(state.value for state in TrustState)
 
 # review_items.review_metadata key holding the exact candidate a review gates.
-REVIEW_BINDING_KEY = "trusted_candidate"
+REVIEW_BINDING_KEY = "candidate_binding"
 
 
 def artifact_digest(payload: Mapping[str, Any]) -> str:
@@ -64,13 +64,17 @@ class CandidateBinding:
         }
 
     @classmethod
-    def from_json(cls, raw: Any) -> CandidateBinding | None:
+    def from_json(
+        cls, raw: Any, *, default_document_id: UUID | None = None
+    ) -> CandidateBinding | None:
+        """Parse a stored binding; ``document_id`` may be implied by the review."""
         if not isinstance(raw, Mapping):
             return None
         try:
+            raw_document = raw.get("document_id") or default_document_id
             return cls(
                 artifact_id=UUID(str(raw["artifact_id"])),
-                document_id=UUID(str(raw["document_id"])),
+                document_id=UUID(str(raw_document)),
                 artifact_version=int(raw["artifact_version"]),
                 artifact_hash=str(raw["artifact_hash"]),
             )

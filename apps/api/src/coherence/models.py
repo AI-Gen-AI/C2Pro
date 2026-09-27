@@ -351,13 +351,6 @@ class DashboardSummary(BaseModel):
     tenant_id: str
     global_score: float | None
     coherence_score: float | None
-    # #714: explicit canonical/provisional split. coherence_score remains the
-    # backward-compatible official value; trusted_score is its named alias.
-    trusted_score: float | None = None
-    projected_score: float | None = None
-    projected_delta: float | None = None
-    pending_review_count: int = 0
-    projection_score_version: Literal["coherence-v1", "coherence-v2"] | None = None
     sub_scores: dict[str, float | None]
     weights_used: dict[str, float]
     alert_count: int
@@ -370,6 +363,7 @@ class DashboardSummary(BaseModel):
     categories_v2: "CoherenceV2Payload | None" = None
     # #714 trusted vs projected (additive). `coherence_score`/`global_score`
     # stay the canonical TRUSTED score; exports/reports use only those.
+    # trusted_score is coherence_score's named alias (validator below).
     trusted_score: float | None = Field(
         default=None,
         description="Canonical score from trusted (approved) state only. Mirrors coherence_score.",

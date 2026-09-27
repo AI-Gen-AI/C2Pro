@@ -33,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.analysis.adapters.persistence.document_artifact_repository import (
     SqlAlchemyDocumentArtifactRepository,
 )
-from src.analysis.adapters.persistence.models import DocumentArtifactORM
+from src.analysis.adapters.persistence.models import Analysis, DocumentArtifactORM
 from src.analysis.application import document_artifact_completion
 from src.analysis.domain.contracts import DocumentArtifact, RiskItem
 from src.analysis.domain.trust import (
@@ -139,7 +139,7 @@ async def _rows(sessions, tenant_id: UUID, document_id: UUID) -> list[DocumentAr
 
 async def _canonical(sessions, tenant_id: UUID, project_id: UUID) -> list[DocumentArtifact]:
     async with sessions(tenant_id) as s:
-        return await SqlAlchemyDocumentArtifactRepository(s).list_active_for_project(
+        return await SqlAlchemyDocumentArtifactRepository(s).list_trusted_for_project(
             project_id=project_id, tenant_id=tenant_id
         )
 
@@ -412,6 +412,11 @@ async def test_f_stale_approval_after_reanalysis_fails_closed(
     ]
     assert await _canonical(independent_sessions, tenant.id, arranged.project_id) == []
     assert graph_enqueues == []
+    # Refused BEFORE the graph resumed: no analysis feeds the trusted score.
+    analyses = (
+        await db.execute(select(Analysis).where(Analysis.project_id == arranged.project_id))
+    ).scalars().all()
+    assert analyses == [], "a stale approval must not reach N17"
 
 
 async def test_non_gated_completion_is_trusted_and_enqueues_once(

@@ -62,7 +62,9 @@ async def run_project_graph_once(
     artifact_repository: IDocumentArtifactRepository,
     trigger_event_id: UUID | None = None,
 ) -> dict[str, object]:
-    artifacts = await artifact_repository.list_active_for_project(
+    # #714: canonical input is TRUSTED artifacts only -- never a pending
+    # PROPOSED candidate, even when it is the newest row for its document.
+    artifacts = await artifact_repository.list_trusted_for_project(
         project_id=project_id,
         tenant_id=tenant_id,
     )

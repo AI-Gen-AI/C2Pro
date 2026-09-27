@@ -1008,6 +1008,30 @@ _REVIEW_BINDING_SQL = text(
 )
 
 
+async def verify_trust_binding(
+    *,
+    tenant_id: UUID,
+    review_row_id: UUID,
+    document_id: UUID | None,
+    session_factory: Any = None,
+) -> None:
+    """#714 pre-flight: fail an approval closed BEFORE the graph resumes.
+
+    Without it a stale approval would still run N17 (persisting a COMPLETED
+    analysis that feeds the trusted score) and only then be refused by
+    finalize_v3. Read-only; finalize_v3 re-verifies under a row lock.
+    """
+    async with _session(session_factory, tenant_id) as session:
+        await _apply_trust_decision(
+            session,
+            tenant_id=tenant_id,
+            review_row_id=review_row_id,
+            document_id=document_id,
+            approved=True,
+            dry_run=True,
+        )
+
+
 async def _apply_trust_decision(
     session: Any,
     *,
@@ -1015,6 +1039,7 @@ async def _apply_trust_decision(
     review_row_id: UUID,
     document_id: UUID | None,
     approved: bool,
+    dry_run: bool = False,
 ) -> Any:
     """#714: apply the human decision to the exact bound candidate.
 
@@ -1044,7 +1069,7 @@ async def _apply_trust_decision(
             },
         )
     ).scalar_one_or_none()
-    binding = CandidateBinding.from_json(raw)
+    binding = CandidateBinding.from_json(raw, default_document_id=document_id)
     repo = SqlAlchemyDocumentArtifactRepository(session)
 
     if binding is None:
@@ -1072,6 +1097,9 @@ async def _apply_trust_decision(
             f"Review {review_row_id} binding targets document {binding.document_id}, "
             f"not {document_id}"
         )
+    if dry_run:
+        await repo.verify_candidate(binding, tenant_id=tenant)
+        return None
     if not approved:
         await repo.reject_candidate(binding, tenant_id=tenant)
         return None

@@ -37,6 +37,7 @@ from src.modules.hitl.adapters.persistence.resume_ownership import (
     mark_graph_completed,
     record_failure,
     renew,
+    verify_trust_binding,
 )
 from src.modules.hitl.adapters.persistence.resume_recovery import (
     RecoveryOutcome as RecoveryOutcome,
@@ -833,6 +834,15 @@ class ResumeWorkflowUseCase:
                     operation_id=str(ownership.operation_id),
                 )
             else:
+                if request.decision == WorkflowDecision.APPROVE:
+                    # C2PRO #714: refuse a stale/substituted approval before
+                    # N17 can persist anything that feeds trusted state.
+                    await verify_trust_binding(
+                        tenant_id=tenant_id,
+                        review_row_id=row_id,
+                        document_id=document_id,
+                        session_factory=self._claim_session_factory,
+                    )
                 # 7. Resume the checkpoint this ATTEMPT is entitled to.
                 #
                 # A takeover restarts from the IMMUTABLE original
