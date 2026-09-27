@@ -39,6 +39,12 @@ on:
         default: "false"
         type: choice
         options: ["false", "true"]
+      execution_mode:
+        description: "Identity preflight is non-mutating; full journey creates synthetic production data."
+        required: true
+        default: "identity-preflight"
+        type: choice
+        options: ["identity-preflight", "full-journey"]
 
 permissions:
   contents: read
@@ -206,7 +212,30 @@ jobs:
             --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"
           echo "PROD_ACCEPTANCE_TENANT_PREFLIGHT_VERIFIED=1" >> "$GITHUB_ENV"
 
+      - name: Execute non-mutating real production identity preflight
+        env:
+          PLAYWRIGHT_SKIP_WEBSERVER: "1"
+          PLAYWRIGHT_BASE_URL: "https://c2pro.io"
+          PROD_ACCEPTANCE_CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_PASSWORD: ${{ secrets.PROD_ACCEPTANCE_CLERK_PASSWORD }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+          PROD_ACCEPTANCE_EXPECTED_BACKEND_SHA: ${{ inputs.backend_commit_sha }}
+          PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA: ${{ env.PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA }}
+          PROD_ACCEPTANCE_EXPECTED_FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
+          PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: ${{ env.PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA }}
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec playwright test \
+            src/tests/e2e/prod-acceptance/706-production-identity-preflight.spec.ts \
+            --project=prod-identity-preflight \
+            --reporter=line \
+            --workers=1
+
       - name: Execute real production browser journey
+        if: ${{ inputs.execution_mode == 'full-journey' }}
         env:
           PLAYWRIGHT_SKIP_WEBSERVER: "1"
           PLAYWRIGHT_BASE_URL: "https://c2pro.io"
@@ -230,6 +259,7 @@ jobs:
             --workers=1
 
       - name: Resolve bounded run identifiers
+        if: ${{ inputs.execution_mode == 'full-journey' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -246,6 +276,7 @@ jobs:
           echo "PROD_ACCEPTANCE_PROJECT_ID=$project_id" >> "$GITHUB_ENV"
 
       - name: Read-only durable post-run verification
+        if: ${{ inputs.execution_mode == 'full-journey' }}
         env:
           PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
           PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
@@ -265,6 +296,7 @@ jobs:
             "${hitl[@]}"
 
       - name: Build non-authoritative P0b evidence bundle
+        if: ${{ inputs.execution_mode == 'full-journey' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -285,6 +317,7 @@ jobs:
           echo "QUALIFICATION_BUNDLE=$output" >> "$GITHUB_ENV"
 
       - name: Validate qualification evidence contract
+        if: ${{ inputs.execution_mode == 'full-journey' }}
         run: python validation/product/validate_qualification_evidence.py
 
       - name: Emit bounded run summary
@@ -299,7 +332,9 @@ jobs:
             echo "- backend commit: \`${{ inputs.backend_commit_sha }}\`"
             echo "- frontend deployment: \`${{ inputs.frontend_deployment_id }}\`"
             echo "- frontend commit: \`${{ inputs.frontend_commit_sha }}\`"
+            echo "- execution mode: \`${{ inputs.execution_mode }}\`"
             echo "- require HITL: \`${{ inputs.require_hitl }}\`"
+            echo "- identity preflight mutates product data: **false**"
             echo "- lifecycle authority: **false**"
             echo
             echo "No credential/token values are included in this summary."
@@ -312,6 +347,7 @@ jobs:
           name: c2pro-706-production-qualification-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
           path: |
+            apps/web/playwright/.prod-acceptance/identity-preflight.json
             apps/web/playwright/.prod-acceptance/run.json
             evidence/product-qualification/runtime/verifier.json
             evidence/product-qualification/runtime/deployment-identity.json
