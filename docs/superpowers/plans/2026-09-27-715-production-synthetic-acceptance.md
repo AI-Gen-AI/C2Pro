@@ -29,6 +29,18 @@
 
 ---
 
+### Task 0: Synthetic production identity prerequisite
+
+**Surfaces:** Clerk production identity/Organization and C2Pro tenant mapping.
+
+**Interfaces:**
+- Pre-provisioned identity is dedicated to #706 acceptance and has no customer-tenant access.
+- Required secret names are limited to synthetic login credentials/ids plus production URLs and the dedicated read-only verifier connection.
+
+- [ ] **Step 1: Provision or verify the dedicated synthetic user + Organization through the supported operator path**
+- [ ] **Step 2: Verify the mapped C2Pro tenant is explicitly synthetic before storing credentials for the harness**
+- [ ] **Step 3: Record identifiers only in protected configuration; never commit credential values**
+
 ### Task 1: Production preflight
 
 **Files:**
