@@ -12,7 +12,7 @@ Always dispatch by **role + currently-assigned model** (e.g. "Test/QA → DeepSe
 
 | Role | Purpose / may do | Hard limits (MUST NOT) |
 |---|---|---|
-| **Orchestrator** | Owns dispatch, the review-gate, merges, and delegates backlog reconciliation. Gates every PR (8-step). | Never self-merge by proxy; never accept a delegate report over git truth; never edit the backlog in-place (routes to Reconciler). |
+| **Orchestrator** | Owns dispatch, the review-gate, merges, and delegates canonical control/state reconciliation. Gates every PR (8-step). | Never self-merge by proxy; never accept a delegate report over git truth; never mutate legacy backlog/blackboard state. Canonical `.c2pro` and reviewed Product-Control reconciliation routes to the Reconciler. |
 | **Backend** | Edit `apps/api/src` + Alembic migrations; run backend; push branches; open PRs. | No self-merge; no backlog edits inside code PRs. |
 | **Frontend** | Edit `apps/web`; run web; push; open PRs. | No self-merge; no backlog edits. |
 | **Full-Stack** | Cross-cutting features spanning `apps/api` + `apps/web`; push; open PRs. | No self-merge; no backlog edits. |
