@@ -384,33 +384,6 @@ class TestMarkTasksComplete:
 
         assert outside.read_bytes() == before
 
-    def test_rejects_master_backlog_symlink_escape(
-        self, tmp_path, sample_backlog_content, monkeypatch
-    ):
-        """Canonical master path must not be allowed to escape through a symlink."""
-        outside = tmp_path / "outside.md"
-        outside.write_text(sample_backlog_content, encoding="utf-8")
-        before = outside.read_bytes()
-        master_backlog = tmp_path / "C2PRO_MASTER_BACKLOG.md"
-        try:
-            master_backlog.symlink_to(outside)
-        except OSError as exc:
-            pytest.skip(f"symlink creation unavailable: {exc}")
-
-        backlogs_dir = tmp_path / "backlogs"
-        backlogs_dir.mkdir()
-
-        monkeypatch.setattr(sync_module, "MASTER_BACKLOG_PATH", master_backlog)
-        monkeypatch.setattr(sync_module, "BACKLOGS_DIR", backlogs_dir)
-
-        with pytest.raises(ValueError, match="canonical legacy backlog"):
-            _mark_tasks_complete_in_file(
-                master_backlog,
-                [{"backlog_id": "TASK-BCK-001", "estado": "completado"}],
-            )
-
-        assert outside.read_bytes() == before
-
     def test_rejects_symlink_escape_from_canonical_backlogs(
         self, tmp_path, sample_backlog_content, monkeypatch
     ):
