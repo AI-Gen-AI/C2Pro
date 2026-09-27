@@ -23,7 +23,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -33,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.analysis.adapters.persistence.document_artifact_repository import (
     SqlAlchemyDocumentArtifactRepository,
 )
-from src.analysis.adapters.persistence.models import Analysis, DocumentArtifactORM
+from src.analysis.adapters.persistence.models import Alert, Analysis, DocumentArtifactORM
 from src.analysis.application import document_artifact_completion
 from src.analysis.domain.contracts import DocumentArtifact, RiskItem
 from src.analysis.domain.trust import (
@@ -46,6 +46,7 @@ from src.core.tasks import project_graph_tasks
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.domain.entities import ReviewStatus
 from src.temporal.application import project_snapshot_trigger
+from src.wbs.adapters.persistence.models import WBSNodeORM
 from tests.modules.integration.test_issue649_hitl_audit_idempotency import (
     _post_approve,
     _post_reject,
@@ -485,6 +486,149 @@ async def test_f_stale_decision_after_reanalysis_fails_closed_and_new_review_bin
         "Unreviewed v2"
     ]
     assert graph_enqueues == [(arranged.project_id, tenant.id)]
+
+
+async def test_stale_screen_decision_pinned_to_replaced_row_never_reaches_successor(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """The review UI addresses decisions by the shared item_id. With the V1
+    modal still open, a re-analysis replaces V1's review by one bound to V2
+    (same item_id). The stale click carries V1's row_id and must fail
+    closed on that row -- never approve or reject the unseen V2."""
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    await _propose(completion_sessions, arranged, tenant.id, title="Seen v1")
+    await _propose(completion_sessions, arranged, tenant.id, title="Unseen v2")
+    reviews = await _review_rows(db, arranged.document_id)
+    old, new = reviews[0], reviews[-1]
+    assert old.item_id == new.item_id == arranged.document_id
+
+    for decide in (_post_approve, _post_reject):
+        with pytest.raises(HTTPException) as refused:
+            await decide(
+                request_sessions, tenant.id, arranged.document_id,
+                saver=saver, app=arranged.app, sessions=independent_sessions,
+                row_id=old.id,
+            )
+        assert refused.value.status_code == 400
+    successor = await _reload(db, ReviewItemORM, new.id)
+    assert successor.current_status == ReviewStatus.PENDING_REVIEW_REQUIRED
+    rows = await _rows(independent_sessions, tenant.id, arranged.document_id)
+    assert [(r.artifact_version, r.trust_state) for r in rows] == [
+        (1, "superseded"),
+        (2, "proposed"),
+    ]
+    assert graph_enqueues == []
+
+    # A row that belongs to another item is never accepted.
+    with pytest.raises(HTTPException) as foreign:
+        await _post_approve(
+            request_sessions, tenant.id, uuid4(),
+            saver=saver, app=arranged.app, sessions=independent_sessions,
+            row_id=new.id,
+        )
+    assert foreign.value.status_code == 404
+
+    # The current screen (V2's row) decides exactly V2.
+    await _post_approve(
+        request_sessions, tenant.id, arranged.document_id,
+        saver=saver, app=arranged.app, sessions=independent_sessions,
+        row_id=new.id,
+    )
+    assert _titles(await _canonical(independent_sessions, tenant.id, arranged.project_id)) == [
+        "Unseen v2"
+    ]
+
+
+async def test_supersede_after_preflight_rolls_back_n17_with_the_trust_commit(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    monkeypatch,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """A re-analysis supersedes the approved candidate AFTER the last
+    pre-flight but before N17. N17's analysis/alerts/WBS must never become
+    canonical without the exact trusted transition: the candidate CAS runs
+    inside N17's transaction, so N17 rolls back entirely."""
+    from src.modules.hitl.application import resume_workflow_use_case as use_case_module
+    from tests.modules.integration import test_p0b_crash_safe_resume_recovery as p0b
+
+    # The resumed graph carries real risks and WBS, so a leaked N17 would
+    # write alerts and replace the canonical WBS -- not just an analysis row.
+    initial_state = p0b._initial_state
+    monkeypatch.setattr(
+        p0b,
+        "_initial_state",
+        lambda *args, **kwargs: {
+            **initial_state(*args, **kwargs),
+            "extracted_risks": _risks("Staged risk"),
+            "extracted_wbs": [{"code": "1", "name": "Staged WBS"}],
+        },
+    )
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    await _seed_trusted(independent_sessions, arranged, tenant.id, "Prior trusted risk")
+    await _propose(completion_sessions, arranged, tenant.id, title="Approved v1")
+
+    real_verify = use_case_module.verify_trust_binding
+    calls = {"n": 0}
+
+    async def _verify_then_race(**kwargs: Any) -> Any:
+        result = await real_verify(**kwargs)
+        calls["n"] += 1
+        if calls["n"] == 2:  # the post-acquire pre-flight, right before the graph
+            await _propose(completion_sessions, arranged, tenant.id, title="Racing v2")
+        return result
+
+    monkeypatch.setattr(use_case_module, "verify_trust_binding", _verify_then_race)
+
+    with pytest.raises(HTTPException):
+        await _post_approve(
+            request_sessions, tenant.id, arranged.review_item_id,
+            saver=saver, app=arranged.app, sessions=independent_sessions,
+        )
+
+    assert calls["n"] == 2
+    analyses = (
+        await db.execute(
+            select(Analysis)
+            .where(Analysis.project_id == arranged.project_id)
+            .execution_options(populate_existing=True)
+        )
+    ).scalars().all()
+    assert analyses == [], "N17 outputs must roll back with the refused trust commit"
+    # The dashboard/report headline reads the latest COMPLETED analysis
+    # (asserted absent above); alerts and the canonical WBS are unchanged too.
+    alerts = (
+        await db.execute(select(Alert).where(Alert.project_id == arranged.project_id))
+    ).scalars().all()
+    assert alerts == []
+    wbs = (
+        await db.execute(select(WBSNodeORM).where(WBSNodeORM.project_id == arranged.project_id))
+    ).scalars().all()
+    assert wbs == []
+    assert _titles(await _canonical(independent_sessions, tenant.id, arranged.project_id)) == [
+        "Prior trusted risk"
+    ]
+    rows = await _rows(independent_sessions, tenant.id, arranged.document_id)
+    assert [(r.artifact_version, r.trust_state) for r in rows] == [
+        (1, "trusted"),
+        (2, "superseded"),
+        (3, "proposed"),
+    ]
+    assert graph_enqueues == []
 
 
 async def test_newer_trusted_completion_retires_bound_proposal(

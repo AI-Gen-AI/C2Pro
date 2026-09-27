@@ -21,7 +21,8 @@ V3 does all core N17 work in one transaction on one session:
     lock project row                          -- serialise canonical WBS
     detect existing analysis BY resume_operation_id
       -> if present: return it; repeat NOTHING
-    else persist analysis + alerts + canonical WBS
+    approve: promote the exact bound candidate (#714)
+    persist analysis + alerts + canonical WBS
          + ProjectEvent('analysis.persisted')
          + operation.analysis_id / provenance / phase=N17_DURABLE
     COMMIT ONCE
@@ -121,7 +122,7 @@ async def persist_resume_analysis_atomically(
 
     async with _session(session_factory, tenant_id) as session:
         # 1-2. Authority, serialised on the operation row itself.
-        await resume_ownership.verify_in_transaction(session, ownership)
+        operation = await resume_ownership.verify_in_transaction(session, ownership)
 
         # 3. Serialise canonical WBS replacement against concurrent writers
         # for the same project (ADR-025: one canonical WBS per project).
@@ -147,6 +148,14 @@ async def persist_resume_analysis_atomically(
                 analysis_id=str(existing),
             )
             return AtomicPersistResult(analysis_id=existing, created=False)
+
+        # #714: persisted != trusted. An approved decision promotes its exact
+        # bound candidate in THIS transaction, so the analysis, alerts and
+        # canonical WBS below can never land without the trusted transition;
+        # a stale or superseded binding rolls all of them back.
+        await resume_ownership.commit_trust_in_transaction(
+            session, tenant_id=tenant_id, operation=operation
+        )
 
         # 6. First execution: every core effect, one transaction.
         analysis_id = uuid4()

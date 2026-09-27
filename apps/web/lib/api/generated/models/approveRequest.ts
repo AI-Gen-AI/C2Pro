@@ -43,9 +43,15 @@
  * accepted from the client — it is derived server-side from the
  * authenticated session (Depends(get_current_user)). A client-supplied
  * reviewer field here would let any authenticated user forge a review as
- * another user, corrupting the HITL audit trail. This body is currently
- * empty by design; do not add a reviewer identity field back.
+ * another user, corrupting the HITL audit trail. Do not add a reviewer
+ * identity field back.
+ *
+ * C2PRO #714: ``row_id`` pins the decision to the EXACT review row the
+ * reviewer saw (ReviewItemResponse.row_id). item_id is a business key a
+ * replacement review for a newer candidate shares; without the row, a
+ * decision from a stale screen would land on a review the human never saw.
+ * A pinned row that is no longer awaiting a decision fails closed.
  */
 export interface ApproveRequest {
-  [key: string]: unknown;
+  row_id?: string | null;
 }

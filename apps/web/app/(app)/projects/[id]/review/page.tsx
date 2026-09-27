@@ -176,15 +176,12 @@ export default function ReviewPage() {
     if (!beginSubmit('approve')) return;
     try {
       await approveMutation.mutateAsync({
-        // The queue list already collapses legacy item_id duplicates to one
-        // canonical (resumable, most-recent) row -- see
-        // SqlAlchemyReviewQueueRepository.list_by_status -- so the card the
-        // user is looking at and the row item_id resolves to on the backend
-        // are always the same one. Keep the URL contract as item_id (not
-        // row_id): callers/tests outside this page still address reviews by
-        // item_id, and get_review_item() already resolves it exactly.
+        // Keep the URL contract as item_id, but pin the decision to the
+        // exact row this modal shows (C2PRO #714): a replacement review for
+        // a newer candidate shares item_id, so a decision from a stale modal
+        // must reach the row it was made on and fail closed there.
         itemId: modal.item.item_id,
-        data: {},
+        data: { row_id: modal.item.row_id ?? undefined },
       });
       markDecided(modal.item);
       closeModal();
@@ -206,6 +203,7 @@ export default function ReviewPage() {
         itemId: modal.item.item_id,
         data: {
           reason: rejectReason.trim(),
+          row_id: modal.item.row_id ?? undefined,
         },
       });
       markDecided(modal.item);

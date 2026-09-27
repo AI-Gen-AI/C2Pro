@@ -270,7 +270,7 @@ _HEARTBEAT_SQL = text(
 # transaction, with FOR UPDATE so the row cannot change under it.
 _VERIFY_OWNERSHIP_FOR_UPDATE_SQL = text(
     """
-    SELECT id, phase, analysis_id, fencing_token, decision_revision,
+    SELECT id, phase, analysis_id, fencing_token, decision_revision, decision,
            current_attempt_id, owner_token, project_id, document_id,
            review_row_id, terminal_checkpoint_id,
            (lease_expires_at IS NOT NULL AND lease_expires_at > clock_timestamp())
@@ -1049,9 +1049,11 @@ async def _apply_trust_decision(
 ) -> Any:
     """#714: apply the human decision to the exact bound candidate.
 
-    Returns the TrustedCommit when an approval newly promoted a candidate,
-    else None. Raises StaleCandidateError (rolling back the finalization)
-    when the approval cannot be bound to the current exact proposal.
+    Returns the TrustedCommit for an approval -- NEWLY_TRUSTED, or
+    ALREADY_TRUSTED when N17 of this same operation already committed it
+    (commit_trust_in_transaction) -- else None. Raises StaleCandidateError
+    (rolling back the transaction) when the approval cannot be bound to the
+    current exact proposal.
     """
     from src.analysis.adapters.persistence.document_artifact_repository import (
         SqlAlchemyDocumentArtifactRepository,
@@ -1062,7 +1064,6 @@ async def _apply_trust_decision(
         CandidateBinding,
         CandidateNotReadyError,
         StaleCandidateError,
-        TrustedCommitOutcome,
     )
     from src.core.tenants.types import require_tenant_id
 
@@ -1121,10 +1122,32 @@ async def _apply_trust_decision(
     if not approved:
         await repo.reject_candidate(binding, tenant_id=tenant)
         return None
-    commit = await repo.commit_candidate(binding, tenant_id=tenant)
-    if commit.outcome is TrustedCommitOutcome.ALREADY_TRUSTED:
+    return await repo.commit_candidate(binding, tenant_id=tenant)
+
+
+async def commit_trust_in_transaction(session: Any, *, tenant_id: UUID, operation: Any) -> Any:
+    """#714: promote the exact approved candidate inside N17's transaction.
+
+    N17 of an approved resume makes the analysis, alerts and canonical WBS
+    durable. Committing the exact bound candidate in that SAME transaction
+    means those outputs can never become user-visible without the trusted
+    transition: a stale, superseded or substituted binding raises
+    StaleCandidateError and rolls every N17 effect back. ``operation`` is
+    the row verify_in_transaction locked. finalize_v3 later finds the
+    candidate ALREADY_TRUSTED (idempotent) and still enqueues ProjectGraph.
+    """
+    if str(getattr(operation, "decision", "") or "").lower() != "approve":
         return None
-    return commit
+    review_row_id = _uuid_or_none(getattr(operation, "review_row_id", None))
+    if review_row_id is None:
+        return None
+    return await _apply_trust_decision(
+        session,
+        tenant_id=tenant_id,
+        review_row_id=review_row_id,
+        document_id=_uuid_or_none(getattr(operation, "document_id", None)),
+        approved=True,
+    )
 
 
 def _append_correction_event(

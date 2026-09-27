@@ -13,11 +13,11 @@ approved version (finalize_v3).
 Legacy data is reclassified truthfully (see _reclassify_legacy_candidates).
 Before #714 a HITL-gated run stored its candidate as the ACTIVE (canonical)
 artifact. A document's latest graph-gated review is matched to its candidate
--- the first artifact created at/after the review row -- and later
-completions are never demoted. Pending candidates become PROPOSED and bound
-(or SUPERSEDED with the review closed, when a later completion exists);
-rejected candidates become REJECTED; only artifacts that provably predate the
-review are ever restored as canonical.
+-- the latest artifact produced while the review awaited a decision. Pending
+candidates become PROPOSED and bound, earlier post-review artifacts are
+SUPERSEDED (fail closed: nothing proves they were non-gated); rejected
+candidates become REJECTED; only artifacts that provably predate the review
+are ever restored as canonical.
 
 It also creates the durable trusted -> ProjectGraph obligation index
 (system_recovery.trusted_projection_index) and queues every current trusted
@@ -122,7 +122,7 @@ def _restore_pre_review_trusted(bind: Any, document_id: Any, tenant_id: Any, rev
         )
 
 
-def _bind_review(bind: Any, review_id: Any, candidate: Any, *, close: bool) -> None:
+def _bind_review(bind: Any, review_id: Any, candidate: Any) -> None:
     binding = {
         "artifact_id": str(candidate.artifact_id),
         "document_id": str(candidate.document_id),
@@ -137,36 +137,33 @@ def _bind_review(bind: Any, review_id: Any, candidate: Any, *, close: bool) -> N
                                      || jsonb_build_object(
                                             cast(:k as text), cast(:b as jsonb),
                                             'trust_candidate_required', true)
-                                     || CASE WHEN :close THEN jsonb_build_object(
-                                            'closed_reason', 'legacy_candidate_superseded')
-                                        ELSE '{}'::jsonb END,
-                   current_status = CASE WHEN :close THEN 'CLOSED'
-                                         ELSE current_status END
              WHERE id = :r
             """
         ),
-        {"k": _BINDING_KEY, "b": json.dumps(binding), "r": review_id, "close": close},
+        {"k": _BINDING_KEY, "b": json.dumps(binding), "r": review_id},
     )
 
 
 def _reclassify_legacy_candidates(bind: Any) -> None:
     """Truthfully classify pre-#714 HITL candidates that were stored canonical.
 
-    For each document's latest graph-gated review R, its candidate C is the
-    FIRST artifact created at/after R (the completion hook persisted it right
-    after the interrupt). Artifacts created after C are later completions
-    and stay as they are -- never demoted, because a legitimate non-gated
-    re-run may have superseded C.
+    For each document's latest graph-gated review R, every artifact created
+    at/after R while R awaited a decision was produced under that gate: a
+    re-analysis on the same thread reused R, so nothing proves any of those
+    rows was non-gated or reviewed. Fail closed:
 
-    * R awaiting a decision, C still the latest artifact -> C PROPOSED, bound
-      to R; the newest artifact that predates R is restored as canonical.
-    * R awaiting, but a later completion exists -> C SUPERSEDED (can never be
-      trusted), R bound to C and CLOSED; the later artifact stays canonical.
-    * R REJECTED and C created before the decision -> C REJECTED; the
-      pre-review artifact is restored only if C was the canonical one.
+    * R awaiting a decision -> the LATEST post-review artifact is the current
+      candidate: PROPOSED and bound to R. Every earlier post-review artifact
+      is SUPERSEDED. The newest artifact that predates R is restored as
+      canonical.
+    * R REJECTED -> of the artifacts created before the decision, the latest
+      is REJECTED and the earlier ones SUPERSEDED; artifacts created after the
+      decision are later runs and stay as they are. The pre-review artifact
+      is restored only when no later run exists.
     * R APPROVED -> unchanged.
 
-    Nothing created at/after R is ever restored as trusted (fail closed).
+    Nothing created at/after R is ever left or restored as trusted while R
+    was awaiting a decision.
     """
     if not _table_exists(bind, "review_items"):
         return
@@ -197,42 +194,52 @@ def _reclassify_legacy_candidates(bind: Any) -> None:
         ).all()
         if not post_review:
             continue
-        candidate, later = post_review[0], post_review[1:]
-        candidate_is_canonical = not later and candidate.lifecycle_status == "active"
 
         if review.status in _PENDING:
-            if candidate_is_canonical:
-                bind.execute(
-                    text("UPDATE document_artifacts SET trust_state = 'proposed' WHERE artifact_id = :a"),
-                    {"a": candidate.artifact_id},
-                )
-                _bind_review(bind, review.id, candidate, close=False)
-                _restore_pre_review_trusted(
-                    bind, review.document_id, review.tenant_id, review.created_at
-                )
-            else:
-                bind.execute(
-                    text(
-                        "UPDATE document_artifacts SET trust_state = 'superseded', "
-                        "lifecycle_status = 'superseded' WHERE artifact_id = :a"
-                    ),
-                    {"a": candidate.artifact_id},
-                )
-                _bind_review(bind, review.id, candidate, close=True)
+            *earlier, candidate = post_review
+            _supersede(bind, earlier)
+            bind.execute(
+                text(
+                    "UPDATE document_artifacts SET trust_state = 'proposed', "
+                    "lifecycle_status = 'active' WHERE artifact_id = :a"
+                ),
+                {"a": candidate.artifact_id},
+            )
+            _bind_review(bind, review.id, candidate)
+            _restore_pre_review_trusted(
+                bind, review.document_id, review.tenant_id, review.created_at
+            )
         elif review.status == "REJECTED":
-            if review.approved_at is not None and candidate.created_at > review.approved_at:
-                continue  # not provably the rejected candidate
+            decided_at = review.approved_at
+            under_review = [
+                row for row in post_review if decided_at is None or row.created_at <= decided_at
+            ]
+            if not under_review:
+                continue  # nothing provably produced under the rejected gate
+            *earlier, rejected = under_review
+            _supersede(bind, earlier)
             bind.execute(
                 text(
                     "UPDATE document_artifacts SET trust_state = 'rejected', "
                     "lifecycle_status = 'superseded' WHERE artifact_id = :a"
                 ),
-                {"a": candidate.artifact_id},
+                {"a": rejected.artifact_id},
             )
-            if candidate_is_canonical:
+            if len(under_review) == len(post_review):
                 _restore_pre_review_trusted(
                     bind, review.document_id, review.tenant_id, review.created_at
                 )
+
+
+def _supersede(bind: Any, rows: Sequence[Any]) -> None:
+    for row in rows:
+        bind.execute(
+            text(
+                "UPDATE document_artifacts SET trust_state = 'superseded', "
+                "lifecycle_status = 'superseded' WHERE artifact_id = :a"
+            ),
+            {"a": row.artifact_id},
+        )
 
 
 def upgrade() -> None:

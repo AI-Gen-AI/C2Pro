@@ -40,9 +40,10 @@
 
 /**
  * See ApproveRequest docstring: reviewer identity is server-derived,
- * never client-supplied.
+ * never client-supplied; ``row_id`` pins the exact review row.
  */
 export interface RejectRequest {
   /** @maxLength 2000 */
   reason?: string;
+  row_id?: string | null;
 }

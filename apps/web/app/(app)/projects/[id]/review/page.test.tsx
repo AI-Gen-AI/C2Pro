@@ -286,7 +286,7 @@ describe('ReviewPage', () => {
     });
   });
 
-  it('targets item_id (not row_id) on approve even when a distinct row_id is present -- guards the journey-3-wedge URL contract', async () => {
+  it('keeps item_id in the URL but pins approve and reject to the exact row shown (C2PRO #714)', async () => {
     setupMock({
       data: {
         items: [
@@ -296,6 +296,7 @@ describe('ReviewPage', () => {
       },
     });
     mockApproveMutate.mockResolvedValue({});
+    mockRejectMutate.mockResolvedValue({});
     render(<ReviewPage />);
 
     await userEvent.click(screen.getByTestId('approve-item-1'));
@@ -304,12 +305,36 @@ describe('ReviewPage', () => {
     await waitFor(() => {
       expect(mockApproveMutate).toHaveBeenCalledWith({
         itemId: 'item-1',
-        data: {},
+        data: { row_id: 'row-distinct-999' },
       });
     });
     expect(mockApproveMutate).not.toHaveBeenCalledWith(
       expect.objectContaining({ itemId: 'row-distinct-999' }),
     );
+  });
+
+  it('pins a rejection to the exact row shown', async () => {
+    setupMock({
+      data: {
+        items: [
+          { ...MOCK_ITEMS[0], row_id: 'row-distinct-999', resumable: true },
+        ],
+        total: 1,
+      },
+    });
+    mockRejectMutate.mockResolvedValue({});
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('reject-item-1'));
+    await userEvent.type(screen.getByRole('textbox'), 'Wrong clause');
+    await userEvent.click(screen.getByText('Confirm Reject'));
+
+    await waitFor(() => {
+      expect(mockRejectMutate).toHaveBeenCalledWith({
+        itemId: 'item-1',
+        data: { reason: 'Wrong clause', row_id: 'row-distinct-999' },
+      });
+    });
   });
 
   it('describes a resumable item approval as resuming the analysis workflow', async () => {

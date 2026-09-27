@@ -202,9 +202,26 @@ async def get_review_item(
     return _to_review_item_response(item)
 
 
+async def _resolve_decision_row(
+    service: HumanInTheLoopService, item_id: UUID, row_id: UUID | None
+) -> ReviewItem:
+    """The review row a decision acts on.
+
+    C2PRO #714: with ``row_id`` the decision is pinned to that exact row --
+    it must belong to ``item_id`` -- and never re-resolved by the shared
+    business key, so a replaced review (candidate superseded, row CLOSED)
+    refuses the decision instead of forwarding it to its successor.
+    """
+    existing = await service.review_queue_repo.get_review_item(row_id or item_id)
+    if existing is None or (row_id is not None and existing.item_id != item_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
+    return existing
+
+
 async def _approve_and_resume_workflow(
     *,
     item_id: UUID,
+    review_id: UUID | None = None,
     reviewer_name: str,
     resume_use_case: ResumeWorkflowUseCase,
     row_id: str | None = None,
@@ -230,7 +247,7 @@ async def _approve_and_resume_workflow(
     """
     try:
         result = await resume_use_case.execute(
-            review_id=item_id,
+            review_id=review_id or item_id,
             request=UseCaseResumeRequest(
                 decision=WorkflowDecision.APPROVE,
                 feedback="",
@@ -294,7 +311,7 @@ async def _approve_and_resume_workflow(
 )
 async def approve_item(
     item_id: UUID,
-    _payload: ApproveRequest,
+    payload: ApproveRequest,
     _tenant_id: CurrentTenantId,
     current_user: Annotated[User, Depends(get_current_user)],
     service: HumanInTheLoopService = Depends(get_hitl_service),
@@ -304,9 +321,7 @@ async def approve_item(
     # authenticated session, never to client-supplied values — otherwise any
     # authenticated user could forge a review as another user. ApproveRequest
     # carries no reviewer fields by design.
-    existing = await service.review_queue_repo.get_review_item(item_id)
-    if existing is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
+    existing = await _resolve_decision_row(service, item_id, payload.row_id)
 
     if existing.metadata.get("thread_id"):
         # Graph-gated review (analysis_critique): approval must resume the
@@ -319,6 +334,7 @@ async def approve_item(
         # must never add another one.
         item = await _approve_and_resume_workflow(
             item_id=item_id,
+            review_id=payload.row_id or item_id,
             reviewer_name=current_user.full_name,
             resume_use_case=resume_use_case,
             row_id=existing.metadata.get("row_id"),
@@ -326,7 +342,7 @@ async def approve_item(
     else:
         try:
             item = await service.approve_item(
-                item_id=item_id,
+                item_id=payload.row_id or item_id,
                 reviewer_id=current_user.id,
                 reviewer_name=current_user.full_name,
             )
@@ -360,9 +376,7 @@ async def reject_item(
     service: HumanInTheLoopService = Depends(get_hitl_service),
     resume_use_case: ResumeWorkflowUseCase = Depends(get_resume_workflow_use_case),
 ) -> ReviewItemResponse:
-    existing = await service.review_queue_repo.get_review_item(item_id)
-    if existing is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
+    existing = await _resolve_decision_row(service, item_id, payload.row_id)
 
     if existing.metadata.get("thread_id"):
         # Graph-gated review: rejection must also terminate the SAME
@@ -370,7 +384,7 @@ async def reject_item(
         # flip a status flag, for the same reason approval must resume it.
         try:
             await resume_use_case.execute(
-                review_id=item_id,
+                review_id=payload.row_id or item_id,
                 request=UseCaseResumeRequest(
                     decision=WorkflowDecision.REJECT,
                     feedback=payload.reason,

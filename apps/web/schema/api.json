@@ -6535,10 +6535,23 @@
         "title": "ApprovalStatus"
       },
       "ApproveRequest": {
-        "properties": {},
+        "properties": {
+          "row_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Id"
+          }
+        },
         "type": "object",
         "title": "ApproveRequest",
-        "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is never\naccepted from the client \u2014 it is derived server-side from the\nauthenticated session (Depends(get_current_user)). A client-supplied\nreviewer field here would let any authenticated user forge a review as\nanother user, corrupting the HITL audit trail. This body is currently\nempty by design; do not add a reviewer identity field back."
+        "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is never\naccepted from the client \u2014 it is derived server-side from the\nauthenticated session (Depends(get_current_user)). A client-supplied\nreviewer field here would let any authenticated user forge a review as\nanother user, corrupting the HITL audit trail. Do not add a reviewer\nidentity field back.\n\nC2PRO #714: ``row_id`` pins the decision to the EXACT review row the\nreviewer saw (ReviewItemResponse.row_id). item_id is a business key a\nreplacement review for a newer candidate shares; without the row, a\ndecision from a stale screen would land on a review the human never saw.\nA pinned row that is no longer awaiting a decision fails closed."
       },
       "AttentionItem": {
         "properties": {
@@ -12498,11 +12511,23 @@
             "maxLength": 2000,
             "title": "Reason",
             "default": ""
+          },
+          "row_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Id"
           }
         },
         "type": "object",
         "title": "RejectRequest",
-        "description": "See ApproveRequest docstring: reviewer identity is server-derived,\nnever client-supplied."
+        "description": "See ApproveRequest docstring: reviewer identity is server-derived,\nnever client-supplied; ``row_id`` pins the exact review row."
       },
       "RelationshipExplanationCitationResponse": {
         "properties": {
