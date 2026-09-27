@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
 **Status:** Reconciliation snapshot (read-only) · **Date:** 2026-09-27 · **Schema:** v7  
-**reconciled_against_main_sha:** `665107c3d3f6ceadc114e51392e64b571bda38a9` · **deployed_runtime_sha:** `UNVERIFIED`  
+**reconciled_against_main_sha:** `9b8206372e90aa1b6bcbe7a24414804131055bae` · **deployed_runtime_sha:** `UNVERIFIED`  
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This document is the human projection of the machine product-control plane. It does not grant execution authority. Direct `main`, merge and production mutation remain governed outside this document.
@@ -10,7 +10,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=665107c3d3f6ceadc114e51392e64b571bda38a9
+reconciled_against_main_sha=9b8206372e90aa1b6bcbe7a24414804131055bae
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
@@ -90,29 +90,32 @@ This resolves the earlier ambiguity that could have led the product toward paral
 
 The current production/control facts remain deliberately separate:
 
-- `reconciled_against_main_sha = 665107c3d3f6ceadc114e51392e64b571bda38a9` — repository baseline used for this reconciliation.
-- `deployed_runtime_sha = UNVERIFIED` remains only as the legacy singleton field; authoritative runtime evidence is plane-specific. Railway API `69ecafa3-6291-48dc-9782-d180c73fba1b`, Worker `6d240412-9ef7-404d-8a03-cfd66aa0f7dc` and Scheduler `a9c567dd-45bf-4043-bd3f-8789861fa73d` are SUCCESS at #728 merge commit `665107c3d3f6ceadc114e51392e64b571bda38a9`. Vercel production `dpl_H5ci9sGH8fo2kGm4xVsq4X4QntT1` remains READY at #719 commit `1832e18257800ef64671694f85c7b0893d8b9ea2` because #728 changes only backend/runtime startup. Qualification must rebind both planes at execution time.
+- `reconciled_against_main_sha = 9b8206372e90aa1b6bcbe7a24414804131055bae` — repository baseline used for this reconciliation.
+- `deployed_runtime_sha = UNVERIFIED` remains only as the legacy singleton field; authoritative runtime evidence is plane-specific. Railway API `64a92905-18ac-4527-8537-09a27bb5d2b0`, Worker `fc2ffa82-724d-40eb-b483-388e6be1facd` and Scheduler `74645064-4fd2-4a27-bb80-e2e009c11ce2` are SUCCESS at `main@9b8206372e90aa1b6bcbe7a24414804131055bae` after #730/#731. Vercel production `dpl_H5ci9sGH8fo2kGm4xVsq4X4QntT1` remains READY at #719 commit `1832e18257800ef64671694f85c7b0893d8b9ea2` because #728/#730/#731 are backend-only. Qualification must rebind both planes at execution time.
 - Railway still reports one unresolved STAGED API environment patch `7fcd5228-be1b-4be5-8e72-9692c854ddbf`; #715 fails closed unless staged changes are zero or the exact delta is operator-reviewed and bound to qualification evidence.
-- #728 production logs prove the readiness wrapper is active: Worker and Scheduler logged `Schema ready revision=20260927_0711 attempts=1` before starting Celery. This proves the already-current-schema path, not the required old-schema → wait → migration → start transition; #727 therefore remains OPEN.
+- #728 production logs prove the readiness wrapper is active: Worker and Scheduler logged `Schema ready revision=20260927_0711 attempts=1` before starting Celery. This proves the already-current-schema path, not the required old-schema → wait → migration/advance → start transition; #727 therefore remains OPEN.
+- #730 has closed the backend/UI retry-eligibility portion of #712, but strict REJECT decision + document NEEDS_CHANGES atomicity remains OPEN.
+- #731 has closed the partial-block bbox overclaiming portion of #713, but canonical parsed-text/source-offset construction remains OPEN.
 - Fresh API logs continue to establish production Coherence availability, but do not by themselves prove the separate per-tenant ADR-017 ProjectGraph gate.
-- `product_value_delivered = false` — #711 stale-writer fencing, #712/#713 fix-forward acceptance, #727 transition proof, #714 trusted-state acceptance and #715 end-to-end production qualification remain open.
+- `product_value_delivered = false` — #711 stale-writer fencing, the remaining #712/#713 acceptance, #727 transition proof, #714 trusted-state acceptance and #715 end-to-end production qualification remain open.
 
 ### 2.1 What changed since the previous 2026-09-27 control baseline
 
-The previous reconciled repository baseline was `0db53883a8942f7097fe9ce2e0e6c63397948fbb`. Current `main` is **40 commits ahead** at `665107c3d3f6ceadc114e51392e64b571bda38a9`.
+The previous reconciled repository baseline was `0db53883a8942f7097fe9ce2e0e6c63397948fbb`. Current `main` is **46 commits ahead** at `9b8206372e90aa1b6bcbe7a24414804131055bae`.
 
 Material facts in this interval:
 
-- **#711 / PR #719:** merged as `1832e182...` and remains part of the live Railway runtime. Its recovery index/heartbeat/claim behavior is operating, but issue #711 remains **OPEN** because monotonic per-attempt writer fencing after takeover is not proven.
-- **#727 / PR #728:** merged as `665107c3...` and is now live on Railway. Worker `6d240412...` and Scheduler `a9c567dd...` each invoked `wait_for_schema.py`, observed `20260927_0711`, and only then started Celery; API `69ecafa3...` also reached SUCCESS. No repeat of the earlier `UndefinedTable` window was observed. However, #728 merged despite a Line B HOLD and without independent exact-head review, and the deterministic old-schema → wait → DB advance → start transition is still unproven. Issue #727 remains OPEN; fix-forward branch `test/727-schema-readiness-transition` is prepared.
-- **Runtime planes:** Railway is now at backend/runtime-only `665107c3...`; Vercel production remains at `1832e182...`. This skew is legitimate for #728 and must be rebound, not normalized artificially.
-- **#712 and #713:** remain OPEN for their documented semantic fix-forward defects although their original PRs are merged/deployed.
-- **#714 / PR #726:** is a full DRAFT trusted-state/projected-coherence implementation with migration lineage after `20260927_0711`. It remains non-authorized for merge/deployment until the upstream acceptance gates and #727 are closed and exact-head review is complete.
+- **#711 / PR #719:** merged as `1832e182...` and remains part of the live Railway runtime lineage. Its recovery index/heartbeat/claim behavior is operating, but issue #711 remains **OPEN** because monotonic per-attempt writer fencing after takeover is not proven.
+- **#727 / PR #728:** merged as `665107c3...` and its readiness wrapper is live. Worker/Scheduler proved the already-current-schema path before Celery startup. #728 nevertheless merged despite Line B HOLD and without independent exact-head review; the deterministic old-schema → wait → DB advance → start transition remains unproven. Issue #727 remains OPEN and `test/727-schema-readiness-transition` is prepared.
+- **#712 / PR #730:** merged as `699bce6a...` without an independent review. It correctly enforces backend lifecycle retry eligibility and closes API/UI retry parity, but #712 remains OPEN for strict atomicity of REJECTED review + document NEEDS_CHANGES.
+- **#713 / PR #731:** merged as `9b820637...` without an independent review. It correctly fails closed on partial-block geometry, but #713 remains OPEN until `parsed_text` and the source-block index are generated by one canonical offset pipeline.
+- **Runtime planes:** Railway API/Worker/Scheduler are SUCCESS at `9b820637...`; Vercel production remains at `1832e182...`. This backend/frontend skew is legitimate for these backend-only changes and must be rebound, not normalized artificially.
+- **#714 / PR #726:** remains a full DRAFT trusted-state/projected-coherence implementation. Exact APPROVE binding/promotion core is promising, but candidate-readiness, stale REJECT, version monotonicity/reanalysis, canonical multi-pending projection, durable trusted→ProjectGraph dispatch and legacy-migration safety remain blocking. It is not merge/deploy authorized.
 - **#715:** remains reopened/unexecuted. No canonical production AUTH → PROJECT → UPLOAD → ANALYSIS → EVIDENCE → HEALTH → HITL → RELOGIN → RECOVERY qualification run exists. #690 remains the external identity prerequisite.
 - **Parallel Line B governance:** #724 Wave 1 and #725 Wave 2 remain control-plane work; they do not count toward #706 product acceptance.
 - **Runtime preflight drift:** the unresolved Railway staged API patch `7fcd5228-be1b-4be5-8e72-9692c854ddbf` remains a fail-closed #715 concern.
 
-The GOAL remains **#706 operational closure**. Runtime health and schema-readiness activation are useful evidence, not acceptance. #711/#712/#713/#727 remain open for bounded fix-forward, #714 remains DRAFT/not accepted, and #715 has not run.
+The GOAL remains **#706 operational closure**. #730/#731 are useful partial remediation, not issue closure. #711/#712/#713/#727 remain OPEN for bounded acceptance work, #714 remains DRAFT/not accepted, and #715 has not run.
 
 CI green, merge state, deployment success and health checks remain controls only. None promotes P0b/P0c/P0d or changes `product_value_delivered=false`.
 
@@ -325,7 +328,7 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 1. **Parallel external prerequisite — #690:** establish the dedicated non-customer Clerk Production org/user through the supported operator path; do not reuse customer/CI identities and do not manually synthesize DB mappings.
 2. **#727 transition-proof fix-forward:** #728 code is already merged/deployed and the current-schema Railway path is proven. Complete `test/727-schema-readiness-transition` to prove `old DB schema → async services wait → API/DB advances → same waiter proceeds`, plus bounded timeout/fail-closed behavior. Close #727 only after that proof and exact-head independent review; do not use #714 as the experiment that proves it.
 3. **#711 processing writer authority:** PR #719 is already merged/deployed. Add the remaining per-attempt owner/fencing invariant so a stale worker cannot make any canonical durable write after takeover. Prove A fence N → B takes N+1 → A writes zero → B commits once.
-4. **#712 and #713 fix-forward acceptance:** close API/UI retry parity + strict REJECT/document atomicity for #712; close canonical parsed-text/offset construction + partial-block bbox exactness for #713. Existing deployments prove wiring, not semantic acceptance.
+4. **#712 and #713 remaining acceptance:** #730 already closes backend/UI retry parity, so #712 now requires strict REJECT/document NEEDS_CHANGES atomicity. #731 already closes partial-block bbox exactness, so #713 now requires one canonical parsed-text/source-offset construction pipeline. The no-review partial merges remain governance exceptions and do not close the issues.
 5. **#714 Trusted-State Commit:** PR #726 may continue as DRAFT implementation, but merge/deployment remains gated on accepted #727 and the #711/#712/#713 fix-forwards. Pending/rejected candidates never mutate canonical state; approval/correction binds the exact reviewed candidate/version/hash and commits exactly once. Trusted score remains canonical; projected score stays explicitly provisional.
 6. **#715 final deployed proof:** only after #690 plus accepted #711–#714/#727 are merged/deployed and exact runtime/config identities are rebound, run AUTH → PROJECT → UPLOAD → PARSE/EXTRACT → ANALYSIS → EVIDENCE → HEALTH → HITL → REFRESH/RELOGIN → RECOVERY. Fail closed on mocks, HITL bypass, fixture mismatch and any unreviewed Railway staged configuration change.
 7. **Qualification evidence:** capture P0b assertions (#683) inside #715 where applicable, then qualify P0c (#686) and P0d (#687) on the same clean synthetic tenant/project when their own gates are met.
