@@ -36,6 +36,7 @@ from src.projects.adapters.persistence.models import ProjectORM
 # creates the function/table/privileges from scratch.
 @pytest_asyncio.fixture(autouse=True)
 async def _recovery_migration_surface(db: AsyncSession, test_user):
+    tenant_id = test_user.tenant_id
     artifacts = (
         await db.execute(
             text(
@@ -72,19 +73,19 @@ async def _recovery_migration_surface(db: AsyncSession, test_user):
     await db.rollback()
     await db.execute(
         text("SELECT set_config('app.current_tenant', :tenant, true)"),
-        {"tenant": str(test_user.tenant_id)},
+        {"tenant": str(tenant_id)},
     )
     await db.execute(
         text("DELETE FROM review_items WHERE tenant_id = CAST(:tenant AS uuid)"),
-        {"tenant": str(test_user.tenant_id)},
+        {"tenant": str(tenant_id)},
     )
     await db.execute(
         text("DELETE FROM documents WHERE tenant_id = CAST(:tenant AS uuid)"),
-        {"tenant": str(test_user.tenant_id)},
+        {"tenant": str(tenant_id)},
     )
     await db.execute(
         text("DELETE FROM projects WHERE tenant_id = CAST(:tenant AS uuid)"),
-        {"tenant": str(test_user.tenant_id)},
+        {"tenant": str(tenant_id)},
     )
     await db.commit()
 
@@ -337,10 +338,11 @@ async def test_exhausted_recovery_becomes_error_and_preserves_retry_path(
     ingestion.apply_async.assert_not_called()
     analysis.apply_async.assert_not_called()
 
-    row = (
-        await db.execute(select(DocumentORM).where(DocumentORM.id == document.id))
-    ).scalar_one()
-    assert row.upload_status is DocumentStatus.ERROR
+    # Recovery uses SQL UPDATE directly; refresh the ORM identity-map entry
+    # before asserting the durable state.
+    await db.refresh(document)
+    assert document.upload_status is DocumentStatus.ERROR
+    row = document
     assert "retry is available" in (row.parsing_error or "").lower()
     assert (
         row.document_metadata["processing_recovery"]["outcome"]
