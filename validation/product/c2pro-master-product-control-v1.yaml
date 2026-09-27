@@ -58,8 +58,8 @@ production_position:
     - "ADR-004 circuit breakers observed in production logs"
     - "PR #630 merged the P0b-L4-5 release-ready implementation; the PR explicitly recorded PROD_VALIDATED=NO"
     - "Production runtime identity is observed per plane rather than inferred from main: Railway backend deployment 2bbaea5d-bc7f-4aeb-80ad-aba6d483141a is SUCCESS at 386cbbce74b2653a6039fdddd9fc9719c43b9ff9; Vercel frontend deployment dpl_9yYepGueXUg9u2XnSXJVmYVVgNcV is READY at e7608723c72e391fa3ff12a50d433e4265e4ac94"
-    - "The legacy singleton deployed_runtime_sha remains UNVERIFIED because backend/frontend SHAs legitimately differ; merged #678 carries non-authoritative composite runtime evidence and #681 owns Product-Control promotion integration"
-    - "Composite deployment filtering is live-proven: Railway Watch Paths /apps/api/** skip non-backend changes while backend-changing #697 deployed SUCCESS; after #699, docs/control-only main merges #669 and #701 did not advance Vercel production, which remains on #678"
+    - "The legacy singleton deployed_runtime_sha remains UNVERIFIED because backend/frontend SHAs legitimately differ; merged #678 carries non-authoritative composite runtime evidence and merged #700/#681 provides the Product-Control promotion guard without self-promotion"
+    - "Composite deployment filtering is live-proven: Railway Watch Paths /apps/api/** skip non-backend changes while backend-changing #697 deployed SUCCESS; Vercel #707 became the first successful production baseline containing #699's ignoreCommand, and subsequent control-only #700 was CANCELED/ignored without advancing frontend READY"
     - "Production HITL incidents proved the real P0b journey reached human review; subsequent #633/#638/#641/#646/#650 hardening is merged on main, without implying P0b PROD_VALIDATED"
   reliability_operability_baseline: CLOSED
   product_value_delivered: false
