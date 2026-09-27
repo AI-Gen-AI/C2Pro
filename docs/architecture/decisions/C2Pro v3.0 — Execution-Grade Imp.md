@@ -1,3 +1,9 @@
+> **RETIRED / NON-OPERATIONAL — historical execution artifact.**  
+> Do not execute the legacy backlog-write, priority, scheduling, or completion instructions below for new work.  
+> Current development execution authority is `.c2pro/control/work-queue.yaml` plus the assigned `.c2pro/work/<work_id>.yaml` envelope.  
+> Current product lifecycle/programme truth is `validation/product/c2pro-master-product-control-v1.yaml` with its guarded human projection.  
+> The remaining body is preserved only as historical context/evidence.
+
 C2Pro v3.0 — Execution-Grade Implementation Plan
 
   SDD → Contract-First → TDD → Multi-Agent Execution · Plan date 2026-06-07 · Canon: ADR-013→021
