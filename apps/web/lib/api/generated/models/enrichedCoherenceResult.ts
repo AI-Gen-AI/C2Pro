@@ -39,6 +39,8 @@
  */
 import type { Alert } from "./alert";
 import type { CategoryBreakdown } from "./categoryBreakdown";
+import type { EnrichedCoherenceResultAuditCoverage } from "./enrichedCoherenceResultAuditCoverage";
+import type { EnrichedCoherenceResultCategoryScores } from "./enrichedCoherenceResultCategoryScores";
 import type { EnrichedCoherenceResultScoreVersion } from "./enrichedCoherenceResultScoreVersion";
 import type { FindingSignal } from "./findingSignal";
 
@@ -81,4 +83,8 @@ export interface EnrichedCoherenceResult {
   llm_cost_usd?: number;
   /** low_budget_mode or standard */
   evaluation_mode?: string;
+  /** Per-category coherence scores keyed by canonical category (null when UNASSESSED). */
+  category_scores?: EnrichedCoherenceResultCategoryScores;
+  /** Audit dimension coverage: assessed / total / pct of the 6 canonical categories. */
+  audit_coverage?: EnrichedCoherenceResultAuditCoverage;
 }
