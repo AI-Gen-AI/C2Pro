@@ -975,6 +975,9 @@ async def reprocess_document_endpoint(
     user_id: CurrentUserId,  # noqa: ARG001
     tenant_id: CurrentTenantId,
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+    pending_review_lookup: PendingReviewLookup = Depends(
+        get_pending_review_document_ids
+    ),
 ) -> DocumentQueuedResponse:
     """
     Re-dispatch a Celery processing task for a document stuck in queued, uploaded,
@@ -983,7 +986,36 @@ async def reprocess_document_endpoint(
     """
     document = await repo.get_by_id(tenant_id, document_id)
     if not document or document.project_id != project_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found or access denied.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or access denied.",
+        )
+
+    review_count = 0
+    if document.upload_status == DocumentStatus.PARSED_PENDING_ANALYSIS:
+        lookup_result = pending_review_lookup(tenant_id, [document_id])
+        pending = (
+            await lookup_result if inspect.isawaitable(lookup_result) else lookup_result
+        )
+        review_count, _review_item_id = pending.get(document_id, (0, None))
+
+    lifecycle = document_lifecycle_status(
+        document.upload_status,
+        has_pending_review=review_count > 0,
+        analysis_attempt_failed=bool(
+            (document.document_metadata or {}).get(
+                "analysis_last_attempt_incomplete"
+            )
+        ),
+    )
+    if not document_is_retryable(lifecycle):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Document cannot be retried while lifecycle state is "
+                f"'{lifecycle.value}'."
+            ),
+        )
 
     # An explicit user retry starts a fresh bounded recovery budget while
     # preserving every unrelated piece of document metadata.
