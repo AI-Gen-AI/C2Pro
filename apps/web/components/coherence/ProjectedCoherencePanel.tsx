@@ -18,6 +18,8 @@ const REASON_COPY: Record<string, string> = {
   pending_without_score_version: "the pending proposal has no score version",
   unknown_score_version: "the pending proposal has an unsupported score version",
   projection_read_failed: "pending proposals could not be read",
+  multiple_pending_order_dependent:
+    "several proposals are pending and the result depends on the order they are approved",
 };
 
 function formatScore(value: number | null | undefined): string {

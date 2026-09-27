@@ -14,6 +14,10 @@ pipeline (N17); the projection is never copied into trusted state.
 
 Guards:
 * nothing pending -> no projection;
+* more than one pending proposal -> unavailable (``multiple_pending_order_
+  dependent``): under latest-wins the eventual canonical score depends on the
+  order future approvals are recomputed in, so a single number would
+  overstate certainty. The pending count stays visible;
 * never mix score versions (trusted vs candidate) -> unavailable;
 * a candidate whose engine produced no score stays null, never 0.
 """
@@ -77,12 +81,10 @@ def project_pending_coherence(
             status=ProjectionStatus.NONE,
         )
 
-    # Deterministic "latest wins", matching the canonical selection rule;
-    # ties broken by version then id so input order never matters.
-    latest = max(
-        pending,
-        key=lambda c: (c.created_at, c.binding.artifact_version, str(c.binding.artifact_id)),
-    )
+    if count > 1:
+        return _unavailable("multiple_pending_order_dependent")
+
+    latest = pending[0]
     scoring = latest.scoring
     if scoring is None or scoring.coherence_score is None:
         return _unavailable("pending_without_engine_score")

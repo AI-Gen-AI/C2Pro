@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.hitl.adapters.persistence.models import ResumeOperationORM, ReviewItemORM
 from src.modules.hitl.application.ports import ReviewQueueRepository
-from src.modules.hitl.domain.entities import ImpactLevel, ReviewItem, ReviewStatus
+from src.modules.hitl.domain.entities import (
+    AWAITING_DECISION_STATUSES,
+    ImpactLevel,
+    ReviewItem,
+    ReviewStatus,
+)
 
 
 class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
@@ -129,7 +134,8 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         C2PRO P0b legacy review canonical-selection hotfix: an ACTIVE row
         awaiting a human decision (PENDING_REVIEW_REQUIRED /
         PENDING_REVIEW_CONDITIONAL) must always outrank a HISTORICAL row
-        that has already been decided (APPROVED/REJECTED/CLOSED/ESCALATED),
+        that has already been decided (APPROVED/REJECTED/CLOSED). ESCALATED
+        rows are still awaiting a decision and rank as active (#714),
         regardless of which was created more recently or which happens to
         carry a thread_id. Without this, an old APPROVED row created after
         (in wall-clock time) a still-active PENDING row -- e.g. a stale
@@ -139,12 +145,9 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         """
         return case(
             (
-                ReviewItemORM.current_status.in_(
-                    [
-                        ReviewStatus.PENDING_REVIEW_REQUIRED,
-                        ReviewStatus.PENDING_REVIEW_CONDITIONAL,
-                    ]
-                ),
+                # C2PRO #714: ESCALATED is still awaiting a (senior) human
+                # decision, so it is an ACTIVE row too.
+                ReviewItemORM.current_status.in_(list(AWAITING_DECISION_STATUSES)),
                 0,
             ),
             else_=1,
@@ -355,12 +358,9 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         stmt = select(ReviewItemORM).where(
             ReviewItemORM.document_id == document_id,
             ReviewItemORM.review_type == review_type,
-            ReviewItemORM.current_status.in_(
-                [
-                    ReviewStatus.PENDING_REVIEW_REQUIRED,
-                    ReviewStatus.PENDING_REVIEW_CONDITIONAL,
-                ]
-            ),
+            # An escalated review is still the active one: a graph re-run
+            # must not open a second review next to it.
+            ReviewItemORM.current_status.in_(list(AWAITING_DECISION_STATUSES)),
         )
         if self.tenant_id is not None:
             stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)

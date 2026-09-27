@@ -547,6 +547,9 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                     "project_id": state["project_id"],
                     "document_id": state["document_id"],
                     "review_type": "analysis_critique",
+                    # C2PRO #714: no decision until the exact candidate is
+                    # persisted and bound (see document_artifact_completion).
+                    "trust_candidate_required": True,
                 }
                 thread_id = state.get("thread_id")
                 if thread_id:

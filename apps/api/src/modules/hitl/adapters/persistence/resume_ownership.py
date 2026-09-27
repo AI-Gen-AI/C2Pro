@@ -1000,7 +1000,8 @@ async def finalize_v3(
 
 _REVIEW_BINDING_SQL = text(
     """
-    SELECT review_metadata -> :key
+    SELECT review_metadata -> :key AS binding,
+           coalesce((review_metadata ->> :marker)::boolean, false) AS required
       FROM review_items
      WHERE id = cast(:review_row_id as uuid)
        AND tenant_id = cast(:tenant_id as uuid)
@@ -1013,11 +1014,15 @@ async def verify_trust_binding(
     tenant_id: UUID,
     review_row_id: UUID,
     document_id: UUID | None,
+    approved: bool = True,
     session_factory: Any = None,
 ) -> None:
-    """#714 pre-flight: fail an approval closed BEFORE the graph resumes.
+    """#714 pre-flight: fail a decision closed BEFORE the graph resumes.
 
-    Without it a stale approval would still run N17 (persisting a COMPLETED
+    Both decisions require a #714 review's candidate to be bound
+    (CandidateNotReadyError otherwise). An approval additionally requires
+    the bound candidate to still be the current exact proposal -- without
+    that a stale approval would still run N17 (persisting a COMPLETED
     analysis that feeds the trusted score) and only then be refused by
     finalize_v3. Read-only; finalize_v3 re-verifies under a row lock.
     """
@@ -1027,7 +1032,7 @@ async def verify_trust_binding(
             tenant_id=tenant_id,
             review_row_id=review_row_id,
             document_id=document_id,
-            approved=True,
+            approved=approved,
             dry_run=True,
         )
 
@@ -1052,27 +1057,39 @@ async def _apply_trust_decision(
     )
     from src.analysis.domain.trust import (
         REVIEW_BINDING_KEY,
+        TRUST_CANDIDATE_REQUIRED_KEY,
         CandidateBinding,
+        CandidateNotReadyError,
         StaleCandidateError,
         TrustedCommitOutcome,
     )
     from src.core.tenants.types import require_tenant_id
 
     tenant = require_tenant_id(str(tenant_id))
-    raw = (
+    review = (
         await session.execute(
             _REVIEW_BINDING_SQL,
             {
                 "key": REVIEW_BINDING_KEY,
+                "marker": TRUST_CANDIDATE_REQUIRED_KEY,
                 "review_row_id": str(review_row_id),
                 "tenant_id": str(tenant_id),
             },
         )
-    ).scalar_one_or_none()
+    ).first()
+    raw = review.binding if review is not None else None
     binding = CandidateBinding.from_json(raw, default_document_id=document_id)
     repo = SqlAlchemyDocumentArtifactRepository(session)
 
     if binding is None:
+        if raw is None and review is not None and review.required:
+            # A #714 review whose candidate is not persisted/bound yet (the
+            # interrupt exposed the review before the completion hook ran).
+            # Neither approve nor reject may proceed: fail closed.
+            raise CandidateNotReadyError(
+                f"Review {review_row_id} is not ready for a decision: its analysis "
+                "candidate is still being prepared. Retry shortly."
+            )
         if raw is not None:
             raise StaleCandidateError(
                 f"Review {review_row_id} carries a malformed candidate binding"
@@ -1098,7 +1115,8 @@ async def _apply_trust_decision(
             f"not {document_id}"
         )
     if dry_run:
-        await repo.verify_candidate(binding, tenant_id=tenant)
+        if approved:
+            await repo.verify_candidate(binding, tenant_id=tenant)
         return None
     if not approved:
         await repo.reject_candidate(binding, tenant_id=tenant)

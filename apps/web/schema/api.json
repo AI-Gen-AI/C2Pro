@@ -8363,6 +8363,77 @@
                 "type": "null"
               }
             ]
+          },
+          "trusted_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trusted Score",
+            "description": "Canonical score from trusted (approved) state only. Mirrors coherence_score."
+          },
+          "projected_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projected Score",
+            "description": "PROVISIONAL: canonical engine score if every pending proposal is accepted unchanged. Never canonical; never exported as the project score."
+          },
+          "projected_delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projected Delta",
+            "description": "projected_score - trusted_score (null when either is null)."
+          },
+          "pending_review_count": {
+            "type": "integer",
+            "title": "Pending Review Count",
+            "description": "Exact candidate versions currently awaiting human review.",
+            "default": 0
+          },
+          "projection_score_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["coherence-v1", "coherence-v2"]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projection Score Version"
+          },
+          "projection_status": {
+            "type": "string",
+            "enum": ["none", "provisional", "unavailable"],
+            "title": "Projection Status",
+            "default": "none"
+          },
+          "projection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projection Reason"
           }
         },
         "type": "object",
@@ -12649,6 +12720,11 @@
             "type": "boolean",
             "title": "Resumable",
             "default": false
+          },
+          "decision_ready": {
+            "type": "boolean",
+            "title": "Decision Ready",
+            "default": true
           }
         },
         "type": "object",

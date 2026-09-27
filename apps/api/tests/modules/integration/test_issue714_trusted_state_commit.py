@@ -179,7 +179,7 @@ async def test_a_pending_candidate_persists_but_cannot_commit(
 ) -> None:
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
-    arranged = await _arrange(db, tenant, saver, register)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
 
     await _propose(completion_sessions, arranged, tenant.id)
 
@@ -218,7 +218,7 @@ async def test_b_reject_cannot_commit_and_keeps_prior_trusted_state(
 ) -> None:
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
-    arranged = await _arrange(db, tenant, saver, register)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
     await _seed_trusted(independent_sessions, arranged, tenant.id, "Prior trusted risk")
     await _propose(completion_sessions, arranged, tenant.id, title="Proposed risk")
 
@@ -261,7 +261,7 @@ async def test_c_approve_commits_exact_candidate_and_enqueues_once(
 ) -> None:
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
-    arranged = await _arrange(db, tenant, saver, register)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
     await _seed_trusted(independent_sessions, arranged, tenant.id, "Prior trusted risk")
     await _propose(completion_sessions, arranged, tenant.id, title="Reviewed risk")
 
@@ -292,7 +292,7 @@ async def test_d_duplicate_and_concurrent_approve_commit_once(
 ) -> None:
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
-    arranged = await _arrange(db, tenant, saver, register)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
     await _propose(completion_sessions, arranged, tenant.id)
 
     def approve() -> Any:
@@ -333,7 +333,7 @@ async def test_e_corrected_proposal_commits_only_corrected_version(
 ) -> None:
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
-    arranged = await _arrange(db, tenant, saver, register)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
     await _propose(completion_sessions, arranged, tenant.id, title="AI wrong risk")
     original = await _binding(db, arranged.review_row_id)
 
@@ -388,7 +388,7 @@ async def test_f_stale_approval_after_reanalysis_fails_closed(
 ) -> None:
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
-    arranged = await _arrange(db, tenant, saver, register)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
     await _propose(completion_sessions, arranged, tenant.id, title="Reviewed v1")
     reviewed = await _binding(db, arranged.review_row_id)
 
@@ -429,7 +429,7 @@ async def test_non_gated_completion_is_trusted_and_enqueues_once(
 ) -> None:
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
-    arranged = await _arrange(db, tenant, saver, register)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
     completion_sessions["tenant"] = tenant.id
 
     await document_artifact_completion._persist_artifact(
@@ -481,7 +481,7 @@ async def test_dashboard_trusted_ignores_pending_and_projection_uses_it(
 ) -> None:
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
-    arranged = await _arrange(db, tenant, saver, register)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
 
     empty = await _dashboard(request_sessions, tenant.id, arranged.project_id)
     assert empty.trusted_score is None, "no trusted evidence -> null, never 0"
@@ -528,7 +528,7 @@ async def test_dashboard_reject_removes_candidate_from_projection(
 ) -> None:
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
-    arranged = await _arrange(db, tenant, saver, register)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
     await _propose(completion_sessions, arranged, tenant.id)
     assert (await _dashboard(request_sessions, tenant.id, arranged.project_id)).projected_score == 60.0
 
@@ -556,7 +556,7 @@ async def test_dashboard_correction_replaces_candidate_in_projection(
 
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
-    arranged = await _arrange(db, tenant, saver, register)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
     await _propose(completion_sessions, arranged, tenant.id)
     original = await _binding(db, arranged.review_row_id)
 
@@ -572,3 +572,180 @@ async def test_dashboard_correction_replaces_candidate_in_projection(
     view = await _dashboard(request_sessions, tenant.id, arranged.project_id)
     assert view.pending_review_count == 1, "Vn+1 replaces Vn; it does not stack"
     assert view.projected_score == 75.0
+
+
+# ── P0 race: a decision before the candidate is persisted/bound ─────────────
+
+
+async def _operations(sessions, tenant_id: UUID, project_id: UUID) -> int:
+    from sqlalchemy import text as sql_text
+
+    async with sessions(tenant_id) as s:
+        return int(
+            (
+                await s.execute(
+                    sql_text(
+                        "SELECT count(*) FROM resume_operations "
+                        "WHERE project_id = cast(:p as uuid)"
+                    ),
+                    {"p": str(project_id)},
+                )
+            ).scalar_one()
+        )
+
+
+async def _decision_ready(db: AsyncSession, tenant_id: UUID, review_row_id: UUID) -> bool:
+    from src.modules.hitl.adapters.http.router import _to_review_item_response
+    from src.modules.hitl.adapters.persistence.repository import (
+        SqlAlchemyReviewQueueRepository,
+    )
+
+    await _reload(db, ReviewItemORM, review_row_id)
+    item = await SqlAlchemyReviewQueueRepository(session=db, tenant_id=tenant_id).get_review_item(
+        review_row_id
+    )
+    assert item is not None
+    return _to_review_item_response(item).decision_ready
+
+
+async def test_decision_before_candidate_binding_fails_closed_then_succeeds_once(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    from tests.modules.integration.test_p0b_crash_safe_resume_recovery import N17_RUNS
+
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    # The real N13 created and exposed the review; the completion hook has
+    # NOT yet persisted/bound the candidate.
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    N17_RUNS.clear()
+    review = await _reload(db, ReviewItemORM, arranged.review_row_id)
+    assert review.review_metadata.get("trust_candidate_required") is True
+    assert await _decision_ready(db, tenant.id, arranged.review_row_id) is False
+
+    for decide in (_post_approve, _post_reject):
+        with pytest.raises(HTTPException) as refused:
+            await decide(
+                request_sessions, tenant.id, arranged.review_item_id,
+                saver=saver, app=arranged.app, sessions=independent_sessions,
+            )
+        assert refused.value.status_code == 400
+        assert "not ready" in str(refused.value.detail)
+
+    review = await _reload(db, ReviewItemORM, arranged.review_row_id)
+    assert review.current_status == ReviewStatus.PENDING_REVIEW_REQUIRED, "no decision"
+    assert await _operations(independent_sessions, tenant.id, arranged.project_id) == 0
+    assert N17_RUNS == [], "no graph ran"
+    assert graph_enqueues == []
+
+    # The completion hook lands: persist + bind the exact candidate.
+    await _propose(completion_sessions, arranged, tenant.id, title="Bound risk")
+    assert await _decision_ready(db, tenant.id, arranged.review_row_id) is True
+
+    await _post_approve(
+        request_sessions, tenant.id, arranged.review_item_id,
+        saver=saver, app=arranged.app, sessions=independent_sessions,
+    )
+    await _post_approve(  # double click after the decision committed
+        request_sessions, tenant.id, arranged.review_item_id,
+        saver=saver, app=arranged.app, sessions=independent_sessions,
+    )
+
+    review = await _reload(db, ReviewItemORM, arranged.review_row_id)
+    assert review.current_status == ReviewStatus.APPROVED
+    assert await _operations(independent_sessions, tenant.id, arranged.project_id) == 1
+    assert len(N17_RUNS) == 1
+    rows = await _rows(independent_sessions, tenant.id, arranged.document_id)
+    assert [(r.trust_state, r.lifecycle_status) for r in rows] == [("trusted", "active")]
+    assert graph_enqueues == [(arranged.project_id, tenant.id)]
+
+
+async def test_reject_after_candidate_binding_succeeds(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    with pytest.raises(HTTPException):
+        await _post_reject(
+            request_sessions, tenant.id, arranged.review_item_id,
+            saver=saver, app=arranged.app, sessions=independent_sessions,
+        )
+    await _propose(completion_sessions, arranged, tenant.id)
+
+    response = await _post_reject(
+        request_sessions, tenant.id, arranged.review_item_id,
+        saver=saver, app=arranged.app, sessions=independent_sessions,
+    )
+
+    assert response.current_status == ReviewStatus.REJECTED
+    rows = await _rows(independent_sessions, tenant.id, arranged.document_id)
+    assert [r.trust_state for r in rows] == ["rejected"]
+    assert graph_enqueues == []
+
+
+async def test_legacy_review_without_marker_stays_decidable(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,  # noqa: F811
+    graph_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """Pre-#714 reviews carry no marker and no candidate: unchanged behaviour."""
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    review = await _reload(db, ReviewItemORM, arranged.review_row_id)
+    review.review_metadata = {
+        k: v for k, v in review.review_metadata.items() if k != "trust_candidate_required"
+    }
+    await db.commit()
+    assert await _decision_ready(db, tenant.id, arranged.review_row_id) is True
+
+    response = await _post_approve(
+        request_sessions, tenant.id, arranged.review_item_id,
+        saver=saver, app=arranged.app, sessions=independent_sessions,
+    )
+
+    assert response.current_status == ReviewStatus.APPROVED
+    assert graph_enqueues == [], "nothing was proposed, so nothing becomes trusted"
+
+
+async def test_escalated_review_is_decidable_through_the_fenced_path(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    await _propose(completion_sessions, arranged, tenant.id)
+    review = await _reload(db, ReviewItemORM, arranged.review_row_id)
+    review.current_status = ReviewStatus.ESCALATED  # SLA job escalated it
+    await db.commit()
+
+    response = await _post_approve(
+        request_sessions, tenant.id, arranged.review_item_id,
+        saver=saver, app=arranged.app, sessions=independent_sessions,
+    )
+
+    assert response.current_status == ReviewStatus.APPROVED
+    assert await _operations(independent_sessions, tenant.id, arranged.project_id) == 1
+    assert graph_enqueues == [(arranged.project_id, tenant.id)]

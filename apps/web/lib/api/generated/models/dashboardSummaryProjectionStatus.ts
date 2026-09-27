@@ -37,22 +37,12 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { ImpactLevel } from "./impactLevel";
-import type { ReviewItemResponseItemData } from "./reviewItemResponseItemData";
-import type { ReviewStatus } from "./reviewStatus";
 
-export interface ReviewItemResponse {
-  item_id: string;
-  item_type: string;
-  current_status: ReviewStatus;
-  confidence: number;
-  impact_level: ImpactLevel;
-  approved_by?: string | null;
-  approved_at?: string | null;
-  sla_due_date: string;
-  created_at: string;
-  item_data?: ReviewItemResponseItemData;
-  row_id?: string | null;
-  resumable?: boolean;
-  decision_ready?: boolean;
-}
+export type DashboardSummaryProjectionStatus =
+  (typeof DashboardSummaryProjectionStatus)[keyof typeof DashboardSummaryProjectionStatus];
+
+export const DashboardSummaryProjectionStatus = {
+  none: "none",
+  provisional: "provisional",
+  unavailable: "unavailable",
+} as const;

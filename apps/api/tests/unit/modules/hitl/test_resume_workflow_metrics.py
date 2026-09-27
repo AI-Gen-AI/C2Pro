@@ -295,9 +295,10 @@ async def test_happy_path_approve_records_attempt_and_latency(
     assert args[1] == "resumed"
     spy_latency.assert_called_once()
     assert resp.status == "resumed"
-    # C2PRO #714: an approval is verified against its bound candidate
-    # BEFORE the graph resumes.
-    assert len(v3_ownership.calls["verify_trust_binding"]) == 1
+    # C2PRO #714: an approval is verified against its bound candidate before
+    # any operation is acquired, and again (post-acquire) before the graph
+    # resumes -- both times as an approval.
+    assert [c["approved"] for c in v3_ownership.calls["verify_trust_binding"]] == [True, True]
 
 
 async def test_happy_path_reject_records_attempt_with_rejected_status(
@@ -327,7 +328,9 @@ async def test_happy_path_reject_records_attempt_with_rejected_status(
     assert args[0] == "reject"
     assert args[1] == "rejected"
     assert resp.status == "rejected"
-    assert v3_ownership.calls["verify_trust_binding"] == [], "reject needs no approval pre-flight"
+    # C2PRO #714: a rejection still requires the candidate to be bound
+    # (readiness), but never runs the approval-only staleness check.
+    assert [c["approved"] for c in v3_ownership.calls["verify_trust_binding"]] == [False]
 
 
 async def test_resume_succeeds_without_checkpoint_id_using_thread_id_only(

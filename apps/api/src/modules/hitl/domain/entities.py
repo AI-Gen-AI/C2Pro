@@ -21,6 +21,18 @@ class ReviewStatus(StrEnum):
     CLOSED = "CLOSED"
 
 
+# A human decision is still owed. ESCALATED items were routed to a senior
+# reviewer by the SLA job but remain undecided, so they stay actionable
+# through the same exact-row fenced resume path (#712 / #714).
+AWAITING_DECISION_STATUSES: frozenset[ReviewStatus] = frozenset(
+    {
+        ReviewStatus.PENDING_REVIEW_REQUIRED,
+        ReviewStatus.PENDING_REVIEW_CONDITIONAL,
+        ReviewStatus.ESCALATED,
+    }
+)
+
+
 class ImpactLevel(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"

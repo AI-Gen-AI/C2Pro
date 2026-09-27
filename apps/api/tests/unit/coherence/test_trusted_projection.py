@@ -59,17 +59,19 @@ def test_reject_removes_candidate_so_projection_returns_to_trusted() -> None:
     assert after.projected_score is None and after.status is ProjectionStatus.NONE
 
 
-def test_mixed_pending_candidates_project_deterministically() -> None:
+def test_multiple_pending_proposals_fail_honest_not_order_dependent() -> None:
+    """Latest-wins over several independent reviews depends on future approval
+    order, so no single projected number is honest (#714 coordinator P1)."""
     older, newer = _candidate(70.0, at=0), _candidate(50.0, at=5)
-    a = project_pending_coherence(
-        trusted_score=80.0, trusted_score_version="coherence-v1", pending=[newer, older]
-    )
-    b = project_pending_coherence(
-        trusted_score=80.0, trusted_score_version="coherence-v1", pending=[older, newer]
-    )
-    assert a == b
-    assert a.projected_score == 50.0
-    assert a.pending_review_count == 2
+    for pending in ([newer, older], [older, newer]):
+        p = project_pending_coherence(
+            trusted_score=80.0, trusted_score_version="coherence-v1", pending=pending
+        )
+        assert p.status is ProjectionStatus.UNAVAILABLE
+        assert p.reason == "multiple_pending_order_dependent"
+        assert (p.projected_score, p.projected_delta) == (None, None)
+        assert p.pending_review_count == 2
+        assert p.trusted_score == 80.0
 
 
 def test_projection_never_mixes_score_versions() -> None:

@@ -48,7 +48,11 @@ from src.modules.hitl.adapters.persistence.resume_recovery import (
 from src.modules.hitl.adapters.persistence.resume_recovery import (
     acquire_for_reconciliation,
 )
-from src.modules.hitl.domain.entities import ReviewItem, ReviewStatus
+from src.modules.hitl.domain.entities import (
+    AWAITING_DECISION_STATUSES,
+    ReviewItem,
+    ReviewStatus,
+)
 from src.modules.hitl.ports.review_queue_repository import IReviewQueueRepository
 
 logger = structlog.get_logger()
@@ -325,6 +329,26 @@ class ResumeWorkflowUseCase:
                 project_id=str(correction.project_id),
                 exc_info=True,
             )
+
+    async def _require_trust_ready(
+        self, *, tenant_id: UUID, row_id: UUID, document_id: UUID | None, approve: bool
+    ) -> None:
+        from src.analysis.domain.trust import CandidateNotReadyError, StaleCandidateError
+
+        try:
+            await verify_trust_binding(
+                tenant_id=tenant_id,
+                review_row_id=row_id,
+                document_id=document_id,
+                approved=approve,
+                session_factory=self._claim_session_factory,
+            )
+        except CandidateNotReadyError:
+            record_hitl_resume_error("candidate_not_ready")
+            raise
+        except StaleCandidateError as exc:
+            record_hitl_resume_error("stale_candidate")
+            raise ValueError(str(exc)) from exc
 
     @staticmethod
     async def _enqueue_trusted_project_graph(commit: Any) -> None:
@@ -617,11 +641,7 @@ class ResumeWorkflowUseCase:
                 raise ValueError(self._ERR_NOT_FOUND.format(review_id=review_id))
 
             # 2. Validate review item is in pending status
-            pending_statuses = {
-                ReviewStatus.PENDING_REVIEW_REQUIRED,
-                ReviewStatus.PENDING_REVIEW_CONDITIONAL,
-            }
-            if review_item.current_status not in pending_statuses:
+            if review_item.current_status not in AWAITING_DECISION_STATUSES:
                 # Check if already processed (idempotency)
                 if review_item.current_status in {ReviewStatus.APPROVED, ReviewStatus.REJECTED}:
                     status = "already_processed"
@@ -720,6 +740,17 @@ class ResumeWorkflowUseCase:
             tenant_id = self._tenant_id_for(review_item)
             document_id = self._document_id_for(review_item, {})
             project_id = self._project_id_for(review_item)
+
+            # C2PRO #714: refuse a decision on a review whose exact candidate
+            # is not bound yet (both decisions), or an approval of a stale /
+            # substituted candidate -- BEFORE any resume operation exists, so
+            # no graph runs and no failure is recorded against the review.
+            await self._require_trust_ready(
+                tenant_id=tenant_id,
+                row_id=row_id,
+                document_id=document_id,
+                approve=request.decision == WorkflowDecision.APPROVE,
+            )
 
             ownership, phase, refusal = await acquire(
                 review_row_id=row_id,
@@ -841,6 +872,7 @@ class ResumeWorkflowUseCase:
                         tenant_id=tenant_id,
                         review_row_id=row_id,
                         document_id=document_id,
+                        approved=True,
                         session_factory=self._claim_session_factory,
                     )
                 # 7. Resume the checkpoint this ATTEMPT is entitled to.

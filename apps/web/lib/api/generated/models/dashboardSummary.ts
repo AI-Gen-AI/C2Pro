@@ -38,6 +38,8 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { CoherenceV2Payload } from "./coherenceV2Payload";
+import type { DashboardSummaryProjectionScoreVersion } from "./dashboardSummaryProjectionScoreVersion";
+import type { DashboardSummaryProjectionStatus } from "./dashboardSummaryProjectionStatus";
 import type { DashboardSummaryScoreVersion } from "./dashboardSummaryScoreVersion";
 import type { DashboardSummarySubScores } from "./dashboardSummarySubScores";
 import type { DashboardSummaryWeightsUsed } from "./dashboardSummaryWeightsUsed";
@@ -63,4 +65,15 @@ export interface DashboardSummary {
   score_missing_dimensions?: string[] | null;
   last_updated: string;
   categories_v2?: CoherenceV2Payload | null;
+  /** Canonical score from trusted (approved) state only. Mirrors coherence_score. */
+  trusted_score?: number | null;
+  /** PROVISIONAL: canonical engine score if every pending proposal is accepted unchanged. Never canonical; never exported as the project score. */
+  projected_score?: number | null;
+  /** projected_score - trusted_score (null when either is null). */
+  projected_delta?: number | null;
+  /** Exact candidate versions currently awaiting human review. */
+  pending_review_count?: number;
+  projection_score_version?: DashboardSummaryProjectionScoreVersion;
+  projection_status?: DashboardSummaryProjectionStatus;
+  projection_reason?: string | null;
 }

@@ -9,6 +9,7 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from src.analysis.domain.trust import review_decision_ready
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.observability.monitoring import record_hitl_decision
@@ -38,7 +39,11 @@ from src.modules.hitl.application.resume_workflow_use_case import (
     ResumeWorkflowUseCase,
     WorkflowDecision,
 )
-from src.modules.hitl.domain.entities import ReviewItem, ReviewStatus
+from src.modules.hitl.domain.entities import (
+    AWAITING_DECISION_STATUSES,
+    ReviewItem,
+    ReviewStatus,
+)
 from src.temporal.application.project_snapshot_trigger import (
     record_project_event_and_enqueue_snapshot,
 )
@@ -116,6 +121,7 @@ def _to_review_item_response(item: ReviewItem) -> ReviewItemResponse:
         item_data=item.item_data,
         row_id=UUID(str(row_id_raw)) if row_id_raw else None,
         resumable=bool(item.metadata.get("thread_id")),
+        decision_ready=review_decision_ready(item.metadata),
     )
 
 
@@ -392,10 +398,7 @@ async def reject_item(
         if item is None:  # pragma: no cover - execute() above already confirmed the row exists
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
     else:
-        if existing.current_status not in {
-            ReviewStatus.PENDING_REVIEW_REQUIRED,
-            ReviewStatus.PENDING_REVIEW_CONDITIONAL,
-        }:
+        if existing.current_status not in AWAITING_DECISION_STATUSES:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 f"Item {item_id} cannot be rejected from status {existing.current_status.value}.",

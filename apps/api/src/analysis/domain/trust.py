@@ -38,6 +38,18 @@ TRUST_STATES: tuple[str, ...] = tuple(state.value for state in TrustState)
 
 # review_items.review_metadata key holding the exact candidate a review gates.
 REVIEW_BINDING_KEY = "candidate_binding"
+# Set on every #714 graph-gated review at creation. A marked review without a
+# binding is NOT legacy: its candidate is not persisted/bound yet, so no
+# decision may be taken on it. Pre-#714 reviews lack the marker.
+TRUST_CANDIDATE_REQUIRED_KEY = "trust_candidate_required"
+
+
+def review_decision_ready(review_metadata: Mapping[str, Any] | None) -> bool:
+    """False while a #714 review still waits for its exact candidate binding."""
+    metadata = review_metadata or {}
+    if not metadata.get(TRUST_CANDIDATE_REQUIRED_KEY):
+        return True
+    return isinstance(metadata.get(REVIEW_BINDING_KEY), Mapping)
 
 
 def artifact_digest(payload: Mapping[str, Any]) -> str:
@@ -139,8 +151,20 @@ class StaleCandidateError(RuntimeError):
     """The bound candidate is not the current PROPOSED version: fail closed."""
 
 
+class CandidateNotReadyError(ValueError):
+    """A #714 review whose exact candidate is not persisted/bound yet.
+
+    A ValueError on purpose: it is a request that cannot be honoured *yet*
+    (HTTP 400), refused before any resume operation, graph run or
+    finalization is started -- never a recorded failure.
+    """
+
+
 __all__ = [
     "REVIEW_BINDING_KEY",
+    "TRUST_CANDIDATE_REQUIRED_KEY",
+    "CandidateNotReadyError",
+    "review_decision_ready",
     "TRUST_STATES",
     "CandidateBinding",
     "CandidateScoring",

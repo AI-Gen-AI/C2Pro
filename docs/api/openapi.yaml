@@ -8888,6 +8888,10 @@ components:
           type: boolean
           title: Resumable
           default: false
+        decision_ready:
+          type: boolean
+          title: Decision Ready
+          default: true
       type: object
       required:
       - item_id

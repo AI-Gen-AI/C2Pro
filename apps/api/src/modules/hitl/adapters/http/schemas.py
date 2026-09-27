@@ -57,6 +57,10 @@ class ReviewItemResponse(BaseModel):
     # (carries a real thread_id) -- approving it resumes that workflow
     # rather than only flipping a status flag.
     resumable: bool = False
+    # C2PRO #714: False while a graph-gated review still waits for its exact
+    # analysis candidate to be persisted and bound. Clients must not offer a
+    # decision then; the backend refuses one regardless (fail closed).
+    decision_ready: bool = True
 
     class Config:
         from_attributes = True

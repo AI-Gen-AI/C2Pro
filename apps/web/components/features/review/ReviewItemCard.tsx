@@ -126,9 +126,15 @@ export function ReviewItemCard({
   const [expanded, setExpanded] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
   const overdue = isOverdue(item.sla_due_date);
+  // C2PRO #714: ESCALATED is still awaiting a (senior) human decision and is
+  // decided through the same exact-row resume path.
   const isPending =
     item.current_status === ReviewStatus.PENDING_REVIEW_REQUIRED ||
-    item.current_status === ReviewStatus.PENDING_REVIEW_CONDITIONAL;
+    item.current_status === ReviewStatus.PENDING_REVIEW_CONDITIONAL ||
+    item.current_status === ReviewStatus.ESCALATED;
+  // C2PRO #714: the exact analysis candidate is not persisted/bound yet.
+  // The backend refuses a decision regardless; never offer one here.
+  const candidatePending = item.decision_ready === false;
 
   // C2PRO P0b HITL review UX hotfix: a reviewer needs a real decision
   // title, the reason a human is in the loop at all, what the model
@@ -170,12 +176,14 @@ export function ReviewItemCard({
   // distribution -- showing it as a real score would misrepresent it.
   const confidenceIsMeaningful = item.confidence > 0;
 
-  const actionsDisabled = !reviewerIdentityReady || actionsLocked;
+  const actionsDisabled = !reviewerIdentityReady || actionsLocked || candidatePending;
   const actionsTitle = actionsLocked
     ? 'Decision submitted. Refreshing the queue...'
-    : !reviewerIdentityReady
-      ? 'Loading your identity...'
-      : undefined;
+    : candidatePending
+      ? 'Preparing the analysis candidate for review...'
+      : !reviewerIdentityReady
+        ? 'Loading your identity...'
+        : undefined;
 
   return (
     <div className="rounded-lg border bg-card" data-testid={`review-item-${item.item_id}`}>
@@ -270,6 +278,14 @@ export function ReviewItemCard({
               >
                 Reject
               </Button>
+              {candidatePending ? (
+                <span
+                  className="text-xs text-muted-foreground"
+                  data-testid={`candidate-preparing-${item.item_id}`}
+                >
+                  Preparing candidate…
+                </span>
+              ) : null}
             </>
           ) : null}
           <Button
