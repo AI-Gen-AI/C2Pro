@@ -79,6 +79,23 @@ async def _seed_document(
     await db.flush()
     db.add(document)
     await db.commit()
+
+    projected = (
+        await db.execute(
+            text(
+                """
+                SELECT tenant_id, upload_status, updated_at
+                  FROM system_recovery.document_work_index
+                 WHERE document_id = :document_id
+                """
+            ),
+            {"document_id": document.id},
+        )
+    ).one()
+    assert projected.tenant_id == tenant_id
+    assert projected.upload_status == status.value
+    assert projected.updated_at <= datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=20)
+
     return project, document
 
 
