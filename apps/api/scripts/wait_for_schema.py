@@ -10,8 +10,8 @@ import asyncio
 import os
 import sys
 import time
+from collections.abc import Set
 from pathlib import Path
-from typing import AbstractSet
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
@@ -37,8 +37,8 @@ def expected_heads(api_root: Path = API_ROOT) -> frozenset[str]:
 
 def schema_ready(
     *,
-    expected: AbstractSet[str],
-    current: AbstractSet[str],
+    expected: Set[str],
+    current: Set[str],
 ) -> bool:
     if len(expected) != 1:
         raise RuntimeError("expected Alembic revision set must contain exactly one head")
