@@ -30,6 +30,7 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 os.environ.setdefault("ENVIRONMENT", "test")
+os.environ.setdefault("STORAGE_PROVIDER", "local")
 os.environ.setdefault("DEBUG", "true")
 os.environ.setdefault(
     "TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:5433/c2pro_test"

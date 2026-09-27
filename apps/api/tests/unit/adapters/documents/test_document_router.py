@@ -815,13 +815,14 @@ class TestRouterHelperFunctions:
         result = _document_status_detail_for_polling(DocumentStatus.QUEUED)
         assert "progress" in result.lower()
 
-    def test_get_storage_service_dependency(self):
-        """Test storage service dependency injection."""
+    def test_get_storage_service_dependency(self, monkeypatch):
+        """Test storage service dependency injection follows configured provider."""
         from src.documents.adapters.http.router import get_storage_service
         from src.documents.adapters.storage.local_file_storage_service import (
             LocalFileStorageService,
         )
 
+        monkeypatch.setattr(settings, "storage_provider", "local")
         service = get_storage_service()
         assert isinstance(service, LocalFileStorageService)
 

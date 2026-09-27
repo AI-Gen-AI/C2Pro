@@ -42,9 +42,7 @@ from src.documents.adapters.rag.rag_service_adapter import SqlAlchemyRagService
 from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
     SqlAlchemyRagIngestionService,
 )
-from src.documents.adapters.storage.local_file_storage_service import (
-    LocalFileStorageService,
-)
+from src.documents.adapters.storage.factory import build_storage_service
 from src.documents.application.answer_rag_question_use_case import AnswerRagQuestionUseCase
 from src.documents.application.delete_document_use_case import DeleteDocumentUseCase
 from src.documents.application.download_document_use_case import DownloadDocumentUseCase
@@ -83,6 +81,7 @@ from src.documents.application.services.relationship_explanation_service import 
 )
 from src.documents.application.upload_document_use_case import UploadDocumentUseCase
 from src.documents.domain.models import DocumentStatus, DocumentType
+from src.documents.ports.storage_service import IStorageService
 from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.application.use_cases.bom_use_cases import CreateBOMItemUseCase
@@ -257,8 +256,8 @@ def get_document_repository(
     return SqlAlchemyDocumentRepository(session=db)
 
 
-def get_storage_service() -> LocalFileStorageService:
-    return LocalFileStorageService()
+def get_storage_service() -> IStorageService:
+    return build_storage_service()
 
 
 def get_file_parser_service() -> CompositeFileParser:
@@ -316,7 +315,7 @@ def get_project_event_repository(
 
 def get_upload_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
-    storage: LocalFileStorageService = Depends(get_storage_service),
+    storage: IStorageService = Depends(get_storage_service),
     project_repo: ProjectRepository = Depends(get_project_repository),
     rev_repo: SqlAlchemyDocumentRevisionRepository = Depends(get_document_revision_repository),
     event_repo: SqlAlchemyProjectEventRepository = Depends(get_project_event_repository),
@@ -333,7 +332,7 @@ def get_upload_use_case(
 def get_reupload_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
     rev_repo: SqlAlchemyDocumentRevisionRepository = Depends(get_document_revision_repository),
-    storage: LocalFileStorageService = Depends(get_storage_service),
+    storage: IStorageService = Depends(get_storage_service),
     event_repo: SqlAlchemyProjectEventRepository = Depends(get_project_event_repository),
 ) -> ReuploadDocumentUseCase:
     return ReuploadDocumentUseCase(
@@ -352,7 +351,7 @@ def get_get_document_use_case(
 
 def get_download_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
-    storage: LocalFileStorageService = Depends(get_storage_service),
+    storage: IStorageService = Depends(get_storage_service),
     get_document: GetDocumentUseCase = Depends(get_get_document_use_case),
     rev_repo: SqlAlchemyDocumentRevisionRepository = Depends(get_document_revision_repository),
 ) -> DownloadDocumentUseCase:
@@ -366,7 +365,7 @@ def get_download_use_case(
 
 def get_delete_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
-    storage: LocalFileStorageService = Depends(get_storage_service),
+    storage: IStorageService = Depends(get_storage_service),
     get_document: GetDocumentUseCase = Depends(get_get_document_use_case),
 ) -> DeleteDocumentUseCase:
     return DeleteDocumentUseCase(
@@ -391,7 +390,7 @@ def get_get_document_with_clauses_use_case(
 
 def get_parse_document_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
-    storage: LocalFileStorageService = Depends(get_storage_service),
+    storage: IStorageService = Depends(get_storage_service),
     file_parser: CompositeFileParser = Depends(get_file_parser_service),
     entity_extraction: DocumentsEntityExtractionService = Depends(get_entity_extraction_service),
     rag_ingestion: SqlAlchemyRagIngestionService = Depends(get_rag_ingestion_service),

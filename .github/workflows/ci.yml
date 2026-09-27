@@ -1129,6 +1129,7 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       CELERY_BROKER_URL: redis://localhost:6379/0
       ENVIRONMENT: test
+      STORAGE_PROVIDER: local
       AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
       # Deterministic inference at the provider boundary ONLY. RAG chunking,
       # chunk persistence, the graph, DB, Redis and the browser stay real.
