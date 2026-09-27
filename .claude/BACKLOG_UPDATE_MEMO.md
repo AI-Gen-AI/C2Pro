@@ -31,13 +31,13 @@ Do NOT read or parse full legacy backlogs by default. Normal worker bootstrap co
 ### 2. Structured RETURN
 Upon task completion or discovering new tasks/risks:
 - **Do NOT update legacy markdown/JSON backlogs.**
-- **DO provide structured evidence (YAML result block)** matching the `c2pro-implementation-result-v1` schema in your PR-body or standard output.
+- **DO provide role-appropriate structured evidence** in your PR-body or standard output: implementation roles use `c2pro-implementation-result-v1`; QA/reviewer/security roles use `c2pro-review-result-v1`; Planner/Reconciler use the applicable canonical planning/control schema.
 
 ---
 
-## Structured Result Format (c2pro-implementation-result-v1)
+## Structured Result Formats
 
-Include this fenced YAML block in your output upon completion:
+Implementation roles may use the following `c2pro-implementation-result-v1` example. QA/reviewer/security roles MUST instead use `c2pro-review-result-v1`; Planner/Reconciler use the applicable canonical planning/control schema.
 
 ```yaml
 ```yaml
