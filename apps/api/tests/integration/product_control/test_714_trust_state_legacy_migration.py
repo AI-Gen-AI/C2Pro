@@ -261,17 +261,18 @@ async def test_714_migration_reclassifies_legacy_hitl_candidates_and_round_trips
                     docs["plain"],
                 )
             # One canonical (active + trusted) artifact per document.
+            second_at = T0 + timedelta(hours=5)
             with pytest.raises(asyncpg.UniqueViolationError):
                 await _artifact(conn, tenant=tenant, project=project, document=docs["plain"],
-                                title="second canonical", lifecycle="active",
-                                at=T0 + timedelta(hours=5))
+                                title="second canonical", lifecycle="active", at=second_at)
             # At most one pending proposal per document.
+            second_proposal = uuid4()
             with pytest.raises(asyncpg.UniqueViolationError):
                 await conn.execute(
                     "INSERT INTO document_artifacts (artifact_id, document_id, project_id, "
                     "tenant_id, payload, lifecycle_status, trust_state, artifact_version) "
                     "VALUES ($1,$2,$3,$4,'{}'::jsonb,'superseded','proposed',99)",
-                    uuid4(), docs["pending"], project, tenant,
+                    second_proposal, docs["pending"], project, tenant,
                 )
             forced_after = await conn.fetch(
                 "SELECT relname, relforcerowsecurity FROM pg_class "

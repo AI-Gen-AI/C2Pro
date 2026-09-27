@@ -189,7 +189,18 @@ def _reclassify_legacy_candidates(bind: Any) -> None:
         )
     ).all()
     for review in reviews:
-        post_review = bind.execute(
+        post_review = _post_review_artifacts(bind, review)
+        if not post_review:
+            continue
+        if review.status in _PENDING:
+            _reclassify_pending(bind, review, post_review)
+        elif review.status == "REJECTED":
+            _reclassify_rejected(bind, review, post_review)
+
+
+def _post_review_artifacts(bind: Any, review: Any) -> list[Any]:
+    return list(
+        bind.execute(
             text(
                 """
                 SELECT artifact_id, document_id, artifact_version, artifact_hash,
@@ -201,83 +212,66 @@ def _reclassify_legacy_candidates(bind: Any) -> None:
             ),
             {"d": review.document_id, "t": review.tenant_id, "since": review.created_at},
         ).all()
-        if not post_review:
-            continue
-        candidate, later = post_review[0], post_review[1:]
-        candidate_is_canonical = not later and candidate.lifecycle_status == "active"
+    )
 
-        if review.status in _PENDING:
-            if candidate_is_canonical:
-                bind.execute(
-                    text("UPDATE document_artifacts SET trust_state = 'proposed' WHERE artifact_id = :a"),
-                    {"a": candidate.artifact_id},
-                )
-                _bind_review(bind, review.id, candidate, close=False)
-                _restore_pre_review_trusted(
-                    bind, review.document_id, review.tenant_id, review.created_at
-                )
-            else:
-                # Ambiguous legacy history: with more than one post-review
-                # completion we cannot prove that any of them bypassed the
-                # still-pending human gate legitimately. Quarantine ALL of
-                # them rather than silently trusting the newest row.
-                bind.execute(
-                    text(
-                        "UPDATE document_artifacts "
-                        "SET trust_state = 'superseded', lifecycle_status = 'superseded' "
-                        "WHERE document_id = :d AND tenant_id = :t AND created_at >= :since"
-                    ),
-                    {
-                        "d": review.document_id,
-                        "t": review.tenant_id,
-                        "since": review.created_at,
-                    },
-                )
-                _bind_review(bind, review.id, candidate, close=True)
-                bind.execute(
-                    text(
-                        "UPDATE review_items "
-                        "SET review_metadata = coalesce(review_metadata, '{}'::jsonb) "
-                        "|| jsonb_build_object('closed_reason', 'legacy_post_review_ambiguous') "
-                        "WHERE id = :r"
-                    ),
-                    {"r": review.id},
-                )
-                _restore_pre_review_trusted(
-                    bind, review.document_id, review.tenant_id, review.created_at
-                )
-        elif review.status == "REJECTED":
-            # Every artifact produced before the decision was produced under
-            # the rejected gate (a gated rerun reused R): the latest of them
-            # is the rejected candidate, earlier ones are superseded. Rows
-            # created after the decision are later runs and stay as they are.
-            decided_at = review.approved_at
-            under_review = [
-                row for row in post_review if decided_at is None or row.created_at <= decided_at
-            ]
-            if not under_review:
-                continue  # nothing provably produced under the rejected gate
-            *earlier, rejected = under_review
-            for row in earlier:
-                bind.execute(
-                    text(
-                        "UPDATE document_artifacts SET trust_state = 'superseded', "
-                        "lifecycle_status = 'superseded' WHERE artifact_id = :a"
-                    ),
-                    {"a": row.artifact_id},
-                )
-            bind.execute(
-                text(
-                    "UPDATE document_artifacts SET trust_state = 'rejected', "
-                    "lifecycle_status = 'superseded' WHERE artifact_id = :a"
-                ),
-                {"a": rejected.artifact_id},
-            )
-            if len(under_review) == len(post_review):
-                _restore_pre_review_trusted(
-                    bind, review.document_id, review.tenant_id, review.created_at
-                )
 
+def _set_state(bind: Any, artifact_id: Any, trust_state: str) -> None:
+    bind.execute(
+        text(
+            "UPDATE document_artifacts SET trust_state = :s, "
+            "lifecycle_status = 'superseded' WHERE artifact_id = :a"
+        ),
+        {"s": trust_state, "a": artifact_id},
+    )
+
+
+def _reclassify_pending(bind: Any, review: Any, post_review: Sequence[Any]) -> None:
+    candidate = post_review[0]
+    if len(post_review) == 1 and candidate.lifecycle_status == "active":
+        bind.execute(
+            text("UPDATE document_artifacts SET trust_state = 'proposed' WHERE artifact_id = :a"),
+            {"a": candidate.artifact_id},
+        )
+        _bind_review(bind, review.id, candidate, close=False)
+    else:
+        # Ambiguous legacy history: with more than one post-review
+        # completion we cannot prove that any of them bypassed the
+        # still-pending human gate legitimately. Quarantine ALL of
+        # them rather than silently trusting the newest row.
+        for row in post_review:
+            _set_state(bind, row.artifact_id, "superseded")
+        _bind_review(bind, review.id, candidate, close=True)
+        bind.execute(
+            text(
+                "UPDATE review_items "
+                "SET review_metadata = coalesce(review_metadata, '{}'::jsonb) "
+                "|| jsonb_build_object('closed_reason', 'legacy_post_review_ambiguous') "
+                "WHERE id = :r"
+            ),
+            {"r": review.id},
+        )
+    _restore_pre_review_trusted(bind, review.document_id, review.tenant_id, review.created_at)
+
+
+def _reclassify_rejected(bind: Any, review: Any, post_review: Sequence[Any]) -> None:
+    # Every artifact produced before the decision was produced under the
+    # rejected gate (a gated rerun reused R): the latest of them is the
+    # rejected candidate, earlier ones are superseded. Rows created after
+    # the decision are later runs and stay as they are.
+    decided_at = review.approved_at
+    under_review = [
+        row for row in post_review if decided_at is None or row.created_at <= decided_at
+    ]
+    if not under_review:
+        return  # nothing provably produced under the rejected gate
+    *earlier, rejected = under_review
+    for row in earlier:
+        _set_state(bind, row.artifact_id, "superseded")
+    _set_state(bind, rejected.artifact_id, "rejected")
+    if len(under_review) == len(post_review):
+        _restore_pre_review_trusted(
+            bind, review.document_id, review.tenant_id, review.created_at
+        )
 
 def upgrade() -> None:
     bind = op.get_bind()

@@ -190,6 +190,20 @@ async def _seed_trusted(sessions, arranged, tenant_id: UUID, title: str) -> None
         )
 
 
+async def _commit_in(sessions, tenant_id: UUID, binding: CandidateBinding) -> Any:
+    async with sessions(tenant_id) as s:
+        return await SqlAlchemyDocumentArtifactRepository(s).commit_candidate(
+            binding, tenant_id=tenant_id
+        )
+
+
+async def _reject_in(sessions, tenant_id: UUID, binding: CandidateBinding) -> Any:
+    async with sessions(tenant_id) as s:
+        return await SqlAlchemyDocumentArtifactRepository(s).reject_candidate(
+            binding, tenant_id=tenant_id
+        )
+
+
 def _titles(artifacts: list[DocumentArtifact]) -> list[str]:
     return [a.extracted_risks[0].title for a in artifacts if a.extracted_risks]
 
@@ -213,7 +227,8 @@ async def test_a_pending_candidate_persists_but_cannot_commit(
 
     rows = await _rows(independent_sessions, tenant.id, arranged.document_id)
     assert [(r.trust_state, r.artifact_version) for r in rows] == [("proposed", 1)]
-    assert rows[0].artifact_hash and len(rows[0].artifact_hash) == 64
+    assert rows[0].artifact_hash
+    assert len(rows[0].artifact_hash) == 64
     assert rows[0].scoring == {"coherence_score": 60.0, "score_version": "coherence-v1"}
     binding = await _binding(db, arranged.review_row_id)
     assert binding == CandidateBinding(
@@ -225,10 +240,7 @@ async def test_a_pending_candidate_persists_but_cannot_commit(
     # Substituted content under the same id/version cannot be committed.
     forged = CandidateBinding(binding.artifact_id, binding.document_id, 1, "0" * 64)
     with pytest.raises(StaleCandidateError):
-        async with independent_sessions(tenant.id) as s:
-            await SqlAlchemyDocumentArtifactRepository(s).commit_candidate(
-                forged, tenant_id=tenant.id
-            )
+        await _commit_in(independent_sessions, tenant.id, forged)
     assert await _canonical(independent_sessions, tenant.id, arranged.project_id) == []
 
 
@@ -265,14 +277,11 @@ async def test_b_reject_cannot_commit_and_keeps_prior_trusted_state(
     assert _titles(canonical) == ["Prior trusted risk"]
     assert graph_enqueues == []
 
+    rejected = CandidateBinding(
+        rows[1].artifact_id, arranged.document_id, 2, rows[1].artifact_hash
+    )
     with pytest.raises(StaleCandidateError):
-        async with independent_sessions(tenant.id) as s:
-            await SqlAlchemyDocumentArtifactRepository(s).commit_candidate(
-                CandidateBinding(
-                    rows[1].artifact_id, arranged.document_id, 2, rows[1].artifact_hash
-                ),
-                tenant_id=tenant.id,
-            )
+        await _commit_in(independent_sessions, tenant.id, rejected)
 
 
 # ── 3 / C + D: approve commits exactly the candidate, exactly once ───────────
@@ -381,10 +390,7 @@ async def test_e_corrected_proposal_commits_only_corrected_version(
     assert await _binding(db, arranged.review_row_id) == corrected
     # Vn can never be committed once superseded.
     with pytest.raises(StaleCandidateError):
-        async with independent_sessions(tenant.id) as s:
-            await SqlAlchemyDocumentArtifactRepository(s).commit_candidate(
-                original, tenant_id=tenant.id
-            )
+        await _commit_in(independent_sessions, tenant.id, original)
     assert await _canonical(independent_sessions, tenant.id, arranged.project_id) == []
 
     await _post_approve(
@@ -528,9 +534,10 @@ async def test_stale_screen_decision_pinned_to_replaced_row_never_reaches_succes
     assert graph_enqueues == []
 
     # A row that belongs to another item is never accepted.
+    other_item = uuid4()
     with pytest.raises(HTTPException) as foreign:
         await _post_approve(
-            request_sessions, tenant.id, uuid4(),
+            request_sessions, tenant.id, other_item,
             saver=saver, app=arranged.app, sessions=independent_sessions,
             row_id=new.id,
         )
@@ -668,10 +675,7 @@ async def test_newer_trusted_completion_retires_bound_proposal(
             saver=saver, app=arranged.app, sessions=independent_sessions,
         )
     with pytest.raises(StaleCandidateError):
-        async with independent_sessions(tenant.id) as s:
-            await SqlAlchemyDocumentArtifactRepository(s).commit_candidate(
-                stale, tenant_id=tenant.id
-            )
+        await _commit_in(independent_sessions, tenant.id, stale)
     assert _titles(await _canonical(independent_sessions, tenant.id, arranged.project_id)) == [
         "V3 newer"
     ]
@@ -694,10 +698,7 @@ async def test_reject_is_exact_binding_and_stale_reject_fails_closed(
 
     forged = CandidateBinding(bound.artifact_id, bound.document_id, 1, "0" * 64)
     with pytest.raises(StaleCandidateError):
-        async with independent_sessions(tenant.id) as s:
-            await SqlAlchemyDocumentArtifactRepository(s).reject_candidate(
-                forged, tenant_id=tenant.id
-            )
+        await _reject_in(independent_sessions, tenant.id, forged)
     # Superseded (e.g. by a correction) -> rejecting the old version fails.
     async with independent_sessions(tenant.id) as s:
         await SqlAlchemyDocumentArtifactRepository(s).propose_correction(
@@ -707,10 +708,7 @@ async def test_reject_is_exact_binding_and_stale_reject_fails_closed(
             review_row_id=arranged.review_row_id,
         )
     with pytest.raises(StaleCandidateError):
-        async with independent_sessions(tenant.id) as s:
-            await SqlAlchemyDocumentArtifactRepository(s).reject_candidate(
-                bound, tenant_id=tenant.id
-            )
+        await _reject_in(independent_sessions, tenant.id, bound)
     rows = await _rows(independent_sessions, tenant.id, arranged.document_id)
     assert [(r.artifact_version, r.trust_state) for r in rows] == [
         (1, "superseded"),
@@ -822,7 +820,8 @@ async def test_dashboard_trusted_ignores_pending_and_projection_uses_it(
 
     await _propose(completion_sessions, arranged, tenant.id)  # engine score 60, v1
     pending = await _dashboard(request_sessions, tenant.id, arranged.project_id)
-    assert pending.coherence_score is None and pending.trusted_score is None
+    assert pending.coherence_score is None
+    assert pending.trusted_score is None
     async with independent_sessions(tenant.id) as s:
         candidates = await SqlAlchemyDocumentArtifactRepository(s).list_pending_candidates(
             project_id=arranged.project_id, tenant_id=tenant.id

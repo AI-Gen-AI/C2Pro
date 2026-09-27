@@ -115,6 +115,22 @@ function hasData(data: ReviewItemResponse['item_data']): boolean {
 const DEFAULT_APPROVE_MEANING = 'Mark this item as approved.';
 const DEFAULT_REJECT_MEANING = 'Mark this item as rejected and record the reason given.';
 
+/** Why Approve/Reject are disabled, first reason wins; undefined when enabled. */
+function actionsBlockedReason(state: {
+  actionsLocked: boolean;
+  exactIdentityMissing: boolean;
+  candidatePending: boolean;
+  reviewerIdentityReady: boolean;
+}): string | undefined {
+  if (state.actionsLocked) return 'Decision submitted. Refreshing the queue...';
+  if (state.exactIdentityMissing) {
+    return 'Exact review identity unavailable. Refresh the queue before deciding.';
+  }
+  if (state.candidatePending) return 'Preparing the analysis candidate for review...';
+  if (!state.reviewerIdentityReady) return 'Loading your identity...';
+  return undefined;
+}
+
 export function ReviewItemCard({
   item,
   projectId,
@@ -179,15 +195,12 @@ export function ReviewItemCard({
   const exactIdentityMissing = !item.row_id;
   const actionsDisabled =
     !reviewerIdentityReady || actionsLocked || candidatePending || exactIdentityMissing;
-  const actionsTitle = actionsLocked
-    ? 'Decision submitted. Refreshing the queue...'
-    : exactIdentityMissing
-      ? 'Exact review identity unavailable. Refresh the queue before deciding.'
-      : candidatePending
-        ? 'Preparing the analysis candidate for review...'
-        : !reviewerIdentityReady
-          ? 'Loading your identity...'
-          : undefined;
+  const actionsTitle = actionsBlockedReason({
+    actionsLocked,
+    exactIdentityMissing,
+    candidatePending,
+    reviewerIdentityReady,
+  });
 
   return (
     <div className="rounded-lg border bg-card" data-testid={`review-item-${item.item_id}`}>

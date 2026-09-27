@@ -35,30 +35,47 @@ function formatDelta(value: number): string {
 }
 
 interface ProjectedCoherencePanelProps {
-  summary: DashboardSummary;
+  readonly summary: DashboardSummary;
 }
 
-export function ProjectedCoherencePanel({ summary }: ProjectedCoherencePanelProps) {
+function numberOrNull(value: number | null | undefined): number | null {
+  return typeof value === "number" ? value : null;
+}
+
+interface PanelView {
+  pending: number;
+  trusted: number | null;
+  projected: number | null;
+  delta: number | null;
+  baseline: number | null;
+  unavailable: boolean;
+  reason: string | null;
+  proposalLabel: string;
+}
+
+function panelView(summary: DashboardSummary): PanelView {
   const pending =
     typeof summary.pending_review_count === "number" ? summary.pending_review_count : 0;
+  const projected = numberOrNull(summary.projected_score);
+  const code = summary.projection_reason;
+  return {
+    pending,
+    trusted: numberOrNull(summary.trusted_score) ?? numberOrNull(summary.coherence_score),
+    projected,
+    delta: numberOrNull(summary.projected_delta),
+    baseline: numberOrNull(summary.projection_baseline_score),
+    unavailable: summary.projection_status === "unavailable" || projected === null,
+    reason: code ? (REASON_COPY[code] ?? code) : null,
+    proposalLabel: pending === 1 ? "proposal" : "proposals",
+  };
+}
+
+export function ProjectedCoherencePanel({ summary }: Readonly<ProjectedCoherencePanelProps>) {
+  const { pending, trusted, projected, delta, baseline, unavailable, reason, proposalLabel } =
+    panelView(summary);
   if (pending <= 0) {
     return null;
   }
-
-  const trusted =
-    typeof summary.trusted_score === "number" ? summary.trusted_score : summary.coherence_score;
-  const projected =
-    typeof summary.projected_score === "number" ? summary.projected_score : null;
-  const delta = typeof summary.projected_delta === "number" ? summary.projected_delta : null;
-  const baseline =
-    typeof summary.projection_baseline_score === "number"
-      ? summary.projection_baseline_score
-      : null;
-  const unavailable = summary.projection_status === "unavailable" || projected === null;
-  const reason = summary.projection_reason
-    ? REASON_COPY[summary.projection_reason] ?? summary.projection_reason
-    : null;
-  const proposalLabel = pending === 1 ? "proposal" : "proposals";
 
   return (
     <section
