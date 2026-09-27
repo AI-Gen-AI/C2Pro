@@ -5919,7 +5919,9 @@ components:
           type: string
           title: Text
         page:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Page
         confidence:
           type: number
@@ -5933,7 +5935,6 @@ components:
       - id
       - type
       - text
-      - page
       - confidence
       title: DocumentEntityResponse
       description: Entity extracted or derived from a persisted document.

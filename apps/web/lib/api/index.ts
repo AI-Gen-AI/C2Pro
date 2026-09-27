@@ -24,15 +24,15 @@ export interface ProcessedEntity {
   id: string;
   type: "stakeholder" | "wbs" | "bom" | "clause";
   text: string;
-  page: number;
+  page: number | null;
   confidence: number;
   metadata?: Record<string, unknown>;
 }
 
 interface EvidenceLocation {
-  bbox: [number, number, number, number];
+  bbox: [number, number, number, number] | null;
   normalized?: boolean;
-  page_number?: number;
+  page_number: number | null;
 }
 
 export interface EvidenceHistoryEvent {
@@ -156,20 +156,26 @@ export function createHighlightsFromEntities(
   return entities.flatMap((entity) => {
     const evidence = parseEvidenceLocation(entity.metadata?.evidence_location);
     if (!evidence) return [];
+    const page = evidence.page_number ?? entity.page;
+    if (page === null) return [];
 
-    const rect: Rectangle = {
-      left: evidence.bbox[0],
-      top: evidence.bbox[1],
-      width: evidence.bbox[2],
-      height: evidence.bbox[3],
-      normalized: evidence.normalized,
-    };
+    const rects: Rectangle[] = evidence?.bbox
+      ? [
+          {
+            left: evidence.bbox[0],
+            top: evidence.bbox[1],
+            width: evidence.bbox[2],
+            height: evidence.bbox[3],
+            normalized: evidence.normalized,
+          },
+        ]
+      : [];
 
     return [
       createHighlight(
         entity.id,
-        evidence.page_number || entity.page,
-        [rect],
+        page,
+        rects,
         getHighlightColor(entity.confidence * 100),
         entity.text,
       ),
@@ -570,22 +576,48 @@ export function parseEvidenceLocation(value: unknown): EvidenceLocation | null {
   };
 
   if (
-    !Array.isArray(candidate.bbox) ||
-    candidate.bbox.length !== 4 ||
-    !candidate.bbox.every((point): point is number => typeof point === "number")
+    candidate.page_number !== undefined &&
+    candidate.page_number !== null &&
+    !(
+      typeof candidate.page_number === "number" &&
+      Number.isInteger(candidate.page_number) &&
+      candidate.page_number >= 1
+    )
   ) {
     return null;
   }
 
+  if (
+    candidate.bbox !== undefined &&
+    candidate.bbox !== null &&
+    !(
+      Array.isArray(candidate.bbox) &&
+      candidate.bbox.length === 4 &&
+      candidate.bbox.every(
+        (point): point is number => typeof point === "number",
+      )
+    )
+  ) {
+    return null;
+  }
+
+  const pageNumber =
+    typeof candidate.page_number === "number" ? candidate.page_number : null;
+  const bbox =
+    Array.isArray(candidate.bbox) && candidate.bbox.length === 4
+      ? ([
+          candidate.bbox[0],
+          candidate.bbox[1],
+          candidate.bbox[2],
+          candidate.bbox[3],
+        ] as [number, number, number, number])
+      : null;
+
   return {
-    bbox: [
-      candidate.bbox[0],
-      candidate.bbox[1],
-      candidate.bbox[2],
-      candidate.bbox[3],
-    ],
-    normalized: typeof candidate.normalized === "boolean" ? candidate.normalized : undefined,
-    page_number: typeof candidate.page_number === "number" ? candidate.page_number : undefined,
+    bbox,
+    normalized:
+      typeof candidate.normalized === "boolean" ? candidate.normalized : undefined,
+    page_number: pageNumber,
   };
 }
 

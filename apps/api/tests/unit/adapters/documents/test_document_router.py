@@ -669,10 +669,120 @@ class TestDocumentHelpers:
         assert body[0]["metadata"]["evidence_location"]["bbox"] == [0.1, 0.2, 0.3, 0.4]
         assert body[0]["metadata"]["evidence_location"]["normalized"] is False
         assert body[1]["text"] == "CLS-002"
-        assert body[1]["page"] == 1
+        assert body[1]["page"] is None
         assert body[1]["confidence"] == pytest.approx(1.0)
         assert body[1]["metadata"]["clause_type"] is None
-        assert body[1]["metadata"]["evidence_location"]["bbox"] == [0.08, 0.12, 0.84, 0.06]
+        assert body[1]["metadata"]["evidence_location"]["bbox"] is None
+
+
+    def test_doc_http_012b_preserves_valid_historical_revision_location(
+        self, client, app, sample_document, tenant_id
+    ):
+        from src.documents.adapters.http.router import (
+            get_document_revision_repository,
+            get_get_document_with_clauses_use_case,
+        )
+
+        revision_id = uuid4()
+        clause = Clause(
+            id=uuid4(),
+            project_id=sample_document.project_id,
+            tenant_id=sample_document.tenant_id,
+            document_id=sample_document.id,
+            clause_code="CLS-HIST",
+            clause_type=ClauseType.QUALITY,
+            title="Historical evidence",
+            full_text="Historical revision remains valid evidence.",
+            extracted_entities={
+                "evidence_location": {
+                    "revision_id": str(revision_id),
+                    "page_number": 7,
+                    "page_numbers": [7],
+                    "bbox": [1.0, 2.0, 3.0, 4.0],
+                }
+            },
+        )
+        use_case = MagicMock()
+        use_case.execute = AsyncMock(
+            return_value=replace(sample_document, clauses=[clause])
+        )
+        revision_repository = MagicMock()
+        revision_repository.get_by_id = AsyncMock()
+        revision = MagicMock()
+        revision.document_id = sample_document.id
+        revision.tenant_id = tenant_id
+        revision_repository.get_by_id.return_value = revision
+        app.dependency_overrides[get_get_document_with_clauses_use_case] = lambda: use_case
+        app.dependency_overrides[get_document_revision_repository] = (
+            lambda: revision_repository
+        )
+
+        response = client.get(f"/documents/{sample_document.id}/entities")
+
+        assert response.status_code == status.HTTP_200_OK
+        location = response.json()[0]["metadata"]["evidence_location"]
+        assert response.json()[0]["page"] == 7
+        assert location["bbox"] == [1.0, 2.0, 3.0, 4.0]
+        revision_repository.get_by_id.assert_awaited_once_with(revision_id, tenant_id)
+
+    @pytest.mark.parametrize("revision_mode", ["missing", "wrong_document", "malformed"])
+    def test_doc_http_012c_invalid_revision_binding_fails_closed(
+        self, client, app, sample_document, tenant_id, revision_mode
+    ):
+        from src.documents.adapters.http.router import (
+            get_document_revision_repository,
+            get_get_document_with_clauses_use_case,
+        )
+
+        revision_id = "not-a-uuid" if revision_mode == "malformed" else str(uuid4())
+        clause = Clause(
+            id=uuid4(),
+            project_id=sample_document.project_id,
+            tenant_id=sample_document.tenant_id,
+            document_id=sample_document.id,
+            clause_code="CLS-INVALID",
+            clause_type=ClauseType.QUALITY,
+            title="Invalid evidence binding",
+            full_text="The stored locator must never retarget another revision.",
+            extracted_entities={
+                "evidence_location": {
+                    "revision_id": revision_id,
+                    "page_number": 9,
+                    "page_numbers": [9],
+                    "bbox": [1.0, 2.0, 3.0, 4.0],
+                }
+            },
+        )
+        use_case = MagicMock()
+        use_case.execute = AsyncMock(
+            return_value=replace(sample_document, clauses=[clause])
+        )
+        revision_repository = MagicMock()
+        revision_repository.get_by_id = AsyncMock()
+        if revision_mode == "missing":
+            revision_repository.get_by_id.return_value = None
+        elif revision_mode == "wrong_document":
+            revision = MagicMock()
+            revision.document_id = uuid4()
+            revision.tenant_id = tenant_id
+            revision_repository.get_by_id.return_value = revision
+
+        app.dependency_overrides[get_get_document_with_clauses_use_case] = lambda: use_case
+        app.dependency_overrides[get_document_revision_repository] = (
+            lambda: revision_repository
+        )
+
+        response = client.get(f"/documents/{sample_document.id}/entities")
+
+        assert response.status_code == status.HTTP_200_OK
+        entity = response.json()[0]
+        location = entity["metadata"]["evidence_location"]
+        assert entity["page"] is None
+        assert location["page_number"] is None
+        assert location["page_numbers"] == []
+        assert location["bbox"] is None
+        if revision_mode == "malformed":
+            revision_repository.get_by_id.assert_not_awaited()
 
     def test_doc_http_013_normalize_status(self, client):
         """

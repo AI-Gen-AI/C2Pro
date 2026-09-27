@@ -81,6 +81,33 @@ describe("evidence addressability", () => {
     expect(resolution.kind).toBe("document-fallback");
   });
 
+  it("treats multi-page source evidence as document fallback rather than one fake page", () => {
+    const clauses = sourceEvidenceClausesFromDocumentDetail([
+      {
+        id: "clause-multi",
+        clause_code: "9.1",
+        title: "Obligation spanning pages",
+        text_start_offset: 10,
+        text_end_offset: 180,
+        extracted_entities: {
+          evidence_location: {
+            page_number: null,
+            page_numbers: [1, 2],
+            bbox: null,
+          },
+        },
+      },
+    ]);
+
+    expect(
+      resolveEvidenceAddress({
+        evidenceId: "clause-multi",
+        semanticTargets: [],
+        sourceClauses: clauses,
+      }),
+    ).toMatchObject({ kind: "document-fallback" });
+  });
+
   it("returns an explicit unresolved state for an unknown evidence id", () => {
     expect(
       resolveEvidenceAddress({

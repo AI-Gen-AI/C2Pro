@@ -154,22 +154,25 @@ async def _call_llm(clause_text: str) -> dict[str, Any]:
         return {}
 
 
-async def _load_cache(clause_id: str) -> dict[str, Any] | None:
-    """Load extracted_entities from clauses table; skip for non-UUID IDs."""
-    if not _is_valid_uuid(clause_id):
+async def _load_cache(
+    clause_id: str,
+    *,
+    tenant_id: UUID | None,
+) -> dict[str, Any] | None:
+    """Load clause cache only inside the canonical tenant-scoped RLS session."""
+    if not _is_valid_uuid(clause_id) or tenant_id is None:
         return None
     try:
         from sqlalchemy import select
 
-        from src.core.database import _session_factory
+        from src.core.database import get_session_with_tenant
         from src.documents.adapters.persistence.models import ClauseORM
 
-        if _session_factory is None:
-            return None
-        async with _session_factory() as session:
+        async with get_session_with_tenant(tenant_id) as session:
             row = await session.execute(
                 select(ClauseORM.extracted_entities).where(
-                    ClauseORM.id == UUID(clause_id)
+                    ClauseORM.id == UUID(clause_id),
+                    ClauseORM.tenant_id == tenant_id,
                 )
             )
             result = row.scalar_one_or_none()
@@ -184,30 +187,63 @@ async def _load_cache(clause_id: str) -> dict[str, Any] | None:
         return None
 
 
-async def _write_cache(clause_id: str, data: dict[str, Any]) -> None:
-    """Persist extracted fields to clauses.extracted_entities; skip for non-UUID IDs."""
-    if not data or not _is_valid_uuid(clause_id):
+def _merge_cache_payload(
+    existing: dict[str, Any] | None,
+    extracted: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge only declared coherence fields without touching reserved provenance."""
+    merged = dict(existing or {})
+    merged.update(
+        {
+            key: value
+            for key, value in extracted.items()
+            if key in _ALL_REQUIRED_KEYS
+        }
+    )
+    return merged
+
+
+async def _write_cache(
+    clause_id: str,
+    data: dict[str, Any],
+    *,
+    tenant_id: UUID | None,
+) -> None:
+    """Merge cache under tenant RLS while preserving parser-owned provenance."""
+    if not data or not _is_valid_uuid(clause_id) or tenant_id is None:
         return
     try:
-        from sqlalchemy import update
+        from sqlalchemy import select
 
-        from src.core.database import _session_factory
+        from src.core.database import get_session_with_tenant
         from src.documents.adapters.persistence.models import ClauseORM
 
-        if _session_factory is None:
-            return
-        async with _session_factory() as session:
-            await session.execute(
-                update(ClauseORM)
-                .where(ClauseORM.id == UUID(clause_id))
-                .values(extracted_entities=data)
+        async with get_session_with_tenant(tenant_id) as session:
+            row = await session.execute(
+                select(ClauseORM)
+                .where(
+                    ClauseORM.id == UUID(clause_id),
+                    ClauseORM.tenant_id == tenant_id,
+                )
+                .with_for_update()
+            )
+            clause = row.scalar_one_or_none()
+            if clause is None:
+                return
+            clause.extracted_entities = _merge_cache_payload(
+                clause.extracted_entities,
+                data,
             )
             await session.commit()
     except Exception as exc:
         logger.debug("clause_extractor: cache write failed for %s: %s", clause_id, exc)
 
 
-async def enrich_clauses(clauses: list[Clause]) -> list[Clause]:
+async def enrich_clauses(
+    clauses: list[Clause],
+    *,
+    tenant_id: UUID | None = None,
+) -> list[Clause]:
     """
     Enrich each clause's `data` dict with structured fields extracted from text.
 
@@ -226,7 +262,7 @@ async def enrich_clauses(clauses: list[Clause]) -> list[Clause]:
             result.append(clause)
             continue
 
-        cached = await _load_cache(clause.id)
+        cached = await _load_cache(clause.id, tenant_id=tenant_id)
         if cached:
             _merge(clause.data, cached)
             result.append(clause)
@@ -236,7 +272,7 @@ async def enrich_clauses(clauses: list[Clause]) -> list[Clause]:
         extracted = await _call_llm(clause.text)
         if extracted:
             _merge(clause.data, extracted)
-            await _write_cache(clause.id, extracted)
+            await _write_cache(clause.id, extracted, tenant_id=tenant_id)
             populated = [k for k, v in extracted.items() if v is not None and v != [] and v != ""]
             logger.warning(
                 "clause_extractor: extracted %d fields for %s: %s",

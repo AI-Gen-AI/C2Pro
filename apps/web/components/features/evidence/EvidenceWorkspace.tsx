@@ -29,7 +29,7 @@ interface EvidenceWorkspaceProps {
   filteredHighlightResults: PdfHighlight[];
   relationshipViewMode: "graph" | "3d";
   relationshipGraph: {
-    entityNodes: Array<{ id: string; label: string; page: number }>;
+    entityNodes: Array<{ id: string; label: string; page: number | null }>;
     alertNodes: Array<{ id: string; label: string; severity: ProjectAlert["severity"] }>;
     linkedAlertCount: number;
   };

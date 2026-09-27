@@ -72,6 +72,44 @@ logger = logging.getLogger(__name__)
 RAG_READINESS_MAX_RETRIES = 3
 
 
+def _build_text_block_index(text_blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build offset + coordinate-space index for flattened parsed text.
+
+    Offsets correspond to the exact string produced by joining blocks with
+    "\n\n". PyMuPDF/OCR bboxes are absolute PDF-page coordinates; a future
+    producer may explicitly declare normalized geometry.
+    """
+    index: list[dict[str, Any]] = []
+    pos = 0
+    for i, block in enumerate(text_blocks):
+        txt = block.get("text", "") if isinstance(block.get("text"), str) else ""
+        start = pos
+        end = start + len(txt)
+        raw_bbox = block.get("bbox")
+        has_bbox = isinstance(raw_bbox, (list, tuple)) and len(raw_bbox) == 4
+        explicit_normalized = block.get("normalized")
+        index.append(
+            {
+                "start_offset": start,
+                "end_offset": end,
+                "page": block.get("page"),
+                "bbox": raw_bbox,
+                "normalized": (
+                    explicit_normalized
+                    if isinstance(explicit_normalized, bool)
+                    else False
+                )
+                if has_bbox
+                else False,
+                "text": txt,
+            }
+        )
+        pos = end
+        if i < len(text_blocks) - 1:
+            pos += 2
+    return index
+
+
 def _temporal_failure_code(error: Exception) -> str:
     """Return a stable safe code; raw errors can contain storage/provider data."""
     if isinstance(error, RevisionSourceError) and str(error) == REVISION_HASH_MISMATCH:
@@ -378,24 +416,52 @@ _CLAUSE_BOUNDARY = re.compile(
 )
 
 
-def _split_contract_into_clauses(parsed_text: str) -> list[str]:
-    """Split a contract into clause-sized segments at clause-boundary markers.
+def _trimmed_clause_span(
+    parsed_text: str,
+    start_offset: int,
+    end_offset: int,
+) -> tuple[str, int, int] | None:
+    raw = parsed_text[start_offset:end_offset]
+    if not raw.strip():
+        return None
+    left_trim = len(raw) - len(raw.lstrip())
+    right_trim = len(raw) - len(raw.rstrip())
+    start = start_offset + left_trim
+    end = end_offset - right_trim
+    return parsed_text[start:end], start, end
 
-    Keeps each boundary marker with its clause body. Falls back to paragraph
-    blocks when no markers exist, so a contract is never fragmented into
-    per-sentence "clauses" (the old ``re.split`` on ``.!?`` produced hundreds of
-    meaningless one-line fragments).
-    """
-    boundaries = [m.start() for m in _CLAUSE_BOUNDARY.finditer(parsed_text)]
+
+def _split_contract_clause_spans(
+    parsed_text: str,
+) -> list[tuple[str, int, int]]:
+    """Split contract text while preserving exact source offsets."""
+    boundaries = [match.start() for match in _CLAUSE_BOUNDARY.finditer(parsed_text)]
+    spans: list[tuple[int, int]] = []
+
     if boundaries:
         cut_points = ([0] if boundaries[0] > 0 else []) + boundaries + [len(parsed_text)]
-        raw = [
-            parsed_text[cut_points[i] : cut_points[i + 1]]
-            for i in range(len(cut_points) - 1)
+        spans = [
+            (cut_points[index], cut_points[index + 1])
+            for index in range(len(cut_points) - 1)
         ]
     else:
-        raw = re.split(r"\n\s*\n+", parsed_text)
-    return [segment.strip() for segment in raw if segment.strip()]
+        cursor = 0
+        for separator in re.finditer(r"\n\s*\n+", parsed_text):
+            spans.append((cursor, separator.start()))
+            cursor = separator.end()
+        spans.append((cursor, len(parsed_text)))
+
+    result: list[tuple[str, int, int]] = []
+    for start, end in spans:
+        trimmed = _trimmed_clause_span(parsed_text, start, end)
+        if trimmed is not None:
+            result.append(trimmed)
+    return result
+
+
+def _split_contract_into_clauses(parsed_text: str) -> list[str]:
+    """Compatibility text-only view over the exact clause-span splitter."""
+    return [segment for segment, _, _ in _split_contract_clause_spans(parsed_text)]
 
 
 def _extract_contract_clauses(
@@ -404,13 +470,74 @@ def _extract_contract_clauses(
     project_id: UUID,
     tenant_id: TenantId,
     parsed_text: str,
+    parsed_payload: dict[str, Any] | None = None,
+    revision_id: UUID | None = None,
 ) -> list[Clause]:
     clauses: list[Clause] = []
-    for index, segment in enumerate(_split_contract_into_clauses(parsed_text), start=1):
+    # Build offset index from text blocks if available
+    text_blocks = parsed_payload.get("text_blocks", []) if isinstance(parsed_payload, dict) else []
+    block_index = _build_text_block_index(text_blocks) if text_blocks else []
+    for index, (segment, start_offset, source_end_offset) in enumerate(
+        _split_contract_clause_spans(parsed_text),
+        start=1,
+    ):
         if len(segment) < 40:
             continue
         segment = segment[:4000]  # keep a clause clause-sized; guard OCR blobs
+        end_offset = min(source_end_offset, start_offset + len(segment))
         clause_type = _infer_contract_clause_type(segment)
+        # Resolve overlapping blocks
+        pages: list[int] = []
+        bboxes: list[tuple[tuple[float, float, float, float], bool]] = []
+        if block_index:
+            for entry in block_index:
+                # Overlap check
+                if entry["end_offset"] <= start_offset or entry["start_offset"] >= end_offset:
+                    continue
+                page = entry.get("page")
+                if isinstance(page, int):
+                    pages.append(page)
+                raw_bbox = entry.get("bbox")
+                if (
+                    isinstance(raw_bbox, (list, tuple))
+                    and len(raw_bbox) == 4
+                    and all(isinstance(value, (int, float)) for value in raw_bbox)
+                ):
+                    x0, y0, x1, y1 = (float(value) for value in raw_bbox)
+                    if x1 >= x0 and y1 >= y0:
+                        # Parser-native PDF geometry is x0/y0/x1/y1.
+                        # The web Highlight rectangle contract is
+                        # left/top/width/height in the same coordinate space.
+                        bboxes.append(
+                            (
+                                (x0, y0, x1 - x0, y1 - y0),
+                                bool(entry.get("normalized", False)),
+                            )
+                        )
+        # Determine truthful location semantics
+        unique_pages = sorted(set(pages))
+        page_number: int | None = None
+        bbox: list[float] | None = None
+        bbox_normalized = False
+        if len(unique_pages) == 1:
+            page_number = unique_pages[0]
+            # A single source block has exact geometry. Multiple blocks keep
+            # the real page but do not invent a merged rectangle.
+            if len(bboxes) == 1:
+                bbox = list(bboxes[0][0])
+                bbox_normalized = bboxes[0][1]
+            else:
+                bbox = None
+        # Build evidence_location
+        evidence_location = {
+            "revision_id": str(revision_id) if revision_id else None,
+            "page_number": page_number,
+            "page_numbers": unique_pages if unique_pages else [],
+            "bbox": bbox,
+            "normalized": bbox_normalized if bbox is not None else False,
+        }
+        extracted = _build_contract_clause_data(segment, parsed_text)
+        extracted["evidence_location"] = evidence_location
         clauses.append(
             Clause(
                 id=uuid4(),
@@ -421,7 +548,9 @@ def _extract_contract_clauses(
                 clause_type=clause_type,
                 title=segment[:80],
                 full_text=segment,
-                extracted_entities=_build_contract_clause_data(segment, parsed_text),
+                text_start_offset=start_offset,
+                text_end_offset=end_offset,
+                extracted_entities=extracted,
                 extraction_confidence=0.65,
                 extraction_model="deterministic-contract-ingestion",
             )
@@ -900,6 +1029,8 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
                         project_id=document.project_id,
                         tenant_id=tenant_id,
                         parsed_text=parsed_text,
+                        parsed_payload=parsed_payload,
+                        revision_id=source_revision.revision_id if source_revision else None,
                     )
                     if not existing_clauses:
                         for clause in revision_clauses:

@@ -33,7 +33,7 @@ export interface ExtractedEntity {
   approvalResourceType?: string | null;
   originalText?: string;
   confidence: number;
-  page: number;
+  page: number | null;
   validated?: boolean;
   validationStatus?: "pending" | "approved" | "rejected";
   rejectionReason?: string;
@@ -156,7 +156,7 @@ export function EntityValidationCard({
               {entity.confidence}% - {confidenceBadge.label}
             </Badge>
             <Badge variant="outline" className="text-xs">
-              Page {entity.page}
+              {entity.page !== null ? `Page ${entity.page}` : "Exact location unavailable"}
             </Badge>
             {entity.linkedWbs && entity.linkedWbs.length > 0 && (
               <Badge variant="outline" className="text-xs">

@@ -211,7 +211,10 @@ async def prepare_context_async(state: CoherenceGraphState) -> NodeOutput:
     errors: list[str] = []
     embeddings_by_clause, embedding_errors = await _load_context_embeddings(state)
     errors.extend(embedding_errors)
-    enriched_raw = await _enrich_context_clauses(state.clauses)
+    enriched_raw = await _enrich_context_clauses(
+        state.clauses,
+        tenant_id=state.config.tenant_id,
+    )
     enriched = _build_enriched_clauses(enriched_raw, embeddings_by_clause)
     cross_pairs = _build_category_cross_pairs(enriched, state.config)
 
@@ -277,12 +280,19 @@ async def _load_context_embeddings(
     return embeddings_by_clause, errors
 
 
-async def _enrich_context_clauses(clauses: list[Clause]) -> list[Clause]:
-    """Enrich clause data for deterministic rules without blocking evaluation."""
+async def _enrich_context_clauses(
+    clauses: list[Clause],
+    *,
+    tenant_id: str | None,
+) -> list[Clause]:
+    """Enrich clause data under the evaluation tenant's RLS context."""
     try:
+        from uuid import UUID
+
         from src.coherence.extraction.clause_extractor import enrich_clauses
 
-        return await enrich_clauses(list(clauses))
+        tenant_uuid = UUID(tenant_id) if tenant_id else None
+        return await enrich_clauses(list(clauses), tenant_id=tenant_uuid)
     except (AttributeError, ImportError, RuntimeError, TypeError, ValueError) as _exc:
         logger.warning("prepare_context: clause enrichment failed, continuing: %s", _exc)
         return list(clauses)

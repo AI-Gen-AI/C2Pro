@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.core.database import get_session
-from src.core.json_types import JsonDict, JsonValue
+from src.core.json_types import JsonDict
 from src.core.repositories import get_project_repository
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
 from src.documents.adapters.extraction.documents_entity_extraction_service import (
@@ -661,9 +661,13 @@ async def get_document_entities_endpoint(
     _user_id: CurrentUserId,
     tenant_id: CurrentTenantId,
     use_case: GetDocumentWithClausesUseCase = Depends(get_get_document_with_clauses_use_case),
+    revision_repository: SqlAlchemyDocumentRevisionRepository = Depends(
+        get_document_revision_repository
+    ),
 ) -> list[DocumentEntityResponse]:
     document = await use_case.execute(tenant_id=tenant_id, document_id=document_id)
 
+    revision_validity: dict[str, bool] = {}
     entities: list[DocumentEntityResponse] = []
     for clause in document.clauses:
         evidence_location = cast(
@@ -672,16 +676,64 @@ async def get_document_entities_endpoint(
             if clause.extracted_entities
             else {},
         )
-        page_number = int(cast(str | int | float, evidence_location.get("page_number") or 1))
+        raw_revision_id = evidence_location.get("revision_id")
+        revision_binding_valid = True
+        if raw_revision_id is not None:
+            revision_key = str(raw_revision_id)
+            if revision_key not in revision_validity:
+                try:
+                    revision_uuid = UUID(revision_key)
+                except (TypeError, ValueError):
+                    revision_validity[revision_key] = False
+                else:
+                    revision = await revision_repository.get_by_id(revision_uuid, tenant_id)
+                    revision_validity[revision_key] = bool(
+                        revision is not None
+                        and revision.document_id == document_id
+                        and revision.tenant_id == tenant_id
+                    )
+            revision_binding_valid = revision_validity[revision_key]
+
+        raw_page = evidence_location.get("page_number")
+        page_number = (
+            int(raw_page)
+            if revision_binding_valid
+            and isinstance(raw_page, (int, float, str))
+            and str(raw_page).lstrip("-").isdigit()
+            and int(raw_page) > 0
+            else None
+        )
+        raw_bbox = evidence_location.get("bbox")
+        bbox = (
+            [float(value) for value in raw_bbox]
+            if revision_binding_valid
+            and isinstance(raw_bbox, list)
+            and len(raw_bbox) == 4
+            and all(isinstance(value, (int, float)) for value in raw_bbox)
+            else None
+        )
+        raw_pages = evidence_location.get("page_numbers")
+        page_numbers = (
+            sorted(
+                {
+                    int(value)
+                    for value in raw_pages
+                    if isinstance(value, (int, float, str))
+                    and str(value).lstrip("-").isdigit()
+                    and int(value) > 0
+                }
+            )
+            if revision_binding_valid and isinstance(raw_pages, list)
+            else []
+        )
         metadata: JsonDict = {
             "clause_code": clause.clause_code,
             "clause_type": clause.clause_type.value if clause.clause_type is not None else None,
             "evidence_location": {
                 "page_number": page_number,
-                "bbox": cast(
-                    JsonValue,
-                    evidence_location.get("bbox") or [0.08, 0.12, 0.84, 0.06],
-                ),
+                "page_numbers": page_numbers,
+                "bbox": bbox,
+                "revision_id": raw_revision_id,
                 "normalized": bool(evidence_location.get("normalized", True)),
             },
         }

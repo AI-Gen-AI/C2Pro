@@ -15,7 +15,7 @@ import {
 } from "./evidence-page-utils";
 
 interface RelationshipGraph {
-  entityNodes: Array<{ id: string; label: string; page: number }>;
+  entityNodes: Array<{ id: string; label: string; page: number | null }>;
   alertNodes: Array<{ id: string; label: string; severity: ProjectAlert["severity"] }>;
   linkedAlertCount: number;
 }
@@ -392,7 +392,7 @@ function Relationship3DGraph({
           title="Layer 1 · Entities"
           nodes={relationshipGraph.entityNodes.map((node) => ({
             ...node,
-            meta: `Entity · page ${node.page}`,
+            meta: node.page !== null ? `Entity · page ${node.page}` : "Entity · exact location unavailable",
           }))}
           activeEntityId={activeEntityId}
           onSelectPanelItem={onSelectPanelItem}
@@ -435,7 +435,7 @@ function RelationshipGraphView({
       <GraphNodeList
         nodes={relationshipGraph.entityNodes.map((node) => ({
           ...node,
-          meta: `Entity · page ${node.page}`,
+          meta: node.page !== null ? `Entity · page ${node.page}` : "Entity · exact location unavailable",
         }))}
         activeEntityId={activeEntityId}
         onSelectPanelItem={onSelectPanelItem}

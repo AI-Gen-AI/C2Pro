@@ -242,12 +242,13 @@ export default function EvidencePage() {
     });
 
     const sourceClauseHighlight =
-      requestedEvidenceResolution?.kind === "raw-clause"
+      requestedEvidenceResolution?.kind === "raw-clause" &&
+      requestedEvidenceResolution.target.page !== null
         ? [
             {
               id: `source-clause-${requestedEvidenceResolution.target.id}`,
               clauseId: requestedEvidenceResolution.target.id,
-              page: requestedEvidenceResolution.target.page ?? 1,
+              page: requestedEvidenceResolution.target.page,
               text: requestedEvidenceResolution.target.label,
               severity: "low" as const,
             },
@@ -694,7 +695,7 @@ export default function EvidencePage() {
         "entity",
         entity.id,
         entity.text,
-        String(entity.page),
+        String(entity.page ?? ""),
         entity.validationStatus ?? "pending",
       ]),
       ...alertsState.map((alert) => [
@@ -740,7 +741,7 @@ export default function EvidencePage() {
         (entity) =>
           `<tr><td>${escapeXml(entity.type)}</td><td>${escapeXml(
             entity.text,
-          )}</td><td>${entity.page}</td><td>${escapeXml(
+          )}</td><td>${entity.page ?? ""}</td><td>${escapeXml(
             entity.validationStatus ?? "pending",
           )}</td></tr>`,
       )
@@ -832,13 +833,13 @@ export default function EvidencePage() {
       ) : requestedSourceClause ? (
         <Alert data-testid="evidence-link-source-clause">
           <AlertDescription>
-            Showing source clause {requestedSourceClause.clauseCode ?? requestedSourceClause.id} from the linked document.
+            Showing source clause {requestedSourceClause.clauseCode ?? requestedSourceClause.id} on page {requestedSourceClause.page}. Exact highlight unavailable when source geometry is not persisted.
           </AlertDescription>
         </Alert>
       ) : requestedDocumentFallback ? (
         <Alert data-testid="evidence-link-document-fallback">
           <AlertDescription>
-            The linked source evidence has no resolvable page span. Showing its source document instead.
+            Exact highlight unavailable. The linked source evidence has no resolvable page span, so its source document is shown without inventing a page.
           </AlertDescription>
         </Alert>
       ) : null}
