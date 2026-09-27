@@ -20,16 +20,17 @@ This document remains useful, but it is no longer sufficient as the standalone p
 
 Current interpretation rules:
 
-1. `C2PRO_MASTER_BACKLOG.md` is the delivery and release source of truth.
-2. `docs/architecture/decisions/006-post-reorganization-architecture.md` is the canonical repository-structure baseline.
-3. This document is primarily the frontend implementation baseline and should not override later backend, security, or release-governance documents.
+1. `validation/product/c2pro-master-product-control-v1.yaml` plus its guarded Markdown projection own current product-programme lifecycle state.
+2. `.c2pro/control/` plus authorized `.c2pro/work/` envelopes own current development execution state.
+3. `docs/architecture/decisions/006-post-reorganization-architecture.md` is the canonical repository-structure baseline.
+4. This document is primarily a frontend implementation baseline and should not override later backend, security, release-governance or product-control evidence.
 
 Current project state aligned to the repository:
 
 - C2Pro is a monorepo with `apps/api` and `apps/web`, not a frontend-only program.
-- The backend is the critical production path: multi-tenant FastAPI, PostgreSQL RLS, LangGraph orchestration, golden regression, and release-gate evidence.
-- `C2PRO_MASTER_BACKLOG.md` records the current canonical open work, with remaining blockers concentrated in security hardening and release signoff evidence.
-- Architectural decisions made after 2026-02-10 must be read together with ADR-006, LangGraph checkpointing docs, and the current testing roadmap.
+- The backend is a critical production path: multi-tenant FastAPI, PostgreSQL RLS, LangGraph orchestration, golden regression, and release-gate evidence.
+- `C2PRO_MASTER_BACKLOG.md` is a historical/cold reconciliation input and does not own current work or release state.
+- Architectural decisions made after 2026-02-10 must be read together with ADR-006, LangGraph checkpointing docs, the current testing roadmap, and the canonical control planes above.
 
 Known limits of this document:
 
