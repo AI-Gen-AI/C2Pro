@@ -290,12 +290,12 @@ Shared state:
    - Do NOT attempt to write to `blackboard.json`, `C2PRO_MASTER_BACKLOG.md`, or `backlogs/*.md`.
 
 3. **After completion:**
-   - Provide structured worker evidence (fenced YAML result block matching the `c2pro-implementation-result-v1` schema) in standard output or the PR description.
+   - Provide the structured evidence assigned to the role: implementation roles use `c2pro-implementation-result-v1`; QA/reviewer/security roles use `c2pro-review-result-v1`; Planner/Reconciler use the applicable canonical planning/control schema.
    - Do NOT commit result files or write to legacy backlog files.
 
 4. **When discovering new work:**
    - Do NOT write new entries directly to legacy backlogs.
-   - Include any newly discovered subtasks or risks in the `findings` and `residual_risks` arrays of your structured result block.
+   - Include newly discovered subtasks or risks in the appropriate fields of the assigned role schema (for example `findings` / `residual_risks` where that schema defines them).
 
 **Multi-agent coordination & Handoff Boundary:**
 
@@ -318,7 +318,7 @@ Under the Single-Writer Control Plane, workers **MUST NOT** directly update:
 - `backlogs/*.md`
 - `blackboard.json`
 
-Instead, after successfully completing any task, workers **MUST** return a structured result block matching the `c2pro-implementation-result-v1` schema as standard output or in the PR body.
+Instead, after successfully completing any task, workers **MUST** return the structured result assigned to their role: implementation roles use `c2pro-implementation-result-v1`; QA/reviewer/security roles use `c2pro-review-result-v1`; Planner/Reconciler use the applicable canonical planning/control schema.
 
 The master/planner remains the sole writer allowed to reconcile this returned evidence back into canonical control state.
 
