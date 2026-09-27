@@ -3,7 +3,11 @@ from __future__ import annotations
 
 import pytest
 
-from core.reconciler import ValidationError, _validate_reconciliation_reviews
+from core.reconciler import (
+    ValidationError,
+    _load_work_review_requirements,
+    _validate_reconciliation_reviews,
+)
 from core.result_parser import validate_review_result
 
 HEAD = "7c3a8347a5bea0c28f2e540559bd515f9afd282a"
@@ -17,6 +21,8 @@ def _routing() -> dict:
             "claude_code": {
                 "principal_gate_eligible": True,
                 "eligible_roles": [
+                    "orchestrator",
+                    "orchestrator",
                     "implementation_lead",
                     "independent_reviewer",
                     "specialist",
@@ -62,6 +68,26 @@ def _review(*, role: str, worker_id: str, verdict: str = "PASS") -> dict:
     }
 
 
+def _synthesis(
+    *,
+    orchestrator_worker_id: str = "codex",
+    principal_worker_ids: list[str] | None = None,
+    challenger_worker_ids: list[str] | None = None,
+) -> dict:
+    return {
+        "schema": "c2pro-orchestrator-synthesis-v1",
+        "work_id": WORK_ID,
+        "risk_class": "architecture",
+        "reviewed_pr": PR,
+        "reviewed_head_sha": HEAD,
+        "orchestrator_worker_id": orchestrator_worker_id,
+        "principal_worker_ids": principal_worker_ids or ["codex"],
+        "challenger_worker_ids": challenger_worker_ids or ["gemini_cli"],
+        "unresolved_material_disagreement": False,
+        "decision": "approve",
+    }
+
+
 def test_principal_and_challenger_policy_accepts_trusted_independent_workers() -> None:
     _validate_reconciliation_reviews(
         [
@@ -75,6 +101,123 @@ def test_principal_and_challenger_policy_accepts_trusted_independent_workers() -
         implementation_worker_id="claude_code",
         routing=_routing(),
     )
+
+
+def test_challenger_cannot_be_the_implementation_worker() -> None:
+    with pytest.raises(ValidationError, match="challenger .* must differ from implementation worker"):
+        _validate_reconciliation_reviews(
+            [
+                _review(role="independent_reviewer", worker_id="codex"),
+                _review(role="specialist", worker_id="gemini_cli"),
+            ],
+            review_policy="principal_and_challenger",
+            work_id=WORK_ID,
+            expected_pr=PR,
+            expected_head_sha=HEAD,
+            implementation_worker_id="gemini_cli",
+            routing=_routing(),
+        )
+
+
+def test_high_risk_review_requires_bound_orchestrator_synthesis() -> None:
+    reviews = [
+        _review(role="independent_reviewer", worker_id="codex"),
+        _review(role="specialist", worker_id="gemini_cli"),
+    ]
+
+    with pytest.raises(ValidationError, match="requires orchestrator synthesis evidence"):
+        _validate_reconciliation_reviews(
+            reviews,
+            review_policy="principal_and_challenger",
+            work_id=WORK_ID,
+            expected_pr=PR,
+            expected_head_sha=HEAD,
+            implementation_worker_id="claude_code",
+            routing=_routing(),
+            risk_class="architecture",
+            orchestrator_synthesis_required=True,
+        )
+
+    _validate_reconciliation_reviews(
+        reviews,
+        review_policy="principal_and_challenger",
+        work_id=WORK_ID,
+        expected_pr=PR,
+        expected_head_sha=HEAD,
+        implementation_worker_id="claude_code",
+        routing=_routing(),
+        risk_class="architecture",
+        orchestrator_synthesis_required=True,
+        orchestrator_synthesis=_synthesis(),
+    )
+
+
+def test_orchestrator_synthesis_is_bound_to_exact_review_workers_and_head() -> None:
+    reviews = [
+        _review(role="independent_reviewer", worker_id="codex"),
+        _review(role="specialist", worker_id="gemini_cli"),
+    ]
+    stale = _synthesis()
+    stale["reviewed_head_sha"] = "9" * 40
+    with pytest.raises(ValidationError, match="reviewed_head_sha mismatch"):
+        _validate_reconciliation_reviews(
+            reviews,
+            review_policy="principal_and_challenger",
+            work_id=WORK_ID,
+            expected_pr=PR,
+            expected_head_sha=HEAD,
+            implementation_worker_id="claude_code",
+            routing=_routing(),
+            risk_class="architecture",
+            orchestrator_synthesis_required=True,
+            orchestrator_synthesis=stale,
+        )
+
+
+def test_canonical_work_envelope_drives_high_risk_synthesis_policy(tmp_path) -> None:
+    c2pro = tmp_path / ".c2pro"
+    control = c2pro / "control"
+    work = c2pro / "work"
+    control.mkdir(parents=True)
+    work.mkdir(parents=True)
+
+    (work / f"{WORK_ID}.yaml").write_text(
+        "\n".join(
+            (
+                "schema: c2pro-work-envelope-v1",
+                "schema_version: 1",
+                f"work_id: {WORK_ID}",
+                "risk_class: architecture",
+                "review_policy: principal_and_challenger",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    (control / "review-policy.yaml").write_text(
+        "\n".join(
+            (
+                "schema: c2pro-review-policy-v1",
+                "schema_version: 1",
+                "risk_classes:",
+                "  architecture:",
+                "    orchestrator_synthesis: true",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    risk_class, synthesis_required = _load_work_review_requirements(
+        control,
+        {
+            "work_id": WORK_ID,
+            "work_ref": f".c2pro/work/{WORK_ID}.yaml",
+            "review_policy": "principal_and_challenger",
+        },
+    )
+
+    assert risk_class == "architecture"
+    assert synthesis_required is True
 
 
 def test_mandatory_review_policy_rejects_absent_review_evidence() -> None:
