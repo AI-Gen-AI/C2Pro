@@ -801,7 +801,7 @@ async def test_reject_graph_gated_review_terminates_without_running_n17(
 
     refreshed_document = await db.get(DocumentORM, document.id)
     await db.refresh(refreshed_document)
-    assert refreshed_document.upload_status == "parsed_pending_analysis"
+    assert refreshed_document.upload_status == "needs_changes"
 
     refreshed_review = await db.get(ReviewItemORM, review.id)
     await db.refresh(refreshed_review)
