@@ -286,6 +286,28 @@ def push_completed_tasks_to_backlog() -> int:
     return updated_count
 
 
+def _resolve_legacy_backlog_target(backlog_path: Path) -> Path:
+    """Resolve and constrain a legacy backlog write target to canonical roots."""
+    master_backlog = MASTER_BACKLOG_PATH.resolve()
+    backlogs_dir = BACKLOGS_DIR.resolve()
+    target = backlog_path.resolve()
+
+    if target == master_backlog:
+        return master_backlog
+
+    if (
+        target.suffix.lower() != ".md"
+        or target.parent != backlogs_dir
+    ):
+        raise ValueError(
+            "Backlog path must remain within canonical legacy backlog roots"
+        )
+
+    # Rebuild from the trusted root so subsequent I/O never follows the
+    # caller-provided path after validation.
+    return backlogs_dir / target.name
+
+
 def _mark_tasks_complete_in_file(backlog_path: Path, completed_tasks: List[Dict]) -> int:
     """Mark completed tasks as [x] in a specific backlog file with timestamp.
 
@@ -296,6 +318,8 @@ def _mark_tasks_complete_in_file(backlog_path: Path, completed_tasks: List[Dict]
     Returns:
         Number of tasks updated in this file
     """
+    backlog_path = _resolve_legacy_backlog_target(backlog_path)
+
     if not backlog_path.exists():
         return 0
 
