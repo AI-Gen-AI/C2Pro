@@ -42,10 +42,10 @@ _SCAN_SQL = text(
     SELECT document_id AS id, tenant_id
       FROM system_recovery.document_work_index
      WHERE upload_status IN (:status_parsing, :status_analysis_pending)
-       AND updated_at <=
+       AND COALESCE(heartbeat_at, updated_at) <=
            (clock_timestamp() AT TIME ZONE 'UTC')
            - make_interval(secs => :stale_after)
-     ORDER BY updated_at, document_id
+     ORDER BY COALESCE(heartbeat_at, updated_at), document_id
      LIMIT :limit
     """
 )
