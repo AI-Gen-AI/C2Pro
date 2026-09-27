@@ -9,6 +9,7 @@ API request/response cycle.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import re
 from typing import Any
@@ -119,10 +120,8 @@ async def _stop_processing_heartbeat(task: asyncio.Task[None] | None) -> None:
     if task is None:
         return
     task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await task
-    except asyncio.CancelledError:
-        pass
 
 
 def _temporal_failure_code(error: Exception) -> str:
