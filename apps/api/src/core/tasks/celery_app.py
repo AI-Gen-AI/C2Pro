@@ -48,6 +48,7 @@ celery_app = Celery(
         "src.core.tasks.snapshot_tasks",
         "src.core.tasks.snapshot_retention",
         "src.core.tasks.hitl_resume_reconciler",
+        "src.core.tasks.document_recovery",
     ],
 )
 
@@ -93,6 +94,10 @@ celery_app.conf.update(
         # still being renewed.
         "hitl-resume-reconcile": {
             "task": "hitl_resume.reconcile",
+            "schedule": 60.0,
+        },
+        "document-processing-reconcile": {
+            "task": "documents.reconcile_stale_processing",
             "schedule": 60.0,
         },
     },
