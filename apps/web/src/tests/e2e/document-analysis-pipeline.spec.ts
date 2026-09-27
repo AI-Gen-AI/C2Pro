@@ -367,6 +367,206 @@ test.describe("TS-E2E-DAP-002: HITL Review Flow", () => {
 });
 
 // ---------------------------------------------------------------------------
+// #712: Truthful document / HITL lifecycle states
+//
+// The demo project's fixture data does not include a document genuinely
+// paused for HITL review (see the TASK-QA-336 skips above) -- reproducing
+// that would need a live backend, a live worker and a real LangGraph
+// interrupt, none of which this suite has. What IS testable end to end,
+// without a real backend, is the contract between the Documents page and
+// whatever `GET /projects/{id}/documents` durably returns: given each #712
+// lifecycle state, does the page render the truthful label, stop treating it
+// as active processing, offer the right action, and reproduce the exact same
+// thing after a hard reload? That is proven here with `page.route`, the same
+// network-mocking approach already used by ERR-002 above. The backend's own
+// truthfulness -- that these fields are what a real reject/approve durably
+// persists -- is proven separately by the Python HITL finalization tests.
+// ---------------------------------------------------------------------------
+
+test.describe("TS-E2E-712: Truthful document / HITL lifecycle states", () => {
+  const DOCUMENTS_ROUTE = `**/api/v1/projects/${DEMO_PROJECT_ID}/documents*`;
+
+  function documentsResponse(item: Record<string, unknown>) {
+    return {
+      items: [
+        {
+          id: "doc-712-fixture",
+          filename: "Contract.pdf",
+          document_type: "contract",
+          status: "processing",
+          status_detail: "",
+          lifecycle_status: "analysis_pending",
+          retryable: false,
+          review_count: null,
+          review_item_id: null,
+          error_message: null,
+          uploaded_at: "2026-03-19T09:00:00Z",
+          file_size_bytes: 2048,
+          ...item,
+        },
+      ],
+      total_count: 1,
+      skip: 0,
+      limit: 20,
+    };
+  }
+
+  async function mockDocumentsOnce(page: Page, item: Record<string, unknown>) {
+    await page.route(DOCUMENTS_ROUTE, (route) =>
+      route.fulfill({ json: documentsResponse(item) }),
+    );
+  }
+
+  test("712-001: a document paused for review shows 'Review required', never 'not started', with a CTA to the exact item", async ({
+    page,
+  }) => {
+    await mockDocumentsOnce(page, {
+      lifecycle_status: "review_required",
+      status_detail: "Analysis completed and is waiting for a human review decision.",
+      review_count: 1,
+      review_item_id: "22222222-2222-2222-2222-222222222222",
+    });
+
+    await goToProjectDocuments(page);
+
+    const row = page.getByTestId("document-row-doc-712-fixture");
+    await expect(row).toContainText("Review required");
+    await expect(row).not.toContainText(/not started/i);
+    // Paused-for-review is not active processing -- no polling tracker.
+    await expect(page.getByTestId("documents-page")).not.toContainText(
+      "Analysis progress",
+    );
+
+    const reviewCta = page.getByTestId("document-review-cta");
+    await expect(reviewCta).toBeVisible();
+    await expect(reviewCta).toHaveAttribute(
+      "href",
+      `/projects/${DEMO_PROJECT_ID}/review?itemId=22222222-2222-2222-2222-222222222222`,
+    );
+  });
+
+  test("712-002: a hard reload reproduces the exact same review-required state", async ({
+    page,
+  }) => {
+    await mockDocumentsOnce(page, {
+      lifecycle_status: "review_required",
+      review_count: 1,
+      review_item_id: "22222222-2222-2222-2222-222222222222",
+    });
+
+    await goToProjectDocuments(page);
+    await expect(page.getByTestId("document-row-doc-712-fixture")).toContainText(
+      "Review required",
+    );
+
+    await page.reload();
+    await expect(page.getByTestId("documents-page")).toBeVisible({ timeout: 15_000 });
+
+    await expect(page.getByTestId("document-row-doc-712-fixture")).toContainText(
+      "Review required",
+    );
+    await expect(page.getByTestId("document-review-cta")).toHaveAttribute(
+      "href",
+      `/projects/${DEMO_PROJECT_ID}/review?itemId=22222222-2222-2222-2222-222222222222`,
+    );
+  });
+
+  test("712-003: more than one pending review routes to the project review queue, never a guess", async ({
+    page,
+  }) => {
+    await mockDocumentsOnce(page, {
+      lifecycle_status: "review_required",
+      review_count: 2,
+      review_item_id: null,
+    });
+
+    await goToProjectDocuments(page);
+
+    const reviewCta = page.getByTestId("document-review-cta");
+    await expect(reviewCta).toHaveAttribute("href", `/projects/${DEMO_PROJECT_ID}/review`);
+    await expect(reviewCta).toContainText("2");
+  });
+
+  test("712-004: an exhausted analysis attempt shows a durable failure with Retry, and stops polling", async ({
+    page,
+  }) => {
+    await mockDocumentsOnce(page, {
+      lifecycle_status: "failed_retryable",
+      status_detail: "Automatic analysis did not complete after several attempts. Retry to try again.",
+      retryable: true,
+    });
+
+    await goToProjectDocuments(page);
+
+    const row = page.getByTestId("document-row-doc-712-fixture");
+    await expect(row).toContainText("Retry needed");
+    await expect(
+      page.getByRole("button", { name: /retry processing contract\.pdf/i }),
+    ).toBeVisible();
+    await expect(page.getByTestId("documents-page")).not.toContainText(
+      "Analysis progress",
+    );
+  });
+
+  test("712-005: a rejected document shows a durable 'Needs changes' state, never a retry action", async ({
+    page,
+  }) => {
+    await mockDocumentsOnce(page, {
+      status: "error",
+      lifecycle_status: "needs_changes",
+      status_detail: "A reviewer requested changes. Upload a corrected version to continue.",
+      retryable: false,
+    });
+
+    await goToProjectDocuments(page);
+
+    const row = page.getByTestId("document-row-doc-712-fixture");
+    await expect(row).toContainText("Needs changes");
+    await expect(
+      page.getByRole("button", { name: /retry processing contract\.pdf/i }),
+    ).toHaveCount(0);
+    await expect(page.getByTestId("documents-page")).not.toContainText(
+      "Analysis progress",
+    );
+  });
+
+  test("712-006: approving the pending review leaves 'Review required' on the very next load", async ({
+    page,
+  }) => {
+    let decided = false;
+    await page.route(DOCUMENTS_ROUTE, (route) =>
+      route.fulfill({
+        json: documentsResponse(
+          decided
+            ? { lifecycle_status: "analyzed", status: "parsed", retryable: false }
+            : {
+                lifecycle_status: "review_required",
+                review_count: 1,
+                review_item_id: "22222222-2222-2222-2222-222222222222",
+              },
+        ),
+      }),
+    );
+
+    await goToProjectDocuments(page);
+    await expect(page.getByTestId("document-row-doc-712-fixture")).toContainText(
+      "Review required",
+    );
+
+    // Simulates the human decision finalizing durably on the backend (proven
+    // by the Python HITL finalization tests) -- the next fetch reflects it.
+    decided = true;
+    await page.reload();
+    await expect(page.getByTestId("documents-page")).toBeVisible({ timeout: 15_000 });
+
+    const row = page.getByTestId("document-row-doc-712-fixture");
+    await expect(row).toContainText("Analyzed");
+    await expect(row).not.toContainText("Review required");
+    await expect(page.getByTestId("document-review-cta")).toHaveCount(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Error Scenarios
 // ---------------------------------------------------------------------------
 
