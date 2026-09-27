@@ -163,7 +163,7 @@ corrected_current_claims:
   - claim: "Phase 1 COMPLETE / product functional for end users"
     truth: "P0a reliability/operability baseline is CLOSED; product value is not yet PROD_VALIDATED."
   - claim: "No open code work required for end users"
-    truth: "P0b user-visible production validation, P0c/P0d candidates, Project Controls, Procurement and later workflows remain open."
+    truth: "P0b/P0c/P0d user-visible production validation remains open; P0c and P0d are already WIRED_ON_MAIN_NOT_PROD_VALIDATED. Project Controls, Procurement and later workflows remain open."
   - claim: "Project Controls can be represented as multiple discipline WBSs"
     truth: "Rejected. One project has one canonical hierarchical WBS; disciplines are branches/levels."
   - claim: "Coherence Score, Health and Alerts are interchangeable project-health concepts"
