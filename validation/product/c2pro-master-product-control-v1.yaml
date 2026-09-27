@@ -48,7 +48,7 @@ development_execution_authority:
     This product plane records target/state; it does not authorize merges or production mutation.
 
 production_position:
-  reconciled_against_main_sha: 1832e18257800ef64671694f85c7b0893d8b9ea2
+  reconciled_against_main_sha: 665107c3d3f6ceadc114e51392e64b571bda38a9
   deployed_runtime_sha: UNVERIFIED
   observed_production_evidence:
     - "kuwait2 doc c510de21: enqueue -> worker -> SUCCESS on dedicated Railway Redis (historical P0a evidence)"
@@ -57,11 +57,11 @@ production_position:
     - "alerts.severity = public.alertseverity enum (schema conformance evidence)"
     - "ADR-004 circuit breakers observed in production logs"
     - "PR #630 merged the P0b-L4-5 release-ready implementation; the PR explicitly recorded PROD_VALIDATED=NO"
-    - "Production has reconverged after #719: Railway API e556e52b-127b-4641-8e9e-599d05b68411, Worker 01899895-cb34-4109-8b6e-11ebafb72fa4 and Scheduler 17f8eeff-e2b0-49b0-861e-d6a161be1317 are SUCCESS at merge commit 1832e18257800ef64671694f85c7b0893d8b9ea2; Vercel production dpl_H5ci9sGH8fo2kGm4xVsq4X4QntT1 is READY on the same main commit. Exact plane identities must still be rebound at #715 execution time."
+    - "After #728 rollout hardening, Railway API 69ecafa3-6291-48dc-9782-d180c73fba1b, Worker 6d240412-9ef7-404d-8a03-cfd66aa0f7dc and Scheduler a9c567dd-45bf-4043-bd3f-8789861fa73d are SUCCESS at #728 merge commit 665107c3d3f6ceadc114e51392e64b571bda38a9. Vercel production dpl_H5ci9sGH8fo2kGm4xVsq4X4QntT1 remains READY at #719 commit 1832e18257800ef64671694f85c7b0893d8b9ea2 because #728 is backend/runtime-only. Exact plane identities must be rebound again at #715 execution time."
     - "Railway production currently carries one unresolved STAGED API environment patch 7fcd5228-be1b-4be5-8e72-9692c854ddbf whose internal before/after delta is not exposed by the available read-only API; #715 must fail closed unless staged changes are zero or an authorized operator has reviewed and bound the exact delta to qualification evidence"
     - "Fresh API logs after #718 report coherence_analysis=True; this proves production Coherence is enabled but does not by itself prove the separate per-tenant ADR-017 ProjectGraph gate is enabled"
     - "The legacy singleton deployed_runtime_sha remains UNVERIFIED because backend/frontend SHAs legitimately differ; merged #678 carries non-authoritative composite runtime evidence and merged #700/#681 provides the Product-Control promotion guard without self-promotion"
-    - "Composite runtime binding is currently aligned at main 1832e18257800ef64671694f85c7b0893d8b9ea2 across Railway backend and Vercel production. This alignment is observational only; branch previews do not change production binding and future #714/#727 deployments must be rebound explicitly."
+    - "Composite runtime binding has diverged again by design after backend-only #728: Railway is at 665107c3d3f6ceadc114e51392e64b571bda38a9 while Vercel production remains at 1832e18257800ef64671694f85c7b0893d8b9ea2. Branch previews do not change production binding; future #714/#715 qualification must bind the exact live plane identities."
     - "Production HITL incidents proved the real P0b journey reached human review; subsequent #633/#638/#641/#646/#650 hardening is merged on main, without implying P0b PROD_VALIDATED"
   reliability_operability_baseline: CLOSED
   product_value_delivered: false
@@ -69,7 +69,7 @@ production_position:
     - "P0b L4-5 is release-ready and merged but still not PROD_VALIDATED end-to-end on the current runtime"
     - "P0c What Changed is WIRED on main but deployment/prod-validation of the complete user journey is not proven"
     - "P0d Current State Reporting is WIRED on main but deployment/prod-validation is not proven"
-    - "#706 full production end-user GOAL remains open: #710 and #719/#711 code are deployed; #711 is reopened because post-takeover stale-writer fencing is not proven; #712 and #713 remain open for fix-forward acceptance; #714 is draft implementation; #727 schema-readiness rollout hardening is open; #715 is reopened and has not executed the production journey"
+    - "#706 full production end-user GOAL remains open: #710/#719 code is deployed; #711 remains open because post-takeover stale-writer fencing is not proven; #712 and #713 remain open for fix-forward acceptance; #728/#727 readiness code is merged/deployed but the old-schema→wait→advance transition proof is still open; #714 is draft implementation; #715 is reopened and has not executed the production journey"
     - "ADR-025 now has canonical-WBS authority and several cross-domain links wired on main, but one-logical-root, baseline/change governance, remaining alert/evidence/change linkage and production journey are not fully proven"
     - "Procurement Plan -> BoQ/RFQ -> award -> governed stakeholder communications is not delivered end-to-end"
 
@@ -106,8 +106,8 @@ qualification_control:
 
 reconciliation_delta_2026_09_27:
   previous_main_sha: 0db53883a8942f7097fe9ce2e0e6c63397948fbb
-  current_main_sha: 1832e18257800ef64671694f85c7b0893d8b9ea2
-  commits_ahead: 31
+  current_main_sha: 665107c3d3f6ceadc114e51392e64b571bda38a9
+  commits_ahead: 40
   material_main_advances:
     - "PR #719/#711 merged as 1832e18257800ef64671694f85c7b0893d8b9ea2 and is live on Railway API/Worker/Scheduler. Alembic 20260927_0711 applied successfully; periodic stale-processing recovery is operational. Issue #711 was reopened because the merged design proves heartbeat/claim liveness but does not yet prove monotonic per-attempt stale-writer fencing after takeover."
     - "Vercel production dpl_H5ci9sGH8fo2kGm4xVsq4X4QntT1 is READY on the same main commit 1832e18257800ef64671694f85c7b0893d8b9ea2, so the previous #722/#723 frontend/backend SHA skew is no longer present."
@@ -115,18 +115,9 @@ reconciliation_delta_2026_09_27:
     - "Issue #715 was reopened because no real AUTH -> PROJECT -> UPLOAD -> ANALYSIS -> EVIDENCE -> HEALTH -> HITL -> RELOGIN -> RECOVERY production run had executed; #690 synthetic Clerk identity, #712/#713 fix-forward, #714 and #727 remain prerequisites."
     - "PR #726/#714 is now full DRAFT implementation rather than RED-only scaffolding. It remains non-mergeable until its unit trust-binding seam is corrected, migration is rebased after 20260927_0711, upstream #712/#713 acceptance is stable, #727 is deployed, and exact-head independent review passes."
     - "Parallel Line B governance cleanup remains non-product: #724 Wave 1 removes live legacy backlog/blackboard authority and #725 Wave 2 is prepared for exact-head review binding and fail-closed reviewer independence/risk-policy enforcement."
+    - "PR #728/#727 merged at 665107c3d3f6ceadc114e51392e64b571bda38a9 despite the preceding Line B HOLD and without independent exact-head review; that is a governance exception, not acceptance. Railway production proves Worker/Scheduler invoke wait_for_schema before Celery and both observed revision 20260927_0711 before starting. The waiting transition from an old DB revision remains unproven and is assigned to fix-forward branch test/727-schema-readiness-transition."
   control_conclusion: >
-    The operational north-star remains #706. Production backend and frontend are now both bound to main
-    1832e18257800ef64671694f85c7b0893d8b9ea2, with Railway API/Worker/Scheduler healthy and Vercel production READY.
-    This runtime convergence does not imply product acceptance. #711 is deployed but reopened because heartbeat/claim
-    liveness is not the same as monotonic writer authority: after takeover, an old processing attempt still lacks a
-    proven fence that every later canonical durable writer must present. #712 and #713 remain open for their documented
-    fix-forward acceptance defects. #714 is an active DRAFT implementation and #727/#728 is a newly observed rollout
-    prerequisite that must prevent Worker/Scheduler from starting against an older schema while leaving API as the sole
-    migrator. #715 is reopened and unexecuted; #690 remains its external identity prerequisite. The unresolved Railway
-    staged API patch remains a fail-closed qualification concern. CI, merge, deployment and runtime health are controls
-    only; none promotes P0b/P0c/P0d or proves product_value_delivered.
-
+    The operational north-star remains #706. Railway production has advanced to backend/runtime-only #728 at 665107c3d3f6ceadc114e51392e64b571bda38a9 while Vercel production remains at #719 commit 1832e18257800ef64671694f85c7b0893d8b9ea2. #728 proves the schema-readiness guard is invoked in Railway with an already-current schema, but #727 remains open until the deterministic old-schema wait/advance transition is proven. #711 stale-writer fencing, #712/#713 semantic fix-forwards and #714 trusted-state acceptance remain open; #715 is unexecuted and #690 remains external. The #728 merge without exact-head review is recorded as a governance exception. CI/merge/deploy facts do not promote P0b/P0c/P0d or product_value_delivered.
 north_star:
   full_product: >
     C2Pro is continuous, evidence-backed project and procurement intelligence for
