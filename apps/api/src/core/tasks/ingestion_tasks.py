@@ -503,17 +503,17 @@ def _extract_contract_clauses(
                     and len(raw_bbox) == 4
                     and all(isinstance(value, (int, float)) for value in raw_bbox)
                 ):
-                    bboxes.append(
-                        (
+                    x0, y0, x1, y1 = (float(value) for value in raw_bbox)
+                    if x1 >= x0 and y1 >= y0:
+                        # Parser-native PDF geometry is x0/y0/x1/y1.
+                        # The web Highlight rectangle contract is
+                        # left/top/width/height in the same coordinate space.
+                        bboxes.append(
                             (
-                                float(raw_bbox[0]),
-                                float(raw_bbox[1]),
-                                float(raw_bbox[2]),
-                                float(raw_bbox[3]),
-                            ),
-                            bool(entry.get("normalized", False)),
+                                (x0, y0, x1 - x0, y1 - y0),
+                                bool(entry.get("normalized", False)),
+                            )
                         )
-                    )
         # Determine truthful location semantics
         unique_pages = sorted(set(pages))
         page_number: int | None = None
