@@ -76,7 +76,37 @@ def mock_control_plane(tmp_path):
     with open(wq_file, "w", encoding="utf-8") as f:
         yaml.dump(wq_data, f)
 
-    # 2. Setup current.yaml
+    # 2. Canonical trivial work envelope + review policy for optional baseline tests.
+    work_dir = tmp_path / ".c2pro" / "work"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    with open(work_dir / "C2PRO-DEV-02.yaml", "w", encoding="utf-8") as f:
+        yaml.dump(
+            {
+                "schema": "c2pro-work-envelope-v1",
+                "schema_version": 1,
+                "work_id": "C2PRO-DEV-02",
+                "risk_class": "trivial",
+                "review_policy": "optional",
+            },
+            f,
+        )
+    with open(control_dir / "review-policy.yaml", "w", encoding="utf-8") as f:
+        yaml.dump(
+            {
+                "schema": "c2pro-review-policy-v1",
+                "schema_version": 1,
+                "risk_classes": {
+                    "trivial": {
+                        "independent_principal_review": "optional",
+                        "challenger": False,
+                        "orchestrator_synthesis": False,
+                    }
+                },
+            },
+            f,
+        )
+
+    # 3. Setup current.yaml
     current_file = control_dir / "current.yaml"
     current_data = {
         "schema": "c2pro-current-v1",
@@ -91,7 +121,7 @@ def mock_control_plane(tmp_path):
     with open(current_file, "w", encoding="utf-8") as f:
         yaml.dump(current_data, f)
 
-    # 3. Trusted routing authority for structured review tests.
+    # 4. Trusted routing authority for structured review tests.
     routing_file = control_dir / "routing.yaml"
     routing_data = {
         "schema": "c2pro-routing-v2",
@@ -99,7 +129,7 @@ def mock_control_plane(tmp_path):
         "workers": {
             "claude_code": {
                 "principal_gate_eligible": True,
-                "eligible_roles": ["implementation_lead", "independent_reviewer", "specialist"],
+                "eligible_roles": ["orchestrator", "implementation_lead", "independent_reviewer", "specialist"],
             },
             "codex": {
                 "principal_gate_eligible": True,
