@@ -199,6 +199,51 @@ describe("ProjectDocumentsPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("orders unique document type filter options with an explicit text order", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_zulu",
+          name: "Zulu.pdf",
+          type: "Zulu",
+          fileSize: 1024,
+          uploadedAt: new Date("2026-03-18T09:00:00Z"),
+          status: "parsed",
+        },
+        {
+          id: "doc_alpha",
+          name: "Alpha.pdf",
+          type: "alpha",
+          fileSize: 1024,
+          uploadedAt: new Date("2026-03-18T09:00:00Z"),
+          status: "parsed",
+        },
+        {
+          id: "doc_alpha_duplicate",
+          name: "Alpha Copy.pdf",
+          type: "alpha",
+          fileSize: 1024,
+          uploadedAt: new Date("2026-03-18T09:00:00Z"),
+          status: "parsed",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    const toolbar = screen.getByTestId("documents-filter-toolbar");
+    fireEvent.click(within(toolbar).getAllByRole("combobox")[0]);
+
+    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "All Types",
+      "alpha",
+      "Zulu",
+    ]);
+  });
+
   it("shows analysis progress while documents are still processing", () => {
     useProjectDocumentsMock.mockReturnValue({
       documents: [
