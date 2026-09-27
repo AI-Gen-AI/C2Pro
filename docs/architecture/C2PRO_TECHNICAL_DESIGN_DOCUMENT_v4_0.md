@@ -94,7 +94,7 @@ Use the following files as authoritative for live dependency versions:
 |---------|-----------------|-------|
 | Frontend runtime and tooling | `apps/web/package.json` | Current frontend is on the Next.js 16 / React 19 family, beyond the February snapshot below |
 | Backend runtime and quality gates | `apps/api/pyproject.toml` | Python 3.11+, strict mypy, ruff, pytest baseline |
-| Release and production-readiness status | `C2PRO_MASTER_BACKLOG.md` | Use for go/no-go task status and release blockers, not this section alone |
+| Release and production-readiness status | `validation/product/c2pro-master-product-control-v1.yaml` + guarded Markdown projection | Current product lifecycle/readiness authority; active development execution remains under `.c2pro/control/` |
 
 ### 1.1 Migration Delta: v3.0 → v4.0
 
