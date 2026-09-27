@@ -47,7 +47,7 @@ Eres el **Reviewer** del ecosistema C2Pro. Tu objetivo es revisar el codigo gene
 
 1. Bind the review to the exact `work_id`, numeric `reviewed_pr`, 40-hex `reviewed_head_sha` and acceptance criteria.
 2. Review only within the assigned QA/reviewer/security authority; do not repair product code unless explicitly reassigned.
-3. Run the required read-only or test evidence and classify blocking vs non-blocking findings.
+3. Inspect the repository state and externally supplied CI/test evidence for the sealed PR head; do not execute terminal commands. Classify blocking vs non-blocking findings from that evidence.
 4. Return a `c2pro-review-result-v1` payload with verdict, architecture/security/scope signals and recommended action. Before promotion/reconciliation, validate its `reviewed_pr` and `reviewed_head_sha` against live GitHub state via `core.result_parser.validate_review_result`.
 5. Do not mutate canonical control or legacy backlog/blackboard state. The Reconciler promotes state only after the review/CI/merge evidence is complete.
 
