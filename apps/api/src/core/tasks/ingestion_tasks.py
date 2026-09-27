@@ -553,9 +553,11 @@ async def _run_analysis_graph_best_effort(
 # the test that guards it cannot drift apart. ``AnalysisIncompleteRetryableError``
 # is only useful because ``autoretry_for`` catches it; if that were ever removed,
 # every transient failure would silently become a one-shot give-up.
+ANALYSIS_MAX_RETRIES = 3
+
 ANALYSIS_TASK_RETRY_OPTIONS: dict[str, Any] = {
     "autoretry_for": (Exception,),
-    "retry_kwargs": {"max_retries": 3},
+    "retry_kwargs": {"max_retries": ANALYSIS_MAX_RETRIES},
     "retry_backoff": True,
     "retry_backoff_max": 60,
 }
@@ -668,6 +670,7 @@ async def _run_document_analysis(
     tenant_id: TenantId,
     document_id: UUID,
     orchestrator: Any = None,
+    automatic_retry_available: bool = False,
 ) -> dict[str, Any]:
     """Analyze a parsed document; the N1-N17 graph is a best-effort enrichment."""
     await init_db()
@@ -732,16 +735,35 @@ async def _run_document_analysis(
         )
         await repo.update_status(tenant_id, document_id, status)
         completed = status is DocumentStatus.ANALYZED
-        # #712: a genuinely incomplete, non-HITL outcome is what the Documents UI
-        # must show as "failed, retry me" rather than "analysis not started" --
-        # a HITL pause is a different, higher-priority truthful state (handled by
-        # the pending review_items row, not this flag) and is never marked here.
-        # _process() clears this flag at the start of every fresh parse pass, so
-        # it never survives a genuine re-upload/reprocess.
-        attempt_incomplete = not completed and not human_approval_required
+        rag_outcome = (
+            document.document_metadata.get("rag_ingestion_outcome")
+            if document.document_metadata
+            else None
+        )
+        # A LangGraph HITL interrupt is a legitimate, durably-checkpointed
+        # pause -- not a failure, and not "incomplete" in the retryable
+        # sense. Auto-retrying it would re-run the whole graph, orphan the
+        # pending review, and (pre-fix) mint a duplicate one.
+        retry = (
+            should_retry_analysis(status=status, rag_outcome=rag_outcome)
+            and not human_approval_required
+        )
+
+        # #712 truthfulness contract:
+        # - while Celery still has an automatic retry available, the durable
+        #   user-facing state remains ANALYSIS_PENDING;
+        # - FAILED_RETRYABLE is persisted only after the automatic budget is
+        #   exhausted, or immediately for a non-retryable incomplete outcome
+        #   such as MISCONFIGURED;
+        # - HITL pauses are represented by durable review_items instead.
+        terminal_incomplete = (
+            not completed
+            and not human_approval_required
+            and (not retry or not automatic_retry_available)
+        )
         current_metadata = dict(document.document_metadata or {})
-        if current_metadata.get("analysis_last_attempt_incomplete") != attempt_incomplete:
-            if attempt_incomplete:
+        if current_metadata.get("analysis_last_attempt_incomplete") != terminal_incomplete:
+            if terminal_incomplete:
                 current_metadata["analysis_last_attempt_incomplete"] = True
             else:
                 current_metadata.pop("analysis_last_attempt_incomplete", None)
@@ -756,23 +778,9 @@ async def _run_document_analysis(
                 "persisted": bool(analysis_id),
                 "document_status": status.value,
                 "rag_chunk_count": chunk_count,
+                "automatic_retry_available": automatic_retry_available,
+                "terminal_incomplete": terminal_incomplete,
             },
-        )
-        rag_outcome = (
-            document.document_metadata.get("rag_ingestion_outcome")
-            if document.document_metadata
-            else None
-        )
-        # A LangGraph HITL interrupt is a legitimate, durably-checkpointed
-        # pause -- not a failure, and not "incomplete" in the retryable
-        # sense. Auto-retrying it would re-run the whole graph, orphan the
-        # pending review, and (pre-fix) mint a duplicate one. The document
-        # stays honestly PARSED_PENDING_ANALYSIS until a human approves and
-        # ResumeWorkflowUseCase resumes the SAME checkpoint -- it must never
-        # be auto-retried and never be retried via C2PRO_SKIP_HITL.
-        retry = (
-            should_retry_analysis(status=status, rag_outcome=rag_outcome)
-            and not human_approval_required
         )
         if human_approval_required:
             logger.info(
@@ -1089,11 +1097,16 @@ async def _run_document_analysis_task_lifecycle(
     tenant_id: TenantId,
     document_id: UUID,
     route_rag_unavailable_to_dlq: bool,
+    automatic_retry_available: bool,
 ) -> dict[str, Any]:
     """Own every loop-bound analysis resource for one Celery task invocation."""
     primary_error: Exception | None = None
     try:
-        return await _run_document_analysis(tenant_id=tenant_id, document_id=document_id)
+        return await _run_document_analysis(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            automatic_retry_available=automatic_retry_available,
+        )
     except RagChunksUnavailableError as error:
         if not route_rag_unavailable_to_dlq:
             primary_error = error
@@ -1159,6 +1172,7 @@ def process_document_analysis_async(self: Any, tenant_id: str, document_id: str)
                 tenant_id=normalized_tenant_id,
                 document_id=UUID(document_id),
                 route_rag_unavailable_to_dlq=retries >= RAG_READINESS_MAX_RETRIES,
+                automatic_retry_available=retries < ANALYSIS_MAX_RETRIES,
             )
         )
     except RagChunksUnavailableError as error:
