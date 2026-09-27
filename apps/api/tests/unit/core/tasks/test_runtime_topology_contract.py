@@ -17,6 +17,8 @@ def test_api_entrypoint_owns_migrations_and_uvicorn_only() -> None:
 
 def test_worker_entrypoint_execs_celery_without_uvicorn_or_migrations() -> None:
     source = _read("scripts/run_worker.sh")
+    assert "python scripts/wait_for_schema.py" in source
+    assert source.index("wait_for_schema.py") < source.index("exec celery")
     assert "exec celery" in source
     assert "worker" in source
     assert "document_parsing" in source
@@ -26,6 +28,8 @@ def test_worker_entrypoint_execs_celery_without_uvicorn_or_migrations() -> None:
 
 def test_scheduler_entrypoint_execs_beat_without_worker_or_api() -> None:
     source = _read("scripts/run_scheduler.sh")
+    assert "python scripts/wait_for_schema.py" in source
+    assert source.index("wait_for_schema.py") < source.index("exec celery")
     assert "exec celery" in source
     assert " beat " in source.replace("\n", " ")
     assert "/tmp/c2pro-celerybeat-schedule" in source
