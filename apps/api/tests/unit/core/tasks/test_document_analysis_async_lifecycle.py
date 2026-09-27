@@ -195,6 +195,68 @@ def test_analysis_failure_persists_dlq_in_the_analysis_resource_loop(
     assert len(persisted) == 1
 
 
+@pytest.mark.asyncio
+async def test_incomplete_analysis_with_auto_retry_available_does_not_write_dlq(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid4()
+    document_id = uuid4()
+    dlq = AsyncMock()
+
+    async def incomplete(**_kwargs: object) -> dict[str, object]:
+        raise ingestion_tasks.AnalysisIncompleteRetryableError("retry me")
+
+    monkeypatch.setattr(ingestion_tasks, "_run_document_analysis", incomplete)
+    monkeypatch.setattr(ingestion_tasks, "_push_trigger_failure_to_dlq", dlq)
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "_close_document_analysis_task_resources",
+        AsyncMock(),
+    )
+
+    with pytest.raises(ingestion_tasks.AnalysisIncompleteRetryableError):
+        await ingestion_tasks._run_document_analysis_task_lifecycle(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            route_rag_unavailable_to_dlq=False,
+            automatic_retry_available=True,
+        )
+
+    dlq.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_incomplete_analysis_after_auto_retries_exhaust_writes_one_dlq(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid4()
+    document_id = uuid4()
+    dlq = AsyncMock()
+
+    async def incomplete(**_kwargs: object) -> dict[str, object]:
+        raise ingestion_tasks.AnalysisIncompleteRetryableError("final failure")
+
+    monkeypatch.setattr(ingestion_tasks, "_run_document_analysis", incomplete)
+    monkeypatch.setattr(ingestion_tasks, "_push_trigger_failure_to_dlq", dlq)
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "_close_document_analysis_task_resources",
+        AsyncMock(),
+    )
+
+    with pytest.raises(ingestion_tasks.AnalysisIncompleteRetryableError):
+        await ingestion_tasks._run_document_analysis_task_lifecycle(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            route_rag_unavailable_to_dlq=False,
+            automatic_retry_available=False,
+        )
+
+    dlq.assert_awaited_once()
+    assert dlq.await_args.kwargs["tenant_id"] == tenant_id
+    assert dlq.await_args.kwargs["document_id"] == document_id
+
+
 def test_process_document_async_does_not_enter_the_cached_analysis_graph(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
