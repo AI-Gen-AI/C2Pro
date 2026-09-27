@@ -18,8 +18,8 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.tasks.document_recovery import (
-    _sweep_async,
     MAX_RECOVERY_ATTEMPTS,
+    _sweep_async,
 )
 from src.documents.adapters.persistence.models import DocumentORM
 from src.documents.domain.models import DocumentStatus, DocumentType
