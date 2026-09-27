@@ -15,6 +15,8 @@ import hashlib
 import re
 import sys
 import tempfile
+
+import yaml
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
@@ -471,7 +473,7 @@ def test_qualification_evidence_directory_rejects_symlink() -> None:
         evidence_parent.mkdir()
         (evidence_parent / "product-qualification").symlink_to(external, target_is_directory=True)
         problems = c.validate_qualification_control(doc, root=root)
-    assert any("evidence_directory must not be a symlink" in problem for problem in problems)
+    assert any("evidence_directory path components must not be symlinks" in problem for problem in problems)
 
 
 def test_invalid_qualification_status_is_rejected() -> None:
