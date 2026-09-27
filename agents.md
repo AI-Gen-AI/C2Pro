@@ -69,7 +69,7 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 - Agents must always check the `Dependency` column and any nearby prerequisite notes before starting implementation.
 - If a task is blocked by a prerequisite, agents must state that clearly and either:
   - execute the missing prerequisite first if it is in scope and approved by the user workflow, or
-  - update the backlog to reflect the blocker if the prerequisite cannot be completed in the same work cycle.
+  - return the blocker as structured `c2pro-implementation-result-v1` evidence for Planner/Reconciler handling when the prerequisite cannot be completed in the same work cycle.
 - Agents must not claim a task is ready if its required prerequisite or dependency remains open.
 - In Testing, agents must respect the normalized split:
   - `Prerequisites` are environment/bootstrap steps
