@@ -16,11 +16,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.documents.adapters.http.router import (
+    _PENDING_REVIEW_STATUSES,
     get_list_documents_use_case,
     get_pending_review_document_ids,
 )
 from src.documents.adapters.http.router import router as documents_router
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
+from src.modules.hitl.domain.entities import ReviewStatus
 
 EXPECTED = {
     DocumentStatus.UPLOADED: ("queued", "uploaded"),
@@ -217,3 +219,9 @@ def test_needs_changes_is_retryable_false_and_stops_looking_like_processing(
     assert item["lifecycle_status"] == "needs_changes"
     assert item["status"] != "processing"
     assert item["retryable"] is False
+
+
+
+def test_escalated_review_still_requires_human_attention() -> None:
+    """Escalation changes the reviewer/priority, not the need for a decision."""
+    assert ReviewStatus.ESCALATED in _PENDING_REVIEW_STATUSES
