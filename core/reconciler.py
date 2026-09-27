@@ -149,6 +149,7 @@ def _validate_orchestrator_synthesis(
     expected_pr: object,
     expected_head_sha: object,
     routing: dict[str, Any],
+    implementation_worker_id: object,
     principal_workers: set[str],
     challenger_workers: set[str],
 ) -> None:
@@ -201,6 +202,10 @@ def _validate_orchestrator_synthesis(
     ):
         raise ValidationError(
             "Orchestrator synthesis worker must be a trusted principal eligible for orchestrator."
+        )
+    if orchestrator_id == implementation_worker_id:
+        raise ValidationError(
+            "Orchestrator synthesis worker must differ from implementation worker."
         )
 
     principal_ids = synthesis.get("principal_worker_ids")
@@ -386,6 +391,7 @@ def _validate_reconciliation_reviews(
         expected_pr=expected_pr,
         expected_head_sha=expected_head_sha,
         routing=routing,
+        implementation_worker_id=implementation_worker_id,
         principal_workers={review["worker_id"] for review in principal_reviews},
         challenger_workers={review["worker_id"] for review in challenger_reviews},
     )
