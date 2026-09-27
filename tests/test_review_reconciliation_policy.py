@@ -22,7 +22,6 @@ def _routing() -> dict:
                 "principal_gate_eligible": True,
                 "eligible_roles": [
                     "orchestrator",
-                    "orchestrator",
                     "implementation_lead",
                     "independent_reviewer",
                     "specialist",
@@ -31,6 +30,7 @@ def _routing() -> dict:
             "codex": {
                 "principal_gate_eligible": True,
                 "eligible_roles": [
+                    "orchestrator",
                     "implementation_lead",
                     "independent_reviewer",
                     "specialist",
@@ -218,6 +218,52 @@ def test_canonical_work_envelope_drives_high_risk_synthesis_policy(tmp_path) -> 
 
     assert risk_class == "architecture"
     assert synthesis_required is True
+
+
+def test_risk_policy_cannot_be_downgraded_to_optional_review(tmp_path) -> None:
+    c2pro = tmp_path / ".c2pro"
+    control = c2pro / "control"
+    work = c2pro / "work"
+    control.mkdir(parents=True)
+    work.mkdir(parents=True)
+    (work / f"{WORK_ID}.yaml").write_text(
+        "\n".join(
+            (
+                "schema: c2pro-work-envelope-v1",
+                "schema_version: 1",
+                f"work_id: {WORK_ID}",
+                "risk_class: architecture",
+                "review_policy: optional",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    (control / "review-policy.yaml").write_text(
+        "\n".join(
+            (
+                "schema: c2pro-review-policy-v1",
+                "schema_version: 1",
+                "risk_classes:",
+                "  architecture:",
+                "    independent_principal_review: required",
+                "    challenger: required",
+                "    orchestrator_synthesis: true",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="requires independent principal review"):
+        _load_work_review_requirements(
+            control,
+            {
+                "work_id": WORK_ID,
+                "work_ref": f".c2pro/work/{WORK_ID}.yaml",
+                "review_policy": "optional",
+            },
+        )
 
 
 def test_mandatory_review_policy_rejects_absent_review_evidence() -> None:
