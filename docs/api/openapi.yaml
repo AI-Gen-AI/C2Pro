@@ -5919,7 +5919,9 @@ components:
           type: string
           title: Text
         page:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Page
         confidence:
           type: number
