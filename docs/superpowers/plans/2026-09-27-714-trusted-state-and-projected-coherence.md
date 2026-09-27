@@ -1,8 +1,8 @@
-# #714 Trusted-State Commit and Projected Coherence Implementation Plan
+# #714 P0 Trusted-State Commit and Projected Coherence Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make HITL the trust boundary for canonical ProjectGraph/Health/Coherence and expose a clearly provisional Coherence projection for pending reviews.
+**Goal:** Make HITL the trust boundary for canonical ProjectGraph/Health/Coherence and expose a clearly provisional Coherence projection for pending reviews. This is P0 for #706 closure because the #706 North Star explicitly includes ProjectGraph/HITL canonical correctness, regardless of whether a tenant flag is currently off.
 
 **Architecture:** Persist pre-review output as a versioned candidate, but gate canonical artifact/ProjectGraph commit behind exact-version approval. Rebuild/promote canonical projections after approval/correction; rejection preserves the prior trusted state. Add a separate derived `projected_score` contract computed by the same canonical scoring engine/version from trusted state plus exact pending candidates.
 
@@ -104,7 +104,9 @@ Commit message: `feat(hitl): bind approvals to exact trusted-state commit`
 
 - [ ] **Step 1: RED test: trusted=80 + pending exact candidates evaluate through canonical engine to projected=60**
 - [ ] **Step 2: RED test: reject removes pending candidate and projection returns to trusted**
-- [ ] **Step 3: RED test: correction replaces candidate, never stacks old+new**
+- [ ] **Step 3: RED tests for projection version isolation**
+
+Assert correction replaces candidate rather than stacking old+new; mixed pending candidate versions are deterministic; a coherence-v1 trusted snapshot cannot be combined with coherence-v2 pending results without recomputing under one canonical score version.
 - [ ] **Step 4: Implement a projection service that invokes the existing canonical scorer instead of ad-hoc arithmetic**
 - [ ] **Step 5: Run coherence tests including null/active-weight guards**
 - [ ] **Step 6: Commit**
