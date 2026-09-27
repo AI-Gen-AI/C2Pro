@@ -18,8 +18,9 @@ const REASON_COPY: Record<string, string> = {
   pending_without_score_version: "the pending proposal has no score version",
   unknown_score_version: "the pending proposal has an unsupported score version",
   projection_read_failed: "pending proposals could not be read",
-  multiple_pending_order_dependent:
-    "several proposals are pending and the result depends on the order they are approved",
+  pending_candidate_payload_missing: "a pending proposal could not be loaded",
+  projection_evaluation_failed: "the projected evaluation could not be computed",
+  insufficient_evidence: "the pending proposals do not provide enough evidence to score",
 };
 
 function formatScore(value: number | null | undefined): string {
@@ -49,6 +50,10 @@ export function ProjectedCoherencePanel({ summary }: ProjectedCoherencePanelProp
   const projected =
     typeof summary.projected_score === "number" ? summary.projected_score : null;
   const delta = typeof summary.projected_delta === "number" ? summary.projected_delta : null;
+  const baseline =
+    typeof summary.projection_baseline_score === "number"
+      ? summary.projection_baseline_score
+      : null;
   const unavailable = summary.projection_status === "unavailable" || projected === null;
   const reason = summary.projection_reason
     ? REASON_COPY[summary.projection_reason] ?? summary.projection_reason
@@ -106,6 +111,12 @@ export function ProjectedCoherencePanel({ summary }: ProjectedCoherencePanelProp
               >
                 {formatDelta(delta)}
               </span>
+              {baseline !== null ? (
+                <span className="text-xs text-muted-foreground" data-testid="coherence-projection-baseline">
+                  {" "}
+                  (vs trusted project evaluation {formatScore(baseline)})
+                </span>
+              ) : null}
             </p>
           ) : null}
           {unavailable ? (

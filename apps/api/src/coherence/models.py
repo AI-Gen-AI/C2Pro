@@ -371,12 +371,21 @@ class DashboardSummary(BaseModel):
     projected_score: float | None = Field(
         default=None,
         description=(
-            "PROVISIONAL: canonical engine score if every pending proposal is accepted "
-            "unchanged. Never canonical; never exported as the project score."
+            "PROVISIONAL: canonical ProjectGraph Coherence of the trusted artifacts with "
+            "every actionable pending proposal accepted unchanged. Never canonical; never "
+            "exported as the project score."
+        ),
+    )
+    projection_baseline_score: float | None = Field(
+        default=None,
+        description=(
+            "Canonical ProjectGraph Coherence of the trusted artifact set -- the same "
+            "evaluation the projection uses, so projected_delta compares like with like."
         ),
     )
     projected_delta: float | None = Field(
-        default=None, description="projected_score - trusted_score (null when either is null)."
+        default=None,
+        description="projected_score - projection_baseline_score (null when either is null).",
     )
     pending_review_count: int = Field(
         default=0, description="Exact candidate versions currently awaiting human review."

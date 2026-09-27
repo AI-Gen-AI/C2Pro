@@ -67,9 +67,11 @@ export interface DashboardSummary {
   categories_v2?: CoherenceV2Payload | null;
   /** Canonical score from trusted (approved) state only. Mirrors coherence_score. */
   trusted_score?: number | null;
-  /** PROVISIONAL: canonical engine score if every pending proposal is accepted unchanged. Never canonical; never exported as the project score. */
+  /** PROVISIONAL: canonical ProjectGraph Coherence of the trusted artifacts with every actionable pending proposal accepted unchanged. Never canonical; never exported as the project score. */
   projected_score?: number | null;
-  /** projected_score - trusted_score (null when either is null). */
+  /** Canonical ProjectGraph Coherence of the trusted artifact set -- the same evaluation the projection uses, so projected_delta compares like with like. */
+  projection_baseline_score?: number | null;
+  /** projected_score - projection_baseline_score (null when either is null). */
   projected_delta?: number | null;
   /** Exact candidate versions currently awaiting human review. */
   pending_review_count?: number;

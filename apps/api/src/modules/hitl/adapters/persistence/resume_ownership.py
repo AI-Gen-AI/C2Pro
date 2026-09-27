@@ -1020,11 +1020,12 @@ async def verify_trust_binding(
     """#714 pre-flight: fail a decision closed BEFORE the graph resumes.
 
     Both decisions require a #714 review's candidate to be bound
-    (CandidateNotReadyError otherwise). An approval additionally requires
-    the bound candidate to still be the current exact proposal -- without
-    that a stale approval would still run N17 (persisting a COMPLETED
-    analysis that feeds the trusted score) and only then be refused by
-    finalize_v3. Read-only; finalize_v3 re-verifies under a row lock.
+    (CandidateNotReadyError otherwise) and to still be the exact current
+    proposal (StaleCandidateError otherwise). Without this a stale approval
+    would still run N17 (persisting a COMPLETED analysis that feeds the
+    trusted score), and a stale rejection would terminate the graph, before
+    finalize_v3 refused them. Read-only; finalize_v3 re-verifies under a
+    row lock.
     """
     async with _session(session_factory, tenant_id) as session:
         await _apply_trust_decision(
@@ -1115,8 +1116,7 @@ async def _apply_trust_decision(
             f"not {document_id}"
         )
     if dry_run:
-        if approved:
-            await repo.verify_candidate(binding, tenant_id=tenant)
+        await repo.verify_candidate(binding, tenant_id=tenant, for_reject=not approved)
         return None
     if not approved:
         await repo.reject_candidate(binding, tenant_id=tenant)

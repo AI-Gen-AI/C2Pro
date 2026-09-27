@@ -5800,15 +5800,24 @@ components:
           - type: number
           - type: 'null'
           title: Projected Score
-          description: 'PROVISIONAL: canonical engine score if every pending proposal
-            is accepted unchanged. Never canonical; never exported as the project
-            score.'
+          description: 'PROVISIONAL: canonical ProjectGraph Coherence of the trusted
+            artifacts with every actionable pending proposal accepted unchanged. Never
+            canonical; never exported as the project score.'
+        projection_baseline_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Projection Baseline Score
+          description: Canonical ProjectGraph Coherence of the trusted artifact set
+            -- the same evaluation the projection uses, so projected_delta compares
+            like with like.
         projected_delta:
           anyOf:
           - type: number
           - type: 'null'
           title: Projected Delta
-          description: projected_score - trusted_score (null when either is null).
+          description: projected_score - projection_baseline_score (null when either
+            is null).
         pending_review_count:
           type: integer
           title: Pending Review Count

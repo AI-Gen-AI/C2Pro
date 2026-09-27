@@ -1249,37 +1249,47 @@ async def _attach_trusted_projection(
 ) -> DashboardSummary:
     """#714: add the provisional pending-review projection (additive only).
 
-    The trusted fields are never altered here. A failure to read pending
-    candidates must not hide the trusted score, so it degrades to
-    ``projection_status='unavailable'``.
+    baseline = canonical ProjectGraph evaluation of the trusted artifacts;
+    projected = the same evaluation with every ACTIONABLE pending proposal
+    (bound to an awaiting review) substituted. The trusted fields are never
+    altered here, and a failure degrades to ``projection_status='unavailable'``
+    rather than hiding the trusted score.
     """
+    from src.analysis.adapters.graph.project_graph import (
+        evaluate_artifact_set,
+        is_coherence_llm_enabled,
+    )
     from src.analysis.adapters.persistence.document_artifact_repository import (
         SqlAlchemyDocumentArtifactRepository,
     )
     from src.coherence.application.trusted_projection import project_pending_coherence
     from src.core.tenants.types import require_tenant_id
 
-    trusted = summary.coherence_score
-    base: DashboardSummary = summary.model_copy(update={"trusted_score": trusted})
+    base: DashboardSummary = summary.model_copy(update={"trusted_score": summary.coherence_score})
     try:
         repo = SqlAlchemyDocumentArtifactRepository(db)
         scoped = require_tenant_id(str(tenant_id))
         # Savepoint: a failed read must not abort the request transaction
         # that the remaining dashboard reads still use.
         async with db.begin_nested():
-            pending = await repo.list_pending_candidates(
-                project_id=project_id, tenant_id=scoped
+            pending = await repo.list_pending_candidates(project_id=project_id, tenant_id=scoped)
+            trusted = (
+                await repo.list_trusted_for_project(project_id=project_id, tenant_id=scoped)
+                if pending
+                else []
             )
-            trusted_version: str | None = summary.score_version
-            if trusted_version is None and trusted is not None and pending:
-                latest = await repo.latest_trusted_scoring(
-                    project_id=project_id, tenant_id=scoped
-                )
-                trusted_version = latest.score_version if latest is not None else None
-        projection = project_pending_coherence(
-            trusted_score=trusted,
-            trusted_score_version=trusted_version,
+        llm_on = await is_coherence_llm_enabled(scoped) if pending else False
+
+        async def _evaluate(artifacts: list[Any]) -> Any:
+            return await evaluate_artifact_set(
+                artifacts, project_id=project_id, tenant_id=scoped, llm_on=llm_on
+            )
+
+        projection = await project_pending_coherence(
+            trusted_artifacts=trusted,
             pending=pending,
+            evaluate=_evaluate,
+            trusted_score_version=summary.score_version,
         )
     except Exception:  # noqa: BLE001 - never block trusted visibility
         logger.warning(
@@ -1303,6 +1313,7 @@ async def _attach_trusted_projection(
     return _copy(
         base,
         {
+            "projection_baseline_score": projection.baseline_score,
             "projected_score": projection.projected_score,
             "projected_delta": projection.projected_delta,
             "pending_review_count": projection.pending_review_count,

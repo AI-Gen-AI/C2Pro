@@ -10,17 +10,18 @@ to ``document_artifacts``. Only ``trust_state = 'trusted'`` rows are canonical
 ``proposed`` candidate bound to its review and is promoted only by the exact
 approved version (finalize_v3).
 
-Legacy data is reclassified truthfully. Before #714 a HITL-gated run stored its
-candidate as the ACTIVE (canonical) artifact, superseding the prior trusted
-one. For each document whose active artifact was produced by a graph-gated
-review (created at/after the review row):
+Legacy data is reclassified truthfully (see _reclassify_legacy_candidates).
+Before #714 a HITL-gated run stored its candidate as the ACTIVE (canonical)
+artifact. A document's latest graph-gated review is matched to its candidate
+-- the first artifact created at/after the review row -- and later
+completions are never demoted. Pending candidates become PROPOSED and bound
+(or SUPERSEDED with the review closed, when a later completion exists);
+rejected candidates become REJECTED; only artifacts that provably predate the
+review are ever restored as canonical.
 
-* review still pending  -> the active row becomes ``proposed`` and is bound to
-  that review (``review_metadata.candidate_binding``) so it can be approved;
-* review REJECTED (artifact created before the decision) -> ``rejected``;
-
-and in both cases the most recent prior trusted version (if any) is restored
-as the canonical artifact. APPROVED reviews keep their artifact trusted.
+It also creates the durable trusted -> ProjectGraph obligation index
+(system_recovery.trusted_projection_index) and queues every current trusted
+artifact once.
 
 document_artifacts and review_items are FORCE-RLS with fail-closed policies,
 so the data steps run under ACCESS EXCLUSIVE locks with FORCE removed only
@@ -94,20 +95,25 @@ def _backfill_hashes(bind: Any) -> None:
         )
 
 
-def _restore_prior_trusted(bind: Any, document_id: Any, before: Any) -> None:
+def _restore_pre_review_trusted(bind: Any, document_id: Any, tenant_id: Any, review_created_at: Any) -> None:
+    """Re-activate the newest artifact that provably PREDATES the gated review.
+
+    Only rows created before the review row can be restored: anything created
+    at/after it may be the unreviewed candidate itself (fail closed).
+    """
     prior = bind.execute(
         text(
             """
             SELECT artifact_id FROM document_artifacts
              WHERE document_id = :d
+               AND tenant_id = :t
                AND trust_state = 'trusted'
-               AND lifecycle_status = 'superseded'
                AND created_at < :before
              ORDER BY created_at DESC, artifact_version DESC
              LIMIT 1
             """
         ),
-        {"d": document_id, "before": before},
+        {"d": document_id, "t": tenant_id, "before": review_created_at},
     ).scalar_one_or_none()
     if prior is not None:
         bind.execute(
@@ -116,70 +122,117 @@ def _restore_prior_trusted(bind: Any, document_id: Any, before: Any) -> None:
         )
 
 
-def _reclassify_legacy_candidates(bind: Any) -> None:
-    if not _table_exists(bind, "review_items"):
-        return
-    rows = bind.execute(
+def _bind_review(bind: Any, review_id: Any, candidate: Any, *, close: bool) -> None:
+    binding = {
+        "artifact_id": str(candidate.artifact_id),
+        "document_id": str(candidate.document_id),
+        "artifact_version": int(candidate.artifact_version),
+        "artifact_hash": candidate.artifact_hash,
+    }
+    bind.execute(
         text(
             """
-            SELECT a.artifact_id, a.document_id, a.artifact_version, a.artifact_hash,
-                   a.created_at, r.id AS review_id, cast(r.current_status as text) AS status,
-                   r.approved_at
-              FROM document_artifacts a
-              JOIN LATERAL (
-                    SELECT id, current_status, created_at, approved_at
-                      FROM review_items
-                     WHERE item_id = a.document_id
-                       AND tenant_id = a.tenant_id
-                       AND thread_id IS NOT NULL
-                     ORDER BY created_at DESC
-                     LIMIT 1
-                   ) r ON TRUE
-             WHERE a.lifecycle_status = 'active'
-               AND a.trust_state = 'trusted'
-               AND a.created_at >= r.created_at
+            UPDATE review_items
+               SET review_metadata = coalesce(review_metadata, '{}'::jsonb)
+                                     || jsonb_build_object(
+                                            cast(:k as text), cast(:b as jsonb),
+                                            'trust_candidate_required', true)
+                                     || CASE WHEN :close THEN jsonb_build_object(
+                                            'closed_reason', 'legacy_candidate_superseded')
+                                        ELSE '{}'::jsonb END,
+                   current_status = CASE WHEN :close THEN 'CLOSED'
+                                         ELSE current_status END
+             WHERE id = :r
+            """
+        ),
+        {"k": _BINDING_KEY, "b": json.dumps(binding), "r": review_id, "close": close},
+    )
+
+
+def _reclassify_legacy_candidates(bind: Any) -> None:
+    """Truthfully classify pre-#714 HITL candidates that were stored canonical.
+
+    For each document's latest graph-gated review R, its candidate C is the
+    FIRST artifact created at/after R (the completion hook persisted it right
+    after the interrupt). Artifacts created after C are later completions
+    and stay as they are -- never demoted, because a legitimate non-gated
+    re-run may have superseded C.
+
+    * R awaiting a decision, C still the latest artifact -> C PROPOSED, bound
+      to R; the newest artifact that predates R is restored as canonical.
+    * R awaiting, but a later completion exists -> C SUPERSEDED (can never be
+      trusted), R bound to C and CLOSED; the later artifact stays canonical.
+    * R REJECTED and C created before the decision -> C REJECTED; the
+      pre-review artifact is restored only if C was the canonical one.
+    * R APPROVED -> unchanged.
+
+    Nothing created at/after R is ever restored as trusted (fail closed).
+    """
+    if not _table_exists(bind, "review_items"):
+        return
+    reviews = bind.execute(
+        text(
+            """
+            SELECT DISTINCT ON (tenant_id, item_id)
+                   id, item_id AS document_id, tenant_id,
+                   cast(current_status as text) AS status, created_at, approved_at
+              FROM review_items
+             WHERE thread_id IS NOT NULL
+             ORDER BY tenant_id, item_id, created_at DESC, id DESC
             """
         )
     ).all()
-    for row in rows:
-        if row.status in _PENDING:
-            bind.execute(
-                text(
-                    "UPDATE document_artifacts SET trust_state = 'proposed' "
-                    "WHERE artifact_id = :a"
-                ),
-                {"a": row.artifact_id},
-            )
-            binding = {
-                "artifact_id": str(row.artifact_id),
-                "document_id": str(row.document_id),
-                "artifact_version": int(row.artifact_version),
-                "artifact_hash": row.artifact_hash,
-            }
-            bind.execute(
-                text(
-                    """
-                    UPDATE review_items
-                       SET review_metadata = coalesce(review_metadata, '{}'::jsonb)
-                                             || jsonb_build_object(:k, cast(:b as jsonb))
-                     WHERE id = :r AND (review_metadata -> :k) IS NULL
-                    """
-                ),
-                {"k": _BINDING_KEY, "b": json.dumps(binding), "r": row.review_id},
-            )
-        elif row.status == "REJECTED" and (
-            row.approved_at is None or row.created_at <= row.approved_at
-        ):
+    for review in reviews:
+        post_review = bind.execute(
+            text(
+                """
+                SELECT artifact_id, document_id, artifact_version, artifact_hash,
+                       created_at, lifecycle_status
+                  FROM document_artifacts
+                 WHERE document_id = :d AND tenant_id = :t AND created_at >= :since
+                 ORDER BY created_at, artifact_version
+                """
+            ),
+            {"d": review.document_id, "t": review.tenant_id, "since": review.created_at},
+        ).all()
+        if not post_review:
+            continue
+        candidate, later = post_review[0], post_review[1:]
+        candidate_is_canonical = not later and candidate.lifecycle_status == "active"
+
+        if review.status in _PENDING:
+            if candidate_is_canonical:
+                bind.execute(
+                    text("UPDATE document_artifacts SET trust_state = 'proposed' WHERE artifact_id = :a"),
+                    {"a": candidate.artifact_id},
+                )
+                _bind_review(bind, review.id, candidate, close=False)
+                _restore_pre_review_trusted(
+                    bind, review.document_id, review.tenant_id, review.created_at
+                )
+            else:
+                bind.execute(
+                    text(
+                        "UPDATE document_artifacts SET trust_state = 'superseded', "
+                        "lifecycle_status = 'superseded' WHERE artifact_id = :a"
+                    ),
+                    {"a": candidate.artifact_id},
+                )
+                _bind_review(bind, review.id, candidate, close=True)
+        elif review.status == "REJECTED":
+            if review.approved_at is not None and candidate.created_at > review.approved_at:
+                continue  # not provably the rejected candidate
             bind.execute(
                 text(
                     "UPDATE document_artifacts SET trust_state = 'rejected', "
                     "lifecycle_status = 'superseded' WHERE artifact_id = :a"
                 ),
-                {"a": row.artifact_id},
+                {"a": candidate.artifact_id},
             )
-        else:
-            continue
-        _restore_prior_trusted(bind, row.document_id, row.created_at)
+            if candidate_is_canonical:
+                _restore_pre_review_trusted(
+                    bind, review.document_id, review.tenant_id, review.created_at
+                )
 
 
 def upgrade() -> None:
@@ -235,13 +288,69 @@ def upgrade() -> None:
             "CREATE UNIQUE INDEX uq_document_artifacts_proposed_document "
             "ON document_artifacts (document_id) WHERE trust_state = 'proposed'"
         )
+        _create_projection_index()
     finally:
         _reforce(restored)
+
+
+def _create_projection_index() -> None:
+    """Durable trusted -> ProjectGraph obligations (internal routing only).
+
+    Same shape as #711's system_recovery.document_work_index: no business
+    payload, no RLS bypass, no PUBLIC access. Every current trusted artifact
+    is queued once, because the reclassification above may have changed the
+    canonical set and nothing proves it was ever projected.
+    """
+    op.execute("CREATE SCHEMA IF NOT EXISTS system_recovery")
+    op.execute("REVOKE ALL ON SCHEMA system_recovery FROM PUBLIC")
+    op.execute(
+        """
+        CREATE TABLE system_recovery.trusted_projection_index (
+            artifact_id uuid PRIMARY KEY
+                REFERENCES public.document_artifacts(artifact_id) ON DELETE CASCADE,
+            document_id uuid NOT NULL,
+            project_id uuid NOT NULL,
+            tenant_id uuid NOT NULL,
+            artifact_version integer NOT NULL,
+            artifact_hash varchar(64) NOT NULL,
+            projection_state varchar(16) NOT NULL DEFAULT 'pending',
+            enqueue_attempts integer NOT NULL DEFAULT 0,
+            last_checked_at timestamp without time zone NULL,
+            created_at timestamp without time zone NOT NULL
+                DEFAULT (now() AT TIME ZONE 'utc'),
+            updated_at timestamp without time zone NOT NULL
+                DEFAULT (now() AT TIME ZONE 'utc'),
+            CONSTRAINT ck_trusted_projection_index_state
+                CHECK (projection_state IN ('pending','projected','obsolete'))
+        )
+        """
+    )
+    op.execute(
+        "CREATE INDEX ix_trusted_projection_index_pending "
+        "ON system_recovery.trusted_projection_index "
+        "(projection_state, last_checked_at, created_at)"
+    )
+    op.execute("REVOKE ALL ON TABLE system_recovery.trusted_projection_index FROM PUBLIC")
+    op.execute(
+        """
+        INSERT INTO system_recovery.trusted_projection_index (
+            artifact_id, document_id, project_id, tenant_id,
+            artifact_version, artifact_hash, projection_state
+        )
+        SELECT artifact_id, document_id, project_id, tenant_id,
+               artifact_version, artifact_hash, 'pending'
+          FROM public.document_artifacts
+         WHERE lifecycle_status = 'active'
+           AND trust_state = 'trusted'
+           AND artifact_hash IS NOT NULL
+        """
+    )
 
 
 def downgrade() -> None:
     bind = op.get_bind()
     op.execute("SET LOCAL lock_timeout = '30s';")
+    op.execute("DROP TABLE IF EXISTS system_recovery.trusted_projection_index")
     restored = _unforce(bind, ["document_artifacts"])
     try:
         # Pre-#714 code treats every lifecycle='active' row as canonical, so a

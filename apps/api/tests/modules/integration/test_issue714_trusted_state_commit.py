@@ -100,6 +100,33 @@ def completion_sessions(monkeypatch, independent_sessions):  # noqa: F811
     return maker_holder
 
 
+_CATEGORIES = ("LEGAL", "TECHNICAL", "SCOPE", "BUDGET", "TIME", "QUALITY")
+
+
+def _risks(title: str, level: str = "HIGH") -> list[dict[str, str]]:
+    """Impact-bearing risks across all six categories, so the canonical
+    evaluator produces a real score; the first risk carries ``title``."""
+    return [
+        {
+            "title": title if i == 0 else f"{title}:{category}",
+            "description": "d",
+            "category": category,
+            "impact": level,
+            "likelihood": level,
+        }
+        for i, category in enumerate(_CATEGORIES)
+    ]
+
+
+async def _expected_projection(project_id: UUID, tenant_id: UUID, artifacts) -> float | None:
+    from src.analysis.adapters.graph.project_graph import evaluate_artifact_set
+
+    result = await evaluate_artifact_set(
+        artifacts, project_id=project_id, tenant_id=tenant_id, llm_on=False
+    )
+    return result.summary.overall_score
+
+
 def _final_state(arranged: Any, tenant_id: UUID, *, gated: bool, title: str) -> dict[str, Any]:
     return {
         "project_id": str(arranged.project_id),
@@ -108,7 +135,7 @@ def _final_state(arranged: Any, tenant_id: UUID, *, gated: bool, title: str) -> 
         "thread_id": f"document:{arranged.document_id}:analysis",
         "doc_type": "contract",
         "human_approval_required": gated,
-        "extracted_risks": [{"title": title, "description": "d", "severity": "HIGH"}],
+        "extracted_risks": _risks(title),
         "extracted_wbs": [],
         "coherence_score": 60.0,
         "coherence_score_version": "coherence-v1",
@@ -163,7 +190,7 @@ async def _seed_trusted(sessions, arranged, tenant_id: UUID, title: str) -> None
 
 
 def _titles(artifacts: list[DocumentArtifact]) -> list[str]:
-    return [risk.title for a in artifacts for risk in a.extracted_risks]
+    return [a.extracted_risks[0].title for a in artifacts if a.extracted_risks]
 
 
 # ── 1 / A: a pending proposal persists but is never canonical ────────────────
@@ -377,7 +404,22 @@ async def test_e_corrected_proposal_commits_only_corrected_version(
 # ── 6 / F: a stale/superseded approval fails closed ──────────────────────────
 
 
-async def test_f_stale_approval_after_reanalysis_fails_closed(
+async def _review_rows(db: AsyncSession, document_id: UUID) -> list[ReviewItemORM]:
+    return list(
+        (
+            await db.execute(
+                select(ReviewItemORM)
+                .where(ReviewItemORM.item_id == document_id)
+                .order_by(ReviewItemORM.created_at)
+                .execution_options(populate_existing=True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+async def test_f_stale_decision_after_reanalysis_fails_closed_and_new_review_binds_v2(
     real_saver,  # noqa: F811
     independent_sessions,  # noqa: F811
     request_sessions,  # noqa: F811
@@ -392,31 +434,177 @@ async def test_f_stale_approval_after_reanalysis_fails_closed(
     await _propose(completion_sessions, arranged, tenant.id, title="Reviewed v1")
     reviewed = await _binding(db, arranged.review_row_id)
 
-    # A re-analysis on the SAME (stable) thread lands while the human is
-    # still looking at v1. It must not silently rebind the review.
+    # A gated re-analysis on the SAME (stable) thread lands while the human
+    # is still looking at v1. It must not silently rebind that review: the
+    # old review is closed and a NEW review is bound to exactly v2.
     await _propose(completion_sessions, arranged, tenant.id, title="Unreviewed v2")
-    assert await _binding(db, arranged.review_row_id) == reviewed
 
-    with pytest.raises(HTTPException):
-        await _post_approve(
-            request_sessions, tenant.id, arranged.review_item_id,
-            saver=saver, app=arranged.app, sessions=independent_sessions,
-        )
-
-    review = await _reload(db, ReviewItemORM, arranged.review_row_id)
-    assert review.current_status != ReviewStatus.APPROVED, "decision rolled back"
+    old = await _reload(db, ReviewItemORM, arranged.review_row_id)
+    assert old.current_status == ReviewStatus.CLOSED
+    assert CandidateBinding.from_json(old.review_metadata["candidate_binding"]) == reviewed
+    assert old.review_metadata["closed_reason"] == "candidate_superseded"
+    reviews = await _review_rows(db, arranged.document_id)
+    assert len(reviews) == 2
+    new = reviews[-1]
+    assert new.current_status == ReviewStatus.PENDING_REVIEW_REQUIRED
     rows = await _rows(independent_sessions, tenant.id, arranged.document_id)
     assert [(r.artifact_version, r.trust_state) for r in rows] == [
         (1, "superseded"),
         (2, "proposed"),
     ]
+    assert CandidateBinding.from_json(new.review_metadata["candidate_binding"]) == (
+        CandidateBinding(rows[1].artifact_id, arranged.document_id, 2, rows[1].artifact_hash)
+    )
+    assert new.review_metadata["supersedes_review_id"] == str(old.id)
+
+    # Deciding the OLD review exactly (by its row id) fails closed, both ways.
+    for decide in (_post_approve, _post_reject):
+        with pytest.raises(HTTPException):
+            await decide(
+                request_sessions, tenant.id, arranged.review_row_id,
+                saver=saver, app=arranged.app, sessions=independent_sessions,
+            )
     assert await _canonical(independent_sessions, tenant.id, arranged.project_id) == []
     assert graph_enqueues == []
-    # Refused BEFORE the graph resumed: no analysis feeds the trusted score.
     analyses = (
         await db.execute(select(Analysis).where(Analysis.project_id == arranged.project_id))
     ).scalars().all()
-    assert analyses == [], "a stale approval must not reach N17"
+    assert analyses == [], "a stale decision must not reach N17"
+
+    # The new review commits exactly v2.
+    await _post_approve(
+        request_sessions, tenant.id, new.id,
+        saver=saver, app=arranged.app, sessions=independent_sessions,
+    )
+    rows = await _rows(independent_sessions, tenant.id, arranged.document_id)
+    assert [(r.artifact_version, r.trust_state) for r in rows] == [
+        (1, "superseded"),
+        (2, "trusted"),
+    ]
+    assert _titles(await _canonical(independent_sessions, tenant.id, arranged.project_id)) == [
+        "Unreviewed v2"
+    ]
+    assert graph_enqueues == [(arranged.project_id, tenant.id)]
+
+
+async def test_newer_trusted_completion_retires_bound_proposal(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """V1 trusted -> V2 proposed+bound -> newer non-gated V3 trusted: V2 can
+    never be approved over V3; V3 stays the sole canonical artifact."""
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    await _seed_trusted(independent_sessions, arranged, tenant.id, "V1")
+    await _propose(completion_sessions, arranged, tenant.id, title="V2 proposal")
+    stale = await _binding(db, arranged.review_row_id)
+    completion_sessions["tenant"] = tenant.id
+    await document_artifact_completion._persist_artifact(
+        _final_state(arranged, tenant.id, gated=False, title="V3 newer")
+    )
+
+    rows = await _rows(independent_sessions, tenant.id, arranged.document_id)
+    assert [(r.artifact_version, r.trust_state, r.lifecycle_status) for r in rows] == [
+        (1, "trusted", "superseded"),
+        (2, "superseded", "superseded"),
+        (3, "trusted", "active"),
+    ]
+    review = await _reload(db, ReviewItemORM, arranged.review_row_id)
+    assert review.current_status == ReviewStatus.CLOSED
+
+    with pytest.raises(HTTPException):
+        await _post_approve(
+            request_sessions, tenant.id, arranged.review_row_id,
+            saver=saver, app=arranged.app, sessions=independent_sessions,
+        )
+    with pytest.raises(StaleCandidateError):
+        async with independent_sessions(tenant.id) as s:
+            await SqlAlchemyDocumentArtifactRepository(s).commit_candidate(
+                stale, tenant_id=tenant.id
+            )
+    assert _titles(await _canonical(independent_sessions, tenant.id, arranged.project_id)) == [
+        "V3 newer"
+    ]
+    assert graph_enqueues == [(arranged.project_id, tenant.id)], "only V3's completion"
+
+
+async def test_reject_is_exact_binding_and_stale_reject_fails_closed(
+    independent_sessions,  # noqa: F811
+    db: AsyncSession,
+    test_user: User,
+    real_saver,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+) -> None:
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    await _propose(completion_sessions, arranged, tenant.id)
+    bound = await _binding(db, arranged.review_row_id)
+
+    forged = CandidateBinding(bound.artifact_id, bound.document_id, 1, "0" * 64)
+    with pytest.raises(StaleCandidateError):
+        async with independent_sessions(tenant.id) as s:
+            await SqlAlchemyDocumentArtifactRepository(s).reject_candidate(
+                forged, tenant_id=tenant.id
+            )
+    # Superseded (e.g. by a correction) -> rejecting the old version fails.
+    async with independent_sessions(tenant.id) as s:
+        await SqlAlchemyDocumentArtifactRepository(s).propose_correction(
+            bound,
+            DocumentArtifact(document_id=str(arranged.document_id), doc_type="contract"),
+            tenant_id=tenant.id,
+            review_row_id=arranged.review_row_id,
+        )
+    with pytest.raises(StaleCandidateError):
+        async with independent_sessions(tenant.id) as s:
+            await SqlAlchemyDocumentArtifactRepository(s).reject_candidate(
+                bound, tenant_id=tenant.id
+            )
+    rows = await _rows(independent_sessions, tenant.id, arranged.document_id)
+    assert [(r.artifact_version, r.trust_state) for r in rows] == [
+        (1, "superseded"),
+        (2, "proposed"),
+    ], "the stale rejection neither rejected nor touched the current proposal"
+
+
+async def test_pending_count_and_projection_use_only_actionable_bound_proposals(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    await _propose(completion_sessions, arranged, tenant.id)
+    # An orphan PROPOSED row for another document, with no review at all.
+    from uuid import uuid4
+
+    from src.analysis.domain.trust import TrustState
+
+    async with independent_sessions(tenant.id) as s:
+        await SqlAlchemyDocumentArtifactRepository(s)._insert(
+            DocumentArtifact(document_id=str(uuid4()), doc_type="contract"),
+            project_id=arranged.project_id,
+            tenant_id=tenant.id,
+            trust_state=TrustState.PROPOSED,
+            scoring=None,
+        )
+    async with independent_sessions(tenant.id) as s:
+        pending = await SqlAlchemyDocumentArtifactRepository(s).list_pending_candidates(
+            project_id=arranged.project_id, tenant_id=tenant.id
+        )
+    assert [p.binding.document_id for p in pending] == [arranged.document_id]
+    assert pending[0].review_row_id == arranged.review_row_id
 
 
 async def test_non_gated_completion_is_trusted_and_enqueues_once(
@@ -491,7 +679,16 @@ async def test_dashboard_trusted_ignores_pending_and_projection_uses_it(
     await _propose(completion_sessions, arranged, tenant.id)  # engine score 60, v1
     pending = await _dashboard(request_sessions, tenant.id, arranged.project_id)
     assert pending.coherence_score is None and pending.trusted_score is None
-    assert pending.projected_score == 60.0
+    async with independent_sessions(tenant.id) as s:
+        candidates = await SqlAlchemyDocumentArtifactRepository(s).list_pending_candidates(
+            project_id=arranged.project_id, tenant_id=tenant.id
+        )
+    expected = await _expected_projection(
+        arranged.project_id, tenant.id, [candidates[0].artifact]
+    )
+    assert expected is not None
+    assert pending.projected_score == expected, "canonical evaluation, not a stored score"
+    assert pending.projection_baseline_score is None, "nothing trusted yet"
     assert pending.projected_delta is None
     assert pending.pending_review_count == 1
     assert pending.projection_status == "provisional"
@@ -530,7 +727,7 @@ async def test_dashboard_reject_removes_candidate_from_projection(
     tenant = await db.get(Tenant, test_user.tenant_id)
     arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
     await _propose(completion_sessions, arranged, tenant.id)
-    assert (await _dashboard(request_sessions, tenant.id, arranged.project_id)).projected_score == 60.0
+    assert (await _dashboard(request_sessions, tenant.id, arranged.project_id)).projected_score is not None
 
     await _post_reject(
         request_sessions, tenant.id, arranged.review_item_id,
@@ -560,10 +757,18 @@ async def test_dashboard_correction_replaces_candidate_in_projection(
     await _propose(completion_sessions, arranged, tenant.id)
     original = await _binding(db, arranged.review_row_id)
 
+    corrected = DocumentArtifact.model_validate(
+        {
+            "document_id": str(arranged.document_id),
+            "doc_type": "contract",
+            "extracted_risks": _risks("Corrected", level="LOW"),
+        }
+    )
+    before = await _dashboard(request_sessions, tenant.id, arranged.project_id)
     async with independent_sessions(tenant.id) as s:
         await SqlAlchemyDocumentArtifactRepository(s).propose_correction(
             original,
-            DocumentArtifact(document_id=str(arranged.document_id), doc_type="contract"),
+            corrected,
             tenant_id=tenant.id,
             review_row_id=arranged.review_row_id,
             scoring=CandidateScoring(coherence_score=75.0, score_version="coherence-v1"),
@@ -571,7 +776,11 @@ async def test_dashboard_correction_replaces_candidate_in_projection(
 
     view = await _dashboard(request_sessions, tenant.id, arranged.project_id)
     assert view.pending_review_count == 1, "Vn+1 replaces Vn; it does not stack"
-    assert view.projected_score == 75.0
+    assert view.projected_score == await _expected_projection(
+        arranged.project_id, tenant.id, [corrected]
+    )
+    assert view.projected_score != before.projected_score, "the corrected version is projected"
+    assert view.projected_score != 75.0, "stored per-run scores are never used"
 
 
 # ── P0 race: a decision before the candidate is persisted/bound ─────────────
@@ -749,3 +958,233 @@ async def test_escalated_review_is_decidable_through_the_fenced_path(
     assert response.current_status == ReviewStatus.APPROVED
     assert await _operations(independent_sessions, tenant.id, arranged.project_id) == 1
     assert graph_enqueues == [(arranged.project_id, tenant.id)]
+
+
+async def test_gated_candidate_without_any_review_gets_an_actionable_review(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """HITL routing degraded at N13 (no review row): the proposal must not be
+    orphaned -- a minimal pending review bound to it is opened."""
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    await db.delete(await _reload(db, ReviewItemORM, arranged.review_row_id))
+    await db.commit()
+
+    await _propose(completion_sessions, arranged, tenant.id)
+
+    reviews = await _review_rows(db, arranged.document_id)
+    assert len(reviews) == 1
+    review = reviews[0]
+    assert review.current_status == ReviewStatus.PENDING_REVIEW_REQUIRED
+    assert review.review_metadata["trust_candidate_required"] is True
+    assert review.thread_id == f"document:{arranged.document_id}:analysis"
+    rows = await _rows(independent_sessions, tenant.id, arranged.document_id)
+    assert CandidateBinding.from_json(review.review_metadata["candidate_binding"]) == (
+        CandidateBinding(rows[0].artifact_id, arranged.document_id, 1, rows[0].artifact_hash)
+    )
+    assert graph_enqueues == []
+
+
+# ── E: durable trusted -> ProjectGraph hand-off ──────────────────────────────
+
+
+async def _obligations(sessions, tenant_id: UUID, project_id: UUID) -> list[Any]:
+    from sqlalchemy import text as sql_text
+
+    async with sessions(tenant_id) as s:
+        return list(
+            (
+                await s.execute(
+                    sql_text(
+                        "SELECT artifact_id, artifact_version, projection_state, "
+                        "enqueue_attempts FROM system_recovery.trusted_projection_index "
+                        "WHERE project_id = cast(:p as uuid) ORDER BY artifact_version"
+                    ),
+                    {"p": str(project_id)},
+                )
+            ).all()
+        )
+
+
+async def _clear_obligations(sessions, tenant_id: UUID) -> None:
+    from sqlalchemy import text as sql_text
+
+    async with sessions(tenant_id) as s:
+        await s.execute(sql_text("DELETE FROM system_recovery.trusted_projection_index"))
+
+
+async def _run_graph(sessions, tenant_id: UUID, project_id: UUID, monkeypatch) -> dict:
+    class _FakeGraph:
+        async def ainvoke(self, _state):
+            return {"node_results": []}
+
+    monkeypatch.setattr(project_graph_tasks, "build_project_graph", lambda: _FakeGraph())
+    async with sessions(tenant_id) as s:
+        return await project_graph_tasks.run_project_graph_once(
+            project_id=project_id,
+            tenant_id=tenant_id,
+            artifact_repository=SqlAlchemyDocumentArtifactRepository(s),
+        )
+
+
+async def test_trusted_commit_obligation_is_acknowledged_only_by_a_completed_graph_run(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    db: AsyncSession,
+    test_user: User,
+    monkeypatch,
+) -> None:
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    await _clear_obligations(independent_sessions, tenant.id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    await _propose(completion_sessions, arranged, tenant.id)
+    assert await _obligations(independent_sessions, tenant.id, arranged.project_id) == [], (
+        "a PROPOSED candidate creates no projection obligation"
+    )
+
+    await _post_approve(
+        request_sessions, tenant.id, arranged.review_item_id,
+        saver=saver, app=arranged.app, sessions=independent_sessions,
+    )
+    [obligation] = await _obligations(independent_sessions, tenant.id, arranged.project_id)
+    assert obligation.projection_state == "pending", "written WITH the trusted commit"
+
+    result = await _run_graph(independent_sessions, tenant.id, arranged.project_id, monkeypatch)
+    assert result["projected_obligations"] == 1
+    [obligation] = await _obligations(independent_sessions, tenant.id, arranged.project_id)
+    assert obligation.projection_state == "projected"
+
+
+async def test_lost_enqueue_is_repaired_by_the_reconciler_without_new_activity(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,  # noqa: F811
+    completion_sessions,
+    db: AsyncSession,
+    test_user: User,
+    monkeypatch,
+) -> None:
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    await _clear_obligations(independent_sessions, tenant.id)
+    monkeypatch.setattr(project_snapshot_trigger, "enqueue_project_snapshot", lambda **_: None)
+
+    async def broker_down(**_kwargs):
+        raise ConnectionError("broker unavailable")
+
+    monkeypatch.setattr(project_graph_tasks, "enqueue_project_graph", broker_down)
+    monkeypatch.setattr(document_artifact_completion, "enqueue_project_graph", broker_down)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    await _propose(completion_sessions, arranged, tenant.id)
+
+    response = await _post_approve(
+        request_sessions, tenant.id, arranged.review_item_id,
+        saver=saver, app=arranged.app, sessions=independent_sessions,
+    )
+    assert response.current_status == ReviewStatus.APPROVED, "trusted commit never rolls back"
+    assert _titles(await _canonical(independent_sessions, tenant.id, arranged.project_id))
+    [obligation] = await _obligations(independent_sessions, tenant.id, arranged.project_id)
+    assert obligation.projection_state == "pending", "the lost dispatch left durable evidence"
+
+    # No further document activity. The beat reconciler repairs it.
+    enqueued: list[tuple[UUID, UUID]] = []
+
+    async def record(*, project_id, tenant_id, **_):
+        enqueued.append((UUID(str(project_id)), UUID(str(tenant_id))))
+
+    async def enabled(_tenant_id):
+        return True
+
+    monkeypatch.setattr(project_graph_tasks, "enqueue_project_graph", record)
+    monkeypatch.setattr(project_graph_tasks, "is_project_graph_enabled", enabled)
+    counts = await project_graph_tasks.reconcile_trusted_projections(grace_seconds=0)
+    assert enqueued == [(arranged.project_id, tenant.id)]
+    assert counts["enqueued"] == 1
+    [obligation] = await _obligations(independent_sessions, tenant.id, arranged.project_id)
+    assert (obligation.projection_state, obligation.enqueue_attempts) == ("pending", 1)
+
+    await _run_graph(independent_sessions, tenant.id, arranged.project_id, monkeypatch)
+    enqueued.clear()
+    counts = await project_graph_tasks.reconcile_trusted_projections(grace_seconds=0)
+    assert enqueued == [], "a projected obligation is never re-dispatched"
+    [obligation] = await _obligations(independent_sessions, tenant.id, arranged.project_id)
+    assert obligation.projection_state == "projected"
+
+
+async def test_reconciler_never_marks_flag_disabled_tenants_projected(
+    independent_sessions,  # noqa: F811
+    db: AsyncSession,
+    test_user: User,
+    real_saver,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    monkeypatch,
+) -> None:
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    await _clear_obligations(independent_sessions, tenant.id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    completion_sessions["tenant"] = tenant.id
+    await document_artifact_completion._persist_artifact(
+        _final_state(arranged, tenant.id, gated=False, title="Trusted")
+    )
+
+    async def disabled(_tenant_id):
+        return False
+
+    monkeypatch.setattr(project_graph_tasks, "is_project_graph_enabled", disabled)
+    graph_enqueues.clear()
+    counts = await project_graph_tasks.reconcile_trusted_projections(grace_seconds=0)
+    assert counts["flag_disabled"] >= 1
+    assert graph_enqueues == []
+    [obligation] = await _obligations(independent_sessions, tenant.id, arranged.project_id)
+    assert (obligation.projection_state, obligation.enqueue_attempts) == ("pending", 0)
+
+
+async def test_older_projection_cannot_acknowledge_a_newer_trusted_version(
+    independent_sessions,  # noqa: F811
+    db: AsyncSession,
+    test_user: User,
+    real_saver,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+) -> None:
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    await _clear_obligations(independent_sessions, tenant.id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    completion_sessions["tenant"] = tenant.id
+    await document_artifact_completion._persist_artifact(
+        _final_state(arranged, tenant.id, gated=False, title="V1")
+    )
+
+    # An (older) ProjectGraph run loads V1 ...
+    async with independent_sessions(tenant.id) as old_run:
+        old_repo = SqlAlchemyDocumentArtifactRepository(old_run)
+        await old_repo.list_trusted_for_project(
+            project_id=arranged.project_id, tenant_id=tenant.id
+        )
+        # ... meanwhile V2 becomes trusted (its obligation obsoletes V1's).
+        await document_artifact_completion._persist_artifact(
+            _final_state(arranged, tenant.id, gated=False, title="V2")
+        )
+        acknowledged = await old_repo.mark_loaded_projected(
+            project_id=arranged.project_id, tenant_id=tenant.id
+        )
+
+    assert acknowledged == 0
+    rows = await _obligations(independent_sessions, tenant.id, arranged.project_id)
+    assert [(r.artifact_version, r.projection_state) for r in rows] == [
+        (1, "obsolete"),
+        (2, "pending"),
+    ], "V2 stays pending until a run that actually loaded V2 completes"

@@ -26,6 +26,7 @@ from src.analysis.adapters.persistence.models import DocumentArtifactORM
 from src.analysis.domain.contracts import DocumentArtifact
 from src.analysis.domain.trust import (
     REVIEW_BINDING_KEY,
+    TRUST_CANDIDATE_REQUIRED_KEY,
     CandidateBinding,
     CandidateScoring,
     StaleCandidateError,
@@ -77,6 +78,150 @@ _REBIND_REVIEW_ROW_SQL = text(
 )
 
 
+_AWAITING = "('PENDING_REVIEW_REQUIRED','PENDING_REVIEW_CONDITIONAL','ESCALATED')"
+
+_CLOSE_SUPERSEDED_REVIEWS_SQL = text(
+    f"""
+    UPDATE review_items
+       SET current_status = 'CLOSED',
+           updated_at = (now() AT TIME ZONE 'utc'),
+           review_metadata = review_metadata || jsonb_build_object(
+               'closed_reason', 'candidate_superseded',
+               'candidate_superseded_by', cast(:superseded_by as text))
+     WHERE tenant_id = cast(:tenant_id as uuid)
+       AND cast(current_status as text) IN {_AWAITING}
+       AND review_metadata -> :key ->> 'artifact_id' = ANY(cast(:artifact_ids as text[]))
+    RETURNING id
+    """
+)
+
+# Clone the replaced (or latest) review of the document into a fresh pending
+# review bound to the new candidate. Resume/decision leftovers are dropped.
+_OPEN_CLONED_REVIEW_SQL = text(
+    """
+    INSERT INTO review_items (
+        id, item_id, item_type, current_status, confidence, impact_level,
+        tenant_id, sla_due_date, item_data, review_metadata, thread_id,
+        checkpoint_id, project_id, document_id, review_type, created_at, updated_at
+    )
+    SELECT cast(:new_id as uuid), t.item_id, t.item_type,
+           'PENDING_REVIEW_REQUIRED', t.confidence, t.impact_level, t.tenant_id,
+           (now() AT TIME ZONE 'utc') + interval '3 days',
+           coalesce(t.item_data, '{}'::jsonb)
+               || jsonb_build_object(
+                      'supersedes_review_id', t.id::text,
+                      'thread_id', coalesce(cast(:thread_id as text), t.thread_id)),
+           (coalesce(t.review_metadata, '{}'::jsonb)
+               - 'resume_operation_id' - 'resume_attempt_id' - 'terminal_checkpoint_id'
+               - 'rejection_reason' - 'resume_claim' - 'closed_reason'
+               - 'candidate_superseded_by' - 'checkpoint_id' - 'thread_id')
+               || jsonb_build_object(
+                      cast(:bkey as text), cast(:binding as jsonb),
+                      cast(:mkey as text), true,
+                      'supersedes_review_id', t.id::text),
+           coalesce(cast(:thread_id as varchar), t.thread_id), NULL,
+           t.project_id, t.document_id, t.review_type,
+           (now() AT TIME ZONE 'utc'), (now() AT TIME ZONE 'utc')
+      FROM review_items t
+     WHERE t.tenant_id = cast(:tenant_id as uuid)
+       AND t.item_id = cast(:document_id as uuid)
+       AND (cast(:template_id as uuid) IS NULL OR t.id = cast(:template_id as uuid))
+     ORDER BY t.created_at DESC
+     LIMIT 1
+    RETURNING id
+    """
+)
+
+_OPEN_MINIMAL_REVIEW_SQL = text(
+    """
+    INSERT INTO review_items (
+        id, item_id, item_type, current_status, confidence, impact_level,
+        tenant_id, sla_due_date, item_data, review_metadata, thread_id,
+        project_id, document_id, review_type, created_at, updated_at
+    )
+    VALUES (
+        cast(:new_id as uuid), cast(:document_id as uuid), cast(:doc_type as varchar),
+        'PENDING_REVIEW_REQUIRED', cast(:confidence as double precision), 'MEDIUM', cast(:tenant_id as uuid),
+        (now() AT TIME ZONE 'utc') + interval '3 days',
+        jsonb_build_object(
+            'project_id', cast(:project_id as text), 'document_id', cast(:document_id as text),
+            'doc_type', cast(:doc_type as text), 'thread_id', cast(:thread_id as text),
+            'reason', 'This analysis requires human confirmation before it can complete.'),
+        jsonb_build_object(
+            'tenant_id', cast(:tenant_id as text), 'project_id', cast(:project_id as text),
+            'document_id', cast(:document_id as text), 'review_type', 'analysis_critique',
+            cast(:bkey as text), cast(:binding as jsonb), cast(:mkey as text), true),
+        cast(:thread_id as varchar), cast(:project_id as uuid), cast(:document_id as uuid),
+        'analysis_critique', (now() AT TIME ZONE 'utc'), (now() AT TIME ZONE 'utc')
+    )
+    """
+)
+
+
+_ACTIONABLE_PENDING_SQL = text(
+    f"""
+    SELECT DISTINCT ON (a.artifact_id) a.artifact_id, r.id AS review_id
+      FROM document_artifacts a
+      JOIN review_items r
+        ON r.tenant_id = a.tenant_id
+       AND cast(r.current_status as text) IN {_AWAITING}
+       AND r.review_metadata -> :key ->> 'artifact_id' = a.artifact_id::text
+       AND (r.review_metadata -> :key ->> 'artifact_version')::int = a.artifact_version
+       AND r.review_metadata -> :key ->> 'artifact_hash' = a.artifact_hash
+     WHERE a.project_id = cast(:project_id as uuid)
+       AND a.tenant_id = cast(:tenant_id as uuid)
+       AND a.trust_state = 'proposed'
+     ORDER BY a.artifact_id, r.created_at DESC
+    """
+)
+
+
+# Durable trusted -> ProjectGraph obligations (#714). Internal routing table in
+# system_recovery (same pattern as #711's document_work_index): no business
+# data, no RLS bypass; every artifact read stays tenant-scoped.
+_OBSOLETE_OBLIGATIONS_SQL = text(
+    """
+    UPDATE system_recovery.trusted_projection_index
+       SET projection_state = 'obsolete',
+           updated_at = (clock_timestamp() AT TIME ZONE 'UTC')
+     WHERE document_id = cast(:document_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
+       AND artifact_id <> cast(:artifact_id as uuid)
+       AND projection_state = 'pending'
+    """
+)
+
+_RECORD_OBLIGATION_SQL = text(
+    """
+    INSERT INTO system_recovery.trusted_projection_index (
+        artifact_id, document_id, project_id, tenant_id,
+        artifact_version, artifact_hash, projection_state
+    )
+    VALUES (
+        cast(:artifact_id as uuid), cast(:document_id as uuid),
+        cast(:project_id as uuid), cast(:tenant_id as uuid),
+        :artifact_version, :artifact_hash, 'pending'
+    )
+    ON CONFLICT (artifact_id) DO UPDATE
+       SET projection_state = 'pending',
+           updated_at = (clock_timestamp() AT TIME ZONE 'UTC')
+    """
+)
+
+_MARK_PROJECTED_SQL = text(
+    """
+    UPDATE system_recovery.trusted_projection_index
+       SET projection_state = 'projected',
+           updated_at = (clock_timestamp() AT TIME ZONE 'UTC')
+     WHERE tenant_id = cast(:tenant_id as uuid)
+       AND project_id = cast(:project_id as uuid)
+       AND artifact_id = ANY(cast(:artifact_ids as uuid[]))
+       AND projection_state = 'pending'
+    RETURNING artifact_id
+    """
+)
+
+
 @dataclass(frozen=True)
 class PendingCandidate:
     """A PROPOSED candidate as the projection sees it."""
@@ -85,11 +230,14 @@ class PendingCandidate:
     project_id: UUID
     scoring: CandidateScoring | None
     created_at: datetime
+    artifact: DocumentArtifact | None = None
+    review_row_id: UUID | None = None
 
 
 class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+        self._loaded_trusted_ids: list[UUID] = []
 
     @staticmethod
     def _artifact_document_id(artifact: DocumentArtifact) -> UUID:
@@ -150,8 +298,9 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
             .values(lifecycle_status="superseded")
         )
 
-    async def _supersede_proposed(self, document_id: UUID) -> None:
-        await self._session.execute(
+    async def _supersede_proposed(self, document_id: UUID) -> list[UUID]:
+        """Retire every pending proposal for the document; return their ids."""
+        result = await self._session.execute(
             update(DocumentArtifactORM)
             .where(
                 DocumentArtifactORM.document_id == document_id,
@@ -161,7 +310,35 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
                 trust_state=TrustState.SUPERSEDED.value,
                 lifecycle_status="superseded",
             )
+            .returning(DocumentArtifactORM.artifact_id)
         )
+        return list(result.scalars().all())
+
+    async def _close_superseded_reviews(
+        self,
+        superseded: list[UUID],
+        *,
+        tenant_id: TenantId,
+        superseded_by: UUID,
+    ) -> list[UUID]:
+        """Close the still-awaiting reviews whose exact candidate was retired.
+
+        Their candidate can never be committed or rejected any more, so they
+        must not linger as actionable-looking reviews (#714 version
+        monotonicity). Closed rows keep their binding as audit evidence.
+        """
+        if not superseded:
+            return []
+        result = await self._session.execute(
+            _CLOSE_SUPERSEDED_REVIEWS_SQL,
+            {
+                "key": REVIEW_BINDING_KEY,
+                "tenant_id": str(tenant_id),
+                "artifact_ids": [str(a) for a in superseded],
+                "superseded_by": str(superseded_by),
+            },
+        )
+        return [UUID(str(r)) for r in result.scalars().all()]
 
     async def save(
         self,
@@ -175,26 +352,37 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
     ) -> DocumentArtifact:
         """Persist one artifact version.
 
+        Any newer completion retires older PROPOSED candidates for the
+        document and closes the reviews bound to them (#714 monotonicity):
+        a stale proposal can never be approved over a newer version.
+
         TRUSTED (non-gated completion): becomes the canonical artifact.
-        PROPOSED (HITL-gated): persisted for audit/recovery, supersedes any
-        older proposal for the document, and is bound to the pending review
-        of ``review_thread_id``. It never touches the canonical artifact.
+        PROPOSED (HITL-gated): persisted for audit/recovery, never canonical.
+        It is bound to the pending, still-unbound review of its own graph
+        thread; if there is none (a re-analysis whose interrupt reused a
+        review already bound to an older version), the old review is closed
+        and a NEW review bound to exactly this version is opened -- content is
+        never silently rebound under a review a human already saw.
         """
         if trust_state not in {TrustState.TRUSTED, TrustState.PROPOSED}:
             raise ValueError(f"save() cannot persist a {trust_state.value} artifact")
         document_id = self._artifact_document_id(artifact)
+        superseded = await self._supersede_proposed(document_id)
         if trust_state is TrustState.TRUSTED:
             await self._supersede_active_trusted(document_id)
-            await self._insert(
+            row = await self._insert(
                 artifact,
                 project_id=project_id,
                 tenant_id=tenant_id,
                 trust_state=trust_state,
                 scoring=scoring,
             )
+            await self._close_superseded_reviews(
+                superseded, tenant_id=tenant_id, superseded_by=row.artifact_id
+            )
+            await self._record_projection_obligation(row)
             return artifact
 
-        await self._supersede_proposed(document_id)
         row = await self._insert(
             artifact,
             project_id=project_id,
@@ -203,6 +391,10 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
             scoring=scoring,
         )
         binding = _binding_of(row)
+        closed = await self._close_superseded_reviews(
+            superseded, tenant_id=tenant_id, superseded_by=row.artifact_id
+        )
+        bound = []
         if review_thread_id:
             bound = (
                 await self._session.execute(
@@ -216,15 +408,98 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
                     },
                 )
             ).all()
-            if not bound:
-                # Not an error: the candidate stays PROPOSED (never canonical);
-                # an unbound candidate simply cannot be approved into trust.
-                logger.warning(
-                    "trusted_candidate_unbound_no_pending_review",
-                    document_id=str(document_id),
-                    artifact_id=str(binding.artifact_id),
-                )
+        if not bound:
+            review_id = await self._open_review_for(
+                row,
+                binding,
+                thread_id=review_thread_id,
+                template_review_id=closed[0] if closed else None,
+            )
+            logger.info(
+                "trusted_candidate_review_opened",
+                document_id=str(document_id),
+                artifact_id=str(binding.artifact_id),
+                review_row_id=str(review_id),
+                supersedes_review_ids=[str(c) for c in closed],
+            )
         return artifact
+
+    async def _open_review_for(
+        self,
+        row: DocumentArtifactORM,
+        binding: CandidateBinding,
+        *,
+        thread_id: str | None,
+        template_review_id: UUID | None,
+    ) -> UUID:
+        """Open a pending review bound to exactly this candidate.
+
+        Cloned from the review it replaces (or the document's latest review)
+        so the reviewer sees the same context; resume identity is reset to
+        this candidate's thread (latest checkpoint = its interrupt). With no
+        prior review at all (HITL routing degraded at N13), a minimal review
+        is created: a proposal must never be left without an actionable
+        review.
+        """
+        new_id = uuid4()
+        params = {
+            "new_id": str(new_id),
+            "tenant_id": str(row.tenant_id),
+            "document_id": str(row.document_id),
+            "project_id": str(row.project_id),
+            "thread_id": thread_id,
+            "bkey": REVIEW_BINDING_KEY,
+            "mkey": TRUST_CANDIDATE_REQUIRED_KEY,
+            "binding": _json(binding.as_json()),
+            "template_id": str(template_review_id) if template_review_id else None,
+            "doc_type": str((row.payload or {}).get("doc_type") or "unknown"),
+            "confidence": float((row.payload or {}).get("confidence_score") or 0.0),
+        }
+        cloned = (await self._session.execute(_OPEN_CLONED_REVIEW_SQL, params)).first()
+        if cloned is None:
+            await self._session.execute(_OPEN_MINIMAL_REVIEW_SQL, params)
+        return new_id
+
+    async def _record_projection_obligation(self, row: DocumentArtifactORM) -> None:
+        """Durable trusted -> ProjectGraph hand-off, in THIS transaction (#714).
+
+        The Celery enqueue after commit stays a best-effort fast path; this
+        row is what makes a lost dispatch recoverable: it stays 'pending'
+        until a successful ProjectGraph run that loaded exactly this
+        artifact acknowledges it, and the beat reconciler re-enqueues it
+        meanwhile. A newer trusted version obsoletes the older obligation.
+        """
+        params = {
+            "artifact_id": str(row.artifact_id),
+            "document_id": str(row.document_id),
+            "project_id": str(row.project_id),
+            "tenant_id": str(row.tenant_id),
+            "artifact_version": int(row.artifact_version),
+            "artifact_hash": str(row.artifact_hash),
+        }
+        await self._session.execute(_OBSOLETE_OBLIGATIONS_SQL, params)
+        await self._session.execute(_RECORD_OBLIGATION_SQL, params)
+
+    async def mark_loaded_projected(self, *, project_id: UUID, tenant_id: TenantId) -> int:
+        """Acknowledge the obligations of exactly the artifacts last loaded.
+
+        Called by a ProjectGraph run only after it completed, in the same
+        transaction that commits its outcome. Only artifacts that run
+        actually loaded are acknowledged, so an older run can never clear
+        the obligation of a newer trusted version.
+        """
+        loaded = self._loaded_trusted_ids
+        if not loaded:
+            return 0
+        result = await self._session.execute(
+            _MARK_PROJECTED_SQL,
+            {
+                "project_id": str(project_id),
+                "tenant_id": str(tenant_id),
+                "artifact_ids": [str(a) for a in loaded],
+            },
+        )
+        return len(result.all())
 
     async def list_trusted_for_project(
         self,
@@ -243,10 +518,11 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
             )
             .order_by(DocumentArtifactORM.created_at.asc())
         )
-        return [
-            DocumentArtifact.model_validate(orm.payload)
-            for orm in result.scalars().all()
-        ]
+        rows = result.scalars().all()
+        # Remembered so a completed ProjectGraph run acknowledges exactly the
+        # trusted versions it projected (see mark_loaded_projected).
+        self._loaded_trusted_ids = [orm.artifact_id for orm in rows]
+        return [DocumentArtifact.model_validate(orm.payload) for orm in rows]
 
     async def list_active_for_project(
         self,
@@ -287,51 +563,50 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
         project_id: UUID,
         tenant_id: TenantId,
     ) -> list[PendingCandidate]:
-        """The exact PROPOSED versions currently awaiting review."""
-        result = await self._session.execute(
-            select(DocumentArtifactORM)
-            .where(
-                DocumentArtifactORM.project_id == project_id,
-                DocumentArtifactORM.tenant_id == tenant_id,
-                DocumentArtifactORM.trust_state == TrustState.PROPOSED.value,
+        """The ACTIONABLE pending proposals: exactly one per awaiting review.
+
+        A PROPOSED row counts only while an awaiting review (pending,
+        conditional or escalated) is bound to exactly its id + version +
+        digest. Unbound/orphan proposals, stale bindings and decided reviews
+        never appear in the pending count or the projection.
+        """
+        rows = (
+            await self._session.execute(
+                _ACTIONABLE_PENDING_SQL,
+                {
+                    "key": REVIEW_BINDING_KEY,
+                    "project_id": str(project_id),
+                    "tenant_id": str(tenant_id),
+                },
             )
-            .order_by(
-                DocumentArtifactORM.created_at.asc(),
-                DocumentArtifactORM.artifact_id.asc(),
+        ).all()
+        if not rows:
+            return []
+        review_by_artifact = {UUID(str(r.artifact_id)): UUID(str(r.review_id)) for r in rows}
+        orms = (
+            await self._session.execute(
+                select(DocumentArtifactORM)
+                .where(
+                    DocumentArtifactORM.tenant_id == tenant_id,
+                    DocumentArtifactORM.artifact_id.in_(list(review_by_artifact)),
+                )
+                .order_by(
+                    DocumentArtifactORM.created_at.asc(),
+                    DocumentArtifactORM.artifact_id.asc(),
+                )
             )
-        )
+        ).scalars().all()
         return [
             PendingCandidate(
                 binding=_binding_of(orm),
                 project_id=orm.project_id,
                 scoring=CandidateScoring.from_json(orm.scoring),
                 created_at=orm.created_at,
+                artifact=DocumentArtifact.model_validate(orm.payload),
+                review_row_id=review_by_artifact[orm.artifact_id],
             )
-            for orm in result.scalars().all()
+            for orm in orms
         ]
-
-    async def latest_trusted_scoring(
-        self,
-        *,
-        project_id: UUID,
-        tenant_id: TenantId,
-    ) -> CandidateScoring | None:
-        """Scoring snapshot of the newest canonical artifact that has one."""
-        orm = (
-            await self._session.execute(
-                select(DocumentArtifactORM)
-                .where(
-                    DocumentArtifactORM.project_id == project_id,
-                    DocumentArtifactORM.tenant_id == tenant_id,
-                    DocumentArtifactORM.lifecycle_status == "active",
-                    DocumentArtifactORM.trust_state == TrustState.TRUSTED.value,
-                    DocumentArtifactORM.scoring.is_not(None),
-                )
-                .order_by(DocumentArtifactORM.created_at.desc())
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-        return CandidateScoring.from_json(orm.scoring) if orm is not None else None
 
     async def _lock(self, artifact_id: UUID, tenant_id: TenantId) -> DocumentArtifactORM | None:
         row: DocumentArtifactORM | None = (
@@ -395,6 +670,7 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
             )
             .values(trust_state=TrustState.TRUSTED.value, lifecycle_status="active")
         )
+        await self._record_projection_obligation(row)
         await self._session.flush()
         return TrustedCommit(
             outcome=TrustedCommitOutcome.COMMITTED,
@@ -408,6 +684,7 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
         binding: CandidateBinding,
         *,
         tenant_id: TenantId,
+        for_reject: bool = False,
     ) -> None:
         """Read-only pre-flight of :meth:`commit_candidate` (no lock, no write).
 
@@ -422,15 +699,17 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
                 )
             )
         ).scalar_one_or_none()
+        # An exact already-applied decision is an idempotent replay; any
+        # other state means the bound candidate is no longer the proposal.
+        settled = TrustState.REJECTED if for_reject else TrustState.TRUSTED
         if (
             row is None
             or not self._matches(row, binding)
-            or row.trust_state
-            not in {TrustState.PROPOSED.value, TrustState.TRUSTED.value}
+            or row.trust_state not in {TrustState.PROPOSED.value, settled.value}
         ):
             raise StaleCandidateError(
                 f"Candidate {binding.artifact_id} v{binding.artifact_version} is no "
-                "longer the reviewed proposal; refusing to approve"
+                "longer the reviewed proposal; refusing the decision"
             )
 
     async def reject_candidate(
@@ -439,10 +718,27 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
         *,
         tenant_id: TenantId,
     ) -> bool:
-        """PROPOSED -> REJECTED; the row stays as immutable audit evidence."""
+        """PROPOSED -> REJECTED for EXACTLY the bound candidate.
+
+        The row stays as immutable audit evidence. A human rejection applies
+        to the exact reviewed id/version/digest: rejecting a candidate that
+        was superseded (by a correction or newer analysis), substituted, or
+        already trusted fails closed -- otherwise the review would finalize
+        REJECTED while a different proposal stays pending (split truth).
+        An already-rejected exact candidate is an idempotent no-op.
+        """
         row = await self._lock(binding.artifact_id, tenant_id)
-        if row is None or row.trust_state != TrustState.PROPOSED.value:
-            return False
+        if row is not None and self._matches(row, binding):
+            if row.trust_state == TrustState.REJECTED.value:
+                return False
+            if row.trust_state == TrustState.PROPOSED.value:
+                return await self._mark_rejected(binding)
+        raise StaleCandidateError(
+            f"Candidate {binding.artifact_id} v{binding.artifact_version} is no longer "
+            "the reviewed proposal; refusing to record a rejection against it"
+        )
+
+    async def _mark_rejected(self, binding: CandidateBinding) -> bool:
         await self._session.execute(
             update(DocumentArtifactORM)
             .where(DocumentArtifactORM.artifact_id == binding.artifact_id)

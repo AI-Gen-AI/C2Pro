@@ -99,7 +99,10 @@ async def test_714_migration_reclassifies_legacy_hitl_candidates_and_round_trips
         _alembic("upgrade", BEFORE_714)
         conn = await asyncpg.connect(SCRATCH_DSN)
         tenant, project = uuid4(), uuid4()
-        docs = {k: uuid4() for k in ("pending", "rejected", "approved", "plain", "rerun")}
+        docs = {
+            k: uuid4()
+            for k in ("pending", "rejected", "approved", "plain", "rerun", "pending_rerun")
+        }
         try:
             # pending: trusted v1, then HITL run -> review (t1) + candidate (t2, active).
             d = docs["pending"]
@@ -137,6 +140,20 @@ async def test_714_migration_reclassifies_legacy_hitl_candidates_and_round_trips
                           created=T0 + timedelta(hours=1), decided=T0 + timedelta(hours=3))
             await _artifact(conn, tenant=tenant, project=project, document=d,
                             title="rerun", lifecycle="active", at=T0 + timedelta(hours=4))
+            # pending_rerun (coordinator P0): V1 trusted, review R pending, legacy
+            # unreviewed candidate V2, then a later NON-gated V3 supersedes V2.
+            d = docs["pending_rerun"]
+            await _artifact(conn, tenant=tenant, project=project, document=d,
+                            title="V1", lifecycle="superseded", at=T0)
+            pending_rerun_review = await _review(
+                conn, tenant=tenant, document=d, status="PENDING_REVIEW_REQUIRED",
+                created=T0 + timedelta(hours=1),
+            )
+            await _artifact(conn, tenant=tenant, project=project, document=d,
+                            title="V2 unreviewed", lifecycle="superseded",
+                            at=T0 + timedelta(hours=2))
+            await _artifact(conn, tenant=tenant, project=project, document=d,
+                            title="V3 non-gated", lifecycle="active", at=T0 + timedelta(hours=4))
             forced_before = await conn.fetch(
                 "SELECT relname, relforcerowsecurity FROM pg_class "
                 "WHERE oid IN ('public.document_artifacts'::regclass, 'public.review_items'::regclass) "
@@ -163,9 +180,34 @@ async def test_714_migration_reclassifies_legacy_hitl_candidates_and_round_trips
             ]
             assert await _states(conn, docs["plain"]) == [("trusted", "trusted", "active")]
             assert await _states(conn, docs["rerun"]) == [
-                ("candidate", "trusted", "superseded"),
+                ("candidate", "rejected", "superseded"),
                 ("rerun", "trusted", "active"),
-            ]
+            ], "the rejected candidate is marked; the later completion stays canonical"
+            assert await _states(conn, docs["pending_rerun"]) == [
+                ("V1", "trusted", "superseded"),
+                ("V2 unreviewed", "superseded", "superseded"),
+                ("V3 non-gated", "trusted", "active"),
+            ], "the later legitimate completion stays canonical; nothing unreviewed restored"
+            pr = await conn.fetchrow(
+                "SELECT cast(current_status as text) AS status, review_metadata "
+                "FROM review_items WHERE id=$1",
+                pending_rerun_review,
+            )
+            assert pr["status"] == "CLOSED", "a review whose candidate was superseded is closed"
+            assert json.loads(pr["review_metadata"])["candidate_binding"]["artifact_version"] == 2
+            # Every current trusted artifact is queued once for projection.
+            queued = await conn.fetch(
+                "SELECT a.document_id FROM system_recovery.trusted_projection_index o "
+                "JOIN document_artifacts a USING (artifact_id) "
+                "WHERE o.projection_state = 'pending'"
+            )
+            active_trusted = await conn.fetch(
+                "SELECT document_id FROM document_artifacts "
+                "WHERE lifecycle_status='active' AND trust_state='trusted'"
+            )
+            assert sorted(r["document_id"] for r in queued) == sorted(
+                r["document_id"] for r in active_trusted
+            )
             # Every row hashed with the runtime canonical digest.
             for row in await conn.fetch("SELECT payload, artifact_hash FROM document_artifacts"):
                 assert row["artifact_hash"] == _digest(json.loads(row["payload"]))
@@ -220,6 +262,9 @@ async def test_714_migration_reclassifies_legacy_hitl_candidates_and_round_trips
         _alembic("downgrade", BEFORE_714)
         conn = await asyncpg.connect(SCRATCH_DSN)
         try:
+            assert await conn.fetchval(
+                "SELECT to_regclass('system_recovery.trusted_projection_index')"
+            ) is None
             columns = {
                 r["column_name"]
                 for r in await conn.fetch(

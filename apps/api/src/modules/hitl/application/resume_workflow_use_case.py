@@ -354,10 +354,12 @@ class ResumeWorkflowUseCase:
     async def _enqueue_trusted_project_graph(commit: Any) -> None:
         """Canonical Tier-2 hand-off for a newly trusted candidate (#714).
 
-        Fail-open like other projection triggers: the trusted commit is
-        already durable and ProjectGraph rebuilds from trusted artifacts, so a
-        lost enqueue is repaired by the next trusted completion. Honours the
-        per-tenant ProjectGraph flag (a no-op when it is disabled).
+        Best-effort fast path only. The trusted commit wrote a durable
+        projection obligation in the same transaction
+        (system_recovery.trusted_projection_index); if this enqueue is lost,
+        the ``project_graph.reconcile_trusted_projections`` beat task
+        re-dispatches it, and only a completed ProjectGraph run clears it.
+        Honours the per-tenant ProjectGraph flag.
         """
         from src.core.tasks.project_graph_tasks import enqueue_project_graph
         from src.core.tenants.types import require_tenant_id

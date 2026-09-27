@@ -100,6 +100,12 @@ celery_app.conf.update(
             "task": "documents.reconcile_stale_processing",
             "schedule": 60.0,
         },
+        # #714: a trusted commit's ProjectGraph enqueue is best effort; the
+        # durable obligation it leaves behind is re-dispatched from here.
+        "project-graph-trusted-projection-reconcile": {
+            "task": "project_graph.reconcile_trusted_projections",
+            "schedule": 300.0,
+        },
     },
 )
 

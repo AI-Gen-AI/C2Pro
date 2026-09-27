@@ -23,6 +23,7 @@ function summary(overrides: Partial<DashboardSummary> = {}): DashboardSummary {
     score_version: "coherence-v1",
     last_updated: "2026-09-27T12:00:00Z",
     projected_score: 60,
+    projection_baseline_score: 80,
     projected_delta: -20,
     pending_review_count: 2,
     projection_score_version: "coherence-v1",
@@ -49,6 +50,9 @@ describe("ProjectedCoherencePanel", () => {
     ).toBeInTheDocument();
 
     expect(screen.getByTestId("coherence-projected-delta")).toHaveTextContent("−20");
+    expect(screen.getByTestId("coherence-projection-baseline")).toHaveTextContent(
+      /trusted project evaluation 80/,
+    );
     expect(screen.getByTestId("coherence-pending-count")).toHaveTextContent("2");
     const cta = screen.getByRole("link", { name: /review 2 pending proposals/i });
     expect(cta).toHaveAttribute("href", "/projects/proj-1/review");

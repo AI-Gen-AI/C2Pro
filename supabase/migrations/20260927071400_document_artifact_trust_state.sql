@@ -38,3 +38,30 @@ CREATE UNIQUE INDEX uq_document_artifacts_active_document
 CREATE UNIQUE INDEX IF NOT EXISTS uq_document_artifacts_proposed_document
     ON public.document_artifacts (document_id)
     WHERE trust_state = 'proposed';
+
+-- Durable trusted -> ProjectGraph obligations (internal routing only; same
+-- pattern as system_recovery.document_work_index). No PUBLIC access.
+CREATE SCHEMA IF NOT EXISTS system_recovery;
+REVOKE ALL ON SCHEMA system_recovery FROM PUBLIC;
+
+CREATE TABLE IF NOT EXISTS system_recovery.trusted_projection_index (
+    artifact_id uuid PRIMARY KEY
+        REFERENCES public.document_artifacts(artifact_id) ON DELETE CASCADE,
+    document_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+    artifact_version integer NOT NULL,
+    artifact_hash varchar(64) NOT NULL,
+    projection_state varchar(16) NOT NULL DEFAULT 'pending',
+    enqueue_attempts integer NOT NULL DEFAULT 0,
+    last_checked_at timestamp without time zone NULL,
+    created_at timestamp without time zone NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+    updated_at timestamp without time zone NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+    CONSTRAINT ck_trusted_projection_index_state
+        CHECK (projection_state IN ('pending','projected','obsolete'))
+);
+
+CREATE INDEX IF NOT EXISTS ix_trusted_projection_index_pending
+    ON system_recovery.trusted_projection_index (projection_state, last_checked_at, created_at);
+
+REVOKE ALL ON TABLE system_recovery.trusted_projection_index FROM PUBLIC;

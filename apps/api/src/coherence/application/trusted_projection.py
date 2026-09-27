@@ -1,38 +1,48 @@
 """Trusted vs projected Coherence Score (#714).
 
-The trusted score is the canonical dashboard score: only approved/trusted
-analysis ever feeds it. The projected score answers "what would the
-canonical score be if every pending proposal were accepted unchanged?".
+The projection answers: "what would the canonical project Coherence be if
+EVERY currently actionable pending proposal were accepted unchanged?"
 
-It is NOT recomputed ad hoc. Each pending candidate carries the canonical
-engine's own output for its run (N8 ``evaluate_coherence_async`` score and
-``score_version``). The dashboard's canonical selection rule is "latest
-completed analysis wins", so accepting the pending proposals makes the
-latest pending candidate's engine score the canonical one -- that is the
-projection. Approving later recomputes the trusted score through the normal
-pipeline (N17); the projection is never copied into trusted state.
+    baseline  = canonical evaluator(trusted artifact set)
+    projected = canonical evaluator(trusted artifact set with each actionable
+                                    PROPOSED candidate substituted for its
+                                    document)
 
-Guards:
-* nothing pending -> no projection;
-* more than one pending proposal -> unavailable (``multiple_pending_order_
-  dependent``): under latest-wins the eventual canonical score depends on the
-  order future approvals are recomputed in, so a single number would
-  overstate certainty. The pending count stays visible;
-* never mix score versions (trusted vs candidate) -> unavailable;
-* a candidate whose engine produced no score stays null, never 0.
+Both go through ``evaluate_artifact_set`` -- the exact ProjectGraph
+evaluation (same aggregation, engine and score_version). Stored per-run
+candidate scores are provenance only and never used here; nothing is
+"latest wins" and nothing is ad-hoc arithmetic. Approving later recomputes
+the trusted state through the normal pipeline; the projection is never
+copied into trusted state.
+
+Fail-honest guards (projection unavailable, trusted untouched):
+* nothing pending -> no projection (and no evaluation);
+* a pending candidate without its exact artifact payload;
+* the evaluation failing;
+* baseline and projection (or the dashboard's own score) on different
+  score versions;
+* null stays null, never 0.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+import structlog
+
 if TYPE_CHECKING:
+    from src.analysis.adapters.graph.project_graph import ArtifactSetEvaluation
     from src.analysis.adapters.persistence.document_artifact_repository import (
         PendingCandidate,
     )
+    from src.analysis.domain.contracts import DocumentArtifact
+
+logger = structlog.get_logger()
+
+ArtifactSetEvaluator = Callable[[list["DocumentArtifact"]], Awaitable["ArtifactSetEvaluation"]]
 
 
 class ProjectionStatus(StrEnum):
@@ -43,7 +53,7 @@ class ProjectionStatus(StrEnum):
 
 @dataclass(frozen=True)
 class CoherenceProjection:
-    trusted_score: float | None
+    baseline_score: float | None
     projected_score: float | None
     projected_delta: float | None
     pending_review_count: int
@@ -52,17 +62,29 @@ class CoherenceProjection:
     reason: str | None = None
 
 
-def project_pending_coherence(
+def _scenario(
+    trusted: Sequence[DocumentArtifact], pending: Sequence[PendingCandidate]
+) -> list[DocumentArtifact]:
+    """Trusted set with each pending candidate substituted for its document."""
+    by_document = {artifact.document_id: artifact for artifact in trusted}
+    for candidate in pending:
+        assert candidate.artifact is not None
+        by_document[candidate.artifact.document_id] = candidate.artifact
+    return [by_document[key] for key in sorted(by_document)]
+
+
+async def project_pending_coherence(
     *,
-    trusted_score: float | None,
-    trusted_score_version: str | None,
+    trusted_artifacts: Sequence[DocumentArtifact],
     pending: Sequence[PendingCandidate],
+    evaluate: ArtifactSetEvaluator,
+    trusted_score_version: str | None = None,
 ) -> CoherenceProjection:
     count = len(pending)
 
     def _unavailable(reason: str) -> CoherenceProjection:
         return CoherenceProjection(
-            trusted_score=trusted_score,
+            baseline_score=None,
             projected_score=None,
             projected_delta=None,
             pending_review_count=count,
@@ -73,41 +95,50 @@ def project_pending_coherence(
 
     if count == 0:
         return CoherenceProjection(
-            trusted_score=trusted_score,
+            baseline_score=None,
             projected_score=None,
             projected_delta=None,
             pending_review_count=0,
             projection_score_version=None,
             status=ProjectionStatus.NONE,
         )
+    if any(candidate.artifact is None for candidate in pending):
+        return _unavailable("pending_candidate_payload_missing")
 
-    if count > 1:
-        return _unavailable("multiple_pending_order_dependent")
+    trusted = sorted(trusted_artifacts, key=lambda a: a.document_id)
+    try:
+        # First analysis: no trusted artifacts -> no baseline to evaluate.
+        baseline = await evaluate(list(trusted)) if trusted else None
+        projected = await evaluate(_scenario(trusted, pending))
+    except Exception:  # noqa: BLE001 - a projection never breaks the dashboard
+        logger.warning("coherence_projection_evaluation_failed", exc_info=True)
+        return _unavailable("projection_evaluation_failed")
 
-    latest = pending[0]
-    scoring = latest.scoring
-    if scoring is None or scoring.coherence_score is None:
-        return _unavailable("pending_without_engine_score")
-    if scoring.score_version is None:
-        return _unavailable("pending_without_score_version")
-    if (
-        trusted_score is not None
-        and trusted_score_version is not None
-        and trusted_score_version != scoring.score_version
+    version = projected.score_version
+    if (baseline is not None and baseline.score_version != version) or (
+        trusted_score_version is not None and version is not None and trusted_score_version != version
     ):
         return _unavailable("score_version_mismatch")
 
-    projected = scoring.coherence_score
+    projected_score = projected.summary.overall_score
+    if projected_score is None:
+        return _unavailable(projected.summary.score_reason or "projection_insufficient_evidence")
+    baseline_score = baseline.summary.overall_score if baseline is not None else None
     return CoherenceProjection(
-        trusted_score=trusted_score,
-        projected_score=projected,
+        baseline_score=baseline_score,
+        projected_score=projected_score,
         projected_delta=(
-            round(projected - trusted_score, 4) if trusted_score is not None else None
+            round(projected_score - baseline_score, 4) if baseline_score is not None else None
         ),
         pending_review_count=count,
-        projection_score_version=scoring.score_version,
+        projection_score_version=version,
         status=ProjectionStatus.PROVISIONAL,
     )
 
 
-__all__ = ["CoherenceProjection", "ProjectionStatus", "project_pending_coherence"]
+__all__ = [
+    "ArtifactSetEvaluator",
+    "CoherenceProjection",
+    "ProjectionStatus",
+    "project_pending_coherence",
+]
