@@ -1,7 +1,7 @@
 # LangSmith Rollout Emergency Runbook
 
 ## Preconditions
-- `EPIC-LANGSMITH-VALIDATION` is marked done in `C2PRO_MASTER_BACKLOG.md` before rollout activation.
+- Before rollout activation, verify the required LangSmith validation work is complete in canonical `.c2pro` control/work evidence and bind the rollout to the exact reviewed/deployed revision. `EPIC-LANGSMITH-VALIDATION` is a legacy reference only; `C2PRO_MASTER_BACKLOG.md` is not rollout authority.
 - Rollout control is managed with `LANGSMITH_ROLLOUT_PERCENTAGE` and `LANGSMITH_ROLLOUT_FAIL_OPEN`.
 
 ## Rollout Plan
