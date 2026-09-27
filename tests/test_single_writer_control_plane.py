@@ -259,7 +259,7 @@ def test_worker_cannot_be_instructed_to_mutate_legacy_files():
 
     # Assert boundaries contain read-only statements
     assert "ALWAYS treat blackboard.json and C2PRO_MASTER_BACKLOG.md as READ-ONLY cold references" in content
-    assert "ALWAYS provide structured worker evidence (fenced YAML result block matching c2pro-implementation-result-v1)" in content
+    assert "implementation roles use c2pro-implementation-result-v1; QA/reviewer/security roles use c2pro-review-result-v1" in content
 
 
 def test_live_guidance_does_not_restore_legacy_backlog_authority():
@@ -324,6 +324,7 @@ def test_role_frontmatter_cannot_mutate_legacy_control_files():
             assert ".c2pro/work/<work_id>.yaml" in body
         elif role_path.name in review_roles:
             assert 'output_schema_ref: "../.c2pro/schemas/review-result.schema.yaml"' in frontmatter
+            assert "c2pro-review-result-v1" in (ROOT / "agents.md").read_text(encoding="utf-8")
             assert "c2pro-review-result-v1" in frontmatter
             assert "reviewed_pr" in frontmatter
             assert "reviewed_head_sha" in frontmatter
