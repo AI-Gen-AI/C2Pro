@@ -561,7 +561,7 @@ describe("AlertsPage analytics dashboard", () => {
         {
           id: "a-zulu",
           severity: "High",
-          type: "Zulu",
+          type: "AZulu",
           title: "Zulu alert",
           description: "Zulu description",
           project: "Atlas Ridge",
@@ -570,7 +570,7 @@ describe("AlertsPage analytics dashboard", () => {
         {
           id: "a-alpha",
           severity: "High",
-          type: "alpha",
+          type: "Alpha",
           title: "Alpha alert",
           description: "Alpha description",
           project: "Atlas Ridge",
@@ -596,8 +596,8 @@ describe("AlertsPage analytics dashboard", () => {
 
     expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
       "All Types",
-      "alpha",
-      "Zulu",
+      "Alpha",
+      "AZulu",
     ]);
   });
 
