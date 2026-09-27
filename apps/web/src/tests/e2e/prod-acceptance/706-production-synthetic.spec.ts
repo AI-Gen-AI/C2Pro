@@ -37,7 +37,10 @@ interface DocumentsPayload {
 interface CategoryAssessment {
   category: string;
   state: string;
+  evidence_count?: number;
   evidence_clause_ids?: string[];
+  missing_data?: string[];
+  gap?: unknown;
 }
 
 interface HealthVector {
@@ -333,6 +336,47 @@ test.describe("Issue #706 production synthetic acceptance", () => {
 
     const healthRegion = page.getByRole("region", { name: "Document health" });
     await expect(healthRegion).toBeVisible();
+    await expect(page.getByTestId("health-loading")).toHaveCount(0);
+    await expect(page.getByTestId("health-error")).toHaveCount(0);
+    await expect(page.getByTestId("health-unavailable")).toHaveCount(0);
+
+    const granularity = health.single_document_evidence_granularity;
+    expect(granularity, "Health must disclose evidence granularity").toBeTruthy();
+    const granularityText = await page.getByTestId("health-granularity").innerText();
+    if (granularity === "clause") expect(granularityText).toMatch(/clause-level/i);
+    if (granularity === "document") expect(granularityText).toMatch(/whole-document/i);
+
+    for (const assessment of assessments) {
+      const tile = page.getByTestId(`health-category-${assessment.category}`);
+      await expect(tile).toBeVisible();
+      const ids = assessment.evidence_clause_ids ?? [];
+      expect(assessment.evidence_count ?? 0).toBe(ids.length);
+      expect(new Set(ids).size).toBe(ids.length);
+
+      if (assessment.state === "present") {
+        expect(ids.length, `${assessment.category}: PRESENT needs evidence`).toBeGreaterThan(0);
+        await expect(tile.getByTestId("health-state")).toHaveText(/evidence found/i);
+      } else {
+        expect(ids).toHaveLength(0);
+        expect(
+          (assessment.missing_data ?? []).length,
+          `${assessment.category}: UNKNOWN must say what is missing`,
+        ).toBeGreaterThan(0);
+        expect(assessment.gap, `${assessment.category}: UNKNOWN needs an action`).toBeTruthy();
+        await expect(tile.getByTestId("health-state")).toHaveText(
+          /unknown \/ insufficient evidence/i,
+        );
+        await expect(tile.getByTestId("health-missing-data")).toBeVisible();
+        await expect(tile.getByTestId("health-gap")).toBeVisible();
+        expect(await tile.innerText()).not.toMatch(/\b0\s*%/);
+      }
+    }
+
+    // This synthetic project contains exactly one document. Relational Coherence
+    // may not manufacture a headline score before enough reconcilable evidence exists.
+    await expect(page.getByTestId("health-coherence-note")).toBeVisible();
+    await expect(page.getByTestId("analysis-coherence-score")).toHaveCount(0);
+
     const evidenceLinks = healthRegion.getByTestId("health-evidence-link");
     expect(
       await evidenceLinks.count(),
@@ -376,8 +420,22 @@ test.describe("Issue #706 production synthetic acceptance", () => {
       project_id: projectId,
       document_id: upload.documentId,
       upload_task_id: upload.taskId,
-      health_categories: [...CANONICAL_CATEGORIES],
+      health: {
+        granularity,
+        assessments: assessments.map((assessment) => ({
+          category: assessment.category,
+          state: assessment.state,
+          evidence_count: assessment.evidence_clause_ids?.length ?? 0,
+          missing_data_count: assessment.missing_data?.length ?? 0,
+          actionable_gap: Boolean(assessment.gap),
+        })),
+        coherence_available: false,
+      },
       evidence_clause_id: clauseId,
+      review_item_id:
+        terminal.lifecycle_status === "review_required"
+          ? terminal.review_item_id ?? null
+          : null,
       hitl_exercised: hitlExercised,
       relogin_verified: true,
     });
