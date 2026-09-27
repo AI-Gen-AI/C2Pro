@@ -10,12 +10,13 @@ CREATE TABLE system_recovery.document_work_index (
         REFERENCES public.documents(id) ON DELETE CASCADE,
     tenant_id uuid NOT NULL,
     upload_status text NULL,
-    updated_at timestamp without time zone NOT NULL
+    updated_at timestamp without time zone NOT NULL,
+    heartbeat_at timestamp without time zone NULL
 );
 
 CREATE INDEX ix_document_work_index_recovery_scan
     ON system_recovery.document_work_index
-        (upload_status, updated_at, document_id);
+        (upload_status, updated_at, heartbeat_at, document_id);
 
 REVOKE ALL ON TABLE system_recovery.document_work_index FROM PUBLIC;
 
@@ -49,6 +50,12 @@ BEGIN
     )
     ON CONFLICT (document_id) DO UPDATE
         SET tenant_id = EXCLUDED.tenant_id,
+            heartbeat_at = CASE
+                WHEN document_work_index.upload_status
+                     IS DISTINCT FROM EXCLUDED.upload_status
+                THEN NULL
+                ELSE document_work_index.heartbeat_at
+            END,
             upload_status = EXCLUDED.upload_status,
             updated_at = EXCLUDED.updated_at;
     RETURN NEW;
