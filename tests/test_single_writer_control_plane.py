@@ -19,6 +19,21 @@ from core.supervisor import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _without_level2_changelog_sections(content: str) -> str:
+    """Exclude only historical level-2 changelog sections, never later live guidance."""
+    output: list[str] = []
+    in_changelog = False
+    for line in content.splitlines():
+        if re.match(r"^##\s+Changelog\b", line, flags=re.IGNORECASE):
+            in_changelog = True
+            continue
+        if in_changelog and re.match(r"^##\s+", line):
+            in_changelog = False
+        if not in_changelog:
+            output.append(line)
+    return "\n".join(output)
+
+
 def setup_mock_control_plane_files(tmp_path: Path, work_id: str = "C2PRO-DEV-02") -> tuple[Path, Path]:
     """Helper to provision mocked .c2pro control and work files to prevent duplication."""
     control_dir = tmp_path / ".c2pro" / "control"
@@ -470,6 +485,7 @@ def test_live_guidance_does_not_repromote_legacy_authority() -> None:
         "docs/runbooks/LANGSMITH_ROLLOUT_EMERGENCY.md",
         "docs/planning/PRODUCTION_READINESS_GATE_2026-03-19.md",
         "docs/COVERAGE_IMPROVEMENT_PLAN.md",
+        "docs/C2_6_PLATFORM_OPERATOR_AUTHORIZATION_BOUNDARY.md",
     ]
     forbidden = (
         "Backlog/task source of truth: `C2PRO_MASTER_BACKLOG.md`",
@@ -486,12 +502,14 @@ def test_live_guidance_does_not_repromote_legacy_authority() -> None:
         "`C2PRO_MASTER_BACKLOG.md` is now the primary engineering delivery backlog",
         "Active task ownership and completion state must be tracked in `C2PRO_MASTER_BACKLOG.md`",
         "execute tasks in backlog priority order",
+        "backlog edits go only through the Reconciler role",
+        "`C2PRO_MASTER_BACKLOG.md`, `backlogs/BCK_BACKEND.md`",
     )
 
     for relative in live_surfaces:
         content = (ROOT / relative).read_text(encoding="utf-8")
-        # Historical changelog text may preserve old claims, but current instructions may not.
-        operational = content.split("## Changelog", 1)[0].split("Changelog:", 1)[0]
+        # Historical changelog text may preserve old claims, but later live sections still count.
+        operational = _without_level2_changelog_sections(content)
         for phrase in forbidden:
             assert phrase not in operational, f"{relative} re-promotes legacy authority: {phrase}"
 
@@ -528,6 +546,18 @@ def test_active_guidance_routes_structured_evidence_by_role() -> None:
         assert "c2pro-implementation-result-v1" in content
         assert "c2pro-review-result-v1" in content
         assert "QA/reviewer/security" in content or "QA/reviewer/security roles" in content
+
+    agents = (ROOT / "agents.md").read_text(encoding="utf-8")
+    assert (
+        "Provide structured worker evidence (fenced YAML result block matching the "
+        "`c2pro-implementation-result-v1` schema)"
+        not in agents
+    )
+    assert (
+        "workers **MUST** return a structured result block matching the "
+        "`c2pro-implementation-result-v1` schema"
+        not in agents
+    )
 
     tdd = (ROOT / "docs" / "testing" / "C2PRO_TDD_BACKLOG_v1.0.md").read_text(
         encoding="utf-8"
