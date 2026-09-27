@@ -6,6 +6,7 @@ scanning so tenant/RLS plumbing cannot blur the product semantics.
 from __future__ import annotations
 
 from src.core.tasks.document_recovery import (
+    _CLAIM_SQL,
     _SCAN_SQL,
     MAX_RECOVERY_ATTEMPTS,
     RecoveryAction,
@@ -119,3 +120,12 @@ def test_cross_tenant_discovery_uses_minimal_internal_projection() -> None:
     assert "FROM public.documents" not in sql
     assert "upload_status" in sql
     assert "updated_at" in sql
+
+
+
+def test_recovery_claim_revalidates_and_locks_heartbeat_lease() -> None:
+    sql = str(_CLAIM_SQL)
+    assert "system_recovery.document_work_index recovery" in sql
+    assert "COALESCE(recovery.heartbeat_at, recovery.updated_at)" in sql
+    assert "recovery.upload_status = d.upload_status::text" in sql
+    assert "FOR UPDATE OF d, recovery SKIP LOCKED" in sql
