@@ -15,7 +15,7 @@ boundaries:
   always:
     - "ALWAYS treat blackboard.json and C2PRO_MASTER_BACKLOG.md as READ-ONLY cold references."
     - "ALWAYS consult .c2pro/control/ and assigned .c2pro/work/ envelope for task specifications."
-    - "ALWAYS provide structured worker evidence (fenced YAML result block matching c2pro-implementation-result-v1) in standard output/PR description instead of mutating backlogs."
+    - "ALWAYS return role-appropriate structured evidence instead of mutating backlogs: implementation roles use c2pro-implementation-result-v1; QA/reviewer/security roles use c2pro-review-result-v1."
     - "ALWAYS validate assigned workspace and branch. On any mismatch, STOP immediately and return WORKSPACE_GUARD_FAILURE."
     - "ALWAYS include Test Suite ID in docstrings of tests and implementation."
     - "ALWAYS filter by tenant_id in database queries."
@@ -48,7 +48,7 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 - The single authoritative write-target for control and planning state is `.c2pro/`, owned exclusively by the **Planner / Master Orchestrator**.
 - Implementation, QA, and review workers read `.c2pro/control/` and their assigned `.c2pro/work/` envelopes.
 - Upon completion of any task or when discovering new tasks/risks, workers **MUST NOT** update any legacy markdown or JSON files.
-- Instead, workers **MUST** provide structured evidence via a fenced YAML block matching the `c2pro-implementation-result-v1` schema in their PR descriptions or standard output.
+- Instead, workers **MUST** provide role-appropriate structured evidence in their PR descriptions or standard output: implementation roles use `c2pro-implementation-result-v1`; QA, reviewer, and security roles use `c2pro-review-result-v1`.
 - Task completion is non-canonical until verified in CI, merged, and reconciled on main by the Master Reconciler.
 
 ### Backlog Interpretation Rules
@@ -69,7 +69,7 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 - Agents must always check the `Dependency` column and any nearby prerequisite notes before starting implementation.
 - If a task is blocked by a prerequisite, agents must state that clearly and either:
   - execute the missing prerequisite first if it is in scope and approved by the user workflow, or
-  - return the blocker as structured `c2pro-implementation-result-v1` evidence for Planner/Reconciler handling when the prerequisite cannot be completed in the same work cycle.
+  - return the blocker using the role-appropriate structured schema (`c2pro-implementation-result-v1` for implementation roles; `c2pro-review-result-v1` for QA/reviewer/security) for Planner/Reconciler handling when the prerequisite cannot be completed in the same work cycle.
 - Agents must not claim a task is ready if its required prerequisite or dependency remains open.
 - In Testing, agents must respect the normalized split:
   - `Prerequisites` are environment/bootstrap steps
@@ -288,7 +288,7 @@ Shared state:
    - Do NOT attempt to write to `blackboard.json`, `C2PRO_MASTER_BACKLOG.md`, or `backlogs/*.md`.
 
 3. **After completion:**
-   - Provide structured worker evidence (fenced YAML result block matching the `c2pro-implementation-result-v1` schema) in standard output or the PR description.
+   - Provide role-appropriate structured evidence in standard output or the PR description: implementation roles use `c2pro-implementation-result-v1`; QA/reviewer/security roles use `c2pro-review-result-v1`.
    - Do NOT commit result files or write to legacy backlog files.
 
 4. **When discovering new work:**
@@ -316,7 +316,7 @@ Under the Single-Writer Control Plane, workers **MUST NOT** directly update:
 - `backlogs/*.md`
 - `blackboard.json`
 
-Instead, after successfully completing any task, workers **MUST** return a structured result block matching the `c2pro-implementation-result-v1` schema as standard output or in the PR body.
+Instead, after completing assigned work, workers **MUST** return the schema assigned to their role: implementation roles return `c2pro-implementation-result-v1`; QA/reviewer/security roles return `c2pro-review-result-v1`.
 
 The master/planner remains the sole writer allowed to reconcile this returned evidence back into canonical control state.
 
@@ -330,7 +330,7 @@ The master/planner remains the sole writer allowed to reconcile this returned ev
 
 ### Category-specific Backlogs & Support Docs
 - Category-specific backlog files in `backlogs/` (such as `backlogs/BCK_BACKEND.md`, `backlogs/FRT_FRONTEND.md`, etc.) are read-only cold references for workers during the transition.
-- Any suggested specifications or technical debt findings must be reported in the `findings` field of the returned structured result block.
+- Any suggested specifications or technical-debt findings must be reported in the role-appropriate structured evidence payload; implementation results use `findings`, while review results use `blocking` / `non_blocking` and the review signal fields.
 
 **Why this matters:**
 
