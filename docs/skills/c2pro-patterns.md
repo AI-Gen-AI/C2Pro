@@ -127,12 +127,15 @@ src/tests/
 7. `make db-migrate` to apply
 
 ### Task Lifecycle
-1. Add `| [ ] | P1 | TASK-XXX-NNN | ... |` row to appropriate `backlogs/BCK_*.md`
-2. Add entry to `C2PRO_MASTER_BACKLOG.md` (MANDATORY — single source of truth)
-3. Implement with branch named `<type>/<kebab-description>`
-4. Commit with `— TASK-XXX-NNN` in message
-5. Mark complete: `chore(backlog): mark TASK-XXX-NNN complete — <sha-of-impl-commit>`
-6. Update `C2PRO_MASTER_BACKLOG.md` `[ ] → [x]`
+
+> Governance override: this section supersedes the historical backlog-writing pattern inferred from old commits.
+
+1. Receive an authorized `.c2pro/work/<work_id>.yaml` envelope or explicitly authorized product slice.
+2. Implement on the assigned branch without mutating legacy control files.
+3. Return structured `c2pro-implementation-result-v1` evidence in the PR/output.
+4. Review + CI + merge occur before completion becomes canonical.
+5. Master/Planner reconciliation updates `.c2pro` and, when product maturity changes, the product-control YAML/Markdown pair.
+6. Treat `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` and `blackboard.json` as read-only legacy/cold references.
 
 ### Ruff Lint Fixes
 - Auto-fix: `chore(lint): auto-fix N violations (W, UP, I rules) — TASK-BCK-040`
