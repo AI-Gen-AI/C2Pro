@@ -1,10 +1,15 @@
 """#713 truthful document evidence provenance tests."""
+import hashlib
+from pathlib import Path
 from uuid import uuid4
+
+import pytest
 
 from src.core.tasks.ingestion_tasks import (
     _build_text_block_index,
     _extract_contract_clauses,
 )
+from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser
 
 
 def _long_clause(prefix: str, suffix: str = "") -> str:
@@ -123,3 +128,47 @@ def test_clause_without_source_blocks_has_honest_null_location() -> None:
     assert location["page_numbers"] == []
     assert location["page_number"] is None
     assert location["bbox"] is None
+
+
+
+@pytest.mark.asyncio
+async def test_sample_contract_fixture_proves_parser_to_clause_provenance() -> None:
+    repo_root = Path(__file__).resolve().parents[6]
+    fixture = repo_root / "apps/web/src/tests/e2e/test-data/sample-contract.pdf"
+    assert hashlib.sha256(fixture.read_bytes()).hexdigest() == (
+        "f0bc7170cf002570be58f9225f9affc534720a4756fa1da39ae7ad328d63a9b9"
+    )
+
+    blocks = await PDFFileParser().extract_text_and_offsets(fixture)
+    scope_block = next(
+        block for block in blocks if "1. SCOPE OF WORK" in str(block.get("text", ""))
+    )
+    assert scope_block["page"] == 1
+    assert isinstance(scope_block["bbox"], tuple)
+    assert len(scope_block["bbox"]) == 4
+
+    parsed_text = "\n\n".join(
+        str(block["text"]) for block in blocks if isinstance(block.get("text"), str)
+    ).strip()
+    revision_id = uuid4()
+    clauses = _extract_contract_clauses(
+        document_id=uuid4(),
+        project_id=uuid4(),
+        tenant_id=uuid4(),
+        parsed_text=parsed_text,
+        parsed_payload={"text_blocks": blocks},
+        revision_id=revision_id,
+    )
+
+    assert clauses
+    located = [
+        clause
+        for clause in clauses
+        if clause.extracted_entities["evidence_location"]["page_numbers"]
+    ]
+    assert located
+    assert all(
+        clause.extracted_entities["evidence_location"]["revision_id"]
+        == str(revision_id)
+        for clause in located
+    )
