@@ -8,7 +8,7 @@
 
 This document defines release policy and evidence requirements. It does not own task status.
 
-Any open release work, blockers, or follow-up actions derived from this policy must be tracked in `C2PRO_MASTER_BACKLOG.md`.
+Any current release work, blockers, or follow-up actions derived from this policy must be represented in the canonical `.c2pro` development control plane. Product release-readiness / production-validation state is canonical only in the product-control YAML/guarded Markdown pair. `C2PRO_MASTER_BACKLOG.md` is a read-only historical reference.
 
 ## Purpose
 
