@@ -384,6 +384,36 @@ class TestMarkTasksComplete:
 
         assert outside.read_bytes() == before
 
+    def test_rejects_symlinked_backlogs_root_escape(
+        self, tmp_path, sample_backlog_content, monkeypatch
+    ):
+        """Canonical backlog root itself must not be a symlink outside the repo."""
+        outside_dir = tmp_path / "outside_backlogs"
+        outside_dir.mkdir()
+        outside = outside_dir / "BCK_BACKEND.md"
+        outside.write_text(sample_backlog_content, encoding="utf-8")
+        before = outside.read_bytes()
+
+        backlogs_dir = tmp_path / "backlogs"
+        try:
+            backlogs_dir.symlink_to(outside_dir, target_is_directory=True)
+        except OSError as exc:
+            pytest.skip(f"symlink creation unavailable: {exc}")
+
+        master_backlog = tmp_path / "C2PRO_MASTER_BACKLOG.md"
+        master_backlog.write_text(sample_backlog_content, encoding="utf-8")
+
+        monkeypatch.setattr(sync_module, "MASTER_BACKLOG_PATH", master_backlog)
+        monkeypatch.setattr(sync_module, "BACKLOGS_DIR", backlogs_dir)
+
+        with pytest.raises(ValueError, match="canonical legacy backlog"):
+            _mark_tasks_complete_in_file(
+                backlogs_dir / "BCK_BACKEND.md",
+                [{"backlog_id": "TASK-BCK-001", "estado": "completado"}],
+            )
+
+        assert outside.read_bytes() == before
+
     def test_rejects_symlink_escape_from_canonical_backlogs(
         self, tmp_path, sample_backlog_content, monkeypatch
     ):
