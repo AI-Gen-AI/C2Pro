@@ -212,6 +212,68 @@ async def test_stale_parsing_is_requeued_once_and_terminal_state_stops_recovery(
 
 
 @pytest.mark.asyncio
+async def test_recent_worker_heartbeat_prevents_false_stale_recovery(
+    db: AsyncSession,
+    test_user,
+) -> None:
+    _, document = await _seed_document(
+        db,
+        tenant_id=test_user.tenant_id,
+        user_id=test_user.id,
+        status=DocumentStatus.PARSING,
+    )
+    await db.execute(
+        text(
+            """
+            UPDATE system_recovery.document_work_index
+               SET heartbeat_at = clock_timestamp() AT TIME ZONE 'UTC'
+             WHERE document_id = :document_id
+            """
+        ),
+        {"document_id": document.id},
+    )
+    await db.commit()
+
+    ingestion = Mock()
+    ingestion.apply_async = Mock()
+    analysis = Mock()
+    analysis.apply_async = Mock()
+
+    active = await _sweep_async(
+        stale_after_seconds=60,
+        session_factory=_session_factory(db),
+        ingestion_task=ingestion,
+        analysis_task=analysis,
+    )
+
+    assert active["scanned"] == 0
+    ingestion.apply_async.assert_not_called()
+    analysis.apply_async.assert_not_called()
+
+    await db.execute(
+        text(
+            """
+            UPDATE system_recovery.document_work_index
+               SET heartbeat_at = :stale
+             WHERE document_id = :document_id
+            """
+        ),
+        {"document_id": document.id, "stale": _stale_time()},
+    )
+    await db.commit()
+
+    abandoned = await _sweep_async(
+        stale_after_seconds=60,
+        session_factory=_session_factory(db),
+        ingestion_task=ingestion,
+        analysis_task=analysis,
+    )
+
+    assert abandoned["requeued_ingestion"] == 1
+    ingestion.apply_async.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_stale_analysis_pending_requeues_analysis_not_parsing(
     db: AsyncSession,
     test_user,
