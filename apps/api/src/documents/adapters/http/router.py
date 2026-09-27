@@ -673,9 +673,24 @@ async def get_document_entities_endpoint(
             if clause.extracted_entities
             else {},
         )
-        raw_page = evidence_location.get("page_number")
-        page_number = int(raw_page) if raw_page is not None else None
-        bbox = evidence_location.get("bbox")
+        # Revision binding: if evidence is bound to a revision different from current document revision, location is stale
+        doc_revision = (document.document_metadata or {}).get("revision_id")
+        ev_revision = evidence_location.get("revision_id")
+        stale_revision = ev_revision is not None and doc_revision is not None and str(ev_revision) != str(doc_revision)
+        # Multi-page truthful semantics: if multiple pages are reported, do not fabricate a single page
+        page_numbers = evidence_location.get("page_numbers")
+        if stale_revision or (isinstance(page_numbers, list) and len(page_numbers) > 1):
+            # Stale revision or spans multiple pages -> exact location unavailable
+            page_number = None
+            bbox = None
+        else:
+            raw_page = evidence_location.get("page_number")
+            page_number = int(raw_page) if raw_page is not None else None
+            # Bbox must be real; never fabricate
+            bbox = evidence_location.get("bbox")
+            # If bbox present but page missing, treat bbox as unavailable
+            if page_number is None and bbox is not None:
+                bbox = None
         metadata: JsonDict = {
             "clause_code": clause.clause_code,
             "clause_type": clause.clause_type.value if clause.clause_type is not None else None,
