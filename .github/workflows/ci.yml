@@ -60,6 +60,8 @@ jobs:
           filters: |
             backend:
               - "apps/api/**"
+              - "core/**"
+              - "tests/unit/core/**"
               - "docker-compose.test.yml"
               - "infrastructure/database/**"
               - ".github/workflows/ci.yml"
