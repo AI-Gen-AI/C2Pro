@@ -435,3 +435,135 @@ async def test_non_gated_completion_is_trusted_and_enqueues_once(
     assert [(r.trust_state, r.lifecycle_status) for r in rows] == [("trusted", "active")]
     assert graph_enqueues == [(arranged.project_id, tenant.id)]
 
+
+
+# ── Coherence: trusted vs projected through the real dashboard endpoint ─────
+
+
+async def _dashboard(maker, tenant_id: UUID, project_id: UUID) -> Any:
+    """GET /coherence/dashboard/{project_id} on a fresh request session.
+
+    A fresh session per call is also the reload/relogin case: nothing is
+    cached between reads, so the state shown is the durable state.
+    """
+    from types import SimpleNamespace
+
+    from sqlalchemy import text as sql_text
+
+    from src.coherence.router import get_coherence_dashboard
+
+    async with maker() as session:
+        await session.execute(
+            sql_text("SELECT set_config('app.current_tenant', :t, true)"),
+            {"t": str(tenant_id)},
+        )
+        return await get_coherence_dashboard(
+            project_id=project_id,
+            current_user=SimpleNamespace(tenant_id=tenant_id),
+            db=session,
+            flags_service=None,
+        )
+
+
+async def test_dashboard_trusted_ignores_pending_and_projection_uses_it(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register)
+
+    empty = await _dashboard(request_sessions, tenant.id, arranged.project_id)
+    assert empty.trusted_score is None, "no trusted evidence -> null, never 0"
+    assert (empty.projected_score, empty.pending_review_count) == (None, 0)
+    assert empty.projection_status == "none"
+
+    await _propose(completion_sessions, arranged, tenant.id)  # engine score 60, v1
+    pending = await _dashboard(request_sessions, tenant.id, arranged.project_id)
+    assert pending.coherence_score is None and pending.trusted_score is None
+    assert pending.projected_score == 60.0
+    assert pending.projected_delta is None
+    assert pending.pending_review_count == 1
+    assert pending.projection_status == "provisional"
+    assert pending.projection_score_version == "coherence-v1"
+
+    # reload/relogin: a brand-new session sees the identical durable state.
+    again = await _dashboard(request_sessions, tenant.id, arranged.project_id)
+    assert again.model_dump(exclude={"last_updated"}) == pending.model_dump(
+        exclude={"last_updated"}
+    )
+
+    await _post_approve(
+        request_sessions, tenant.id, arranged.review_item_id,
+        saver=saver, app=arranged.app, sessions=independent_sessions,
+    )
+    approved = await _dashboard(request_sessions, tenant.id, arranged.project_id)
+    # The trusted score is RECOMPUTED by the pipeline (N17 persists the
+    # resumed run's engine output: 90 in this harness), not copied from
+    # the projection (60).
+    assert approved.trusted_score == approved.coherence_score == 90
+    assert approved.projected_score is None
+    assert approved.pending_review_count == 0
+    assert approved.projection_status == "none"
+
+
+async def test_dashboard_reject_removes_candidate_from_projection(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register)
+    await _propose(completion_sessions, arranged, tenant.id)
+    assert (await _dashboard(request_sessions, tenant.id, arranged.project_id)).projected_score == 60.0
+
+    await _post_reject(
+        request_sessions, tenant.id, arranged.review_item_id,
+        saver=saver, app=arranged.app, sessions=independent_sessions,
+    )
+
+    after = await _dashboard(request_sessions, tenant.id, arranged.project_id)
+    assert after.trusted_score is None, "reject leaves no trusted evidence"
+    assert after.projected_score is None
+    assert after.pending_review_count == 0
+
+
+async def test_dashboard_correction_replaces_candidate_in_projection(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    from src.analysis.domain.trust import CandidateScoring
+
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register)
+    await _propose(completion_sessions, arranged, tenant.id)
+    original = await _binding(db, arranged.review_row_id)
+
+    async with independent_sessions(tenant.id) as s:
+        await SqlAlchemyDocumentArtifactRepository(s).propose_correction(
+            original,
+            DocumentArtifact(document_id=str(arranged.document_id), doc_type="contract"),
+            tenant_id=tenant.id,
+            review_row_id=arranged.review_row_id,
+            scoring=CandidateScoring(coherence_score=75.0, score_version="coherence-v1"),
+        )
+
+    view = await _dashboard(request_sessions, tenant.id, arranged.project_id)
+    assert view.pending_review_count == 1, "Vn+1 replaces Vn; it does not stack"
+    assert view.projected_score == 75.0

@@ -1230,9 +1230,83 @@ async def get_coherence_dashboard(
         categories_v2=None,
     )
 
+    summary = await _attach_trusted_projection(summary, project_id, tenant_id, db)
+
     v2_enabled = await _v2_enabled_for(tenant_id, flags_service)
     return await _maybe_add_v2_dashboard(
         summary, project_id, last_updated, v2_enabled=v2_enabled, db=db
+    )
+
+
+_PROJECTABLE_SCORE_VERSIONS = {"coherence-v1", "coherence-v2"}
+
+
+async def _attach_trusted_projection(
+    summary: DashboardSummary,
+    project_id: UUID,
+    tenant_id: UUID,
+    db: AsyncSession,
+) -> DashboardSummary:
+    """#714: add the provisional pending-review projection (additive only).
+
+    The trusted fields are never altered here. A failure to read pending
+    candidates must not hide the trusted score, so it degrades to
+    ``projection_status='unavailable'``.
+    """
+    from src.analysis.adapters.persistence.document_artifact_repository import (
+        SqlAlchemyDocumentArtifactRepository,
+    )
+    from src.coherence.application.trusted_projection import project_pending_coherence
+    from src.core.tenants.types import require_tenant_id
+
+    trusted = summary.coherence_score
+    base = summary.model_copy(update={"trusted_score": trusted})
+    try:
+        repo = SqlAlchemyDocumentArtifactRepository(db)
+        scoped = require_tenant_id(str(tenant_id))
+        # Savepoint: a failed read must not abort the request transaction
+        # that the remaining dashboard reads still use.
+        async with db.begin_nested():
+            pending = await repo.list_pending_candidates(
+                project_id=project_id, tenant_id=scoped
+            )
+            trusted_version = summary.score_version
+            if trusted_version is None and trusted is not None and pending:
+                latest = await repo.latest_trusted_scoring(
+                    project_id=project_id, tenant_id=scoped
+                )
+                trusted_version = latest.score_version if latest is not None else None
+        projection = project_pending_coherence(
+            trusted_score=trusted,
+            trusted_score_version=trusted_version,
+            pending=pending,
+        )
+    except Exception:  # noqa: BLE001 - never block trusted visibility
+        logger.warning(
+            "coherence_projection_unavailable", project_id=str(project_id), exc_info=True
+        )
+        return base.model_copy(
+            update={"projection_status": "unavailable", "projection_reason": "projection_read_failed"}
+        )
+
+    version = projection.projection_score_version
+    if version is not None and version not in _PROJECTABLE_SCORE_VERSIONS:
+        return base.model_copy(
+            update={
+                "pending_review_count": projection.pending_review_count,
+                "projection_status": "unavailable",
+                "projection_reason": "unknown_score_version",
+            }
+        )
+    return base.model_copy(
+        update={
+            "projected_score": projection.projected_score,
+            "projected_delta": projection.projected_delta,
+            "pending_review_count": projection.pending_review_count,
+            "projection_score_version": version,
+            "projection_status": projection.status.value,
+            "projection_reason": projection.reason,
+        }
     )
 
 

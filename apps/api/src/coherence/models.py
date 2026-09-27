@@ -361,4 +361,26 @@ class DashboardSummary(BaseModel):
     score_missing_dimensions: list[str] | None = None
     last_updated: datetime
     categories_v2: "CoherenceV2Payload | None" = None
+    # #714 trusted vs projected (additive). `coherence_score`/`global_score`
+    # stay the canonical TRUSTED score; exports/reports use only those.
+    trusted_score: float | None = Field(
+        default=None,
+        description="Canonical score from trusted (approved) state only. Mirrors coherence_score.",
+    )
+    projected_score: float | None = Field(
+        default=None,
+        description=(
+            "PROVISIONAL: canonical engine score if every pending proposal is accepted "
+            "unchanged. Never canonical; never exported as the project score."
+        ),
+    )
+    projected_delta: float | None = Field(
+        default=None, description="projected_score - trusted_score (null when either is null)."
+    )
+    pending_review_count: int = Field(
+        default=0, description="Exact candidate versions currently awaiting human review."
+    )
+    projection_score_version: Literal["coherence-v1", "coherence-v2"] | None = None
+    projection_status: Literal["none", "provisional", "unavailable"] = "none"
+    projection_reason: str | None = None
 
