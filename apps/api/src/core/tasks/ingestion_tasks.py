@@ -35,9 +35,7 @@ from src.documents.adapters.persistence.sqlalchemy_document_repository import (
 from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
     SqlAlchemyRagIngestionService,
 )
-from src.documents.adapters.storage.local_file_storage_service import (
-    LocalFileStorageService,
-)
+from src.documents.adapters.storage.factory import build_storage_service
 from src.documents.application.document_source import (
     REVISION_HASH_MISMATCH,
     RevisionSourceError,
@@ -84,7 +82,6 @@ def _temporal_failure_code(error: Exception) -> str:
 class RagChunksUnavailableError(RuntimeError):
     """TS-UD-OPS-DOCFLOW-B-001: analysis must not run before RAG evidence commits."""
 
-storage = LocalFileStorageService()
 file_parser = CompositeFileParser(
     bc3_parser=BC3FileParser(),
     excel_parser=ExcelFileParser(),
@@ -857,6 +854,7 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
 
         source_revision: DocumentRevision | None = None
         try:
+            storage = build_storage_service()
             source_revision = await resolve_source_revision(
                 revision_repository=SqlAlchemyDocumentRevisionRepository(session),
                 document_id=document_id,
