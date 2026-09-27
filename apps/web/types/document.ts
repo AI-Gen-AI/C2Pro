@@ -17,7 +17,10 @@ export type DocumentLifecycleStatus =
   | 'processing'
   | 'parsed'
   | 'analysis_pending'
+  | 'review_required'
   | 'analyzed'
+  | 'needs_changes'
+  | 'failed_retryable'
   | 'error';
 
 export interface DocumentInfo {
@@ -41,6 +44,14 @@ export interface DocumentInfo {
   status?: DocumentProcessingStatus;
   /** Lifecycle state from the backend (absent in older payloads) */
   lifecycleStatus?: DocumentLifecycleStatus;
+  /** Human-readable detail matching the lifecycle state (#712) */
+  statusDetail?: string;
+  /** Whether the UI's Retry action is honest for this document (#712) */
+  retryable?: boolean;
+  /** Pending HITL review count when lifecycleStatus is review_required (#712) */
+  reviewCount?: number;
+  /** Exact pending review item id, only when reviewCount is exactly 1 (#712) */
+  reviewItemId?: string;
 }
 
 export interface DocumentViewState {

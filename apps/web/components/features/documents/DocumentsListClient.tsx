@@ -49,7 +49,10 @@ const LIFECYCLE_LABELS: Record<DocumentLifecycleStatus, string> = {
   processing: "Processing",
   parsed: "Parsed",
   analysis_pending: "Analysis pending",
+  review_required: "Review required",
   analyzed: "Analyzed",
+  needs_changes: "Needs changes",
+  failed_retryable: "Retry needed",
   error: "Error",
 };
 
@@ -79,15 +82,27 @@ function getStatusIcon(status: DocumentLifecycleStatus) {
     case "uploaded":
       return Loader2;
     case "error":
+    case "needs_changes":
+    case "failed_retryable":
       return AlertTriangle;
+    case "review_required":
+      return Eye;
     default:
       return FileText;
   }
 }
 
 function getStatusColor(status: DocumentLifecycleStatus) {
-  // Parsed / pending documents are not finished: keep them neutral, not success-green.
-  return statusToToken(status === "parsed" || status === "analysis_pending" ? "uploaded" : status);
+  // Parsed / pending / awaiting-a-human documents are not finished: keep them
+  // neutral, not success-green. A durable rejection or an exhausted retry is
+  // attention the user must act on, routed through the same token as an error.
+  if (status === "parsed" || status === "analysis_pending" || status === "review_required") {
+    return statusToToken("uploaded");
+  }
+  if (status === "needs_changes" || status === "failed_retryable") {
+    return statusToToken("error");
+  }
+  return statusToToken(status);
 }
 
 function getTypeColor(docType: string | null | undefined) {

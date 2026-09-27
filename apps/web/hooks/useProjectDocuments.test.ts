@@ -265,4 +265,122 @@ describe("useProjectDocuments", () => {
     });
     expect(result.current.documents[1]?.lifecycleStatus).toBeUndefined();
   });
+
+  it("carries retryable, review count and review item id through from the backend (#712)", async () => {
+    getProjectDocumentsMock.mockResolvedValueOnce([
+      {
+        id: "doc-review",
+        filename: "Contract.pdf",
+        document_type: "contract",
+        status: "processing",
+        status_detail: "Analysis completed and is waiting for a human review decision.",
+        lifecycle_status: "review_required",
+        retryable: false,
+        review_count: 1,
+        review_item_id: "11111111-1111-1111-1111-111111111111",
+        uploaded_at: "2026-03-19T09:00:00Z",
+        file_size_bytes: 2048,
+      },
+    ]);
+
+    const { result } = renderHook(() => useProjectDocuments("proj-review"), {
+      wrapper: createTestWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.documents).toHaveLength(1));
+    expect(result.current.documents[0]).toMatchObject({
+      lifecycleStatus: "review_required",
+      statusDetail: "Analysis completed and is waiting for a human review decision.",
+      retryable: false,
+      reviewCount: 1,
+      reviewItemId: "11111111-1111-1111-1111-111111111111",
+    });
+  });
+
+  it("stops polling a document paused for human review, even though its legacy status still reads processing (#712)", async () => {
+    vi.useFakeTimers();
+    getProjectDocumentsMock.mockResolvedValue([
+      {
+        id: "doc-review",
+        filename: "Contract.pdf",
+        document_type: "contract",
+        status: "processing",
+        lifecycle_status: "review_required",
+        uploaded_at: "2026-03-19T09:00:00Z",
+        file_size_bytes: 2048,
+      },
+    ]);
+
+    const { result } = renderHook(() => useProjectDocuments("proj-review-poll"), {
+      wrapper: createTestWrapper(),
+    });
+
+    await vi.waitFor(() =>
+      expect(result.current.documents[0]?.lifecycleStatus).toBe("review_required"),
+    );
+    expect(getProjectDocumentsMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(getProjectDocumentsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops polling an exhausted, retryable analysis attempt (#712)", async () => {
+    vi.useFakeTimers();
+    getProjectDocumentsMock.mockResolvedValue([
+      {
+        id: "doc-retry",
+        filename: "Contract.pdf",
+        document_type: "contract",
+        status: "processing",
+        lifecycle_status: "failed_retryable",
+        retryable: true,
+        uploaded_at: "2026-03-19T09:00:00Z",
+        file_size_bytes: 2048,
+      },
+    ]);
+
+    const { result } = renderHook(() => useProjectDocuments("proj-retry-poll"), {
+      wrapper: createTestWrapper(),
+    });
+
+    await vi.waitFor(() =>
+      expect(result.current.documents[0]?.lifecycleStatus).toBe("failed_retryable"),
+    );
+    expect(getProjectDocumentsMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(getProjectDocumentsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops polling a durable rejection, even though its legacy status still reads error (#712)", async () => {
+    vi.useFakeTimers();
+    getProjectDocumentsMock.mockResolvedValue([
+      {
+        id: "doc-rejected",
+        filename: "Contract.pdf",
+        document_type: "contract",
+        status: "error",
+        lifecycle_status: "needs_changes",
+        uploaded_at: "2026-03-19T09:00:00Z",
+        file_size_bytes: 2048,
+      },
+    ]);
+
+    const { result } = renderHook(() => useProjectDocuments("proj-rejected-poll"), {
+      wrapper: createTestWrapper(),
+    });
+
+    await vi.waitFor(() =>
+      expect(result.current.documents[0]?.lifecycleStatus).toBe("needs_changes"),
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(getProjectDocumentsMock).toHaveBeenCalledTimes(1);
+  });
 });

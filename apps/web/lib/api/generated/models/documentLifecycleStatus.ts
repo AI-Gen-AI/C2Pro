@@ -50,6 +50,9 @@ export const DocumentLifecycleStatus = {
   processing: "processing",
   parsed: "parsed",
   analysis_pending: "analysis_pending",
+  review_required: "review_required",
   analyzed: "analyzed",
+  needs_changes: "needs_changes",
+  failed_retryable: "failed_retryable",
   error: "error",
 } as const;

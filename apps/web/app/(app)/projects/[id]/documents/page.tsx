@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, FileText, Loader2, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, Eye, FileText, Loader2, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { statusToToken } from '@/lib/ui/severity-tokens';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,10 @@ const LIFECYCLE_LABELS: Record<DocumentLifecycleStatus, string> = {
   processing: 'Processing',
   parsed: 'Parsed',
   analysis_pending: 'Analysis pending',
+  review_required: 'Review required',
   analyzed: 'Analyzed',
+  needs_changes: 'Needs changes',
+  failed_retryable: 'Retry needed',
   error: 'Error',
 };
 
@@ -77,15 +80,28 @@ function getStatusIcon(status: DocumentLifecycleStatus) {
     case 'analyzed':
       return CheckCircle2;
     case 'error':
+    case 'needs_changes':
+    case 'failed_retryable':
       return AlertTriangle;
+    case 'review_required':
+      return Eye;
     default:
       return Clock;
   }
 }
 
 function getStatusColor(status: DocumentLifecycleStatus): string {
-  // Parsed / pending documents are not finished: keep them neutral, not success-green.
-  return statusToToken(status === 'parsed' || status === 'analysis_pending' ? 'uploaded' : status);
+  // Parsed / pending / awaiting-a-human documents are not finished: keep them
+  // neutral, not success-green. A durable rejection or an exhausted retry is
+  // routed through the same "error" token as a system error -- it is
+  // attention the user must act on, not a still-succeeding state.
+  if (status === 'parsed' || status === 'analysis_pending' || status === 'review_required') {
+    return statusToToken('uploaded');
+  }
+  if (status === 'needs_changes' || status === 'failed_retryable') {
+    return statusToToken('error');
+  }
+  return statusToToken(status);
 }
 
 function labelType(type: string): string {
@@ -105,7 +121,22 @@ function sortedUniqueTypes(rows: Array<{ type: string }>) {
   return Array.from(types).sort();
 }
 
-function isInFlightStatus(status: string | undefined): boolean {
+// #712: review_required / failed_retryable / needs_changes are durable
+// attention states, never active processing, even though their legacy
+// polling status still reads "processing"/"error" for backward compatibility.
+const TERMINAL_ATTENTION_LIFECYCLE_STATUSES = new Set<DocumentLifecycleStatus>([
+  'review_required',
+  'failed_retryable',
+  'needs_changes',
+]);
+
+function isInFlightStatus(
+  status: string | undefined,
+  lifecycleStatus: DocumentLifecycleStatus | undefined,
+): boolean {
+  if (lifecycleStatus && TERMINAL_ATTENTION_LIFECYCLE_STATUSES.has(lifecycleStatus)) {
+    return false;
+  }
   return ['uploaded', 'queued', 'processing'].includes(
     String(status ?? '').toLowerCase(),
   );
@@ -214,20 +245,37 @@ export default function ProjectDocumentsPage() {
 
   const rows = useMemo(
     () =>
-      documents.map((doc) => ({
-        id: doc.id,
-        name: doc.name,
-        type: labelType(doc.type || 'PDF'),
-        status: resolveLifecycle(doc.lifecycleStatus, doc.status ?? 'parsed'),
-        // Retry follows the polling status exactly as before: a stored "queued" document is
-        // already being processed, and reprocessing it would enqueue a duplicate task.
-        retryable: !(['processing', 'parsed', 'analyzed', 'parsed_pending_analysis'] as string[]).includes(
-          doc.status ?? 'parsed',
-        ),
-        uploadedAt: doc.uploadedAt,
-        size: formatFileSize(doc.fileSize),
-      })),
-    [documents]
+      documents.map((doc) => {
+        const status = resolveLifecycle(doc.lifecycleStatus, doc.status ?? 'parsed');
+        return {
+          id: doc.id,
+          name: doc.name,
+          type: labelType(doc.type || 'PDF'),
+          status,
+          statusDetail: doc.statusDetail,
+          // The backend is authoritative on whether Retry is honest for this
+          // lifecycle state (#712); fall back to the old polling-status
+          // heuristic only for payloads that predate the field.
+          retryable:
+            doc.retryable ??
+            !(['processing', 'parsed', 'analyzed', 'parsed_pending_analysis'] as string[]).includes(
+              doc.status ?? 'parsed',
+            ),
+          reviewCount: doc.reviewCount,
+          // A single stable pending review deep-links straight to it; more
+          // than one (or an unknown count) routes to the project's review
+          // queue instead of guessing which item to open.
+          reviewHref:
+            status === 'review_required'
+              ? doc.reviewItemId
+                ? `/projects/${projectId}/review?itemId=${doc.reviewItemId}`
+                : `/projects/${projectId}/review`
+              : undefined,
+          uploadedAt: doc.uploadedAt,
+          size: formatFileSize(doc.fileSize),
+        };
+      }),
+    [documents, projectId]
   );
 
   const typeOptions = useMemo(
@@ -256,7 +304,7 @@ export default function ProjectDocumentsPage() {
   const errorCount = rows.filter((row) => row.status === 'error').length;
   const hasBackendDocuments = rows.length > 0;
   const hasInFlightDocuments = documents.some((doc) =>
-    isInFlightStatus(doc.status),
+    isInFlightStatus(doc.status, doc.lifecycleStatus),
   );
 
   return (
@@ -573,10 +621,19 @@ export default function ProjectDocumentsPage() {
                         <Badge variant="outline" className="rounded-full bg-background/95 shadow-sm" data-testid="document-type">{doc.type}</Badge>
                       </td>
                       <td className="px-4 py-4">
-                        <Badge variant="outline" className={`rounded-full shadow-sm ${getStatusColor(doc.status)}`}>
+                        <Badge
+                          variant="outline"
+                          className={`rounded-full shadow-sm ${getStatusColor(doc.status)}`}
+                          data-testid="document-status-badge"
+                        >
                           <StatusIcon className="mr-1 h-3 w-3" />
                           {LIFECYCLE_LABELS[doc.status]}
                         </Badge>
+                        {doc.statusDetail ? (
+                          <p className="mt-1 max-w-[220px] text-xs text-muted-foreground" data-testid="document-status-detail">
+                            {doc.statusDetail}
+                          </p>
+                        ) : null}
                       </td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">{doc.size}</td>
                       <td className="px-4 py-4 text-sm text-muted-foreground" data-testid="document-date">
@@ -584,6 +641,29 @@ export default function ProjectDocumentsPage() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-end gap-2">
+                          {doc.reviewHref && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              asChild
+                              className="rounded-xl bg-background/95 shadow-sm"
+                            >
+                              <Link
+                                href={doc.reviewHref}
+                                aria-label={
+                                  doc.reviewCount && doc.reviewCount > 1
+                                    ? `Open review queue for ${doc.name}`
+                                    : `Review ${doc.name}`
+                                }
+                                data-testid="document-review-cta"
+                              >
+                                <Eye className="mr-1 h-4 w-4" />
+                                {doc.reviewCount && doc.reviewCount > 1
+                                  ? `Review (${doc.reviewCount})`
+                                  : 'Review'}
+                              </Link>
+                            </Button>
+                          )}
                           {doc.retryable && (
                             <Button
                               variant="outline"

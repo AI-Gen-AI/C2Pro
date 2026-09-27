@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { severityToToken } from '@/lib/ui/severity-tokens';
@@ -74,6 +74,11 @@ function errorMessage(error: unknown, fallback: string): string {
 export default function ReviewPage() {
   const params = useParams();
   const projectId = params.id as string;
+  // #712: the Documents page links here with ?itemId=<review_item_id> when a
+  // document has exactly one pending review, so the reviewer lands on the
+  // right card instead of having to find it in the full queue.
+  const searchParams = useSearchParams();
+  const targetItemId = searchParams.get('itemId');
   const { isLoaded: isUserLoaded, user } = useUser();
   const reviewerName = user?.primaryEmailAddress?.emailAddress ?? user?.id;
   const reviewerIdentityReady = isUserLoaded && Boolean(reviewerName);
@@ -114,6 +119,14 @@ export default function ReviewPage() {
 
   const items = useMemo(() => queueData?.items ?? [], [queueData]);
   const canLoadMore = items.length === pageLimit && pageLimit < MAX_PAGE_LIMIT;
+
+  useEffect(() => {
+    if (!targetItemId) return;
+    if (!items.some((item) => item.item_id === targetItemId)) return;
+    document
+      .getElementById(`review-item-${targetItemId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [targetItemId, items]);
 
   const pendingCount = items.filter(
     (i) =>
@@ -292,8 +305,16 @@ export default function ReviewPage() {
       ) : (
         <div className="space-y-3" data-testid="review-queue">
           {items.map((item) => (
-            <ReviewItemCard
+            <div
               key={item.item_id}
+              id={`review-item-${item.item_id}`}
+              className={
+                targetItemId === item.item_id
+                  ? 'rounded-lg ring-2 ring-primary ring-offset-2'
+                  : undefined
+              }
+            >
+            <ReviewItemCard
               item={item}
               projectId={projectId}
               reviewerIdentityReady={reviewerIdentityReady}
@@ -307,6 +328,7 @@ export default function ReviewPage() {
                 setModal({ kind: 'reject', item: reviewItem });
               }}
             />
+            </div>
           ))}
           {canLoadMore ? (
             <div className="flex justify-center pt-2">
