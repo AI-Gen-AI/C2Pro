@@ -6,7 +6,7 @@ import pytest
 
 from scripts.wait_for_schema import expected_heads, schema_ready
 
-API_ROOT = Path(__file__).resolve().parents[3]
+API_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_repository_has_exactly_one_alembic_head() -> None:
