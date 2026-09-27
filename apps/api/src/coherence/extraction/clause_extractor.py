@@ -184,12 +184,22 @@ async def _load_cache(clause_id: str) -> dict[str, Any] | None:
         return None
 
 
+def _merge_cache_payload(
+    existing: dict[str, Any] | None,
+    extracted: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge structured extraction without deleting unrelated clause provenance."""
+    merged = dict(existing or {})
+    merged.update(extracted)
+    return merged
+
+
 async def _write_cache(clause_id: str, data: dict[str, Any]) -> None:
-    """Persist extracted fields to clauses.extracted_entities; skip for non-UUID IDs."""
+    """Merge extracted fields into clauses.extracted_entities; preserve provenance."""
     if not data or not _is_valid_uuid(clause_id):
         return
     try:
-        from sqlalchemy import update
+        from sqlalchemy import select
 
         from src.core.database import _session_factory
         from src.documents.adapters.persistence.models import ClauseORM
@@ -197,10 +207,17 @@ async def _write_cache(clause_id: str, data: dict[str, Any]) -> None:
         if _session_factory is None:
             return
         async with _session_factory() as session:
-            await session.execute(
-                update(ClauseORM)
+            row = await session.execute(
+                select(ClauseORM)
                 .where(ClauseORM.id == UUID(clause_id))
-                .values(extracted_entities=data)
+                .with_for_update()
+            )
+            clause = row.scalar_one_or_none()
+            if clause is None:
+                return
+            clause.extracted_entities = _merge_cache_payload(
+                clause.extracted_entities,
+                data,
             )
             await session.commit()
     except Exception as exc:
