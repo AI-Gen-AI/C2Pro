@@ -146,7 +146,7 @@ jobs:
           do
             name="${pair%%:*}"
             service_id="${pair#*:}"
-            payload="$(jq -cn               --arg q "$list_query"               --arg project "$PROD_ACCEPTANCE_RAILWAY_PROJECT_ID"               --arg environment "$PROD_ACCEPTANCE_RAILWAY_ENVIRONMENT_ID"               --arg service "$service_id"               '{query:$q,variables:{input:{projectId:$project,environmentId:$environment,serviceId:$service,status:{successfulOnly:true}},first:1}}')"
+            payload="$(jq -cn               --arg q "$list_query"               --arg project "$PROD_ACCEPTANCE_RAILWAY_PROJECT_ID"               --arg environment "$PROD_ACCEPTANCE_RAILWAY_ENVIRONMENT_ID"               --arg service "$service_id"               '{query:$q,variables:{input:{projectId:$project,environmentId:$environment,serviceId:$service},first:1}}')"
             railway_graphql "$payload"               "evidence/product-qualification/runtime/provider/railway-${name}.json"
           done
 
