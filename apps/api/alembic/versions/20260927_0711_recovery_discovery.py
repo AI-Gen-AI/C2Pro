@@ -59,7 +59,7 @@ def upgrade() -> None:
                   LIMIT LEAST(GREATEST($2, 1), 100)'
                 USING p_stale_after_seconds, p_limit;
         END
-        $;
+        $recovery$;
         """
     )
     op.execute("REVOKE ALL ON SCHEMA system_recovery FROM PUBLIC;")
