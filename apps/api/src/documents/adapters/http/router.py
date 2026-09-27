@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.core.database import get_session
-from src.core.json_types import JsonDict, JsonValue
+from src.core.json_types import JsonDict
 from src.core.repositories import get_project_repository
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
 from src.documents.adapters.extraction.documents_entity_extraction_service import (
