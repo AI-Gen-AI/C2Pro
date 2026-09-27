@@ -31,19 +31,35 @@ def upgrade() -> None:
             document_id uuid,
             tenant_id uuid
         )
-        LANGUAGE sql
+        LANGUAGE plpgsql
         SECURITY DEFINER
         SET search_path = public, pg_temp
-        AS $$
-            SELECT d.id, d.tenant_id
-              FROM public.documents AS d
-             WHERE d.upload_status::text IN ('parsing', 'parsed_pending_analysis')
-               AND d.updated_at <=
-                   clock_timestamp()
-                   - make_interval(secs => GREATEST(p_stale_after_seconds, 1))
-             ORDER BY d.updated_at, d.id
-             LIMIT LEAST(GREATEST(p_limit, 1), 100);
-        $$;
+        AS $
+        BEGIN
+            -- The Alembic application schema owns upload_status. The historic
+            -- Supabase mirror baseline predates that column; keep mirror
+            -- migrations replayable without weakening production semantics.
+            IF NOT EXISTS (
+                SELECT 1
+                  FROM pg_attribute
+                 WHERE attrelid = 'public.documents'::regclass
+                   AND attname = 'upload_status'
+                   AND NOT attisdropped
+            ) THEN
+                RETURN;
+            END IF;
+
+            RETURN QUERY EXECUTE
+                'SELECT d.id, d.tenant_id
+                   FROM public.documents AS d
+                  WHERE d.upload_status::text IN (''parsing'', ''parsed_pending_analysis'')
+                    AND d.updated_at <=
+                        clock_timestamp() - make_interval(secs => GREATEST($1, 1))
+                  ORDER BY d.updated_at, d.id
+                  LIMIT LEAST(GREATEST($2, 1), 100)'
+                USING p_stale_after_seconds, p_limit;
+        END
+        $;
         """
     )
     op.execute("REVOKE ALL ON SCHEMA system_recovery FROM PUBLIC;")
