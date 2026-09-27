@@ -852,9 +852,9 @@ async def test_reject_is_crash_safe_and_never_runs_n17(
     assert (await _reload(db, ReviewItemORM, arranged.review_row_id)).current_status == (
         ReviewStatus.REJECTED.value
     )
-    # A rejection must NOT mark the document analyzed.
+    # A rejection is terminal attention, never ANALYZED and never "still processing".
     assert (await _reload(db, DocumentORM, arranged.document_id)).upload_status == (
-        "parsed_pending_analysis"
+        "needs_changes"
     )
     op = await _operation_row(independent_sessions, tenant.id, arranged.review_row_id)
     assert op.phase == Phase.FINALIZED_REJECTED.value
@@ -980,7 +980,7 @@ async def test_cp7_takeover_applies_its_own_decision_not_the_superseded_one(
         ReviewStatus.REJECTED.value
     ), "the takeover's decision must win, not the superseded attempt's"
     assert (await _reload(db, DocumentORM, arranged.document_id)).upload_status == (
-        "parsed_pending_analysis"
+        "needs_changes"
     )
 
     op = await _operation_row(independent_sessions, tenant.id, arranged.review_row_id)
