@@ -10,6 +10,10 @@ import pytest
 
 from src.core.tasks.ingestion_tasks import _process, _run_document_analysis
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
+from src.documents.ports.rag_ingestion_service import (
+    RagIngestionOutcome,
+    RagIngestionResult,
+)
 from src.temporal.domain.document_revision import DocumentRevision
 
 
@@ -39,6 +43,93 @@ def _session_factory(session: AsyncMock):
         yield session
 
     return _ctx
+
+
+
+
+@pytest.mark.asyncio
+async def test_same_document_delivery_twice_emits_durable_seams_once() -> None:
+    """The second delivery after the ingestion commit is a pure no-op."""
+    document = _document(status=DocumentStatus.UPLOADED)
+    session = _session()
+    repo = Mock()
+    repo.get_by_id_internal = AsyncMock(return_value=document)
+    repo.get_project_tenant_id = AsyncMock(return_value=document.tenant_id)
+    repo.list_clauses_for_document = AsyncMock(return_value=[])
+    repo.add_clause = AsyncMock()
+    repo.update_metadata = AsyncMock()
+
+    async def _update_status(_tenant_id, _document_id, status, **_kwargs):
+        document.upload_status = status
+
+    repo.update_status = AsyncMock(side_effect=_update_status)
+
+    class _NoRevisionLineage:
+        def __init__(self, _session: object) -> None:
+            pass
+
+        async def get_current(self, _document_id: object, _tenant_id: object):
+            return None
+
+        async def get_by_id(self, _revision_id: object, _tenant_id: object):
+            return None
+
+    storage = Mock()
+    storage.download_file = AsyncMock(return_value=Mock())
+    parser = AsyncMock(return_value=_parsed_payload())
+    extraction = AsyncMock(return_value={"stakeholders": 1})
+    rag = AsyncMock(
+        return_value=RagIngestionResult(
+            outcome=RagIngestionOutcome.INGESTED,
+            chunks=4,
+        )
+    )
+    trigger = AsyncMock(return_value={"status": "started", "task_id": "analysis-1"})
+
+    with (
+        patch("src.core.tasks.ingestion_tasks.init_db", new=AsyncMock()),
+        patch("src.core.tasks.ingestion_tasks.get_raw_session", _session_factory(session)),
+        patch(
+            "src.core.tasks.ingestion_tasks.SqlAlchemyDocumentRepository",
+            return_value=repo,
+        ),
+        patch(
+            "src.core.tasks.ingestion_tasks.SqlAlchemyDocumentRevisionRepository",
+            _NoRevisionLineage,
+        ),
+        patch(
+            "src.core.tasks.ingestion_tasks.build_storage_service",
+            return_value=storage,
+        ),
+        patch(
+            "src.core.tasks.ingestion_tasks.file_parser.parse_document_file",
+            new=parser,
+        ),
+        patch(
+            "src.core.tasks.ingestion_tasks.DocumentsEntityExtractionService"
+        ) as extraction_cls,
+        patch(
+            "src.core.tasks.ingestion_tasks.SqlAlchemyRagIngestionService"
+        ) as rag_cls,
+        patch(
+            "src.core.tasks.ingestion_tasks.TriggerDocumentAnalysisUseCase"
+        ) as trigger_cls,
+    ):
+        extraction_cls.return_value.extract_entities_from_document = extraction
+        rag_cls.return_value.ingest_document_chunks = rag
+        trigger_cls.return_value.execute = trigger
+
+        first = await _process(document.id)
+        second = await _process(document.id)
+
+    assert first["status"] == "success"
+    assert second["status"] == "already_ingested"
+    parser.assert_awaited_once()
+    extraction.assert_awaited_once()
+    rag.assert_awaited_once()
+    trigger.assert_awaited_once()
+    repo.update_metadata.assert_awaited_once()
+    repo.list_clauses_for_document.assert_awaited_once()
 
 
 @pytest.mark.asyncio
