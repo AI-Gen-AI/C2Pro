@@ -358,6 +358,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
       if (assessment.state === "present") {
         expect(ids.length, `${assessment.category}: PRESENT needs evidence`).toBeGreaterThan(0);
         await expect(tile.getByTestId("health-state")).toHaveText(/evidence found/i);
+        await expect(tile.getByTestId("health-state")).toHaveClass(/emerald/);
       } else {
         expect(ids).toHaveLength(0);
         expect(
@@ -368,6 +369,8 @@ test.describe("Issue #706 production synthetic acceptance", () => {
         await expect(tile.getByTestId("health-state")).toHaveText(
           /unknown \/ insufficient evidence/i,
         );
+        await expect(tile.getByTestId("health-state")).toHaveClass(/amber/);
+        await expect(tile.getByTestId("health-state")).not.toHaveClass(/emerald/);
         await expect(tile.getByTestId("health-missing-data")).toBeVisible();
         await expect(tile.getByTestId("health-gap")).toBeVisible();
         expect(await tile.innerText()).not.toMatch(/\b0\s*%/);
