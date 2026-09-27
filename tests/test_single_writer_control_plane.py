@@ -270,6 +270,7 @@ def test_live_guidance_does_not_restore_legacy_backlog_authority():
         ".claude/rules/agents.md",
         ".claude/rules/DOCUMENTATION_STRUCTURE.md",
         "docs/ARCHITECTURE_INDEX.md",
+        "docs/MASTER_DEVELOPMENT_STATUS.md",
         "docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md",
         "docs/RELEASE_CRITERIA.md",
         "docs/internal/RELEASE_SIGNOFF_POLICY.md",
@@ -371,6 +372,19 @@ def test_role_frontmatter_cannot_mutate_legacy_control_files():
             "register discovered tasks in backlogs/",
         ):
             assert forbidden not in body, f"{role_path.name} retains legacy operational instruction: {forbidden}"
+
+
+def test_master_development_status_is_only_a_current_authority_pointer() -> None:
+    """Compatibility status file must point to modern control and never restore backlog authority."""
+    content = (ROOT / "docs" / "MASTER_DEVELOPMENT_STATUS.md").read_text(
+        encoding="utf-8"
+    )
+    assert "Compatibility pointer only" in content
+    assert "validation/product/c2pro-master-product-control-v1.yaml" in content
+    assert "docs/product/00-c2pro-master-product-control-v1.md" in content
+    assert ".c2pro/control/" in content
+    assert "C2PRO_MASTER_BACKLOG.md` is now the single source of truth" not in content
+    assert "C2PRO_MASTER_BACKLOG.md` for execution status" not in content
 
 
 def test_indexed_specialist_profiles_are_retired_non_operational() -> None:
