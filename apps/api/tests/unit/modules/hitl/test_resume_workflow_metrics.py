@@ -141,6 +141,7 @@ def v3_ownership(monkeypatch):
         "mark_graph_completed": [],
         "finalize_v3": [],
         "record_failure": [],
+        "verify_trust_binding": [],
     }
     module = "src.modules.hitl.application.resume_workflow_use_case"
 
@@ -161,11 +162,16 @@ def v3_ownership(monkeypatch):
     async def _renew(**kwargs):
         return True
 
+    async def _verify_trust_binding(**kwargs):
+        # C2PRO #714 approve pre-flight against the same durable store.
+        calls["verify_trust_binding"].append(kwargs)
+
     monkeypatch.setattr(f"{module}.acquire", _acquire)
     monkeypatch.setattr(f"{module}.mark_graph_completed", _mark)
     monkeypatch.setattr(f"{module}.finalize_v3", _finalize)
     monkeypatch.setattr(f"{module}.record_failure", _fail)
     monkeypatch.setattr(f"{module}.renew", _renew)
+    monkeypatch.setattr(f"{module}.verify_trust_binding", _verify_trust_binding)
     return SimpleNamespace(ownership=ownership, calls=calls)
 
 
@@ -256,7 +262,7 @@ async def test_workflow_resume_failure_emits_workflow_resume_error(
 
 
 async def test_happy_path_approve_records_attempt_and_latency(
-    use_case, review_queue_repo, checkpoint_service, monkeypatch
+    use_case, review_queue_repo, checkpoint_service, monkeypatch, v3_ownership
 ):
     item = _make_review_item()
     review_queue_repo.get_review_item.return_value = item
@@ -289,10 +295,13 @@ async def test_happy_path_approve_records_attempt_and_latency(
     assert args[1] == "resumed"
     spy_latency.assert_called_once()
     assert resp.status == "resumed"
+    # C2PRO #714: an approval is verified against its bound candidate
+    # BEFORE the graph resumes.
+    assert len(v3_ownership.calls["verify_trust_binding"]) == 1
 
 
 async def test_happy_path_reject_records_attempt_with_rejected_status(
-    use_case, review_queue_repo, checkpoint_service, monkeypatch
+    use_case, review_queue_repo, checkpoint_service, monkeypatch, v3_ownership
 ):
     item = _make_review_item()
     review_queue_repo.get_review_item.return_value = item
@@ -318,6 +327,7 @@ async def test_happy_path_reject_records_attempt_with_rejected_status(
     assert args[0] == "reject"
     assert args[1] == "rejected"
     assert resp.status == "rejected"
+    assert v3_ownership.calls["verify_trust_binding"] == [], "reject needs no approval pre-flight"
 
 
 async def test_resume_succeeds_without_checkpoint_id_using_thread_id_only(
