@@ -661,9 +661,13 @@ async def get_document_entities_endpoint(
     _user_id: CurrentUserId,
     tenant_id: CurrentTenantId,
     use_case: GetDocumentWithClausesUseCase = Depends(get_get_document_with_clauses_use_case),
+    revision_repository: SqlAlchemyDocumentRevisionRepository = Depends(
+        get_document_revision_repository
+    ),
 ) -> list[DocumentEntityResponse]:
     document = await use_case.execute(tenant_id=tenant_id, document_id=document_id)
 
+    revision_validity: dict[str, bool] = {}
     entities: list[DocumentEntityResponse] = []
     for clause in document.clauses:
         evidence_location = cast(
@@ -672,20 +676,64 @@ async def get_document_entities_endpoint(
             if clause.extracted_entities
             else {},
         )
+        raw_revision_id = evidence_location.get("revision_id")
+        revision_binding_valid = True
+        if raw_revision_id is not None:
+            revision_key = str(raw_revision_id)
+            if revision_key not in revision_validity:
+                try:
+                    revision_uuid = UUID(revision_key)
+                except (TypeError, ValueError):
+                    revision_validity[revision_key] = False
+                else:
+                    revision = await revision_repository.get_by_id(revision_uuid, tenant_id)
+                    revision_validity[revision_key] = bool(
+                        revision is not None
+                        and revision.document_id == document_id
+                        and revision.tenant_id == tenant_id
+                    )
+            revision_binding_valid = revision_validity[revision_key]
+
         raw_page = evidence_location.get("page_number")
-        page_number = int(raw_page) if isinstance(raw_page, (int, float, str)) and str(raw_page).lstrip("-").isdigit() else None
-        bbox = evidence_location.get("bbox")
-        # Ensure bbox is a list of numbers or None
-        if not isinstance(bbox, list):
-            bbox = None
+        page_number = (
+            int(raw_page)
+            if revision_binding_valid
+            and isinstance(raw_page, (int, float, str))
+            and str(raw_page).lstrip("-").isdigit()
+            and int(raw_page) > 0
+            else None
+        )
+        raw_bbox = evidence_location.get("bbox")
+        bbox = (
+            [float(value) for value in raw_bbox]
+            if revision_binding_valid
+            and isinstance(raw_bbox, list)
+            and len(raw_bbox) == 4
+            and all(isinstance(value, (int, float)) for value in raw_bbox)
+            else None
+        )
+        raw_pages = evidence_location.get("page_numbers")
+        page_numbers = (
+            sorted(
+                {
+                    int(value)
+                    for value in raw_pages
+                    if isinstance(value, (int, float, str))
+                    and str(value).lstrip("-").isdigit()
+                    and int(value) > 0
+                }
+            )
+            if revision_binding_valid and isinstance(raw_pages, list)
+            else []
+        )
         metadata: JsonDict = {
             "clause_code": clause.clause_code,
             "clause_type": clause.clause_type.value if clause.clause_type is not None else None,
             "evidence_location": {
                 "page_number": page_number,
-                "page_numbers": evidence_location.get("page_numbers") if isinstance(evidence_location.get("page_numbers"), list) else [],
+                "page_numbers": page_numbers,
                 "bbox": bbox,
-                "revision_id": evidence_location.get("revision_id"),
+                "revision_id": raw_revision_id,
                 "normalized": bool(evidence_location.get("normalized", True)),
             },
         }
