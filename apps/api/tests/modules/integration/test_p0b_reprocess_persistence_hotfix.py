@@ -285,6 +285,7 @@ def _install_graph(monkeypatch: pytest.MonkeyPatch, document: Document, fake_app
     repo = Mock()
     repo.get_by_id = AsyncMock(return_value=document)
     repo.update_status = AsyncMock()
+    repo.update_metadata = AsyncMock()
     monkeypatch.setattr(ingestion_tasks, "SqlAlchemyDocumentRepository", lambda *, session: repo)
     monkeypatch.setattr(workflow, "ensure_checkpointer_ready", AsyncMock())
     monkeypatch.setattr(workflow, "_build_checkpointer", lambda: object())

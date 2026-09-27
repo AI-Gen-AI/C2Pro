@@ -98,12 +98,28 @@ class DocumentPollingStatus(StrEnum):
 
 class DocumentLifecycleStatus(StrEnum):
     """User-facing lifecycle state; unlike the polling status it never merges
-    "parsed", "analysis pending" and "analyzed"."""
+    "parsed", "analysis pending" and "analyzed".
+
+    #712: PARSED_PENDING_ANALYSIS is durably overloaded -- the same stored
+    status covers "analysis not started yet", "analysis ran and paused for
+    HITL review", and "analysis ran and came back incomplete/retryable".
+    document_lifecycle_status() below disambiguates those three using
+    context that already exists durably (a pending review_items row; the
+    document's own analysis_last_attempt_incomplete metadata flag) rather
+    than inventing a new stored status for them. NEEDS_CHANGES is the one
+    case that DOES get its own stored DocumentStatus (set by
+    finalize_v3's reject path), because "a human rejected this" is a durable
+    fact the document row itself must carry, not something to re-derive from
+    a join every time.
+    """
     UPLOADED = "uploaded"
     PROCESSING = "processing"
     PARSED = "parsed"
     ANALYSIS_PENDING = "analysis_pending"
+    REVIEW_REQUIRED = "review_required"
     ANALYZED = "analyzed"
+    NEEDS_CHANGES = "needs_changes"
+    FAILED_RETRYABLE = "failed_retryable"
     ERROR = "error"
 
 
@@ -112,15 +128,51 @@ _LIFECYCLE_BY_STORED_STATUS = {
     DocumentStatus.QUEUED: DocumentLifecycleStatus.UPLOADED,
     DocumentStatus.PARSING: DocumentLifecycleStatus.PROCESSING,
     DocumentStatus.PARSED: DocumentLifecycleStatus.PARSED,
-    DocumentStatus.PARSED_PENDING_ANALYSIS: DocumentLifecycleStatus.ANALYSIS_PENDING,
     DocumentStatus.ANALYZED: DocumentLifecycleStatus.ANALYZED,
+    DocumentStatus.NEEDS_CHANGES: DocumentLifecycleStatus.NEEDS_CHANGES,
     DocumentStatus.ERROR: DocumentLifecycleStatus.ERROR,
 }
 
 
-def document_lifecycle_status(status: DocumentStatus) -> DocumentLifecycleStatus:
-    """Map the stored document status to its lifecycle state (every stored status is mapped)."""
+def document_lifecycle_status(
+    status: DocumentStatus,
+    *,
+    has_pending_review: bool = False,
+    analysis_attempt_failed: bool = False,
+) -> DocumentLifecycleStatus:
+    """Map the stored document status (+ durable context) to its lifecycle state.
+
+    PARSED_PENDING_ANALYSIS is context-sensitive: a pending HITL review
+    (``has_pending_review``) means analysis ran and is waiting on a human,
+    never "not started"; a recorded failed attempt with no pending review
+    (``analysis_attempt_failed``) means the automatic pipeline gave up and a
+    user-triggered retry is the honest next step. Every other stored status
+    maps 1:1, unconditionally.
+    """
+    if status == DocumentStatus.PARSED_PENDING_ANALYSIS:
+        if has_pending_review:
+            return DocumentLifecycleStatus.REVIEW_REQUIRED
+        if analysis_attempt_failed:
+            return DocumentLifecycleStatus.FAILED_RETRYABLE
+        return DocumentLifecycleStatus.ANALYSIS_PENDING
     return _LIFECYCLE_BY_STORED_STATUS[status]
+
+
+# Lifecycle states the existing reprocess endpoint (POST .../reprocess) can
+# genuinely recover: it unconditionally resets upload_status to UPLOADED and
+# re-enqueues parsing + analysis, which is a real fix for a system/parsing
+# fault (ERROR) or an exhausted automatic analysis attempt (FAILED_RETRYABLE).
+# It is NOT offered for REVIEW_REQUIRED (a decision is pending, not a retry)
+# or NEEDS_CHANGES (a human already decided; re-upload/correction is the
+# honest next step, not blindly re-running the same pipeline).
+_RETRYABLE_LIFECYCLE_STATUSES = frozenset(
+    {DocumentLifecycleStatus.ERROR, DocumentLifecycleStatus.FAILED_RETRYABLE}
+)
+
+
+def document_is_retryable(lifecycle_status: DocumentLifecycleStatus) -> bool:
+    """Whether the UI's Retry action is honest for this lifecycle state."""
+    return lifecycle_status in _RETRYABLE_LIFECYCLE_STATUSES
 
 
 class DocumentResponse(BaseModel):
@@ -167,6 +219,9 @@ class DocumentListItem(BaseModel):
     status: DocumentPollingStatus
     status_detail: str
     lifecycle_status: DocumentLifecycleStatus
+    retryable: bool = False
+    review_count: int | None = None
+    review_item_id: UUID | None = None
     error_message: str | None = None
     uploaded_at: datetime | None = None
     file_size_bytes: int | None = None

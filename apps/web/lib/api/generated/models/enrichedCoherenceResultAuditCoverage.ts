@@ -39,32 +39,8 @@
  */
 
 /**
- * User-facing lifecycle state; unlike the polling status it never merges
- * "parsed", "analysis pending" and "analyzed".
- *
- * #712: PARSED_PENDING_ANALYSIS is durably overloaded -- the same stored
- * status covers "analysis not started yet", "analysis ran and paused for
- * HITL review", and "analysis ran and came back incomplete/retryable".
- * document_lifecycle_status() below disambiguates those three using
- * context that already exists durably (a pending review_items row; the
- * document's own analysis_last_attempt_incomplete metadata flag) rather
- * than inventing a new stored status for them. NEEDS_CHANGES is the one
- * case that DOES get its own stored DocumentStatus (set by
- * finalize_v3's reject path), because "a human rejected this" is a durable
- * fact the document row itself must carry, not something to re-derive from
- * a join every time.
+ * Audit dimension coverage: assessed / total / pct of the 6 canonical categories.
  */
-export type DocumentLifecycleStatus =
-  (typeof DocumentLifecycleStatus)[keyof typeof DocumentLifecycleStatus];
-
-export const DocumentLifecycleStatus = {
-  uploaded: "uploaded",
-  processing: "processing",
-  parsed: "parsed",
-  analysis_pending: "analysis_pending",
-  review_required: "review_required",
-  analyzed: "analyzed",
-  needs_changes: "needs_changes",
-  failed_retryable: "failed_retryable",
-  error: "error",
-} as const;
+export type EnrichedCoherenceResultAuditCoverage = {
+  [key: string]: number;
+} | null;

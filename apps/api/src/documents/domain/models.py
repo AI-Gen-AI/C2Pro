@@ -24,6 +24,11 @@ class DocumentStatus(StrEnum):
     PARSED_PENDING_ANALYSIS = "parsed_pending_analysis"  # TASK-BCK-022: Ingestion complete, analysis not yet started
     ANALYZED = "analyzed"  # TASK-BCK-022: Analysis orchestration completed
     ERROR = "error"
+    # #712: a human HITL reviewer rejected the pending analysis. Durable and
+    # terminal-for-now -- distinct from PARSED_PENDING_ANALYSIS (which means
+    # "no decision yet") and from ERROR (a system/parsing fault, not a human
+    # decision). Set exclusively by finalize_v3's reject path.
+    NEEDS_CHANGES = "needs_changes"
 
 class DocumentType(StrEnum):
     """Supported document types."""

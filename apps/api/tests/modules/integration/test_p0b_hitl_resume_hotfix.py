@@ -208,6 +208,7 @@ async def _install_real_hitl_path_with_interrupting_graph(
     repo = Mock()
     repo.get_by_id = AsyncMock(return_value=document)
     repo.update_status = AsyncMock()
+    repo.update_metadata = AsyncMock()
     monkeypatch.setattr(
         ingestion_tasks, "SqlAlchemyDocumentRepository", lambda *, session: repo
     )

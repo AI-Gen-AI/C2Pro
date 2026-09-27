@@ -43,6 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from src.analysis.adapters.persistence.models import Analysis
 from src.core.auth.models import Tenant, User
+from src.documents.adapters.persistence.models import DocumentORM
 from src.modules.hitl.adapters.checkpoint_service import CheckpointService
 from src.modules.hitl.adapters.http import router as hitl_router
 from src.modules.hitl.adapters.http.schemas import ApproveRequest, RejectRequest
@@ -456,6 +457,14 @@ async def test_repeated_reject_records_one_rejected_correction(
     corrections = await _events(db, arranged.project_id, HITL_CORRECTION)
     assert len(corrections) == 1, f"got {len(corrections)} corrections for one rejection"
     _assert_correction_is_v3_keyed(corrections[0], arranged, ReviewStatus.REJECTED.value)
+
+    # #712: a rejection must not leave the document stuck at
+    # parsed_pending_analysis forever -- it is a durable, truthful
+    # "needs changes" outcome, set by the SAME fenced finalize_v3
+    # transaction that recorded the REJECTED review decision above.
+    assert (
+        await _reload(db, DocumentORM, arranged.document_id)
+    ).upload_status == "needs_changes"
 
 
 # ── a genuinely new final decision stays auditable ───────────────────────────

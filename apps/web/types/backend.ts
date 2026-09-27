@@ -81,8 +81,24 @@ export interface DocumentListResponse {
   filename: string;
   document_type?: string | null;
   status: 'queued' | 'processing' | 'parsed' | 'error';
+  status_detail?: string;
   /** Honest lifecycle state; absent in older payloads. */
-  lifecycle_status?: 'uploaded' | 'processing' | 'parsed' | 'analysis_pending' | 'analyzed' | 'error';
+  lifecycle_status?:
+    | 'uploaded'
+    | 'processing'
+    | 'parsed'
+    | 'analysis_pending'
+    | 'review_required'
+    | 'analyzed'
+    | 'needs_changes'
+    | 'failed_retryable'
+    | 'error';
+  /** Whether the UI's Retry action is honest for this document (#712). */
+  retryable?: boolean;
+  /** Pending HITL review count when lifecycle_status is review_required (#712). */
+  review_count?: number | null;
+  /** Exact pending review item id, only when review_count is exactly 1 (#712). */
+  review_item_id?: string | null;
   error_message?: string | null;
   uploaded_at: string;
   file_size_bytes: number;

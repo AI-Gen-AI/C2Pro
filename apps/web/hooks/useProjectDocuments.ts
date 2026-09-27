@@ -52,15 +52,37 @@ function transformDocument(doc: DocumentListResponse): DocumentInfo {
     uploadedAt: doc.uploaded_at ? new Date(doc.uploaded_at) : undefined,
     status: doc.status,
     lifecycleStatus: doc.lifecycle_status,
+    statusDetail: doc.status_detail,
+    retryable: doc.retryable,
+    reviewCount: doc.review_count ?? undefined,
+    reviewItemId: doc.review_item_id ?? undefined,
   };
 }
 
+// #712: a document whose lifecycle state is a durable attention state
+// (waiting on a human decision, exhausted and retryable, or a recorded
+// rejection) is NOT active processing, even though its legacy polling
+// `status` still reads "processing"/"error" for backward compatibility.
+// Polling it every 5s would never stop, and the spinner would lie about
+// work that already finished (or paused for a human).
+const TERMINAL_ATTENTION_LIFECYCLE_STATUSES = new Set([
+  'review_required',
+  'failed_retryable',
+  'needs_changes',
+  'analyzed',
+  'error',
+]);
+
 function hasInFlightDocs(documents: DocumentInfo[] | undefined): boolean {
-  return (documents ?? []).some((doc) =>
-    ['uploaded', 'queued', 'processing'].includes(
+  return (documents ?? []).some((doc) => {
+    const lifecycle = String(doc.lifecycleStatus ?? '').toLowerCase();
+    if (lifecycle && TERMINAL_ATTENTION_LIFECYCLE_STATUSES.has(lifecycle)) {
+      return false;
+    }
+    return ['uploaded', 'queued', 'processing'].includes(
       String(doc.status ?? '').toLowerCase(),
-    ),
-  );
+    );
+  });
 }
 
 /**

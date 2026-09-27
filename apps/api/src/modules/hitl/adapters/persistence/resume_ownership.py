@@ -782,6 +782,22 @@ _FINALIZE_DOCUMENT_SQL = text(
     """
 )
 
+# #712: a rejection must not leave the document stuck at
+# parsed_pending_analysis forever. Unlike the approve path above, this is
+# NOT strict -- a reject's business meaning is already durably recorded on
+# the review row by _FINALIZE_REVIEW_SQL, so a document row that is missing
+# or belongs to a different tenant (defensive; document_id is only skipped
+# entirely when None) never blocks the human decision from finalizing.
+_FINALIZE_DOCUMENT_REJECT_SQL = text(
+    """
+    UPDATE documents
+       SET upload_status = 'needs_changes'
+     WHERE id = cast(:document_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
+    RETURNING id
+    """
+)
+
 _FINALIZE_OPERATION_SQL = text(
     """
     UPDATE resume_operations
@@ -899,6 +915,16 @@ async def finalize_v3(
                     f"Finalization could not mark document {document_id} ANALYZED; "
                     "nothing committed."
                 )
+        elif document_id is not None:
+            if fault is not None:
+                await fault("document")
+            await session.execute(
+                _FINALIZE_DOCUMENT_REJECT_SQL,
+                {
+                    "document_id": str(document_id),
+                    "tenant_id": str(ownership.tenant_id),
+                },
+            )
 
         finalized = (
             await session.execute(

@@ -50,6 +50,9 @@ export interface DocumentListItem {
   status: DocumentPollingStatus;
   status_detail: string;
   lifecycle_status: DocumentLifecycleStatus;
+  retryable?: boolean;
+  review_count?: number | null;
+  review_item_id?: string | null;
   error_message?: string | null;
   uploaded_at?: string | null;
   file_size_bytes?: number | null;

@@ -5,9 +5,11 @@ Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 """
 from __future__ import annotations
 
+import inspect
 import os
 import pathlib
 import tempfile
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from typing import cast
 from uuid import UUID
@@ -16,6 +18,7 @@ import structlog
 from anyio import open_file
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
@@ -50,6 +53,7 @@ from src.documents.application.dtos import (
     DocumentDetailResponse,
     DocumentEntityResponse,
     DocumentHistoryResponse,
+    DocumentLifecycleStatus,
     DocumentListItem,
     DocumentListResponse,
     DocumentPollingStatus,
@@ -59,6 +63,7 @@ from src.documents.application.dtos import (
     DocumentUploadResponse,
     RagAnswerResponse,
     RagQuestionRequest,
+    document_is_retryable,
     document_lifecycle_status,
 )
 from src.documents.application.get_document_history_use_case import GetDocumentHistoryUseCase
@@ -82,6 +87,8 @@ from src.documents.application.services.relationship_explanation_service import 
 from src.documents.application.upload_document_use_case import UploadDocumentUseCase
 from src.documents.domain.models import DocumentStatus, DocumentType
 from src.documents.ports.storage_service import IStorageService
+from src.modules.hitl.adapters.persistence.models import ReviewItemORM
+from src.modules.hitl.domain.entities import ReviewStatus
 from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.application.use_cases.bom_use_cases import CreateBOMItemUseCase
@@ -230,6 +237,11 @@ def _normalize_document_status_for_polling(status: DocumentStatus) -> DocumentPo
         return DocumentPollingStatus.PARSED
     if status == DocumentStatus.ERROR:
         return DocumentPollingStatus.ERROR
+    if status == DocumentStatus.NEEDS_CHANGES:
+        # #712: a human rejection is durable, terminal-for-now attention -- the
+        # polling enum has no dedicated member for it, so it surfaces the same
+        # as a system error rather than as still-processing.
+        return DocumentPollingStatus.ERROR
     return DocumentPollingStatus.PROCESSING
 
 
@@ -247,6 +259,77 @@ def _document_status_detail_for_polling(status: DocumentStatus) -> str:
     if status == DocumentStatus.ERROR:
         return "Document processing failed before analysis could start."
     return "Document ingestion is still in progress. Analysis has not started."
+
+
+# #712: the two review statuses that mean "a human decision is still pending" --
+# APPROVED/REJECTED/ESCALATED/CLOSED/DRAFT items are not what makes a document
+# say REVIEW_REQUIRED.
+_PENDING_REVIEW_STATUSES = (
+    ReviewStatus.PENDING_REVIEW_REQUIRED,
+    ReviewStatus.PENDING_REVIEW_CONDITIONAL,
+    ReviewStatus.ESCALATED,
+)
+
+# (pending_review_count, exact_item_id_if_exactly_one_else_None) per document_id.
+PendingReviewLookup = Callable[[UUID, list[UUID]], Awaitable[dict[UUID, tuple[int, UUID | None]]]]
+
+
+async def _fetch_pending_review_counts(
+    tenant_id: UUID, document_ids: list[UUID], db: AsyncSession
+) -> dict[UUID, tuple[int, UUID | None]]:
+    """Group pending HITL review items by document, so the Documents list can
+    say "review required" truthfully without guessing which item to link to
+    when more than one is pending (#712)."""
+    if not document_ids:
+        return {}
+
+    result = await db.execute(
+        select(ReviewItemORM.document_id, ReviewItemORM.item_id).where(
+            ReviewItemORM.tenant_id == tenant_id,
+            ReviewItemORM.document_id.in_(document_ids),
+            ReviewItemORM.current_status.in_(_PENDING_REVIEW_STATUSES),
+        )
+    )
+    item_ids_by_document: dict[UUID, list[UUID]] = {}
+    for document_id, item_id in result.all():
+        item_ids_by_document.setdefault(document_id, []).append(item_id)
+
+    return {
+        document_id: (len(item_ids), item_ids[0] if len(item_ids) == 1 else None)
+        for document_id, item_ids in item_ids_by_document.items()
+    }
+
+
+def get_pending_review_document_ids(
+    db: AsyncSession = Depends(get_session),
+) -> PendingReviewLookup:
+    async def _lookup(tenant_id: UUID, document_ids: list[UUID]) -> dict[UUID, tuple[int, UUID | None]]:
+        return await _fetch_pending_review_counts(tenant_id, document_ids, db)
+
+    return _lookup
+
+
+def _document_status_detail(
+    status: DocumentStatus,
+    lifecycle: DocumentLifecycleStatus,
+    review_count: int | None,
+) -> str:
+    """Context-aware status detail. Falls back to the polling-only text for
+    every lifecycle state that isn't one of #712's new truthful states, so
+    existing copy for UPLOADED/PROCESSING/PARSED/ANALYSIS_PENDING/ANALYZED/
+    ERROR is unchanged."""
+    if lifecycle == DocumentLifecycleStatus.REVIEW_REQUIRED:
+        if review_count is not None and review_count > 1:
+            return (
+                f"{review_count} reviews are pending for this document. "
+                "Open the project review queue to act on them."
+            )
+        return "Analysis completed and is waiting for a human review decision."
+    if lifecycle == DocumentLifecycleStatus.FAILED_RETRYABLE:
+        return "Automatic analysis did not complete after several attempts. Retry to try again."
+    if lifecycle == DocumentLifecycleStatus.NEEDS_CHANGES:
+        return "A reviewer requested changes. Upload a corrected version to continue."
+    return _document_status_detail_for_polling(status)
 
 
 # --- Dependency wiring ---
@@ -791,6 +874,7 @@ async def list_documents_for_project(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     list_use_case: ListProjectDocumentsUseCase = Depends(get_list_documents_use_case),
+    pending_review_lookup: PendingReviewLookup = Depends(get_pending_review_document_ids),
 ) -> DocumentListResponse:
     documents, total_count = await list_use_case.execute(
         project_id=project_id,
@@ -799,20 +883,50 @@ async def list_documents_for_project(
         limit=limit,
     )
 
-    items = [
-        DocumentListItem(
-            id=doc.id,
-            filename=doc.filename,
-            document_type=doc.document_type.value if doc.document_type is not None else None,
-            status=_normalize_document_status_for_polling(doc.upload_status),
-            status_detail=_document_status_detail_for_polling(doc.upload_status),
-            lifecycle_status=document_lifecycle_status(doc.upload_status),
-            error_message=doc.parsing_error if doc.upload_status == DocumentStatus.ERROR else None,
-            uploaded_at=doc.created_at,
-            file_size_bytes=doc.file_size_bytes or 0,
-        )
-        for doc in documents
+    # Only PARSED_PENDING_ANALYSIS documents can possibly have a pending HITL
+    # review, so skip the query entirely when none are in this page (#712).
+    pending_candidate_ids = [
+        doc.id for doc in documents if doc.upload_status == DocumentStatus.PARSED_PENDING_ANALYSIS
     ]
+    pending_by_document: dict[UUID, tuple[int, UUID | None]] = {}
+    if pending_candidate_ids:
+        lookup_result = pending_review_lookup(tenant_id, pending_candidate_ids)
+        pending_by_document = (
+            await lookup_result if inspect.isawaitable(lookup_result) else lookup_result
+        )
+
+    items = []
+    for doc in documents:
+        review_count, review_item_id = pending_by_document.get(doc.id, (0, None))
+        has_pending_review = review_count > 0
+        analysis_attempt_failed = bool(
+            (doc.document_metadata or {}).get("analysis_last_attempt_incomplete")
+        )
+        lifecycle = document_lifecycle_status(
+            doc.upload_status,
+            has_pending_review=has_pending_review,
+            analysis_attempt_failed=analysis_attempt_failed,
+        )
+        items.append(
+            DocumentListItem(
+                id=doc.id,
+                filename=doc.filename,
+                document_type=doc.document_type.value if doc.document_type is not None else None,
+                status=_normalize_document_status_for_polling(doc.upload_status),
+                status_detail=_document_status_detail(
+                    doc.upload_status,
+                    lifecycle,
+                    review_count if has_pending_review else None,
+                ),
+                lifecycle_status=lifecycle,
+                retryable=document_is_retryable(lifecycle),
+                review_count=review_count if has_pending_review else None,
+                review_item_id=review_item_id if has_pending_review else None,
+                error_message=doc.parsing_error if doc.upload_status == DocumentStatus.ERROR else None,
+                uploaded_at=doc.created_at,
+                file_size_bytes=doc.file_size_bytes or 0,
+            )
+        )
     return DocumentListResponse(items=items, total_count=total_count, skip=skip, limit=limit)
 
 

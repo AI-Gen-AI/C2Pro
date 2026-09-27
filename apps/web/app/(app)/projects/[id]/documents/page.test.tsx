@@ -308,6 +308,132 @@ describe("ProjectDocumentsPage", () => {
     expect(screen.getByText("1 analyzed")).toBeInTheDocument();
   });
 
+  it("shows a review CTA to the exact item and stops the processing spinner when a single review is pending (#712)", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_review",
+          name: "Contract.pdf",
+          type: "contract",
+          fileSize: 2048,
+          uploadedAt: new Date("2026-03-18T09:00:00Z"),
+          status: "processing",
+          lifecycleStatus: "review_required",
+          statusDetail: "Analysis completed and is waiting for a human review decision.",
+          retryable: false,
+          reviewCount: 1,
+          reviewItemId: "11111111-1111-1111-1111-111111111111",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    expect(screen.getByTestId("document-row-doc_review")).toHaveTextContent("Review required");
+    expect(
+      screen.getByText("Analysis completed and is waiting for a human review decision."),
+    ).toBeInTheDocument();
+    // Never "Analysis has not started" -- analysis ran and is paused on a human.
+    expect(screen.getByTestId("document-row-doc_review")).not.toHaveTextContent(/not started/i);
+    expect(
+      screen.queryByRole("button", { name: /retry processing contract\.pdf/i }),
+    ).not.toBeInTheDocument();
+    const reviewLink = screen.getByRole("link", { name: /review contract\.pdf/i });
+    expect(reviewLink).toHaveAttribute(
+      "href",
+      "/projects/proj_real_001/review?itemId=11111111-1111-1111-1111-111111111111",
+    );
+    // A document paused for review is not active processing: no polling tracker.
+    expect(screen.queryByText("Analysis progress for proj_real_001")).not.toBeInTheDocument();
+  });
+
+  it("routes to the project review queue instead of guessing when more than one review is pending (#712)", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_review_multi",
+          name: "Contract.pdf",
+          type: "contract",
+          fileSize: 2048,
+          uploadedAt: new Date("2026-03-18T09:00:00Z"),
+          status: "processing",
+          lifecycleStatus: "review_required",
+          reviewCount: 2,
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    const reviewLink = screen.getByRole("link", { name: /open review queue for contract\.pdf/i });
+    expect(reviewLink).toHaveAttribute("href", "/projects/proj_real_001/review");
+    expect(reviewLink).toHaveTextContent("Review (2)");
+  });
+
+  it("shows an exhausted retryable analysis as a durable failure with a Retry action and stops polling (#712)", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_retry",
+          name: "Contract.pdf",
+          type: "contract",
+          fileSize: 2048,
+          uploadedAt: new Date("2026-03-18T09:00:00Z"),
+          status: "processing",
+          lifecycleStatus: "failed_retryable",
+          statusDetail: "Automatic analysis did not complete after several attempts. Retry to try again.",
+          retryable: true,
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    expect(screen.getByTestId("document-row-doc_retry")).toHaveTextContent("Retry needed");
+    expect(
+      screen.getByRole("button", { name: /retry processing contract\.pdf/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Analysis progress for proj_real_001")).not.toBeInTheDocument();
+  });
+
+  it("shows a rejected document as a durable needs-changes state without a retry action (#712)", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_rejected",
+          name: "Contract.pdf",
+          type: "contract",
+          fileSize: 2048,
+          uploadedAt: new Date("2026-03-18T09:00:00Z"),
+          status: "error",
+          lifecycleStatus: "needs_changes",
+          statusDetail: "A reviewer requested changes. Upload a corrected version to continue.",
+          retryable: false,
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    expect(screen.getByTestId("document-row-doc_rejected")).toHaveTextContent("Needs changes");
+    expect(
+      screen.queryByRole("button", { name: /retry processing contract\.pdf/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Analysis progress for proj_real_001")).not.toBeInTheDocument();
+  });
+
   it("offers retry only where it did before: not for documents the backend is already processing", () => {
     useProjectDocumentsMock.mockReturnValue({
       documents: [

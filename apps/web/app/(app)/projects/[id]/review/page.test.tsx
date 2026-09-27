@@ -7,9 +7,13 @@ import userEvent from '@testing-library/user-event';
 import ReviewPage from './page';
 
 // Mock next/navigation
+const { mockSearchParams } = vi.hoisted(() => ({
+  mockSearchParams: vi.fn(() => new URLSearchParams()),
+}));
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'test-project-id' }),
   useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => mockSearchParams(),
 }));
 
 vi.mock('@clerk/nextjs', () => ({
@@ -125,6 +129,19 @@ describe('ReviewPage', () => {
     expect(mockUseQueue).toHaveBeenCalledWith(
       expect.objectContaining({ project_id: 'test-project-id' }),
     );
+  });
+
+  it('highlights and scrolls to the exact item linked from the Documents page (#712)', () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams('itemId=item-1'));
+    const scrollIntoViewMock = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoViewMock;
+    setupMock();
+
+    render(<ReviewPage />);
+
+    const target = document.getElementById('review-item-item-1');
+    expect(target).toHaveClass('ring-2');
+    expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 
   it('shows loading state', () => {

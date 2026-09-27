@@ -52,4 +52,5 @@ export const DocumentStatus = {
   parsed_pending_analysis: "parsed_pending_analysis",
   analyzed: "analyzed",
   error: "error",
+  needs_changes: "needs_changes",
 } as const;
