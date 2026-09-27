@@ -206,6 +206,7 @@ jobs:
         run: |
           python -m pytest \
             tests/unit/ \
+            ../../tests/unit/core/ \
             -m "not integration" \
             --tb=short \
             --junit-xml=unit-test-results.xml \
