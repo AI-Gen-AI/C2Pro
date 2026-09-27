@@ -410,10 +410,15 @@ def reconcile_result(
 
     # Review authorization is evaluated only after immutable Git/CI/merge evidence and
     # the canonical queue item are known, but before any canonical-state mutation.
-    review_routing = _load_review_routing(control_dir)
+    review_policy = work_item.get("review_policy")
+    review_routing = (
+        _load_review_routing(control_dir)
+        if review_results is not None or review_policy != "optional"
+        else {}
+    )
     _validate_reconciliation_reviews(
         review_results,
-        review_policy=work_item.get("review_policy"),
+        review_policy=review_policy,
         work_id=work_id,
         expected_pr=remote_evidence.get("pr_number"),
         expected_head_sha=remote_evidence.get("pr_head_sha"),
