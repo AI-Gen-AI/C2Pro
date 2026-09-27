@@ -53,7 +53,7 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 
 ### Backlog Interpretation Rules
 
-- The backlog section and subsection hierarchy is operational. Examples: `2.2 Frontend`, `2.3 AI & Intelligence`, `2.5 Security`, `2.6.1 Prerequisites`, `2.6.3 Executable Verification`.
+- Legacy backlog section/subsection hierarchy may be used as read-only compatibility context when the user references an old group. Current execution order and ownership come from `.c2pro/control/work-queue.yaml` and the assigned work envelope.
 - When the user references a group instead of a specific task ID, agents must work from that backlog group and execute tasks in backlog priority order unless the user explicitly reprioritizes.
 - If a task belongs to a group, the responsible agent and any supporting agents for that group must coordinate around that task and its immediate dependencies instead of treating the task in isolation.
 - Group ownership is interpreted as follows:
@@ -69,7 +69,7 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 - Agents must always check the `Dependency` column and any nearby prerequisite notes before starting implementation.
 - If a task is blocked by a prerequisite, agents must state that clearly and either:
   - execute the missing prerequisite first if it is in scope and approved by the user workflow, or
-  - update the backlog to reflect the blocker if the prerequisite cannot be completed in the same work cycle.
+  - return the blocker in role-appropriate structured evidence for Planner/Reconciler handling if the prerequisite cannot be completed in the same work cycle.
 - Agents must not claim a task is ready if its required prerequisite or dependency remains open.
 - In Testing, agents must respect the normalized split:
   - `Prerequisites` are environment/bootstrap steps
@@ -179,7 +179,9 @@ apps/api/
 
 ## Required Context
 
-- `C2PRO_MASTER_BACKLOG.md`
+- `.c2pro/control/` + assigned `.c2pro/work/<work_id>.yaml` for active execution
+- `validation/product/c2pro-master-product-control-v1.yaml` + guarded Markdown projection for product lifecycle
+- `C2PRO_MASTER_BACKLOG.md` only when legacy reconciliation context is needed
 - `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md`
 - `docs/architecture/decisions/006-post-reorganization-architecture.md`
 - `docs/testing/C2PRO_TEST_SUITES_INDEX_v1.1.md`
@@ -216,25 +218,19 @@ When the user provides a Suite ID:
 2. `RED`: generate failing tests under `apps/api/tests/...`.
 3. `GREEN`: implement minimal code under `apps/api/src/...`.
 4. `REFACTOR`: improve only after passing tests.
-5. Update project tracking docs.
+5. Return role-appropriate structured completion evidence; canonical tracking is reconciled separately.
 
 ## Tracking Updates
 
-After completing a suite:
+After completing a suite or assigned work item:
 
-- Update `C2PRO_MASTER_BACKLOG.md`.
-- Update `docs/testing/C2PRO_TDD_BACKLOG_v1.0.md` when suite tracking changes.
-- Update `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md` when platform-level architecture changes.
-
-After completing any backlog task:
-
-- Mark the task state in `C2PRO_MASTER_BACKLOG.md`.
-- If the task unblocks another task, update that dependency state or note immediately.
+- Do **not** update or mark `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md`, or `blackboard.json`; they are legacy/cold references for modern `C2PRO-*` work.
+- Return the structured result required by the assigned role/work envelope, including completed work, tests, findings, residual risks, and dependency/unblock information.
+- Modify testing or architecture documentation only when that document is explicitly inside the assigned work scope; otherwise report the required documentation follow-up in structured evidence.
+- The Master Reconciler updates canonical `.c2pro` execution state after CI/merge evidence is complete.
 - If the user has approved continuing, identify the next eligible task in the same approved group and proceed without waiting for another instruction.
 
-Use this completion note format when applicable:
-
-- `[x] Implemented (Unit Tests & Domain Logic)`
+A human-readable completion note may accompany the structured result, but it never substitutes for canonical reconciliation.
 
 ## Agent Orchestration
 
@@ -279,8 +275,8 @@ Change the assignment at any time — no role files need modification.
 Shared state:
 
 - `blackboard.json` — ephemeral session state (active tasks, retries, errors, role assignments)
-- `C2PRO_MASTER_BACKLOG.md` — permanent project task register (cold read source of truth)
-- The Planner reads the Backlog for context, writes the session plan to the Blackboard.
+- `C2PRO_MASTER_BACKLOG.md` — legacy/cold historical task register; read-only context, **not current authority**
+- The Planner may read legacy material for reconciliation context; modern planning/control state is written only through the canonical `.c2pro` plane.
 
 ### Blackboard Integration & Task Lifecycle
 
@@ -310,7 +306,7 @@ Shared state:
 
 ### Role Assignment & Execution Rule
 
-- When the user assigns a backlog group, agents must treat that group as the active work queue.
+- When the user names a legacy backlog group, agents use it only to resolve intent and map that intent into the active `.c2pro` work queue.
 - Within that queue, agents execute by priority, prerequisite readiness, and task order as mapped from `.c2pro/control/work-queue.yaml`.
 
 ## State Management & Documentation Updates (CRITICAL)
@@ -349,9 +345,9 @@ The master/planner remains the sole writer allowed to reconcile this returned ev
 
 **Enforcement:**
 
-- Pre-execution hooks verify `backlog_id` exists
-- Post-execution hooks verify backlog was updated
-- Schema validation prevents invalid blackboard writes
+- Modern `C2PRO-*` work must resolve to an authorized `.c2pro/work/<work_id>.yaml` envelope before execution.
+- Ordinary workers cannot promote completion by mutating legacy backlog/blackboard files.
+- Review/CI/merge evidence is reconciled by the authorized Master/Planner/Reconciler into canonical control.
 
 ---
 
