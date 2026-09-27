@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -9,6 +10,7 @@ SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "verify_prod_syntheti
 SPEC = spec_from_file_location("verify_prod_synthetic_journey", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
 
