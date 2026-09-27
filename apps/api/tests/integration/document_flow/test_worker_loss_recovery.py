@@ -13,6 +13,7 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +26,35 @@ from src.documents.domain.models import DocumentStatus, DocumentType
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
+
+
+# This acceptance validates a migration-owned trigger/projection. The default
+# integration fixture recreates public via Base.metadata.create_all(), which
+# intentionally cannot recreate Alembic triggers. Use the real migrated schema.
+pytestmark = pytest.mark.alembic_schema
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _isolate_recovery_documents(db: AsyncSession, test_user):
+    yield
+    await db.rollback()
+    await db.execute(
+        text("SELECT set_config('app.current_tenant', :tenant, true)"),
+        {"tenant": str(test_user.tenant_id)},
+    )
+    await db.execute(
+        text("DELETE FROM review_items WHERE tenant_id = CAST(:tenant AS uuid)"),
+        {"tenant": str(test_user.tenant_id)},
+    )
+    await db.execute(
+        text("DELETE FROM documents WHERE tenant_id = CAST(:tenant AS uuid)"),
+        {"tenant": str(test_user.tenant_id)},
+    )
+    await db.execute(
+        text("DELETE FROM projects WHERE tenant_id = CAST(:tenant AS uuid)"),
+        {"tenant": str(test_user.tenant_id)},
+    )
+    await db.commit()
 
 
 def _stale_time() -> datetime:
