@@ -306,16 +306,18 @@ test.describe("Issue #706 production synthetic acceptance", () => {
     );
 
     let hitlExercised = false;
+    let exercisedReviewItemId: string | null = null;
     if (terminal.lifecycle_status === "review_required") {
       if ((terminal.review_count ?? 0) !== 1 || !terminal.review_item_id) {
         throw new Error(
           "PROD_ACCEPTANCE_REVIEW_NOT_EXACTLY_ADDRESSABLE",
         );
       }
+      exercisedReviewItemId = terminal.review_item_id;
       await approveExactDocumentReview(
         page,
         projectId,
-        terminal.review_item_id,
+        exercisedReviewItemId,
       );
       hitlExercised = true;
       terminal = await waitForAnalyzed(page, projectId, upload.documentId);
@@ -432,10 +434,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
         coherence_available: false,
       },
       evidence_clause_id: clauseId,
-      review_item_id:
-        terminal.lifecycle_status === "review_required"
-          ? terminal.review_item_id ?? null
-          : null,
+      review_item_id: exercisedReviewItemId,
       hitl_exercised: hitlExercised,
       relogin_verified: true,
     });
