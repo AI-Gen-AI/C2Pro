@@ -269,15 +269,20 @@ def push_completed_tasks_to_backlog() -> int:
     if not completed_tasks:
         return 0
 
-    updated_count = 0
-
-    # Update master backlog
-    updated_count += _mark_tasks_complete_in_file(MASTER_BACKLOG_PATH, completed_tasks)
-
-    # Update category backlogs
+    backlog_targets = [MASTER_BACKLOG_PATH]
     if BACKLOGS_DIR.exists():
-        for backlog_file in BACKLOGS_DIR.glob("*.md"):
-            updated_count += _mark_tasks_complete_in_file(backlog_file, completed_tasks)
+        backlog_targets.extend(BACKLOGS_DIR.glob("*.md"))
+
+    # Fail closed before the first mutation if any legacy target escapes the
+    # canonical write boundary.
+    for backlog_target in backlog_targets:
+        _resolve_legacy_backlog_target(backlog_target)
+
+    updated_count = 0
+    for backlog_target in backlog_targets:
+        updated_count += _mark_tasks_complete_in_file(
+            backlog_target, completed_tasks
+        )
 
     if updated_count > 0:
         blackboard["backlog_sync"]["last_sync"] = datetime.now(timezone.utc).isoformat()
