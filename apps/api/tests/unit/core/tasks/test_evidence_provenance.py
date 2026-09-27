@@ -65,6 +65,36 @@ def test_single_page_single_block_clause_preserves_real_bbox_and_revision() -> N
     }
 
 
+def test_partial_clause_inside_one_parser_block_keeps_page_without_full_block_bbox() -> None:
+    first = _long_clause("1.-")
+    second = _long_clause("2.-")
+    block_text = f"{first}\n{second}"
+
+    clauses = _extract_contract_clauses(
+        document_id=uuid4(),
+        project_id=uuid4(),
+        tenant_id=uuid4(),
+        parsed_text=block_text,
+        parsed_payload={
+            "text_blocks": [
+                {
+                    "text": block_text,
+                    "page": 4,
+                    "bbox": (10.0, 20.0, 410.0, 220.0),
+                }
+            ]
+        },
+        revision_id=uuid4(),
+    )
+
+    assert len(clauses) == 2
+    for clause in clauses:
+        location = clause.extracted_entities["evidence_location"]
+        assert location["page_number"] == 4
+        assert location["page_numbers"] == [4]
+        assert location["bbox"] is None
+
+
 def test_same_page_multiblock_clause_keeps_page_without_fake_union_bbox() -> None:
     first = _long_clause("1.-")
     second = "Additional supporting records remain part of the same contractual obligation."
