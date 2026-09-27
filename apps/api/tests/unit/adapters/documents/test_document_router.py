@@ -669,10 +669,10 @@ class TestDocumentHelpers:
         assert body[0]["metadata"]["evidence_location"]["bbox"] == [0.1, 0.2, 0.3, 0.4]
         assert body[0]["metadata"]["evidence_location"]["normalized"] is False
         assert body[1]["text"] == "CLS-002"
-        assert body[1]["page"] == 1
+        assert body[1]["page"] is None
         assert body[1]["confidence"] == pytest.approx(1.0)
         assert body[1]["metadata"]["clause_type"] is None
-        assert body[1]["metadata"]["evidence_location"]["bbox"] == [0.08, 0.12, 0.84, 0.06]
+        assert body[1]["metadata"]["evidence_location"]["bbox"] is None
 
     def test_doc_http_013_normalize_status(self, client):
         """
