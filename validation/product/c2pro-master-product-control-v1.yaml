@@ -106,16 +106,10 @@ reconciliation_delta_2026_09_27:
   current_main_sha: 863ac936cf36dac41c95e9e51f5e23d8dba1c419
   commits_ahead: 40
   material_main_advances:
-    - "P0b-L4-5 release-ready Health UI/report qualification merged via PR #630; PROD_VALIDATED explicitly remains NO"
-    - "Immutable tenant/project/document revision storage contract merged (fa58102d)"
-    - "P0c temporal/change intelligence wired on main: revision-bound worker events, timeline/change-detail API and What Changed UI (d93ad4b5)"
-    - "P0d Current State Reporting wired on main: canonical six-category Health projection, API, export and UI"
-    - "ADR-025 canonical WBS migrations and runtime authority wired on main; legacy parallel WBS writes blocked, RACI/BOM/MCP references reconciled; PR #631 repaired the production predecessor migration shape"
-    - "HITL resume evolved through #633/#638/#641/#646/#650 to V3 fenced, recoverable, idempotent final-decision semantics"
-    - "Next.js security baseline advanced to 16.3.6 via #654; blocking E2E runs against production Next runtime via #655"
-    - "CI action maintenance through #665/#668 is present in the observed main baseline but remains execution work owned outside this product-control reconciliation"
-    - "Qualification evidence Phase A merged via #678: P0b/P0c/P0d evidence bundles are machine-validated, historically bound and non-authoritative; lifecycle promotion remains Product Control only"
-    - "Composite deployment filtering completed via #695/#699: Railway and Vercel filters are both live-verified against non-runtime main changes"
+    - "PR #701 redacted committed credential examples from documentation/runbook surfaces; this is security hygiene only and does not advance product lifecycle."
+    - "PR #707 closed post-#669 control drift: DEV-03 activation/fresh job authority now precedes qualification, and P0c/P0d remain WIRED_ON_MAIN_NOT_PROD_VALIDATED rather than candidate work."
+    - "PR #700 merged Product Qualification Phase B: schema v7 compact qualification control, fixed capability-to-lifecycle mappings and fail-closed promotion guard are canonical; P0b/P0c/P0d remain unpromoted."
+    - "Operational deployment evidence after the previous baseline: Vercel #707 activated the #699 ignore rule and subsequent control-only #700 was CANCELED/ignored; Railway skipped both #707 and #700, leaving backend runtime at #697."
   control_conclusion: >
     Main is materially ahead of the 2026-09-13 reconciliation. Several former candidate lanes are
     now wired in repository code, but merge status is still distinct from deployment and PROD_VALIDATED.
@@ -516,8 +510,5 @@ next_authorized_action:
   - "Immediate P0 prerequisite: close #690 by establishing one dedicated non-customer production qualification identity + tenant through the real Clerk/auth path; do not reuse customer, personal or CI-only identities."
   - "Then execute #683 P0b against the exact backend/frontend deployments observed at run time; if either plane changed, rebind rather than redeploy merely to match main."
   - "After successful P0b evidence/reconciliation, execute #686 P0c and then #687 P0d on the same clean qualification project where practical; do not rebuild these wired lanes as new candidate features."
-  - "P1 is now ACTIVE/PARTIAL: finish ADR-025 with one-logical-root enforcement, WBS baseline/change governance, complete Budget/Schedule/Stakeholder/Alert/Evidence/Change linkage and the user drill-down."
-  - "Resolve the authoritative Coherence v2 cutover separately from Health; coverage and Unknown/null semantics remain mandatory."
-  - "Keep alert visibility/integration in P1; keep richer Action ownership/correlation/HITL automation in P2 even though the underlying HITL runtime is now materially hardened."
-  - "Procurement remains downstream of the canonical WBS backbone: Plan -> WBS packages -> BoQ/RFQ -> bid/award -> updates/comms."
+  - "After #687, stop for a fresh Line B reconciliation and explicit authorization before any P1/Coherence/Procurement implementation; those lanes remain planning context only in this snapshot."
   - "No direct main or production mutation; human-reviewed merge and separate production validation remain mandatory."
