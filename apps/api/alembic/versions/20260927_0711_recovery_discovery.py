@@ -1,7 +1,7 @@
 """#711 durable recovery discovery index outside tenant-scoped business reads.
 
 Revision ID: 20260927_0711
-Revises: 20260923_0001
+Revises: 20260927_0001
 Create Date: 2026-09-27
 
 The documents table is FORCE-RLS and must stay fail-closed. A scheduler with no
@@ -24,7 +24,7 @@ from sqlalchemy import text
 from alembic import op
 
 revision: str = "20260927_0711"
-down_revision: str | None = "20260923_0001"
+down_revision: str | None = "20260927_0001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
