@@ -76,3 +76,40 @@ def test_production_environment_and_explicit_operator_intent_remain_required() -
     assert "environment: production-qualification" in source
     assert 'test "${{ inputs.confirm_production }}" = "RUN-ISSUE-706"' in source
     assert 'test "${{ inputs.railway_staged_changes_clear }}" = "true"' in source
+
+
+
+def test_identity_preflight_is_the_default_non_mutating_mode() -> None:
+    source = _source()
+    assert 'default: "identity-preflight"' in source
+    identity = source.index("Execute non-mutating real production identity preflight")
+    journey = source.index("Execute real production browser journey")
+    assert identity < journey
+    assert "706-production-identity-preflight.spec.ts" in source
+
+
+def test_product_mutation_and_postrun_steps_require_full_journey_mode() -> None:
+    source = _source()
+    full_gate = "if: ${{ inputs.execution_mode == 'full-journey' }}"
+    for step in (
+        "Execute real production browser journey",
+        "Resolve bounded run identifiers",
+        "Read-only durable post-run verification",
+        "Build non-authoritative P0b evidence bundle",
+        "Validate qualification evidence contract",
+    ):
+        start = source.index(f"- name: {step}")
+        snippet = source[start : start + 220]
+        assert full_gate in snippet, f"{step} is not gated to full-journey mode"
+
+
+def test_production_playwright_projects_disable_sensitive_artifacts() -> None:
+    config = (REPO_ROOT / "apps" / "web" / "playwright.config.ts").read_text(
+        encoding="utf-8"
+    )
+    for project in ("prod-identity-preflight", "prod-acceptance"):
+        start = config.index(f'name: "{project}"')
+        snippet = config[start : start + 700]
+        assert 'trace: "off"' in snippet
+        assert 'screenshot: "off"' in snippet
+        assert 'video: "off"' in snippet
