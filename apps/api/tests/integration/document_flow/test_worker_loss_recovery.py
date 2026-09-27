@@ -71,7 +71,13 @@ async def _seed_document(
         created_by=user_id,
         updated_at=_stale_time(),
     )
-    db.add_all([project, document])
+    # ProjectORM/DocumentORM do not expose an ORM relationship that lets
+    # SQLAlchemy infer flush ordering here. Persist the FK parent explicitly
+    # before the document so this acceptance test exercises recovery semantics,
+    # not unit-of-work ordering.
+    db.add(project)
+    await db.flush()
+    db.add(document)
     await db.commit()
     return project, document
 
