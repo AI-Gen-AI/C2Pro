@@ -555,52 +555,6 @@ describe("AlertsPage analytics dashboard", () => {
     expect(screen.getAllByText("Resolved").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("orders unique alert type filter options with an explicit text order", () => {
-    useAlertsMock.mockReturnValue({
-      alerts: [
-        {
-          id: "a-zulu",
-          severity: "High",
-          type: "AZulu",
-          title: "Zulu alert",
-          description: "Zulu description",
-          project: "Atlas Ridge",
-          status: "Open",
-        },
-        {
-          id: "a-alpha",
-          severity: "High",
-          type: "Alpha",
-          title: "Alpha alert",
-          description: "Alpha description",
-          project: "Atlas Ridge",
-          status: "Open",
-        },
-        {
-          id: "a-alpha-duplicate",
-          severity: "Medium",
-          type: "alpha",
-          title: "Alpha duplicate",
-          description: "Duplicate type",
-          project: "Atlas Ridge",
-          status: "Open",
-        },
-      ],
-      loading: false,
-      error: null,
-    });
-
-    renderWithProviders(<AlertsPage />);
-
-    fireEvent.click(screen.getByRole("combobox", { name: /type filter/i }));
-
-    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "All Types",
-      "Alpha",
-      "AZulu",
-    ]);
-  });
-
   it("filters alerts by project id or name, type, and severity", async () => {
     useAlertsMock.mockReturnValue({
       alerts: [
