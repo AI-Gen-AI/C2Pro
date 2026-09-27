@@ -315,17 +315,10 @@ def test_tool_protocol():
     print("TEST 8: Tool Protocol Implementation")
     print("=" * 60)
 
-    try:
-        from src.core.ai.tools import Tool, get_tool
+    from src.core.ai.tools import Tool, get_tool
 
-        risk_tool = get_tool("risk_extraction")
-        wbs_tool = get_tool("wbs_extraction")
-    except Exception as e:
-        print(f"[FAIL] Protocol setup failed: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return False
+    risk_tool = get_tool("risk_extraction")
+    wbs_tool = get_tool("wbs_extraction")
 
     # Check if tools implement the protocol.
     # Note: isinstance with Protocol requires runtime_checkable.
@@ -339,6 +332,19 @@ def test_tool_protocol():
     print("[OK] WBS tool has all required methods")
 
     print("\n[OK] Protocol implementation test passed")
+
+
+def _run_tool_protocol_manual():
+    """Run the protocol test for the boolean-reporting manual harness."""
+    try:
+        test_tool_protocol()
+    except Exception as e:
+        print(f"[FAIL] Protocol test failed: {e}")
+        import traceback
+
+        traceback.print_exc()
+        return False
+
     return True
 
 def run_all_tests():
@@ -355,7 +361,7 @@ def run_all_tests():
         "Input Models": test_input_models(),
         "Output Models": test_output_models(),
         "Node Integration": test_node_integration(),
-        "Protocol Implementation": test_tool_protocol()
+        "Protocol Implementation": _run_tool_protocol_manual()
     }
 
     # Summary
