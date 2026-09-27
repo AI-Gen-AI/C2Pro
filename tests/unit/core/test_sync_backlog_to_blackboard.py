@@ -13,6 +13,8 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
+import core.sync_backlog_to_blackboard as sync_module
+
 from core.sync_backlog_to_blackboard import (
     extraer_tareas_de_backlog,
     inferir_tipo_y_rol,
@@ -40,10 +42,18 @@ def sample_backlog_content():
 
 
 @pytest.fixture
-def temp_backlog_file(tmp_path, sample_backlog_content):
-    """Create a temporary backlog file."""
-    backlog_file = tmp_path / "TEST_BACKLOG.md"
+def temp_backlog_file(tmp_path, sample_backlog_content, monkeypatch):
+    """Create a temporary canonical category backlog file."""
+    backlogs_dir = tmp_path / "backlogs"
+    backlogs_dir.mkdir()
+    master_backlog = tmp_path / "C2PRO_MASTER_BACKLOG.md"
+    master_backlog.write_text(sample_backlog_content, encoding="utf-8")
+
+    backlog_file = backlogs_dir / "TEST_BACKLOG.md"
     backlog_file.write_text(sample_backlog_content, encoding="utf-8")
+
+    monkeypatch.setattr(sync_module, "MASTER_BACKLOG_PATH", master_backlog)
+    monkeypatch.setattr(sync_module, "BACKLOGS_DIR", backlogs_dir)
     return backlog_file
 
 
@@ -250,6 +260,128 @@ class TestMarkTasksComplete:
         # Content should remain unchanged
         new_content = temp_backlog_file.read_text(encoding="utf-8")
         assert new_content == original_content
+
+
+    def test_mark_canonical_master_backlog_complete(
+        self, tmp_path, sample_backlog_content, monkeypatch
+    ):
+        """Canonical master backlog remains an allowed legacy write target."""
+        master_backlog = tmp_path / "C2PRO_MASTER_BACKLOG.md"
+        master_backlog.write_text(sample_backlog_content, encoding="utf-8")
+        backlogs_dir = tmp_path / "backlogs"
+        backlogs_dir.mkdir()
+
+        monkeypatch.setattr(sync_module, "MASTER_BACKLOG_PATH", master_backlog)
+        monkeypatch.setattr(sync_module, "BACKLOGS_DIR", backlogs_dir)
+
+        count = _mark_tasks_complete_in_file(
+            master_backlog,
+            [{"backlog_id": "TASK-BCK-001", "estado": "completado"}],
+        )
+
+        assert count == 1
+        assert "| [x] | P0 | `TASK-BCK-001` |" in master_backlog.read_text(
+            encoding="utf-8"
+        )
+
+    def test_mark_canonical_category_backlog_complete(
+        self, tmp_path, sample_backlog_content, monkeypatch
+    ):
+        """Markdown files beneath the canonical backlog root remain allowed."""
+        master_backlog = tmp_path / "C2PRO_MASTER_BACKLOG.md"
+        master_backlog.write_text(sample_backlog_content, encoding="utf-8")
+        backlogs_dir = tmp_path / "backlogs"
+        backlogs_dir.mkdir()
+        category_backlog = backlogs_dir / "BCK_BACKEND.md"
+        category_backlog.write_text(sample_backlog_content, encoding="utf-8")
+
+        monkeypatch.setattr(sync_module, "MASTER_BACKLOG_PATH", master_backlog)
+        monkeypatch.setattr(sync_module, "BACKLOGS_DIR", backlogs_dir)
+
+        count = _mark_tasks_complete_in_file(
+            category_backlog,
+            [{"backlog_id": "TASK-BCK-001", "estado": "completado"}],
+        )
+
+        assert count == 1
+        assert "| [x] | P0 | `TASK-BCK-001` |" in category_backlog.read_text(
+            encoding="utf-8"
+        )
+
+    def test_rejects_parent_traversal_outside_canonical_backlogs(
+        self, tmp_path, sample_backlog_content, monkeypatch
+    ):
+        """A ../ path that resolves outside the backlog root must fail closed."""
+        master_backlog = tmp_path / "C2PRO_MASTER_BACKLOG.md"
+        master_backlog.write_text(sample_backlog_content, encoding="utf-8")
+        backlogs_dir = tmp_path / "backlogs"
+        backlogs_dir.mkdir()
+        outside = tmp_path / "outside.md"
+        outside.write_text(sample_backlog_content, encoding="utf-8")
+        before = outside.read_bytes()
+
+        monkeypatch.setattr(sync_module, "MASTER_BACKLOG_PATH", master_backlog)
+        monkeypatch.setattr(sync_module, "BACKLOGS_DIR", backlogs_dir)
+
+        traversal = backlogs_dir / ".." / "outside.md"
+        with pytest.raises(ValueError, match="canonical legacy backlog"):
+            _mark_tasks_complete_in_file(
+                traversal,
+                [{"backlog_id": "TASK-BCK-001", "estado": "completado"}],
+            )
+
+        assert outside.read_bytes() == before
+
+    def test_rejects_resolved_outside_path_without_mutation(
+        self, tmp_path, sample_backlog_content, monkeypatch
+    ):
+        """An arbitrary resolved path outside canonical roots must not be written."""
+        master_backlog = tmp_path / "C2PRO_MASTER_BACKLOG.md"
+        master_backlog.write_text(sample_backlog_content, encoding="utf-8")
+        backlogs_dir = tmp_path / "backlogs"
+        backlogs_dir.mkdir()
+        outside = tmp_path / "outside.md"
+        outside.write_text(sample_backlog_content, encoding="utf-8")
+        before = outside.read_bytes()
+
+        monkeypatch.setattr(sync_module, "MASTER_BACKLOG_PATH", master_backlog)
+        monkeypatch.setattr(sync_module, "BACKLOGS_DIR", backlogs_dir)
+
+        with pytest.raises(ValueError, match="canonical legacy backlog"):
+            _mark_tasks_complete_in_file(
+                outside,
+                [{"backlog_id": "TASK-BCK-001", "estado": "completado"}],
+            )
+
+        assert outside.read_bytes() == before
+
+    def test_rejects_symlink_escape_from_canonical_backlogs(
+        self, tmp_path, sample_backlog_content, monkeypatch
+    ):
+        """A symlink under backlogs that resolves outside the root must fail closed."""
+        master_backlog = tmp_path / "C2PRO_MASTER_BACKLOG.md"
+        master_backlog.write_text(sample_backlog_content, encoding="utf-8")
+        backlogs_dir = tmp_path / "backlogs"
+        backlogs_dir.mkdir()
+        outside = tmp_path / "outside.md"
+        outside.write_text(sample_backlog_content, encoding="utf-8")
+        before = outside.read_bytes()
+        escape = backlogs_dir / "ESCAPE.md"
+        try:
+            escape.symlink_to(outside)
+        except OSError as exc:
+            pytest.skip(f"symlink creation unavailable: {exc}")
+
+        monkeypatch.setattr(sync_module, "MASTER_BACKLOG_PATH", master_backlog)
+        monkeypatch.setattr(sync_module, "BACKLOGS_DIR", backlogs_dir)
+
+        with pytest.raises(ValueError, match="canonical legacy backlog"):
+            _mark_tasks_complete_in_file(
+                escape,
+                [{"backlog_id": "TASK-BCK-001", "estado": "completado"}],
+            )
+
+        assert outside.read_bytes() == before
 
 
 class TestValidation:
