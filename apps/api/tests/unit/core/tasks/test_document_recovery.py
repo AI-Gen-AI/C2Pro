@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from src.core.tasks.document_recovery import (
     MAX_RECOVERY_ATTEMPTS,
+    _SCAN_SQL,
     RecoveryAction,
     classify_stale_document,
     recovery_attempts_for,
@@ -108,3 +109,11 @@ def test_recovery_attempt_budget_is_scoped_to_stage_and_document_generation() ->
         )
         == 0
     )
+
+
+
+def test_cross_tenant_discovery_uses_narrow_security_definer_surface() -> None:
+    sql = str(_SCAN_SQL)
+    assert "system_recovery.list_stale_document_candidates" in sql
+    assert "FROM documents" not in sql
+    assert "FROM public.documents" not in sql
