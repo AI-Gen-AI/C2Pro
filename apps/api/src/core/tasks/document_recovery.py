@@ -46,7 +46,7 @@ _SCAN_SQL = text(
     """
     SELECT document_id AS id, tenant_id
       FROM system_recovery.document_work_index
-     WHERE upload_status = ANY(:statuses)
+     WHERE upload_status IN (:status_parsing, :status_analysis_pending)
        AND updated_at <=
            (clock_timestamp() AT TIME ZONE 'UTC')
            - make_interval(secs => :stale_after)
@@ -85,7 +85,7 @@ _CLAIM_SQL = text(
       FROM documents d
      WHERE d.id = CAST(:document_id AS uuid)
        AND d.tenant_id = CAST(:tenant_id AS uuid)
-       AND d.upload_status::text = ANY(:statuses)
+       AND d.upload_status::text IN (:status_parsing, :status_analysis_pending)
        AND d.updated_at <= clock_timestamp() - make_interval(secs => :stale_after)
      FOR UPDATE OF d SKIP LOCKED
     """
@@ -225,7 +225,8 @@ async def _sweep_async(
             await session.execute(
                 _SCAN_SQL,
                 {
-                    "statuses": list(_RECOVERABLE_STATUSES),
+                    "status_parsing": DocumentStatus.PARSING.value,
+                    "status_analysis_pending": DocumentStatus.PARSED_PENDING_ANALYSIS.value,
                     "stale_after": stale_after_seconds,
                     "limit": batch_size,
                 },
