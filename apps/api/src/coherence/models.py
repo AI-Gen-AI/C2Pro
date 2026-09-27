@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from src.coherence.application.dtos.coherence_v2_dtos import CoherenceV2Payload
 from src.coherence.domain.v2_constants import SCORE_VERSION_V1
@@ -351,6 +351,13 @@ class DashboardSummary(BaseModel):
     tenant_id: str
     global_score: float | None
     coherence_score: float | None
+    # #714: explicit canonical/provisional split. coherence_score remains the
+    # backward-compatible official value; trusted_score is its named alias.
+    trusted_score: float | None = None
+    projected_score: float | None = None
+    projected_delta: float | None = None
+    pending_review_count: int = 0
+    projection_score_version: Literal["coherence-v1", "coherence-v2"] | None = None
     sub_scores: dict[str, float | None]
     weights_used: dict[str, float]
     alert_count: int
@@ -383,4 +390,12 @@ class DashboardSummary(BaseModel):
     projection_score_version: Literal["coherence-v1", "coherence-v2"] | None = None
     projection_status: Literal["none", "provisional", "unavailable"] = "none"
     projection_reason: str | None = None
+
+    @model_validator(mode="after")
+    def _trusted_score_is_canonical_alias(self) -> "DashboardSummary":
+        if self.trusted_score is None and self.coherence_score is not None:
+            self.trusted_score = self.coherence_score
+        elif self.trusted_score != self.coherence_score:
+            raise ValueError("trusted_score must equal canonical coherence_score")
+        return self
 
