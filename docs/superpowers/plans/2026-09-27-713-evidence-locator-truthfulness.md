@@ -38,7 +38,9 @@
 **Interfaces:**
 - Produce evidence metadata containing real `page_number: int | None`, source offsets/snippet, and optional real bbox.
 
-- [ ] **Step 1: Add fixture assertions for a known clause on a known page**
+- [ ] **Step 1: Add fixture assertions for provenance edge cases**
+
+Cover a known clause on a known page, a multi-page clause that must not invent one bbox, an OCR/scanned page with page known but bbox unavailable, and a non-PDF source whose page is legitimately null.
 - [ ] **Step 2: Run and verify RED because current producer does not persist `evidence_location`**
 - [ ] **Step 3: Thread real parser provenance into persisted clause/entity metadata**
 - [ ] **Step 4: Run parser/entity contract tests**
@@ -53,7 +55,9 @@ Commit message: `feat(evidence): persist real source page provenance`
 - Extend: `apps/api/tests/core/test_documents_entities_contract.py`
 - Extend: `apps/api/tests/unit/adapters/documents/test_document_router.py`
 
-- [ ] **Step 1: Write RED test: no location metadata => `page_number=null`, `bbox=null`**
+- [ ] **Step 1: Write RED tests for missing/stale location data**
+
+Assert no location metadata => `page_number=null`, `bbox=null`; malformed metadata also degrades to null; a locator bound to a missing/deleted revision does not retarget another document.
 - [ ] **Step 2: Write RED test: real location is preserved byte-for-byte/value-for-value**
 - [ ] **Step 3: Remove page-1/fixed-bbox fallback**
 - [ ] **Step 4: Run backend tests**
