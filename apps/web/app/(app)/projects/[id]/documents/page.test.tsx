@@ -205,7 +205,7 @@ describe("ProjectDocumentsPage", () => {
         {
           id: "doc_zulu",
           name: "Zulu.pdf",
-          type: "Zulu",
+          type: "aZulu",
           fileSize: 1024,
           uploadedAt: new Date("2026-03-18T09:00:00Z"),
           status: "parsed",
@@ -213,7 +213,7 @@ describe("ProjectDocumentsPage", () => {
         {
           id: "doc_alpha",
           name: "Alpha.pdf",
-          type: "alpha",
+          type: "Alpha",
           fileSize: 1024,
           uploadedAt: new Date("2026-03-18T09:00:00Z"),
           status: "parsed",
@@ -239,8 +239,8 @@ describe("ProjectDocumentsPage", () => {
 
     expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
       "All Types",
-      "alpha",
-      "Zulu",
+      "Alpha",
+      "AZulu",
     ]);
   });
 
