@@ -15,7 +15,7 @@ RETURNS TABLE (
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $$
+AS $recovery$
 BEGIN
     -- The Alembic application schema owns upload_status. The historic
     -- Supabase mirror baseline predates that column; keep mirror migrations
@@ -40,7 +40,7 @@ BEGIN
           LIMIT LEAST(GREATEST($2, 1), 100)'
         USING p_stale_after_seconds, p_limit;
 END
-$$;
+$recovery$;
 
 REVOKE ALL ON SCHEMA system_recovery FROM PUBLIC;
 REVOKE ALL ON FUNCTION
