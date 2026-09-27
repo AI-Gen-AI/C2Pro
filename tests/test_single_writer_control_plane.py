@@ -288,6 +288,7 @@ def test_live_guidance_does_not_restore_legacy_backlog_authority():
         "- Update `C2PRO_MASTER_BACKLOG.md`.",
         "- Mark the task state in `C2PRO_MASTER_BACKLOG.md`.",
         "update the backlog to reflect the blocker",
+        "implementation/review evidence belongs in the PR and structured `c2pro-implementation-result-v1` output",
         "cold read source of truth",
     )
     for relative in live_guidance:
