@@ -114,6 +114,7 @@ reconciliation_delta_2026_09_27:
     - "PR #719/#711 is now rebased on current main at head 6c0e93ca9871f1cfd4d6f6098d11187e61b44b57. Its Alembic lineage has been corrected to 20260923_0001 -> 20260927_0001 (#712 landed) -> 20260927_0711 (#711), so the single-head design is correct; exact-head CI proof is still running and processing stale-writer ownership/fencing remains the functional acceptance blocker."
     - "Vercel production remains at #722 6e98ec53f814bd29dee4607e375600c4560c7d70 while Railway production is at #723 0db53883a8942f7097fe9ce2e0e6c63397948fbb; this composite state is recorded, not normalized by redeploying merely for SHA equality."
     - "Parallel Line B governance cleanup remains non-product: #724 Wave 1 removes live legacy backlog/blackboard authority from active guidance, and #725 Wave 2 is queued to enforce exact-PR/head independent review, reviewer independence, risk-policy floors and fail-closed synthesis in the reconciler."
+    - "PR #726/#714 has started as DRAFT RED scaffolding from main with focused trusted-state tests only and no trusted-state migration yet. This is preparatory work, not accepted implementation; mergeable #714 integration remains gated on corrected #711/#712/#713 contracts."
   control_conclusion: >
     The operational north-star remains #706. Production currently runs Railway backend 0db53883a8942f7097fe9ce2e0e6c63397948fbb
     and Vercel frontend 6e98ec53f814bd29dee4607e375600c4560c7d70. #712/#713 code is deployed but not accepted:
@@ -121,8 +122,9 @@ reconciliation_delta_2026_09_27:
     #711 is rebased onto current main and its Alembic lineage is now linear by design, but exact-head CI remains a
     control gate and the decisive functional blocker is still processing ownership/fencing: after takeover, a stale
     worker must be unable to make any later canonical durable mutation. Line A owns the implementation; Claude is the
-    principal implementation route and Gemini the adversarial QA/challenger route under canonical routing. #714 must
-    consume corrected #711/#712/#713 contracts, not fork another lifecycle model. #715 remains unexecuted and #690
+    principal implementation route and Gemini the adversarial QA/challenger route under canonical routing. #714 has
+    begun only as PR #726 DRAFT/RED test scaffolding with no migration; its mergeable implementation must consume
+    corrected #711/#712/#713 contracts rather than fork another lifecycle model. #715 remains unexecuted and #690
     remains an external prerequisite. In parallel, #724 Wave 1 and #725 Wave 2 remove legacy governance ambiguity and
     harden exact-head review enforcement; they are control-plane work and do not substitute for #706 product proof.
     The unresolved Railway staged API patch remains a fail-closed #715 concern. None of these merge/deployment/control
