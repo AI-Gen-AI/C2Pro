@@ -6,8 +6,8 @@ scanning so tenant/RLS plumbing cannot blur the product semantics.
 from __future__ import annotations
 
 from src.core.tasks.document_recovery import (
-    MAX_RECOVERY_ATTEMPTS,
     _SCAN_SQL,
+    MAX_RECOVERY_ATTEMPTS,
     RecoveryAction,
     classify_stale_document,
     recovery_attempts_for,
