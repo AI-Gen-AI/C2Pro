@@ -1,6 +1,6 @@
 # Plan to Reach 70% Document Adapter Coverage
 
-> **Governance Note:** This document is a technical planning artifact. Active task ownership and completion state must be tracked in `C2PRO_MASTER_BACKLOG.md`.
+> **Governance Note:** This is a historical technical planning artifact. Any still-relevant work must first be reconciled into canonical `.c2pro` control/work state before execution. `C2PRO_MASTER_BACKLOG.md` is a read-only historical reference and does not own current task state.
 
 ## Current Coverage: 37%
 
