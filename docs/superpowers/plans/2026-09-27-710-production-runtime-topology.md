@@ -47,7 +47,8 @@
 Assert:
 - `local` returns `LocalFileStorageService`;
 - `r2` returns `R2StorageService`;
-- incomplete R2 configuration raises a safe configuration error rather than silently falling back to local.
+- incomplete R2 configuration raises a safe configuration error rather than silently falling back to local;
+- the supported production path uses the existing `boto3` dependency through a small async adapter (`asyncio.to_thread` around the S3 client methods), so #710 does not add an unreviewed storage SDK or alter the production lock merely to instantiate R2.
 
 - [ ] **Step 2: Run the focused tests and verify RED**
 
@@ -57,20 +58,24 @@ Expected: FAIL because the canonical factory does not exist.
 
 - [ ] **Step 3: Implement `build_storage_service() -> IStorageService`**
 
-Use the repository's existing R2 adapter and current settings. Do not add a new storage backend. If the existing R2 adapter cannot be instantiated safely with current dependencies, make that adapter instantiation the minimal code change inside this task rather than retaining hardcoded local storage.
+Use the repository's existing `R2StorageService` and current settings. Add a focused internal async boto3 adapter in the storage factory: configure one `boto3.client("s3", endpoint_url=settings.storage_endpoint, aws_access_key_id=..., aws_secret_access_key=...)`; expose the async methods required by `_R2Client` by calling the synchronous boto3 methods through `asyncio.to_thread`. Do not add `aioboto3` or another storage SDK in this PR. `storage_provider="s3"` is not silently treated as R2 unless its contract is separately proven; fail closed if unsupported.
 
-- [ ] **Step 4: Replace both active hardcoded LocalFileStorageService call sites**
+- [ ] **Step 4: Add a storage round-trip contract test**
+
+With a fake async S3 client, prove upload -> returned object key/url -> worker download resolves the same bytes without local filesystem sharing.
+
+- [ ] **Step 5: Replace both active hardcoded LocalFileStorageService call sites**
 
 The HTTP dependency and Celery ingestion module must resolve the same provider contract.
 
-- [ ] **Step 5: Run storage/upload tests**
+- [ ] **Step 6: Run storage/upload tests**
 
 Run:
 `cd apps/api && pytest tests/unit/documents/test_storage_factory.py tests/modules/documents/adapters/http/test_document_upload.py tests/unit/documents/test_p0b_storage_adapters.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 Commit message: `fix(storage): honor configured provider across upload and ingestion`
 
