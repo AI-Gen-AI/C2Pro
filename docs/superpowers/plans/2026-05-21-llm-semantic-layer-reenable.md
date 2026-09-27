@@ -1,3 +1,9 @@
+> **RETIRED / NON-OPERATIONAL — historical execution artifact.**  
+> Do not execute the legacy backlog-write, priority, scheduling, or completion instructions below for new work.  
+> Current development execution authority is `.c2pro/control/work-queue.yaml` plus the assigned `.c2pro/work/<work_id>.yaml` envelope.  
+> Current product lifecycle/programme truth is `validation/product/c2pro-master-product-control-v1.yaml` with its guarded human projection.  
+> The remaining body is preserved only as historical context/evidence.
+
 # LLM Semantic Layer Re-enable Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
