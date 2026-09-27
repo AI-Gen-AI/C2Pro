@@ -165,7 +165,7 @@ These rules in `.claude/rules/` override general defaults.
 
 3. **Commit attribution** disabled globally — do not add Co-Authored-By trailers.
 
-4. **`.claude/rules/agents.md` → Real Delegate Roster** — multi-terminal orchestration is governed by functional, model-agnostic roles (Orchestrator, Backend, Frontend, Full-Stack, DevOps/Infra, Test/QA, Verification Auditor, Reconciler). Hard limits attach to the role, not the model. Always dispatch by role + assigned model; the Verification Auditor role is strictly read-only; backlog edits go only through the Reconciler role.
+4. **`.claude/rules/agents.md` → Real Delegate Roster** — multi-terminal orchestration is governed by functional, model-agnostic roles (Orchestrator, Backend, Frontend, Full-Stack, DevOps/Infra, Test/QA, Verification Auditor, Reconciler). Hard limits attach to the role, not the model. Always dispatch by role + assigned model; the Verification Auditor role is strictly read-only. The Reconciler may write only canonical `.c2pro` control/evidence and reviewed Product-Control state within its authority; legacy backlog/blackboard files remain read-only for modern work.
 
 ## Security Baseline
 
