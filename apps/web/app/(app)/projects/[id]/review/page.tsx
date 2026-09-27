@@ -175,15 +175,18 @@ export default function ReviewPage() {
     if (modal.kind !== 'approve' || !reviewerName) return;
     if (!beginSubmit('approve')) return;
     try {
+      const reviewRowId = modal.item.row_id;
+      if (!reviewRowId) {
+        throw new Error(
+          'Exact review identity is unavailable. Refresh the queue before deciding.',
+        );
+      }
+      // #714: decisions from the user-facing queue target the immutable
+      // review row, never the reusable business item_id. A stale V1 modal
+      // therefore reaches V1 (now CLOSED) and fails closed instead of
+      // resolving onto an unseen V2 review for the same document.
       await approveMutation.mutateAsync({
-        // The queue list already collapses legacy item_id duplicates to one
-        // canonical (resumable, most-recent) row -- see
-        // SqlAlchemyReviewQueueRepository.list_by_status -- so the card the
-        // user is looking at and the row item_id resolves to on the backend
-        // are always the same one. Keep the URL contract as item_id (not
-        // row_id): callers/tests outside this page still address reviews by
-        // item_id, and get_review_item() already resolves it exactly.
-        itemId: modal.item.item_id,
+        itemId: reviewRowId,
         data: {},
       });
       markDecided(modal.item);
@@ -202,8 +205,14 @@ export default function ReviewPage() {
     if (modal.kind !== 'reject' || rejectReason.trim().length === 0 || !reviewerName) return;
     if (!beginSubmit('reject')) return;
     try {
+      const reviewRowId = modal.item.row_id;
+      if (!reviewRowId) {
+        throw new Error(
+          'Exact review identity is unavailable. Refresh the queue before deciding.',
+        );
+      }
       await rejectMutation.mutateAsync({
-        itemId: modal.item.item_id,
+        itemId: reviewRowId,
         data: {
           reason: rejectReason.trim(),
         },
