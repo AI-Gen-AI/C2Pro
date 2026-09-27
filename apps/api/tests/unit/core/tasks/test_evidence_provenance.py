@@ -112,6 +112,30 @@ def test_cross_page_clause_never_claims_one_exact_page_or_bbox() -> None:
     assert location["bbox"] is None
 
 
+def test_duplicate_clause_text_keeps_distinct_source_offsets() -> None:
+    repeated = _long_clause("1.-")
+    parsed_text = f"{repeated}\n\n{repeated}"
+    blocks = [
+        {"text": repeated, "page": 1, "bbox": (1.0, 1.0, 100.0, 30.0)},
+        {"text": repeated, "page": 2, "bbox": (1.0, 1.0, 100.0, 30.0)},
+    ]
+
+    clauses = _extract_contract_clauses(
+        document_id=uuid4(),
+        project_id=uuid4(),
+        tenant_id=uuid4(),
+        parsed_text=parsed_text,
+        parsed_payload={"text_blocks": blocks},
+        revision_id=uuid4(),
+    )
+
+    assert len(clauses) == 2
+    assert clauses[0].text_start_offset == 0
+    assert clauses[1].text_start_offset == len(repeated) + 2
+    assert clauses[0].extracted_entities["evidence_location"]["page_number"] == 1
+    assert clauses[1].extracted_entities["evidence_location"]["page_number"] == 2
+
+
 def test_clause_without_source_blocks_has_honest_null_location() -> None:
     text = _long_clause("1.-")
 
