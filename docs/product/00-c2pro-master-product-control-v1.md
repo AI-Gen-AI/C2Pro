@@ -98,6 +98,7 @@ Three facts remain deliberately separate:
 
 The previous control baseline was `1aecb4cf7ca454088e26046bb2ae8fa6b11bc518`. Current `main` is **40 commits ahead** at `863ac936cf36dac41c95e9e51f5e23d8dba1c419`. Material changes in this exact interval are:
 
+- **Canonical reconciliation (#669):** Product/Development Control was reconciled to the then-current repository/runtime evidence. This changed control classifications only; it introduced no product runtime capability and no `PROD_VALIDATED` promotion.
 - **Security hygiene (#701):** committed credential examples were redacted from documentation/runbook surfaces. This does not advance product lifecycle.
 - **Control drift repair (#707):** DEV-03 activation and fresh job-bound authority now precede qualification, while P0c/P0d remain classified as already wired and not production-validated.
 - **Qualification Phase B (#700):** Product Control schema v7 now carries compact qualification refs/status plus fixed capability→lifecycle mappings and a fail-closed promotion guard. Merging it did not promote P0b, P0c or P0d.
