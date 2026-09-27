@@ -13,6 +13,7 @@ its review, and becomes canonical only through :meth:`commit_candidate`.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -394,7 +395,7 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
         closed = await self._close_superseded_reviews(
             superseded, tenant_id=tenant_id, superseded_by=row.artifact_id
         )
-        bound = []
+        bound: Sequence[Any] = ()
         if review_thread_id:
             bound = (
                 await self._session.execute(
