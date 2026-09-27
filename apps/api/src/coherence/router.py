@@ -1260,7 +1260,7 @@ async def _attach_trusted_projection(
     from src.core.tenants.types import require_tenant_id
 
     trusted = summary.coherence_score
-    base = summary.model_copy(update={"trusted_score": trusted})
+    base: DashboardSummary = summary.model_copy(update={"trusted_score": trusted})
     try:
         repo = SqlAlchemyDocumentArtifactRepository(db)
         scoped = require_tenant_id(str(tenant_id))
@@ -1270,7 +1270,7 @@ async def _attach_trusted_projection(
             pending = await repo.list_pending_candidates(
                 project_id=project_id, tenant_id=scoped
             )
-            trusted_version = summary.score_version
+            trusted_version: str | None = summary.score_version
             if trusted_version is None and trusted is not None and pending:
                 latest = await repo.latest_trusted_scoring(
                     project_id=project_id, tenant_id=scoped
@@ -1285,29 +1285,37 @@ async def _attach_trusted_projection(
         logger.warning(
             "coherence_projection_unavailable", project_id=str(project_id), exc_info=True
         )
-        return base.model_copy(
-            update={"projection_status": "unavailable", "projection_reason": "projection_read_failed"}
+        return _copy(
+            base,
+            {"projection_status": "unavailable", "projection_reason": "projection_read_failed"},
         )
 
     version = projection.projection_score_version
     if version is not None and version not in _PROJECTABLE_SCORE_VERSIONS:
-        return base.model_copy(
-            update={
+        return _copy(
+            base,
+            {
                 "pending_review_count": projection.pending_review_count,
                 "projection_status": "unavailable",
                 "projection_reason": "unknown_score_version",
-            }
+            },
         )
-    return base.model_copy(
-        update={
+    return _copy(
+        base,
+        {
             "projected_score": projection.projected_score,
             "projected_delta": projection.projected_delta,
             "pending_review_count": projection.pending_review_count,
             "projection_score_version": version,
             "projection_status": projection.status.value,
             "projection_reason": projection.reason,
-        }
+        },
     )
+
+
+def _copy(summary: DashboardSummary, update: dict[str, Any]) -> DashboardSummary:
+    copied: DashboardSummary = summary.model_copy(update=update)
+    return copied
 
 
 async def _maybe_add_v2_dashboard(
