@@ -267,6 +267,7 @@ def _document_status_detail_for_polling(status: DocumentStatus) -> str:
 _PENDING_REVIEW_STATUSES = (
     ReviewStatus.PENDING_REVIEW_REQUIRED,
     ReviewStatus.PENDING_REVIEW_CONDITIONAL,
+    ReviewStatus.ESCALATED,
 )
 
 # (pending_review_count, exact_item_id_if_exactly_one_else_None) per document_id.
