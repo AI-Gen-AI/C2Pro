@@ -351,3 +351,41 @@ async def test_non_hitl_artifact_still_enqueues_canonical_project_graph_once(
     )
 
     assert enqueued == [(project_id, tenant_id)]
+
+
+@pytest.mark.asyncio
+async def test_project_graph_loads_trusted_artifacts_not_merely_active_candidates(
+    monkeypatch,
+) -> None:
+    """#714: a newer PROPOSED candidate must not displace canonical TRUSTED."""
+    from src.core.tasks import project_graph_tasks
+
+    trusted = _artifact()
+    proposed = _artifact()
+
+    class TrustAwareRepo:
+        def __init__(self) -> None:
+            self.trusted_calls = 0
+            self.active_calls = 0
+
+        async def list_trusted_for_project(self, *, project_id, tenant_id):
+            self.trusted_calls += 1
+            return [trusted]
+
+        async def list_active_for_project(self, *, project_id, tenant_id):
+            self.active_calls += 1
+            return [proposed]
+
+    repo = TrustAwareRepo()
+    fake_graph = _FakeGraph()
+    monkeypatch.setattr(project_graph_tasks, "build_project_graph", lambda: fake_graph)
+
+    result = await project_graph_tasks.run_project_graph_once(
+        project_id=uuid4(),
+        tenant_id=uuid4(),
+        artifact_repository=repo,
+    )
+
+    assert result["artifact_count"] == 1
+    assert repo.trusted_calls == 1
+    assert repo.active_calls == 0
