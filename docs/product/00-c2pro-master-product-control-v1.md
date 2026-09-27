@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
 **Status:** Reconciliation snapshot (read-only) · **Date:** 2026-09-27 · **Schema:** v7  
-**reconciled_against_main_sha:** `ed2eabd636d56b68605e26791ca69c11ce3a2905` · **deployed_runtime_sha:** `UNVERIFIED`  
+**reconciled_against_main_sha:** `c04b5567ad579259abd73037fa6cca2aa33891fc` · **deployed_runtime_sha:** `UNVERIFIED`  
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This document is the human projection of the machine product-control plane. It does not grant execution authority. Direct `main`, merge and production mutation remain governed outside this document.
@@ -10,7 +10,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=ed2eabd636d56b68605e26791ca69c11ce3a2905
+reconciled_against_main_sha=c04b5567ad579259abd73037fa6cca2aa33891fc
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
