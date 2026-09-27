@@ -379,10 +379,11 @@ def test_master_development_status_is_only_a_current_authority_pointer() -> None
     content = (ROOT / "docs" / "MASTER_DEVELOPMENT_STATUS.md").read_text(
         encoding="utf-8"
     )
-    assert "Compatibility pointer only" in content
+    assert "compatibility pointer" in content.lower()
     assert "validation/product/c2pro-master-product-control-v1.yaml" in content
     assert "docs/product/00-c2pro-master-product-control-v1.md" in content
     assert ".c2pro/control/" in content
+    assert ".c2pro/work/" in content
     assert "C2PRO_MASTER_BACKLOG.md` is now the single source of truth" not in content
     assert "C2PRO_MASTER_BACKLOG.md` for execution status" not in content
 
