@@ -106,17 +106,18 @@ reconciliation_delta_2026_09_27:
   current_main_sha: 863ac936cf36dac41c95e9e51f5e23d8dba1c419
   commits_ahead: 40
   material_main_advances:
+    - "PR #669 reconciled Product/Development Control against the then-current main/runtime evidence; it changed canonical control classifications only and introduced no product runtime capability or PROD_VALIDATED promotion."
     - "PR #701 redacted committed credential examples from documentation/runbook surfaces; this is security hygiene only and does not advance product lifecycle."
     - "PR #707 closed post-#669 control drift: DEV-03 activation/fresh job authority now precedes qualification, and P0c/P0d remain WIRED_ON_MAIN_NOT_PROD_VALIDATED rather than candidate work."
     - "PR #700 merged Product Qualification Phase B: schema v7 compact qualification control, fixed capability-to-lifecycle mappings and fail-closed promotion guard are canonical; P0b/P0c/P0d remain unpromoted."
     - "Operational deployment evidence after the previous baseline: Vercel #707 activated the #699 ignore rule and subsequent control-only #700 was CANCELED/ignored; Railway skipped both #707 and #700, leaving backend runtime at #697."
   control_conclusion: >
     Across the exact 2026-09-26 baseline 1aecb4cf... to 2026-09-27 baseline 863ac936... interval,
-    the material changes are control/security reconciliation only: #701 documentation hygiene,
-    #707 post-#669 control-drift repair and #700 Product Qualification Phase-B promotion guards.
-    No new product runtime capability or PROD_VALIDATED lifecycle promotion is claimed by this delta.
-    The north-star wedge remains P0b and its immediate execution blocker is #690: a dedicated
-    non-customer production qualification identity/tenant before the real #683 user journey.
+    the material changes are control/security reconciliation only: #669 canonical control reconciliation,
+    #701 documentation hygiene, #707 post-#669 control-drift repair and #700 Product Qualification
+    Phase-B promotion guards. No new product runtime capability or PROD_VALIDATED lifecycle promotion
+    is claimed by this delta. The north-star wedge remains P0b and its immediate execution blocker is
+    #690: a dedicated non-customer production qualification identity/tenant before the real #683 user journey.
 
 north_star:
   full_product: >
