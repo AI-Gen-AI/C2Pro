@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
-**Status:** Reconciliation snapshot (read-only) · **Date:** 2026-09-26 · **Schema:** v7  
-**reconciled_against_main_sha:** `1aecb4cf7ca454088e26046bb2ae8fa6b11bc518` · **deployed_runtime_sha:** `UNVERIFIED`  
+**Status:** Reconciliation snapshot (read-only) · **Date:** 2026-09-27 · **Schema:** v7  
+**reconciled_against_main_sha:** `863ac936cf36dac41c95e9e51f5e23d8dba1c419` · **deployed_runtime_sha:** `UNVERIFIED`  
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This document is the human projection of the machine product-control plane. It does not grant execution authority. Direct `main`, merge and production mutation remain governed outside this document.
@@ -10,7 +10,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=1aecb4cf7ca454088e26046bb2ae8fa6b11bc518
+reconciled_against_main_sha=863ac936cf36dac41c95e9e51f5e23d8dba1c419
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
@@ -90,8 +90,8 @@ This resolves the earlier ambiguity that could have led the product toward paral
 
 Three facts remain deliberately separate:
 
-- `reconciled_against_main_sha = 1aecb4cf7ca454088e26046bb2ae8fa6b11bc518` — repository baseline used for this reconciliation.
-- `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is now observed as a composite runtime with Railway backend `386cbbce74b2653a6039fdddd9fc9719c43b9ff9` (SUCCESS) and Vercel frontend `6186f2a06fb3957562aa338742f18838fac5993a` (READY). #678 records plane-specific non-authoritative evidence; #681 owns Product-Control promotion integration.
+- `reconciled_against_main_sha = 863ac936cf36dac41c95e9e51f5e23d8dba1c419` — repository baseline used for this reconciliation.
+- `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is currently observed as Railway backend `386cbbce74b2653a6039fdddd9fc9719c43b9ff9` (SUCCESS) and Vercel frontend `e7608723c72e391fa3ff12a50d433e4265e4ac94` (READY). #678 records plane-specific evidence and merged #700/#681 owns the Product-Control promotion guard.
 - `product_value_delivered = false` — P0a reliability is closed and several product lanes are now wired on `main`, but the north-star P0b journey is still not PROD_VALIDATED.
 
 ### 2.1 What changed since the 2026-09-13 reconciliation
@@ -108,7 +108,7 @@ The previous control snapshot was anchored to `454637863c502f6825d158af551511e0e
 - **Qualification evidence:** #678 is merged. P0b/P0c/P0d evidence bundles are machine-validated, historically bound and explicitly non-authoritative; Product Control still owns lifecycle promotion.
 - **Deployment identity:** composite filtering is live-proven. Railway Watch Paths skip non-backend changes while backend-changing #697 deployed; after #699, docs/control-only main merges #669 and #701 did not advance Vercel production, which remains on #678.
 
-None of those facts permits collapsing the current production deployment into one repository SHA. The immediate user-value gap remains **P0b-L4-5 production evidence**: one uploaded document must reach a truthful six-category Health surface with findings, missing evidence and actionable gaps across the exact backend/frontend deployments exercised.
+None of those facts permits collapsing the current production deployment into one repository SHA. The immediate user-value gap remains **P0b-L4-5 production evidence**, but execution is now blocked first by **#690**: one dedicated non-customer production qualification identity/tenant must authenticate through the real Clerk path. Once that exists, #683 runs the actual upload → analysis → Health journey against the exact backend/frontend deployments observed at run time.
 
 ### 2.2 Qualification Control v1 — evidence is necessary, never self-promoting
 
@@ -316,13 +316,14 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 
 ## 12. Next authorized sequence
 
-1. **Immediate P0 — production qualification, not another feature lane:** deploy/qualify the current hardened `main` and close P0b-L4-5 with evidence for the truthful single-document Health journey.
-2. **Qualify what is already built:** prove P0c What Changed and P0d Current State on the deployed runtime; do not recreate them as candidate work.
-3. **P1 Project Controls — ACTIVE/PARTIAL:** finish one-logical-root enforcement, WBS baseline/change governance and complete Budget/Schedule/Stakeholder/Alert/Evidence/Change linkage plus user drill-down.
-4. **P1 Coherence:** make the authoritative v2 cutover decision independently from Health and preserve coverage/Unknown semantics.
-5. Keep alert visibility/integration in P1; keep richer Action ownership/correlation/HITL automation in P2 despite the hardened HITL substrate.
-6. Build Procurement only on top of the completed canonical Project Controls backbone.
-7. Extend reporting to executive/portfolio only when Current State + Evolution + Project Controls are trustworthy.
-8. **Control-plane discipline:** reconcile this YAML/Markdown pair against an exact `main` SHA whenever a material product lane merges; branch completion never advances deployment or PROD_VALIDATED automatically.
+1. **Immediate P0 prerequisite — #690:** establish one dedicated non-customer production qualification identity + tenant through the real Clerk/auth path. Do not reuse customer, personal or CI-only identities.
+2. **P0b — #683:** execute the real single-document upload → analysis → truthful six-category Health journey on the exact backend/frontend deployments observed immediately before the run. Rebind if either plane changed; do not redeploy merely to force SHA equality.
+3. **P0c/P0d — #686 then #687:** qualify What Changed and Current State on the same clean qualification project where practical; do not recreate already-wired lanes as feature work.
+4. **P1 Project Controls — ACTIVE/PARTIAL:** finish one-logical-root enforcement, WBS baseline/change governance and complete Budget/Schedule/Stakeholder/Alert/Evidence/Change linkage plus user drill-down.
+5. **P1 Coherence:** make the authoritative v2 cutover decision independently from Health and preserve coverage/Unknown semantics.
+6. Keep alert visibility/integration in P1; keep richer Action ownership/correlation/HITL automation in P2 despite the hardened HITL substrate.
+7. Build Procurement only on top of the completed canonical Project Controls backbone.
+8. Extend reporting to executive/portfolio only when Current State + Evolution + Project Controls are trustworthy.
+9. **Control-plane discipline:** reconcile this YAML/Markdown pair against an exact `main` SHA whenever a material product lane merges; branch completion never advances deployment or PROD_VALIDATED automatically.
 
 **No direct `main` or production mutation is authorized by this reconciliation. Human-reviewed merge remains mandatory.**
