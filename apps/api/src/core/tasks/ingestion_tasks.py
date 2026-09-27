@@ -1068,6 +1068,8 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
     retry_backoff=True,
     retry_backoff_max=60,
     task_track_started=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
 )
 def process_document_async(
     self: Any, document_id: str, revision_id: str | None = None
