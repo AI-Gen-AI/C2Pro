@@ -112,8 +112,10 @@ def test_recovery_attempt_budget_is_scoped_to_stage_and_document_generation() ->
 
 
 
-def test_cross_tenant_discovery_uses_narrow_security_definer_surface() -> None:
+def test_cross_tenant_discovery_uses_minimal_internal_projection() -> None:
     sql = str(_SCAN_SQL)
-    assert "system_recovery.list_stale_document_candidates" in sql
+    assert "system_recovery.document_work_index" in sql
     assert "FROM documents" not in sql
     assert "FROM public.documents" not in sql
+    assert "upload_status" in sql
+    assert "updated_at" in sql
