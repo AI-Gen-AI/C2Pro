@@ -288,7 +288,7 @@ def push_completed_tasks_to_backlog() -> int:
 
 def _resolve_legacy_backlog_target(backlog_path: Path) -> Path:
     """Resolve and constrain a legacy backlog write target to canonical roots."""
-    if MASTER_BACKLOG_PATH.is_symlink():
+    if MASTER_BACKLOG_PATH.is_symlink() or BACKLOGS_DIR.is_symlink():
         raise ValueError(
             "Backlog path must remain within canonical legacy backlog roots"
         )
