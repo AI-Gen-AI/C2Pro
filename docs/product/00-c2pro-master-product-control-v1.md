@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
 **Status:** Reconciliation snapshot (read-only) · **Date:** 2026-09-27 · **Schema:** v7  
-**reconciled_against_main_sha:** `c04b5567ad579259abd73037fa6cca2aa33891fc` · **deployed_runtime_sha:** `UNVERIFIED`  
+**reconciled_against_main_sha:** `0db53883a8942f7097fe9ce2e0e6c63397948fbb` · **deployed_runtime_sha:** `UNVERIFIED`  
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This document is the human projection of the machine product-control plane. It does not grant execution authority. Direct `main`, merge and production mutation remain governed outside this document.
@@ -10,7 +10,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=c04b5567ad579259abd73037fa6cca2aa33891fc
+reconciled_against_main_sha=0db53883a8942f7097fe9ce2e0e6c63397948fbb
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
@@ -91,23 +91,26 @@ This resolves the earlier ambiguity that could have led the product toward paral
 Three facts remain deliberately separate:
 
 - `reconciled_against_main_sha = c04b5567ad579259abd73037fa6cca2aa33891fc` — repository baseline used for this reconciliation.
-- `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is composite. Railway API `d3bd8b61-9481-49f5-aa6a-c0d51b8ce037`, Worker `f1a2e319-e586-475e-805a-50d0a0f1ee47` and Scheduler `1c38fde0-a201-43b7-a1d1-ec605f05e070` are SUCCESS at #718 merge commit `c04b5567ad579259abd73037fa6cca2aa33891fc`; API logs show Alembic completion, Uvicorn startup and `/api/v1/health` 200, while Worker/Scheduler start only their dedicated Celery roles. Vercel production remains READY at #707 `e7608723c72e391fa3ff12a50d433e4265e4ac94`. #678/#700 retain plane-specific evidence/promotion control.
+- `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is composite. Railway API `ab0a2cfa-2565-4e74-bdc5-26b3066d4bdb`, Worker `7d2fdcb4-7606-4c80-836e-6dfd852e55a4` and Scheduler `5f59ff9f-9a78-4065-93f6-b9a3c8f5e4e3` are SUCCESS at #723 merge commit `0db53883a8942f7097fe9ce2e0e6c63397948fbb`. Vercel production `dpl_2z3ivCtezP7RKZ1b3wmDmAi7PUB5` is READY at #722 merge commit `6e98ec53f814bd29dee4607e375600c4560c7d70`. Backend and frontend SHAs therefore legitimately differ and must be rebound separately at qualification time.
 - Railway also reports one unresolved STAGED API environment patch `7fcd5228-be1b-4be5-8e72-9692c854ddbf`; the available read-only API does not expose its internal delta, so #715 must fail closed unless staged changes are zero or the exact delta is operator-reviewed and bound to the qualification evidence.
 - Fresh API logs report `coherence_analysis=True`; this proves production Coherence is enabled, but does not by itself prove the separate per-tenant ADR-017 ProjectGraph gate.
 - `product_value_delivered = false` — P0a reliability is closed and several product lanes are now wired on `main`, but the north-star P0b journey is still not PROD_VALIDATED.
 
 ### 2.1 What changed since the previous 2026-09-27 control baseline
 
-The previous reconciled repository baseline was `ed2eabd636d56b68605e26791ca69c11ce3a2905`. Current `main` is **10 commits ahead** at `c04b5567ad579259abd73037fa6cca2aa33891fc`. Material changes in this exact interval are:
+The previous reconciled repository baseline was `c04b5567ad579259abd73037fa6cca2aa33891fc`. Current `main` is **61 commits ahead** at `0db53883a8942f7097fe9ce2e0e6c63397948fbb`.
 
-- **Line B GOAL reconciliation (#720):** Product Control was aligned to #706 at `ed2eabd...` with no lifecycle promotion. It subsequently merged despite Line B recording `HOLD_EXTERNAL_REVIEW`; that merge is a governance/review exception and is not independent-review evidence.
-- **#710 runtime-default cleanup (#718):** the repository default is now API-only after the already-live Railway cutover. Fresh Railway deployments of API, Worker and Scheduler all reached SUCCESS on merge commit `c04b5567ad579259abd73037fa6cca2aa33891fc`; startup logs prove role separation and the API healthcheck returned 200. The merged #718 head also lacked independent exact-head review after its earlier Codex P1 had been remediated, so that is a second governance/review exception rather than evidence of user-value failure.
-- **Runtime preflight drift:** Railway production currently has one unresolved STAGED API environment patch (`7fcd5228-be1b-4be5-8e72-9692c854ddbf`) whose internal before/after delta is not available through the current read-only API. It must not be accepted implicitly during qualification.
-- **Feature-state evidence:** API logs show `coherence_analysis=True`. This confirms Coherence is enabled in production, but it does not prove the distinct per-tenant ProjectGraph flag.
+Material facts in this interval:
 
-Production remains a composite runtime: Railway is now on #718/`c04b5567...` while Vercel production remains on #707/`e7608723...`. That is legitimate because #718 is backend/runtime-only; both planes must still be rebound exactly at qualification time.
+- **#713 / PR #722:** evidence-provenance and locator improvements merged as `6e98ec53...` and are live in both Railway and Vercel production. However, the exact merged head had **zero review records** and still contains two documented truthfulness defects: parsed-text/block-index offset canonicalization and partial-block bbox exactness. Issue #713 remains OPEN for fix-forward. Merge/deploy is not acceptance.
+- **#712 / PR #723:** truthful lifecycle work merged as `0db53883...` and is live in Railway backend. The exact merged head also had **zero review records** and no remediation commits after the Line B hold. Backend/UI retry eligibility and strict REJECT-to-document atomicity remain fix-forward blockers. Issue #712 remains OPEN.
+- **Migration order changed operationally:** because #712 landed before #711, #719 must now rebase on current main and chain its recovery migration after landed revision `20260927_0001`, proving one Alembic head before merge.
+- **Production is currently composite:** Railway backend is `0db53883...`; Vercel production is `6e98ec53...`. No #723 Vercel production deployment is observed after the #722 READY deployment.
+- **Runtime preflight drift persists:** Railway still carries unresolved staged API patch `7fcd5228-be1b-4be5-8e72-9692c854ddbf`; #715 must fail closed unless that delta is explicitly reviewed/bound or staged changes return to zero.
 
-The immediate GOAL remains **#706 operational closure**. #710 is live; #711–#714 remain P0 remediation, #715 is the final real synthetic production acceptance, and #690 remains the external dedicated Clerk identity prerequisite. CI green, merge state and deployment success are controls; none is the GOAL and none promotes P0b/P0c/P0d by itself.
+The GOAL remains **#706 operational closure**. #710 is live. #712 and #713 are merged/deployed but **not accepted**; both require fix-forward. #711 still requires ownership/fencing plus final rebase/migration chaining. #714 must not start a mergeable implementation until corrected upstream contracts are stable. #715 has not run and #690 remains an external prerequisite.
+
+CI green, merge state and deployment success remain controls only. None promotes P0b/P0c/P0d or changes `product_value_delivered=false`.
 
 ### 2.2 Qualification Control v1 — evidence is necessary, never self-promoting
 
@@ -316,7 +319,7 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 ## 12. Next authorized sequence
 
 1. **Parallel external prerequisite — #690:** establish the dedicated non-customer Clerk Production org/user through the supported operator path; do not reuse customer/CI identities and do not manually synthesize DB mappings.
-2. **Line A #706 remediation:** #710 is DONE/live. Complete the required #711–#714 P0 workstreams under their existing Line A authority; Line B does not duplicate them.
+2. **Line A #706 remediation:** #710 is DONE/live. Complete #711 ownership/fencing + current-main migration integration; fix-forward the merged-but-unaccepted #712 and #713 semantics; only then implement #714 on those corrected contracts. Line B coordinates/reconciles and does not duplicate the feature branches.
 3. **Final deployed proof — #715:** only after #690 plus required #711–#714 are merged/deployed, run the synthetic production harness against exact rebound Railway API/Worker/Scheduler and Vercel production identities. Fail closed on mocks/HITL bypass/fixture mismatch and on any unreviewed Railway staged configuration change.
 4. **P0b evidence — #683:** capture its Health/persistence assertions inside the #715 run where applicable; do not promote a pre-remediation diagnostic as final production evidence.
 5. **Then P0c/P0d — #686 then #687:** qualify on the same clean synthetic tenant/project where their own gates are met.
