@@ -107,6 +107,17 @@ _RECORD_ATTEMPT_SQL = text(
     """
 )
 
+_RENEW_RECOVERY_LEASE_SQL = text(
+    """
+    UPDATE system_recovery.document_work_index
+       SET heartbeat_at = clock_timestamp() AT TIME ZONE 'UTC'
+     WHERE document_id = CAST(:document_id AS uuid)
+       AND tenant_id = CAST(:tenant_id AS uuid)
+       AND upload_status = :expected_status
+    """
+)
+
+
 _MARK_RETRYABLE_FAILURE_SQL = text(
     """
     UPDATE documents
@@ -337,6 +348,19 @@ async def _sweep_async(
                         attempts=next_attempt,
                         outcome=action.value,
                     ),
+                },
+            )
+            # Acquire a fresh recovery lease before committing and dispatching.
+            # The document trigger intentionally preserves heartbeat while the
+            # status is unchanged; without this explicit renewal another beat
+            # tick could immediately reclaim the same stale candidate before
+            # the replacement worker emits its first heartbeat.
+            await session.execute(
+                _RENEW_RECOVERY_LEASE_SQL,
+                {
+                    "document_id": str(document_id),
+                    "tenant_id": str(tenant_id),
+                    "expected_status": status.value,
                 },
             )
             dispatch = (action, current_revision_id)
