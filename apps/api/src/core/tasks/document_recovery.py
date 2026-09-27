@@ -44,12 +44,11 @@ _RECOVERABLE_STATUSES = (
 
 _SCAN_SQL = text(
     """
-    SELECT d.id, d.tenant_id
-      FROM documents d
-     WHERE d.upload_status::text = ANY(:statuses)
-       AND d.updated_at <= clock_timestamp() - make_interval(secs => :stale_after)
-     ORDER BY d.updated_at, d.id
-     LIMIT :limit
+    SELECT document_id AS id, tenant_id
+      FROM system_recovery.list_stale_document_candidates(
+          :stale_after,
+          :limit
+      )
     """
 )
 
@@ -223,7 +222,6 @@ async def _sweep_async(
             await session.execute(
                 _SCAN_SQL,
                 {
-                    "statuses": list(_RECOVERABLE_STATUSES),
                     "stale_after": stale_after_seconds,
                     "limit": batch_size,
                 },
