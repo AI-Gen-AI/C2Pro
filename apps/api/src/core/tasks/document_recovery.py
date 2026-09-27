@@ -37,11 +37,6 @@ DEFAULT_STALE_AFTER_SECONDS = 900
 MAX_RECOVERY_ATTEMPTS = 3
 RECOVERY_METADATA_KEY = "processing_recovery"
 
-_RECOVERABLE_STATUSES = (
-    DocumentStatus.PARSING.value,
-    DocumentStatus.PARSED_PENDING_ANALYSIS.value,
-)
-
 _SCAN_SQL = text(
     """
     SELECT document_id AS id, tenant_id
@@ -252,7 +247,10 @@ async def _sweep_async(
                     {
                         "document_id": str(document_id),
                         "tenant_id": str(tenant_id),
-                        "statuses": list(_RECOVERABLE_STATUSES),
+                        "status_parsing": DocumentStatus.PARSING.value,
+                        "status_analysis_pending": (
+                            DocumentStatus.PARSED_PENDING_ANALYSIS.value
+                        ),
                         "stale_after": stale_after_seconds,
                     },
                 )
