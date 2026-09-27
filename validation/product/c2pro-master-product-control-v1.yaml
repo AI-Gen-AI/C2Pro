@@ -1,7 +1,7 @@
 schema: c2pro-product-control-v1
 schema_version: 7
 repository: AI-Gen-AI/C2Pro
-generated: "2026-09-26"
+generated: "2026-09-27"
 control_status: reconciliation
 
 # Machine source of truth for product programme state. Edit this file first;
@@ -48,7 +48,7 @@ development_execution_authority:
     This product plane records target/state; it does not authorize merges or production mutation.
 
 production_position:
-  reconciled_against_main_sha: 1aecb4cf7ca454088e26046bb2ae8fa6b11bc518
+  reconciled_against_main_sha: 863ac936cf36dac41c95e9e51f5e23d8dba1c419
   deployed_runtime_sha: UNVERIFIED
   observed_production_evidence:
     - "kuwait2 doc c510de21: enqueue -> worker -> SUCCESS on dedicated Railway Redis (historical P0a evidence)"
@@ -57,7 +57,7 @@ production_position:
     - "alerts.severity = public.alertseverity enum (schema conformance evidence)"
     - "ADR-004 circuit breakers observed in production logs"
     - "PR #630 merged the P0b-L4-5 release-ready implementation; the PR explicitly recorded PROD_VALIDATED=NO"
-    - "Production runtime identity is now observed per plane rather than inferred from main: Railway backend deployment 2bbaea5d-bc7f-4aeb-80ad-aba6d483141a is SUCCESS at 386cbbce74b2653a6039fdddd9fc9719c43b9ff9; Vercel frontend deployment dpl_GTC5eGxtn4m6e5p7Tsyet8jRDBfq is READY at 6186f2a06fb3957562aa338742f18838fac5993a"
+    - "Production runtime identity is observed per plane rather than inferred from main: Railway backend deployment 2bbaea5d-bc7f-4aeb-80ad-aba6d483141a is SUCCESS at 386cbbce74b2653a6039fdddd9fc9719c43b9ff9; Vercel frontend deployment dpl_9yYepGueXUg9u2XnSXJVmYVVgNcV is READY at e7608723c72e391fa3ff12a50d433e4265e4ac94"
     - "The legacy singleton deployed_runtime_sha remains UNVERIFIED because backend/frontend SHAs legitimately differ; merged #678 carries non-authoritative composite runtime evidence and #681 owns Product-Control promotion integration"
     - "Composite deployment filtering is live-proven: Railway Watch Paths /apps/api/** skip non-backend changes while backend-changing #697 deployed SUCCESS; after #699, docs/control-only main merges #669 and #701 did not advance Vercel production, which remains on #678"
     - "Production HITL incidents proved the real P0b journey reached human review; subsequent #633/#638/#641/#646/#650 hardening is merged on main, without implying P0b PROD_VALIDATED"
@@ -101,10 +101,10 @@ qualification_control:
       lifecycle_targets:
         - {kind: wbs_subtrack, id: PWBS-EXEC-REPORTING, subtrack: current_state, field: prod_validation_status, promote_to: PROD_VALIDATED}
 
-reconciliation_delta_2026_09_26:
-  previous_main_sha: 454637863c502f6825d158af551511e0e9996d14
-  current_main_sha: 1aecb4cf7ca454088e26046bb2ae8fa6b11bc518
-  commits_ahead: 276
+reconciliation_delta_2026_09_27:
+  previous_main_sha: 1aecb4cf7ca454088e26046bb2ae8fa6b11bc518
+  current_main_sha: 863ac936cf36dac41c95e9e51f5e23d8dba1c419
+  commits_ahead: 40
   material_main_advances:
     - "P0b-L4-5 release-ready Health UI/report qualification merged via PR #630; PROD_VALIDATED explicitly remains NO"
     - "Immutable tenant/project/document revision storage contract merged (fa58102d)"
@@ -119,7 +119,7 @@ reconciliation_delta_2026_09_26:
   control_conclusion: >
     Main is materially ahead of the 2026-09-13 reconciliation. Several former candidate lanes are
     now wired in repository code, but merge status is still distinct from deployment and PROD_VALIDATED.
-    The north-star wedge therefore remains P0b until production evidence closes its exit gate.
+    The north-star wedge therefore remains P0b. The common execution blocker is now #690: a dedicated non-customer production qualification identity/tenant must exist before the real #683 user journey can run.
 
 north_star:
   full_product: >
@@ -513,8 +513,9 @@ pr_disposition:
   "650": {action: MERGED_HITL_V3_IDEMPOTENCY, reason: "final decision audit idempotency + exact-identity reconciliation integrated"}
 
 next_authorized_action:
-  - "Immediate P0: deploy/qualify the current hardened main and close P0b-L4-5 with production evidence for the truthful single-document Health journey."
-  - "Then production-qualify the already-wired P0c What Changed and P0d Current State journeys; do not rebuild them as new candidate lanes."
+  - "Immediate P0 prerequisite: close #690 by establishing one dedicated non-customer production qualification identity + tenant through the real Clerk/auth path; do not reuse customer, personal or CI-only identities."
+  - "Then execute #683 P0b against the exact backend/frontend deployments observed at run time; if either plane changed, rebind rather than redeploy merely to match main."
+  - "After successful P0b evidence/reconciliation, execute #686 P0c and then #687 P0d on the same clean qualification project where practical; do not rebuild these wired lanes as new candidate features."
   - "P1 is now ACTIVE/PARTIAL: finish ADR-025 with one-logical-root enforcement, WBS baseline/change governance, complete Budget/Schedule/Stakeholder/Alert/Evidence/Change linkage and the user drill-down."
   - "Resolve the authoritative Coherence v2 cutover separately from Health; coverage and Unknown/null semantics remain mandatory."
   - "Keep alert visibility/integration in P1; keep richer Action ownership/correlation/HITL automation in P2 even though the underlying HITL runtime is now materially hardened."
