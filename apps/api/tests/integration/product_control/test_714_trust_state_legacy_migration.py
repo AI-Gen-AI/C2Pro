@@ -140,8 +140,9 @@ async def test_714_migration_reclassifies_legacy_hitl_candidates_and_round_trips
                           created=T0 + timedelta(hours=1), decided=T0 + timedelta(hours=3))
             await _artifact(conn, tenant=tenant, project=project, document=d,
                             title="rerun", lifecycle="active", at=T0 + timedelta(hours=4))
-            # pending_rerun (coordinator P0): V1 trusted, review R pending, legacy
-            # unreviewed candidate V2, then a later NON-gated V3 supersedes V2.
+            # pending_rerun: V1 is provably pre-review trusted, while R remains
+            # pending across V2 and V3. Legacy timestamps cannot prove whether
+            # V3 was gated or non-gated, so BOTH post-review rows must fail closed.
             d = docs["pending_rerun"]
             await _artifact(conn, tenant=tenant, project=project, document=d,
                             title="V1", lifecycle="superseded", at=T0)
@@ -153,7 +154,7 @@ async def test_714_migration_reclassifies_legacy_hitl_candidates_and_round_trips
                             title="V2 unreviewed", lifecycle="superseded",
                             at=T0 + timedelta(hours=2))
             await _artifact(conn, tenant=tenant, project=project, document=d,
-                            title="V3 non-gated", lifecycle="active", at=T0 + timedelta(hours=4))
+                            title="V3 ambiguous", lifecycle="active", at=T0 + timedelta(hours=4))
             forced_before = await conn.fetch(
                 "SELECT relname, relforcerowsecurity FROM pg_class "
                 "WHERE oid IN ('public.document_artifacts'::regclass, 'public.review_items'::regclass) "
@@ -184,17 +185,22 @@ async def test_714_migration_reclassifies_legacy_hitl_candidates_and_round_trips
                 ("rerun", "trusted", "active"),
             ], "the rejected candidate is marked; the later completion stays canonical"
             assert await _states(conn, docs["pending_rerun"]) == [
-                ("V1", "trusted", "superseded"),
+                ("V1", "trusted", "active"),
                 ("V2 unreviewed", "superseded", "superseded"),
-                ("V3 non-gated", "trusted", "active"),
-            ], "the later legitimate completion stays canonical; nothing unreviewed restored"
+                ("V3 ambiguous", "superseded", "superseded"),
+            ], (
+                "while the review is still pending, no post-review artifact may "
+                "become canonical merely because it is newer"
+            )
             pr = await conn.fetchrow(
                 "SELECT cast(current_status as text) AS status, review_metadata "
                 "FROM review_items WHERE id=$1",
                 pending_rerun_review,
             )
-            assert pr["status"] == "CLOSED", "a review whose candidate was superseded is closed"
-            assert json.loads(pr["review_metadata"])["candidate_binding"]["artifact_version"] == 2
+            assert pr["status"] == "CLOSED", "ambiguous legacy review is closed fail-closed"
+            pr_meta = json.loads(pr["review_metadata"])
+            assert pr_meta["candidate_binding"]["artifact_version"] == 2
+            assert pr_meta["closed_reason"] == "legacy_post_review_ambiguous"
             # Every current trusted artifact is queued once for projection.
             queued = await conn.fetch(
                 "SELECT a.document_id FROM system_recovery.trusted_projection_index o "
