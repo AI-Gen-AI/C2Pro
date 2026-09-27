@@ -342,6 +342,25 @@ def test_tool_protocol():
         return False
 
 
+
+def test_tool_protocol_assertion_failures_propagate():
+    """A protocol assertion failure must escape instead of becoming False."""
+
+    class IncompleteTool:
+        async def execute(self):
+            return None
+
+        def __call__(self):
+            return None
+
+    caught_assertion = False
+    try:
+        _assert_tool_protocol(IncompleteTool())
+    except AssertionError:
+        caught_assertion = True
+
+    assert caught_assertion
+
 def run_all_tests():
     """Run all tests and report results."""
     print("\n" + "=" * 60)
