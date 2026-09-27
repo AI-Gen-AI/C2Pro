@@ -286,7 +286,7 @@ export default function AlertsPage() {
     [alertsState],
   );
   const typeOptions = useMemo(
-    () => Array.from(new Set(alertsState.map((alert) => alert.type))).sort(),
+    () => Array.from(new Set(alertsState.map((alert) => alert.type))).sort((a, b) => a.localeCompare(b)),
     [alertsState],
   );
 
