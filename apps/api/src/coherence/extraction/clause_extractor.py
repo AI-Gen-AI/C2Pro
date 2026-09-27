@@ -188,9 +188,15 @@ def _merge_cache_payload(
     existing: dict[str, Any] | None,
     extracted: dict[str, Any],
 ) -> dict[str, Any]:
-    """Merge structured extraction without deleting unrelated clause provenance."""
+    """Merge only declared coherence fields without touching reserved provenance."""
     merged = dict(existing or {})
-    merged.update(extracted)
+    merged.update(
+        {
+            key: value
+            for key, value in extracted.items()
+            if key in _ALL_REQUIRED_KEYS
+        }
+    )
     return merged
 
 
