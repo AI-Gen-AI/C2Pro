@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import UUID, uuid4
 
