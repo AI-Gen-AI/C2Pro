@@ -159,7 +159,7 @@ These rules in `.claude/rules/` override general defaults.
 
 **Canonical control:** active development execution is owned by `.c2pro/control/` + assigned `.c2pro/work/` envelopes. Product lifecycle state is owned by `validation/product/c2pro-master-product-control-v1.yaml` and its guarded Markdown projection. `C2PRO_MASTER_BACKLOG.md`, `backlogs/BCK_*.md` and `blackboard.json` are read-only legacy/cold references.
 
-1. **`CRITICAL_BACKLOG_REQUIREMENT.md`** — Ordinary workers MUST NOT mutate legacy backlog/blackboard files. Return structured `c2pro-implementation-result-v1` evidence; completion becomes canonical only after review, CI, merge and Master/Planner reconciliation.
+1. **`CRITICAL_BACKLOG_REQUIREMENT.md`** — Ordinary workers MUST NOT mutate legacy backlog/blackboard files. Return the schema assigned to the role: implementation roles use `c2pro-implementation-result-v1`; QA/reviewer/security roles use `c2pro-review-result-v1`. Completion becomes canonical only after review, CI, merge and Master/Planner reconciliation.
 
 2. **`DOCUMENTATION_STRUCTURE.md`** — **Never create task-specific standalone markdown files** merely to report completion. Use the authorized work envelope + PR evidence for current execution. Historical backlog/session files may be read when needed for reconciliation but are not current write targets. The root has many legacy `TASK-*`, `UNIFY-*`, `SPRINT_*` files — these predate the rule. Do not add new ones.
 
