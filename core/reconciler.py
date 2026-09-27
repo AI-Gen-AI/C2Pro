@@ -111,10 +111,31 @@ def _load_work_review_requirements(
         raise ValidationError(
             f"Work '{work_id}' risk_class {risk_class!r} is absent from review-policy.yaml."
         )
+    principal_requirement = risk_config.get("independent_principal_review")
+    challenger_requirement = risk_config.get("challenger")
     synthesis_required = risk_config.get("orchestrator_synthesis")
+    if principal_requirement not in {"optional", "required"}:
+        raise ValidationError(
+            f"Work '{work_id}' risk_class {risk_class!r} has invalid principal review policy."
+        )
+    if challenger_requirement not in {False, "optional", "required"}:
+        raise ValidationError(
+            f"Work '{work_id}' risk_class {risk_class!r} has invalid challenger policy."
+        )
     if type(synthesis_required) is not bool:
         raise ValidationError(
             f"Work '{work_id}' risk_class {risk_class!r} has invalid orchestrator_synthesis policy."
+        )
+    if principal_requirement == "required" and queue_review_policy == "optional":
+        raise ValidationError(
+            f"Work '{work_id}' risk_class {risk_class!r} requires independent principal review."
+        )
+    if (
+        challenger_requirement == "required"
+        and queue_review_policy != "principal_and_challenger"
+    ):
+        raise ValidationError(
+            f"Work '{work_id}' risk_class {risk_class!r} requires principal_and_challenger review."
         )
     return risk_class, synthesis_required
 
@@ -403,6 +424,8 @@ def reconcile_result(
               - 'ci_status': 'success' / 'passed' or failure
         control_dir: Optional custom Path to .c2pro/control/
         now_fn: Optional clock provider function returning string ISO-8601 timestamp
+        review_results: Structured independent review evidence bound to the live PR/head.
+        orchestrator_synthesis: Required bounded synthesis evidence when canonical risk policy says so.
 
     Returns:
         Dict representing the reconciliation outcome.
@@ -603,7 +626,7 @@ def reconcile_result(
     )
     risk_class: str | None = None
     orchestrator_synthesis_required = False
-    if review_results is not None or review_policy != "optional":
+    if work_item.get("work_ref") is not None or review_policy != "optional":
         risk_class, orchestrator_synthesis_required = _load_work_review_requirements(
             control_dir,
             work_item,
