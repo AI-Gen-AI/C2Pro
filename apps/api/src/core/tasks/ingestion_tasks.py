@@ -455,7 +455,7 @@ def _extract_contract_clauses(
             end_offset = start_offset + len(segment)
         # Resolve overlapping blocks
         pages: list[int] = []
-        bboxes: list[tuple[float, float, float, float] | None] = []
+        bboxes: list[tuple[float, float, float, float]] = []
         if start_offset is not None and end_offset is not None and block_index:
             for entry in block_index:
                 # Overlap check
@@ -464,21 +464,29 @@ def _extract_contract_clauses(
                 page = entry.get("page")
                 if isinstance(page, int):
                     pages.append(page)
-                bbox = entry.get("bbox")
-                if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
-                    bboxes.append(tuple(bbox))  # type: ignore
+                raw_bbox = entry.get("bbox")
+                if (
+                    isinstance(raw_bbox, (list, tuple))
+                    and len(raw_bbox) == 4
+                    and all(isinstance(value, (int, float)) for value in raw_bbox)
+                ):
+                    bboxes.append(
+                        (
+                            float(raw_bbox[0]),
+                            float(raw_bbox[1]),
+                            float(raw_bbox[2]),
+                            float(raw_bbox[3]),
+                        )
+                    )
         # Determine truthful location semantics
         unique_pages = sorted(set(pages))
         page_number: int | None = None
         bbox: list[float] | None = None
         if len(unique_pages) == 1:
             page_number = unique_pages[0]
-            # If single block overlap, use its bbox; otherwise null for safety
-            if len(bboxes) == 1:
-                bbox = list(bboxes[0])
-            else:
-                # Multiple blocks same page: could compute union, but keep null to avoid heuristic
-                bbox = None
+            # A single source block has exact geometry. Multiple blocks keep
+            # the real page but do not invent a merged rectangle.
+            bbox = list(bboxes[0]) if len(bboxes) == 1 else None
         # Build evidence_location
         evidence_location = {
             "revision_id": str(revision_id) if revision_id else None,
