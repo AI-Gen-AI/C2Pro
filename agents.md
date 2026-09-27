@@ -15,7 +15,7 @@ boundaries:
   always:
     - "ALWAYS treat blackboard.json and C2PRO_MASTER_BACKLOG.md as READ-ONLY cold references."
     - "ALWAYS consult .c2pro/control/ and assigned .c2pro/work/ envelope for task specifications."
-    - "ALWAYS provide structured worker evidence (fenced YAML result block matching c2pro-implementation-result-v1) in standard output/PR description instead of mutating backlogs."
+    - "ALWAYS provide role-appropriate structured evidence in standard output/PR description instead of mutating backlogs: implementation roles use c2pro-implementation-result-v1; QA/reviewer/security roles use c2pro-review-result-v1; Planner/Reconciler use the applicable canonical planning/control schema."
     - "ALWAYS validate assigned workspace and branch. On any mismatch, STOP immediately and return WORKSPACE_GUARD_FAILURE."
     - "ALWAYS include Test Suite ID in docstrings of tests and implementation."
     - "ALWAYS filter by tenant_id in database queries."
@@ -48,13 +48,13 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 - The single authoritative write-target for control and planning state is `.c2pro/`, owned exclusively by the **Planner / Master Orchestrator**.
 - Implementation, QA, and review workers read `.c2pro/control/` and their assigned `.c2pro/work/` envelopes.
 - Upon completion of any task or when discovering new tasks/risks, workers **MUST NOT** update any legacy markdown or JSON files.
-- Instead, workers **MUST** provide structured evidence via a fenced YAML block matching the `c2pro-implementation-result-v1` schema in their PR descriptions or standard output.
+- Instead, workers **MUST** provide role-appropriate structured evidence in their PR descriptions or standard output: implementation roles use `c2pro-implementation-result-v1`; QA/reviewer/security roles use `c2pro-review-result-v1`; Planner/Reconciler use the applicable canonical planning/control schema.
 - Task completion is non-canonical until verified in CI, merged, and reconciled on main by the Master Reconciler.
 
 ### Backlog Interpretation Rules
 
 - Legacy backlog section/subsection hierarchy may be used as read-only compatibility context when the user references an old group. Current execution order and ownership come from `.c2pro/control/work-queue.yaml` and the assigned work envelope.
-- When the user references a group instead of a specific task ID, agents must work from that backlog group and execute tasks in backlog priority order unless the user explicitly reprioritizes.
+- When the user references a legacy group instead of a specific task ID, agents may use that group only to resolve intent/category. They MUST map the requested work to authorized `.c2pro` work items; actual priority/order/dependency authority comes from `.c2pro/control/work-queue.yaml` plus the assigned work envelope. If no canonical mapping exists, return a Planner/Reconciler blocker instead of executing legacy backlog order.
 - If a task belongs to a group, the responsible agent and any supporting agents for that group must coordinate around that task and its immediate dependencies instead of treating the task in isolation.
 - Group ownership is interpreted as follows:
   - `2.1 Backend`: planner, backend, QA, and docs coordination as needed
