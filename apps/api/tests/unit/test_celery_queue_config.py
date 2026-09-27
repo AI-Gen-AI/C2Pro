@@ -30,6 +30,7 @@ _REQUIRED_TASK_MODULES = {
     "src.core.tasks.snapshot_tasks",
     "src.core.tasks.snapshot_retention",
     "src.core.tasks.hitl_resume_reconciler",
+    "src.core.tasks.document_recovery",
 }
 
 

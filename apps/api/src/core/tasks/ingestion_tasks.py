@@ -9,6 +9,7 @@ API request/response cycle.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import re
 from typing import Any
@@ -70,6 +71,57 @@ from src.temporal.domain.document_revision import DocumentRevision
 logger = logging.getLogger(__name__)
 
 RAG_READINESS_MAX_RETRIES = 3
+PROCESSING_HEARTBEAT_INTERVAL_SECONDS = 60
+
+_PROCESSING_HEARTBEAT_SQL = text(
+    """
+    UPDATE system_recovery.document_work_index
+       SET heartbeat_at = clock_timestamp() AT TIME ZONE 'UTC'
+     WHERE document_id = CAST(:document_id AS uuid)
+       AND upload_status = :expected_status
+    """
+)
+
+
+async def _document_processing_heartbeat_loop(
+    *,
+    document_id: UUID,
+    expected_status: DocumentStatus,
+    interval_seconds: float = PROCESSING_HEARTBEAT_INTERVAL_SECONDS,
+) -> None:
+    """Refresh the internal recovery lease while this worker is alive."""
+    while True:
+        try:
+            async with get_raw_session() as heartbeat_session:
+                await heartbeat_session.execute(
+                    _PROCESSING_HEARTBEAT_SQL,
+                    {
+                        "document_id": str(document_id),
+                        "expected_status": expected_status.value,
+                    },
+                )
+                await heartbeat_session.commit()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # Primary processing remains authoritative; a failed heartbeat is
+            # observable but must not mask the task's real outcome.
+            logger.exception(
+                "document_processing_heartbeat_failed",
+                extra={
+                    "document_id": str(document_id),
+                    "expected_status": expected_status.value,
+                },
+            )
+        await asyncio.sleep(interval_seconds)
+
+
+async def _stop_processing_heartbeat(task: asyncio.Task[None] | None) -> None:
+    if task is None:
+        return
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
 
 def _build_text_block_index(text_blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -809,6 +861,14 @@ async def _run_document_analysis(
         document = await repo.get_by_id(tenant_id, document_id)
         if not document:
             raise ValueError("document not found or access denied")
+        # Redelivery after the durable terminal seam must not replay graph
+        # side effects.
+        if document.upload_status is DocumentStatus.ANALYZED:
+            return {
+                "status": "already_complete",
+                "document_id": str(document_id),
+                "document_status": DocumentStatus.ANALYZED.value,
+            }
         if not document.is_parsed():
             raise ValueError("document must be parsed before analysis")
 
@@ -1000,18 +1060,52 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
             return {"status": "error", "message": "Project not found"}
         tenant_id = require_tenant_id(raw_tenant_id)
 
-        await repo.update_status(tenant_id, document_id, DocumentStatus.PARSING)
-        await session.commit()
+        # ACK-loss redelivery after either durable seam is a no-op.
+        if document.upload_status is DocumentStatus.ANALYZED:
+            return {
+                "status": "already_complete",
+                "document_id": str(document_id),
+                "document_status": DocumentStatus.ANALYZED.value,
+            }
+        if document.upload_status is DocumentStatus.PARSED_PENDING_ANALYSIS:
+            return {
+                "status": "already_ingested",
+                "document_id": str(document_id),
+                "document_status": DocumentStatus.PARSED_PENDING_ANALYSIS.value,
+            }
 
         source_revision: DocumentRevision | None = None
         try:
-            storage = build_storage_service()
+            revision_repository = SqlAlchemyDocumentRevisionRepository(session)
             source_revision = await resolve_source_revision(
-                revision_repository=SqlAlchemyDocumentRevisionRepository(session),
+                revision_repository=revision_repository,
                 document_id=document_id,
                 tenant_id=tenant_id,
                 revision_id=revision_id,
             )
+
+            # A task pinned to an older revision may arrive after a newer
+            # revision became current. It may remain historical evidence but
+            # must never move the mutable document state backwards.
+            if revision_id is not None and source_revision is not None:
+                current_revision = await revision_repository.get_current(
+                    document_id, tenant_id
+                )
+                if (
+                    current_revision is not None
+                    and current_revision.revision_id != source_revision.revision_id
+                ):
+                    return {
+                        "status": "superseded",
+                        "document_id": str(document_id),
+                        "revision_id": str(source_revision.revision_id),
+                        "current_revision_id": str(current_revision.revision_id),
+                    }
+
+            await repo.update_status(tenant_id, document_id, DocumentStatus.PARSING)
+            await session.commit()
+
+            storage = build_storage_service()
             file_path = await fetch_source_file(
                 storage=storage, document=document, revision=source_revision
             )
@@ -1171,6 +1265,23 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
             raise
 
 
+async def _run_document_processing_task_lifecycle(
+    *,
+    document_id: UUID,
+    revision_id: UUID | None,
+) -> dict[str, Any]:
+    heartbeat = asyncio.create_task(
+        _document_processing_heartbeat_loop(
+            document_id=document_id,
+            expected_status=DocumentStatus.PARSING,
+        )
+    )
+    try:
+        return await _process(document_id, revision_id)
+    finally:
+        await _stop_processing_heartbeat(heartbeat)
+
+
 @celery_app.task(
     bind=True,
     autoretry_for=(Exception,),
@@ -1178,6 +1289,8 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
     retry_backoff=True,
     retry_backoff_max=60,
     task_track_started=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
 )
 def process_document_async(
     self: Any, document_id: str, revision_id: str | None = None
@@ -1198,7 +1311,10 @@ def process_document_async(
         revision_id,
     )
     return asyncio.run(
-        _process(UUID(document_id), UUID(revision_id) if revision_id is not None else None)
+        _run_document_processing_task_lifecycle(
+            document_id=UUID(document_id),
+            revision_id=UUID(revision_id) if revision_id is not None else None,
+        )
     )
 
 
@@ -1229,9 +1345,20 @@ async def _run_document_analysis_task_lifecycle(
     document_id: UUID,
     route_rag_unavailable_to_dlq: bool,
     automatic_retry_available: bool,
+    enable_processing_heartbeat: bool = False,
 ) -> dict[str, Any]:
     """Own every loop-bound analysis resource for one Celery task invocation."""
     primary_error: Exception | None = None
+    heartbeat = (
+        asyncio.create_task(
+            _document_processing_heartbeat_loop(
+                document_id=document_id,
+                expected_status=DocumentStatus.PARSED_PENDING_ANALYSIS,
+            )
+        )
+        if enable_processing_heartbeat
+        else None
+    )
     try:
         return await _run_document_analysis(
             tenant_id=tenant_id,
@@ -1296,6 +1423,7 @@ async def _run_document_analysis_task_lifecycle(
             )
         raise
     finally:
+        await _stop_processing_heartbeat(heartbeat)
         await _close_document_analysis_task_resources(primary_error=primary_error)
 
 
@@ -1322,6 +1450,7 @@ def process_document_analysis_async(self: Any, tenant_id: str, document_id: str)
                 document_id=UUID(document_id),
                 route_rag_unavailable_to_dlq=retries >= RAG_READINESS_MAX_RETRIES,
                 automatic_retry_available=retries < ANALYSIS_MAX_RETRIES,
+                enable_processing_heartbeat=True,
             )
         )
     except RagChunksUnavailableError as error:

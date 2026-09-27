@@ -20,6 +20,7 @@ def test_celery_app_registers_all_scheduler_task_modules() -> None:
         "src.core.tasks.snapshot_tasks",
         "src.core.tasks.snapshot_retention",
         "src.core.tasks.hitl_resume_reconciler",
+        "src.core.tasks.document_recovery",
     ):
         assert f'"{module}"' in source
 
@@ -33,6 +34,11 @@ def test_beat_schedule_contains_required_recovery_and_snapshot_jobs() -> None:
         == "project_snapshots.enqueue_daily"
     )
     assert schedule["project-snapshots-retention"]["task"] == "project_snapshots.retention"
+    assert (
+        schedule["document-processing-reconcile"]["task"]
+        == "documents.reconcile_stale_processing"
+    )
+    assert schedule["document-processing-reconcile"]["schedule"] == 60.0
 
 
 def test_periodic_jobs_use_worker_consumed_default_queue() -> None:
