@@ -45,6 +45,12 @@ def _session_factory(session: AsyncMock):
     return _ctx
 
 
+def _parsed_payload() -> dict[str, object]:
+    return {
+        "text_blocks": [
+            {"text": "The Supplier shall deliver the works within 30 days."}
+        ]
+    }
 
 
 @pytest.mark.asyncio
