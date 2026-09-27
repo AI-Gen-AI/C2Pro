@@ -1,5 +1,5 @@
 schema: c2pro-product-control-v1
-schema_version: 6
+schema_version: 7
 repository: AI-Gen-AI/C2Pro
 generated: "2026-09-26"
 control_status: reconciliation
@@ -25,6 +25,8 @@ parity:
     - "adr(ADR-018,ADR-024,ADR-025).{realization_status,deployment_status,prod_validation_status}"
     - p0b_vertical_contract.done_definition (sha256-16 digest)
     - p0b_vertical_contract.invariant_ids
+    - "qualification_control.lanes[*].{qualification_status,bundle_ref,bundle_sha256,lifecycle_targets}"
+    - "PWBS-EXEC-REPORTING.subtracks.current_state.{realization_status,deployment_status,prod_validation_status}"
 
 status_enums:
   design_status: [Accepted, Proposed, Implemented, Deferred]
@@ -35,6 +37,7 @@ status_enums:
   slice_status: [NOT_STARTED, ACTIVE, PARTIAL, DONE, BLOCKED, DEFERRED]
   residual_status: [PLANNED, ACTIVE, BLOCKED, DEFERRED, RESOLVED]
   residual_blocking: [BLOCKING, NON_BLOCKING]
+  qualification_status: [REQUIRED, COLLECTING, PASS, FAIL]
 
 development_execution_authority:
   plane: .c2pro/
@@ -56,7 +59,7 @@ production_position:
     - "PR #630 merged the P0b-L4-5 release-ready implementation; the PR explicitly recorded PROD_VALIDATED=NO"
     - "Production runtime identity is now observed per plane rather than inferred from main: Railway backend deployment 2bbaea5d-bc7f-4aeb-80ad-aba6d483141a is SUCCESS at 386cbbce74b2653a6039fdddd9fc9719c43b9ff9; Vercel frontend deployment dpl_GTC5eGxtn4m6e5p7Tsyet8jRDBfq is READY at 6186f2a06fb3957562aa338742f18838fac5993a"
     - "The legacy singleton deployed_runtime_sha remains UNVERIFIED because backend/frontend SHAs legitimately differ; merged #678 carries non-authoritative composite runtime evidence and #681 owns Product-Control promotion integration"
-    - "Railway Watch Paths /apps/api/** are live-proven: control-only #678 and frontend-only #699 main commits were SKIPPED while backend-changing #697 deployed SUCCESS; Vercel filtering is merged via #699 but live skip proof is pending platform quota reset"
+    - "Composite deployment filtering is live-proven: Railway Watch Paths /apps/api/** skip non-backend changes while backend-changing #697 deployed SUCCESS; after #699, docs/control-only main merges #669 and #701 did not advance Vercel production, which remains on #678"
     - "Production HITL incidents proved the real P0b journey reached human review; subsequent #633/#638/#641/#646/#650 hardening is merged on main, without implying P0b PROD_VALIDATED"
   reliability_operability_baseline: CLOSED
   product_value_delivered: false
@@ -66,6 +69,37 @@ production_position:
     - "P0d Current State Reporting is WIRED on main but deployment/prod-validation is not proven"
     - "ADR-025 now has canonical-WBS authority and several cross-domain links wired on main, but one-logical-root, baseline/change governance, remaining alert/evidence/change linkage and production journey are not fully proven"
     - "Procurement Plan -> BoQ/RFQ -> award -> governed stakeholder communications is not delivered end-to-end"
+
+qualification_control:
+  schema_version: 1
+  evidence_contract: c2pro-product-qualification-evidence-v1
+  evidence_directory: evidence/product-qualification
+  validator: validation/product/validate_qualification_evidence.py
+  note: >
+    This block is lifecycle-control metadata only. Detailed scenario/assertion/runtime evidence lives
+    in non-authoritative Phase-A bundles. A validated bundle is necessary but never auto-promotes
+    lifecycle state; Product Control changes remain an explicit reviewed action.
+  lanes:
+    P0b:
+      qualification_status: REQUIRED
+      bundle_ref: null
+      bundle_sha256: null
+      lifecycle_targets:
+        - {kind: adr, id: ADR-024, field: prod_validation_status, promote_to: PROD_VALIDATED}
+        - {kind: p0b_slice, id: P0b-L4-5, field: slice_status, promote_to: DONE}
+    P0c:
+      qualification_status: REQUIRED
+      bundle_ref: null
+      bundle_sha256: null
+      lifecycle_targets:
+        - {kind: adr, id: ADR-015, field: prod_validation_status, promote_to: PROD_VALIDATED}
+        - {kind: adr, id: ADR-016, field: prod_validation_status, promote_to: PROD_VALIDATED}
+    P0d:
+      qualification_status: REQUIRED
+      bundle_ref: null
+      bundle_sha256: null
+      lifecycle_targets:
+        - {kind: wbs_subtrack, id: PWBS-EXEC-REPORTING, subtrack: current_state, field: prod_validation_status, promote_to: PROD_VALIDATED}
 
 reconciliation_delta_2026_09_26:
   previous_main_sha: 454637863c502f6825d158af551511e0e9996d14
@@ -81,7 +115,7 @@ reconciliation_delta_2026_09_26:
     - "Next.js security baseline advanced to 16.3.6 via #654; blocking E2E runs against production Next runtime via #655"
     - "CI action maintenance through #665/#668 is present in the observed main baseline but remains execution work owned outside this product-control reconciliation"
     - "Qualification evidence Phase A merged via #678: P0b/P0c/P0d evidence bundles are machine-validated, historically bound and non-authoritative; lifecycle promotion remains Product Control only"
-    - "Composite deployment filtering advanced via #695/#699: Railway backend filtering is live-proven; Vercel frontend ignore logic is merged and awaits live skip verification after quota reset"
+    - "Composite deployment filtering completed via #695/#699: Railway and Vercel filters are both live-verified against non-runtime main changes"
   control_conclusion: >
     Main is materially ahead of the 2026-09-13 reconciliation. Several former candidate lanes are
     now wired in repository code, but merge status is still distinct from deployment and PROD_VALIDATED.
@@ -335,7 +369,9 @@ product_wbs:
     user_value: "Truthful current-state and evolution reporting, then executive/portfolio roll-up"
     realization_status: PARTIAL
     work_status: ACTIVE
-    subtracks: {current_state: WIRED, executive_portfolio: SCAFFOLDED}
+    subtracks:
+      current_state: {realization_status: WIRED, deployment_status: NONE, prod_validation_status: NONE}
+      executive_portfolio: {realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE}
     planning_note: "P0d Current State Reporting is wired on main but not deployment/prod-validated; executive/PMO/portfolio extension remains deferred."
     exit_gate: "merged/deployed/prod-validated current-state/evolution reporting, then briefing/portfolio extension"
     evidence_for_done: "executive reads evidence-backed current/evolution view with drill-down"
