@@ -212,6 +212,62 @@ async def test_stale_parsing_is_requeued_once_and_terminal_state_stops_recovery(
 
 
 @pytest.mark.asyncio
+async def test_recovery_claim_renews_lease_before_replacement_worker_heartbeat(
+    db: AsyncSession,
+    test_user,
+) -> None:
+    """A second beat tick must not redispatch the same just-claimed candidate."""
+    _, document = await _seed_document(
+        db,
+        tenant_id=test_user.tenant_id,
+        user_id=test_user.id,
+        status=DocumentStatus.PARSING,
+    )
+    ingestion = Mock()
+    ingestion.apply_async = Mock()
+    analysis = Mock()
+    analysis.apply_async = Mock()
+
+    first = await _sweep_async(
+        stale_after_seconds=60,
+        session_factory=_session_factory(db),
+        ingestion_task=ingestion,
+        analysis_task=analysis,
+    )
+    assert first["requeued_ingestion"] == 1
+
+    lease = (
+        await db.execute(
+            text(
+                """
+                SELECT heartbeat_at
+                  FROM system_recovery.document_work_index
+                 WHERE document_id = :document_id
+                """
+            ),
+            {"document_id": document.id},
+        )
+    ).one()
+    assert lease.heartbeat_at is not None
+    assert lease.heartbeat_at > datetime.now(UTC).replace(tzinfo=None) - timedelta(
+        seconds=30
+    )
+
+    # Simulate the next beat tick arriving before the replacement worker has
+    # emitted its own heartbeat. The scheduler-owned lease must suppress it.
+    second = await _sweep_async(
+        stale_after_seconds=60,
+        session_factory=_session_factory(db),
+        ingestion_task=ingestion,
+        analysis_task=analysis,
+    )
+
+    assert second["scanned"] == 0
+    assert ingestion.apply_async.call_count == 1
+    analysis.apply_async.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_recent_worker_heartbeat_prevents_false_stale_recovery(
     db: AsyncSession,
     test_user,
