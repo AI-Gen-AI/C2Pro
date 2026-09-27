@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
 **Status:** Reconciliation snapshot (read-only) · **Date:** 2026-09-27 · **Schema:** v7  
-**reconciled_against_main_sha:** `0db53883a8942f7097fe9ce2e0e6c63397948fbb` · **deployed_runtime_sha:** `UNVERIFIED`  
+**reconciled_against_main_sha:** `1832e18257800ef64671694f85c7b0893d8b9ea2` · **deployed_runtime_sha:** `UNVERIFIED`  
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This document is the human projection of the machine product-control plane. It does not grant execution authority. Direct `main`, merge and production mutation remain governed outside this document.
@@ -10,7 +10,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=0db53883a8942f7097fe9ce2e0e6c63397948fbb
+reconciled_against_main_sha=1832e18257800ef64671694f85c7b0893d8b9ea2
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
@@ -98,21 +98,22 @@ Three facts remain deliberately separate:
 
 ### 2.1 What changed since the previous 2026-09-27 control baseline
 
-The previous reconciled repository baseline was `c04b5567ad579259abd73037fa6cca2aa33891fc`. Current `main` is **61 commits ahead** at `0db53883a8942f7097fe9ce2e0e6c63397948fbb`.
+The previous reconciled repository baseline was `0db53883a8942f7097fe9ce2e0e6c63397948fbb`. Current `main` is **31 commits ahead** at `1832e18257800ef64671694f85c7b0893d8b9ea2`.
 
 Material facts in this interval:
 
-- **#713 / PR #722:** evidence-provenance and locator improvements merged as `6e98ec53...` and are live in both Railway and Vercel production. However, the exact merged head had **zero review records** and still contains two documented truthfulness defects: parsed-text/block-index offset canonicalization and partial-block bbox exactness. Issue #713 remains OPEN for fix-forward. Merge/deploy is not acceptance.
-- **#712 / PR #723:** truthful lifecycle work merged as `0db53883...` and is live in Railway backend. The exact merged head also had **zero review records** and no remediation commits after the Line B hold. Backend/UI retry eligibility and strict REJECT-to-document atomicity remain fix-forward blockers. Issue #712 remains OPEN.
-- **#711 / PR #719 integration status:** #719 is now rebased on current `main` at head `6c0e93ca...`. Its migration chain has been linearized as `20260923_0001 -> 20260927_0001 (#712) -> 20260927_0711 (#711)`. The single-head design is correct; exact-head CI is still a control gate and the remaining functional acceptance blocker is processing ownership/fencing after takeover.
-- **Production is currently composite:** Railway backend is `0db53883...`; Vercel production is `6e98ec53...`. No #723 Vercel production deployment is observed after the #722 READY deployment.
-- **Parallel Line B governance lane:** #724 Wave 1 is active to remove residual live authority from legacy backlog/blackboard guidance; #725 Wave 2 is prepared to bind independent review to exact PR/head and enforce independence/risk-policy/synthesis fail-closed. This lane improves development governance but does not count toward #706 product acceptance.
-- **#714 preparation has started, not integration:** PR #726 is DRAFT/RED and currently contains focused trusted-state tests only; it deliberately has no trusted-state migration yet because #711 still owns the immediately preceding migration. This work may refine acceptance tests, but must not become mergeable canonical implementation until corrected #711/#712/#713 contracts are stable.
+- **#711 / PR #719:** merged as `1832e182...` and is live on Railway. API deployment `e556e52b-127b-4641-8e9e-599d05b68411`, Worker `01899895-cb34-4109-8b6e-11ebafb72fa4` and Scheduler `17f8eeff-e2b0-49b0-861e-d6a161be1317` are SUCCESS. Alembic `20260927_0711` applied and stale-processing recovery is operating. Issue #711 is nevertheless **OPEN**: heartbeat/claim liveness is proven, but monotonic per-attempt stale-writer fencing after takeover is not.
+- **Frontend/runtime convergence:** Vercel production `dpl_H5ci9sGH8fo2kGm4xVsq4X4QntT1` is READY on the same main commit `1832e182...`. The previous #722/#723 frontend/backend SHA skew is therefore gone.
+- **#727 / PR #728 rollout hardening:** #719 exposed a real startup race where Worker/Scheduler could run new code before API Alembic completed; the first recovery tick failed `UndefinedTable` and self-healed next interval. #727 now requires fail-closed schema readiness for async services while API remains the sole migrator. This is a deployment prerequisite for #714/#715.
+- **#712 and #713:** remain OPEN for their previously documented fix-forward acceptance defects even though their implementation PRs are merged.
+- **#714 / PR #726:** has advanced from RED scaffolding to a full DRAFT trusted-state/projected-coherence implementation. It is not merge-authorized: the unit trust-binding persistence seam is currently red, its migration must descend from `20260927_0711`, upstream #712/#713 acceptance must be stable, #727 must be deployed, and exact-head independent review is still required.
+- **#715:** reopened. No real production AUTH → PROJECT → UPLOAD → ANALYSIS → EVIDENCE → HEALTH → HITL → RELOGIN → RECOVERY journey has executed. #690 remains an external prerequisite.
+- **Parallel Line B governance lane:** #724 Wave 1 and #725 Wave 2 continue as control-plane cleanup; they do not count toward #706 product acceptance.
 - **Runtime preflight drift persists:** Railway still carries unresolved staged API patch `7fcd5228-be1b-4be5-8e72-9692c854ddbf`; #715 must fail closed unless that delta is explicitly reviewed/bound or staged changes return to zero.
 
-The GOAL remains **#706 operational closure**. #710 is live. #712 and #713 are merged/deployed but **not accepted**; both require fix-forward. #711 is now integrated onto current-main migration topology, but still requires the owner/fence invariant and its real-Postgres stale-writer race proof. Under canonical routing, Claude is the principal implementation route for that bounded fencing delta and Gemini is the adversarial QA/challenger route. #714 must consume the corrected upstream contracts; #715 has not run and #690 remains an external prerequisite.
+The GOAL remains **#706 operational closure**. Production backend and frontend are aligned on `1832e182...`, but runtime alignment is not acceptance. #711 is deployed yet still open for writer-fencing proof; #712/#713 require fix-forward; #714 and #727 are active; #715 is reopened/unexecuted and #690 remains external.
 
-CI green, merge state and deployment success remain controls only. None promotes P0b/P0c/P0d or changes `product_value_delivered=false`.
+CI green, merge state, deployment success and health checks remain controls only. None promotes P0b/P0c/P0d or changes `product_value_delivered=false`.
 
 ### 2.2 Qualification Control v1 — evidence is necessary, never self-promoting
 
