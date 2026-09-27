@@ -819,9 +819,11 @@ The next unresolved execution gate is:
 
 DEV-00, DEV-01 and DEV-02 are already DONE. The merged DEV-03 restart/readiness package (#676) is planning/evidence only: it does not grant provider execution authority and does not prove principal readiness.
 
-The next bounded step is therefore to execute the fresh DEV-03 qualification defined by the machine plan against current VPS/runtime evidence, including isolated read-only and bounded write/commit jobs, canonical-main denial, runtime/secret denial, resource limits and frozen qualification evidence.
+The next bounded step is therefore **DEV-03 activation**, not provider execution: refresh the post-#669 baseline, create/bind the canonical DEV-03 work envelope, set the queue/current `work_ref`, and obtain fresh job-bound authority. Standing provider authority remains closed.
 
-DEV-04 remains blocked until both principals are qualified. Do not restart DEV-00/01/02 or recreate their completed audit outputs.
+Only after that activation may the fresh DEV-03 qualification run against current VPS/runtime evidence, including isolated read-only and bounded write/commit jobs, canonical-main denial, runtime/secret denial, resource limits and frozen qualification evidence.
+
+DEV-04 remains blocked until both principals are qualified. Do not restart DEV-00/01/02, recreate their completed audit outputs, or invoke a provider before the fresh bounded DEV-03 authority is present.
 
 ---
 
