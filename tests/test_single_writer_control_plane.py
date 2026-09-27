@@ -214,7 +214,9 @@ def test_worker_cannot_be_instructed_to_mutate_legacy_files():
 
     # Assert boundaries contain read-only statements
     assert "ALWAYS treat blackboard.json and C2PRO_MASTER_BACKLOG.md as READ-ONLY cold references" in content
-    assert "ALWAYS provide structured worker evidence (fenced YAML result block matching c2pro-implementation-result-v1)" in content
+    assert "ALWAYS provide role-appropriate structured evidence" in content
+    assert "QA/reviewer/security roles use c2pro-review-result-v1" in content
+    assert "execute tasks in backlog priority order" not in content
 
 
 def test_planner_master_retains_canonical_write_authority():
@@ -455,9 +457,12 @@ def test_live_guidance_does_not_repromote_legacy_authority() -> None:
         "CLAUDE.md",
         ".claude/rules/DOCUMENTATION_STRUCTURE.md",
         ".claude/rules/agents.md",
+        ".claude/BACKLOG_UPDATE_MEMO.md",
+        ".claude/rules/CRITICAL_BACKLOG_REQUIREMENT.md",
         "docs/ARCHITECTURE_INDEX.md",
         "docs/RELEASE_CRITERIA.md",
         "docs/testing/README.md",
+        "docs/testing/C2PRO_TDD_BACKLOG_v1.0.md",
         "docs/skills/c2pro-patterns.md",
         "docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md",
         "docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md",
@@ -480,6 +485,7 @@ def test_live_guidance_does_not_repromote_legacy_authority() -> None:
         "is marked done in `C2PRO_MASTER_BACKLOG.md` before rollout activation",
         "`C2PRO_MASTER_BACKLOG.md` is now the primary engineering delivery backlog",
         "Active task ownership and completion state must be tracked in `C2PRO_MASTER_BACKLOG.md`",
+        "execute tasks in backlog priority order",
     )
 
     for relative in live_surfaces:
@@ -508,6 +514,28 @@ def test_live_guidance_does_not_repromote_legacy_authority() -> None:
 
 
 
+
+
+def test_active_guidance_routes_structured_evidence_by_role() -> None:
+    """Active guidance must not force implementation-result schema onto review roles."""
+    surfaces = [
+        ROOT / "agents.md",
+        ROOT / ".claude" / "BACKLOG_UPDATE_MEMO.md",
+        ROOT / ".claude" / "rules" / "CRITICAL_BACKLOG_REQUIREMENT.md",
+    ]
+    for path in surfaces:
+        content = path.read_text(encoding="utf-8")
+        assert "c2pro-implementation-result-v1" in content
+        assert "c2pro-review-result-v1" in content
+        assert "QA/reviewer/security" in content or "QA/reviewer/security roles" in content
+
+    tdd = (ROOT / "docs" / "testing" / "C2PRO_TDD_BACKLOG_v1.0.md").read_text(
+        encoding="utf-8"
+    )
+    governance = tdd.split("---", 1)[0]
+    assert ".c2pro/control/" in governance
+    assert "read-only legacy/cold context" in governance
+    assert "must also be tracked in `C2PRO_MASTER_BACKLOG.md`" not in governance
 
 
 def test_indexed_specialist_profiles_are_retired_non_operational() -> None:
