@@ -677,6 +677,15 @@ async def _run_document_analysis(
         document = await repo.get_by_id(tenant_id, document_id)
         if not document:
             raise ValueError("document not found or access denied")
+        # Celery redelivery after the terminal commit is a no-op. The analysis
+        # graph has already produced its durable effects; replaying it could
+        # duplicate downstream events even though the document is complete.
+        if document.upload_status is DocumentStatus.ANALYZED:
+            return {
+                "status": "already_complete",
+                "document_id": str(document_id),
+                "document_status": DocumentStatus.ANALYZED.value,
+            }
         if not document.is_parsed():
             raise ValueError("document must be parsed before analysis")
 
@@ -849,18 +858,56 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
             return {"status": "error", "message": "Project not found"}
         tenant_id = require_tenant_id(raw_tenant_id)
 
-        await repo.update_status(tenant_id, document_id, DocumentStatus.PARSING)
-        await session.commit()
+        # ACK-loss redelivery after either durable seam must be a no-op. A
+        # PARSED_PENDING_ANALYSIS document is deliberately left to the analysis
+        # task/reconciler; reparsing here would duplicate side effects and can
+        # enqueue a second analysis task.
+        if document.upload_status is DocumentStatus.ANALYZED:
+            return {
+                "status": "already_complete",
+                "document_id": str(document_id),
+                "document_status": DocumentStatus.ANALYZED.value,
+            }
+        if document.upload_status is DocumentStatus.PARSED_PENDING_ANALYSIS:
+            return {
+                "status": "already_ingested",
+                "document_id": str(document_id),
+                "document_status": DocumentStatus.PARSED_PENDING_ANALYSIS.value,
+            }
 
         source_revision: DocumentRevision | None = None
         try:
-            storage = build_storage_service()
+            revision_repository = SqlAlchemyDocumentRevisionRepository(session)
             source_revision = await resolve_source_revision(
-                revision_repository=SqlAlchemyDocumentRevisionRepository(session),
+                revision_repository=revision_repository,
                 document_id=document_id,
                 tenant_id=tenant_id,
                 revision_id=revision_id,
             )
+
+            # A task pinned to revision A can arrive after revision B was
+            # uploaded. It may read A for audit/history, but it must never move
+            # the mutable document pointer/status backwards or overwrite B's
+            # derived state.
+            if revision_id is not None and source_revision is not None:
+                current_revision = await revision_repository.get_current(
+                    document_id, tenant_id
+                )
+                if (
+                    current_revision is not None
+                    and current_revision.revision_id != source_revision.revision_id
+                ):
+                    return {
+                        "status": "superseded",
+                        "document_id": str(document_id),
+                        "revision_id": str(source_revision.revision_id),
+                        "current_revision_id": str(current_revision.revision_id),
+                    }
+
+            await repo.update_status(tenant_id, document_id, DocumentStatus.PARSING)
+            await session.commit()
+
+            storage = build_storage_service()
             file_path = await fetch_source_file(
                 storage=storage, document=document, revision=source_revision
             )
