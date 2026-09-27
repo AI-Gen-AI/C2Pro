@@ -43,7 +43,6 @@ from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
     SqlAlchemyRagIngestionService,
 )
 from src.documents.adapters.storage.factory import build_storage_service
-from src.documents.ports.storage_service import IStorageService
 from src.documents.application.answer_rag_question_use_case import AnswerRagQuestionUseCase
 from src.documents.application.delete_document_use_case import DeleteDocumentUseCase
 from src.documents.application.download_document_use_case import DownloadDocumentUseCase
@@ -82,6 +81,7 @@ from src.documents.application.services.relationship_explanation_service import 
 )
 from src.documents.application.upload_document_use_case import UploadDocumentUseCase
 from src.documents.domain.models import DocumentStatus, DocumentType
+from src.documents.ports.storage_service import IStorageService
 from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.application.use_cases.bom_use_cases import CreateBOMItemUseCase
