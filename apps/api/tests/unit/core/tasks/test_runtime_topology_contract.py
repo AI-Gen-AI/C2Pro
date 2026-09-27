@@ -33,12 +33,10 @@ def test_scheduler_entrypoint_execs_beat_without_worker_or_api() -> None:
     assert "alembic" not in source
 
 
-def test_legacy_start_is_api_only_compatibility_shim() -> None:
-    source = _read("start.sh")
-    assert "scripts/run_api.sh" in source
-    assert "celery" not in source.lower()
-
-
-def test_docker_default_process_is_api_entrypoint() -> None:
-    source = _read("Dockerfile")
-    assert 'CMD ["bash", "scripts/run_api.sh"]' in source
+def test_transitional_default_keeps_existing_worker_until_railway_cutover() -> None:
+    """#710 phase A must not remove the only prod worker before the new service exists."""
+    start = _read("start.sh")
+    docker = _read("Dockerfile")
+    assert "celery" in start.lower()
+    assert "uvicorn" in start.lower()
+    assert 'CMD ["bash", "start.sh"]' in docker
