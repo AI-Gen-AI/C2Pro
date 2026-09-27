@@ -75,6 +75,7 @@ def _build_r2_client(config: Any) -> _AsyncBoto3S3Client:
         endpoint_url=endpoint,
         aws_access_key_id=config.r2_access_key_id,
         aws_secret_access_key=config.r2_secret_access_key,
+        region_name="auto",
     )
     return _AsyncBoto3S3Client(client)
 
