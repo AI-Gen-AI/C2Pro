@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
 **Status:** Reconciliation snapshot (read-only) · **Date:** 2026-09-27 · **Schema:** v7  
-**reconciled_against_main_sha:** `863ac936cf36dac41c95e9e51f5e23d8dba1c419` · **deployed_runtime_sha:** `UNVERIFIED`  
+**reconciled_against_main_sha:** `ed2eabd636d56b68605e26791ca69c11ce3a2905` · **deployed_runtime_sha:** `UNVERIFIED`  
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This document is the human projection of the machine product-control plane. It does not grant execution authority. Direct `main`, merge and production mutation remain governed outside this document.
@@ -10,7 +10,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=863ac936cf36dac41c95e9e51f5e23d8dba1c419
+reconciled_against_main_sha=ed2eabd636d56b68605e26791ca69c11ce3a2905
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
@@ -90,21 +90,23 @@ This resolves the earlier ambiguity that could have led the product toward paral
 
 Three facts remain deliberately separate:
 
-- `reconciled_against_main_sha = 863ac936cf36dac41c95e9e51f5e23d8dba1c419` — repository baseline used for this reconciliation.
-- `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is currently observed as Railway backend `386cbbce74b2653a6039fdddd9fc9719c43b9ff9` (SUCCESS) and Vercel frontend `e7608723c72e391fa3ff12a50d433e4265e4ac94` (READY). #678 records plane-specific evidence and merged #700/#681 owns the Product-Control promotion guard.
+- `reconciled_against_main_sha = ed2eabd636d56b68605e26791ca69c11ce3a2905` — repository baseline used for this reconciliation.
+- `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is now composite. Railway API `23706959-89a7-4478-98e8-bd67fd425c72`, Worker `485927bd-60a6-465c-bc0b-b231e987e08c` and Scheduler `5725b969-7840-4d4b-bde6-f758a9790845` are SUCCESS at #717 `ed2eabd636d56b68605e26791ca69c11ce3a2905`; Vercel production remains READY at #707 `e7608723c72e391fa3ff12a50d433e4265e4ac94`. #678/#700 retain plane-specific evidence/promotion control.
 - `product_value_delivered = false` — P0a reliability is closed and several product lanes are now wired on `main`, but the north-star P0b journey is still not PROD_VALIDATED.
 
-### 2.1 What changed since the 2026-09-26 control baseline
+### 2.1 What changed since the previous 2026-09-27 control baseline
 
-The previous control baseline was `1aecb4cf7ca454088e26046bb2ae8fa6b11bc518`. Current `main` is **40 commits ahead** at `863ac936cf36dac41c95e9e51f5e23d8dba1c419`. Material changes in this exact interval are:
+The previous control baseline was `863ac936cf36dac41c95e9e51f5e23d8dba1c419`. Current `main` is **58 commits ahead** at `ed2eabd636d56b68605e26791ca69c11ce3a2905`. Material changes in this exact interval are:
 
-- **Canonical reconciliation (#669):** Product/Development Control was reconciled to the then-current repository/runtime evidence. This changed control classifications only; it introduced no product runtime capability and no `PROD_VALIDATED` promotion.
-- **Security hygiene (#701):** committed credential examples were redacted from documentation/runbook surfaces. This does not advance product lifecycle.
-- **Control drift repair (#707):** DEV-03 activation and fresh job-bound authority now precede qualification, while P0c/P0d remain classified as already wired and not production-validated.
-- **Qualification Phase B (#700):** Product Control schema v7 now carries compact qualification refs/status plus fixed capability→lifecycle mappings and a fail-closed promotion guard. Merging it did not promote P0b, P0c or P0d.
-- **Deployment identity proof:** Railway skipped #707 and #700, keeping backend runtime at #697. Vercel #707 was the one-time activation deployment that first included #699's ignore rule; subsequent control-only #700 was CANCELED/ignored and did not advance the READY frontend runtime.
+- **Line B reconciliation (#708):** control-only; it introduced no runtime capability and no lifecycle promotion.
+- **Deterministic backend lock (#698):** Python 3.11 production dependency resolution is committed/guarded, improving reproducibility without proving user value.
+- **#706 architecture (#709):** the GOAL is explicitly the real deployed end-user journey, not CI green or services merely being up.
+- **#710–#715 plans (#716):** the final synthetic production acceptance (#715) is downstream of the required #710–#714 remediation set.
+- **Production runtime/storage (#717):** Railway now runs separate API, Worker and Scheduler services on the same #717 commit; live read-only checks show the current API deployment completing uvicorn/Redis/LangGraph startup successfully and scheduled HITL recovery tasks repeatedly completing successfully.
 
-None of those facts permits collapsing the current production deployment into one repository SHA. The immediate user-value gap remains **P0b-L4-5 production evidence**, but execution is now blocked first by **#690**: one dedicated non-customer production qualification identity/tenant must authenticate through the real Clerk path. Once that exists, #683 runs the actual upload → analysis → Health journey against the exact backend/frontend deployments observed at run time.
+Production is still a composite runtime: Railway is on #717 while Vercel production remains on #707. That is legitimate and must be rebound exactly at qualification time.
+
+The immediate GOAL is now **#706 operational closure**. #710 is live; #711–#714 remain P0 remediation, #715 is the final real synthetic production acceptance, and #690 remains the external dedicated Clerk identity prerequisite. None of this promotes P0b/P0c/P0d yet.
 
 ### 2.2 Qualification Control v1 — evidence is necessary, never self-promoting
 
@@ -312,10 +314,12 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 
 ## 12. Next authorized sequence
 
-1. **Immediate P0 prerequisite — #690:** establish one dedicated non-customer production qualification identity + tenant through the real Clerk/auth path. Do not reuse customer, personal or CI-only identities.
-2. **P0b — #683:** execute the real single-document upload → analysis → truthful six-category Health journey on the exact backend/frontend deployments observed immediately before the run. Rebind if either plane changed; do not redeploy merely to force SHA equality.
-3. **P0c/P0d — #686 then #687:** qualify What Changed and Current State on the same clean qualification project where practical; do not recreate already-wired lanes as feature work.
-4. **Stop/reconcile after #687:** P1 Project Controls, Coherence, Alerts/Actions and Procurement remain planning context only. They require a fresh Line B reconciliation plus explicit authorization before implementation.
-5. **Control-plane discipline:** reconcile this YAML/Markdown pair against an exact `main` SHA whenever a material product lane merges; branch completion never advances deployment or PROD_VALIDATED automatically.
+1. **Parallel external prerequisite — #690:** establish the dedicated non-customer Clerk Production org/user through the supported operator path; do not reuse customer/CI identities and do not manually synthesize DB mappings.
+2. **Line A #706 remediation:** #710 is DONE/live. Complete the required #711–#714 P0 workstreams under their existing Line A authority; Line B does not duplicate them.
+3. **Final deployed proof — #715:** only after #690 plus required #711–#714 are merged/deployed, run the synthetic production harness against exact rebound Railway API/Worker/Scheduler and Vercel production identities. Fail closed on mocks/HITL bypass/fixture mismatch.
+4. **P0b evidence — #683:** capture its Health/persistence assertions inside the #715 run where applicable; do not promote a pre-remediation diagnostic as final production evidence.
+5. **Then P0c/P0d — #686 then #687:** qualify on the same clean synthetic tenant/project where their own gates are met.
+6. **Stop/reconcile after the P0 wave:** P1 Project Controls, Coherence, Alerts/Actions and Procurement remain planning context only and require fresh explicit authorization.
+7. **Control-plane discipline:** branch completion, CI green or deployment success never advances `PROD_VALIDATED` automatically.
 
 **No direct `main` or production mutation is authorized by this reconciliation. Human-reviewed merge remains mandatory.**
