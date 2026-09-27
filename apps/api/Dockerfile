@@ -105,6 +105,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD sh -c 'curl -f http://localhost:${PORT:-8000}/health || exit 1'
 
-# Default production process is API-only. Railway worker/scheduler services reuse
-# the same image with explicit start commands: scripts/run_worker.sh / run_scheduler.sh.
-CMD ["bash", "scripts/run_api.sh"]
+# Run migrations, start Celery worker + API server in same container.
+# start.sh: (1) alembic upgrade head, (2) celery worker in bg, (3) exec uvicorn
+CMD ["bash", "start.sh"]
