@@ -69,7 +69,7 @@ def mock_control_plane(tmp_path):
                 "work_ref": ".c2pro/work/C2PRO-DEV-02.yaml",
                 "priority": "P0",
                 "depends_on": [],
-                "review_policy": "principal_and_challenger",
+                "review_policy": "optional",
             }
         ]
     }
@@ -90,6 +90,33 @@ def mock_control_plane(tmp_path):
     }
     with open(current_file, "w", encoding="utf-8") as f:
         yaml.dump(current_data, f)
+
+    # 3. Trusted routing authority for structured review tests.
+    routing_file = control_dir / "routing.yaml"
+    routing_data = {
+        "schema": "c2pro-routing-v2",
+        "schema_version": 2,
+        "workers": {
+            "claude_code": {
+                "principal_gate_eligible": True,
+                "eligible_roles": ["implementation_lead", "independent_reviewer", "specialist"],
+            },
+            "codex": {
+                "principal_gate_eligible": True,
+                "eligible_roles": ["implementation_lead", "independent_reviewer", "specialist"],
+            },
+            "gemini_cli": {
+                "principal_gate_eligible": False,
+                "eligible_roles": ["specialist"],
+            },
+        },
+        "principal_gate": {
+            "eligible_workers": ["claude_code", "codex"],
+            "material_reviewer_must_differ_from_implementation_worker": True,
+        },
+    }
+    with open(routing_file, "w", encoding="utf-8") as f:
+        yaml.dump(routing_data, f)
 
     return control_dir
 
@@ -150,7 +177,11 @@ def test_reconciler_rejects_stale_structured_review_identity(
     ):
         reconcile_result(
             valid_worker_result,
-            remote_evidence={"pr_number": 597, "pr_head_sha": live_head},
+            remote_evidence={
+                "pr_number": 597,
+                "pr_head_sha": live_head,
+                "implementation_worker_id": "claude_code",
+            },
             ci_evidence={},
             control_dir=mock_control_plane,
             review_results=[stale_review],
