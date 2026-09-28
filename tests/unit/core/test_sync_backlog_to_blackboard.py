@@ -316,6 +316,52 @@ class TestMarkTasksComplete:
         assert outside.read_bytes() == outside_before
         assert blackboard_path.read_bytes() == blackboard_before
 
+    def test_push_rejects_non_regular_category_before_first_mutation(
+        self, tmp_path, sample_backlog_content, monkeypatch
+    ):
+        """A *.md directory must be rejected before any backlog file is changed."""
+        master_backlog = tmp_path / "C2PRO_MASTER_BACKLOG.md"
+        master_backlog.write_text(sample_backlog_content, encoding="utf-8")
+        master_before = master_backlog.read_bytes()
+
+        backlogs_dir = tmp_path / "backlogs"
+        backlogs_dir.mkdir()
+        (backlogs_dir / "BAD.md").mkdir()
+
+        blackboard_path = tmp_path / "blackboard.json"
+        blackboard = {
+            "session_id": "test_session",
+            "objetivo_global": "Test sync",
+            "estado_actual": "ejecucion",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "tareas": [
+                {
+                    "backlog_id": "TASK-BCK-001",
+                    "estado": "completado",
+                }
+            ],
+            "backlog_sync": {
+                "last_sync": None,
+                "backlog_file": "C2PRO_MASTER_BACKLOG.md",
+                "task_ids_en_sesion": ["TASK-BCK-001"],
+            },
+        }
+        blackboard_path.write_text(
+            json.dumps(blackboard, indent=2), encoding="utf-8"
+        )
+        blackboard_before = blackboard_path.read_bytes()
+
+        monkeypatch.setattr(sync_module, "BLACKBOARD_PATH", blackboard_path)
+        monkeypatch.setattr(sync_module, "MASTER_BACKLOG_PATH", master_backlog)
+        monkeypatch.setattr(sync_module, "BACKLOGS_DIR", backlogs_dir)
+
+        with pytest.raises(ValueError, match="canonical legacy backlog"):
+            push_completed_tasks_to_backlog()
+
+        assert master_backlog.read_bytes() == master_before
+        assert blackboard_path.read_bytes() == blackboard_before
+
     def test_mark_canonical_master_backlog_complete(
         self, tmp_path, sample_backlog_content, monkeypatch
     ):
