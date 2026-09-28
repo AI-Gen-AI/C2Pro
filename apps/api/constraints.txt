@@ -175,7 +175,7 @@ tzdata==2026.4
 tzlocal==5.4.4
 upstash-redis==1.7.0
 urllib3==2.8.0
-uuid-utils==0.17.1
+uuid-utils==1.0.0
 uvicorn==0.54.0
 uvloop==0.22.1
 vine==5.1.0
