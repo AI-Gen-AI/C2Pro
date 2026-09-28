@@ -42,15 +42,20 @@ STRUCTURED_DOCUMENT_TYPES = {DocumentType.BUDGET, DocumentType.SCHEDULE}
 STRUCTURED_DOCX_ERROR = "budget/schedule require .xlsx/.bc3"
 
 
-def _enqueue_document_processing(document_id: UUID, revision_id: UUID | None = None) -> str | None:
+def _enqueue_document_processing(
+    document_id: UUID, revision_id: UUID | None = None, generation: int | None = None
+) -> str | None:
     """Best-effort post-commit analysis dispatch pinned to the new immutable revision."""
     try:
         from src.core.tasks.ingestion_tasks import process_document_async
 
-        task = process_document_async.delay(
-            document_id=str(document_id),
-            revision_id=str(revision_id) if revision_id is not None else None,
-        )
+        kwargs: dict[str, object] = {
+            "document_id": str(document_id),
+            "revision_id": str(revision_id) if revision_id is not None else None,
+        }
+        if generation is not None:
+            kwargs["generation"] = generation
+        task = process_document_async.delay(**kwargs)
         return getattr(task, "id", None)
     except Exception as exc:  # pragma: no cover - broker availability is runtime-only.
         logger.warning("reupload_processing_enqueue_failed", document_id=str(document_id), error=str(exc))
@@ -194,13 +199,18 @@ class ReuploadDocumentUseCase:
         )
         # The mutable pointer follows the current revision; history is read from revisions.
         await self.document_repository.update_storage_path(scoped_tenant_id, document_id, blob_key)
+        # #711: the new canonical revision supersedes every earlier processing
+        # attempt atomically with the revision itself.
+        generation = await self.document_repository.begin_processing_generation(
+            scoped_tenant_id, document_id, new_revision.revision_id
+        )
 
         # REVISION + PROJECT_EVENT commit atomically here, before the enqueue.
         await self.document_repository.commit()
 
         # A revision is not useful temporal evidence until the worker parses it. The durable
         # write has already committed, so a broker outage cannot roll back the lineage.
-        _enqueue_document_processing(document_id, new_revision.revision_id)
+        _enqueue_document_processing(document_id, new_revision.revision_id, generation)
 
         # Best-effort: the snapshot enqueue hits the Celery broker synchronously.
         # A broker outage must NOT fail the reupload — revision, event, and the

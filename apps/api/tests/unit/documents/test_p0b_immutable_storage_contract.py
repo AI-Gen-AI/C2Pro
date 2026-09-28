@@ -121,6 +121,12 @@ class _DocumentRepo:
     async def update_storage_path(self, _tenant_id: UUID, document_id: UUID, storage_url: str) -> None:
         self.documents[document_id].storage_url = storage_url
 
+    async def begin_processing_generation(
+        self, _tenant_id: UUID, _document_id: UUID, _revision_id: UUID | None = None
+    ) -> int:
+        # #711: a new revision / reprocess starts a new processing generation.
+        return 2
+
     async def update_status(self, _tenant_id: UUID, document_id: UUID, status: DocumentStatus) -> None:
         self.documents[document_id].upload_status = status
 
@@ -541,7 +547,7 @@ async def test_upload_dispatch_pins_the_created_revision(monkeypatch: pytest.Mon
     dispatched: list[tuple[UUID, UUID | None]] = []
     monkeypatch.setattr(
         router_module, "_enqueue_document_processing",
-        lambda document_id, revision_id=None: dispatched.append((document_id, revision_id)) or "task-1",
+        lambda document_id, revision_id=None, generation=None: dispatched.append((document_id, revision_id)) or "task-1",
     )
 
     await router_module.upload_document_for_processing(
@@ -566,4 +572,6 @@ def test_processing_task_forwards_the_pinned_revision_to_the_worker() -> None:
         else:  # the Celery decorator is isolated to a plain bound function in unit runs
             task(SimpleNamespace(request=SimpleNamespace(id=None)), document_id=str(document_id), revision_id=str(revision_id))
 
-    process.assert_awaited_once_with(document_id, revision_id)
+    # #711: a plain producer message carries no generation/authority; the
+    # worker acquires its own fenced authority.
+    process.assert_awaited_once_with(document_id, revision_id, generation=None, authority=None)
