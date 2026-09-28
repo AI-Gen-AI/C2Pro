@@ -308,6 +308,7 @@ def _resolve_legacy_backlog_target(backlog_path: Path) -> Path:
     if (
         target.suffix.lower() != ".md"
         or target.parent != backlogs_dir
+        or not target.is_file()
     ):
         raise ValueError(
             "Backlog path must remain within canonical legacy backlog roots"
