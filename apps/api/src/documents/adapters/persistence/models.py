@@ -14,6 +14,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -301,3 +302,59 @@ class DocumentChunkORM(Base):
 
     def __repr__(self) -> str:
         return f"<DocumentChunkORM(id={self.id}, document_id={self.document_id})>"
+
+
+
+class DocumentProcessingOperationORM(Base):
+    """#711: the single processing authority for one document.
+
+    One row per document. It names the canonical revision and processing
+    generation being worked on, the current stage (INGESTION -> ANALYSIS), and
+    the exact attempt that owns it: attempt_id + owner_token + a monotonic
+    fencing_token under a PostgreSQL-clock lease. Every canonical durable
+    write re-verifies this row inside its own transaction (see
+    ``src.core.processing_authority``); a worker whose attempt was superseded can keep
+    computing but can never persist.
+    """
+
+    __tablename__ = "document_processing_operations"
+
+    document_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
+    revision_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    generation: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="1")
+    stage: Mapped[str] = mapped_column(String(16), nullable=False)
+    phase: Mapped[str] = mapped_column(String(16), nullable=False)
+    attempt_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    owner_token: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    fencing_token: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    failure_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    outcome: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "stage IN ('INGESTION','ANALYSIS')", name="ck_document_processing_operations_stage"
+        ),
+        CheckConstraint(
+            "phase IN ('PENDING','CLAIMED','RUNNING','COMPLETED','FAILED')",
+            name="ck_document_processing_operations_phase",
+        ),
+        CheckConstraint(
+            "fencing_token >= 0", name="ck_document_processing_operations_fence"
+        ),
+        {"info": {"rls_policy": "tenant_isolation"}},
+    )

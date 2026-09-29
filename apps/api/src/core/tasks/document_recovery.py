@@ -8,6 +8,10 @@ safe.
 
 The sweep is deliberately conservative:
 - only stale PARSING / PARSED_PENDING_ANALYSIS documents are candidates;
+- the discovery index is only a hint: a document is recovered only when its
+  processing authority has no valid owner by PostgreSQL's clock (#711), and
+  the takeover mints a new attempt + fencing token that is handed to exactly
+  one replacement task;
 - pending HITL review is never treated as abandoned work;
 - every candidate is rechecked under its own tenant and a row lock;
 - attempts are bounded per document generation and processing stage;
@@ -26,6 +30,8 @@ from uuid import UUID
 import structlog
 from sqlalchemy import text
 
+from src.core import processing_authority
+from src.core.processing_authority import ProcessingStage
 from src.core.tasks.celery_app import celery_app
 from src.documents.domain.models import DocumentStatus
 from src.documents.ports.rag_ingestion_service import RagIngestionOutcome
@@ -255,7 +261,9 @@ async def _sweep_async(
     for candidate in rows:
         tenant_id = UUID(str(candidate.tenant_id))
         document_id = UUID(str(candidate.id))
-        dispatch: tuple[RecoveryAction, UUID | None] | None = None
+        dispatch: (
+            tuple[RecoveryAction, UUID | None, processing_authority.ProcessingAuthority] | None
+        ) = None
 
         async with session_factory(tenant_id) as session:
             row = (
@@ -307,7 +315,21 @@ async def _sweep_async(
                     skipped_race += 1
                 continue
 
+            stage = (
+                ProcessingStage.INGESTION
+                if status is DocumentStatus.PARSING
+                else ProcessingStage.ANALYSIS
+            )
+
             if action is RecoveryAction.FAIL_RETRYABLE:
+                # #711: only work nobody validly owns may be failed; a live
+                # owner (valid DB lease) is never overwritten.
+                if not await processing_authority.recovery_may_fail(
+                    session, tenant_id=tenant_id, document_id=document_id, stage=stage
+                ):
+                    await session.rollback()
+                    skipped_race += 1
+                    continue
                 reason = (
                     "configuration_required"
                     if rag_outcome == RagIngestionOutcome.MISCONFIGURED.value
@@ -333,7 +355,29 @@ async def _sweep_async(
                         ),
                     },
                 )
+                await processing_authority.fail_unowned(
+                    session,
+                    tenant_id=tenant_id,
+                    document_id=document_id,
+                    outcome=RecoveryAction.FAIL_RETRYABLE.value,
+                    error=error_message,
+                )
                 failed_retryable += 1
+                continue
+
+            # #711: take over only when nobody validly owns the work (DB
+            # clock). The claim mints a new attempt + fence (CLAIMED) that is
+            # passed to exactly one replacement task, which adopts it once.
+            claimed = await processing_authority.claim_for_recovery(
+                session,
+                tenant_id=tenant_id,
+                document_id=document_id,
+                stage=stage,
+                revision_id=current_revision_id,
+            )
+            if claimed is None:
+                await session.rollback()
+                skipped_race += 1
                 continue
 
             next_attempt = attempts + 1
@@ -363,12 +407,12 @@ async def _sweep_async(
                     "expected_status": status.value,
                 },
             )
-            dispatch = (action, current_revision_id)
+            dispatch = (action, current_revision_id, claimed)
 
         if dispatch is None:
             continue
 
-        action, current_revision_id = dispatch
+        action, current_revision_id, claimed = dispatch
         try:
             if action is RecoveryAction.REQUEUE_INGESTION:
                 ingestion_task.apply_async(
@@ -379,6 +423,7 @@ async def _sweep_async(
                             if current_revision_id is not None
                             else None
                         ),
+                        "authority": claimed.to_message(),
                     },
                     queue="document_parsing",
                 )
@@ -388,6 +433,7 @@ async def _sweep_async(
                     kwargs={
                         "tenant_id": str(tenant_id),
                         "document_id": str(document_id),
+                        "authority": claimed.to_message(),
                     },
                     queue="document_parsing",
                 )

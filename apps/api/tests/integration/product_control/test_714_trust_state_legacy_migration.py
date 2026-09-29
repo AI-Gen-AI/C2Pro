@@ -39,7 +39,7 @@ pytestmark = [
     pytest.mark.skipif(not SCRATCH_DSN, reason="requires C2PRO_MIGRATION_SCRATCH_DSN"),
 ]
 
-BEFORE_714 = "20260927_0711"
+BEFORE_714 = "20260928_0711"
 T0 = datetime(2026, 9, 1, 12, 0, 0)
 
 

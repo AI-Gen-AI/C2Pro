@@ -1,7 +1,7 @@
 """#714 trusted-state envelope on document_artifacts ("persisted != trusted").
 
 Revision ID: 20260927_0714
-Revises: 20260927_0711
+Revises: 20260928_0711
 Create Date: 2026-09-27
 
 Adds ``artifact_version``, ``artifact_hash``, ``trust_state`` and ``scoring``
@@ -43,7 +43,7 @@ from sqlalchemy import text
 from alembic import op
 
 revision: str = "20260927_0714"
-down_revision: str | None = "20260927_0711"
+down_revision: str | None = "20260928_0711"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

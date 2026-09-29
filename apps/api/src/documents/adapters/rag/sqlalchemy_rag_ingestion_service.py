@@ -26,9 +26,11 @@ logger = structlog.get_logger()
 
 
 class SqlAlchemyRagIngestionService(IRagIngestionService):
-    def __init__(self, db_session: AsyncSession) -> None:
+    def __init__(self, db_session: AsyncSession, *, commit: bool = True) -> None:
         self.db_session = db_session
-        self._rag_service = RagService(db_session)
+        # #711: commit=False stages the chunk replacement in the caller's
+        # (fenced) transaction instead of committing it on its own.
+        self._rag_service = RagService(db_session, commit=commit)
 
     async def ingest_document_chunks(
         self,

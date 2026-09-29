@@ -147,6 +147,21 @@ class IDocumentRepository(ABC):
         """Lists all clauses for a document."""
         pass
 
+    async def begin_processing_generation(
+        self,
+        tenant_id: TenantId,
+        document_id: UUID,
+        revision_id: UUID | None = None,
+    ) -> int | None:
+        """#711: start a new processing generation in the current transaction.
+
+        A new canonical revision or an explicit reprocess supersedes every
+        earlier processing attempt. Adapters without a processing-authority
+        store keep the default (no generation).
+        """
+        _ = (tenant_id, document_id, revision_id)
+        return None
+
     @abstractmethod
     async def commit(self) -> None:
         """Commits pending changes to the repository."""
