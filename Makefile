@@ -65,21 +65,7 @@ setup-env: ## Crear archivo .env desde ejemplo
 	fi
 
 check-local-postgres-password: ## Validar password PostgreSQL local antes de arrancar Docker
-	@if [ ! -f .env ]; then \
-		echo "ERROR: .env is required; run make setup-env first"; \
-		exit 1; \
-	fi
-	@pw="$(sed -n 's/^POSTGRES_PASSWORD=//p' .env | head -n 1 | tr -d '\r')"; \
-	if [ -z "$pw" ]; then \
-		echo "ERROR: POSTGRES_PASSWORD must be non-empty"; \
-		echo "Set it in .env before starting local Docker services."; \
-		exit 1; \
-	fi; \
-	case "$pw" in \
-		*[!A-Za-z0-9._~-]*) \
-			echo "ERROR: local POSTGRES_PASSWORD must use URI-unreserved characters only (A-Za-z0-9._~-)."; \
-			exit 1 ;; \
-	esac
+	@python -c 'from pathlib import Path; import re, sys; p=Path(".env"); p.is_file() or (print("ERROR: .env is required; run make setup-env first"), sys.exit(1)); value=next((line.split("=", 1)[1].strip() for line in p.read_text(encoding="utf-8").splitlines() if line.startswith("POSTGRES_PASSWORD=")), ""); value or (print("ERROR: POSTGRES_PASSWORD must be non-empty"), sys.exit(1)); re.fullmatch(r"[A-Za-z0-9._~-]+", value) or (print("ERROR: local POSTGRES_PASSWORD must use URI-unreserved characters only (A-Za-z0-9._~-)."), sys.exit(1))'
 
 setup-backend: ## Instalar dependencias del backend (Docker)
 	@echo "$(CYAN)📦 Instalando dependencias del backend...$(RESET)"
