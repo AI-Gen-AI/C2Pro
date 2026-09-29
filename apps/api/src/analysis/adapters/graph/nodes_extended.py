@@ -145,9 +145,12 @@ async def _persist_node_error(state: ProjectState, result: NodeResult[object]) -
 
     try:
         from src.core.database import get_session_with_tenant
+        from src.core.processing_authority import fence_current
         from src.evidence.adapters.persistence.models import EvidenceExtractionEventORM
 
         async with get_session_with_tenant(UUID(str(tenant_id))) as session:
+            # #711: a stale processing worker records no evidence.
+            await fence_current(session)
             session.add(
                 EvidenceExtractionEventORM(
                     extraction_run_id=uuid4(),

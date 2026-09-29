@@ -697,8 +697,11 @@ async def _persist_real_checkpoint_id(
 
         from src.analysis.adapters.graph.dependencies import get_hitl_service_for_graph
         from src.core.database import get_session_with_tenant
+        from src.core.processing_authority import fence_current
 
         async with get_session_with_tenant(UUID(tenant_id)) as session:
+            # #711: only the current processing owner may bind a checkpoint.
+            await fence_current(session)
             service = get_hitl_service_for_graph(session=session, tenant_id=UUID(tenant_id))
             review = await service.review_queue_repo.find_active_review(
                 document_id=UUID(document_id),

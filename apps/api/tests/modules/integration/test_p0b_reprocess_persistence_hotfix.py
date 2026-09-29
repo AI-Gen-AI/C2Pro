@@ -52,8 +52,16 @@ from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
 from tests.support.hitl_resume_fakes import ResumeGraphDouble
+from tests.support.processing_authority_fakes import install_permissive_authority
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture(autouse=True)
+def _permissive_processing_authority(monkeypatch: pytest.MonkeyPatch):
+    """#711: these tests drive the worker with mock sessions; the real fence
+    is proven against PostgreSQL in test_711_processing_attempt_fence.py."""
+    return install_permissive_authority(monkeypatch)
 
 
 def _fake_embed(dimension: int = 1536):

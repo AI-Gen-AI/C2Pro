@@ -198,7 +198,9 @@ def _validate_upload_extension(
         )
 
 
-def _enqueue_document_processing(document_id: UUID, revision_id: UUID | None = None) -> str | None:
+def _enqueue_document_processing(
+    document_id: UUID, revision_id: UUID | None = None, generation: int | None = None
+) -> str | None:
     try:
         from src.core.tasks.ingestion_tasks import process_document_async
 
@@ -208,10 +210,14 @@ def _enqueue_document_processing(document_id: UUID, revision_id: UUID | None = N
 
         # P0b: a pinned revision_id makes the worker read that immutable object even if a
         # newer revision is uploaded before the task runs.
-        task = process_document_async.delay(
-            document_id=str(document_id),
-            revision_id=str(revision_id) if revision_id is not None else None,
-        )
+        kwargs: dict[str, object] = {
+            "document_id": str(document_id),
+            "revision_id": str(revision_id) if revision_id is not None else None,
+        }
+        # #711: a reprocess pins the new processing generation it started.
+        if generation is not None:
+            kwargs["generation"] = generation
+        task = process_document_async.delay(**kwargs)
         return getattr(task, "id", None)
     except Exception as exc:  # pragma: no cover - runtime infra failure path
         logger.warning(
@@ -1024,11 +1030,14 @@ async def reprocess_document_endpoint(
         await repo.update_metadata(tenant_id, document_id, metadata)
 
     await repo.update_status(tenant_id, document_id, DocumentStatus.UPLOADED, parsing_error=None)
+    # #711: an explicit reprocess starts a new processing generation in the
+    # same transaction, superseding any earlier (possibly still running) worker.
+    generation = await repo.begin_processing_generation(tenant_id, document_id)
     await repo.commit()
     await repo.refresh(document)
 
     response_data = DocumentResponse.model_validate(document).model_dump()
-    response_data["task_id"] = _enqueue_document_processing(document_id)
+    response_data["task_id"] = _enqueue_document_processing(document_id, generation=generation)
     response_data["processing_status"] = DocumentPollingStatus.QUEUED
     response_data["status_detail"] = (
         "Document status reset successfully. Background reprocessing will start when the worker is available."

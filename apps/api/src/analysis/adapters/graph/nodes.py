@@ -47,6 +47,7 @@ from src.analysis.domain.contracts import RiskItem, WbsActivity
 from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.analysis.domain.prompts import DOC_TYPES
 from src.core.database import get_session_with_tenant
+from src.core.processing_authority import fence_current
 from src.shared_kernel.enums import AlertSeverity
 from src.temporal.application.project_snapshot_trigger import (
     record_project_event_and_enqueue_snapshot,
@@ -539,6 +540,8 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                 else ImpactLevel.MEDIUM
             )
             async with get_session_with_tenant(UUID(tenant_id)) as session:
+                # #711: a stale processing worker must not route a review.
+                await fence_current(session)
                 service = get_hitl_service_for_graph(
                     session=session, tenant_id=UUID(tenant_id),
                 )
@@ -760,6 +763,9 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
     tenant_id = UUID(state["tenant_id"])
     try:
         async with get_session_with_tenant(tenant_id) as session:
+            # #711: analysis, alerts and canonical WBS commit only for the
+            # current processing owner (same transaction as the writes).
+            await fence_current(session)
             result = await PersistAnalysisUseCase(
                 analysis_repo=SqlAlchemyAnalysisRepository(session),
                 wbs_repo=SQLAlchemyWBSRepository(session),

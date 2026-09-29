@@ -520,6 +520,19 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         result = await self.session.execute(stmt)
         return [self._to_domain_clause(orm) for orm in result.scalars().all()]
 
+    async def begin_processing_generation(
+        self,
+        tenant_id: UUID,
+        document_id: UUID,
+        revision_id: UUID | None = None,
+    ) -> int | None:
+        """#711: supersede every earlier processing attempt, in this transaction."""
+        from src.core.processing_authority import begin_generation
+
+        return await begin_generation(
+            self.session, tenant_id=tenant_id, document_id=document_id, revision_id=revision_id
+        )
+
     async def commit(self) -> None:
         await self.session.commit()
 
