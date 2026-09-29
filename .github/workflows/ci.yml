@@ -48,6 +48,7 @@ jobs:
       backend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.backend }}
       frontend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.frontend }}
       migrations: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.migrations }}
+      backend_docker: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.backend_docker }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -76,6 +77,9 @@ jobs:
             migrations:
               - "apps/api/alembic/**"
               - "supabase/migrations/**"
+            backend_docker:
+              - "apps/api/Dockerfile"
+              - "apps/api/.dockerignore"
 
   # ──────────────────────────── Backend lane ────────────────────────────
 
@@ -1375,6 +1379,43 @@ jobs:
         working-directory: apps/web
         run: pnpm build
 
+  backend-docker-build:
+    name: Backend Docker Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend_docker == 'true'
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build production API image
+        run: docker build --file apps/api/Dockerfile --tag c2pro-api:ci apps/api
+
+      - name: Verify runtime payload
+        run: |
+          docker run --rm --entrypoint bash c2pro-api:ci -lc '
+            set -euo pipefail
+            test -d /app/src
+            test -d /app/alembic
+            test -f /app/alembic.ini
+            test -f /app/scripts/run_api.sh
+            test -f /app/scripts/run_worker.sh
+            test -f /app/scripts/run_scheduler.sh
+            test -f /app/scripts/wait_for_schema.py
+            test -f /app/start.sh
+            test ! -e /app/tests
+            test ! -e /app/.env
+            test ! -e /app/.env.example
+            test ! -e /app/migrate.py
+            bash -n /app/scripts/run_api.sh
+            bash -n /app/scripts/run_worker.sh
+            bash -n /app/scripts/run_scheduler.sh
+            python -c "from alembic.config import Config; from alembic.script import ScriptDirectory; cfg=Config('/app/alembic.ini'); cfg.set_main_option('script_location','/app/alembic'); heads=ScriptDirectory.from_config(cfg).get_heads(); assert len(heads) == 1, heads"
+          '
+
   # ──────────────────────────── Join gate ───────────────────────────────
   # The ONLY check that branch protection should require. Skipped lanes are
   # fine (path filtering); failed or cancelled required lanes are not.
@@ -1396,6 +1437,7 @@ jobs:
       - backend-modules
       - backend-coverage
       - backend-migrations
+      - backend-docker-build
       - frontend-quality
       - frontend-test
       - frontend-e2e-smoke
@@ -1491,6 +1533,7 @@ jobs:
           RESULT_BACKEND_PRESIDIO_NER: ${{ needs.backend-presidio-ner.result }}
           RESULT_BACKEND_SECURITY: ${{ needs.backend-security.result }}
           RESULT_BACKEND_MIGRATIONS: ${{ needs.backend-migrations.result }}
+          RESULT_BACKEND_DOCKER_BUILD: ${{ needs.backend-docker-build.result }}
           RESULT_FRONTEND_QUALITY: ${{ needs.frontend-quality.result }}
           RESULT_FRONTEND_TEST: ${{ needs.frontend-test.result }}
           RESULT_FRONTEND_E2E: ${{ needs.frontend-e2e-smoke.result }}
@@ -1520,6 +1563,7 @@ jobs:
             "backend-modules:$RESULT_BACKEND_MODULES"
             "backend-coverage:$RESULT_BACKEND_COVERAGE"
             "backend-migrations:$RESULT_BACKEND_MIGRATIONS"
+            "backend-docker-build:$RESULT_BACKEND_DOCKER_BUILD"
             "frontend-quality:$RESULT_FRONTEND_QUALITY"
             "frontend-test:$RESULT_FRONTEND_TEST"
             "frontend-e2e-smoke:$RESULT_FRONTEND_E2E"
