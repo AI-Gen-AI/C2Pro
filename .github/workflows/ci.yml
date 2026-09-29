@@ -1413,7 +1413,7 @@ jobs:
             bash -n /app/scripts/run_api.sh
             bash -n /app/scripts/run_worker.sh
             bash -n /app/scripts/run_scheduler.sh
-            python -c "from alembic.config import Config; from alembic.script import ScriptDirectory; cfg=Config('/app/alembic.ini'); cfg.set_main_option('script_location','/app/alembic'); heads=ScriptDirectory.from_config(cfg).get_heads(); assert len(heads) == 1, heads"
+            python -c "from alembic.config import Config; from alembic.script import ScriptDirectory; cfg=Config(\"/app/alembic.ini\"); cfg.set_main_option(\"script_location\",\"/app/alembic\"); heads=ScriptDirectory.from_config(cfg).get_heads(); assert len(heads) == 1, heads"
           '
 
   # ──────────────────────────── Join gate ───────────────────────────────
