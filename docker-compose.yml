@@ -24,7 +24,7 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
       POSTGRES_DB: c2pro
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -132,7 +132,7 @@ services:
     environment:
       - ENVIRONMENT=development
       - DEBUG=true
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/c2pro
+      - "DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/c2pro"
       - REDIS_URL=redis://redis:6379
       - R2_ENDPOINT_URL=http://minio:9000
       - R2_ACCESS_KEY_ID=minioadmin
@@ -182,7 +182,7 @@ services:
     environment:
       - ENVIRONMENT=development
       - DEBUG=true
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/c2pro
+      - "DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/c2pro"
       - REDIS_URL=redis://redis:6379
       - R2_ENDPOINT_URL=http://minio:9000
       - R2_ACCESS_KEY_ID=minioadmin
