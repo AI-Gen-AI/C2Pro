@@ -50,6 +50,7 @@ setup: ## Setup inicial completo (Supabase)
 setup-local: ## Setup con Docker local
 	@echo "$(CYAN)🚀 Configurando C2PRO (Docker)...$(RESET)"
 	@make setup-env
+	@make check-local-postgres-password
 	@make setup-backend
 	@make setup-frontend
 	@make setup-infra
@@ -62,6 +63,23 @@ setup-env: ## Crear archivo .env desde ejemplo
 	else \
 		echo "$(GREEN)✓ Archivo .env ya existe$(RESET)"; \
 	fi
+
+check-local-postgres-password: ## Validar password PostgreSQL local antes de arrancar Docker
+	@if [ ! -f .env ]; then \
+		echo "ERROR: .env is required; run make setup-env first"; \
+		exit 1; \
+	fi
+	@pw="$(sed -n 's/^POSTGRES_PASSWORD=//p' .env | head -n 1 | tr -d '\r')"; \
+	if [ -z "$pw" ]; then \
+		echo "ERROR: POSTGRES_PASSWORD must be non-empty"; \
+		echo "Set it in .env before starting local Docker services."; \
+		exit 1; \
+	fi; \
+	case "$pw" in \
+		*[!A-Za-z0-9._~-]*) \
+			echo "ERROR: local POSTGRES_PASSWORD must use URI-unreserved characters only (A-Za-z0-9._~-)."; \
+			exit 1 ;; \
+	esac
 
 setup-backend: ## Instalar dependencias del backend (Docker)
 	@echo "$(CYAN)📦 Instalando dependencias del backend...$(RESET)"
@@ -77,7 +95,7 @@ setup-frontend: ## Instalar dependencias del frontend (pnpm workspace)
 	@echo "$(CYAN)📦 Instalando dependencias del frontend...$(RESET)"
 	pnpm install
 
-setup-infra: ## Iniciar servicios de infraestructura
+setup-infra: check-local-postgres-password ## Iniciar servicios de infraestructura
 	@echo "$(CYAN)🐳 Iniciando servicios Docker...$(RESET)"
 	docker compose up -d postgres redis minio minio-setup
 	@echo "$(CYAN)⏳ Esperando a que los servicios estén listos...$(RESET)"
@@ -108,7 +126,7 @@ backend-dev: ## Iniciar backend en desarrollo (Supabase)
 	@echo "$(CYAN)🚀 Iniciando backend...$(RESET)"
 	cd apps/api && python dev.py
 
-dev-infra: ## Iniciar solo infraestructura
+dev-infra: check-local-postgres-password ## Iniciar solo infraestructura
 	docker compose up -d postgres redis minio
 
 dev-api: ## Iniciar backend en modo desarrollo
@@ -132,7 +150,7 @@ db-migrate-status: ## Ver estado de migraciones
 db-migrate-history: ## Ver historial de migraciones
 	cd apps/api && python migrate.py history
 
-db-reset: ## Resetear base de datos (⚠️ destruye datos)
+db-reset: check-local-postgres-password ## Resetear base de datos (⚠️ destruye datos)
 	docker compose down -v postgres
 	docker compose up -d postgres
 	@sleep 3
