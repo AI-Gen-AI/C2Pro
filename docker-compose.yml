@@ -24,6 +24,7 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_USER: postgres
+      # Local password is also embedded in DATABASE_URL below; keep it URI-unreserved.
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
       POSTGRES_DB: c2pro
     volumes:
