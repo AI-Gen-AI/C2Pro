@@ -56,6 +56,7 @@ Edit the `.env` created above with your credentials. For **local Docker** develo
 
 ```bash
 # Database - Docker PostgreSQL
+# Use URI-unreserved characters only: A-Z a-z 0-9 . _ ~ -
 POSTGRES_PASSWORD=<choose-a-local-password>
 DATABASE_URL=postgresql://postgres:<same-local-password>@localhost:5432/c2pro
 
@@ -78,6 +79,18 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 > **Required variables:** `POSTGRES_PASSWORD` (for local Docker Compose), `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET_KEY`
+
+> **Existing local database:** if you already have an existing postgres_data volume created before this change, PostgreSQL keeps the password stored inside that volume and ignores a new initialization password. To preserve local data, start only PostgreSQL, open a local psql session, rotate the role interactively, then start the remaining services:
+>
+> ```bash
+> docker compose up -d postgres
+> docker compose exec postgres psql -U postgres -d postgres
+> \password postgres
+> # Enter the same URI-unreserved password configured as POSTGRES_PASSWORD in .env.
+> docker compose up -d redis minio minio-setup
+> ```
+>
+> If the local database is disposable, `docker compose down -v` followed by a normal startup recreates the volume, but **deletes local database data**.
 
 ### 1.3 Start backend
 
