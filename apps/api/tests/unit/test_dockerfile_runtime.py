@@ -28,3 +28,21 @@ def test_api_runtime_requirements_include_pgvector() -> None:
     content = requirements.read_text(encoding="utf-8")
 
     assert "pgvector" in content
+
+
+def test_api_runtime_image_uses_explicit_runtime_copy_surface() -> None:
+    """R17-HS-C: production image must not recursively copy the API build context."""
+    dockerfile = Path(__file__).resolve().parents[2] / "Dockerfile"
+    content = dockerfile.read_text(encoding="utf-8")
+
+    assert "COPY --chown=appuser:appgroup . ." not in content
+
+    required_runtime_copies = [
+        "COPY --chown=appuser:appgroup src/ ./src/",
+        "COPY --chown=appuser:appgroup alembic/ ./alembic/",
+        "COPY --chown=appuser:appgroup alembic.ini ./alembic.ini",
+        "COPY --chown=appuser:appgroup scripts/ ./scripts/",
+        "COPY --chown=appuser:appgroup start.sh ./start.sh",
+    ]
+    for expected in required_runtime_copies:
+        assert expected in content
