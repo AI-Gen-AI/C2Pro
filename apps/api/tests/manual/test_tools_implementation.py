@@ -300,40 +300,44 @@ def test_node_integration():
         return False
 
 
+def _assert_tool_protocol(tool):
+    """Assert the structural members required by the Tool protocol."""
+    assert hasattr(tool, "execute")
+    assert callable(tool)
+    assert hasattr(tool, "extract_input_from_state")
+    assert hasattr(tool, "inject_output_into_state")
+    assert hasattr(tool, "metadata")
+
+
 def test_tool_protocol():
     """Test that tools implement the Tool protocol correctly."""
     print("\n" + "=" * 60)
     print("TEST 8: Tool Protocol Implementation")
     print("=" * 60)
 
+    from src.core.ai.tools import Tool, get_tool
+
+    risk_tool = get_tool("risk_extraction")
+    wbs_tool = get_tool("wbs_extraction")
+
+    # Check if tools implement the protocol.
+    # Note: isinstance with Protocol requires runtime_checkable.
+    print(f"[OK] Risk tool is instance of Tool: {isinstance(risk_tool, Tool)}")
+    print(f"[OK] WBS tool is instance of Tool: {isinstance(wbs_tool, Tool)}")
+
+    _assert_tool_protocol(risk_tool)
+    print("\n[OK] Risk tool has all required methods")
+
+    _assert_tool_protocol(wbs_tool)
+    print("[OK] WBS tool has all required methods")
+
+    print("\n[OK] Protocol implementation test passed")
+
+
+def _run_tool_protocol_manual():
+    """Run the protocol test for the boolean-reporting manual harness."""
     try:
-        from src.core.ai.tools import Tool, get_tool
-
-        risk_tool = get_tool("risk_extraction")
-        wbs_tool = get_tool("wbs_extraction")
-
-        # Check if tools implement the protocol
-        # Note: isinstance with Protocol requires runtime_checkable
-        print(f"[OK] Risk tool is instance of Tool: {isinstance(risk_tool, Tool)}")
-        print(f"[OK] WBS tool is instance of Tool: {isinstance(wbs_tool, Tool)}")
-
-        # Check required methods exist
-        assert hasattr(risk_tool, "execute")
-        assert callable(risk_tool)
-        assert hasattr(risk_tool, "extract_input_from_state")
-        assert hasattr(risk_tool, "inject_output_into_state")
-        assert hasattr(risk_tool, "metadata")
-        print("\n[OK] Risk tool has all required methods")
-
-        assert hasattr(wbs_tool, "execute")
-        assert callable(wbs_tool)
-        assert hasattr(wbs_tool, "extract_input_from_state")
-        assert hasattr(wbs_tool, "inject_output_into_state")
-        assert hasattr(wbs_tool, "metadata")
-        print("[OK] WBS tool has all required methods")
-
-        print("\n[OK] Protocol implementation test passed")
-        return True
+        test_tool_protocol()
     except Exception as e:
         print(f"[FAIL] Protocol test failed: {e}")
         import traceback
@@ -341,6 +345,7 @@ def test_tool_protocol():
         traceback.print_exc()
         return False
 
+    return True
 
 def run_all_tests():
     """Run all tests and report results."""
@@ -356,7 +361,7 @@ def run_all_tests():
         "Input Models": test_input_models(),
         "Output Models": test_output_models(),
         "Node Integration": test_node_integration(),
-        "Protocol Implementation": test_tool_protocol()
+        "Protocol Implementation": _run_tool_protocol_manual()
     }
 
     # Summary

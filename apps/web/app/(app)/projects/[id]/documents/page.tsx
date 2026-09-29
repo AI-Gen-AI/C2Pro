@@ -118,7 +118,7 @@ function sortedUniqueTypes(rows: Array<{ type: string }>) {
     types.add(row.type);
   }
 
-  return Array.from(types).sort();
+  return Array.from(types).sort((a, b) => a.localeCompare(b));
 }
 
 // #712: review_required / failed_retryable / needs_changes are durable
