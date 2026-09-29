@@ -13,6 +13,7 @@ import pytest
 
 from src.core.tasks.ingestion_tasks import AnalysisIncompleteRetryableError
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
+from tests.support.processing_authority_fakes import install_permissive_authority
 
 
 def _make_document() -> Document:
@@ -54,6 +55,13 @@ class _NoRevisionLineage:
     async def get_by_id(self, _revision_id: object, _tenant_id: object) -> None:
         return None
 
+
+
+@pytest.fixture(autouse=True)
+def _permissive_processing_authority(monkeypatch: pytest.MonkeyPatch):
+    """#711: these tests drive the worker with mock sessions; the real fence
+    is proven against PostgreSQL in test_711_processing_attempt_fence.py."""
+    return install_permissive_authority(monkeypatch)
 
 @pytest.fixture(autouse=True)
 def _legacy_documents_without_revisions():
@@ -212,9 +220,11 @@ class TestAnalysisTriggerAfterIngestion:
 
             await _process(document_id)
 
+        # #711: the hand-over pins the generation whose ingestion committed.
         mock_trigger_instance.execute.assert_called_once_with(
             tenant_id=tenant_id,
             document_id=document_id,
+            generation=1,
         )
 
     @pytest.mark.asyncio

@@ -12,6 +12,7 @@ import structlog
 
 from src.core.database import get_session_with_tenant
 from src.core.json_types import JsonDict
+from src.core.processing_authority import fence_current
 from src.core.tenants.types import TenantId, require_tenant_id
 from src.temporal.adapters.persistence.project_event_repository import (
     SqlAlchemyProjectEventRepository,
@@ -70,6 +71,9 @@ async def record_project_event_and_enqueue_snapshot(
     )
 
     async with get_session_with_tenant(scoped_tenant_id) as session:
+        # #711: inside a processing worker the event commits only for the
+        # current owner; a no-op for API requests and HITL resumes.
+        await fence_current(session)
         await SqlAlchemyProjectEventRepository(session).append(event)
 
     try:

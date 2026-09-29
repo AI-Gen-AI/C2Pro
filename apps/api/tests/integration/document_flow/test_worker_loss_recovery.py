@@ -186,10 +186,15 @@ async def test_stale_parsing_is_requeued_once_and_terminal_state_stops_recovery(
     )
 
     assert first["requeued_ingestion"] == 1
-    ingestion.apply_async.assert_called_once_with(
-        kwargs={"document_id": str(document.id), "revision_id": None},
-        queue="document_parsing",
-    )
+    ingestion.apply_async.assert_called_once()
+    dispatched = ingestion.apply_async.call_args.kwargs
+    assert dispatched["queue"] == "document_parsing"
+    assert dispatched["kwargs"]["document_id"] == str(document.id)
+    assert dispatched["kwargs"]["revision_id"] is None
+    # #711: the replacement task carries the exact authority the sweep claimed.
+    authority = dispatched["kwargs"]["authority"]
+    assert authority["stage"] == "INGESTION"
+    assert authority["fencing_token"] == 1
     await db.refresh(document)
     recovery = document.document_metadata["processing_recovery"]
     assert recovery["attempts"] == 1
@@ -355,13 +360,13 @@ async def test_stale_analysis_pending_requeues_analysis_not_parsing(
 
     assert result["requeued_analysis"] == 1
     ingestion.apply_async.assert_not_called()
-    analysis.apply_async.assert_called_once_with(
-        kwargs={
-            "tenant_id": str(test_user.tenant_id),
-            "document_id": str(document.id),
-        },
-        queue="document_parsing",
-    )
+    analysis.apply_async.assert_called_once()
+    dispatched = analysis.apply_async.call_args.kwargs
+    assert dispatched["queue"] == "document_parsing"
+    assert dispatched["kwargs"]["tenant_id"] == str(test_user.tenant_id)
+    assert dispatched["kwargs"]["document_id"] == str(document.id)
+    # #711: the replacement task carries the exact authority the sweep claimed.
+    assert dispatched["kwargs"]["authority"]["stage"] == "ANALYSIS"
 
 
 @pytest.mark.asyncio

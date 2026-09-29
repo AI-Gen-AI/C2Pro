@@ -26,7 +26,7 @@ class AsyncTaskResult(Protocol):
 class AnalysisTask(Protocol):
     name: str
 
-    def apply_async(self, *, kwargs: dict[str, str], queue: str) -> AsyncTaskResult:
+    def apply_async(self, *, kwargs: dict[str, str | int], queue: str) -> AsyncTaskResult:
         """Enqueue an async analysis task."""
         ...
 
@@ -67,7 +67,11 @@ class TriggerDocumentAnalysisUseCase:
         return await self._document_repository.get_by_id_internal(document_id)
 
     async def execute(
-        self, *, document_id: UUID, tenant_id: UUID | None = None
+        self,
+        *,
+        document_id: UUID,
+        tenant_id: UUID | None = None,
+        generation: int | None = None,
     ) -> JsonDict:
         document = await self._load_document(tenant_id=tenant_id, document_id=document_id)
         if not document:
@@ -92,13 +96,15 @@ class TriggerDocumentAnalysisUseCase:
         # the document ANALYZED. Gating here stranded structured docs in
         # parsed_pending_analysis and flooded the DLQ ("parsed_text not available").
         task = self._get_analysis_task()
-        async_result = task.apply_async(
-            kwargs={
-                "tenant_id": str(effective_tenant_id),
-                "document_id": str(document_id),
-            },
-            queue="document_parsing",
-        )
+        task_kwargs: dict[str, str | int] = {
+            "tenant_id": str(effective_tenant_id),
+            "document_id": str(document_id),
+        }
+        # #711: the analysis worker may only act for the generation whose
+        # ingestion handed over to it.
+        if generation is not None:
+            task_kwargs["generation"] = generation
+        async_result = task.apply_async(kwargs=task_kwargs, queue="document_parsing")
         task_id = async_result.id
         logger.info(
             "document_analysis_task_enqueued",
