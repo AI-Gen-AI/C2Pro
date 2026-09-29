@@ -31,12 +31,16 @@ This is the production-like setup where both the API and the web app connect to 
 
 ### 1.1 Start infrastructure services
 
+Create the local environment file first and set an explicit PostgreSQL password:
+
 ```bash
+cp .env.example .env
+# Edit .env and set POSTGRES_PASSWORD to a local-only value.
 docker compose up -d postgres redis minio minio-setup
 ```
 
 This starts:
-- **PostgreSQL 15** on `localhost:5432` (user: `postgres`, password: `postgres`, db: `c2pro`)
+- **PostgreSQL 15** on `localhost:5432` (user: `postgres`, password: value from `POSTGRES_PASSWORD` in `.env`, db: `c2pro`)
 - **Redis 7** on `localhost:6379`
 - **MinIO** on `localhost:9000` (console: `localhost:9001`, user/pass: `minioadmin`)
 
@@ -48,15 +52,12 @@ docker compose ps
 
 ### 1.2 Configure environment
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your credentials. For **local Docker** development, use these values:
+Edit the `.env` created above with your credentials. For **local Docker** development, use these values:
 
 ```bash
-# Database -  Docker PostgreSQL
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/c2pro
+# Database - Docker PostgreSQL
+POSTGRES_PASSWORD=<choose-a-local-password>
+DATABASE_URL=postgresql://postgres:<same-local-password>@localhost:5432/c2pro
 
 # Supabase -  Required for auth (get from https://supabase.com/dashboard)
 SUPABASE_URL=https://your-project.supabase.co
@@ -76,7 +77,7 @@ STORAGE_PROVIDER=local
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-> **Required variables:** `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET_KEY`
+> **Required variables:** `POSTGRES_PASSWORD` (for local Docker Compose), `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET_KEY`
 
 ### 1.3 Start backend
 
