@@ -17,6 +17,7 @@ from src.analysis.adapters.persistence.document_artifact_repository import (
     SqlAlchemyDocumentArtifactRepository,
 )
 from src.core.database import get_raw_session, init_db
+from src.core.processing_authority import fence_current
 from src.core.tasks.project_graph_tasks import enqueue_project_graph
 from src.core.tenants.types import require_tenant_id
 
@@ -31,6 +32,8 @@ async def _persist_artifact(final_state: Mapping[str, Any]) -> None:
     async with get_raw_session() as session:
         try:
             await session.execute(text(f"SET LOCAL app.current_tenant = '{tenant_id}'"))
+            # #711: the artifact commits only for the current processing owner.
+            await fence_current(session)
             await SqlAlchemyDocumentArtifactRepository(session).save(
                 artifact,
                 project_id=project_id,

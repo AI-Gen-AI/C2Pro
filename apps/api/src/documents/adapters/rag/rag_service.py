@@ -73,8 +73,11 @@ class RagProjectNotFoundError(RuntimeError):
 
 
 class RagService:
-    def __init__(self, db_session: AsyncSession) -> None:
+    def __init__(self, db_session: AsyncSession, *, commit: bool = True) -> None:
         self.db_session = db_session
+        # #711: a fenced ingestion stages the replacement inside its own
+        # transaction and commits only after re-verifying its authority.
+        self._commit = commit
 
     async def ingest_document(
         self,
@@ -123,6 +126,7 @@ class RagService:
             tenant_id=tenant_id,
             document_id=document_id,
             rows=rows,
+            commit=self._commit,
         )
         return len(rows)
 
@@ -272,18 +276,13 @@ async def _embed_texts(texts: list[str]) -> list[list[float]]:
     return embeddings
 
 
-async def _replace_chunks(
+async def _delete_and_insert_chunks(
     db_session: AsyncSession,
     *,
     tenant_id: UUID,
     document_id: UUID,
     rows: list[dict[str, Any]],
-) -> None:
-    """Delete this document's existing chunks, then insert the new batch,
-    as one transaction. Reprocessing an immutable document must be
-    idempotent on the chunk count -- the old chunks are superseded, not
-    accumulated alongside the new ones.
-    """
+) -> int:
     delete_stmt = text(
         "DELETE FROM document_chunks WHERE tenant_id = CAST(:tenant_id AS uuid) "
         "AND document_id = CAST(:document_id AS uuid)"
@@ -309,11 +308,38 @@ async def _replace_chunks(
             """
         )
         await db_session.execute(stmt, row)
-    await db_session.commit()
+    return int(cast(Any, deleted).rowcount or 0)
+
+
+async def _replace_chunks(
+    db_session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    rows: list[dict[str, Any]],
+    commit: bool = True,
+) -> None:
+    """Delete this document's existing chunks, then insert the new batch,
+    as one transaction. Reprocessing an immutable document must be
+    idempotent on the chunk count -- the old chunks are superseded, not
+    accumulated alongside the new ones.
+    """
+    if commit:
+        deleted_count = await _delete_and_insert_chunks(
+            db_session, tenant_id=tenant_id, document_id=document_id, rows=rows
+        )
+        await db_session.commit()
+    else:
+        # Staged in the caller's transaction; a savepoint keeps a failed
+        # replacement from poisoning the rest of that transaction.
+        async with db_session.begin_nested():
+            deleted_count = await _delete_and_insert_chunks(
+                db_session, tenant_id=tenant_id, document_id=document_id, rows=rows
+            )
     logger.info(
         "rag_chunks_replaced",
         inserted=len(rows),
-        deleted=cast(Any, deleted).rowcount or 0,
+        deleted=deleted_count,
         document_id=str(document_id),
     )
 
