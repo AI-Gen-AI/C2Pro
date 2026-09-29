@@ -269,21 +269,54 @@ def push_completed_tasks_to_backlog() -> int:
     if not completed_tasks:
         return 0
 
-    updated_count = 0
-
-    # Update master backlog
-    updated_count += _mark_tasks_complete_in_file(MASTER_BACKLOG_PATH, completed_tasks)
-
-    # Update category backlogs
+    backlog_targets = [MASTER_BACKLOG_PATH]
     if BACKLOGS_DIR.exists():
-        for backlog_file in BACKLOGS_DIR.glob("*.md"):
-            updated_count += _mark_tasks_complete_in_file(backlog_file, completed_tasks)
+        backlog_targets.extend(BACKLOGS_DIR.glob("*.md"))
+
+    # Fail closed before the first mutation if any legacy target escapes the
+    # canonical write boundary.
+    for backlog_target in backlog_targets:
+        _resolve_legacy_backlog_target(backlog_target)
+
+    updated_count = 0
+    for backlog_target in backlog_targets:
+        updated_count += _mark_tasks_complete_in_file(
+            backlog_target, completed_tasks
+        )
 
     if updated_count > 0:
         blackboard["backlog_sync"]["last_sync"] = datetime.now(timezone.utc).isoformat()
         guardar_blackboard(blackboard)
 
     return updated_count
+
+
+def _resolve_legacy_backlog_target(backlog_path: Path) -> Path:
+    """Resolve and constrain a legacy backlog write target to canonical roots."""
+    if MASTER_BACKLOG_PATH.is_symlink() or BACKLOGS_DIR.is_symlink():
+        raise ValueError(
+            "Backlog path must remain within canonical legacy backlog roots"
+        )
+
+    master_backlog = MASTER_BACKLOG_PATH.resolve()
+    backlogs_dir = BACKLOGS_DIR.resolve()
+    target = backlog_path.resolve()
+
+    if target == master_backlog:
+        return master_backlog
+
+    if (
+        target.suffix.lower() != ".md"
+        or target.parent != backlogs_dir
+        or not target.is_file()
+    ):
+        raise ValueError(
+            "Backlog path must remain within canonical legacy backlog roots"
+        )
+
+    # Rebuild from the trusted root so subsequent I/O never follows the
+    # caller-provided path after validation.
+    return backlogs_dir / target.name
 
 
 def _mark_tasks_complete_in_file(backlog_path: Path, completed_tasks: List[Dict]) -> int:
@@ -296,6 +329,8 @@ def _mark_tasks_complete_in_file(backlog_path: Path, completed_tasks: List[Dict]
     Returns:
         Number of tasks updated in this file
     """
+    backlog_path = _resolve_legacy_backlog_target(backlog_path)
+
     if not backlog_path.exists():
         return 0
 
