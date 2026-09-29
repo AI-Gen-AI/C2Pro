@@ -54,7 +54,7 @@ def _no_broker(monkeypatch: pytest.MonkeyPatch) -> None:
         )
     monkeypatch.setattr(
         "src.documents.application.reupload_document_use_case._enqueue_document_processing",
-        lambda _document_id, _revision_id=None: None,
+        lambda _document_id, _revision_id=None, _generation=None: None,
     )
 
 

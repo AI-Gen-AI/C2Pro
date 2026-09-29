@@ -47,10 +47,12 @@ async def test_reprocess_clears_only_processing_recovery_metadata(
     repo.update_metadata = AsyncMock(side_effect=_update_metadata)
     repo.commit = AsyncMock()
     repo.refresh = AsyncMock()
+    repo.begin_processing_generation = AsyncMock(return_value=2)
+    enqueued: list[int | None] = []
     monkeypatch.setattr(
         router,
         "_enqueue_document_processing",
-        lambda _document_id: "retry-task",
+        lambda _document_id, generation=None: enqueued.append(generation) or "retry-task",
     )
 
     response = await router.reprocess_document_endpoint(
@@ -69,6 +71,9 @@ async def test_reprocess_clears_only_processing_recovery_metadata(
     )
     assert response.task_id == "retry-task"
     assert document.document_metadata == {"business_metadata": "preserve-me"}
+    # #711: an explicit reprocess supersedes every earlier processing attempt.
+    repo.begin_processing_generation.assert_awaited_once_with(tenant_id, document_id)
+    assert enqueued == [2]
 
 
 
@@ -98,10 +103,11 @@ async def test_failed_retryable_analysis_is_allowed_to_reprocess(
     repo.update_metadata = AsyncMock()
     repo.commit = AsyncMock()
     repo.refresh = AsyncMock()
+    repo.begin_processing_generation = AsyncMock(return_value=3)
     monkeypatch.setattr(
         router,
         "_enqueue_document_processing",
-        lambda _document_id: "retry-analysis",
+        lambda _document_id, generation=None: "retry-analysis",
     )
 
     response = await router.reprocess_document_endpoint(
