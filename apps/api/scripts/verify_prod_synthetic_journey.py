@@ -64,7 +64,7 @@ def _normalize_database_url(raw: str) -> str:
         return raw.replace("postgresql://", ASYNCPG_URL_PREFIX, 1)
     if raw.startswith("postgres://"):
         return raw.replace("postgres://", ASYNCPG_URL_PREFIX, 1)
-    return raw
+    raise VerificationFailure("database URL must use a PostgreSQL scheme")
 
 
 def _uuid(raw: str, label: str) -> UUID:
@@ -290,7 +290,6 @@ async def verify(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--database-url", default=os.getenv("PROD_ACCEPTANCE_DATABASE_URL_READONLY"))
     parser.add_argument("--tenant-id", default=os.getenv("PROD_ACCEPTANCE_EXPECTED_TENANT_ID"))
     parser.add_argument("--clerk-org-id", default=os.getenv("PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"))
     parser.add_argument("--project-id", default=os.getenv("PROD_ACCEPTANCE_PROJECT_ID"))
@@ -300,7 +299,8 @@ def main() -> int:
         help="Optional bounded result JSON path (identifiers + check states only).",
     )
     args = parser.parse_args()
-    if not args.database_url or not args.tenant_id or not args.clerk_org_id:
+    database_url = os.getenv("PROD_ACCEPTANCE_DATABASE_URL_READONLY")
+    if not database_url or not args.tenant_id or not args.clerk_org_id:
         print("FAIL: required production acceptance configuration is missing.", file=sys.stderr)
         return 2
     try:
@@ -308,7 +308,7 @@ def main() -> int:
         project_id = _uuid(args.project_id, "project id") if args.project_id else None
         checks, identifiers = asyncio.run(
             verify(
-                database_url=args.database_url,
+                database_url=database_url,
                 tenant_id=tenant_id,
                 clerk_org_id=args.clerk_org_id,
                 project_id=project_id,
