@@ -1,0 +1,38 @@
+name: Diagnostic Sonar PR 733 Issues
+
+on:
+  push:
+    branches:
+      - diag/733-sonar-exact-issues-20261001
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sonar-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query public SonarCloud issues
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://sonarcloud.io/api/issues/search?componentKeys=AI-Gen-AI_C2Pro&pullRequest=733&issueStatuses=OPEN,CONFIRMED&ps=100'
+          curl -fsS --max-time 20 "$url" -o /tmp/issues.json
+          python - <<'PY'
+          import json
+          data=json.load(open('/tmp/issues.json', encoding='utf-8'))
+          print("TOTAL=", data.get("total"))
+          for issue in data.get("issues", []):
+              print(json.dumps({
+                  "key": issue.get("key"),
+                  "rule": issue.get("rule"),
+                  "severity": issue.get("severity"),
+                  "type": issue.get("type"),
+                  "component": issue.get("component"),
+                  "line": issue.get("line"),
+                  "message": issue.get("message"),
+                  "status": issue.get("status"),
+              }, sort_keys=True))
+          PY
