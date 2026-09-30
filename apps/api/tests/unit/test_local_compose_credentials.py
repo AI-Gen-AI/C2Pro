@@ -138,14 +138,12 @@ def test_local_postgres_password_validator_matches_effective_precedence(
     )
 
     duplicate_last_wins = run_guard(
-        SAFE_PASSWORD_ASSIGNMENT
-        UNSAFE_PASSWORD_ASSIGNMENT
+        SAFE_PASSWORD_ASSIGNMENT + UNSAFE_PASSWORD_ASSIGNMENT
     )
     assert duplicate_last_wins.returncode != 0
 
     duplicate_last_safe = run_guard(
-        UNSAFE_PASSWORD_ASSIGNMENT
-        SAFE_PASSWORD_ASSIGNMENT
+        UNSAFE_PASSWORD_ASSIGNMENT + SAFE_PASSWORD_ASSIGNMENT
     )
     assert duplicate_last_safe.returncode == 0, (
         duplicate_last_safe.stdout + duplicate_last_safe.stderr
