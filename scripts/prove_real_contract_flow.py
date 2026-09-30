@@ -12,6 +12,10 @@ import argparse
 import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import os
+from urllib.parse import quote
+
+from dotenv import dotenv_values
 from typing import Any
 
 import fitz  # PyMuPDF
@@ -22,7 +26,22 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 
 API_BASE_URL = "http://localhost:8000"
-DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/c2pro"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+def local_database_url() -> str:
+    """Build the local async PostgreSQL URL from the explicit environment secret."""
+    password = os.environ.get("POSTGRES_PASSWORD")
+    if password is None:
+        password = str(
+            dotenv_values(REPO_ROOT / ".env").get("POSTGRES_PASSWORD") or ""
+        )
+    if not password:
+        raise RuntimeError(
+            "POSTGRES_PASSWORD is required in the environment or repo-root .env"
+        )
+    return (
+        "postgresql+asyncpg://postgres:"
+        f"{quote(password, safe='')}@localhost:5432/c2pro"
+    )
 
 TEST_USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 TEST_TENANT_ID = "11111111-1111-1111-1111-111111111111"
@@ -142,7 +161,7 @@ async def main() -> int:
     headers = {"Authorization": f"Bearer {token}"}
     json_headers = {**headers, "Content-Type": "application/json"}
 
-    engine = create_async_engine(DATABASE_URL, echo=False)
+    engine = create_async_engine(local_database_url(), echo=False)
     before = await checkpoint_counts(engine)
     print(f"[DB BEFORE] {before}")
 

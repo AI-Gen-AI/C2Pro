@@ -18,6 +18,10 @@ import asyncio
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
+import os
+from urllib.parse import quote
+
+from dotenv import dotenv_values
 
 import httpx
 import jwt
@@ -27,7 +31,22 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 # Test configuration
 API_BASE_URL = "http://localhost:8000"
-DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/c2pro"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+def local_database_url() -> str:
+    """Build the local async PostgreSQL URL from the explicit environment secret."""
+    password = os.environ.get("POSTGRES_PASSWORD")
+    if password is None:
+        password = str(
+            dotenv_values(REPO_ROOT / ".env").get("POSTGRES_PASSWORD") or ""
+        )
+    if not password:
+        raise RuntimeError(
+            "POSTGRES_PASSWORD is required in the environment or repo-root .env"
+        )
+    return (
+        "postgresql+asyncpg://postgres:"
+        f"{quote(password, safe='')}@localhost:5432/c2pro"
+    )
 
 # Test user/tenant (seeded in database)
 TEST_USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
@@ -155,7 +174,7 @@ async def main():
     print("=" * 80)
 
     # Create database engine
-    engine = create_async_engine(DATABASE_URL, echo=False)
+    engine = create_async_engine(local_database_url(), echo=False)
 
     # Step 1: Check initial state
     print("\n[Step 1] Checking initial database state...")
