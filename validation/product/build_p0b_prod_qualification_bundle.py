@@ -36,9 +36,9 @@ def _resolve_exact_evidence_path(
     repo_root: Path = REPO_ROOT,
 ) -> Path:
     root = repo_root.resolve()
-    candidate = path.resolve()
+    candidate = (path if path.is_absolute() else root / path).resolve()
     canonical = (root / expected).resolve()
-    if candidate != canonical:
+    if candidate != canonical or not candidate.is_file():
         raise BundleBuildError(f"{label} must use canonical evidence path")
     return candidate
 
@@ -64,7 +64,7 @@ def _resolve_verifier_json(path: Path, *, repo_root: Path = REPO_ROOT) -> Path:
 def _resolve_bundle_output(path: Path, *, repo_root: Path = REPO_ROOT) -> Path:
     root = repo_root.resolve()
     output_root = (root / QUALIFICATION_OUTPUT_ROOT).resolve()
-    candidate = path.resolve()
+    candidate = (path if path.is_absolute() else root / path).resolve()
     if (
         candidate.parent != output_root
         or candidate.suffix != ".yaml"
