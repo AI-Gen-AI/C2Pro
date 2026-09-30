@@ -31,13 +31,11 @@ def test_bundle_output_is_derived_from_github_run_identity(tmp_path: Path) -> No
         tmp_path
         / "evidence/product-qualification/p0b-prod-gh-123-2.yaml"
     )
-    assert _bundle_output("123", "2", repo_root=tmp_path) == expected
+    assert _bundle_output(123, 2, repo_root=tmp_path) == expected
 
     for run_id, attempt in (
-        ("0", "1"),
-        ("abc", "1"),
-        ("1", "0"),
-        ("1", "../2"),
+        (0, 1),
+        (1, 0),
     ):
         with pytest.raises(BundleBuildError, match="positive integer"):
             _bundle_output(run_id, attempt, repo_root=tmp_path)
