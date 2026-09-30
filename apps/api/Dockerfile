@@ -77,9 +77,9 @@ COPY --from=builder /opt/venv /opt/venv
 
 # Copy only production runtime surfaces. Requirements/constraints were
 # consumed in the builder and the resulting virtualenv is copied above.
-COPY --chown=appuser:appgroup src/ ./src/
-COPY --chown=appuser:appgroup alembic/ ./alembic/
-COPY --chown=appuser:appgroup alembic.ini ./alembic.ini
+COPY --chown=root:appgroup src/ ./src/
+COPY --chown=root:appgroup alembic/ ./alembic/
+COPY --chown=root:appgroup alembic.ini ./alembic.ini
 COPY --chown=root:appgroup scripts/ ./scripts/
 COPY --chown=root:appgroup start.sh ./start.sh
 RUN sed -i 's/\r$//' /app/start.sh /app/scripts/*.sh
