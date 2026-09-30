@@ -29,6 +29,9 @@ from src.analysis.adapters.graph.nodes_extended import (
     _ok_node_result,
     _persist_node_error,
 )
+from src.analysis.adapters.graph.review_lineage import (
+    claim_review_lineage_for_current_attempt,
+)
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.application.classify_document_use_case import (
     ClassifyDocumentCommand,
@@ -525,65 +528,17 @@ def route_after_human_interrupt(state: ProjectState) -> str:
 
 
 async def _claim_checkpoint_lineage_for_current_attempt(state: ProjectState) -> None:
-    """Bind the active review to THIS processing attempt's checkpoint thread.
+    """N13 defense-in-depth: re-assert the lineage claim from graph state.
 
-    #758. Deliberately narrow:
-
-    * no-ops outside a processing worker (``current_authority()`` is None), so
-      a direct HITL resume -- which re-executes this node from the top -- can
-      never rewrite the lineage it is resuming;
-    * no-ops unless this run's thread is authority-scoped, so legacy lineages
-      (including the UUID-style threads still present in production, which
-      carry no checkpoint id) keep working exactly as before;
-    * no-ops when the review already names this thread.
-
-    Fails CLOSED for an authority-scoped attempt: if ownership of the lineage
-    cannot be established, this attempt must not go on to present an
-    actionable review that resumes somebody else's checkpoint. Raising here
-    leaves the document pending and retryable, which is the honest outcome --
-    unlike the routing block above, which fails OPEN to an interrupt because
-    pausing for a human is safer than auto-approving.
+    #758. The authoritative claim happens BEFORE the graph starts (see
+    ``_run_analysis_graph_best_effort``); this one is idempotent and covers a
+    review that only became active during the run.
     """
-    from src.core.checkpoint_lineage import is_authority_scoped_analysis_thread
-    from src.core.processing_authority import current_authority
-
-    thread_id = state.get("thread_id")
-    tenant_id = state.get("tenant_id")
-    document_id = state.get("document_id")
-    if not thread_id or not tenant_id or not document_id:
-        return
-    if current_authority() is None:
-        return
-    if not is_authority_scoped_analysis_thread(thread_id):
-        return
-
-    async with get_session_with_tenant(UUID(tenant_id)) as session:
-        # Same fence as every other durable seam: a worker that lost
-        # authority cannot take a lineage over.
-        await fence_current(session)
-        service = get_hitl_service_for_graph(session=session, tenant_id=UUID(tenant_id))
-        review = await service.review_queue_repo.find_active_review(
-            document_id=UUID(document_id),
-            review_type="analysis_critique",
-        )
-        if review is None or review.metadata.get("thread_id") == thread_id:
-            return
-        row_id = review.metadata.get("row_id")
-        if not row_id:
-            raise RuntimeError(
-                "cannot claim the checkpoint lineage: active review for document "
-                f"{document_id} has no row identity"
-            )
-        superseded = review.metadata.get("thread_id")
-        await service.review_queue_repo.claim_checkpoint_lineage(
-            row_id=UUID(str(row_id)), thread_id=thread_id
-        )
-        structlog.get_logger().info(
-            "checkpoint_lineage_claimed",
-            document_id=document_id,
-            thread_id=thread_id,
-            superseded_thread_id=superseded,
-        )
+    await claim_review_lineage_for_current_attempt(
+        thread_id=state.get("thread_id"),
+        tenant_id=state.get("tenant_id"),
+        document_id=state.get("document_id"),
+    )
 
 
 async def human_interrupt_node(state: ProjectState) -> ProjectState:

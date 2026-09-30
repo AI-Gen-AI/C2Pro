@@ -1,4 +1,4 @@
-"""Unit coverage for the #758 lineage claim in human_interrupt_node.
+"""Unit coverage for the #758 review lineage claim.
 
 Every branch exercised directly with mocks -- no LangGraph runtime, no real
 database -- so codecov patch coverage reflects this function regardless of
@@ -22,7 +22,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from src.analysis.adapters.graph import nodes
+from src.analysis.adapters.graph import review_lineage
 from src.core import checkpoint_lineage as lineage
 from src.core.processing_authority import (
     ProcessingAuthority,
@@ -79,10 +79,10 @@ def _patch(monkeypatch: pytest.MonkeyPatch, service: MagicMock) -> list[Any]:
     async def _fence(session):
         fenced.append(session)
 
-    monkeypatch.setattr(nodes, "get_session_with_tenant", _session)
-    monkeypatch.setattr(nodes, "fence_current", _fence)
+    monkeypatch.setattr(review_lineage, "get_session_with_tenant", _session)
+    monkeypatch.setattr(review_lineage, "fence_current", _fence)
     monkeypatch.setattr(
-        nodes, "get_hitl_service_for_graph", lambda *, session, tenant_id: service
+        review_lineage, "get_hitl_service_for_graph", lambda *, session, tenant_id: service
     )
     return fenced
 
@@ -119,7 +119,7 @@ async def test_takeover_claims_the_review_and_clears_the_stale_checkpoint(
     mine = _scoped(fence=2)
 
     with bound_authority(_authority(fence=2)):
-        await nodes._claim_checkpoint_lineage_for_current_attempt(_state(mine))  # type: ignore[arg-type]
+        await review_lineage.claim_review_lineage_for_current_attempt(**_state(mine))
 
     service.review_queue_repo.claim_checkpoint_lineage.assert_awaited_once_with(
         row_id=row_id, thread_id=mine
@@ -136,7 +136,7 @@ async def test_claim_is_skipped_when_the_review_already_names_this_lineage(
     _patch(monkeypatch, service)
 
     with bound_authority(_authority(fence=2)):
-        await nodes._claim_checkpoint_lineage_for_current_attempt(_state(mine))  # type: ignore[arg-type]
+        await review_lineage.claim_review_lineage_for_current_attempt(**_state(mine))
 
     service.review_queue_repo.claim_checkpoint_lineage.assert_not_awaited()
 
@@ -149,7 +149,7 @@ async def test_claim_is_skipped_without_an_active_review(
     _patch(monkeypatch, service)
 
     with bound_authority(_authority()):
-        await nodes._claim_checkpoint_lineage_for_current_attempt(_state(_scoped()))  # type: ignore[arg-type]
+        await review_lineage.claim_review_lineage_for_current_attempt(**_state(_scoped()))
 
     service.review_queue_repo.claim_checkpoint_lineage.assert_not_awaited()
 
@@ -167,7 +167,7 @@ async def test_claim_never_runs_outside_a_processing_worker(
     _patch(monkeypatch, service)
 
     # No bound_authority: current_authority() is None.
-    await nodes._claim_checkpoint_lineage_for_current_attempt(_state(_scoped(fence=2)))  # type: ignore[arg-type]
+    await review_lineage.claim_review_lineage_for_current_attempt(**_state(_scoped(fence=2)))
 
     service.review_queue_repo.find_active_review.assert_not_awaited()
     service.review_queue_repo.claim_checkpoint_lineage.assert_not_awaited()
@@ -185,7 +185,7 @@ async def test_legacy_lineage_is_never_claimed(monkeypatch: pytest.MonkeyPatch) 
 
     with bound_authority(_authority()):
         # This run's own thread is a legacy UUID, not authority-scoped.
-        await nodes._claim_checkpoint_lineage_for_current_attempt(_state(str(uuid4())))  # type: ignore[arg-type]
+        await review_lineage.claim_review_lineage_for_current_attempt(**_state(str(uuid4())))
 
     service.review_queue_repo.find_active_review.assert_not_awaited()
     service.review_queue_repo.claim_checkpoint_lineage.assert_not_awaited()
@@ -201,7 +201,7 @@ async def test_incomplete_state_is_skipped(monkeypatch: pytest.MonkeyPatch) -> N
             {"thread_id": _scoped(), "tenant_id": None, "document_id": str(_DOCUMENT)},
             {"thread_id": _scoped(), "tenant_id": str(_TENANT), "document_id": None},
         ):
-            await nodes._claim_checkpoint_lineage_for_current_attempt(partial)  # type: ignore[arg-type]
+            await review_lineage.claim_review_lineage_for_current_attempt(**partial)
 
     service.review_queue_repo.claim_checkpoint_lineage.assert_not_awaited()
 
@@ -219,7 +219,7 @@ async def test_claim_fails_closed_when_the_row_identity_is_missing(
     _patch(monkeypatch, service)
 
     with bound_authority(_authority(fence=2)), pytest.raises(RuntimeError, match="row identity"):
-        await nodes._claim_checkpoint_lineage_for_current_attempt(_state(_scoped(fence=2)))  # type: ignore[arg-type]
+        await review_lineage.claim_review_lineage_for_current_attempt(**_state(_scoped(fence=2)))
 
     service.review_queue_repo.claim_checkpoint_lineage.assert_not_awaited()
 
@@ -233,4 +233,4 @@ async def test_claim_propagates_a_persistence_failure(
     _patch(monkeypatch, service)
 
     with bound_authority(_authority(fence=2)), pytest.raises(RuntimeError, match="db down"):
-        await nodes._claim_checkpoint_lineage_for_current_attempt(_state(_scoped(fence=2)))  # type: ignore[arg-type]
+        await review_lineage.claim_review_lineage_for_current_attempt(**_state(_scoped(fence=2)))

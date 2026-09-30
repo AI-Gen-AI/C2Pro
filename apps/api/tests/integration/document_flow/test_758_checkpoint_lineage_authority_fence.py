@@ -26,6 +26,7 @@ observable fact rather than an inference from the thread string.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -52,12 +53,43 @@ from src.core import processing_authority as pa
 from src.core.tasks import ingestion_tasks
 from src.documents.adapters.rag import rag_service as rag_service_module
 from src.modules.hitl.adapters.checkpoint_service import CheckpointService
+from src.modules.hitl.adapters.persistence.repository import (
+    SqlAlchemyReviewQueueRepository,
+)
+from src.modules.hitl.application.resume_workflow_use_case import (
+    ResumeWorkflowRequest,
+    ResumeWorkflowUseCase,
+    WorkflowDecision,
+)
 from src.temporal.application import project_snapshot_trigger
 
 pytestmark = pytest.mark.asyncio
 
 
 # ── harness ──────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+async def _clean_recovery_discovery_rows(db: AsyncSession, test_user: Any):
+    """Remove this file's rows from the #711 recovery discovery index.
+
+    `system_recovery.document_work_index` is populated by a migration-owned
+    trigger and SURVIVES the per-test public-schema reset, so documents seeded
+    here would otherwise still be visible to the recovery sweep in
+    test_worker_loss_recovery.py and make it scan rows it never created. The
+    #711 fence suite cleans up for the same reason.
+    """
+    # Captured BEFORE the yield: the session expires ORM attributes on
+    # commit, so reading test_user.tenant_id at teardown raises
+    # MissingGreenlet and the cleanup silently never runs.
+    tenant_id = test_user.tenant_id
+    yield
+    await db.rollback()
+    await db.execute(
+        text("DELETE FROM system_recovery.document_work_index WHERE tenant_id = :t"),
+        {"t": tenant_id},
+    )
+    await db.commit()
 
 
 def _dsn(db: AsyncSession) -> str:
@@ -342,7 +374,7 @@ async def _review(db: AsyncSession, document_id: UUID) -> Any:
     return (
         await db.execute(
             text(
-                "SELECT id, thread_id, checkpoint_id, review_metadata, "
+                "SELECT id, item_id, thread_id, checkpoint_id, review_metadata, "
                 "       current_status::text AS current_status "
                 "  FROM review_items "
                 " WHERE document_id = :d AND review_type = 'analysis_critique' "
@@ -1036,3 +1068,202 @@ async def test_legacy_uuid_review_still_resumes_and_is_never_claimed(
     )
     assert "__interrupt__" not in resumed
     assert DOWNSTREAM_RUNS == ["LEGACY"], "the legacy lineage must still resume"
+
+
+# ── P1-A: the pre-HITL takeover window ───────────────────────────────────────
+
+
+async def test_approval_between_takeover_and_graph_start_cannot_resume_a(
+    db: AsyncSession,
+    test_user: Any,
+    worker: Any,
+    real_saver: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The window between B acquiring the fence and the graph reaching N13.
+
+    Claiming the lineage at human_interrupt_node is too late: from the moment
+    B becomes the authoritative replacement until the graph reaches N13, the
+    active review still names A. A human approving in that window resumes A --
+    and a direct HITL resume runs outside the processing authority, so #711
+    cannot stop it. For a reprocess that means resuming an already superseded
+    revision.
+
+    During the window the review must NOT be resumable through A. Being
+    temporarily unresumable is acceptable and preferable; what is not
+    acceptable is resuming superseded evidence, or recording the human
+    decision as processed when nothing ran.
+    """
+    saver, register = real_saver
+    document = await _seed_analysable(db, test_user)
+    tenant = test_user.tenant_id
+    DOWNSTREAM_RUNS.clear()
+
+    a = _RealGraphWorker("A", saver, register)
+    b_entered, b_release = asyncio.Event(), asyncio.Event()
+    b = _RealGraphWorker("B", saver, register, entered=b_entered, release=b_release)
+
+    monkeypatch.setattr(pa, "LEASE_TTL_SECONDS", 1)
+    await ingestion_tasks._run_document_analysis(
+        tenant_id=tenant, document_id=document.id, orchestrator=a
+    )
+    rows = await _review(db, document.id)
+    assert rows[0].thread_id == a.thread_id
+    assert rows[0].checkpoint_id in a.checkpoint_ids, "the review is bound to A"
+    review_item_id = rows[0].item_id
+
+    await _expire_lease()
+    monkeypatch.setattr(pa, "LEASE_TTL_SECONDS", 60)
+
+    # B takes over and stops before its graph reaches the HITL gate: authority
+    # acquired, lineage computed, N13 not yet reached.
+    task_b = asyncio.create_task(
+        ingestion_tasks._run_document_analysis(
+            tenant_id=tenant, document_id=document.id, orchestrator=b
+        )
+    )
+    await asyncio.wait_for(b_entered.wait(), 15)
+
+    try:
+        rows = await _review(db, document.id)
+        window_thread, window_checkpoint = rows[0].thread_id, rows[0].checkpoint_id
+        assert window_thread != a.thread_id, (
+            "during the takeover window the active review still names the SUPERSEDED "
+            f"lineage (thread={window_thread}, checkpoint={window_checkpoint})"
+        )
+        assert window_checkpoint not in a.checkpoint_ids
+
+        # A real approval attempted in the window must not replay A, and must
+        # not record the decision as processed.
+        use_case = ResumeWorkflowUseCase(
+            review_queue_repo=SqlAlchemyReviewQueueRepository(session=db, tenant_id=tenant),
+            checkpoint_service=CheckpointService(checkpointer=saver),
+            graph_app=a.app,
+        )
+        with contextlib.suppress(Exception):
+            await use_case.execute(
+                review_id=review_item_id,
+                request=ResumeWorkflowRequest(
+                    decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer"
+                ),
+            )
+        assert DOWNSTREAM_RUNS == [], (
+            "an approval in the takeover window replayed a superseded lineage: "
+            f"{DOWNSTREAM_RUNS}"
+        )
+        rows = await _review(db, document.id)
+        assert rows[0].current_status != "APPROVED", (
+            "the human decision was recorded as processed although nothing ran"
+        )
+    finally:
+        # A failed assertion must never leave the gated worker holding a
+        # transaction across the per-test schema reset.
+        b_release.set()
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(task_b, 40)
+
+    # B proceeded; the review is resumable through B alone.
+    rows = await _review(db, document.id)
+    assert rows[0].thread_id == b.thread_id
+    assert await _owner_of(saver, rows[0].thread_id, rows[0].checkpoint_id) == "B"
+
+
+async def test_claim_to_checkpoint_crash_window_is_recoverable_and_never_false_success(
+    db: AsyncSession,
+    test_user: Any,
+    worker: Any,
+    real_saver: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """B claims the lineage, then dies before its interrupt checkpoint exists.
+
+    This is the residual window the claim deliberately opens, and it is only
+    acceptable under four conditions, all asserted here:
+
+    * the superseded lineage is ALREADY non-resumable;
+    * a direct approval in the window fails, because the claimed thread has no
+      checkpoint yet;
+    * the human decision is NOT recorded as processed;
+    * a later attempt can still rebuild an actionable state.
+
+    Fail closed beats resuming superseded evidence.
+    """
+    saver, register = real_saver
+    document = await _seed_analysable(db, test_user)
+    tenant = test_user.tenant_id
+    DOWNSTREAM_RUNS.clear()
+
+    a = _RealGraphWorker("A", saver, register)
+    monkeypatch.setattr(pa, "LEASE_TTL_SECONDS", 1)
+    await ingestion_tasks._run_document_analysis(
+        tenant_id=tenant, document_id=document.id, orchestrator=a
+    )
+    rows = await _review(db, document.id)
+    assert rows[0].thread_id == a.thread_id
+    review_item_id = rows[0].item_id
+
+    await _expire_lease()
+    monkeypatch.setattr(pa, "LEASE_TTL_SECONDS", 60)
+
+    class _DiesBeforeTheGate:
+        """Takes over, then dies before the graph reaches the HITL gate."""
+
+        def __init__(self) -> None:
+            self.thread_id: str | None = None
+
+        async def run(self, _state: dict[str, Any], *, thread_id: str) -> dict[str, Any]:
+            self.thread_id = thread_id
+            register(thread_id)
+            raise RuntimeError("worker lost before reaching the HITL gate")
+
+    b = _DiesBeforeTheGate()
+    # The attempt surfaces as RETRYABLE rather than a false success: that is
+    # the other half of failing closed.
+    with pytest.raises(ingestion_tasks.AnalysisIncompleteRetryableError):
+        await ingestion_tasks._run_document_analysis(
+            tenant_id=tenant, document_id=document.id, orchestrator=b
+        )
+    assert b.thread_id is not None and b.thread_id != a.thread_id
+
+    rows = await _review(db, document.id)
+    assert rows[0].thread_id != a.thread_id, "the superseded lineage must already be gone"
+    assert rows[0].checkpoint_id is None, "no checkpoint exists on the claimed lineage yet"
+
+    # Approval in the window fails closed, and records nothing.
+    use_case = ResumeWorkflowUseCase(
+        review_queue_repo=SqlAlchemyReviewQueueRepository(session=db, tenant_id=tenant),
+        checkpoint_service=CheckpointService(checkpointer=saver),
+        graph_app=a.app,
+    )
+    with contextlib.suppress(Exception):
+        await use_case.execute(
+            review_id=review_item_id,
+            request=ResumeWorkflowRequest(
+                decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer"
+            ),
+        )
+    assert DOWNSTREAM_RUNS == [], "nothing may be replayed in the window"
+    rows = await _review(db, document.id)
+    assert rows[0].current_status != "APPROVED", (
+        "the human decision was recorded as processed although nothing ran"
+    )
+
+    # A later attempt rebuilds an actionable state.
+    async with worker.tenant_session(tenant) as s:
+        await pa.begin_generation(s, tenant_id=tenant, document_id=document.id, revision_id=None)
+    async with worker.tenant_session(tenant) as s:
+        await s.execute(
+            text(
+                "UPDATE document_processing_operations SET stage = 'ANALYSIS', "
+                "phase = 'PENDING' WHERE document_id = :d"
+            ),
+            {"d": document.id},
+        )
+    c = _RealGraphWorker("C", saver, register)
+    await ingestion_tasks._run_document_analysis(
+        tenant_id=tenant, document_id=document.id, orchestrator=c
+    )
+
+    rows = await _review(db, document.id)
+    assert rows[0].thread_id == c.thread_id
+    assert await _owner_of(saver, rows[0].thread_id, rows[0].checkpoint_id) == "C"

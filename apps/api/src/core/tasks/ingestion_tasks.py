@@ -19,6 +19,9 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import text
 
+from src.analysis.adapters.graph.review_lineage import (
+    claim_review_lineage_for_current_attempt,
+)
 from src.analysis.adapters.graph.workflow import close_checkpointer_resources
 from src.analysis.factories.orchestrator_factory import AnalysisOrchestratorFactory
 from src.core import checkpoint_lineage, processing_authority
@@ -754,6 +757,27 @@ async def _run_analysis_graph_best_effort(
         "analysis_id": None,
         "force_full_pipeline": True,
     }
+    # #758: take the existing review's lineage over the moment this attempt
+    # becomes authoritative -- BEFORE the graph starts.
+    #
+    # Claiming it at the HITL gate is too late: from the instant this worker
+    # holds the new fence until the graph reaches N13, the active ReviewItem
+    # still names the superseded attempt. A human approving in that window
+    # resumes the dead lineage, and a direct HITL resume runs outside the
+    # processing authority, so the #711 fence cannot stop it -- for a
+    # reprocess it would resume an already superseded revision.
+    #
+    # Deliberately OUTSIDE the try below, which degrades a graph failure to
+    # "no enrichment": an unclaimable lineage must fail closed and stay
+    # retryable, never proceed to present a review that resumes someone
+    # else's checkpoint. The review is briefly unresumable until this
+    # attempt's interrupt checkpoint exists, which is the intended state.
+    await claim_review_lineage_for_current_attempt(
+        thread_id=thread_id,
+        tenant_id=str(tenant_id),
+        document_id=str(document_id),
+    )
+
     logger.info(
         "document_analysis_task_started",
         extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},

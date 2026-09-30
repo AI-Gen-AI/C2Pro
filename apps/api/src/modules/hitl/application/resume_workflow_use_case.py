@@ -20,6 +20,7 @@ from langgraph.types import Command
 if TYPE_CHECKING:
     from src.modules.hitl.adapters.checkpoint_service import CheckpointService
 
+from src.core.checkpoint_lineage import is_legacy_shared_analysis_thread
 from src.core.observability.monitoring import (
     record_hitl_checkpoint_load_error,
     record_hitl_resume_attempt,
@@ -136,6 +137,12 @@ class ResumeWorkflowUseCase:
     _ERR_MISSING_THREAD_ID = "Review item {review_id} missing thread_id for workflow resumption"
     _ERR_ALREADY_PROCESSED = "Review item {review_id} already processed (status: {status})"
     _ERR_CHECKPOINT_NOT_FOUND = "Checkpoint not found for thread_id {thread_id}"
+    _ERR_SHARED_LINEAGE_NO_CHECKPOINT = (
+        "Review item {review_id} records the shared pre-#758 analysis lineage "
+        "{thread_id} with no checkpoint id. That thread was shared across "
+        "processing attempts, so resuming its latest checkpoint could replay a "
+        "superseded attempt; it needs an exact checkpoint id (operator repair)."
+    )
 
     def __init__(
         self,
@@ -635,6 +642,30 @@ class ResumeWorkflowUseCase:
                 record_hitl_resume_error("missing_thread")
                 raise ValueError(self._ERR_MISSING_THREAD_ID.format(review_id=review_id))
             if not checkpoint_id:
+                # #758: the thread-only fallback resolves "latest checkpoint on
+                # this thread", which is only safe when the thread belonged to
+                # ONE processing attempt.
+                #
+                # `document:{uuid}:analysis` is the pre-#758 DETERMINISTIC
+                # SHARED thread: every attempt on that document wrote to it, so
+                # latest-by-thread can resolve a superseded attempt's
+                # checkpoint. Refuse rather than resume superseded evidence;
+                # an operator can repair the row by pinning an exact
+                # checkpoint id, which stays permitted below.
+                #
+                # Deliberately narrow. An authority-scoped thread is
+                # attempt-pure, and a legacy UUID thread is the shape
+                # production's pending reviews actually use (they carry no
+                # checkpoint id and resume only through this fallback) -- both
+                # keep working untouched.
+                if is_legacy_shared_analysis_thread(thread_id):
+                    record_hitl_checkpoint_load_error("shared_lineage_without_checkpoint")
+                    record_hitl_resume_error("shared_lineage_without_checkpoint")
+                    raise ValueError(
+                        self._ERR_SHARED_LINEAGE_NO_CHECKPOINT.format(
+                            review_id=review_id, thread_id=thread_id
+                        )
+                    )
                 logger.warning(
                     "resuming_without_explicit_checkpoint_id",
                     review_id=str(review_id),
