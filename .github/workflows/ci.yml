@@ -1410,6 +1410,11 @@ jobs:
             test ! -e /app/.env
             test ! -e /app/.env.example
             test ! -e /app/migrate.py
+            test ! -e /app/dev.py
+            test ! -e /app/evals
+            test ! -e /app/examples
+            test ! -e /app/test.py
+            test ! -e /app/scripts/admin_ops_bootstrap.py
             test ! -e /app/src/golden
             test ! -e /app/src/core/ai/test_langsmith_client.py
             test ! -e /app/src/core/ai/example_llm_client.py
