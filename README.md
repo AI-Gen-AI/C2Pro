@@ -140,7 +140,8 @@ cp .env.example .env
 ### 2. Iniciar servicios locales
 
 ```bash
-# Iniciar PostgreSQL y Redis locales
+# Validar el password PostgreSQL local y después iniciar servicios
+python scripts/validate_local_postgres_password.py
 docker-compose up -d
 
 # O usar Supabase local

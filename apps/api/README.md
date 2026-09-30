@@ -217,7 +217,10 @@ DATABASE_URL=postgresql://postgres.<project_ref>:[PASSWORD]@aws-<region>.pooler.
 # Supabase local (CLI)
 # DATABASE_URL=postgresql://postgres:postgres@localhost:54322/postgres
 # Docker compose (PostgreSQL local)
-# DATABASE_URL=postgresql://postgres:postgres@localhost:5432/c2pro
+# Set POSTGRES_PASSWORD in the repo-root .env first.
+# Use URI-unreserved characters only: A-Z a-z 0-9 . _ ~ -
+# POSTGRES_PASSWORD=<choose-a-local-password>
+# DATABASE_URL=postgresql://postgres:<same-local-password>@localhost:5432/c2pro
 
 # Supabase
 SUPABASE_URL=https://xxx.supabase.co
