@@ -28,7 +28,8 @@ def _resolve_provider_input(
 ) -> Path:
     root = repo_root.resolve()
     expected = (root / PROVIDER_EVIDENCE_ROOT / expected_name).resolve()
-    candidate = Path(raw).resolve()
+    supplied = Path(raw)
+    candidate = (supplied if supplied.is_absolute() else root / supplied).resolve()
     if candidate != expected or not candidate.is_file():
         raise IdentityError("provider JSON must use canonical provider evidence")
     return candidate
@@ -37,7 +38,8 @@ def _resolve_provider_input(
 def _resolve_output_path(raw: str, *, repo_root: Path = REPO_ROOT) -> Path:
     root = repo_root.resolve()
     expected = (root / DEPLOYMENT_IDENTITY_OUTPUT).resolve()
-    candidate = Path(raw).resolve()
+    supplied = Path(raw)
+    candidate = (supplied if supplied.is_absolute() else root / supplied).resolve()
     if candidate != expected:
         raise IdentityError("output-json must use canonical deployment identity output")
     return candidate
