@@ -60,6 +60,17 @@ alembic/versions/__pycache__/
 *.tmp
 .DS_Store
 
+# Local/private credentials must never enter the Docker build context
+credentials.json
+*credentials*.json
+*service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
 # Production runtime source allowlist hygiene
 src/core/ai/test_*.py
 src/core/ai/example_*.py
