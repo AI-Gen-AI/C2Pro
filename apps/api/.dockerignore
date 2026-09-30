@@ -60,3 +60,9 @@ alembic/versions/__pycache__/
 *.bak
 *.tmp
 .DS_Store
+
+# Production runtime source allowlist hygiene
+src/core/ai/test_*.py
+src/core/ai/example_*.py
+src/golden/
+src/projects/adapters/http/router.py.fullversion
