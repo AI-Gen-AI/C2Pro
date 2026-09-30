@@ -200,3 +200,46 @@ async def test_persist_block_exception_is_caught_and_does_not_propagate(
     await workflow._persist_real_checkpoint_id(
         app, _config(), thread_id="thr-1", document_id=str(uuid4()), tenant_id=str(uuid4())
     )
+
+
+async def test_review_bound_to_a_superseded_lineage_is_rebound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#758: a takeover must re-bind a review that names another attempt's thread.
+
+    The old guard ("bind only when nothing is bound yet") left the current
+    review pointing at the superseded attempt's checkpoint forever. Keyed on
+    the LINEAGE: a different thread means a different processing attempt.
+    """
+    app = MagicMock()
+    app.aget_state = AsyncMock(
+        return_value=SimpleNamespace(
+            config={"configurable": {"thread_id": "thr-2", "checkpoint_id": "cp-b"}}
+        )
+    )
+    review = _make_review(checkpoint_id="cp-a")  # metadata thread_id == "thr-1"
+    service = MagicMock()
+    service.review_queue_repo = AsyncMock()
+    service.review_queue_repo.find_active_review.return_value = review
+    _patch_session_and_service(monkeypatch, service)
+
+    await workflow._persist_real_checkpoint_id(
+        app, _config("thr-2"), thread_id="thr-2", document_id=str(uuid4()),
+        tenant_id=str(uuid4()),
+    )
+
+    service.review_queue_repo.update_review_item.assert_called_once()
+    assert review.metadata["checkpoint_id"] == "cp-b"
+    assert review.metadata["thread_id"] == "thr-2", "the thread must be overwritten"
+
+
+def test_needs_rebinding_is_keyed_on_the_lineage() -> None:
+    """Pinned directly: within one attempt the binding must not slide forward.
+
+    The bound checkpoint is the interrupt point resume replays; moving it to a
+    later checkpoint on the same thread would break that, which is why the
+    rule compares threads and not checkpoint ids.
+    """
+    assert workflow._needs_rebinding(_make_review(checkpoint_id=None), "thr-1") is True
+    assert workflow._needs_rebinding(_make_review(checkpoint_id="cp-a"), "thr-2") is True
+    assert workflow._needs_rebinding(_make_review(checkpoint_id="cp-a"), "thr-1") is False

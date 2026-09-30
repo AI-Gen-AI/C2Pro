@@ -40,7 +40,6 @@ class IReviewQueueRepository(Protocol):
         superseded lineage, and `update_review_item` deliberately refuses to
         null these columns, so it cannot express this.
         """
-        ...
 
     async def list_by_status(
         self,
