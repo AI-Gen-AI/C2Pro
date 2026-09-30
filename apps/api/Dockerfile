@@ -77,7 +77,7 @@ COPY --from=builder /opt/venv /opt/venv
 
 # Copy application code
 COPY --chown=appuser:appgroup . .
-COPY --chown=root:appgroup start.sh ./start.sh
+COPY --chown=root:root start.sh ./start.sh
 RUN sed -i 's/\r$//' /app/start.sh
 
 # Create uploads directory with proper ownership for non-root user
