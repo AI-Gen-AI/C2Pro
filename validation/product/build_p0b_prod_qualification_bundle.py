@@ -28,60 +28,44 @@ class BundleBuildError(RuntimeError):
 
 
 
-def _resolve_exact_evidence_path(
-    path: Path,
-    *,
-    expected: Path,
-    label: str,
-    repo_root: Path = REPO_ROOT,
+def _canonical_evidence_path(
+    expected: Path, *, label: str, repo_root: Path = REPO_ROOT
 ) -> Path:
-    root = repo_root.resolve()
-    candidate = (path if path.is_absolute() else root / path).resolve()
-    canonical = (root / expected).resolve()
-    if candidate != canonical or not candidate.is_file():
-        raise BundleBuildError(f"{label} must use canonical evidence path")
-    return candidate
+    """Return a canonical repository evidence input and require it to exist."""
+    path = repo_root.resolve() / expected
+    if not path.is_file():
+        raise BundleBuildError(f"{label} is missing")
+    return path
 
 
-def _resolve_run_json(path: Path, *, repo_root: Path = REPO_ROOT) -> Path:
-    return _resolve_exact_evidence_path(
-        path,
-        expected=CANONICAL_RUN_JSON,
+def _run_json(*, repo_root: Path = REPO_ROOT) -> Path:
+    return _canonical_evidence_path(
+        CANONICAL_RUN_JSON,
         label="canonical browser run evidence",
         repo_root=repo_root,
     )
 
 
-def _resolve_verifier_json(path: Path, *, repo_root: Path = REPO_ROOT) -> Path:
-    return _resolve_exact_evidence_path(
-        path,
-        expected=CANONICAL_VERIFIER_JSON,
+def _verifier_json(*, repo_root: Path = REPO_ROOT) -> Path:
+    return _canonical_evidence_path(
+        CANONICAL_VERIFIER_JSON,
         label="canonical verifier evidence",
         repo_root=repo_root,
     )
 
 
-def _resolve_bundle_output(path: Path, *, repo_root: Path = REPO_ROOT) -> Path:
-    root = repo_root.resolve()
-    output_root = (root / QUALIFICATION_OUTPUT_ROOT).resolve()
-    candidate = (path if path.is_absolute() else root / path).resolve()
-    if (
-        candidate.parent != output_root
-        or candidate.suffix != ".yaml"
-        or not candidate.name.startswith("p0b-prod-gh-")
-    ):
-        raise BundleBuildError("output must use canonical qualification output")
-    return candidate
-
-
-def _require_full_sha(value: str, label: str) -> str:
-    if FULL_SHA_RE.fullmatch(value) is None:
-        raise BundleBuildError(f"{label} must be a full 40-character Git SHA")
-    return value.lower()
-
-
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def _bundle_output(
+    github_run_id: str,
+    github_run_attempt: str,
+    *,
+    repo_root: Path = REPO_ROOT,
+) -> Path:
+    if not github_run_id.isdigit() or int(github_run_id) < 1:
+        raise BundleBuildError("GitHub run id must be a positive integer")
+    if not github_run_attempt.isdigit() or int(github_run_attempt) < 1:
+        raise BundleBuildError("GitHub run attempt must be a positive integer")
+    output_root = repo_root.resolve() / QUALIFICATION_OUTPUT_ROOT
+    return output_root / f"p0b-prod-gh-{github_run_id}-{github_run_attempt}.yaml"
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -340,17 +324,16 @@ def main() -> int:
     parser.add_argument("--frontend-commit-sha", required=True)
     parser.add_argument("--frontend-deployment-id", required=True)
     parser.add_argument("--recovery-evidence-ref", required=True)
-    parser.add_argument("--run-json", required=True, type=Path)
-    parser.add_argument("--verifier-json", required=True, type=Path)
-    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--github-run-id", required=True)
+    parser.add_argument("--github-run-attempt", required=True)
     parser.add_argument("--require-hitl", action="store_true")
     parser.add_argument("--observed-at")
     args = parser.parse_args()
 
     try:
-        run_json = _resolve_run_json(args.run_json)
-        verifier_json = _resolve_verifier_json(args.verifier_json)
-        output = _resolve_bundle_output(args.output)
+        run_json = _run_json()
+        verifier_json = _verifier_json()
+        output = _bundle_output(args.github_run_id, args.github_run_attempt)
         bundle = build_bundle(
             control_commit_sha=_require_full_sha(
                 args.control_commit_sha, "control commit"
