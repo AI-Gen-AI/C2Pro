@@ -123,34 +123,55 @@ async function loadDocument(
   return record;
 }
 
+const DOCUMENT_TERMINAL_STATES = new Set([
+  "analyzed",
+  "review_required",
+  "failed_retryable",
+  "needs_changes",
+  "error",
+]);
+const DOCUMENT_FAILURE_STATES = new Set([
+  "failed_retryable",
+  "needs_changes",
+  "error",
+]);
+const POLL_INTERVALS_MS = [1_000, 2_000, 5_000];
+
+async function pollDocumentUntilTerminal(
+  page: Page,
+  projectId: string,
+  documentId: string,
+): Promise<DocumentRecord> {
+  let latest = await loadDocument(page, projectId, documentId);
+
+  try {
+    await expect
+      .poll(
+        async () => {
+          latest = await loadDocument(page, projectId, documentId);
+          return String(latest.lifecycle_status ?? "").toLowerCase();
+        },
+        {
+          timeout: PROCESSING_TIMEOUT_MS,
+          intervals: POLL_INTERVALS_MS,
+        },
+      )
+      .toSatisfy((lifecycle) => DOCUMENT_TERMINAL_STATES.has(lifecycle));
+  } catch {
+    throw new Error(
+      `PROD_ACCEPTANCE_PROCESSING_TIMEOUT:last_lifecycle=${latest.lifecycle_status ?? "null"};last_status=${latest.status ?? "null"}`,
+    );
+  }
+
+  return latest;
+}
+
 async function waitForDocumentAttentionOrCompletion(
   page: Page,
   projectId: string,
   documentId: string,
 ): Promise<DocumentRecord> {
-  const deadline = Date.now() + PROCESSING_TIMEOUT_MS;
-  let latest = await loadDocument(page, projectId, documentId);
-
-  while (Date.now() < deadline) {
-    const lifecycle = String(latest.lifecycle_status ?? "").toLowerCase();
-    if (
-      [
-        "analyzed",
-        "review_required",
-        "failed_retryable",
-        "needs_changes",
-        "error",
-      ].includes(lifecycle)
-    ) {
-      return latest;
-    }
-    await page.waitForTimeout(5_000);
-    latest = await loadDocument(page, projectId, documentId);
-  }
-
-  throw new Error(
-    `PROD_ACCEPTANCE_PROCESSING_TIMEOUT:last_lifecycle=${latest.lifecycle_status ?? "null"};last_status=${latest.status ?? "null"}`,
-  );
+  return pollDocumentUntilTerminal(page, projectId, documentId);
 }
 
 async function waitForAnalyzed(
@@ -158,20 +179,15 @@ async function waitForAnalyzed(
   projectId: string,
   documentId: string,
 ): Promise<DocumentRecord> {
-  const deadline = Date.now() + PROCESSING_TIMEOUT_MS;
-  let latest = await loadDocument(page, projectId, documentId);
-  while (Date.now() < deadline) {
-    const lifecycle = String(latest.lifecycle_status ?? "").toLowerCase();
-    if (lifecycle === "analyzed") return latest;
-    if (["failed_retryable", "needs_changes", "error"].includes(lifecycle)) {
-      throw new Error(
-        `PROD_ACCEPTANCE_ANALYSIS_TERMINAL_FAILURE:${lifecycle}`,
-      );
-    }
-    await page.waitForTimeout(5_000);
-    latest = await loadDocument(page, projectId, documentId);
+  const latest = await pollDocumentUntilTerminal(page, projectId, documentId);
+  const lifecycle = String(latest.lifecycle_status ?? "").toLowerCase();
+  if (lifecycle === "analyzed") return latest;
+  if (DOCUMENT_FAILURE_STATES.has(lifecycle)) {
+    throw new Error(
+      `PROD_ACCEPTANCE_ANALYSIS_TERMINAL_FAILURE:${lifecycle}`,
+    );
   }
-  throw new Error("PROD_ACCEPTANCE_ANALYZED_TIMEOUT");
+  throw new Error(`PROD_ACCEPTANCE_ANALYZED_TIMEOUT:last_lifecycle=${lifecycle}`);
 }
 
 async function loadHealth(
@@ -193,13 +209,21 @@ async function waitForHealth(
   page: Page,
   projectId: string,
 ): Promise<HealthVector> {
-  const deadline = Date.now() + PROCESSING_TIMEOUT_MS;
   let vector = await loadHealth(page, projectId);
-  while (!vector.single_document_coverage && Date.now() < deadline) {
-    await page.waitForTimeout(5_000);
-    vector = await loadHealth(page, projectId);
-  }
-  if (!vector.single_document_coverage) {
+  try {
+    await expect
+      .poll(
+        async () => {
+          vector = await loadHealth(page, projectId);
+          return Boolean(vector.single_document_coverage);
+        },
+        {
+          timeout: PROCESSING_TIMEOUT_MS,
+          intervals: POLL_INTERVALS_MS,
+        },
+      )
+      .toBe(true);
+  } catch {
     throw new Error("PROD_ACCEPTANCE_HEALTH_TIMEOUT");
   }
   return vector;
