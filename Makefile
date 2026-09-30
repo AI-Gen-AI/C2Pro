@@ -65,7 +65,7 @@ setup-env: ## Crear archivo .env desde ejemplo
 	fi
 
 check-local-postgres-password: ## Validar password PostgreSQL local antes de arrancar Docker
-	@python -c 'from pathlib import Path; import os, re, sys; p=Path(".env"); exported=os.environ.get("POSTGRES_PASSWORD"); (exported is not None or p.is_file()) or (print("ERROR: .env is required unless POSTGRES_PASSWORD is exported"), sys.exit(1)); file_value=next((line.split("=", 1)[1].strip() for line in p.read_text(encoding="utf-8").splitlines() if line.startswith("POSTGRES_PASSWORD=")), "") if p.is_file() else ""; value=exported if exported is not None else file_value; value or (print("ERROR: POSTGRES_PASSWORD must be non-empty"), sys.exit(1)); re.fullmatch(r"[A-Za-z0-9._~-]+", value) or (print("ERROR: local POSTGRES_PASSWORD must use URI-unreserved characters only (A-Za-z0-9._~-)."), sys.exit(1))'
+	@python -c 'from pathlib import Path; import os, re, sys; p=Path(".env"); p.is_file() or (print("ERROR: .env is required for Docker Compose local targets"), sys.exit(1)); file_value=next((line.split("=", 1)[1].strip() for line in p.read_text(encoding="utf-8").splitlines() if line.startswith("POSTGRES_PASSWORD=")), ""); exported=os.environ.get("POSTGRES_PASSWORD"); value=exported if exported is not None else file_value; value or (print("ERROR: POSTGRES_PASSWORD must be non-empty"), sys.exit(1)); re.fullmatch(r"[A-Za-z0-9._~-]+", value) or (print("ERROR: local POSTGRES_PASSWORD must use URI-unreserved characters only (A-Za-z0-9._~-)."), sys.exit(1))'
 
 setup-backend: ## Instalar dependencias del backend (Docker)
 	@echo "$(CYAN)📦 Instalando dependencias del backend...$(RESET)"
