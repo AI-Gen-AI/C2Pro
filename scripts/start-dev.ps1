@@ -28,6 +28,10 @@ try {
     exit 1
 }
 
+# Validate the same effective PostgreSQL credential contract used by Compose
+python scripts/validate_local_postgres_password.py
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 # Step 1: Start infrastructure services
 Write-Host "[1/4] Starting infrastructure services (postgres, redis, minio)..." -ForegroundColor Yellow
 docker-compose up -d postgres redis minio
