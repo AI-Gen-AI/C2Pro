@@ -68,6 +68,8 @@ alembic/versions/__pycache__/
 *.db
 **/*.db
 
+claves postgre.txt
+**/claves postgre.txt
 # Local/private credentials must never enter the Docker build context
 credentials.json
 **/credentials.json
