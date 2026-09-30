@@ -1,5 +1,6 @@
 """Security regression for local docker-compose database credentials."""
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -37,23 +38,39 @@ def test_local_compose_requires_environment_supplied_postgres_password():
 
     assert "existing postgres_data volume" in quick_start
     assert "\\password postgres" in quick_start
+    assert "docker compose down -v" not in quick_start
+    assert '"volumes"]["postgres_data"]["name"]' in quick_start
+
+    assert "dotenv_values" in contract_flow
+    assert "dotenv_values" in checkpointer_e2e
 
 
 def test_make_local_postgres_password_guard_executes_in_shell(tmp_path: Path) -> None:
     makefile = REPO_ROOT / "Makefile"
 
-    def run_guard(value: str | None) -> subprocess.CompletedProcess[str]:
+    def run_guard(
+        value: str | None,
+        *,
+        exported: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         env_path = tmp_path / ".env"
         if value is None:
             env_path.unlink(missing_ok=True)
         else:
             env_path.write_text(f"POSTGRES_PASSWORD={value}\n", encoding="utf-8")
+
+        env = os.environ.copy()
+        env.pop("POSTGRES_PASSWORD", None)
+        if exported is not None:
+            env["POSTGRES_PASSWORD"] = exported
+
         return subprocess.run(
             ["make", "-f", str(makefile), "check-local-postgres-password"],
             cwd=tmp_path,
             text=True,
             capture_output=True,
             check=False,
+            env=env,
         )
 
     missing = run_guard(None)
@@ -70,3 +87,17 @@ def test_make_local_postgres_password_guard_executes_in_shell(tmp_path: Path) ->
 
     safe = run_guard("Safe_Local-123.~")
     assert safe.returncode == 0, safe.stdout + safe.stderr
+
+    unsafe_export_override = run_guard(
+        "Safe_Local-123.~",
+        exported="bad/password",
+    )
+    assert unsafe_export_override.returncode != 0
+    assert "URI-unreserved" in (
+        unsafe_export_override.stdout + unsafe_export_override.stderr
+    )
+
+    safe_export_without_file = run_guard(None, exported="Safe_Export-123.~")
+    assert safe_export_without_file.returncode == 0, (
+        safe_export_without_file.stdout + safe_export_without_file.stderr
+    )
