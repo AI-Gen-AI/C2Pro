@@ -6,6 +6,7 @@ import { expect, test, type Page, type Response } from "@playwright/test";
 import {
   buildSyntheticProjectName,
   PROD_ACCEPTANCE_FIXTURE,
+  requireProductionOrigin,
 } from "./support/prod-preflight";
 import {
   signInSyntheticProductionUser,
@@ -65,7 +66,9 @@ const CANONICAL_CATEGORIES = new Set([
 ]);
 
 function baseUrl(): string {
-  return process.env.PROD_ACCEPTANCE_BASE_URL ?? "https://c2pro.io";
+  return requireProductionOrigin(
+    process.env.PROD_ACCEPTANCE_BASE_URL ?? "https://c2pro.io",
+  );
 }
 
 function requireHitl(): boolean {
