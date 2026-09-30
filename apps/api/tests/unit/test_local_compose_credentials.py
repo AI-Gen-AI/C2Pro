@@ -12,6 +12,7 @@ def test_local_compose_requires_environment_supplied_postgres_password():
     compose = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     env_example = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
     quick_start = (REPO_ROOT / "QUICK_START.md").read_text(encoding="utf-8")
+    root_readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
     api_readme = (REPO_ROOT / "apps/api/README.md").read_text(encoding="utf-8")
     contract_flow = (REPO_ROOT / "scripts/prove_real_contract_flow.py").read_text(
@@ -38,6 +39,7 @@ def test_local_compose_requires_environment_supplied_postgres_password():
     start_dev_sh = (REPO_ROOT / "scripts/start-dev.sh").read_text(encoding="utf-8")
     start_dev_ps1 = (REPO_ROOT / "scripts/start-dev.ps1").read_text(encoding="utf-8")
     assert quick_start.count("validate_local_postgres_password.py") >= 2
+    assert "validate_local_postgres_password.py" in root_readme
     assert "validate_local_postgres_password.py" in start_dev_sh
     assert "validate_local_postgres_password.py" in start_dev_ps1
 
@@ -94,6 +96,21 @@ def test_local_postgres_password_validator_matches_effective_precedence(
 
     safe = run_guard("POSTGRES_PASSWORD=Safe_Local-123.~\n")
     assert safe.returncode == 0, safe.stdout + safe.stderr
+
+    quoted_safe = run_guard('POSTGRES_PASSWORD="Safe_Local-123.~"\n')
+    assert quoted_safe.returncode == 0, quoted_safe.stdout + quoted_safe.stderr
+
+    single_quoted_safe = run_guard("POSTGRES_PASSWORD='Safe_Local-123.~'\n")
+    assert single_quoted_safe.returncode == 0, (
+        single_quoted_safe.stdout + single_quoted_safe.stderr
+    )
+
+    unquoted_with_comment = run_guard(
+        "POSTGRES_PASSWORD=Safe_Local-123.~ # local password\n"
+    )
+    assert unquoted_with_comment.returncode == 0, (
+        unquoted_with_comment.stdout + unquoted_with_comment.stderr
+    )
 
     unsafe_export_override = run_guard(
         "POSTGRES_PASSWORD=Safe_Local-123.~\n",
