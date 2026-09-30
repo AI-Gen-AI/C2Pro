@@ -47,3 +47,18 @@ def test_api_runtime_image_uses_explicit_runtime_copy_surface() -> None:
     ]
     for expected in required_runtime_copies:
         assert expected in content
+
+
+def test_api_docker_context_excludes_in_tree_test_and_evaluation_code() -> None:
+    """Production source COPY must omit test/evaluation-only modules under src."""
+    dockerignore = Path(__file__).resolve().parents[2] / ".dockerignore"
+    content = dockerignore.read_text(encoding="utf-8")
+
+    expected_exclusions = [
+        "src/core/ai/test_*.py",
+        "src/core/ai/example_*.py",
+        "src/golden/",
+        "src/projects/adapters/http/router.py.fullversion",
+    ]
+    for expected in expected_exclusions:
+        assert expected in content
