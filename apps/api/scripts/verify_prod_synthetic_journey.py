@@ -21,6 +21,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 ASYNCPG_URL_PREFIX = "postgresql+asyncpg://"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+CANONICAL_VERIFIER_OUTPUT = Path("evidence/product-qualification/runtime/verifier.json")
 CHECK_SYNTHETIC_PROJECT_SCOPE = "synthetic project scope"
 CHECK_DOCUMENT_PERSISTED = "document persisted"
 CHECK_DOCUMENT_TERMINAL = "document terminal"
@@ -41,6 +43,17 @@ class Check:
     name: str
     passed: bool
     detail: str
+
+
+
+def _resolve_output_json_path(raw: str, *, repo_root: Path = REPO_ROOT) -> Path:
+    """Constrain CLI output to the canonical bounded verifier artifact."""
+    root = repo_root.resolve()
+    expected = (root / CANONICAL_VERIFIER_OUTPUT).resolve()
+    candidate = Path(raw).resolve()
+    if candidate != expected:
+        raise VerificationFailure("output-json must use the canonical evidence path")
+    return candidate
 
 
 def _normalize_database_url(raw: str) -> str:
@@ -319,7 +332,7 @@ def main() -> int:
                 for check in checks
             ],
         }
-        output_path = Path(args.output_json)
+        output_path = _resolve_output_json_path(args.output_json)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(
             json.dumps(output, indent=2, sort_keys=True),
