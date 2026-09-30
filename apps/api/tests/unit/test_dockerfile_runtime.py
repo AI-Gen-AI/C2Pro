@@ -51,6 +51,8 @@ def test_api_docker_context_excludes_in_tree_test_and_evaluation_code() -> None:
         "**/.env.*",
         "*.db",
         "**/*.db",
+        "claves postgre.txt",
+        "**/claves postgre.txt",
         "credentials.json",
         "*credentials*.json",
         "*service-account*.json",
