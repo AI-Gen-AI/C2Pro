@@ -49,15 +49,9 @@ class Check:
 
 
 
-def _resolve_output_json_path(raw: str, *, repo_root: Path = REPO_ROOT) -> Path:
-    """Constrain CLI output to the canonical bounded verifier artifact."""
-    root = repo_root.resolve()
-    expected = (root / CANONICAL_VERIFIER_OUTPUT).resolve()
-    supplied = Path(raw)
-    candidate = (supplied if supplied.is_absolute() else root / supplied).resolve()
-    if candidate != expected:
-        raise VerificationFailure("output-json must use the canonical evidence path")
-    return candidate
+def _verifier_output_path(*, repo_root: Path = REPO_ROOT) -> Path:
+    """Return the single canonical verifier evidence path."""
+    return repo_root.resolve() / CANONICAL_VERIFIER_OUTPUT
 
 
 def _normalize_database_url(raw: str) -> str:
@@ -308,8 +302,9 @@ def main() -> int:
     parser.add_argument("--project-id", default=os.getenv("PROD_ACCEPTANCE_PROJECT_ID"))
     parser.add_argument("--require-hitl", action="store_true")
     parser.add_argument(
-        "--output-json",
-        help="Optional bounded result JSON path (identifiers + check states only).",
+        "--write-evidence",
+        action="store_true",
+        help="Write bounded verifier evidence to the canonical repository path.",
     )
     args = parser.parse_args()
     database_url = os.getenv("PROD_ACCEPTANCE_DATABASE_URL_READONLY")
@@ -337,7 +332,7 @@ def main() -> int:
         print(f"{state}: {check.name} ({check.detail})")
         failed = failed or not check.passed
 
-    if args.output_json:
+    if args.write_evidence:
         output = {
             "verdict": "FAIL" if failed else "PASS",
             "identifiers": identifiers,
@@ -346,7 +341,7 @@ def main() -> int:
                 for check in checks
             ],
         }
-        output_path = _resolve_output_json_path(args.output_json)
+        output_path = _verifier_output_path()
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(
             json.dumps(output, indent=2, sort_keys=True),
