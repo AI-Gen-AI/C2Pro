@@ -36,14 +36,15 @@ def test_api_runtime_copy_surface_is_explicit() -> None:
     content = dockerfile.read_text(encoding="utf-8")
 
     assert "COPY --chown=appuser:appgroup . ." not in content
+    assert "COPY --chown=root:root" not in content
     assert "RUN rm -rf" not in content
 
     required_runtime_copies = [
-        "COPY --chown=appuser:appgroup src/ ./src/",
-        "COPY --chown=appuser:appgroup alembic/ ./alembic/",
-        "COPY --chown=appuser:appgroup alembic.ini ./alembic.ini",
-        "COPY --chown=appuser:appgroup scripts/ ./scripts/",
-        "COPY --chown=appuser:appgroup start.sh ./start.sh",
+        "COPY src/ ./src/",
+        "COPY alembic/ ./alembic/",
+        "COPY alembic.ini ./alembic.ini",
+        "COPY scripts/ ./scripts/",
+        "COPY start.sh ./start.sh",
     ]
     for expected in required_runtime_copies:
         assert expected in content
