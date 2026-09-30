@@ -355,12 +355,12 @@ jobs:
             echo "## C2Pro #706 Production Synthetic Acceptance"
             echo
             echo "- control commit: \`$GITHUB_SHA\`"
-            echo "- backend deployment: \`${{ inputs.backend_deployment_id }}\`"
-            echo "- backend commit: \`${{ inputs.backend_commit_sha }}\`"
-            echo "- frontend deployment: \`${{ inputs.frontend_deployment_id }}\`"
-            echo "- frontend commit: \`${{ inputs.frontend_commit_sha }}\`"
-            echo "- execution mode: \`${{ inputs.execution_mode }}\`"
-            echo "- require HITL: \`${{ inputs.require_hitl }}\`"
+            echo "- backend deployment: \`$PROD_INPUT_BACKEND_DEPLOYMENT_ID\`"
+            echo "- backend commit: \`$PROD_INPUT_BACKEND_COMMIT_SHA\`"
+            echo "- frontend deployment: \`$PROD_INPUT_FRONTEND_DEPLOYMENT_ID\`"
+            echo "- frontend commit: \`$PROD_INPUT_FRONTEND_COMMIT_SHA\`"
+            echo "- execution mode: \`$PROD_INPUT_EXECUTION_MODE\`"
+            echo "- require HITL: \`$PROD_INPUT_REQUIRE_HITL\`"
             echo "- identity preflight mutates product data: **false**"
             echo "- lifecycle authority: **false**"
             echo
