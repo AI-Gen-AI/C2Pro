@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import copy
 from pathlib import Path
 
@@ -7,8 +8,12 @@ import pytest
 
 from validation.product.verify_prod_deployment_identity import (
     IdentityError,
+    _full_sha_arg,
     _output_path,
     _provider_input,
+    _railway_deployment_arg,
+    _vercel_deployment_arg,
+    _vercel_project_arg,
     verify,
 )
 
@@ -63,8 +68,9 @@ def test_provider_observation_proves_all_four_runtime_identities():
 
 @pytest.mark.parametrize("service", ["api", "worker", "scheduler"])
 def test_backend_provider_sha_mismatch_fails_closed(service):
+    mismatched_payload = railway(f"dep_{service}", sha="c" * 40)
     with pytest.raises(IdentityError, match="Git SHA mismatch"):
-        run(**{f"{service}_payload": railway(f"dep_{service}", sha="c" * 40)})
+        run(**{f"{service}_payload": mismatched_payload})
 
 
 def test_operator_expected_api_deployment_cannot_self_assert_observed_identity():
@@ -73,8 +79,9 @@ def test_operator_expected_api_deployment_cannot_self_assert_observed_identity()
 
 
 def test_frontend_provider_sha_mismatch_fails_closed():
+    mismatched_payload = vercel(sha="d" * 40)
     with pytest.raises(IdentityError, match="Git SHA mismatch"):
-        run(frontend_payload=vercel(sha="d" * 40))
+        run(frontend_payload=mismatched_payload)
 
 
 def test_frontend_provider_deployment_mismatch_fails_closed():
@@ -83,8 +90,9 @@ def test_frontend_provider_deployment_mismatch_fails_closed():
 
 
 def test_frontend_provider_project_mismatch_fails_closed():
+    mismatched_payload = vercel(project_id="prj_other")
     with pytest.raises(IdentityError, match="project"):
-        run(frontend_payload=vercel(project_id="prj_other"))
+        run(frontend_payload=mismatched_payload)
 
 
 def test_frontend_project_id_flat_shape_is_supported():
@@ -96,13 +104,15 @@ def test_frontend_project_id_flat_shape_is_supported():
 
 
 def test_nonproduction_frontend_fails_closed():
+    preview_payload = vercel(target="preview")
     with pytest.raises(IdentityError, match="production"):
-        run(frontend_payload=vercel(target="preview"))
+        run(frontend_payload=preview_payload)
 
 
 def test_nonterminal_backend_fails_closed():
+    deploying_payload = railway("dep_worker", status="DEPLOYING")
     with pytest.raises(IdentityError, match="not SUCCESS"):
-        run(worker_payload=railway("dep_worker", status="DEPLOYING"))
+        run(worker_payload=deploying_payload)
 
 
 def test_missing_provider_commit_metadata_fails_closed():
@@ -183,3 +193,30 @@ def test_deployment_identity_output_is_fixed_to_canonical_evidence_path(tmp_path
     )
     assert _output_path(repo_root=tmp_path) == expected
 
+
+
+@pytest.mark.parametrize(
+    ("validator", "valid"),
+    [
+        (_full_sha_arg, "a" * 40),
+        (_railway_deployment_arg, "11111111-1111-4111-8111-111111111111"),
+        (_vercel_deployment_arg, "dpl_12345678901234567890"),
+        (_vercel_project_arg, "prj_12345678"),
+    ],
+)
+def test_cli_identity_validators_accept_canonical_values(validator, valid):
+    assert validator(valid)
+
+
+@pytest.mark.parametrize(
+    ("validator", "unsafe"),
+    [
+        (_full_sha_arg, "../main"),
+        (_railway_deployment_arg, "../deployment"),
+        (_vercel_deployment_arg, "../../dpl_bad"),
+        (_vercel_project_arg, "../prj_bad"),
+    ],
+)
+def test_cli_identity_validators_reject_path_shaped_values(validator, unsafe):
+    with pytest.raises(argparse.ArgumentTypeError):
+        validator(unsafe)
