@@ -60,12 +60,20 @@ def _bundle_output(
     *,
     repo_root: Path = REPO_ROOT,
 ) -> Path:
-    if not github_run_id.isdigit() or int(github_run_id) < 1:
+    if not github_run_id.isdigit():
         raise BundleBuildError("GitHub run id must be a positive integer")
-    if not github_run_attempt.isdigit() or int(github_run_attempt) < 1:
+    if not github_run_attempt.isdigit():
         raise BundleBuildError("GitHub run attempt must be a positive integer")
+
+    run_id = int(github_run_id)
+    run_attempt = int(github_run_attempt)
+    if run_id < 1:
+        raise BundleBuildError("GitHub run id must be a positive integer")
+    if run_attempt < 1:
+        raise BundleBuildError("GitHub run attempt must be a positive integer")
+
     output_root = repo_root.resolve() / QUALIFICATION_OUTPUT_ROOT
-    return output_root / f"p0b-prod-gh-{github_run_id}-{github_run_attempt}.yaml"
+    return output_root / f"p0b-prod-gh-{run_id}-{run_attempt}.yaml"
 
 
 def _load_json(path: Path) -> dict[str, Any]:
