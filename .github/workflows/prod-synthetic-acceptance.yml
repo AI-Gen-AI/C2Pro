@@ -186,7 +186,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python validation/product/verify_prod_deployment_identity.py             --railway-api-json evidence/product-qualification/runtime/provider/railway-api.json             --railway-worker-json evidence/product-qualification/runtime/provider/railway-worker.json             --railway-scheduler-json evidence/product-qualification/runtime/provider/railway-scheduler.json             --vercel-json evidence/product-qualification/runtime/provider/vercel-frontend.json             --expected-backend-sha "$PROD_INPUT_BACKEND_COMMIT_SHA"             --expected-api-deployment "$PROD_INPUT_BACKEND_DEPLOYMENT_ID"             --expected-frontend-sha "$PROD_INPUT_FRONTEND_COMMIT_SHA"             --expected-frontend-deployment "$PROD_INPUT_FRONTEND_DEPLOYMENT_ID"             --output-json evidence/product-qualification/runtime/deployment-identity.json
+          python validation/product/verify_prod_deployment_identity.py             --expected-backend-sha "$PROD_INPUT_BACKEND_COMMIT_SHA"             --expected-api-deployment "$PROD_INPUT_BACKEND_DEPLOYMENT_ID"             --expected-frontend-sha "$PROD_INPUT_FRONTEND_COMMIT_SHA"             --expected-frontend-deployment "$PROD_INPUT_FRONTEND_DEPLOYMENT_ID"
 
           backend_sha="$(python -c 'import json; print(json.load(open("evidence/product-qualification/runtime/deployment-identity.json"))["backend"]["api"]["commit_sha"])')"
           frontend_sha="$(python -c 'import json; print(json.load(open("evidence/product-qualification/runtime/deployment-identity.json"))["frontend"]["commit_sha"])')"
