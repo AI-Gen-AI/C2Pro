@@ -79,14 +79,25 @@ function responsePath(response: Response): string {
   return new URL(response.url()).pathname;
 }
 
+function matchesProjectApiPath(
+  pathname: string,
+  projectId: string,
+  resource: "documents" | "health",
+): boolean {
+  const paths = [
+    `/api/projects/${projectId}/${resource}`,
+    `/api/v1/projects/${projectId}/${resource}`,
+  ];
+  return paths.some(
+    (expected) => pathname === expected || pathname === `${expected}/`,
+  );
+}
+
 function documentListResponse(response: Response, projectId: string): boolean {
-  const pathname = responsePath(response);
   return (
     response.request().method() === "GET" &&
     response.status() === 200 &&
-    new RegExp(
-      `/api(?:/v1)?/projects/${projectId}/documents/?$`,
-    ).test(pathname)
+    matchesProjectApiPath(responsePath(response), projectId, "documents")
   );
 }
 
@@ -171,9 +182,7 @@ async function loadHealth(
     (response) =>
       response.request().method() === "GET" &&
       response.status() === 200 &&
-      new RegExp(
-        `/api(?:/v1)?/projects/${projectId}/health/?$`,
-      ).test(responsePath(response)),
+      matchesProjectApiPath(responsePath(response), projectId, "health"),
     { timeout: 60_000 },
   );
   await page.goto(`${baseUrl()}/projects/${projectId}/analysis`);
@@ -230,9 +239,7 @@ async function uploadFixture(
   const accepted = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
-      new RegExp(
-        `/projects/${projectId}/documents/?$`,
-      ).test(responsePath(response)),
+      matchesProjectApiPath(responsePath(response), projectId, "documents"),
     { timeout: 120_000 },
   );
   await page.getByRole("button", { name: /^upload 1 file$/i }).click();
@@ -396,9 +403,9 @@ test.describe("Issue #706 production synthetic acceptance", () => {
     if (!clauseId) throw new Error("PROD_ACCEPTANCE_EVIDENCE_CLAUSE_ID_MISSING");
     await evidenceLink.click();
     await page.waitForURL(
-      new RegExp(
-        `/projects/${projectId}/evidence\\?.*highlightId=${clauseId}`,
-      ),
+      (url) =>
+        url.pathname === `/projects/${projectId}/evidence` &&
+        url.searchParams.get("highlightId") === clauseId,
       { timeout: 30_000 },
     );
     const activeEvidence = page.locator(
