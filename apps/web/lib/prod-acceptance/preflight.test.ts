@@ -50,6 +50,8 @@ describe("production acceptance preflight", () => {
     expect(requireProductionOrigin("https://www.c2pro.io/projects")).toBe("https://www.c2pro.io");
     expectCode({ baseUrl: "http://c2pro.io" }, "NON_PRODUCTION_HOST");
     expectCode({ baseUrl: "https://preview.example.com" }, "NON_PRODUCTION_HOST");
+    expectCode({ baseUrl: "https://c2pro.io:8443" }, "NON_PRODUCTION_HOST");
+    expectCode({ baseUrl: "https://www.c2pro.io:444" }, "NON_PRODUCTION_HOST");
     expect(() => requireProductionOrigin("https://preview.example.com")).toThrowError(
       expect.objectContaining({ code: "NON_PRODUCTION_HOST" }),
     );
