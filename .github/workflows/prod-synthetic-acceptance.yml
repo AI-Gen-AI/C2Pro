@@ -229,7 +229,6 @@ jobs:
         run: |
           set -euo pipefail
           python apps/api/scripts/verify_prod_synthetic_journey.py \
-            --database-url "$PROD_ACCEPTANCE_DATABASE_URL_READONLY" \
             --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
             --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"
           echo "PROD_ACCEPTANCE_TENANT_PREFLIGHT_VERIFIED=1" >> "$GITHUB_ENV"
@@ -311,7 +310,6 @@ jobs:
           hitl=()
           if [ "$PROD_INPUT_REQUIRE_HITL" = "true" ]; then hitl=(--require-hitl); fi
           python apps/api/scripts/verify_prod_synthetic_journey.py \
-            --database-url "$PROD_ACCEPTANCE_DATABASE_URL_READONLY" \
             --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
             --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID" \
             --project-id "$PROD_ACCEPTANCE_PROJECT_ID" \
@@ -529,7 +527,6 @@ jobs:
         run: |
           set -euo pipefail
           python apps/api/scripts/verify_prod_synthetic_journey.py \
-            --database-url "$PROD_ACCEPTANCE_DATABASE_URL_READONLY" \
             --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
             --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"
           echo "PROD_ACCEPTANCE_TENANT_PREFLIGHT_VERIFIED=1" >> "$GITHUB_ENV"
@@ -611,7 +608,6 @@ jobs:
           hitl=()
           if [ "$PROD_INPUT_REQUIRE_HITL" = "true" ]; then hitl=(--require-hitl); fi
           python apps/api/scripts/verify_prod_synthetic_journey.py \
-            --database-url "$PROD_ACCEPTANCE_DATABASE_URL_READONLY" \
             --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
             --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID" \
             --project-id "$PROD_ACCEPTANCE_PROJECT_ID" \
@@ -829,7 +825,6 @@ jobs:
         run: |
           set -euo pipefail
           python apps/api/scripts/verify_prod_synthetic_journey.py \
-            --database-url "$PROD_ACCEPTANCE_DATABASE_URL_READONLY" \
             --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
             --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"
           echo "PROD_ACCEPTANCE_TENANT_PREFLIGHT_VERIFIED=1" >> "$GITHUB_ENV"
@@ -911,7 +906,6 @@ jobs:
           hitl=()
           if [ "$PROD_INPUT_REQUIRE_HITL" = "true" ]; then hitl=(--require-hitl); fi
           python apps/api/scripts/verify_prod_synthetic_journey.py \
-            --database-url "$PROD_ACCEPTANCE_DATABASE_URL_READONLY" \
             --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
             --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID" \
             --project-id "$PROD_ACCEPTANCE_PROJECT_ID" \
