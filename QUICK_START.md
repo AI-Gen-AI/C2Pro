@@ -36,6 +36,7 @@ Create the local environment file first and set an explicit PostgreSQL password:
 ```bash
 cp .env.example .env
 # Edit .env and set POSTGRES_PASSWORD to a local-only value.
+python scripts/validate_local_postgres_password.py
 docker compose up -d postgres redis minio minio-setup
 ```
 
@@ -209,6 +210,7 @@ To run everything (backend + infrastructure) in Docker:
 ```bash
 # Ensure .env exists with valid credentials
 cp .env.example .env  # then edit
+python scripts/validate_local_postgres_password.py
 
 # Start all services
 docker compose up -d
