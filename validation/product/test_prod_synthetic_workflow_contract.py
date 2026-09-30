@@ -151,6 +151,25 @@ def test_production_playwright_projects_disable_sensitive_artifacts() -> None:
         assert 'video: "off"' in snippet
 
 
+def test_provider_observation_is_bound_to_canonical_service_and_project_ids() -> None:
+    source = _source()
+    provider = source[
+        source.index("Observe production deployment identities from providers") :
+        source.index("Verify independently observed deployment identities")
+    ]
+
+    assert '"api:${PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID}"' in provider
+    assert '"worker:${PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID}"' in provider
+    assert '"scheduler:${PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID}"' in provider
+    assert "query deployment($id:" not in provider
+
+    verifier = source[
+        source.index("Verify independently observed deployment identities") :
+        source.index("Setup Python backend")
+    ]
+    assert '--expected-frontend-project "$PROD_ACCEPTANCE_VERCEL_PROJECT_ID"' in verifier
+
+
 def test_operator_deployment_ids_are_validated_before_provider_calls() -> None:
     source = _source()
     gate = source.index("Fail closed on operator intent and branch")
