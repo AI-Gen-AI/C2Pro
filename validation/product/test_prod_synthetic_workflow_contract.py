@@ -55,13 +55,13 @@ def test_issue_690_credentials_fail_closed_before_browser_mutation() -> None:
     gate = source.index("Fail closed on protected qualification prerequisites")
     browser = source.index("Execute real production browser journey")
     assert gate < browser
-    for secret in (
+    for prerequisite_name in (
         "PROD_ACCEPTANCE_CLERK_EMAIL",
         "PROD_ACCEPTANCE_CLERK_PASSWORD",
         "PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID",
         "PROD_ACCEPTANCE_EXPECTED_TENANT_ID",
     ):
-        assert secret in source
+        assert prerequisite_name in source
 
 
 def test_raw_provider_responses_are_not_uploaded_as_qualification_artifacts() -> None:
