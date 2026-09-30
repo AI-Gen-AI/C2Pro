@@ -19,6 +19,7 @@ from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
+from sqlalchemy.sql.elements import TextClause
 
 ASYNCPG_URL_PREFIX = "postgresql+asyncpg://"
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -74,8 +75,10 @@ def _uuid(raw: str, label: str) -> UUID:
         raise VerificationFailure(f"{label} must be a UUID") from exc
 
 
-async def _scalar(conn: AsyncConnection, sql: str, params: dict[str, object]) -> int:
-    result = await conn.execute(text(sql), params)
+async def _scalar(
+    conn: AsyncConnection, statement: TextClause, params: dict[str, object]
+) -> int:
+    result = await conn.execute(statement, params)
     return int(result.scalar_one())
 
 
@@ -84,24 +87,28 @@ async def _preflight_checks(
 ) -> list[Check]:
     eligible = await _scalar(
         conn,
-        """
+        text(
+            """
         SELECT count(*)
           FROM tenants
          WHERE id = :tenant_id
            AND is_active IS TRUE
            AND clerk_org_id = :clerk_org_id
            AND coalesce((settings ->> 'synthetic_acceptance')::boolean, false) IS TRUE
-        """,
+            """
+        ),
         {"tenant_id": tenant_id, "clerk_org_id": clerk_org_id},
     )
     foreign_projects = await _scalar(
         conn,
-        """
+        text(
+            """
         SELECT count(*)
           FROM projects
          WHERE tenant_id = :tenant_id
            AND name NOT LIKE 'ACCEPT-706-%'
-        """,
+            """
+        ),
         {"tenant_id": tenant_id},
     )
     return [
@@ -119,50 +126,50 @@ async def _journey_checks(
 ) -> list[Check]:
     p = {"tenant_id": tenant_id, "project_id": project_id}
     queries = {
-        CHECK_SYNTHETIC_PROJECT_SCOPE: """
+        CHECK_SYNTHETIC_PROJECT_SCOPE: text("""
             SELECT count(*) FROM projects
              WHERE id = :project_id AND tenant_id = :tenant_id
                AND name LIKE 'ACCEPT-706-%'
-        """,
-        CHECK_DOCUMENT_PERSISTED: """
+        """),
+        CHECK_DOCUMENT_PERSISTED: text("""
             SELECT count(*) FROM documents
              WHERE project_id = :project_id AND tenant_id = :tenant_id
-        """,
-        CHECK_DOCUMENT_TERMINAL: """
+        """),
+        CHECK_DOCUMENT_TERMINAL: text("""
             SELECT count(*) FROM documents
              WHERE project_id = :project_id AND tenant_id = :tenant_id
                AND upload_status::text IN ('analyzed','needs_changes')
-        """,
-        CHECK_CLAUSES_PERSISTED: """
+        """),
+        CHECK_CLAUSES_PERSISTED: text("""
             SELECT count(*) FROM clauses
              WHERE project_id = :project_id AND tenant_id = :tenant_id
-        """,
-        CHECK_RAG_CHUNKS_PERSISTED: """
+        """),
+        CHECK_RAG_CHUNKS_PERSISTED: text("""
             SELECT count(*) FROM document_chunks
              WHERE project_id = :project_id AND tenant_id = :tenant_id
-        """,
-        CHECK_ANALYSIS_PERSISTED: """
+        """),
+        CHECK_ANALYSIS_PERSISTED: text("""
             SELECT count(*) FROM analyses
              WHERE project_id = :project_id AND tenant_id = :tenant_id
-        """,
-        CHECK_TRUSTED_CANONICAL_ARTIFACT: """
+        """),
+        CHECK_TRUSTED_CANONICAL_ARTIFACT: text("""
             SELECT count(*) FROM document_artifacts
              WHERE project_id = :project_id AND tenant_id = :tenant_id
                AND trust_state = 'trusted' AND lifecycle_status = 'active'
-        """,
-        CHECK_PROJECT_GRAPH_COMPLETED: """
+        """),
+        CHECK_PROJECT_GRAPH_COMPLETED: text("""
             SELECT count(*) FROM project_events
              WHERE project_id = :project_id AND tenant_id = :tenant_id
                AND event_type = 'graph.completed'
-        """,
-        CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT: """
+        """),
+        CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT: text("""
             SELECT count(*) FROM project_snapshots
              WHERE project_id = :project_id AND tenant_id = :tenant_id
                AND health_vector IS NOT NULL
                AND jsonb_array_length(
                      health_vector -> 'single_document_coverage' -> 'assessments'
                    ) = 6
-        """,
+        """),
     }
     values = {name: await _scalar(conn, sql, p) for name, sql in queries.items()}
     checks = [
