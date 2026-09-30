@@ -5,6 +5,7 @@ import {
   type ProdPreflightFailureCode,
   assertProdPreflight,
   requireProdAcceptanceEnv,
+  requireProductionOrigin,
   syntheticProjectName,
 } from "./preflight";
 
@@ -45,8 +46,13 @@ function expectCode(
 describe("production acceptance preflight", () => {
   it("accepts only the canonical production hosts over HTTPS", () => {
     expect(() => assertProdPreflight(valid())).not.toThrow();
+    expect(requireProductionOrigin("https://c2pro.io/sign-in")).toBe("https://c2pro.io");
+    expect(requireProductionOrigin("https://www.c2pro.io/projects")).toBe("https://www.c2pro.io");
     expectCode({ baseUrl: "http://c2pro.io" }, "NON_PRODUCTION_HOST");
     expectCode({ baseUrl: "https://preview.example.com" }, "NON_PRODUCTION_HOST");
+    expect(() => requireProductionOrigin("https://preview.example.com")).toThrowError(
+      expect.objectContaining({ code: "NON_PRODUCTION_HOST" }),
+    );
   });
 
   it("fails closed before mutation on tenant or organization mismatch", () => {
