@@ -50,7 +50,8 @@ def _resolve_output_json_path(raw: str, *, repo_root: Path = REPO_ROOT) -> Path:
     """Constrain CLI output to the canonical bounded verifier artifact."""
     root = repo_root.resolve()
     expected = (root / CANONICAL_VERIFIER_OUTPUT).resolve()
-    candidate = Path(raw).resolve()
+    supplied = Path(raw)
+    candidate = (supplied if supplied.is_absolute() else root / supplied).resolve()
     if candidate != expected:
         raise VerificationFailure("output-json must use the canonical evidence path")
     return candidate
