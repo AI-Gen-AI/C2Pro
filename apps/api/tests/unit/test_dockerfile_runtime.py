@@ -45,6 +45,12 @@ def test_api_docker_context_excludes_in_tree_test_and_evaluation_code() -> None:
     content = dockerignore.read_text(encoding="utf-8")
 
     expected_exclusions = [
+        ".env",
+        "**/.env",
+        ".env.*",
+        "**/.env.*",
+        "*.db",
+        "**/*.db",
         "credentials.json",
         "*credentials*.json",
         "*service-account*.json",
