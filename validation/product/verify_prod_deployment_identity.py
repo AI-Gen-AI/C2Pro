@@ -101,6 +101,8 @@ def _vercel(payload: Any) -> dict[str, str]:
     ).upper()
     target = str(payload.get("target") or "").lower()
     meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+    project = payload.get("project") if isinstance(payload.get("project"), dict) else {}
+    project_id = str(project.get("id") or payload.get("projectId") or "")
     commit = str(
         meta.get("githubCommitSha")
         or meta.get("githubCommitSHA")
@@ -109,13 +111,20 @@ def _vercel(payload: Any) -> dict[str, str]:
     ).lower()
     if not deployment_id:
         raise IdentityError("Vercel: deployment id missing")
+    if not project_id:
+        raise IdentityError("Vercel: project identity missing")
     if state != "READY":
         raise IdentityError("Vercel: deployment is not READY")
     if target != "production":
         raise IdentityError("Vercel: deployment is not production target")
     if len(commit) != 40 or any(ch not in "0123456789abcdef" for ch in commit):
         raise IdentityError("Vercel: exact Git commit metadata unavailable")
-    return {"deployment_id": deployment_id, "commit_sha": commit, "status": state}
+    return {
+        "deployment_id": deployment_id,
+        "project_id": project_id,
+        "commit_sha": commit,
+        "status": state,
+    }
 
 
 def verify(
@@ -128,6 +137,7 @@ def verify(
     expected_api_deployment: str,
     expected_frontend_sha: str,
     expected_frontend_deployment: str,
+    expected_frontend_project: str,
 ) -> dict[str, Any]:
     backend = expected_backend_sha.lower()
     frontend = expected_frontend_sha.lower()
@@ -151,6 +161,8 @@ def verify(
 
     if vercel["deployment_id"] != expected_frontend_deployment:
         raise IdentityError("Vercel deployment id does not match expected release")
+    if vercel["project_id"] != expected_frontend_project:
+        raise IdentityError("Vercel deployment does not belong to expected project")
     if vercel["commit_sha"] != frontend:
         raise IdentityError("Vercel: Git SHA mismatch")
 
@@ -174,6 +186,7 @@ def main() -> int:
     parser.add_argument("--expected-api-deployment", required=True)
     parser.add_argument("--expected-frontend-sha", required=True)
     parser.add_argument("--expected-frontend-deployment", required=True)
+    parser.add_argument("--expected-frontend-project", required=True)
     args = parser.parse_args()
 
     result = verify(
@@ -185,6 +198,7 @@ def main() -> int:
         expected_api_deployment=args.expected_api_deployment,
         expected_frontend_sha=args.expected_frontend_sha,
         expected_frontend_deployment=args.expected_frontend_deployment,
+        expected_frontend_project=args.expected_frontend_project,
     )
     output = _output_path()
     output.parent.mkdir(parents=True, exist_ok=True)
