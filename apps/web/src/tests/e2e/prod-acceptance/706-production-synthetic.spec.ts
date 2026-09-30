@@ -156,7 +156,7 @@ async function pollDocumentUntilTerminal(
           intervals: POLL_INTERVALS_MS,
         },
       )
-      .toSatisfy((lifecycle) => DOCUMENT_TERMINAL_STATES.has(lifecycle));
+      .toMatch(/^(analyzed|review_required|failed_retryable|needs_changes|error)$/);
   } catch {
     throw new Error(
       `PROD_ACCEPTANCE_PROCESSING_TIMEOUT:last_lifecycle=${latest.lifecycle_status ?? "null"};last_status=${latest.status ?? "null"}`,
