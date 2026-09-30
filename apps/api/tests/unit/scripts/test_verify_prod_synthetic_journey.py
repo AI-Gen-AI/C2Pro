@@ -16,8 +16,17 @@ SPEC.loader.exec_module(MODULE)
 
 
 def test_normalize_database_url_uses_asyncpg() -> None:
-    assert MODULE._normalize_database_url("postgresql://example/db").startswith("postgresql+asyncpg://")
-    assert MODULE._normalize_database_url("postgres://example/db").startswith("postgresql+asyncpg://")
+    assert MODULE._normalize_database_url("postgresql://example/db").startswith(
+        "postgresql+asyncpg://"
+    )
+    assert MODULE._normalize_database_url("postgres://example/db").startswith(
+        "postgresql+asyncpg://"
+    )
+
+
+def test_normalize_database_url_rejects_non_postgres_scheme() -> None:
+    with pytest.raises(MODULE.VerificationFailure, match="PostgreSQL scheme"):
+        MODULE._normalize_database_url("https://attacker.invalid/db")
 
 
 def test_uuid_rejects_malformed_identifier_without_echoing_value() -> None:
