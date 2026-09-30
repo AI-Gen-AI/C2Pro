@@ -90,7 +90,16 @@ ANTHROPIC_API_KEY=sk-ant-...
 > docker compose up -d redis minio minio-setup
 > ```
 >
-> If the local database is disposable, `docker compose down -v` followed by a normal startup recreates the volume, but **deletes local database data**.
+> If the local PostgreSQL database is disposable, remove only its Compose-managed volume; do not use `docker compose down -v`, which also deletes Redis, MinIO and uploads volumes:
+>
+> ```bash
+> docker compose stop postgres
+> docker compose rm -sf postgres
+> docker compose config --format json | python -c 'import json, subprocess, sys; name=json.load(sys.stdin)["volumes"]["postgres_data"]["name"]; subprocess.run(["docker", "volume", "rm", name], check=True)'
+> docker compose up -d postgres
+> ```
+>
+> This destroys **only local PostgreSQL data** in the Compose project.
 
 ### 1.3 Start backend
 
