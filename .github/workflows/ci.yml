@@ -1397,6 +1397,7 @@ jobs:
           printf '%s\n' '{"type":"service_account","private_key":"CI_SENTINEL"}' > apps/api/config/credentials.json
           printf '%s\n' 'POSTGRES_PASSWORD=CI_SENTINEL' > apps/api/config/.env.production
           printf '%s\n' 'CI_SENTINEL_DB' > apps/api/tmp/test.db
+          printf '%s\n' 'CI_SENTINEL_POSTGRES_NOTE' > "apps/api/config/claves postgre.txt"
 
       - name: Build production API image
         run: docker build --file apps/api/Dockerfile --tag c2pro-api:ci apps/api
@@ -1418,6 +1419,7 @@ jobs:
             test ! -e /app/.env.example
             test ! -e /app/config/credentials.json
             test ! -e /app/config/.env.production
+            test ! -e "/app/config/claves postgre.txt"
             test ! -e /app/tmp/test.db
             test ! -e /app/migrate.py
             test ! -e /app/dev.py
