@@ -43,7 +43,6 @@ docs/
 # Development
 .env
 .env.*
-!.env.example
 Makefile
 *.log
 
@@ -66,3 +65,22 @@ src/core/ai/test_*.py
 src/core/ai/example_*.py
 src/golden/
 src/projects/adapters/http/router.py.fullversion
+
+# Non-runtime top-level development/test tooling
+dev.py
+evals/
+examples/
+install_spacy_model.py
+migrate.py
+migrations/
+mypy-baseline.txt
+requirements-sprint1.txt
+setup.py
+test*.py
+
+# Only the production runtime scripts belong in the image
+scripts/*
+!scripts/run_api.sh
+!scripts/run_worker.sh
+!scripts/run_scheduler.sh
+!scripts/wait_for_schema.py
