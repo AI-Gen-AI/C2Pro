@@ -9,8 +9,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[4]
 LEGACY_LOCAL_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/c2pro"
 VALIDATOR_SCRIPT_NAME = "validate_local_postgres_password.py"
-SAFE_PASSWORD_ASSIGNMENT = "POSTGRES_PASSWORD=Safe_Local-123.~\\n"
-UNSAFE_PASSWORD_ASSIGNMENT = "POSTGRES_PASSWORD=bad/password\\n"
+SAFE_PASSWORD_ASSIGNMENT = "POSTGRES_PASSWORD=Safe_Local-123.~\n"
+UNSAFE_PASSWORD_ASSIGNMENT = "POSTGRES_PASSWORD=bad/password\n"
 
 
 def test_local_compose_requires_environment_supplied_postgres_password():
@@ -98,11 +98,11 @@ def test_local_postgres_password_validator_matches_effective_precedence(
     assert empty.returncode != 0
     assert "POSTGRES_PASSWORD must be non-empty" in (empty.stdout + empty.stderr)
 
-    unsafe = run_guard("POSTGRES_PASSWORD=bad/password\n")
+    unsafe = run_guard(UNSAFE_PASSWORD_ASSIGNMENT)
     assert unsafe.returncode != 0
     assert "URI-unreserved" in (unsafe.stdout + unsafe.stderr)
 
-    safe = run_guard("POSTGRES_PASSWORD=Safe_Local-123.~\n")
+    safe = run_guard(SAFE_PASSWORD_ASSIGNMENT)
     assert safe.returncode == 0, safe.stdout + safe.stderr
 
     quoted_safe = run_guard('POSTGRES_PASSWORD="Safe_Local-123.~"\n')
@@ -128,7 +128,7 @@ def test_local_postgres_password_validator_matches_effective_precedence(
     )
 
     unsafe_export_override = run_guard(
-        "POSTGRES_PASSWORD=Safe_Local-123.~\n",
+        SAFE_PASSWORD_ASSIGNMENT,
         exported="bad/password",
     )
     assert unsafe_export_override.returncode != 0
@@ -137,14 +137,14 @@ def test_local_postgres_password_validator_matches_effective_precedence(
     )
 
     duplicate_last_wins = run_guard(
-        "POSTGRES_PASSWORD=Safe_Local-123.~\n"
-        "POSTGRES_PASSWORD=bad/password\n"
+        SAFE_PASSWORD_ASSIGNMENT
+        UNSAFE_PASSWORD_ASSIGNMENT
     )
     assert duplicate_last_wins.returncode != 0
 
     duplicate_last_safe = run_guard(
-        "POSTGRES_PASSWORD=bad/password\n"
-        "POSTGRES_PASSWORD=Safe_Local-123.~\n"
+        UNSAFE_PASSWORD_ASSIGNMENT
+        SAFE_PASSWORD_ASSIGNMENT
     )
     assert duplicate_last_safe.returncode == 0, (
         duplicate_last_safe.stdout + duplicate_last_safe.stderr
