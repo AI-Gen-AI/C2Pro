@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import copy
+from pathlib import Path
 
 import pytest
 
-from validation.product.verify_prod_deployment_identity import IdentityError, verify
+from validation.product.verify_prod_deployment_identity import (
+    IdentityError,
+    _resolve_provider_input,
+    _resolve_output_path,
+    verify,
+)
 
 BACKEND = "a" * 40
 FRONTEND = "b" * 40
@@ -134,3 +140,39 @@ def test_railway_public_graphql_shapes_are_supported():
     assert result["backend"]["api"]["deployment_id"] == "dep_api"
     assert result["backend"]["worker"]["deployment_id"] == "dep_worker"
     assert result["backend"]["scheduler"]["deployment_id"] == "dep_scheduler"
+
+
+def test_provider_payload_paths_are_bounded_to_canonical_evidence_root(tmp_path: Path):
+    provider_root = tmp_path / "evidence/product-qualification/runtime/provider"
+    provider_root.mkdir(parents=True)
+    allowed = provider_root / "railway-api.json"
+    allowed.write_text("{}", encoding="utf-8")
+
+    assert (
+        _resolve_provider_input(
+            str(allowed),
+            expected_name="railway-api.json",
+            repo_root=tmp_path,
+        )
+        == allowed
+    )
+
+    with pytest.raises(IdentityError, match="canonical provider evidence"):
+        _resolve_provider_input(
+            str(tmp_path / "outside.json"),
+            expected_name="railway-api.json",
+            repo_root=tmp_path,
+        )
+
+
+def test_deployment_identity_output_is_exact_canonical_evidence_path(tmp_path: Path):
+    allowed = (
+        tmp_path
+        / "evidence/product-qualification/runtime/deployment-identity.json"
+    )
+    allowed.parent.mkdir(parents=True)
+
+    assert _resolve_output_path(str(allowed), repo_root=tmp_path) == allowed
+
+    with pytest.raises(IdentityError, match="canonical deployment identity output"):
+        _resolve_output_path(str(tmp_path / "outside.json"), repo_root=tmp_path)
