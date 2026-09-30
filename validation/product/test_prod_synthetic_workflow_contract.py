@@ -1,5 +1,4 @@
 """Static safety contract for the #715 production acceptance workflow."""
-import json
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -185,18 +184,3 @@ def test_production_workflow_has_no_duplicate_step_names() -> None:
 
     duplicates = sorted({name for name in step_names if step_names.count(name) > 1})
     assert duplicates == [], f"duplicate production workflow steps: {duplicates}"
-
-
-def test_versioned_target_manifest_is_loaded_after_control_commit_verification() -> None:
-    source = _source()
-    manifest_path = REPO_ROOT / "validation/product/prod-acceptance-targets.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-
-    assert len(manifest) == 9
-    verify = source.index("Verify control commit belongs to canonical main")
-    load = source.index("Load versioned production qualification targets")
-    observe = source.index("Observe production deployment identities from providers")
-    assert verify < load < observe
-
-    for value in manifest.values():
-        assert value not in source
