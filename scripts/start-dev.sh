@@ -36,9 +36,6 @@ fi
 # Validate the same effective PostgreSQL credential contract used by Compose
 python scripts/validate_local_postgres_password.py
 
-# Validate the same effective PostgreSQL credential contract used by Compose
-python scripts/validate_local_postgres_password.py
-
 # Step 1: Start infrastructure services
 echo -e "${YELLOW}[1/4] Starting infrastructure services (postgres, redis, minio)...${NC}"
 docker-compose up -d postgres redis minio
