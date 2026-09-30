@@ -47,7 +47,7 @@ def test_local_compose_requires_environment_supplied_postgres_password():
     assert "existing postgres_data volume" in quick_start
     assert "\\password postgres" in quick_start
     assert re.search(
-        r"(?m)^\\s*docker compose down -v\\s*$",
+        r"(?m)^\s*docker compose down -v\s*$",
         quick_start,
     ) is None
     assert '"volumes"]["postgres_data"]["name"]' in quick_start
