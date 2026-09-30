@@ -2,6 +2,7 @@ import { expect, type Page, type Request } from "@playwright/test";
 
 import {
   assertProductionJourneyPreflight,
+  requireProductionOrigin,
   type BrowserIdentityFacts,
 } from "./prod-preflight";
 
@@ -27,12 +28,14 @@ function credentials(): { email: string; password: string } {
   return { email, password };
 }
 
-function observeApplicationAuth(page: Page): {
+function observeApplicationAuth(
+  page: Page,
+  baseOrigin: string,
+): {
   facts: () => ObservedApplicationAuth;
 } {
   let tenantId: string | null = null;
   let bearerObserved = false;
-  const baseOrigin = new URL(productionBaseUrl()).origin;
 
   page.on("request", (request: Request) => {
     const url = new URL(request.url());
@@ -65,10 +68,11 @@ async function waitForClerkSession(page: Page): Promise<void> {
 export async function signInSyntheticProductionUser(
   page: Page,
 ): Promise<BrowserIdentityFacts> {
+  const baseOrigin = requireProductionOrigin(productionBaseUrl());
   const { email, password } = credentials();
-  const observed = observeApplicationAuth(page);
+  const observed = observeApplicationAuth(page, baseOrigin);
 
-  await page.goto(`${productionBaseUrl()}/sign-in`);
+  await page.goto(`${baseOrigin}/sign-in`);
   const identifier = page.locator('input[name="identifier"]');
   await expect(identifier).toBeVisible({ timeout: 30_000 });
   await identifier.fill(email);
@@ -84,7 +88,7 @@ export async function signInSyntheticProductionUser(
 
   // Force one ordinary product read so the exact application tenant header is
   // observed from AuthSync/Zustand, not inferred from a JWT or copied secret.
-  await page.goto(`${productionBaseUrl()}/projects`);
+  await page.goto(`${baseOrigin}/projects`);
   await expect(page.getByRole("heading", { name: /projects/i })).toBeVisible({
     timeout: 30_000,
   });
