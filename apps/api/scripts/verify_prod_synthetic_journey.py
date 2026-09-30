@@ -33,6 +33,8 @@ CHECK_ANALYSIS_PERSISTED = "analysis persisted"
 CHECK_TRUSTED_CANONICAL_ARTIFACT = "trusted canonical artifact"
 CHECK_PROJECT_GRAPH_COMPLETED = "ProjectGraph completed"
 CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT = "six-category Health snapshot"
+TENANT_ID_KEY = "tenant_id"
+PROJECT_ID_KEY = "project_id"
 
 
 class VerificationFailure(Exception):
@@ -97,7 +99,7 @@ async def _preflight_checks(
            AND coalesce((settings ->> 'synthetic_acceptance')::boolean, false) IS TRUE
             """
         ),
-        {"tenant_id": tenant_id, "clerk_org_id": clerk_org_id},
+        {TENANT_ID_KEY: tenant_id, "clerk_org_id": clerk_org_id},
     )
     foreign_projects = await _scalar(
         conn,
@@ -109,7 +111,7 @@ async def _preflight_checks(
            AND name NOT LIKE 'ACCEPT-706-%'
             """
         ),
-        {"tenant_id": tenant_id},
+        {TENANT_ID_KEY: tenant_id},
     )
     return [
         Check("synthetic tenant binding", eligible == 1, f"eligible_tenants={eligible}"),
@@ -124,7 +126,7 @@ async def _preflight_checks(
 async def _journey_checks(
     conn: AsyncConnection, *, tenant_id: UUID, project_id: UUID, require_hitl: bool
 ) -> list[Check]:
-    p = {"tenant_id": tenant_id, "project_id": project_id}
+    p = {TENANT_ID_KEY: tenant_id, PROJECT_ID_KEY: project_id}
     queries = {
         CHECK_SYNTHETIC_PROJECT_SCOPE: text("""
             SELECT count(*) FROM projects
@@ -232,12 +234,12 @@ async def _journey_identifiers(
              ORDER BY r.rev_no DESC
             """
         ),
-        {"tenant_id": tenant_id, "project_id": project_id},
+        {TENANT_ID_KEY: tenant_id, PROJECT_ID_KEY: project_id},
     )
     rows = result.all()
     if len(rows) != 1:
         return (
-            {"project_id": str(project_id)},
+            {PROJECT_ID_KEY: str(project_id)},
             Check(
                 "source revision resolved",
                 False,
@@ -247,7 +249,7 @@ async def _journey_identifiers(
     row = rows[0]
     return (
         {
-            "project_id": str(project_id),
+            PROJECT_ID_KEY: str(project_id),
             "document_id": str(row.document_id),
             "source_revision_id": str(row.revision_id),
         },
