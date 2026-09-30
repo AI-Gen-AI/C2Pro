@@ -59,16 +59,21 @@ export function sha256File(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
-export function assertProdPreflight(contract: ProdPreflightContract): void {
+export function requireProductionOrigin(baseUrl: string): string {
   let parsed: URL;
   try {
-    parsed = new URL(contract.baseUrl);
+    parsed = new URL(baseUrl);
   } catch {
     throw new ProdPreflightError("INVALID_BASE_URL");
   }
   if (parsed.protocol !== "https:" || !PRODUCTION_HOSTS.has(parsed.hostname)) {
     throw new ProdPreflightError("NON_PRODUCTION_HOST");
   }
+  return parsed.origin;
+}
+
+export function assertProdPreflight(contract: ProdPreflightContract): void {
+  requireProductionOrigin(contract.baseUrl);
 
   syntheticProjectName(contract.runId);
 
