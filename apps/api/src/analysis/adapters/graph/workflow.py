@@ -656,6 +656,27 @@ def get_graph_app() -> ProjectGraph:
     return _graph_app
 
 
+def _needs_rebinding(review: Any, thread_id: str) -> bool:
+    """Whether this attempt must (re)bind the review's checkpoint lineage.
+
+    #758. Keyed on the LINEAGE, not on the checkpoint id:
+
+    * nothing bound yet -> bind;
+    * bound to a DIFFERENT thread -> re-bind. Threads are authority-scoped,
+      so a different thread means a different processing attempt: this
+      attempt owns the review now and the recorded lineage belongs to a
+      superseded one.
+    * bound within THIS thread -> leave it alone, even though `aget_state`
+      may now report a later checkpoint on the same lineage. The bound
+      checkpoint is the interrupt point resume must replay; sliding the
+      binding forward within an attempt would move it off that point.
+    """
+    if not review.metadata.get("checkpoint_id"):
+        return True
+    recorded_thread: str | None = review.metadata.get("thread_id")
+    return recorded_thread != thread_id
+
+
 async def _persist_real_checkpoint_id(
     app: ProjectGraph,
     config: RunnableConfig,
@@ -680,6 +701,19 @@ async def _persist_real_checkpoint_id(
     thread when no checkpoint_id is given). A failure here must not fail the
     graph run -- it only means checkpoint_id stays unset and resume falls
     back to thread_id-only.
+
+    #758: the review is RE-BOUND when the lineage it currently records is
+    not this attempt's. A takeover legitimately inherits a review created
+    (and possibly already bound) by the attempt it replaced, and the old
+    "bind only when nothing is bound yet" guard left that review pointing at
+    the superseded attempt's checkpoint forever.
+
+    Reading state before opening the fenced transaction is safe now that
+    threads are authority-scoped: ``config`` names THIS attempt's thread, so
+    ``aget_state`` cannot observe another attempt's checkpoint no matter how
+    long the stale writer keeps appending. The binding itself is still
+    fenced, so a worker that lost authority between the read and the write
+    commits nothing.
     """
     if not document_id or not tenant_id:
         return
@@ -707,9 +741,13 @@ async def _persist_real_checkpoint_id(
                 document_id=UUID(document_id),
                 review_type="analysis_critique",
             )
-            if review is not None and not review.metadata.get("checkpoint_id"):
+            if review is not None and _needs_rebinding(review, thread_id):
+                superseded_thread = review.metadata.get("thread_id")
                 review.metadata["checkpoint_id"] = checkpoint_id
-                review.metadata.setdefault("thread_id", thread_id)
+                # Overwrite, never setdefault: after a takeover the recorded
+                # thread is the SUPERSEDED attempt's, and leaving it would
+                # point resume at a lineage this review no longer owns.
+                review.metadata["thread_id"] = thread_id
                 # C2PRO P0b reprocess/persist hotfix: a LEGACY row being
                 # adopted here (created before thread_id/checkpoint_id
                 # existed, or by a dedup hit on an even older row) may never
@@ -724,6 +762,12 @@ async def _persist_real_checkpoint_id(
                     thread_id=thread_id,
                     checkpoint_id=checkpoint_id,
                     document_id=document_id,
+                    # A rebind means this attempt took the review over from
+                    # another lineage: worth seeing in the log, because it is
+                    # the moment a stale attempt stops being resumable.
+                    rebound_from_thread_id=(
+                        superseded_thread if superseded_thread != thread_id else None
+                    ),
                 )
     except Exception:
         logger.warning("checkpoint_id_persist_failed", thread_id=thread_id, exc_info=True)
