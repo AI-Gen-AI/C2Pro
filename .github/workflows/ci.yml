@@ -1391,6 +1391,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Inject ignored local-secret sentinels
+        run: |
+          mkdir -p apps/api/config apps/api/tmp
+          printf '%s\n' '{"type":"service_account","private_key":"CI_SENTINEL"}' > apps/api/config/credentials.json
+          printf '%s\n' 'POSTGRES_PASSWORD=CI_SENTINEL' > apps/api/config/.env.production
+          printf '%s\n' 'CI_SENTINEL_DB' > apps/api/tmp/test.db
+
       - name: Build production API image
         run: docker build --file apps/api/Dockerfile --tag c2pro-api:ci apps/api
 
@@ -1409,6 +1416,9 @@ jobs:
             test ! -e /app/tests
             test ! -e /app/.env
             test ! -e /app/.env.example
+            test ! -e /app/config/credentials.json
+            test ! -e /app/config/.env.production
+            test ! -e /app/tmp/test.db
             test ! -e /app/migrate.py
             test ! -e /app/dev.py
             test ! -e /app/evals
