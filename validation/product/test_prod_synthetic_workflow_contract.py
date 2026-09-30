@@ -42,12 +42,15 @@ def test_provider_identity_is_checked_before_browser_mutation() -> None:
 
 def test_all_backend_runtime_roles_are_provider_verified() -> None:
     source = _source()
-    assert "PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID" in source
-    assert "PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID" in source
-    assert "PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID" in source
-    assert "--railway-api-json" in source
-    assert "--railway-worker-json" in source
-    assert "--railway-scheduler-json" in source
+    assert '"api:${PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID}"' in source
+    assert '"worker:${PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID}"' in source
+    assert '"scheduler:${PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID}"' in source
+    assert 'evidence/product-qualification/runtime/provider/railway-api.json' in source
+    assert 'evidence/product-qualification/runtime/provider/railway-worker.json' in source
+    assert 'evidence/product-qualification/runtime/provider/railway-scheduler.json' in source
+    assert "--railway-api-json" not in source
+    assert "--railway-worker-json" not in source
+    assert "--railway-scheduler-json" not in source
 
 
 def test_issue_690_credentials_fail_closed_before_browser_mutation() -> None:
