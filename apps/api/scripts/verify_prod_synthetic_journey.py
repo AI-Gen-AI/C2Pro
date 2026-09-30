@@ -21,6 +21,18 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 
+ASYNCPG_URL_PREFIX = ASYNCPG_URL_PREFIX
+CHECK_SYNTHETIC_PROJECT_SCOPE = CHECK_SYNTHETIC_PROJECT_SCOPE
+CHECK_DOCUMENT_PERSISTED = CHECK_DOCUMENT_PERSISTED
+CHECK_DOCUMENT_TERMINAL = CHECK_DOCUMENT_TERMINAL
+CHECK_CLAUSES_PERSISTED = CHECK_CLAUSES_PERSISTED
+CHECK_RAG_CHUNKS_PERSISTED = CHECK_RAG_CHUNKS_PERSISTED
+CHECK_ANALYSIS_PERSISTED = CHECK_ANALYSIS_PERSISTED
+CHECK_TRUSTED_CANONICAL_ARTIFACT = CHECK_TRUSTED_CANONICAL_ARTIFACT
+CHECK_PROJECT_GRAPH_COMPLETED = CHECK_PROJECT_GRAPH_COMPLETED
+CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT = CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT
+
+
 class VerificationFailure(Exception):
     """Synthetic production contract is not satisfied."""
 
@@ -33,12 +45,12 @@ class Check:
 
 
 def _normalize_database_url(raw: str) -> str:
-    if raw.startswith("postgresql+asyncpg://"):
+    if raw.startswith(ASYNCPG_URL_PREFIX):
         return raw
     if raw.startswith("postgresql://"):
-        return raw.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return raw.replace("postgresql://", ASYNCPG_URL_PREFIX, 1)
     if raw.startswith("postgres://"):
-        return raw.replace("postgres://", "postgresql+asyncpg://", 1)
+        return raw.replace("postgres://", ASYNCPG_URL_PREFIX, 1)
     return raw
 
 
@@ -94,43 +106,43 @@ async def _journey_checks(
 ) -> list[Check]:
     p = {"tenant_id": tenant_id, "project_id": project_id}
     queries = {
-        "synthetic project scope": """
+        CHECK_SYNTHETIC_PROJECT_SCOPE: """
             SELECT count(*) FROM projects
              WHERE id = :project_id AND tenant_id = :tenant_id
                AND name LIKE 'ACCEPT-706-%'
         """,
-        "document persisted": """
+        CHECK_DOCUMENT_PERSISTED: """
             SELECT count(*) FROM documents
              WHERE project_id = :project_id AND tenant_id = :tenant_id
         """,
-        "document terminal": """
+        CHECK_DOCUMENT_TERMINAL: """
             SELECT count(*) FROM documents
              WHERE project_id = :project_id AND tenant_id = :tenant_id
                AND upload_status::text IN ('analyzed','needs_changes')
         """,
-        "clauses persisted": """
+        CHECK_CLAUSES_PERSISTED: """
             SELECT count(*) FROM clauses
              WHERE project_id = :project_id AND tenant_id = :tenant_id
         """,
-        "RAG chunks persisted": """
+        CHECK_RAG_CHUNKS_PERSISTED: """
             SELECT count(*) FROM document_chunks
              WHERE project_id = :project_id AND tenant_id = :tenant_id
         """,
-        "analysis persisted": """
+        CHECK_ANALYSIS_PERSISTED: """
             SELECT count(*) FROM analyses
              WHERE project_id = :project_id AND tenant_id = :tenant_id
         """,
-        "trusted canonical artifact": """
+        CHECK_TRUSTED_CANONICAL_ARTIFACT: """
             SELECT count(*) FROM document_artifacts
              WHERE project_id = :project_id AND tenant_id = :tenant_id
                AND trust_state = 'trusted' AND lifecycle_status = 'active'
         """,
-        "ProjectGraph completed": """
+        CHECK_PROJECT_GRAPH_COMPLETED: """
             SELECT count(*) FROM project_events
              WHERE project_id = :project_id AND tenant_id = :tenant_id
                AND event_type = 'graph.completed'
         """,
-        "six-category Health snapshot": """
+        CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT: """
             SELECT count(*) FROM project_snapshots
              WHERE project_id = :project_id AND tenant_id = :tenant_id
                AND health_vector IS NOT NULL
@@ -141,15 +153,15 @@ async def _journey_checks(
     }
     values = {name: await _scalar(conn, sql, p) for name, sql in queries.items()}
     checks = [
-        Check("synthetic project scope", values["synthetic project scope"] == 1, f"projects={values['synthetic project scope']}"),
-        Check("document persisted", values["document persisted"] >= 1, f"documents={values['document persisted']}"),
-        Check("document terminal", values["document terminal"] >= 1, f"terminal_documents={values['document terminal']}"),
-        Check("clauses persisted", values["clauses persisted"] > 0, f"clauses={values['clauses persisted']}"),
-        Check("RAG chunks persisted", values["RAG chunks persisted"] > 0, f"chunks={values['RAG chunks persisted']}"),
-        Check("analysis persisted", values["analysis persisted"] > 0, f"analyses={values['analysis persisted']}"),
-        Check("trusted canonical artifact", values["trusted canonical artifact"] > 0, f"trusted_artifacts={values['trusted canonical artifact']}"),
-        Check("ProjectGraph completed", values["ProjectGraph completed"] > 0, f"graph_completed={values['ProjectGraph completed']}"),
-        Check("six-category Health snapshot", values["six-category Health snapshot"] > 0, f"health_snapshots={values['six-category Health snapshot']}"),
+        Check(CHECK_SYNTHETIC_PROJECT_SCOPE, values[CHECK_SYNTHETIC_PROJECT_SCOPE] == 1, f"projects={values['synthetic project scope']}"),
+        Check(CHECK_DOCUMENT_PERSISTED, values[CHECK_DOCUMENT_PERSISTED] >= 1, f"documents={values['document persisted']}"),
+        Check(CHECK_DOCUMENT_TERMINAL, values[CHECK_DOCUMENT_TERMINAL] >= 1, f"terminal_documents={values['document terminal']}"),
+        Check(CHECK_CLAUSES_PERSISTED, values[CHECK_CLAUSES_PERSISTED] > 0, f"clauses={values['clauses persisted']}"),
+        Check(CHECK_RAG_CHUNKS_PERSISTED, values[CHECK_RAG_CHUNKS_PERSISTED] > 0, f"chunks={values['RAG chunks persisted']}"),
+        Check(CHECK_ANALYSIS_PERSISTED, values[CHECK_ANALYSIS_PERSISTED] > 0, f"analyses={values['analysis persisted']}"),
+        Check(CHECK_TRUSTED_CANONICAL_ARTIFACT, values[CHECK_TRUSTED_CANONICAL_ARTIFACT] > 0, f"trusted_artifacts={values['trusted canonical artifact']}"),
+        Check(CHECK_PROJECT_GRAPH_COMPLETED, values[CHECK_PROJECT_GRAPH_COMPLETED] > 0, f"graph_completed={values['ProjectGraph completed']}"),
+        Check(CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT, values[CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT] > 0, f"health_snapshots={values['six-category Health snapshot']}"),
     ]
     if require_hitl:
         finalized = await _scalar(
