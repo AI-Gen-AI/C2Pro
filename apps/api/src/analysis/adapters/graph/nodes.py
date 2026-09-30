@@ -524,6 +524,68 @@ def route_after_human_interrupt(state: ProjectState) -> str:
     return "enrichment_dispatch"
 
 
+async def _claim_checkpoint_lineage_for_current_attempt(state: ProjectState) -> None:
+    """Bind the active review to THIS processing attempt's checkpoint thread.
+
+    #758. Deliberately narrow:
+
+    * no-ops outside a processing worker (``current_authority()`` is None), so
+      a direct HITL resume -- which re-executes this node from the top -- can
+      never rewrite the lineage it is resuming;
+    * no-ops unless this run's thread is authority-scoped, so legacy lineages
+      (including the UUID-style threads still present in production, which
+      carry no checkpoint id) keep working exactly as before;
+    * no-ops when the review already names this thread.
+
+    Fails CLOSED for an authority-scoped attempt: if ownership of the lineage
+    cannot be established, this attempt must not go on to present an
+    actionable review that resumes somebody else's checkpoint. Raising here
+    leaves the document pending and retryable, which is the honest outcome --
+    unlike the routing block above, which fails OPEN to an interrupt because
+    pausing for a human is safer than auto-approving.
+    """
+    from src.core.checkpoint_lineage import is_authority_scoped_analysis_thread
+    from src.core.processing_authority import current_authority
+
+    thread_id = state.get("thread_id")
+    tenant_id = state.get("tenant_id")
+    document_id = state.get("document_id")
+    if not thread_id or not tenant_id or not document_id:
+        return
+    if current_authority() is None:
+        return
+    if not is_authority_scoped_analysis_thread(thread_id):
+        return
+
+    async with get_session_with_tenant(UUID(tenant_id)) as session:
+        # Same fence as every other durable seam: a worker that lost
+        # authority cannot take a lineage over.
+        await fence_current(session)
+        service = get_hitl_service_for_graph(session=session, tenant_id=UUID(tenant_id))
+        review = await service.review_queue_repo.find_active_review(
+            document_id=UUID(document_id),
+            review_type="analysis_critique",
+        )
+        if review is None or review.metadata.get("thread_id") == thread_id:
+            return
+        row_id = review.metadata.get("row_id")
+        if not row_id:
+            raise RuntimeError(
+                "cannot claim the checkpoint lineage: active review for document "
+                f"{document_id} has no row identity"
+            )
+        superseded = review.metadata.get("thread_id")
+        await service.review_queue_repo.claim_checkpoint_lineage(
+            row_id=UUID(str(row_id)), thread_id=thread_id
+        )
+        structlog.get_logger().info(
+            "checkpoint_lineage_claimed",
+            document_id=document_id,
+            thread_id=thread_id,
+            superseded_thread_id=superseded,
+        )
+
+
 async def human_interrupt_node(state: ProjectState) -> ProjectState:
     """N13 — Route through HITL service and raise LangGraph Interrupt.
 
@@ -617,6 +679,22 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                 error_type=type(exc).__name__,
                 exc_info=True,
             )
+
+    # #758: take the review's checkpoint LINEAGE over before the interrupt
+    # becomes actionable.
+    #
+    # route_for_review deduplicates on the document, so a takeover adopts the
+    # review its predecessor created -- still carrying the SUPERSEDED thread
+    # and checkpoint. Binding the real checkpoint id afterwards is
+    # best-effort, so if it fails the only active review stays resumable
+    # through the dead attempt's lineage, and a later HITL approval runs
+    # outside processing authority where #711 can no longer repair it.
+    #
+    # Claiming the thread HERE, before interrupt() raises, is what keeps
+    # checkpoint-id capture safely best-effort: the thread alone is enough,
+    # because an authority-scoped thread holds exactly one attempt's
+    # checkpoints, so a thread-only restore is necessarily this attempt's.
+    await _claim_checkpoint_lineage_for_current_attempt(state)
 
     # C2PRO P0b true-resume hotfix: interrupt() does NOT return on the first
     # execution -- it raises GraphInterrupt and LangGraph persists the

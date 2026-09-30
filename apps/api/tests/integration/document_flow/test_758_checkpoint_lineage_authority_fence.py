@@ -41,7 +41,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.analysis.adapters.graph import workflow
-from src.analysis.adapters.graph.nodes import human_interrupt_node, route_after_human_interrupt
+from src.analysis.adapters.graph.nodes import (
+    _claim_checkpoint_lineage_for_current_attempt,
+    human_interrupt_node,
+    route_after_human_interrupt,
+)
 from src.analysis.adapters.graph.schema import ProjectState
 from src.core import checkpoint_lineage as lineage
 from src.core import processing_authority as pa
@@ -250,6 +254,7 @@ class _RealGraphWorker:
         entered: asyncio.Event | None = None,
         release: asyncio.Event | None = None,
         bind: bool = True,
+        fail_bind: bool = False,
     ) -> None:
         self.name = name
         self.saver = saver
@@ -257,6 +262,7 @@ class _RealGraphWorker:
         self.entered = entered
         self.release = release
         self.bind = bind
+        self.fail_bind = fail_bind
         self.thread_id: str | None = None
         self.checkpoint_ids: list[str] = []
         self.app: Any = None
@@ -280,8 +286,23 @@ class _RealGraphWorker:
         self.checkpoint_ids.append(await self._latest_checkpoint_id())
 
         if result.get("human_approval_required") and self.bind:
+            # fail_bind drives the REAL helper through its REAL failure path.
+            # Every failure mode it can hit -- checkpoint capture, the tenant
+            # session, find_active_review, the update/commit -- converges on
+            # the same `except Exception: log; return`, so a raising
+            # aget_state reproduces all of them observably.
+            app: Any = self.app
+            if self.fail_bind:
+
+                class _CaptureFails:
+                    checkpointer = self.saver
+
+                    async def aget_state(self, _config: dict[str, Any]) -> Any:
+                        raise RuntimeError("injected: checkpoint binding failed")
+
+                app = _CaptureFails()
             await workflow._persist_real_checkpoint_id(
-                self.app,
+                app,
                 self.config,
                 thread_id=thread_id,
                 document_id=state.get("document_id"),
@@ -808,3 +829,210 @@ def test_lineage_identity_is_deterministic_and_attempt_unique() -> None:
     legacy = lineage.analysis_thread_id(document_id=document_id, authority=None)
     assert lineage.is_legacy_shared_analysis_thread(legacy)
     assert not lineage.is_authority_scoped_analysis_thread(legacy)
+
+
+# ── the rebind-failure window (#758 principal review) ────────────────────────
+
+
+async def test_rebind_failure_must_not_leave_the_review_resumable_through_a(
+    db: AsyncSession,
+    test_user: Any,
+    worker: Any,
+    real_saver: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """B takes over, then FAILS to attach its lineage. The review must not stay A's.
+
+    `route_for_review` deduplicates on the document, so B's interrupt adopts
+    the review A created -- still carrying A's thread and checkpoint. If B's
+    binding then fails, the only active review remains resumable through a
+    SUPERSEDED lineage, and a later HITL approval runs outside processing
+    authority, so #711 cannot repair it at approval time.
+
+    Either the attempt fails closed (retryable, nothing declared ready) or
+    the review is bound to B's lineage before the interrupt is actionable.
+    Reporting `waiting_for_review` while the review still points at A is the
+    defect.
+    """
+    saver, register = real_saver
+    document = await _seed_analysable(db, test_user)
+    tenant = test_user.tenant_id
+
+    a = _RealGraphWorker("A", saver, register)
+    b = _RealGraphWorker("B", saver, register, fail_bind=True)
+
+    monkeypatch.setattr(pa, "LEASE_TTL_SECONDS", 1)
+    await ingestion_tasks._run_document_analysis(
+        tenant_id=tenant, document_id=document.id, orchestrator=a
+    )
+    rows = await _review(db, document.id)
+    assert rows[0].thread_id == a.thread_id
+    assert rows[0].checkpoint_id in a.checkpoint_ids, "A really did bind its own lineage"
+
+    await _expire_lease()
+    monkeypatch.setattr(pa, "LEASE_TTL_SECONDS", 60)
+    result_b = await ingestion_tasks._run_document_analysis(
+        tenant_id=tenant, document_id=document.id, orchestrator=b
+    )
+    assert b.thread_id is not None and b.thread_id != a.thread_id
+
+    rows = await _review(db, document.id)
+    assert len(rows) == 1, f"takeover must not duplicate the review: {rows}"
+    bound_thread, bound_checkpoint = rows[0].thread_id, rows[0].checkpoint_id
+
+    # The review must never remain addressable through the superseded lineage.
+    assert bound_thread != a.thread_id, (
+        "the only active review still names the SUPERSEDED attempt's lineage after "
+        f"B's binding failed (thread={bound_thread}, checkpoint={bound_checkpoint}); "
+        f"status={result_b['status']}"
+    )
+    assert bound_checkpoint not in a.checkpoint_ids
+
+    if result_b["status"] == "waiting_for_review":
+        # Declared ready: the lineage must be B-pure, with or without an
+        # exact checkpoint id (capture stays best-effort by design).
+        assert bound_thread == b.thread_id
+        assert await _owner_of(saver, bound_thread, bound_checkpoint) == "B"
+    else:
+        # Failed closed: nothing was declared ready, and the attempt is
+        # retryable rather than silently reporting a stale review.
+        assert result_b["status"] != "completed", result_b
+
+
+async def test_rebind_failure_leaves_a_resumable_b_pure_lineage(
+    db: AsyncSession,
+    test_user: Any,
+    worker: Any,
+    real_saver: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After a failed checkpoint capture, thread-only resume must still be B-pure.
+
+    checkpoint_id capture is deliberately best-effort and must stay that way
+    (making it mandatory would break legacy reviews that have none). What must
+    hold is that the thread the review names belongs to the current attempt,
+    so the thread-only fallback resolves the current owner's checkpoint.
+    """
+    saver, register = real_saver
+    document = await _seed_analysable(db, test_user)
+    tenant = test_user.tenant_id
+    DOWNSTREAM_RUNS.clear()
+
+    a = _RealGraphWorker("A", saver, register)
+    b = _RealGraphWorker("B", saver, register, fail_bind=True)
+
+    monkeypatch.setattr(pa, "LEASE_TTL_SECONDS", 1)
+    await ingestion_tasks._run_document_analysis(
+        tenant_id=tenant, document_id=document.id, orchestrator=a
+    )
+    await _expire_lease()
+    monkeypatch.setattr(pa, "LEASE_TTL_SECONDS", 60)
+    result_b = await ingestion_tasks._run_document_analysis(
+        tenant_id=tenant, document_id=document.id, orchestrator=b
+    )
+    if result_b["status"] != "waiting_for_review":
+        pytest.skip("attempt failed closed; the resumability contract is the other test")
+
+    # A keeps writing to its own lineage after losing authority.
+    await a.append_stale_checkpoint()
+
+    rows = await _review(db, document.id)
+    restored = await CheckpointService(checkpointer=saver).restore_checkpoint(
+        thread_id=rows[0].thread_id, checkpoint_id=rows[0].checkpoint_id
+    )
+    assert restored is not None, "the review must remain resumable"
+    resumed = await b.app.ainvoke(
+        Command(resume={"decision": "approve", "feedback": ""}), restored.config
+    )
+    assert "__interrupt__" not in resumed
+    assert DOWNSTREAM_RUNS == ["B"], (
+        f"approval replayed the superseded attempt's lineage: {DOWNSTREAM_RUNS}"
+    )
+
+
+# ── legacy lineage compatibility (verified production shape) ─────────────────
+
+
+async def test_legacy_uuid_review_still_resumes_and_is_never_claimed(
+    db: AsyncSession,
+    test_user: Any,
+    worker: Any,
+    real_saver: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production has pending reviews on legacy UUID threads with NO checkpoint id.
+
+    Read-only production inspection found 6 pending analysis_critique reviews,
+    all with checkpoint_id NULL, all on 36-character UUID thread ids (not
+    `document:{id}:analysis`), all with checkpoint records. They resume today
+    purely through the thread-only fallback, so #758 must not touch them:
+
+    * a legacy thread is not authority-scoped, so the lineage claim skips it;
+    * a direct resume runs with no ambient authority, so the claim skips it
+      again even if it were;
+    * and it must still restore and resume with no checkpoint id at all.
+    """
+    saver, register = real_saver
+    document = await _seed_analysable(db, test_user)
+    tenant = test_user.tenant_id
+    DOWNSTREAM_RUNS.clear()
+
+    # A legacy lineage: a bare UUID thread, exactly production's shape.
+    legacy_thread = str(uuid4())
+    register(legacy_thread)
+    assert len(legacy_thread) == 36
+    assert not lineage.is_authority_scoped_analysis_thread(legacy_thread)
+    assert not lineage.is_legacy_shared_analysis_thread(legacy_thread)
+
+    app = _build_interrupting_graph(saver)
+    legacy_state = {
+        "document_text": "",
+        "project_id": str(document.project_id),
+        "document_id": str(document.id),
+        "tenant_id": str(tenant),
+        "thread_id": legacy_thread,
+        "doc_type": "contract",
+        "critique_notes": "LEGACY",
+        "messages": [],
+        "extracted_risks": [],
+        "extracted_wbs": [],
+        "retry_count": 0,
+        "confidence_score": 0.0,
+        "human_feedback": "",
+        "human_approval_required": False,
+        "analysis_id": None,
+        "node_results": [],
+    }
+    # No ambient authority: this is how a legacy row came to exist and how a
+    # direct resume reaches this node.
+    assert pa.current_authority() is None
+    config = {"configurable": {"thread_id": legacy_thread}}
+    await app.ainvoke(legacy_state, config)
+
+    rows = await _review(db, document.id)
+    assert len(rows) == 1
+    assert rows[0].thread_id == legacy_thread
+    assert rows[0].checkpoint_id is None, "production's shape: no checkpoint id"
+
+    # Even with an authority ambiently bound, a legacy thread is never claimed.
+    async with worker.tenant_session(tenant) as s:
+        granted = await pa.acquire(
+            s, tenant_id=tenant, document_id=document.id, stage=pa.ProcessingStage.ANALYSIS
+        )
+    assert granted.authority is not None
+    with pa.bound_authority(granted.authority):
+        await _claim_checkpoint_lineage_for_current_attempt(legacy_state)  # type: ignore[arg-type]
+    rows = await _review(db, document.id)
+    assert rows[0].thread_id == legacy_thread, "a legacy lineage must never be rebound"
+    assert rows[0].checkpoint_id is None
+
+    # And it still resumes with no checkpoint id: thread-only fallback.
+    restored = await CheckpointService(checkpointer=saver).restore_checkpoint(
+        thread_id=rows[0].thread_id, checkpoint_id=rows[0].checkpoint_id
+    )
+    assert restored is not None, "legacy reviews must remain restorable"
+    resumed = await app.ainvoke(
+        Command(resume={"decision": "approve", "feedback": ""}), restored.config
+    )
+    assert "__interrupt__" not in resumed
+    assert DOWNSTREAM_RUNS == ["LEGACY"], "the legacy lineage must still resume"
