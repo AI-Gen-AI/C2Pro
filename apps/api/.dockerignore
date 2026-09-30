@@ -60,6 +60,14 @@ alembic/versions/__pycache__/
 *.tmp
 .DS_Store
 
+# Local environment/database material is also excluded recursively
+.env
+**/.env
+.env.*
+**/.env.*
+*.db
+**/*.db
+
 # Local/private credentials must never enter the Docker build context
 credentials.json
 **/credentials.json
