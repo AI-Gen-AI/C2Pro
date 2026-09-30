@@ -11,20 +11,21 @@ LEGACY_LOCAL_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/c2pro
 VALIDATOR_SCRIPT_NAME = "validate_local_postgres_password.py"
 SAFE_PASSWORD_ASSIGNMENT = "POSTGRES_PASSWORD=Safe_Local-123.~\n"
 UNSAFE_PASSWORD_ASSIGNMENT = "POSTGRES_PASSWORD=bad/password\n"
+TEXT_ENCODING = "utf-8"
 
 
 def test_local_compose_requires_environment_supplied_postgres_password():
-    compose = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
-    env_example = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
-    quick_start = (REPO_ROOT / "QUICK_START.md").read_text(encoding="utf-8")
-    root_readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
-    api_readme = (REPO_ROOT / "apps/api/README.md").read_text(encoding="utf-8")
+    compose = (REPO_ROOT / "docker-compose.yml").read_text(encoding=TEXT_ENCODING)
+    env_example = (REPO_ROOT / ".env.example").read_text(encoding=TEXT_ENCODING)
+    quick_start = (REPO_ROOT / "QUICK_START.md").read_text(encoding=TEXT_ENCODING)
+    root_readme = (REPO_ROOT / "README.md").read_text(encoding=TEXT_ENCODING)
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding=TEXT_ENCODING)
+    api_readme = (REPO_ROOT / "apps/api/README.md").read_text(encoding=TEXT_ENCODING)
     contract_flow = (REPO_ROOT / "scripts/prove_real_contract_flow.py").read_text(
-        encoding="utf-8"
+        encoding=TEXT_ENCODING
     )
     checkpointer_e2e = (REPO_ROOT / "scripts/test_checkpointer_e2e.py").read_text(
-        encoding="utf-8"
+        encoding=TEXT_ENCODING
     )
 
     assert "POSTGRES_PASSWORD: postgres" not in compose
@@ -41,8 +42,8 @@ def test_local_compose_requires_environment_supplied_postgres_password():
     assert "check-local-postgres-password" in makefile
     assert "python scripts/validate_local_postgres_password.py" in makefile
 
-    start_dev_sh = (REPO_ROOT / "scripts/start-dev.sh").read_text(encoding="utf-8")
-    start_dev_ps1 = (REPO_ROOT / "scripts/start-dev.ps1").read_text(encoding="utf-8")
+    start_dev_sh = (REPO_ROOT / "scripts/start-dev.sh").read_text(encoding=TEXT_ENCODING)
+    start_dev_ps1 = (REPO_ROOT / "scripts/start-dev.ps1").read_text(encoding=TEXT_ENCODING)
     assert quick_start.count(VALIDATOR_SCRIPT_NAME) >= 2
     assert VALIDATOR_SCRIPT_NAME in root_readme
     assert VALIDATOR_SCRIPT_NAME in start_dev_sh
@@ -74,7 +75,7 @@ def test_local_postgres_password_validator_matches_effective_precedence(
         if env_text is None:
             env_path.unlink(missing_ok=True)
         else:
-            env_path.write_text(env_text, encoding="utf-8")
+            env_path.write_text(env_text, encoding=TEXT_ENCODING)
 
         env = os.environ.copy()
         env.pop("POSTGRES_PASSWORD", None)
