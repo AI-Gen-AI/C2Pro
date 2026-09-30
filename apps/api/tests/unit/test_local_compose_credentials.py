@@ -112,6 +112,13 @@ def test_local_postgres_password_validator_matches_effective_precedence(
         unquoted_with_comment.stdout + unquoted_with_comment.stderr
     )
 
+    quoted_with_comment = run_guard(
+        'POSTGRES_PASSWORD="Safe_Local-123.~" # local password\n'
+    )
+    assert quoted_with_comment.returncode == 0, (
+        quoted_with_comment.stdout + quoted_with_comment.stderr
+    )
+
     unsafe_export_override = run_guard(
         "POSTGRES_PASSWORD=Safe_Local-123.~\n",
         exported="bad/password",
