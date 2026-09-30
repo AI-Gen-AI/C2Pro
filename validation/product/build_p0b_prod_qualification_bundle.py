@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,10 +16,68 @@ import yaml
 
 CONTROL_PATH = "validation/product/c2pro-master-product-control-v1.yaml"
 REPOSITORY = "AI-Gen-AI/C2Pro"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CANONICAL_RUN_JSON = Path("apps/web/playwright/.prod-acceptance/run.json")
+CANONICAL_VERIFIER_JSON = Path("evidence/product-qualification/runtime/verifier.json")
+QUALIFICATION_OUTPUT_ROOT = Path("evidence/product-qualification")
+FULL_SHA_RE = re.compile(r"[0-9a-fA-F]{40}")
 
 
 class BundleBuildError(RuntimeError):
     """Qualification inputs are incomplete or contradictory."""
+
+
+
+def _resolve_exact_evidence_path(
+    path: Path,
+    *,
+    expected: Path,
+    label: str,
+    repo_root: Path = REPO_ROOT,
+) -> Path:
+    root = repo_root.resolve()
+    candidate = path.resolve()
+    canonical = (root / expected).resolve()
+    if candidate != canonical:
+        raise BundleBuildError(f"{label} must use canonical evidence path")
+    return candidate
+
+
+def _resolve_run_json(path: Path, *, repo_root: Path = REPO_ROOT) -> Path:
+    return _resolve_exact_evidence_path(
+        path,
+        expected=CANONICAL_RUN_JSON,
+        label="canonical browser run evidence",
+        repo_root=repo_root,
+    )
+
+
+def _resolve_verifier_json(path: Path, *, repo_root: Path = REPO_ROOT) -> Path:
+    return _resolve_exact_evidence_path(
+        path,
+        expected=CANONICAL_VERIFIER_JSON,
+        label="canonical verifier evidence",
+        repo_root=repo_root,
+    )
+
+
+def _resolve_bundle_output(path: Path, *, repo_root: Path = REPO_ROOT) -> Path:
+    root = repo_root.resolve()
+    output_root = (root / QUALIFICATION_OUTPUT_ROOT).resolve()
+    candidate = path.resolve()
+    if (
+        candidate.parent != output_root
+        or candidate.suffix != ".yaml"
+        or not candidate.name.startswith("p0b-prod-gh-")
+    ):
+        raise BundleBuildError("output must use canonical qualification output")
+    return candidate
+
+
+def _require_full_sha(value: str, label: str) -> str:
+    if FULL_SHA_RE.fullmatch(value) is None:
+        raise BundleBuildError(f"{label} must be a full 40-character Git SHA")
+    return value.lower()
 
 
 def _sha256(path: Path) -> str:
@@ -33,6 +92,7 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def _control_at(commit_sha: str) -> dict[str, Any]:
+    commit_sha = _require_full_sha(commit_sha, "control commit")
     completed = subprocess.run(
         ["git", "show", f"{commit_sha}:{CONTROL_PATH}"],
         check=True,
@@ -282,27 +342,32 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
+        run_json = _resolve_run_json(args.run_json)
+        verifier_json = _resolve_verifier_json(args.verifier_json)
+        output = _resolve_bundle_output(args.output)
         bundle = build_bundle(
-            control_commit_sha=args.control_commit_sha,
-            backend_commit_sha=args.backend_commit_sha,
+            control_commit_sha=_require_full_sha(
+                args.control_commit_sha, "control commit"
+            ),
+            backend_commit_sha=_require_full_sha(args.backend_commit_sha, "backend commit"),
             backend_deployment_id=args.backend_deployment_id,
-            frontend_commit_sha=args.frontend_commit_sha,
+            frontend_commit_sha=_require_full_sha(args.frontend_commit_sha, "frontend commit"),
             frontend_deployment_id=args.frontend_deployment_id,
             recovery_evidence_ref=args.recovery_evidence_ref,
-            run_json=args.run_json,
-            verifier_json=args.verifier_json,
+            run_json=run_json,
+            verifier_json=verifier_json,
             require_hitl=args.require_hitl,
             observed_at=args.observed_at,
         )
     except Exception as exc:
         raise SystemExit(f"FAIL: qualification bundle build failed ({type(exc).__name__}: {exc})") from exc
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
         yaml.safe_dump(bundle, sort_keys=False, allow_unicode=False),
         encoding="utf-8",
     )
-    print(f"PASS: wrote qualification bundle to {args.output}")
+    print(f"PASS: wrote qualification bundle to {output}")
     return 0
 
 
