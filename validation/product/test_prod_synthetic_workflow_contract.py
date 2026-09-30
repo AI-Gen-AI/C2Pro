@@ -149,3 +149,17 @@ def test_production_playwright_projects_disable_sensitive_artifacts() -> None:
         assert 'trace: "off"' in snippet
         assert 'screenshot: "off"' in snippet
         assert 'video: "off"' in snippet
+
+
+def test_operator_deployment_ids_are_validated_before_provider_calls() -> None:
+    source = _source()
+    gate = source.index("Fail closed on operator intent and branch")
+    providers = source.index("Observe production deployment identities from providers")
+    window = source[gate:providers]
+
+    assert "PROD_INPUT_BACKEND_DEPLOYMENT_ID" in window
+    assert "PROD_INPUT_FRONTEND_DEPLOYMENT_ID" in window
+    assert "RAILWAY_DEPLOYMENT_ID_RE" in window
+    assert "VERCEL_DEPLOYMENT_ID_RE" in window
+    assert "PROD_INPUT_BACKEND_DEPLOYMENT_ID" in window
+    assert "PROD_INPUT_FRONTEND_DEPLOYMENT_ID" in window
