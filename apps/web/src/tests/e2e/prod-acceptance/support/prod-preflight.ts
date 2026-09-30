@@ -4,10 +4,13 @@ import { fileURLToPath } from "node:url";
 import {
   assertProdPreflight,
   requireProdAcceptanceEnv,
+  requireProductionOrigin,
   sha256File,
   syntheticProjectName,
   type ProdPreflightContract,
 } from "../../../../../lib/prod-acceptance/preflight";
+
+export { requireProductionOrigin };
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const PROD_ACCEPTANCE_FIXTURE = path.resolve(
