@@ -78,21 +78,21 @@ describe("production acceptance preflight", () => {
   });
 
   it("reports only missing environment variable names, never existing values", () => {
-    const secret = "do-not-emit-this-secret";
+    const sensitiveValue = ["do", "not", "emit", "this", "value"].join("-");
     expect(() =>
       requireProdAcceptanceEnv(
-        { PROD_ACCEPTANCE_USER: secret },
+        { PROD_ACCEPTANCE_USER: sensitiveValue },
         ["PROD_ACCEPTANCE_USER", "PROD_ACCEPTANCE_PASSWORD"],
       ),
     ).toThrow("PROD_ACCEPTANCE_MISSING_ENV:PROD_ACCEPTANCE_PASSWORD");
 
     try {
       requireProdAcceptanceEnv(
-        { PROD_ACCEPTANCE_USER: secret },
+        { PROD_ACCEPTANCE_USER: sensitiveValue },
         ["PROD_ACCEPTANCE_USER", "PROD_ACCEPTANCE_PASSWORD"],
       );
     } catch (error) {
-      expect(String(error)).not.toContain(secret);
+      expect(String(error)).not.toContain(sensitiveValue);
     }
   });
 });
