@@ -80,8 +80,8 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --chown=appuser:appgroup src/ ./src/
 COPY --chown=appuser:appgroup alembic/ ./alembic/
 COPY --chown=appuser:appgroup alembic.ini ./alembic.ini
-COPY --chown=appuser:appgroup scripts/ ./scripts/
-COPY --chown=appuser:appgroup start.sh ./start.sh
+COPY --chown=root:appgroup scripts/ ./scripts/
+COPY --chown=root:appgroup start.sh ./start.sh
 RUN sed -i 's/\r$//' /app/start.sh /app/scripts/*.sh
 
 # Create uploads directory with proper ownership for non-root user
