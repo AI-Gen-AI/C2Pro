@@ -14,17 +14,25 @@ from validation.product.verify_prod_deployment_identity import (
 
 BACKEND = "a" * 40
 FRONTEND = "b" * 40
+FRONTEND_PROJECT = "prj_c2pro"
 
 
 def railway(service_id: str, *, sha: str = BACKEND, status: str = "SUCCESS"):
     return [{"id": service_id, "status": status, "meta": {"commitHash": sha}}]
 
 
-def vercel(*, sha: str = FRONTEND, state: str = "READY", target: str = "production"):
+def vercel(
+    *,
+    sha: str = FRONTEND,
+    state: str = "READY",
+    target: str = "production",
+    project_id: str = FRONTEND_PROJECT,
+):
     return {
         "uid": "dpl_frontend",
         "readyState": state,
         "target": target,
+        "project": {"id": project_id},
         "meta": {"githubCommitSha": sha},
     }
 
@@ -39,6 +47,7 @@ def run(**overrides):
         "expected_api_deployment": "dep_api",
         "expected_frontend_sha": FRONTEND,
         "expected_frontend_deployment": "dpl_frontend",
+        "expected_frontend_project": FRONTEND_PROJECT,
     }
     kwargs.update(overrides)
     return verify(**kwargs)
@@ -71,6 +80,19 @@ def test_frontend_provider_sha_mismatch_fails_closed():
 def test_frontend_provider_deployment_mismatch_fails_closed():
     with pytest.raises(IdentityError, match="deployment id"):
         run(expected_frontend_deployment="dpl_not_observed")
+
+
+def test_frontend_provider_project_mismatch_fails_closed():
+    with pytest.raises(IdentityError, match="project"):
+        run(frontend_payload=vercel(project_id="prj_other"))
+
+
+def test_frontend_project_id_flat_shape_is_supported():
+    payload = vercel()
+    payload.pop("project")
+    payload["projectId"] = FRONTEND_PROJECT
+    result = run(frontend_payload=payload)
+    assert result["frontend"]["project_id"] == FRONTEND_PROJECT
 
 
 def test_nonproduction_frontend_fails_closed():
