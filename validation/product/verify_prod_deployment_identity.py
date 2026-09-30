@@ -23,26 +23,17 @@ class IdentityError(RuntimeError):
     pass
 
 
-def _resolve_provider_input(
-    raw: str, *, expected_name: str, repo_root: Path = REPO_ROOT
-) -> Path:
-    root = repo_root.resolve()
-    expected = (root / PROVIDER_EVIDENCE_ROOT / expected_name).resolve()
-    supplied = Path(raw)
-    candidate = (supplied if supplied.is_absolute() else root / supplied).resolve()
-    if candidate != expected or not candidate.is_file():
-        raise IdentityError("provider JSON must use canonical provider evidence")
-    return candidate
+def _provider_input(expected_name: str, *, repo_root: Path = REPO_ROOT) -> Path:
+    """Return one canonical provider evidence input."""
+    path = repo_root.resolve() / PROVIDER_EVIDENCE_ROOT / expected_name
+    if not path.is_file():
+        raise IdentityError("canonical provider evidence is missing")
+    return path
 
 
-def _resolve_output_path(raw: str, *, repo_root: Path = REPO_ROOT) -> Path:
-    root = repo_root.resolve()
-    expected = (root / DEPLOYMENT_IDENTITY_OUTPUT).resolve()
-    supplied = Path(raw)
-    candidate = (supplied if supplied.is_absolute() else root / supplied).resolve()
-    if candidate != expected:
-        raise IdentityError("output-json must use canonical deployment identity output")
-    return candidate
+def _output_path(*, repo_root: Path = REPO_ROOT) -> Path:
+    """Return the single canonical deployment identity output."""
+    return repo_root.resolve() / DEPLOYMENT_IDENTITY_OUTPUT
 
 
 def _load(path: Path) -> Any:
@@ -179,44 +170,23 @@ def verify(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--railway-api-json", required=True)
-    parser.add_argument("--railway-worker-json", required=True)
-    parser.add_argument("--railway-scheduler-json", required=True)
-    parser.add_argument("--vercel-json", required=True)
     parser.add_argument("--expected-backend-sha", required=True)
     parser.add_argument("--expected-api-deployment", required=True)
     parser.add_argument("--expected-frontend-sha", required=True)
     parser.add_argument("--expected-frontend-deployment", required=True)
-    parser.add_argument("--output-json", required=True)
     args = parser.parse_args()
 
     result = verify(
-        api_payload=_load(
-            _resolve_provider_input(
-                args.railway_api_json, expected_name="railway-api.json"
-            )
-        ),
-        worker_payload=_load(
-            _resolve_provider_input(
-                args.railway_worker_json, expected_name="railway-worker.json"
-            )
-        ),
-        scheduler_payload=_load(
-            _resolve_provider_input(
-                args.railway_scheduler_json, expected_name="railway-scheduler.json"
-            )
-        ),
-        frontend_payload=_load(
-            _resolve_provider_input(
-                args.vercel_json, expected_name="vercel-frontend.json"
-            )
-        ),
+        api_payload=_load(_provider_input("railway-api.json")),
+        worker_payload=_load(_provider_input("railway-worker.json")),
+        scheduler_payload=_load(_provider_input("railway-scheduler.json")),
+        frontend_payload=_load(_provider_input("vercel-frontend.json")),
         expected_backend_sha=args.expected_backend_sha,
         expected_api_deployment=args.expected_api_deployment,
         expected_frontend_sha=args.expected_frontend_sha,
         expected_frontend_deployment=args.expected_frontend_deployment,
     )
-    output = _resolve_output_path(args.output_json)
+    output = _output_path()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print("production deployment identities verified")
