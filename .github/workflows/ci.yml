@@ -78,18 +78,7 @@ jobs:
               - "apps/api/alembic/**"
               - "supabase/migrations/**"
             backend_docker:
-              - "apps/api/Dockerfile"
-              - "apps/api/.dockerignore"
-              - "apps/api/requirements.txt"
-              - "apps/api/constraints.txt"
-              - "apps/api/src/**"
-              - "apps/api/alembic/**"
-              - "apps/api/alembic.ini"
-              - "apps/api/scripts/run_api.sh"
-              - "apps/api/scripts/run_worker.sh"
-              - "apps/api/scripts/run_scheduler.sh"
-              - "apps/api/scripts/wait_for_schema.py"
-              - "apps/api/start.sh"
+              - "apps/api/**"
               - ".github/workflows/ci.yml"
 
   # ──────────────────────────── Backend lane ────────────────────────────
