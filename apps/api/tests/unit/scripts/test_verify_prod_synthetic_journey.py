@@ -59,3 +59,19 @@ def test_verifier_forces_read_only_transaction_and_has_no_write_sql() -> None:
     assert 'text("SET TRANSACTION READ ONLY")' in source
     for keyword in ("INSERT INTO", "UPDATE ", "DELETE FROM"):
         assert keyword not in source
+
+
+def test_output_json_path_is_bounded_to_canonical_evidence_file(tmp_path: Path) -> None:
+    allowed = tmp_path / "evidence/product-qualification/runtime/verifier.json"
+    allowed.parent.mkdir(parents=True)
+
+    assert MODULE._resolve_output_json_path(str(allowed), repo_root=tmp_path) == allowed
+
+    with pytest.raises(MODULE.VerificationFailure, match="canonical evidence path"):
+        MODULE._resolve_output_json_path(
+            str(tmp_path / "evidence/product-qualification/runtime/../outside.json"),
+            repo_root=tmp_path,
+        )
+
+    with pytest.raises(MODULE.VerificationFailure, match="canonical evidence path"):
+        MODULE._resolve_output_json_path(str(tmp_path / "outside.json"), repo_root=tmp_path)
