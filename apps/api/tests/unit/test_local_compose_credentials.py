@@ -8,6 +8,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 LEGACY_LOCAL_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/c2pro"
+VALIDATOR_SCRIPT_NAME = "validate_local_postgres_password.py"
+SAFE_PASSWORD_ASSIGNMENT = "POSTGRES_PASSWORD=Safe_Local-123.~\\n"
+UNSAFE_PASSWORD_ASSIGNMENT = "POSTGRES_PASSWORD=bad/password\\n"
 
 
 def test_local_compose_requires_environment_supplied_postgres_password():
@@ -40,10 +43,10 @@ def test_local_compose_requires_environment_supplied_postgres_password():
 
     start_dev_sh = (REPO_ROOT / "scripts/start-dev.sh").read_text(encoding="utf-8")
     start_dev_ps1 = (REPO_ROOT / "scripts/start-dev.ps1").read_text(encoding="utf-8")
-    assert quick_start.count("validate_local_postgres_password.py") >= 2
-    assert "validate_local_postgres_password.py" in root_readme
-    assert "validate_local_postgres_password.py" in start_dev_sh
-    assert "validate_local_postgres_password.py" in start_dev_ps1
+    assert quick_start.count(VALIDATOR_SCRIPT_NAME) >= 2
+    assert VALIDATOR_SCRIPT_NAME in root_readme
+    assert VALIDATOR_SCRIPT_NAME in start_dev_sh
+    assert VALIDATOR_SCRIPT_NAME in start_dev_ps1
 
     assert "existing postgres_data volume" in quick_start
     assert "\\password postgres" in quick_start
@@ -60,7 +63,7 @@ def test_local_compose_requires_environment_supplied_postgres_password():
 def test_local_postgres_password_validator_matches_effective_precedence(
     tmp_path: Path,
 ) -> None:
-    validator = REPO_ROOT / "scripts" / "validate_local_postgres_password.py"
+    validator = REPO_ROOT / "scripts" / VALIDATOR_SCRIPT_NAME
 
     def run_guard(
         env_text: str | None,
