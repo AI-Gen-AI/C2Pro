@@ -97,7 +97,8 @@ def test_make_local_postgres_password_guard_executes_in_shell(tmp_path: Path) ->
         unsafe_export_override.stdout + unsafe_export_override.stderr
     )
 
-    safe_export_without_file = run_guard(None, exported="Safe_Export-123.~")
-    assert safe_export_without_file.returncode == 0, (
-        safe_export_without_file.stdout + safe_export_without_file.stderr
+    exported_without_file = run_guard(None, exported="Safe_Export-123.~")
+    assert exported_without_file.returncode != 0
+    assert ".env is required" in (
+        exported_without_file.stdout + exported_without_file.stderr
     )
