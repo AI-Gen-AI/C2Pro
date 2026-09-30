@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -40,30 +42,48 @@ def _load(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _dict_rows(rows: Any) -> list[dict[str, Any]]:
+    if not isinstance(rows, list):
+        return []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def _graphql_deployments(data: Any) -> list[dict[str, Any]]:
+    if not isinstance(data, dict):
+        return []
+
+    single = data.get("deployment")
+    if isinstance(single, dict):
+        return [single]
+
+    connection = data.get("deployments")
+    if not isinstance(connection, dict):
+        return []
+
+    edges = connection.get("edges")
+    if not isinstance(edges, list):
+        return []
+
+    return [
+        edge["node"]
+        for edge in edges
+        if isinstance(edge, dict) and isinstance(edge.get("node"), dict)
+    ]
+
+
 def _deployments(payload: Any) -> list[dict[str, Any]]:
     if isinstance(payload, list):
-        return [row for row in payload if isinstance(row, dict)]
-    if isinstance(payload, dict):
-        # Railway public GraphQL responses.
-        data = payload.get("data")
-        if isinstance(data, dict):
-            single = data.get("deployment")
-            if isinstance(single, dict):
-                return [single]
-            connection = data.get("deployments")
-            if isinstance(connection, dict):
-                edges = connection.get("edges")
-                if isinstance(edges, list):
-                    return [
-                        edge["node"]
-                        for edge in edges
-                        if isinstance(edge, dict) and isinstance(edge.get("node"), dict)
-                    ]
-        # Provider-normalized fixtures / future bounded adapters.
-        rows = payload.get("deployments")
-        if isinstance(rows, list):
-            return [row for row in rows if isinstance(row, dict)]
-    raise IdentityError("provider deployment payload has no deployments list")
+        rows = _dict_rows(payload)
+    elif isinstance(payload, dict):
+        rows = _graphql_deployments(payload.get("data"))
+        if not rows:
+            rows = _dict_rows(payload.get("deployments"))
+    else:
+        rows = []
+
+    if not rows:
+        raise IdentityError("provider deployment payload has no deployments list")
+    return rows
 
 
 def _railway_latest(payload: Any, *, service: str) -> dict[str, str]:
@@ -180,13 +200,55 @@ def verify(
     }
 
 
+FULL_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+VERCEL_DEPLOYMENT_RE = re.compile(r"^dpl_[A-Za-z0-9]{20,64}$")
+VERCEL_PROJECT_RE = re.compile(r"^prj_[A-Za-z0-9]{8,64}$")
+
+
+def _full_sha_arg(raw: str) -> str:
+    if not FULL_SHA_RE.fullmatch(raw):
+        raise argparse.ArgumentTypeError("must be a full 40-character Git SHA")
+    return raw.lower()
+
+
+def _railway_deployment_arg(raw: str) -> str:
+    try:
+        return str(UUID(raw))
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a Railway deployment UUID") from exc
+
+
+def _vercel_deployment_arg(raw: str) -> str:
+    if not VERCEL_DEPLOYMENT_RE.fullmatch(raw):
+        raise argparse.ArgumentTypeError("must be a Vercel deployment id")
+    return raw
+
+
+def _vercel_project_arg(raw: str) -> str:
+    if not VERCEL_PROJECT_RE.fullmatch(raw):
+        raise argparse.ArgumentTypeError("must be a Vercel project id")
+    return raw
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--expected-backend-sha", required=True)
-    parser.add_argument("--expected-api-deployment", required=True)
-    parser.add_argument("--expected-frontend-sha", required=True)
-    parser.add_argument("--expected-frontend-deployment", required=True)
-    parser.add_argument("--expected-frontend-project", required=True)
+    parser.add_argument("--expected-backend-sha", required=True, type=_full_sha_arg)
+    parser.add_argument(
+        "--expected-api-deployment",
+        required=True,
+        type=_railway_deployment_arg,
+    )
+    parser.add_argument("--expected-frontend-sha", required=True, type=_full_sha_arg)
+    parser.add_argument(
+        "--expected-frontend-deployment",
+        required=True,
+        type=_vercel_deployment_arg,
+    )
+    parser.add_argument(
+        "--expected-frontend-project",
+        required=True,
+        type=_vercel_project_arg,
+    )
     args = parser.parse_args()
 
     result = verify(
