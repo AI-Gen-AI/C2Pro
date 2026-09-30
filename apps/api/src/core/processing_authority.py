@@ -48,7 +48,10 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
+import structlog
 from sqlalchemy import text
+
+logger = structlog.get_logger()
 
 LEASE_TTL_SECONDS = 300
 
@@ -310,7 +313,20 @@ async def begin_generation(
 
     Runs in the caller's transaction, with the document reset it belongs to.
     Bumps generation AND fence, so every earlier attempt is superseded.
+
+    #758: a pending HITL review must stop being resumable at THIS boundary,
+    not later when the replacement attempt happens to reach the HITL gate.
+    Parsing and RAG run in between, and in that window an approval of the
+    inherited review resumes a lineage the new revision has already
+    invalidated. The generation bump is itself what makes a review's recorded
+    lineage stale (see :mod:`src.core.resume_lineage`); the stamp below only
+    brings LEGACY rows, which record no lineage at all, into the same
+    comparison. Everything lands in the caller's transaction, so "the new
+    generation is authoritative" and "the superseded review is not resumable"
+    commit together or not at all.
     """
+    from src.core import resume_lineage
+
     await _set_tenant(session, tenant_id)
     row = (
         await session.execute(
@@ -326,7 +342,21 @@ async def begin_generation(
         raise ProcessingAuthorityLost(
             f"document {document_id} processing row belongs to another tenant"
         )
-    return int(row.generation)
+    generation = int(row.generation)
+    superseded = await resume_lineage.stamp_superseded_reviews(
+        session,
+        tenant_id=tenant_id,
+        document_id=document_id,
+        superseded_generation=generation - 1,
+    )
+    if superseded:
+        logger.info(
+            "review_lineage_superseded_by_generation",
+            document_id=str(document_id),
+            generation=generation,
+            review_row_ids=[str(row_id) for row_id in superseded],
+        )
+    return generation
 
 
 async def _ensure_row(

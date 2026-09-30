@@ -714,6 +714,12 @@ async def _persist_real_checkpoint_id(
     long the stale writer keeps appending. The binding itself is still
     fenced, so a worker that lost authority between the read and the write
     commits nothing.
+
+    A rebind here also re-stamps the review's processing lineage from this
+    attempt's #711 grant. Moving the thread without it would leave the row
+    naming THIS attempt's thread beside the SUPERSEDED attempt's generation
+    and fence -- a contradiction that :mod:`src.core.resume_lineage` reads as
+    "not current", stranding a review this attempt legitimately owns.
     """
     if not document_id or not tenant_id:
         return
@@ -731,7 +737,8 @@ async def _persist_real_checkpoint_id(
 
         from src.analysis.adapters.graph.dependencies import get_hitl_service_for_graph
         from src.core.database import get_session_with_tenant
-        from src.core.processing_authority import fence_current
+        from src.core.processing_authority import current_authority, fence_current
+        from src.core.resume_lineage import authority_lineage
 
         async with get_session_with_tenant(UUID(tenant_id)) as session:
             # #711: only the current processing owner may bind a checkpoint.
@@ -743,6 +750,19 @@ async def _persist_real_checkpoint_id(
             )
             if review is not None and _needs_rebinding(review, thread_id):
                 superseded_thread = review.metadata.get("thread_id")
+                rebound = superseded_thread is not None and superseded_thread != thread_id
+                if rebound:
+                    # Take the lineage over first, as its own statement: it is
+                    # the only way to move the (thread, generation, fence)
+                    # identity together and to null the superseded checkpoint
+                    # id, which update_review_item deliberately cannot do.
+                    generation, fencing_token = authority_lineage(current_authority())
+                    await service.review_queue_repo.claim_checkpoint_lineage(
+                        row_id=UUID(str(review.metadata["row_id"])),
+                        thread_id=thread_id,
+                        lineage_generation=generation,
+                        lineage_fencing_token=fencing_token,
+                    )
                 review.metadata["checkpoint_id"] = checkpoint_id
                 # Overwrite, never setdefault: after a takeover the recorded
                 # thread is the SUPERSEDED attempt's, and leaving it would
@@ -765,9 +785,7 @@ async def _persist_real_checkpoint_id(
                     # A rebind means this attempt took the review over from
                     # another lineage: worth seeing in the log, because it is
                     # the moment a stale attempt stops being resumable.
-                    rebound_from_thread_id=(
-                        superseded_thread if superseded_thread != thread_id else None
-                    ),
+                    rebound_from_thread_id=superseded_thread if rebound else None,
                 )
     except Exception:
         logger.warning("checkpoint_id_persist_failed", thread_id=thread_id, exc_info=True)

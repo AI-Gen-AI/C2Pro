@@ -42,10 +42,12 @@ from src.analysis.application.persist_resume_analysis import (
 from src.core.auth.models import Tenant, User
 from src.documents.adapters.persistence.models import DocumentORM
 from src.modules.hitl.adapters.persistence import resume_ownership
+from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.adapters.persistence.resume_ownership import (
     OwnershipError,
     Phase,
 )
+from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
 from src.temporal.adapters.persistence.models import ProjectEventORM
 from src.wbs.adapters.persistence.models import WBSNodeORM
@@ -101,7 +103,16 @@ async def connections(db):
 
 
 async def _seed(db: AsyncSession, tenant: Tenant) -> tuple[UUID, UUID, UUID]:
-    """A project, a document and a review row id to hang an operation on."""
+    """A project, a document and the REAL review row an operation belongs to.
+
+    #758: the review is a genuine row, not a bare uuid. An operation only ever
+    exists for a review that exists -- `acquire` is reached from a loaded
+    review and finalization updates that row by primary key -- and ownership
+    is now bound to the review's checkpoint lineage, so a synthetic id is
+    refused as `review_row_missing` and would prove nothing about fencing. The
+    row carries the same pre-#758 shared thread `_acquire` authorizes against
+    and no lineage columns, which is the legacy shape these cases exercise.
+    """
     project_id, document_id = uuid4(), uuid4()
     db.add(
         ProjectORM(
@@ -124,7 +135,25 @@ async def _seed(db: AsyncSession, tenant: Tenant) -> tuple[UUID, UUID, UUID]:
         )
     )
     await db.commit()
-    return project_id, document_id, uuid4()
+    review = ReviewItemORM(
+        id=uuid4(),
+        item_id=document_id,
+        item_type="contract",
+        current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+        confidence=0.9,
+        impact_level=ImpactLevel.HIGH,
+        tenant_id=tenant.id,
+        sla_due_date=datetime.now(),
+        item_data={},
+        review_metadata={"tenant_id": str(tenant.id)},
+        project_id=project_id,
+        document_id=document_id,
+        review_type="analysis_critique",
+        thread_id=f"document:{document_id}:analysis",
+    )
+    db.add(review)
+    await db.commit()
+    return project_id, document_id, review.id
 
 
 async def _acquire(connections, tenant, project_id, document_id, review_row_id, **kw):

@@ -47,14 +47,25 @@ from src.analysis.adapters.graph.nodes import (
     human_interrupt_node,
     route_after_human_interrupt,
 )
+from src.analysis.adapters.graph.review_lineage import (
+    claim_review_lineage_for_current_attempt,
+)
 from src.analysis.adapters.graph.schema import ProjectState
 from src.core import checkpoint_lineage as lineage
 from src.core import processing_authority as pa
+from src.core import resume_lineage
 from src.core.tasks import ingestion_tasks
+from src.documents.adapters.persistence.sqlalchemy_document_repository import (
+    SqlAlchemyDocumentRepository,
+)
 from src.documents.adapters.rag import rag_service as rag_service_module
 from src.modules.hitl.adapters.checkpoint_service import CheckpointService
+from src.modules.hitl.adapters.persistence import resume_ownership
 from src.modules.hitl.adapters.persistence.repository import (
     SqlAlchemyReviewQueueRepository,
+)
+from src.modules.hitl.application import (
+    resume_workflow_use_case as resume_workflow_module,
 )
 from src.modules.hitl.application.resume_workflow_use_case import (
     ResumeWorkflowRequest,
@@ -1267,3 +1278,311 @@ async def test_claim_to_checkpoint_crash_window_is_recoverable_and_never_false_s
     rows = await _review(db, document.id)
     assert rows[0].thread_id == c.thread_id
     assert await _owner_of(saver, rows[0].thread_id, rows[0].checkpoint_id) == "C"
+
+
+# ── P1-1: the generation / reupload window ──────────────────────────────────
+
+
+async def test_new_generation_ends_resumability_before_analysis_runs(
+    db: AsyncSession,
+    test_user: Any,
+    worker: Any,
+    real_saver: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A new revision/reprocess must invalidate the inherited review AT ONCE.
+
+    The claim at the HITL gate -- and even the claim before the graph starts
+    -- happens after the new generation is already authoritative. Parsing and
+    RAG run in between, and that whole interval was a window in which the
+    pending review still named the superseded revision's lineage and stayed
+    approvable. For a reupload that means approving an analysis of the
+    PREVIOUS file.
+
+    So this asserts the boundary itself: the generation transition commits,
+    nothing else has run, and the review is already non-resumable. B is then
+    allowed to proceed and must establish its own actionable checkpoint,
+    because "permanently stuck" would be a different bug.
+    """
+    saver, register = real_saver
+    document = await _seed_analysable(db, test_user)
+    tenant = test_user.tenant_id
+    DOWNSTREAM_RUNS.clear()
+
+    a = _RealGraphWorker("A", saver, register)
+    monkeypatch.setattr(pa, "LEASE_TTL_SECONDS", 60)
+    await ingestion_tasks._run_document_analysis(
+        tenant_id=tenant, document_id=document.id, orchestrator=a
+    )
+    rows = await _review(db, document.id)
+    assert rows[0].thread_id == a.thread_id
+    assert rows[0].checkpoint_id in a.checkpoint_ids, "the review is bound to A"
+    review_item_id = rows[0].item_id
+    generation_a = int((await _op(db, document.id)).generation)
+
+    # The production generation transition, called exactly as the reprocess
+    # route and the reupload use case call it: in the caller's transaction,
+    # committed with the document reset it belongs to.
+    async with worker.tenant_session(tenant) as session:
+        repo = SqlAlchemyDocumentRepository(session=session)
+        generation_b = await repo.begin_processing_generation(tenant, document.id)
+    assert generation_b == generation_a + 1
+
+    # NOTHING else has happened: no parsing, no RAG, no graph, no claim.
+    rows = await _review(db, document.id)
+    assert rows[0].thread_id == a.thread_id, (
+        "the review still names A's lineage -- which is the point: it must be "
+        "non-resumable because the DOCUMENT moved on, not because the row changed"
+    )
+    assert rows[0].current_status in {
+        "PENDING_REVIEW_REQUIRED",
+        "PENDING_REVIEW_CONDITIONAL",
+    }
+
+    use_case = ResumeWorkflowUseCase(
+        review_queue_repo=SqlAlchemyReviewQueueRepository(session=db, tenant_id=tenant),
+        checkpoint_service=CheckpointService(checkpointer=saver),
+        graph_app=a.app,
+    )
+    with pytest.raises(ValueError, match="no longer be resumed"):
+        await use_case.execute(
+            review_id=review_item_id,
+            request=ResumeWorkflowRequest(
+                decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer"
+            ),
+        )
+    assert DOWNSTREAM_RUNS == [], (
+        f"an approval after the generation transition replayed A: {DOWNSTREAM_RUNS}"
+    )
+    rows = await _review(db, document.id)
+    assert rows[0].current_status != "APPROVED", "the decision must not be recorded"
+
+    # The replacement generation reaches the gate and takes the lineage over.
+    async with worker.tenant_session(tenant) as session:
+        await session.execute(
+            text(
+                "UPDATE document_processing_operations SET stage = 'ANALYSIS', "
+                "phase = 'PENDING' WHERE document_id = :d"
+            ),
+            {"d": document.id},
+        )
+    b = _RealGraphWorker("B", saver, register)
+    await ingestion_tasks._run_document_analysis(
+        tenant_id=tenant, document_id=document.id, orchestrator=b
+    )
+    rows = await _review(db, document.id)
+    assert len(rows) == 1, f"the new generation must not duplicate the review: {rows}"
+    assert rows[0].thread_id == b.thread_id
+    assert await _owner_of(saver, rows[0].thread_id, rows[0].checkpoint_id) == "B"
+
+    # ... and the review is authorized again, for B's lineage only. Asserted
+    # through acquisition rather than the whole use case: this harness's graph
+    # stops at the gate and never reaches N17, so a full approval would
+    # (correctly) refuse to report a completion it did not achieve.
+    ownership, _phase, refusal = await resume_ownership.acquire(
+        review_row_id=rows[0].id,
+        tenant_id=tenant,
+        project_id=document.project_id,
+        document_id=document.id,
+        thread_id=rows[0].thread_id,
+        source_checkpoint_id=rows[0].checkpoint_id,
+        decision="approve",
+        feedback="",
+        reviewer="Reviewer",
+        session_factory=worker.tenant_session,
+    )
+    assert refusal is None and ownership is not None, (
+        f"the new generation's own review must be resumable again: {refusal}"
+    )
+    restored = await CheckpointService(checkpointer=saver).restore_checkpoint(
+        thread_id=rows[0].thread_id, checkpoint_id=rows[0].checkpoint_id
+    )
+    assert restored is not None
+    resumed = await b.app.ainvoke(
+        Command(resume={"decision": "approve", "feedback": ""}), restored.config
+    )
+    assert "__interrupt__" not in resumed
+    assert DOWNSTREAM_RUNS == ["B"], (
+        f"approval after the new generation replayed the wrong lineage: {DOWNSTREAM_RUNS}"
+    )
+
+
+async def test_legacy_lineage_review_is_also_superseded_by_a_new_generation(
+    db: AsyncSession,
+    test_user: Any,
+    worker: Any,
+    real_saver: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A review bound before #758 records no lineage, so it needs the stamp.
+
+    Production still has pending reviews on UUID-style threads with no
+    generation and no fence. Those are deliberately exempt from the currency
+    comparison -- there is nothing to compare -- which would leave exactly one
+    hole in P1-1: a reupload of such a document would not invalidate them.
+    The generation transition therefore names the generation they belonged to,
+    which is what brings them under the same comparison.
+    """
+    saver, register = real_saver
+    document = await _seed_analysable(db, test_user)
+    tenant = test_user.tenant_id
+
+    a = _RealGraphWorker("A", saver, register)
+    monkeypatch.setattr(pa, "LEASE_TTL_SECONDS", 60)
+    await ingestion_tasks._run_document_analysis(
+        tenant_id=tenant, document_id=document.id, orchestrator=a
+    )
+    rows = await _review(db, document.id)
+    review_row_id = rows[0].id
+
+    # Rewind this row to the pre-#758 shape: a lineage with no recorded
+    # generation or fence, which is what every existing pending review has.
+    async with worker.tenant_session(tenant) as session:
+        await session.execute(
+            text(
+                "UPDATE review_items SET lineage_generation = NULL, "
+                "lineage_fencing_token = NULL WHERE id = :r"
+            ),
+            {"r": review_row_id},
+        )
+    async with worker.tenant_session(tenant) as session:
+        unfenced = await resume_lineage.read_review_lineage(
+            session, review_row_id=review_row_id, tenant_id=tenant
+        )
+    assert unfenced is not None and not unfenced.is_fenced
+    assert unfenced.is_current_for_document, "an unfenced lineage is exempt, by design"
+
+    async with worker.tenant_session(tenant) as session:
+        repo = SqlAlchemyDocumentRepository(session=session)
+        generation_b = await repo.begin_processing_generation(tenant, document.id)
+
+    async with worker.tenant_session(tenant) as session:
+        stamped = await resume_lineage.read_review_lineage(
+            session, review_row_id=review_row_id, tenant_id=tenant
+        )
+    assert stamped is not None
+    assert stamped.lineage_generation == generation_b - 1, (
+        "the transition must name the generation this legacy review belonged to"
+    )
+    assert not stamped.is_current_for_document, (
+        "a legacy review must stop being resumable when its document is reprocessed"
+    )
+
+
+# ── P1-2: an approval already in flight when the lineage is rebound ─────────
+
+
+async def test_resume_is_bound_to_the_lineage_it_was_authorized_against(
+    db: AsyncSession,
+    test_user: Any,
+    worker: Any,
+    real_saver: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The review is rebound AFTER the resume resolved it, BEFORE it acquires.
+
+    The resume path reads the review, restores its checkpoint, and only then
+    acquires ownership. Ownership acquisition proves nobody else is resuming
+    the OPERATION -- it says nothing about whether the review still names the
+    lineage the request resolved, and a processing takeover advances no resume
+    fence at all. So a resume could legitimately acquire, and then run the
+    graph, on a lineage that had already been superseded.
+
+    The pause sits exactly where the race is: after restore, before
+    acquisition. B takes the lineage over in that gap, and the approval must
+    fail CLOSED -- no graph, no N17, no finalization.
+    """
+    saver, register = real_saver
+    document = await _seed_analysable(db, test_user)
+    tenant = test_user.tenant_id
+    DOWNSTREAM_RUNS.clear()
+
+    a = _RealGraphWorker("A", saver, register)
+    monkeypatch.setattr(pa, "LEASE_TTL_SECONDS", 1)
+    await ingestion_tasks._run_document_analysis(
+        tenant_id=tenant, document_id=document.id, orchestrator=a
+    )
+    rows = await _review(db, document.id)
+    assert rows[0].thread_id == a.thread_id
+    review_item_id, review_row_id = rows[0].item_id, rows[0].id
+
+    await _expire_lease()
+    monkeypatch.setattr(pa, "LEASE_TTL_SECONDS", 60)
+
+    at_acquire, may_acquire = asyncio.Event(), asyncio.Event()
+    real_acquire = resume_workflow_module.acquire
+
+    async def _paused_acquire(**kwargs: Any) -> Any:
+        # Everything before this point already happened: the review was read,
+        # its checkpoint restored, and this thread id authorized.
+        at_acquire.set()
+        await may_acquire.wait()
+        return await real_acquire(**kwargs)
+
+    monkeypatch.setattr(resume_workflow_module, "acquire", _paused_acquire)
+
+    use_case = ResumeWorkflowUseCase(
+        review_queue_repo=SqlAlchemyReviewQueueRepository(session=db, tenant_id=tenant),
+        checkpoint_service=CheckpointService(checkpointer=saver),
+        graph_app=a.app,
+        claim_session_factory=worker.tenant_session,
+    )
+    approval = asyncio.create_task(
+        use_case.execute(
+            review_id=review_item_id,
+            request=ResumeWorkflowRequest(
+                decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer"
+            ),
+        )
+    )
+    await asyncio.wait_for(at_acquire.wait(), 15)
+
+    # B takes over and rebinds the review, through the REAL claim.
+    async with worker.tenant_session(tenant) as session:
+        grant = await pa.acquire(
+            session,
+            tenant_id=tenant,
+            document_id=document.id,
+            stage=pa.ProcessingStage.ANALYSIS,
+        )
+    assert grant.authority is not None, grant.outcome
+    b_thread = lineage.analysis_thread_id(
+        document_id=document.id, authority=grant.authority
+    )
+    with pa.bound_authority(grant.authority):
+        await claim_review_lineage_for_current_attempt(
+            thread_id=b_thread, tenant_id=str(tenant), document_id=str(document.id)
+        )
+    async with worker.tenant_session(tenant) as session:
+        rebound = await resume_lineage.read_review_lineage(
+            session, review_row_id=review_row_id, tenant_id=tenant
+        )
+    assert rebound is not None and rebound.thread_id == b_thread != a.thread_id
+    assert rebound.is_current_for_document, "B's own lineage is current"
+
+    may_acquire.set()
+    with pytest.raises(ValueError, match="no longer be resumed"):
+        await asyncio.wait_for(approval, 30)
+
+    assert DOWNSTREAM_RUNS == [], (
+        f"the in-flight approval resumed the superseded lineage: {DOWNSTREAM_RUNS}"
+    )
+    rows = await _review(db, document.id)
+    assert rows[0].current_status != "APPROVED", "the decision must not be recorded"
+    assert rows[0].thread_id == b_thread, "the rebind must stand"
+    async with worker.tenant_session(tenant) as session:
+        operation = (
+            await session.execute(
+                text(
+                    "SELECT phase, thread_id FROM resume_operations "
+                    " WHERE review_row_id = :r"
+                ),
+                {"r": review_row_id},
+            )
+        ).first()
+    if operation is not None:
+        assert operation.phase not in {
+            "N17_DURABLE",
+            "GRAPH_COMPLETED",
+            "FINALIZED_APPROVED",
+        }, f"a refused acquisition must leave no durable progress: {operation.phase}"

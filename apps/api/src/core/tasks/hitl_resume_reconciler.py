@@ -38,6 +38,7 @@ from uuid import UUID
 import structlog
 from sqlalchemy import text
 
+from src.core import resume_lineage
 from src.core.tasks.celery_app import celery_app
 
 logger = structlog.get_logger()
@@ -57,7 +58,7 @@ _RECOVERABLE_PHASES = (
 )
 
 _CLAIMABLE_SQL = text(
-    """
+    f"""
     SELECT o.id, o.tenant_id, o.review_row_id, o.phase, o.decision,
            o.decision_hash, o.decision_revision, o.fencing_token
       FROM resume_operations o
@@ -67,6 +68,13 @@ _CLAIMABLE_SQL = text(
             OR o.lease_expires_at <= clock_timestamp())
        AND (o.next_attempt_at IS NULL OR o.next_attempt_at <= clock_timestamp())
        AND o.decision IS NOT NULL
+       -- #758: skip operations whose review has been rebound to another
+       -- processing lineage. Only a hint, deliberately: this scan is
+       -- cross-tenant and cannot see the fail-closed authority table, so the
+       -- authoritative comparison stays in acquire_for_reconciliation, under
+       -- the review row's lock. Filtering here just stops the sweep from
+       -- burning its bounded batch on candidates it will always refuse.
+       AND {resume_lineage.OPERATION_LINEAGE_MATCHES_REVIEW_SQL}
      ORDER BY o.updated_at
      LIMIT :limit
     """

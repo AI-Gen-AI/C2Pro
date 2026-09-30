@@ -24,6 +24,7 @@ from src.analysis.adapters.graph.dependencies import get_hitl_service_for_graph
 from src.core.checkpoint_lineage import is_authority_scoped_analysis_thread
 from src.core.database import get_session_with_tenant
 from src.core.processing_authority import current_authority, fence_current
+from src.core.resume_lineage import authority_lineage, read_review_lineage
 
 __all__ = ["claim_review_lineage_for_current_attempt"]
 
@@ -41,7 +42,16 @@ async def claim_review_lineage_for_current_attempt(
     * no-ops unless this run's thread is authority-scoped, so legacy lineages
       (including the UUID-style threads still present in production, which
       carry no checkpoint id) keep working exactly as before;
-    * no-ops when the review already names this thread.
+    * no-ops when the review already names this thread AND already records
+      this exact attempt's processing lineage.
+
+    That last condition is why a review this attempt created itself is still
+    claimed. ``route_for_review`` writes the thread but knows nothing about
+    the #711 grant, so the row would otherwise carry a thread with no
+    generation or fence beside it -- unfenced, and therefore exempt from the
+    currency comparison every later seam performs (see
+    :mod:`src.core.resume_lineage`). Stamping it here is what makes a fresh
+    review fenced from the moment it becomes actionable.
 
     Fails CLOSED for an authority-scoped attempt: if ownership of the lineage
     cannot be established, this attempt must not go on to present an
@@ -52,10 +62,12 @@ async def claim_review_lineage_for_current_attempt(
     """
     if not thread_id or not tenant_id or not document_id:
         return
-    if current_authority() is None:
+    authority = current_authority()
+    if authority is None:
         return
     if not is_authority_scoped_analysis_thread(thread_id):
         return
+    generation, fencing_token = authority_lineage(authority)
 
     async with get_session_with_tenant(UUID(tenant_id)) as session:
         # Same fence as every other durable seam: a worker that lost
@@ -66,7 +78,7 @@ async def claim_review_lineage_for_current_attempt(
             document_id=UUID(document_id),
             review_type="analysis_critique",
         )
-        if review is None or review.metadata.get("thread_id") == thread_id:
+        if review is None:
             return
         row_id = review.metadata.get("row_id")
         if not row_id:
@@ -74,13 +86,27 @@ async def claim_review_lineage_for_current_attempt(
                 "cannot claim the checkpoint lineage: active review for document "
                 f"{document_id} has no row identity"
             )
-        superseded = review.metadata.get("thread_id")
+        lineage = await read_review_lineage(
+            session, review_row_id=UUID(str(row_id)), tenant_id=UUID(tenant_id)
+        )
+        if (
+            lineage is not None
+            and lineage.thread_id == thread_id
+            and lineage.lineage_generation == generation
+            and lineage.lineage_fencing_token == fencing_token
+        ):
+            return
         await service.review_queue_repo.claim_checkpoint_lineage(
-            row_id=UUID(str(row_id)), thread_id=thread_id
+            row_id=UUID(str(row_id)),
+            thread_id=thread_id,
+            lineage_generation=generation,
+            lineage_fencing_token=fencing_token,
         )
         structlog.get_logger().info(
             "checkpoint_lineage_claimed",
             document_id=document_id,
             thread_id=thread_id,
-            superseded_thread_id=superseded,
+            superseded_thread_id=lineage.thread_id if lineage else None,
+            lineage_generation=generation,
+            lineage_fencing_token=fencing_token,
         )

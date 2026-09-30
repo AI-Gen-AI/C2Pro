@@ -341,7 +341,14 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         orm.updated_at = datetime.now(UTC).replace(tzinfo=None)
         await self.session.flush()
 
-    async def claim_checkpoint_lineage(self, *, row_id: UUID, thread_id: str) -> None:
+    async def claim_checkpoint_lineage(
+        self,
+        *,
+        row_id: UUID,
+        thread_id: str,
+        lineage_generation: int | None = None,
+        lineage_fencing_token: int | None = None,
+    ) -> None:
         """Rebind the EXACT review row to `thread_id`, clearing the old checkpoint.
 
         #758. Addressed by primary key, and scoped to this repository's tenant
@@ -351,6 +358,14 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         exist and that CheckpointService correctly refuses to restore. With it
         cleared, a thread-only restore resolves this thread's own latest
         checkpoint, which belongs to exactly one processing attempt.
+
+        The claiming attempt's ``(generation, fencing_token)`` is stamped
+        alongside the thread, so "which processing attempt owns this review's
+        lineage" becomes a stored fact rather than something inferred from the
+        thread string. Everything downstream -- resume authorization, the
+        durable-write fence, recovery -- compares that stamp with the
+        document's live grant. They are written in the SAME statement as the
+        thread, so a lineage can never be half-claimed.
         """
         stmt = select(ReviewItemORM).where(ReviewItemORM.id == row_id)
         if self.tenant_id is not None:
@@ -360,6 +375,8 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
             raise ValueError(f"Review row {row_id} not found.")
         orm.thread_id = thread_id
         orm.checkpoint_id = None
+        orm.lineage_generation = lineage_generation
+        orm.lineage_fencing_token = lineage_fencing_token
         orm.updated_at = datetime.now(UTC).replace(tzinfo=None)
         await self.session.flush()
 
