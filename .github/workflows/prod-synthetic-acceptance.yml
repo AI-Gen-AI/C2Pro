@@ -315,7 +315,7 @@ jobs:
             --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
             --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID" \
             --project-id "$PROD_ACCEPTANCE_PROJECT_ID" \
-            --output-json evidence/product-qualification/runtime/verifier.json \
+            --write-evidence \
             "${hitl[@]}"
 
       - name: Build non-authoritative P0b evidence bundle
