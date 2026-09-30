@@ -92,14 +92,20 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def _control_at(commit_sha: str) -> dict[str, Any]:
-    commit_sha = _require_full_sha(commit_sha, "control commit")
+    expected_sha = _require_full_sha(commit_sha, "control commit")
     completed = subprocess.run(
-        ["git", "show", f"{commit_sha}:{CONTROL_PATH}"],
+        ["git", "rev-parse", "HEAD"],
+        cwd=REPO_ROOT,
         check=True,
         capture_output=True,
         text=True,
     )
-    value = yaml.safe_load(completed.stdout)
+    checked_out_sha = completed.stdout.strip().lower()
+    if checked_out_sha != expected_sha:
+        raise BundleBuildError("control commit must match the checked-out commit")
+    value = yaml.safe_load(
+        (REPO_ROOT / CONTROL_PATH).read_text(encoding="utf-8")
+    )
     if not isinstance(value, dict):
         raise BundleBuildError("historical Product Control must be a mapping")
     return value
