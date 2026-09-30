@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import os
 import re
-import sys
 from pathlib import Path
 
 PASSWORD_RE = re.compile(r"[A-Za-z0-9._~-]+")
