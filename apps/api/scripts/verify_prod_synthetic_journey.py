@@ -186,20 +186,24 @@ async def _journey_checks(
     if require_hitl:
         finalized = await _scalar(
             conn,
-            """
-            SELECT count(*) FROM review_items
-             WHERE project_id = :project_id AND tenant_id = :tenant_id
-               AND current_status::text IN ('APPROVED','REJECTED','CLOSED')
-            """,
+            text(
+                """
+                SELECT count(*) FROM review_items
+                 WHERE project_id = :project_id AND tenant_id = :tenant_id
+                   AND current_status::text IN ('APPROVED','REJECTED','CLOSED')
+                """
+            ),
             p,
         )
         corrections = await _scalar(
             conn,
-            """
-            SELECT count(*) FROM project_events
-             WHERE project_id = :project_id AND tenant_id = :tenant_id
-               AND event_type = 'hitl.correction'
-            """,
+            text(
+                """
+                SELECT count(*) FROM project_events
+                 WHERE project_id = :project_id AND tenant_id = :tenant_id
+                   AND event_type = 'hitl.correction'
+                """
+            ),
             p,
         )
         checks.extend([
