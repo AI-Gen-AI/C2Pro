@@ -152,15 +152,15 @@ async def _journey_checks(
     }
     values = {name: await _scalar(conn, sql, p) for name, sql in queries.items()}
     checks = [
-        Check(CHECK_SYNTHETIC_PROJECT_SCOPE, values[CHECK_SYNTHETIC_PROJECT_SCOPE] == 1, f"projects={values['synthetic project scope']}"),
-        Check(CHECK_DOCUMENT_PERSISTED, values[CHECK_DOCUMENT_PERSISTED] >= 1, f"documents={values['document persisted']}"),
-        Check(CHECK_DOCUMENT_TERMINAL, values[CHECK_DOCUMENT_TERMINAL] >= 1, f"terminal_documents={values['document terminal']}"),
-        Check(CHECK_CLAUSES_PERSISTED, values[CHECK_CLAUSES_PERSISTED] > 0, f"clauses={values['clauses persisted']}"),
-        Check(CHECK_RAG_CHUNKS_PERSISTED, values[CHECK_RAG_CHUNKS_PERSISTED] > 0, f"chunks={values['RAG chunks persisted']}"),
-        Check(CHECK_ANALYSIS_PERSISTED, values[CHECK_ANALYSIS_PERSISTED] > 0, f"analyses={values['analysis persisted']}"),
-        Check(CHECK_TRUSTED_CANONICAL_ARTIFACT, values[CHECK_TRUSTED_CANONICAL_ARTIFACT] > 0, f"trusted_artifacts={values['trusted canonical artifact']}"),
-        Check(CHECK_PROJECT_GRAPH_COMPLETED, values[CHECK_PROJECT_GRAPH_COMPLETED] > 0, f"graph_completed={values['ProjectGraph completed']}"),
-        Check(CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT, values[CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT] > 0, f"health_snapshots={values['six-category Health snapshot']}"),
+        Check(CHECK_SYNTHETIC_PROJECT_SCOPE, values[CHECK_SYNTHETIC_PROJECT_SCOPE] == 1, f"projects={values[CHECK_SYNTHETIC_PROJECT_SCOPE]}"),
+        Check(CHECK_DOCUMENT_PERSISTED, values[CHECK_DOCUMENT_PERSISTED] >= 1, f"documents={values[CHECK_DOCUMENT_PERSISTED]}"),
+        Check(CHECK_DOCUMENT_TERMINAL, values[CHECK_DOCUMENT_TERMINAL] >= 1, f"terminal_documents={values[CHECK_DOCUMENT_TERMINAL]}"),
+        Check(CHECK_CLAUSES_PERSISTED, values[CHECK_CLAUSES_PERSISTED] > 0, f"clauses={values[CHECK_CLAUSES_PERSISTED]}"),
+        Check(CHECK_RAG_CHUNKS_PERSISTED, values[CHECK_RAG_CHUNKS_PERSISTED] > 0, f"chunks={values[CHECK_RAG_CHUNKS_PERSISTED]}"),
+        Check(CHECK_ANALYSIS_PERSISTED, values[CHECK_ANALYSIS_PERSISTED] > 0, f"analyses={values[CHECK_ANALYSIS_PERSISTED]}"),
+        Check(CHECK_TRUSTED_CANONICAL_ARTIFACT, values[CHECK_TRUSTED_CANONICAL_ARTIFACT] > 0, f"trusted_artifacts={values[CHECK_TRUSTED_CANONICAL_ARTIFACT]}"),
+        Check(CHECK_PROJECT_GRAPH_COMPLETED, values[CHECK_PROJECT_GRAPH_COMPLETED] > 0, f"graph_completed={values[CHECK_PROJECT_GRAPH_COMPLETED]}"),
+        Check(CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT, values[CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT] > 0, f"health_snapshots={values[CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT]}"),
     ]
     if require_hitl:
         finalized = await _scalar(
