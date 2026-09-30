@@ -36,12 +36,13 @@ def test_api_runtime_image_uses_explicit_runtime_copy_surface() -> None:
     content = dockerfile.read_text(encoding="utf-8")
 
     assert "COPY --chown=appuser:appgroup . ." not in content
+    assert "COPY --chown=appuser:appgroup scripts/ ./scripts/" not in content
 
     required_runtime_copies = [
         "COPY --chown=appuser:appgroup src/ ./src/",
         "COPY --chown=appuser:appgroup alembic/ ./alembic/",
         "COPY --chown=appuser:appgroup alembic.ini ./alembic.ini",
-        "COPY --chown=appuser:appgroup scripts/ ./scripts/",
+        "COPY --chown=appuser:appgroup scripts/run_api.sh scripts/run_worker.sh scripts/run_scheduler.sh scripts/wait_for_schema.py ./scripts/",
         "COPY --chown=appuser:appgroup start.sh ./start.sh",
     ]
     for expected in required_runtime_copies:
