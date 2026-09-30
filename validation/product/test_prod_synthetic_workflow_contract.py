@@ -163,3 +163,12 @@ def test_operator_deployment_ids_are_validated_before_provider_calls() -> None:
     assert "VERCEL_DEPLOYMENT_ID_RE" in window
     assert "PROD_INPUT_BACKEND_DEPLOYMENT_ID" in window
     assert "PROD_INPUT_FRONTEND_DEPLOYMENT_ID" in window
+
+
+def test_readonly_database_secret_is_not_passed_on_process_argv() -> None:
+    source = _source()
+    assert "--database-url" not in source
+    assert (
+        "PROD_ACCEPTANCE_DATABASE_URL_READONLY: "
+        "${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}"
+    ) in source
