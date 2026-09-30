@@ -123,13 +123,8 @@ async function loadDocument(
   return record;
 }
 
-const DOCUMENT_TERMINAL_STATES = new Set([
-  "analyzed",
-  "review_required",
-  "failed_retryable",
-  "needs_changes",
-  "error",
-]);
+const DOCUMENT_TERMINAL_PATTERN =
+  /^(analyzed|review_required|failed_retryable|needs_changes|error)$/;
 const DOCUMENT_FAILURE_STATES = new Set([
   "failed_retryable",
   "needs_changes",
@@ -156,7 +151,7 @@ async function pollDocumentUntilTerminal(
           intervals: POLL_INTERVALS_MS,
         },
       )
-      .toMatch(/^(analyzed|review_required|failed_retryable|needs_changes|error)$/);
+      .toMatch(DOCUMENT_TERMINAL_PATTERN);
   } catch {
     throw new Error(
       `PROD_ACCEPTANCE_PROCESSING_TIMEOUT:last_lifecycle=${latest.lifecycle_status ?? "null"};last_status=${latest.status ?? "null"}`,
