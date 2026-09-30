@@ -45,6 +45,15 @@ def test_api_docker_context_excludes_in_tree_test_and_evaluation_code() -> None:
     content = dockerignore.read_text(encoding="utf-8")
 
     expected_exclusions = [
+        "credentials.json",
+        "*credentials*.json",
+        "*service-account*.json",
+        "*.pem",
+        "*.key",
+        "*.p12",
+        "*.pfx",
+        "*.crt",
+        "*.cer",
         "src/core/ai/test_*.py",
         "src/core/ai/example_*.py",
         "src/golden/",
