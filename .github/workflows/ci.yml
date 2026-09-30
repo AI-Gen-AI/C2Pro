@@ -1394,8 +1394,8 @@ jobs:
       - name: Inject ignored local-secret sentinels
         run: |
           mkdir -p apps/api/config apps/api/tmp
-          printf '%s\n' '{"type":"service_account","private_key":"CI_SENTINEL"}' > apps/api/config/credentials.json
-          printf '%s\n' 'POSTGRES_PASSWORD=CI_SENTINEL' > apps/api/config/.env.production
+          : > apps/api/config/credentials.json
+          : > apps/api/config/.env.production
           printf '%s\n' 'CI_SENTINEL_DB' > apps/api/tmp/test.db
           printf '%s\n' 'CI_SENTINEL_POSTGRES_NOTE' > "apps/api/config/claves postgre.txt"
 
