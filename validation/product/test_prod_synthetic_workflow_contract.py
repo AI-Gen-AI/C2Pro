@@ -74,9 +74,45 @@ def test_raw_provider_responses_are_not_uploaded_as_qualification_artifacts() ->
 def test_production_environment_and_explicit_operator_intent_remain_required() -> None:
     source = _source()
     assert "environment: production-qualification" in source
-    assert 'test "${{ inputs.confirm_production }}" = "RUN-ISSUE-706"' in source
-    assert 'test "${{ inputs.railway_staged_changes_clear }}" = "true"' in source
+    assert 'test "$PROD_INPUT_CONFIRM_PRODUCTION" = "RUN-ISSUE-706"' in source
+    assert 'test "$PROD_INPUT_RAILWAY_STAGED_CHANGES_CLEAR" = "true"' in source
 
+
+
+def test_dispatch_inputs_are_not_interpolated_directly_into_shell_source() -> None:
+    source = _source()
+    lines = source.splitlines()
+    run_sources: list[str] = []
+
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.lstrip()
+        indent = len(line) - len(stripped)
+        if not stripped.startswith("run:"):
+            index += 1
+            continue
+
+        inline = stripped.removeprefix("run:").strip()
+        if inline and inline != "|":
+            run_sources.append(inline)
+            index += 1
+            continue
+
+        index += 1
+        block: list[str] = []
+        while index < len(lines):
+            candidate = lines[index]
+            candidate_stripped = candidate.lstrip()
+            candidate_indent = len(candidate) - len(candidate_stripped)
+            if candidate_stripped and candidate_indent <= indent:
+                break
+            block.append(candidate)
+            index += 1
+        run_sources.append("\n".join(block))
+
+    assert run_sources
+    assert all("${{ inputs." not in block for block in run_sources)
 
 
 def test_identity_preflight_is_the_default_non_mutating_mode() -> None:
