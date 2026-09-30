@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
+LEGACY_LOCAL_DATABASE_URL = LEGACY_LOCAL_DATABASE_URL
 
 
 def test_local_compose_requires_environment_supplied_postgres_password():
@@ -28,9 +29,9 @@ def test_local_compose_requires_environment_supplied_postgres_password():
     assert compose.count("${POSTGRES_PASSWORD:?") == 3
 
     assert "POSTGRES_PASSWORD=" in env_example
-    assert "postgresql://postgres:postgres@localhost:5432/c2pro" not in env_example
-    assert "postgresql://postgres:postgres@localhost:5432/c2pro" not in quick_start
-    assert "postgresql://postgres:postgres@localhost:5432/c2pro" not in api_readme
+    assert LEGACY_LOCAL_DATABASE_URL not in env_example
+    assert LEGACY_LOCAL_DATABASE_URL not in quick_start
+    assert LEGACY_LOCAL_DATABASE_URL not in api_readme
     assert "postgresql+asyncpg://postgres:postgres@localhost:5432/c2pro" not in contract_flow
     assert "postgresql+asyncpg://postgres:postgres@localhost:5432/c2pro" not in checkpointer_e2e
 
