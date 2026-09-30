@@ -43,7 +43,6 @@ docs/
 # Development
 .env
 .env.*
-!.env.example
 Makefile
 *.log
 
@@ -60,3 +59,58 @@ alembic/versions/__pycache__/
 *.bak
 *.tmp
 .DS_Store
+
+# Local environment/database material is also excluded recursively
+.env
+**/.env
+.env.*
+**/.env.*
+*.db
+**/*.db
+
+claves postgre.txt
+**/claves postgre.txt
+# Local/private credentials must never enter the Docker build context
+credentials.json
+**/credentials.json
+*credentials*.json
+**/*credentials*.json
+*service-account*.json
+**/*service-account*.json
+*.pem
+**/*.pem
+*.key
+**/*.key
+*.p12
+**/*.p12
+*.pfx
+**/*.pfx
+*.crt
+**/*.crt
+*.cer
+**/*.cer
+
+# Production runtime source allowlist hygiene
+src/core/ai/test_*.py
+src/core/ai/example_*.py
+src/golden/
+src/projects/adapters/http/router.py.fullversion
+
+# Non-runtime top-level development/test tooling
+dev.py
+evals/
+examples/
+install_spacy_model.py
+migrate.py
+migrations/
+mypy-baseline.txt
+requirements-sprint1.txt
+setup.py
+test*.py
+
+# Only the production runtime scripts belong in the image
+scripts/*
+!scripts/run_api.sh
+!scripts/run_worker.sh
+!scripts/run_scheduler.sh
+!scripts/wait_for_schema.py
