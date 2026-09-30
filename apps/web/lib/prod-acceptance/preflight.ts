@@ -66,7 +66,11 @@ export function requireProductionOrigin(baseUrl: string): string {
   } catch {
     throw new ProdPreflightError("INVALID_BASE_URL");
   }
-  if (parsed.protocol !== "https:" || !PRODUCTION_HOSTS.has(parsed.hostname)) {
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.port !== "" ||
+    !PRODUCTION_HOSTS.has(parsed.hostname)
+  ) {
     throw new ProdPreflightError("NON_PRODUCTION_HOST");
   }
   return parsed.origin;
