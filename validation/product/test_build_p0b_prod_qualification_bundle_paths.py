@@ -5,6 +5,7 @@ import pytest
 from validation.product.build_p0b_prod_qualification_bundle import (
     BundleBuildError,
     _resolve_bundle_output,
+    _require_full_sha,
     _resolve_run_json,
     _resolve_verifier_json,
 )
@@ -46,3 +47,11 @@ def test_bundle_output_stays_under_qualification_evidence_root(tmp_path: Path) -
             output_root / "../outside.yaml",
             repo_root=tmp_path,
         )
+
+
+def test_control_commit_rejects_ref_syntax_and_short_shas() -> None:
+    assert _require_full_sha("a" * 40, "control commit") == "a" * 40
+
+    for unsafe in ("main", "abc123", "a" * 40 + ":other", "--help"):
+        with pytest.raises(BundleBuildError, match="40-character Git SHA"):
+            _require_full_sha(unsafe, "control commit")
