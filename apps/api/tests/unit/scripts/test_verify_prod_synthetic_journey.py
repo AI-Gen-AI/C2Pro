@@ -8,7 +8,8 @@ import pytest
 
 SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "verify_prod_synthetic_journey.py"
 SPEC = spec_from_file_location("verify_prod_synthetic_journey", SCRIPT)
-assert SPEC and SPEC.loader
+assert SPEC is not None
+assert SPEC.loader is not None
 MODULE = module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
