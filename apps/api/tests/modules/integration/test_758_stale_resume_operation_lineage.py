@@ -75,6 +75,7 @@ from src.modules.hitl.adapters.persistence.resume_recovery import (
     ResumeRecoveryRequest,
 )
 from src.modules.hitl.application.resume_workflow_use_case import ResumeWorkflowUseCase
+from src.modules.hitl.domain.entities import ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
 from src.temporal.adapters.persistence.models import ProjectEventORM
 
@@ -756,3 +757,100 @@ async def test_an_owned_resume_cannot_persist_after_the_review_is_rebound(
     ).scalars().all()
     assert analyses == [], "a superseded lineage committed N17"
     await _assert_nothing_was_finalized(db, arranged, expected_phase=Phase.RUNNING)
+
+
+# ── P1-1 at the generation transition, in the coverage-counted lane ─────────
+
+
+async def test_generation_transition_ends_resumability_for_fenced_and_legacy_rows(
+    db: AsyncSession, test_user: User, real_saver: Any, sessions: Any
+) -> None:
+    """`begin_generation` is where a new revision/reprocess invalidates a review.
+
+    Both halves are asserted, because they cover different rows:
+
+    * a FENCED review needs nothing extra -- bumping the generation is itself
+      what makes its recorded lineage stale;
+    * a LEGACY review records no lineage at all and is deliberately exempt
+      from that comparison, so the transition stamps it with the generation it
+      belonged to. Without the stamp, a reupload would leave production's
+      existing pending reviews resumable against the superseded revision.
+
+    The transition runs in the CALLER's transaction, exactly as the reprocess
+    route and the reupload use case invoke it, so "the new generation is
+    authoritative" and "the old review is not resumable" commit together.
+    """
+    saver, register = real_saver
+    tenant_id = UUID(str(test_user.tenant_id))
+    arranged = await _arrange(db, tenant_id, saver, register)
+
+    fenced = await _lineage(db, tenant_id, arranged.review_row_id)
+    assert fenced is not None and fenced.is_fenced and fenced.is_current_for_document
+
+    generation = await pa.begin_generation(
+        db, tenant_id=tenant_id, document_id=arranged.document_id, revision_id=None
+    )
+    await db.commit()
+
+    superseded = await _lineage(db, tenant_id, arranged.review_row_id)
+    assert superseded is not None
+    assert superseded.thread_id == arranged.thread_a, "the row itself is untouched"
+    assert superseded.lineage_generation == fenced.lineage_generation
+    assert superseded.authority_generation == generation
+    assert not superseded.is_current_for_document, (
+        "a fenced review must stop being resumable the moment the generation moves"
+    )
+
+    # Now the legacy shape: a review bound before this identity existed.
+    await db.execute(
+        text(
+            "UPDATE review_items SET lineage_generation = NULL, "
+            "lineage_fencing_token = NULL WHERE id = :r"
+        ),
+        {"r": arranged.review_row_id},
+    )
+    await db.commit()
+    unfenced = await _lineage(db, tenant_id, arranged.review_row_id)
+    assert unfenced is not None and not unfenced.is_fenced
+    assert unfenced.is_current_for_document, "an unfenced lineage is exempt, by design"
+
+    next_generation = await pa.begin_generation(
+        db, tenant_id=tenant_id, document_id=arranged.document_id, revision_id=None
+    )
+    await db.commit()
+
+    stamped = await _lineage(db, tenant_id, arranged.review_row_id)
+    assert stamped is not None
+    assert stamped.lineage_generation == next_generation - 1, (
+        "the transition must name the generation this legacy review belonged to"
+    )
+    assert not stamped.is_current_for_document
+
+
+async def test_the_generation_stamp_never_rewrites_a_decided_review(
+    db: AsyncSession, test_user: User, real_saver: Any, sessions: Any
+) -> None:
+    """A decided row is history: the transition must leave it exactly as it is.
+
+    The stamp exists to bring PENDING legacy rows under the currency
+    comparison. Touching a decided row would rewrite the audit record of which
+    attempt produced the decision a human already made.
+    """
+    saver, register = real_saver
+    tenant_id = UUID(str(test_user.tenant_id))
+    arranged = await _arrange(db, tenant_id, saver, register)
+
+    review = await _reload(db, ReviewItemORM, arranged.review_row_id)
+    review.current_status = ReviewStatus.APPROVED
+    review.lineage_generation = None
+    review.lineage_fencing_token = None
+    await db.commit()
+
+    await pa.begin_generation(
+        db, tenant_id=tenant_id, document_id=arranged.document_id, revision_id=None
+    )
+    await db.commit()
+
+    decided = await _reload(db, ReviewItemORM, arranged.review_row_id)
+    assert decided.lineage_generation is None, "a decided review must not be stamped"
+    assert decided.lineage_fencing_token is None
