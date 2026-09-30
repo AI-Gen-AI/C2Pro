@@ -55,25 +55,18 @@ def _verifier_json(*, repo_root: Path = REPO_ROOT) -> Path:
 
 
 def _bundle_output(
-    github_run_id: str,
-    github_run_attempt: str,
+    github_run_id: int,
+    github_run_attempt: int,
     *,
     repo_root: Path = REPO_ROOT,
 ) -> Path:
-    if not github_run_id.isdigit():
+    if github_run_id < 1:
         raise BundleBuildError("GitHub run id must be a positive integer")
-    if not github_run_attempt.isdigit():
-        raise BundleBuildError("GitHub run attempt must be a positive integer")
-
-    run_id = int(github_run_id)
-    run_attempt = int(github_run_attempt)
-    if run_id < 1:
-        raise BundleBuildError("GitHub run id must be a positive integer")
-    if run_attempt < 1:
+    if github_run_attempt < 1:
         raise BundleBuildError("GitHub run attempt must be a positive integer")
 
     output_root = repo_root.resolve() / QUALIFICATION_OUTPUT_ROOT
-    return output_root / f"p0b-prod-gh-{run_id}-{run_attempt}.yaml"
+    return output_root / f"p0b-prod-gh-{github_run_id}-{github_run_attempt}.yaml"
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -324,6 +317,16 @@ def build_bundle(
     }
 
 
+def _positive_int(raw: str) -> int:
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return value
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--control-commit-sha", required=True)
@@ -332,8 +335,8 @@ def main() -> int:
     parser.add_argument("--frontend-commit-sha", required=True)
     parser.add_argument("--frontend-deployment-id", required=True)
     parser.add_argument("--recovery-evidence-ref", required=True)
-    parser.add_argument("--github-run-id", required=True)
-    parser.add_argument("--github-run-attempt", required=True)
+    parser.add_argument("--github-run-id", required=True, type=_positive_int)
+    parser.add_argument("--github-run-attempt", required=True, type=_positive_int)
     parser.add_argument("--require-hitl", action="store_true")
     parser.add_argument("--observed-at")
     args = parser.parse_args()
