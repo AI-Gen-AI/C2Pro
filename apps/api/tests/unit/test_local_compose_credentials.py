@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-LEGACY_LOCAL_DATABASE_URL = LEGACY_LOCAL_DATABASE_URL
+LEGACY_LOCAL_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/c2pro"
 
 
 def test_local_compose_requires_environment_supplied_postgres_password():
