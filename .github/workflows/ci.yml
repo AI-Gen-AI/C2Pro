@@ -1421,6 +1421,10 @@ jobs:
             test ! -e /app/.env
             test ! -e /app/.env.example
             test ! -e /app/migrate.py
+            test ! -e /app/src/golden
+            test ! -e /app/src/core/ai/test_langsmith_client.py
+            test ! -e /app/src/core/ai/example_llm_client.py
+            test ! -e /app/src/projects/adapters/http/router.py.fullversion
             bash -n /app/scripts/run_api.sh
             bash -n /app/scripts/run_worker.sh
             bash -n /app/scripts/run_scheduler.sh
