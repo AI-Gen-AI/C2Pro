@@ -23,8 +23,16 @@ def _last_assignment(path: Path) -> str:
         if "=" not in line:
             continue
         name, value = line.split("=", 1)
-        if name.strip() == KEY:
-            values.append(value.strip())
+        if name.strip() != KEY:
+            continue
+
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        elif " #" in value:
+            value = value.split(" #", 1)[0].rstrip()
+
+        values.append(value)
     return values[-1] if values else ""
 
 
