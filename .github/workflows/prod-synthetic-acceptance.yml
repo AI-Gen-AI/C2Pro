@@ -340,9 +340,8 @@ jobs:
             --frontend-commit-sha "$PROD_INPUT_FRONTEND_COMMIT_SHA" \
             --frontend-deployment-id "$PROD_INPUT_FRONTEND_DEPLOYMENT_ID" \
             --recovery-evidence-ref "$PROD_INPUT_RECOVERY_EVIDENCE_REF" \
-            --run-json apps/web/playwright/.prod-acceptance/run.json \
-            --verifier-json evidence/product-qualification/runtime/verifier.json \
-            --output "$output" \
+            --github-run-id "$GITHUB_RUN_ID" \
+            --github-run-attempt "$GITHUB_RUN_ATTEMPT" \
             "${hitl[@]}"
           echo "QUALIFICATION_BUNDLE=$output" >> "$GITHUB_ENV"
 
