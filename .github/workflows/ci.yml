@@ -1407,7 +1407,7 @@ jobs:
 
       - name: Verify runtime payload
         run: |
-          docker run --rm --entrypoint bash c2pro-api:ci -lc '
+          docker run --rm --entrypoint bash c2pro-api:ci -c '
             set -euo pipefail
             test -d /app/src
             test -d /app/alembic
