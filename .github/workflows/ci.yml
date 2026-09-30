@@ -1396,8 +1396,8 @@ jobs:
           mkdir -p apps/api/config apps/api/tmp
           : > apps/api/config/credentials.json
           : > apps/api/config/.env.production
-          printf '%s\n' 'CI_SENTINEL_DB' > apps/api/tmp/test.db
-          printf '%s\n' 'CI_SENTINEL_POSTGRES_NOTE' > "apps/api/config/claves postgre.txt"
+          : > apps/api/tmp/test.db
+          : > "apps/api/config/claves postgre.txt"
 
       - name: Build production API image
         run: docker build --file apps/api/Dockerfile --tag c2pro-api:ci apps/api
