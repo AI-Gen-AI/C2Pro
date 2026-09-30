@@ -80,7 +80,7 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --chown=appuser:appgroup src/ ./src/
 COPY --chown=appuser:appgroup alembic/ ./alembic/
 COPY --chown=appuser:appgroup alembic.ini ./alembic.ini
-COPY --chown=appuser:appgroup scripts/ ./scripts/
+COPY --chown=appuser:appgroup scripts/run_api.sh scripts/run_worker.sh scripts/run_scheduler.sh scripts/wait_for_schema.py ./scripts/
 COPY --chown=appuser:appgroup start.sh ./start.sh
 RUN sed -i 's/\r$//' /app/start.sh /app/scripts/*.sh
 
