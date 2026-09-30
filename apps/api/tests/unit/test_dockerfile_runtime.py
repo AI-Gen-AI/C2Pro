@@ -49,6 +49,15 @@ def test_api_docker_context_excludes_in_tree_test_and_evaluation_code() -> None:
         "src/core/ai/example_*.py",
         "src/golden/",
         "src/projects/adapters/http/router.py.fullversion",
+        "migrate.py",
+        "evals/",
+        "examples/",
+        "test*.py",
+        "scripts/*",
+        "!scripts/run_api.sh",
+        "!scripts/run_worker.sh",
+        "!scripts/run_scheduler.sh",
+        "!scripts/wait_for_schema.py",
     ]
     for expected in expected_exclusions:
         assert expected in content
