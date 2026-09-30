@@ -20,7 +20,6 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
-
 ASYNCPG_URL_PREFIX = "postgresql+asyncpg://"
 CHECK_SYNTHETIC_PROJECT_SCOPE = "synthetic project scope"
 CHECK_DOCUMENT_PERSISTED = "document persisted"
