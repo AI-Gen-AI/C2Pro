@@ -14,6 +14,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import os
 from urllib.parse import quote
+
+from dotenv import dotenv_values
 from typing import Any
 
 import fitz  # PyMuPDF
@@ -24,11 +26,18 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 
 API_BASE_URL = "http://localhost:8000"
+REPO_ROOT = Path(__file__).resolve().parents[1]
 def local_database_url() -> str:
     """Build the local async PostgreSQL URL from the explicit environment secret."""
-    password = os.environ.get("POSTGRES_PASSWORD", "")
+    password = os.environ.get("POSTGRES_PASSWORD")
+    if password is None:
+        password = str(
+            dotenv_values(REPO_ROOT / ".env").get("POSTGRES_PASSWORD") or ""
+        )
     if not password:
-        raise RuntimeError("POSTGRES_PASSWORD is required for local database scripts")
+        raise RuntimeError(
+            "POSTGRES_PASSWORD is required in the environment or repo-root .env"
+        )
     return (
         "postgresql+asyncpg://postgres:"
         f"{quote(password, safe='')}@localhost:5432/c2pro"
