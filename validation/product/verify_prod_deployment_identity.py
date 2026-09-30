@@ -12,12 +12,39 @@ from pathlib import Path
 from typing import Any
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+PROVIDER_EVIDENCE_ROOT = Path("evidence/product-qualification/runtime/provider")
+DEPLOYMENT_IDENTITY_OUTPUT = Path(
+    "evidence/product-qualification/runtime/deployment-identity.json"
+)
+
+
 class IdentityError(RuntimeError):
     pass
 
 
-def _load(path: str) -> Any:
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+def _resolve_provider_input(
+    raw: str, *, expected_name: str, repo_root: Path = REPO_ROOT
+) -> Path:
+    root = repo_root.resolve()
+    expected = (root / PROVIDER_EVIDENCE_ROOT / expected_name).resolve()
+    candidate = Path(raw).resolve()
+    if candidate != expected or not candidate.is_file():
+        raise IdentityError("provider JSON must use canonical provider evidence")
+    return candidate
+
+
+def _resolve_output_path(raw: str, *, repo_root: Path = REPO_ROOT) -> Path:
+    root = repo_root.resolve()
+    expected = (root / DEPLOYMENT_IDENTITY_OUTPUT).resolve()
+    candidate = Path(raw).resolve()
+    if candidate != expected:
+        raise IdentityError("output-json must use canonical deployment identity output")
+    return candidate
+
+
+def _load(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _deployments(payload: Any) -> list[dict[str, Any]]:
@@ -162,16 +189,32 @@ def main() -> int:
     args = parser.parse_args()
 
     result = verify(
-        api_payload=_load(args.railway_api_json),
-        worker_payload=_load(args.railway_worker_json),
-        scheduler_payload=_load(args.railway_scheduler_json),
-        frontend_payload=_load(args.vercel_json),
+        api_payload=_load(
+            _resolve_provider_input(
+                args.railway_api_json, expected_name="railway-api.json"
+            )
+        ),
+        worker_payload=_load(
+            _resolve_provider_input(
+                args.railway_worker_json, expected_name="railway-worker.json"
+            )
+        ),
+        scheduler_payload=_load(
+            _resolve_provider_input(
+                args.railway_scheduler_json, expected_name="railway-scheduler.json"
+            )
+        ),
+        frontend_payload=_load(
+            _resolve_provider_input(
+                args.vercel_json, expected_name="vercel-frontend.json"
+            )
+        ),
         expected_backend_sha=args.expected_backend_sha,
         expected_api_deployment=args.expected_api_deployment,
         expected_frontend_sha=args.expected_frontend_sha,
         expected_frontend_deployment=args.expected_frontend_deployment,
     )
-    output = Path(args.output_json)
+    output = _resolve_output_path(args.output_json)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print("production deployment identities verified")
