@@ -163,11 +163,8 @@ jobs:
             curl --fail --silent --show-error               --request POST               --url "https://backboard.railway.com/graphql/v2"               --header "Authorization: Bearer ${PROD_ACCEPTANCE_RAILWAY_API_TOKEN}"               --header "Content-Type: application/json"               --data "$payload"               --output "$output"
           }
 
-          api_payload="$(jq -cn             --arg q 'query deployment($id: String!) { deployment(id: $id) { id status meta } }'             --arg id "$PROD_INPUT_BACKEND_DEPLOYMENT_ID"             '{query:$q,variables:{id:$id}}')"
-          railway_graphql "$api_payload"             evidence/product-qualification/runtime/provider/railway-api.json
-
           list_query='query deployments($input: DeploymentListInput!, $first: Int) { deployments(input: $input, first: $first) { edges { node { id status meta } } } }'
-          for pair in             "worker:${PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID}"             "scheduler:${PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID}"
+          for pair in             "api:${PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID}"             "worker:${PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID}"             "scheduler:${PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID}"
           do
             name="${pair%%:*}"
             service_id="${pair#*:}"
@@ -186,7 +183,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python validation/product/verify_prod_deployment_identity.py             --expected-backend-sha "$PROD_INPUT_BACKEND_COMMIT_SHA"             --expected-api-deployment "$PROD_INPUT_BACKEND_DEPLOYMENT_ID"             --expected-frontend-sha "$PROD_INPUT_FRONTEND_COMMIT_SHA"             --expected-frontend-deployment "$PROD_INPUT_FRONTEND_DEPLOYMENT_ID"
+          python validation/product/verify_prod_deployment_identity.py             --expected-backend-sha "$PROD_INPUT_BACKEND_COMMIT_SHA"             --expected-api-deployment "$PROD_INPUT_BACKEND_DEPLOYMENT_ID"             --expected-frontend-sha "$PROD_INPUT_FRONTEND_COMMIT_SHA"             --expected-frontend-deployment "$PROD_INPUT_FRONTEND_DEPLOYMENT_ID"             --expected-frontend-project "$PROD_ACCEPTANCE_VERCEL_PROJECT_ID"
 
           backend_sha="$(python -c 'import json; print(json.load(open("evidence/product-qualification/runtime/deployment-identity.json"))["backend"]["api"]["commit_sha"])')"
           frontend_sha="$(python -c 'import json; print(json.load(open("evidence/product-qualification/runtime/deployment-identity.json"))["frontend"]["commit_sha"])')"
