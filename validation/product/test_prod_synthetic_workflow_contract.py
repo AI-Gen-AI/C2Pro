@@ -172,3 +172,15 @@ def test_readonly_database_secret_is_not_passed_on_process_argv() -> None:
         "PROD_ACCEPTANCE_DATABASE_URL_READONLY: "
         "${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}"
     ) in source
+
+
+def test_production_workflow_has_no_duplicate_step_names() -> None:
+    source = _source()
+    step_names = []
+    for line in source.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- name:"):
+            step_names.append(stripped.removeprefix("- name:").strip())
+
+    duplicates = sorted({name for name in step_names if step_names.count(name) > 1})
+    assert duplicates == [], f"duplicate production workflow steps: {duplicates}"
