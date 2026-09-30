@@ -30,13 +30,23 @@ def test_api_runtime_requirements_include_pgvector() -> None:
     assert "pgvector" in content
 
 
-def test_api_runtime_recursive_copy_is_bounded_by_dockerignore() -> None:
-    """R17-HS-C: recursive runtime COPY stays bounded by a hardened build context."""
+def test_api_runtime_copy_surface_is_explicit() -> None:
+    """R17-HS-C: runtime image copies only the proven production surfaces."""
     dockerfile = Path(__file__).resolve().parents[2] / "Dockerfile"
     content = dockerfile.read_text(encoding="utf-8")
 
-    assert "COPY --chown=appuser:appgroup . ." in content
-    assert "RUN rm -rf" in content
+    assert "COPY --chown=appuser:appgroup . ." not in content
+    assert "RUN rm -rf" not in content
+
+    required_runtime_copies = [
+        "COPY --chown=appuser:appgroup src/ ./src/",
+        "COPY --chown=appuser:appgroup alembic/ ./alembic/",
+        "COPY --chown=appuser:appgroup alembic.ini ./alembic.ini",
+        "COPY --chown=appuser:appgroup scripts/ ./scripts/",
+        "COPY --chown=appuser:appgroup start.sh ./start.sh",
+    ]
+    for expected in required_runtime_copies:
+        assert expected in content
 
 
 def test_api_docker_context_excludes_in_tree_test_and_evaluation_code() -> None:
