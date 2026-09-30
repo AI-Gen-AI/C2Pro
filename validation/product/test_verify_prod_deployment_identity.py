@@ -7,8 +7,8 @@ import pytest
 
 from validation.product.verify_prod_deployment_identity import (
     IdentityError,
-    _resolve_provider_input,
-    _resolve_output_path,
+    _output_path,
+    _provider_input,
     verify,
 )
 
@@ -142,37 +142,22 @@ def test_railway_public_graphql_shapes_are_supported():
     assert result["backend"]["scheduler"]["deployment_id"] == "dep_scheduler"
 
 
-def test_provider_payload_paths_are_bounded_to_canonical_evidence_root(tmp_path: Path):
+def test_provider_inputs_are_fixed_to_canonical_evidence_root(tmp_path: Path):
     provider_root = tmp_path / "evidence/product-qualification/runtime/provider"
     provider_root.mkdir(parents=True)
-    allowed = provider_root / "railway-api.json"
-    allowed.write_text("{}", encoding="utf-8")
+    expected = provider_root / "railway-api.json"
+    expected.write_text("{}", encoding="utf-8")
 
-    assert (
-        _resolve_provider_input(
-            str(allowed),
-            expected_name="railway-api.json",
-            repo_root=tmp_path,
-        )
-        == allowed
-    )
+    assert _provider_input("railway-api.json", repo_root=tmp_path) == expected
 
-    with pytest.raises(IdentityError, match="canonical provider evidence"):
-        _resolve_provider_input(
-            str(tmp_path / "outside.json"),
-            expected_name="railway-api.json",
-            repo_root=tmp_path,
-        )
+    with pytest.raises(IdentityError, match="canonical provider evidence is missing"):
+        _provider_input("missing.json", repo_root=tmp_path)
 
 
-def test_deployment_identity_output_is_exact_canonical_evidence_path(tmp_path: Path):
-    allowed = (
+def test_deployment_identity_output_is_fixed_to_canonical_evidence_path(tmp_path: Path):
+    expected = (
         tmp_path
         / "evidence/product-qualification/runtime/deployment-identity.json"
     )
-    allowed.parent.mkdir(parents=True)
+    assert _output_path(repo_root=tmp_path) == expected
 
-    assert _resolve_output_path(str(allowed), repo_root=tmp_path) == allowed
-
-    with pytest.raises(IdentityError, match="canonical deployment identity output"):
-        _resolve_output_path(str(tmp_path / "outside.json"), repo_root=tmp_path)
