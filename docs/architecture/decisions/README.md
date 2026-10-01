@@ -1,8 +1,10 @@
 # Architecture Decisions
 
-This section contains the active architecture decision records for the current repository state.
+This directory contains durable architectural decisions for the active C2Pro platform.
 
-## Current ADR Set
+An ADR records a **decision and its consequences**. It is not a live task board and does not prove deployment or production validation.
+
+## Foundation set
 
 - [001 Modular monolith architecture](./001-modular-monolith-architecture.md)
 - [002 Supabase for MVP](./002-supabase-for-mvp.md)
@@ -10,39 +12,77 @@ This section contains the active architecture decision records for the current r
 - [004 Frontend layer rules](./004-frontend-layer-rules.md)
 - [005 Three-layer SC test strategy](./005-three-layer-sc-test-strategy.md)
 - [006 Post-reorganization architecture](./006-post-reorganization-architecture.md)
+
+## Coherence and resilience
+
 - [ADR-004 Circuit breakers](./ADR-004-circuit-breakers.md)
-- [ADR-009 Coherence Score v2 — Evidence-Aware, Explainable, Bottom-Up](./ADR-009-evidence-oriented-coherence-orchestration.md)
+- [ADR-009 Evidence-oriented Coherence orchestration](./ADR-009-evidence-oriented-coherence-orchestration.md)
 
-> **Reserved (in-flight, not yet filed):** ADR-010 (Evidence Maturity), ADR-011 (Evidence Intelligence), ADR-012 (deferred) are referenced in `CHANGELOG.md` / `CLAUDE.md`. The v3.0 canon starts at ADR-013 to avoid collision.
+> ADR-010/011/012 remain reserved/in-flight historical references where existing documents cite them; the v3 architecture canon intentionally begins at ADR-013.
 
-## C2Pro v3.0 — Project Intelligence Overlay (ADR-013 → ADR-025)
+## C2Pro v3 project-intelligence canon
 
-Canonical set ratified 2026-06-07 by multi-model arbitration (DeepSeek / Codex / Claude / Gemini blueprints + Architecture Challenger verdict; sources in [`docs/audits/`](../../audits/)). Cross-cutting invariant **INV-1 (Evidence & Provenance, tiered)** is defined in ADR-013 and extends the in-flight evidence layer. Later accepted product decisions extend the original set without rewriting its history.
+- [ADR-013 Typed Graph Contract & Runtime Correctness](./ADR-013-typed-graph-contract-runtime-correctness.md)
+- [ADR-014 Project State Model](./ADR-014-project-state-model.md)
+- [ADR-015 Temporal Intelligence Layer](./ADR-015-temporal-intelligence-layer.md)
+- [ADR-016 Semantic Diff & Change Impact](./ADR-016-semantic-diff-change-impact-engine.md)
+- [ADR-017 ProjectGraph Two-Tier Orchestration](./ADR-017-projectgraph-two-tier-orchestration.md)
+- [ADR-018 Project Health Engine](./ADR-018-project-health-engine.md)
+- [ADR-019 Alert Correlation & Action Lifecycle](./ADR-019-alert-correlation-action-lifecycle.md)
+- [ADR-020 HITL Workflow System](./ADR-020-hitl-workflow-system.md)
+- [ADR-021 Read-Model & Briefing Projection](./ADR-021-read-model-briefing-projection.md)
+- [ADR-022 Contract Clarity Findings](./ADR-022-contract-clarity-findings.md)
+- [ADR-023 Agentic Coherence Architecture](./ADR-023-agentic-coherence-architecture.md)
+- [ADR-024 Single-Document Activation](./ADR-024-single-document-activation.md)
+- [ADR-025 Canonical Project Controls WBS Backbone](./ADR-025-canonical-project-controls-wbs-backbone.md)
+- [ADR-026 Trusted-State Commit & Exact Approval Binding](./ADR-026-trusted-state-commit-and-approval-binding.md)
 
-- [ADR-013 Typed Graph Contract & Runtime Correctness Baseline](./ADR-013-typed-graph-contract-runtime-correctness.md) — **P0 Foundation**
-- [ADR-014 Project State Model (Canonical Aggregate)](./ADR-014-project-state-model.md) — **P0 Foundation / keystone** · hosts the Future Bounded-Context Reservation Plan (Procurement, Stakeholder)
-- [ADR-015 Temporal Intelligence Layer](./ADR-015-temporal-intelligence-layer.md) — **P0 Foundation**
-- [ADR-016 Semantic Diff & Change-Impact Engine](./ADR-016-semantic-diff-change-impact-engine.md) — **P0→P1 Core (the wedge)**
-- [ADR-017 ProjectGraph Orchestration (Two-Tier, Async)](./ADR-017-projectgraph-two-tier-orchestration.md) — **P1 Core**
-- [ADR-018 Project Health Engine](./ADR-018-project-health-engine.md) — **P0/P1 primary product surface; six-dimension Health/Coherence/Alerts clarification 2026-09-13**
-- [ADR-019 Alert Correlation & Action Lifecycle](./ADR-019-alert-correlation-action-lifecycle.md) — **P2 Action/HITL differentiation; alert visibility is cross-cutting**
-- [ADR-020 HITL Workflow System](./ADR-020-hitl-workflow-system.md) — **P2 Differentiation**
-- [ADR-021 Read-Model & Briefing Projection](./ADR-021-read-model-briefing-projection.md) — **P3 · Deferred**
-- [ADR-022 Contract Clarity Findings (Health v0, Findings-Only)](./ADR-022-contract-clarity-findings.md) — **P2 · extends ADR-018** · resolves TASK-V3-P1-SCOPE-11
-- [ADR-023 Agentic Coherence Architecture](./ADR-023-agentic-coherence-architecture.md) — **Proposed; not required for current product-control activation**
-- [ADR-024 Single-Document Activation](./ADR-024-single-document-activation.md) — **Accepted P0b product activation**
-- [ADR-025 Canonical Project Controls Backbone — One Hierarchical WBS per Project](./ADR-025-canonical-project-controls-wbs-backbone.md) — **Accepted P1 Product Foundation**
+## Cross-cutting invariants
 
-**Critical path:** 013 → 014 → 015 (revisions) → 016 (change) → 018/024 (current-state product) → 025 (canonical Project Controls backbone). ADR-017/023 extend relational/agentic depth but are not allowed to block the user-visible product path.
+### Project intelligence
 
-**Product-control red line:** a project has one canonical hierarchical WBS. Budget, Schedule, Procurement, Stakeholders/RACI, Alerts, Evidence and Changes attach to that tree (or explicitly project-level scope). Discipline branches are not separate WBSs.
+The project is the primary intelligence boundary. Documents are evidence inputs.
 
-**Evidence red line:** `Unknown` remains null/insufficient evidence. Coherence/Health/Alerts may drill down through the WBS only when evidence supports the statement; no blind arithmetic roll-up and no unknown-to-zero conversion.
+### Canonical Project Controls
 
-**Rejected from canon:** Passive Ingestion Mesh as an ADR; full event sourcing; absolute evidence veto; agent-mesh orchestration as a prerequisite for product value; BIM/IFC, mobile field app, native Gantt, Neo4j, NL rules engine, plugin marketplace before validated need.
+One project owns one canonical hierarchical WBS. Domain planes attach to that tree or explicitly project-level scope.
 
-## Related Sections
+### Evidence truthfulness
 
-- [Architecture index](../README.md)
-- [Archived decisions](../../archive/architecture/decisions/)
+Unknown/insufficient evidence remains unknown. No blind unknown-to-zero conversion or fabricated evidence locator is allowed.
+
+### Trust boundary
+
+`persisted != trusted`.
+
+Pending/rejected candidates cannot mutate canonical ProjectGraph/Health/Coherence. Consequential approval binds the exact reviewed candidate/version/hash and promotes trusted state idempotently.
+
+### Lifecycle truthfulness
+
+An ADR being accepted, code being merged, a deployment existing, and a production journey being validated are distinct claims.
+
+## Current implementation note
+
+As of 2026-10-01 audit baseline:
+
+- ADR-026/#714 implementation is landed.
+- the #715 production-acceptance harness implementation is landed.
+- #715 itself remains open pending actual production qualification.
+- machine Product Control owns newer lifecycle reconciliation.
+
+## Rejected/prevented patterns
+
+- Document as the sole unit of intelligence.
+- Parallel independent WBS authorities.
+- Pending AI output mutating official state.
+- Generic “approve latest” semantics.
+- Fabricated evidence locators.
+- Agent mesh as prerequisite for core product value.
+- Treating a merged harness as production proof.
+
+## Related
+
+- [Current TDD](../C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md)
+- [Architecture index](../../ARCHITECTURE_INDEX.md)
 - [Documentation index](../../README.md)
+- [Product Control](../../product/00-c2pro-master-product-control-v1.md)
