@@ -31,6 +31,16 @@ class PermissiveProcessingAuthority:
         # fake grants have no row to verify against).
         return real.bound_authority(None)
 
+    @staticmethod
+    def current_authority() -> ProcessingAuthority | None:
+        # Mirrors bound_authority: nothing is bound, so #758's analysis
+        # lineage falls back to the legacy shared thread in these DB-less
+        # tests. That keeps them exercising what they are about; they prove
+        # nothing about lineage isolation, which needs a real checkpointer
+        # (tests/integration/document_flow/
+        # test_758_checkpoint_lineage_authority_fence.py).
+        return real.current_authority()
+
     def __init__(self) -> None:
         self.grants: list[ProcessingAuthority] = []
         self.settled: list[dict[str, Any]] = []

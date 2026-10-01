@@ -50,6 +50,7 @@ setup: ## Setup inicial completo (Supabase)
 setup-local: ## Setup con Docker local
 	@echo "$(CYAN)🚀 Configurando C2PRO (Docker)...$(RESET)"
 	@make setup-env
+	@make check-local-postgres-password
 	@make setup-backend
 	@make setup-frontend
 	@make setup-infra
@@ -62,6 +63,9 @@ setup-env: ## Crear archivo .env desde ejemplo
 	else \
 		echo "$(GREEN)✓ Archivo .env ya existe$(RESET)"; \
 	fi
+
+check-local-postgres-password: ## Validar password PostgreSQL local antes de arrancar Docker
+	@python scripts/validate_local_postgres_password.py
 
 setup-backend: ## Instalar dependencias del backend (Docker)
 	@echo "$(CYAN)📦 Instalando dependencias del backend...$(RESET)"
@@ -77,7 +81,7 @@ setup-frontend: ## Instalar dependencias del frontend (pnpm workspace)
 	@echo "$(CYAN)📦 Instalando dependencias del frontend...$(RESET)"
 	pnpm install
 
-setup-infra: ## Iniciar servicios de infraestructura
+setup-infra: check-local-postgres-password ## Iniciar servicios de infraestructura
 	@echo "$(CYAN)🐳 Iniciando servicios Docker...$(RESET)"
 	docker compose up -d postgres redis minio minio-setup
 	@echo "$(CYAN)⏳ Esperando a que los servicios estén listos...$(RESET)"
@@ -108,7 +112,7 @@ backend-dev: ## Iniciar backend en desarrollo (Supabase)
 	@echo "$(CYAN)🚀 Iniciando backend...$(RESET)"
 	cd apps/api && python dev.py
 
-dev-infra: ## Iniciar solo infraestructura
+dev-infra: check-local-postgres-password ## Iniciar solo infraestructura
 	docker compose up -d postgres redis minio
 
 dev-api: ## Iniciar backend en modo desarrollo
@@ -132,8 +136,10 @@ db-migrate-status: ## Ver estado de migraciones
 db-migrate-history: ## Ver historial de migraciones
 	cd apps/api && python migrate.py history
 
-db-reset: ## Resetear base de datos (⚠️ destruye datos)
-	docker compose down -v postgres
+db-reset: check-local-postgres-password ## Resetear solo PostgreSQL local (⚠️ destruye datos DB)
+	docker compose stop postgres
+	docker compose rm -sf postgres
+	docker compose config --format json | python -c 'import json, subprocess, sys; name=json.load(sys.stdin)["volumes"]["postgres_data"]["name"]; subprocess.run(["docker", "volume", "rm", name], check=True)'
 	docker compose up -d postgres
 	@sleep 3
 	@make db-migrate

@@ -1,0 +1,156 @@
+"""Security regression for local docker-compose database credentials."""
+
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+LEGACY_LOCAL_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/c2pro"
+VALIDATOR_SCRIPT_NAME = "validate_local_postgres_password.py"
+SAFE_PASSWORD_ASSIGNMENT = "POSTGRES_PASSWORD=Safe_Local-123.~\n"
+UNSAFE_PASSWORD_ASSIGNMENT = "POSTGRES_PASSWORD=bad/password\n"
+TEXT_ENCODING = "utf-8"
+
+
+def test_local_compose_requires_environment_supplied_postgres_password():
+    compose = (REPO_ROOT / "docker-compose.yml").read_text(encoding=TEXT_ENCODING)
+    env_example = (REPO_ROOT / ".env.example").read_text(encoding=TEXT_ENCODING)
+    quick_start = (REPO_ROOT / "QUICK_START.md").read_text(encoding=TEXT_ENCODING)
+    root_readme = (REPO_ROOT / "README.md").read_text(encoding=TEXT_ENCODING)
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding=TEXT_ENCODING)
+    api_readme = (REPO_ROOT / "apps/api/README.md").read_text(encoding=TEXT_ENCODING)
+    contract_flow = (REPO_ROOT / "scripts/prove_real_contract_flow.py").read_text(
+        encoding=TEXT_ENCODING
+    )
+    checkpointer_e2e = (REPO_ROOT / "scripts/test_checkpointer_e2e.py").read_text(
+        encoding=TEXT_ENCODING
+    )
+
+    assert "POSTGRES_PASSWORD: postgres" not in compose
+    assert "postgresql://postgres:postgres@postgres:5432/c2pro" not in compose
+    assert compose.count("${POSTGRES_PASSWORD:?") == 3
+
+    assert "POSTGRES_PASSWORD=" in env_example
+    assert LEGACY_LOCAL_DATABASE_URL not in env_example
+    assert LEGACY_LOCAL_DATABASE_URL not in quick_start
+    assert LEGACY_LOCAL_DATABASE_URL not in api_readme
+    assert "postgresql+asyncpg://postgres:postgres@localhost:5432/c2pro" not in contract_flow
+    assert "postgresql+asyncpg://postgres:postgres@localhost:5432/c2pro" not in checkpointer_e2e
+
+    assert "check-local-postgres-password" in makefile
+    assert "python scripts/validate_local_postgres_password.py" in makefile
+
+    start_dev_sh = (REPO_ROOT / "scripts/start-dev.sh").read_text(encoding=TEXT_ENCODING)
+    start_dev_ps1 = (REPO_ROOT / "scripts/start-dev.ps1").read_text(encoding=TEXT_ENCODING)
+    assert quick_start.count(VALIDATOR_SCRIPT_NAME) >= 2
+    assert VALIDATOR_SCRIPT_NAME in root_readme
+    assert VALIDATOR_SCRIPT_NAME in start_dev_sh
+    assert VALIDATOR_SCRIPT_NAME in start_dev_ps1
+
+    assert "existing postgres_data volume" in quick_start
+    assert "\\password postgres" in quick_start
+    assert re.search(
+        r"(?m)^\s*docker compose down -v\s*$",
+        quick_start,
+    ) is None
+    assert '"volumes"]["postgres_data"]["name"]' in quick_start
+
+    assert "dotenv_values" in contract_flow
+    assert "dotenv_values" in checkpointer_e2e
+
+
+def test_local_postgres_password_validator_matches_effective_precedence(
+    tmp_path: Path,
+) -> None:
+    validator = REPO_ROOT / "scripts" / VALIDATOR_SCRIPT_NAME
+
+    def run_guard(
+        env_text: str | None,
+        *,
+        exported: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        env_path = tmp_path / ".env"
+        if env_text is None:
+            env_path.unlink(missing_ok=True)
+        else:
+            env_path.write_text(env_text, encoding=TEXT_ENCODING)
+
+        env = os.environ.copy()
+        env.pop("POSTGRES_PASSWORD", None)
+        if exported is not None:
+            env["POSTGRES_PASSWORD"] = exported
+
+        return subprocess.run(
+            [sys.executable, str(validator)],
+            cwd=tmp_path,
+            text=True,
+            capture_output=True,
+            check=False,
+            env=env,
+        )
+
+    missing = run_guard(None)
+    assert missing.returncode != 0
+    assert ".env is required" in (missing.stdout + missing.stderr)
+
+    empty = run_guard("POSTGRES_PASSWORD=\n")
+    assert empty.returncode != 0
+    assert "POSTGRES_PASSWORD must be non-empty" in (empty.stdout + empty.stderr)
+
+    unsafe = run_guard(UNSAFE_PASSWORD_ASSIGNMENT)
+    assert unsafe.returncode != 0
+    assert "URI-unreserved" in (unsafe.stdout + unsafe.stderr)
+
+    safe = run_guard(SAFE_PASSWORD_ASSIGNMENT)
+    assert safe.returncode == 0, safe.stdout + safe.stderr
+
+    quoted_safe = run_guard('POSTGRES_PASSWORD="Safe_Local-123.~"\n')
+    assert quoted_safe.returncode == 0, quoted_safe.stdout + quoted_safe.stderr
+
+    single_quoted_safe = run_guard("POSTGRES_PASSWORD='Safe_Local-123.~'\n")
+    assert single_quoted_safe.returncode == 0, (
+        single_quoted_safe.stdout + single_quoted_safe.stderr
+    )
+
+    unquoted_with_comment = run_guard(
+        "POSTGRES_PASSWORD=Safe_Local-123.~ # local password\n"
+    )
+    assert unquoted_with_comment.returncode == 0, (
+        unquoted_with_comment.stdout + unquoted_with_comment.stderr
+    )
+
+    quoted_with_comment = run_guard(
+        'POSTGRES_PASSWORD="Safe_Local-123.~" # local password\n'
+    )
+    assert quoted_with_comment.returncode == 0, (
+        quoted_with_comment.stdout + quoted_with_comment.stderr
+    )
+
+    unsafe_export_override = run_guard(
+        SAFE_PASSWORD_ASSIGNMENT,
+        exported="bad/password",
+    )
+    assert unsafe_export_override.returncode != 0
+    assert "URI-unreserved" in (
+        unsafe_export_override.stdout + unsafe_export_override.stderr
+    )
+
+    duplicate_last_wins = run_guard(
+        SAFE_PASSWORD_ASSIGNMENT + UNSAFE_PASSWORD_ASSIGNMENT
+    )
+    assert duplicate_last_wins.returncode != 0
+
+    duplicate_last_safe = run_guard(
+        UNSAFE_PASSWORD_ASSIGNMENT + SAFE_PASSWORD_ASSIGNMENT
+    )
+    assert duplicate_last_safe.returncode == 0, (
+        duplicate_last_safe.stdout + duplicate_last_safe.stderr
+    )
+
+    exported_without_file = run_guard(None, exported="Safe_Export-123.~")
+    assert exported_without_file.returncode != 0
+    assert ".env is required" in (
+        exported_without_file.stdout + exported_without_file.stderr
+    )

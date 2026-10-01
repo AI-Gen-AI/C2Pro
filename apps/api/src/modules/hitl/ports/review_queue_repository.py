@@ -29,6 +29,28 @@ class IReviewQueueRepository(Protocol):
     # Returns None when there is no active review.
     async def find_active_review(self, document_id: UUID, review_type: str) -> ReviewItem | None: ...
 
+    async def claim_checkpoint_lineage(
+        self,
+        *,
+        row_id: UUID,
+        thread_id: str,
+        lineage_generation: int | None = None,
+        lineage_fencing_token: int | None = None,
+    ) -> None:
+        """Point a review at `thread_id` and DROP any superseded checkpoint id.
+
+        #758. A processing takeover inherits the review its predecessor
+        created; this is how the new owner takes the lineage over. Clearing
+        the checkpoint id is the point of a separate method: it belongs to the
+        superseded lineage, and `update_review_item` deliberately refuses to
+        null these columns, so it cannot express this.
+
+        The claiming attempt's processing generation and fencing token are
+        recorded with the thread, which is what lets every later seam ask
+        "does the attempt that bound this review still own the document?"
+        rather than trust the thread name alone.
+        """
+
     async def list_by_status(
         self,
         status: ReviewStatus | None = None,

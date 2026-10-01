@@ -75,25 +75,19 @@ WORKDIR /app
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv
 
-# Copy application code
-COPY --chown=appuser:appgroup . .
-RUN sed -i 's/\r$//' /app/start.sh
+# Copy only production runtime surfaces. COPY defaults to root:root here,
+# keeping runtime code/config immutable to the non-root app user.
+# Requirements/constraints were consumed in the builder and the resulting
+# virtualenv is copied above.
+COPY src/ ./src/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./alembic.ini
+COPY scripts/ ./scripts/
+COPY start.sh ./start.sh
+RUN sed -i 's/\r$//' /app/start.sh /app/scripts/*.sh
 
 # Create uploads directory with proper ownership for non-root user
 RUN mkdir -p /app/uploads && chown appuser:appgroup /app/uploads
-
-# Remove unnecessary files from final image
-RUN rm -rf \
-    tests/ \
-    *.md \
-    .pytest_cache/ \
-    __pycache__/ \
-    .git/ \
-    .gitignore \
-    .env.example \
-    Makefile \
-    docker-compose*.yml \
-    2>/dev/null || true
 
 # Switch to non-root user
 USER appuser
