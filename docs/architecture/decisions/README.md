@@ -37,6 +37,10 @@ An ADR records a **decision and its consequences**. It is not a live task board 
 - [ADR-025 Canonical Project Controls WBS Backbone](./ADR-025-canonical-project-controls-wbs-backbone.md)
 - [ADR-026 Trusted-State Commit & Exact Approval Binding](./ADR-026-trusted-state-commit-and-approval-binding.md)
 
+## Historical non-ADR artifact
+
+- [C2Pro v3.0 — Execution-Grade Implementation Plan](./C2Pro%20v3.0%20%E2%80%94%20Execution-Grade%20Imp.md) — preserved implementation history from 2026-06-07. It is **not** part of the ADR canon and does not define current CI/lifecycle state.
+
 ## Cross-cutting invariants
 
 ### Project intelligence
