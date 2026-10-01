@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-C2Pro — Contract Intelligence Platform. Tridimensional audit (Contract + Schedule + Budget) that uses AI to detect incoherencies before they cause cost overruns. Monorepo managed with pnpm workspaces (`pnpm-workspace.yaml` → `apps/*`).
+C2Pro — evidence-backed contract, project-controls and procurement intelligence for construction/infrastructure projects. Evidence enters a governed project model with one canonical hierarchical WBS; Health, relational Coherence, temporal/change intelligence, Alerts/HITL and reporting turn that state into traceable decisions. Monorepo managed with pnpm workspaces (`pnpm-workspace.yaml` → `apps/*`).
 
 **Product architecture**: evidence-backed Project Health, relational Coherence, temporal/change intelligence, one canonical hierarchical WBS, Alerts/HITL, and governed procurement/project-control workflows. Health, Coherence and Alerts are distinct first-class domain signals.
 
