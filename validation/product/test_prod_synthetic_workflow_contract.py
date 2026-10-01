@@ -32,6 +32,19 @@ def test_observed_shas_are_not_operator_self_assertions() -> None:
     assert "PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: ${{ env.PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA }}" in source
 
 
+def test_railway_provider_supports_both_documented_token_headers_and_fails_closed() -> None:
+    source = _source()
+    provider = source[
+        source.index("Observe production deployment identities from providers") :
+        source.index("Verify independently observed deployment identities")
+    ]
+    assert '"Authorization"' in provider
+    assert '"Project-Access-Token"' in provider
+    assert "Railway provider observation failed for all supported token authentication modes." in provider
+    assert "(.errors // [])" in provider
+    assert "serviceInstance(serviceId:" in provider
+
+
 def test_provider_identity_is_checked_before_browser_mutation() -> None:
     source = _source()
     observe = source.index("Observe production deployment identities from providers")
@@ -155,7 +168,7 @@ def test_production_playwright_projects_disable_sensitive_artifacts() -> None:
         assert 'video: "off"' in snippet
 
 
-def test_provider_observation_is_bound_to_canonical_service_and_project_ids() -> None:
+def test_provider_observation_is_bound_to_canonical_service_and_environment_ids() -> None:
     source = _source()
     provider = source[
         source.index("Observe production deployment identities from providers") :
@@ -165,6 +178,8 @@ def test_provider_observation_is_bound_to_canonical_service_and_project_ids() ->
     assert '"api:${PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID}"' in provider
     assert '"worker:${PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID}"' in provider
     assert '"scheduler:${PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID}"' in provider
+    assert 'environment "$PROD_ACCEPTANCE_RAILWAY_ENVIRONMENT_ID"' in provider
+    assert "serviceInstance(serviceId:" in provider
     assert "query deployment($id:" not in provider
 
     verifier = source[
