@@ -1,7 +1,7 @@
 # Documentation Reconciliation Audit — 2026-10-01
 
 **Repository:** AI-Gen-AI/C2Pro  
-**Baseline main SHA:** `a025982e101b14407dc9012b97841d3b77c35b34`  
+**Baseline main SHA:** `33650a28a930d82a7bd65d98b50981145b3fd1d1`  
 **Scope:** canonical documentation, architecture decisions, product/development status pointers, runtime/deployment documentation and root navigation
 
 ## Executive finding
@@ -146,3 +146,10 @@ The requested final automated Codex re-review could not run because the reposito
 ## Review conclusion
 
 The reconciliation is acceptable only if the **exact final head** passes Product-Control parity/tests, CI, secret/install/dependency/security gates and the final adversarial review has no unresolved material finding. Earlier green heads are not sufficient evidence for later documentation commits.
+
+
+### Third adversarial round — moving-base reconciliation
+
+During final review, `main` advanced after the original documentation baseline. PR #781 merged backend support for Clerk v2 organization claims, moving `main` from `a025982e...` to `33650a28a930d82a7bd65d98b50981145b3fd1d1`.
+
+**Disposition:** the documentation branch was merged forward to the new `main`, the architecture/product-control baseline was rebound to the new SHA, and the auth baseline now records the supported Clerk v2 organization-claim path. This prevents #780 from merging with a baseline that was already stale.
