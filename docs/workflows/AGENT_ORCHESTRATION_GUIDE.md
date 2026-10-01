@@ -1,8 +1,14 @@
 # Agent Orchestration Guide
 
+> **Lifecycle:** Historical / superseded orchestration guide  
+> **Superseded by:** the single-writer `.c2pro/` control plane and `docs/architecture/development/`  
+> **Do not execute the blackboard/backlog mutation workflow below as current procedure.**  
+> Preserved unchanged below for architecture/process history. Reclassified 2026-10-01.
+
+
 **Version**: 1.0.0
 **Last Updated**: 2026-04-04
-**Status**: Production-Ready ✅
+**Historical status at time of writing**: Production-Ready ✅
 
 ---
 
