@@ -7,7 +7,7 @@ This section contains C2Pro's current platform design, durable architecture deci
 - [Platform Technical Design v4.2](./C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md) — **current platform baseline**
 - [Architecture Decision Records](./decisions/README.md)
 - [Flow diagrams](./FLOW_DIAGRAMS.md)
-- [LangGraph checkpointing](./LANGGRAPH_CHECKPOINTING.md)
+- [LangGraph checkpointing](./LANGGRAPH_CHECKPOINTING.md) — dated implementation note; re-verify against ADR-017/026 + current code
 - [Detailed diagrams](./diagrams/)
 - [Architecture notes](./notes/)
 
