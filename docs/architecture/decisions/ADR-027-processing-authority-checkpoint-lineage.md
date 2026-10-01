@@ -21,9 +21,9 @@ Each processing generation/attempt is bound to a deterministic authority identit
 
 - a stale attempt cannot perform canonical durable mutation;
 - its checkpoint evidence may remain append-only, but cannot become selectable as the current lineage;
-- current review metadata binds the exact current checkpoint tuple;
-- HITL resume uses that exact persisted checkpoint identity;
-- absence of an exact checkpoint identity cannot silently fall back across an authority boundary.
+- current review metadata binds the authority-scoped processing thread and, when capture succeeds, the exact checkpoint tuple;
+- HITL resume uses the exact persisted checkpoint identity when present; if no checkpoint ID was captured, thread-only recovery may resolve the latest checkpoint only inside that same authority-scoped attempt lineage;
+- absence of an exact checkpoint identity can never fall back across an authority boundary.
 
 ## Locking / ordering rule
 
@@ -36,7 +36,7 @@ The document/generation authority boundary is therefore part of workflow correct
 - **PA-1:** after fence `N+1` is acquired, fence `N` cannot make later canonical durable writes.
 - **PA-2:** stale checkpoint lineage cannot be selected as current after takeover.
 - **PA-3:** current review/checkpoint binding belongs to the current authority generation.
-- **PA-4:** HITL resumes the exact persisted checkpoint tuple.
+- **PA-4:** HITL resumes the exact persisted checkpoint tuple when available; otherwise thread-only fallback is confined to the same authority-scoped attempt lineage.
 - **PA-5:** retry/redelivery remains idempotent and does not duplicate review/trusted effects.
 - **PA-6:** reprocess/new revision creates a new generation boundary.
 - **PA-7:** “latest checkpoint by document thread” is insufficient across ownership changes.
