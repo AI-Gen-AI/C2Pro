@@ -456,6 +456,42 @@ async def test_get_current_user_rejects_inactive_user_from_local_jwt(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_get_current_user_uses_clerk_v2_compact_org_for_bootstrap(monkeypatch):
+    """Clerk v2 o.id must drive org-bound bootstrap instead of personal fallback."""
+    credentials = SimpleNamespace(credentials="clerk-v2-token")
+    db = SimpleNamespace(execute=AsyncMock())
+    expected_user = SimpleNamespace(id=uuid4(), tenant_id=uuid4(), is_active=True)
+    provision = AsyncMock(return_value=expected_user)
+
+    monkeypatch.setattr(
+        "src.core.auth.dependencies._try_clerk_jwt",
+        AsyncMock(
+            return_value={
+                "v": 2,
+                "sub": "user_v2",
+                "o": {"id": "org_v2", "rol": "member", "slg": "qualification"},
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        "src.core.auth.dependencies._provision_clerk_user",
+        provision,
+    )
+
+    result = await get_current_user(credentials, db)
+
+    assert result is expected_user
+    provision.assert_awaited_once_with(
+        db,
+        "user_v2",
+        "org_v2",
+        None,
+        None,
+        None,
+    )
+
+
+@pytest.mark.asyncio
 async def test_get_current_user_rejects_clerk_claims_without_subject(monkeypatch):
     """Should reject Clerk claims that omit the user identifier."""
     credentials = SimpleNamespace(credentials="clerk-token")

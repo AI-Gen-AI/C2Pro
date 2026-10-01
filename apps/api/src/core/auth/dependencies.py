@@ -213,6 +213,11 @@ async def get_current_user(
     # First, try Clerk JWT (RS256)
     clerk_claims = await _try_clerk_jwt(token)
     if clerk_claims:
+        # Normalize Clerk v2 compact Organization claims before bootstrap.
+        from src.core.middleware.clerk_auth import normalize_clerk_claims
+
+        clerk_claims = normalize_clerk_claims(clerk_claims)
+
         # Extract Clerk-specific claims
         clerk_user_id = clerk_claims.get("sub")
         clerk_org_id = clerk_claims.get("org_id") or clerk_claims.get("organization_id")

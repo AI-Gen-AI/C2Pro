@@ -116,6 +116,44 @@ def clear_jwks_cache() -> None:
     get_clerk_jwks.cache_clear()
 
 
+def normalize_clerk_claims(claims: dict[str, Any]) -> dict[str, Any]:
+    """Normalize Clerk organization claims across session-token versions.
+
+    Clerk session-token v2 stores active Organization context in the compact
+    o claim (o.id, o.rol, o.slg). Older v1 tokens exposed org_id, org_role
+    and org_slug as top-level claims.
+
+    Downstream C2Pro auth code consumes the legacy canonical keys. For v2 we
+    derive those aliases exclusively from the compact Organization claim so a
+    custom/legacy top-level claim cannot override the authenticated v2 context.
+    """
+    normalized = dict(claims)
+    version = str(claims.get("v", ""))
+    compact_org = claims.get("o")
+
+    if version == "2":
+        normalized.pop("org_id", None)
+        normalized.pop("organization_id", None)
+        normalized.pop("org_role", None)
+        normalized.pop("organization_role", None)
+        normalized.pop("org_slug", None)
+        normalized.pop("organization_slug", None)
+
+    if isinstance(compact_org, dict):
+        compact_id = compact_org.get("id")
+        compact_role = compact_org.get("rol")
+        compact_slug = compact_org.get("slg")
+
+        if isinstance(compact_id, str) and compact_id:
+            normalized["org_id"] = compact_id
+        if isinstance(compact_role, str) and compact_role:
+            normalized["org_role"] = compact_role
+        if isinstance(compact_slug, str) and compact_slug:
+            normalized["org_slug"] = compact_slug
+
+    return normalized
+
+
 async def verify_clerk_token(token: str) -> dict[str, Any]:
     """
     Verify Clerk JWT token and extract claims.
@@ -191,7 +229,7 @@ async def verify_clerk_token(token: str) -> dict[str, Any]:
             options=decode_options,
         )
 
-        return decoded
+        return normalize_clerk_claims(dict(decoded))
 
     except jwt.ExpiredSignatureError:
         raise ClerkTokenVerificationError("Token has expired")
@@ -214,18 +252,25 @@ class ClerkUser:
     """Represents a verified Clerk user with extracted claims."""
 
     def __init__(self, claims: dict[str, Any]):
-        self.claims = claims
-        self.user_id = claims.get("sub")
-        self.email = claims.get("email")
-        self.first_name = claims.get("first_name")
-        self.last_name = claims.get("last_name")
-        self.org_id = claims.get("org_id") or claims.get("organization_id")
-        self.org_role = claims.get("org_role") or claims.get("organization_role")
-        self.org_slug = claims.get("org_slug") or claims.get("organization_slug")
-        self.email_verified = claims.get("email_verified", False)
+        normalized_claims = normalize_clerk_claims(claims)
+        self.claims = normalized_claims
+        self.user_id = normalized_claims.get("sub")
+        self.email = normalized_claims.get("email")
+        self.first_name = normalized_claims.get("first_name")
+        self.last_name = normalized_claims.get("last_name")
+        self.org_id = normalized_claims.get("org_id") or normalized_claims.get(
+            "organization_id"
+        )
+        self.org_role = normalized_claims.get("org_role") or normalized_claims.get(
+            "organization_role"
+        )
+        self.org_slug = normalized_claims.get("org_slug") or normalized_claims.get(
+            "organization_slug"
+        )
+        self.email_verified = normalized_claims.get("email_verified", False)
 
         # Organization metadata (if present in token)
-        org_metadata = claims.get("org_public_metadata", {})
+        org_metadata = normalized_claims.get("org_public_metadata", {})
         self.tenant_id = org_metadata.get("tenant_id")
         self.is_demo = org_metadata.get("is_demo", False)
         self.service_tier = org_metadata.get("tier", "free")
@@ -461,6 +506,7 @@ __all__ = [
     "get_clerk_jwks",
     "get_clerk_user",
     "get_current_tenant_id",
+    "normalize_clerk_claims",
     "require_admin",
     "require_organization",
     "require_tenant",
