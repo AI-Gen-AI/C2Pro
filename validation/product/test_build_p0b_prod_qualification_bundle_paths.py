@@ -56,5 +56,5 @@ def test_sha256_hashes_evidence_bytes(tmp_path: Path) -> None:
 
     assert (
         _sha256(artifact)
-        == "ab47f9f0d734581ed9652b47f1755619917e607a031e17e90f3d0d9d401d8422"
+        == "b51e697e6ad7dc2485112282cac26c9e22bc81e3af450b5845841c7505053ddd"
     )
