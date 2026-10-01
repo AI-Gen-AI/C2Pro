@@ -188,15 +188,11 @@ def verify(
 
     return {
         "backend": {
-            "expected_commit_sha": backend,
             "api": api,
             "worker": worker,
             "scheduler": scheduler,
         },
-        "frontend": {
-            "expected_commit_sha": frontend,
-            **vercel,
-        },
+        "frontend": vercel,
     }
 
 
