@@ -176,6 +176,56 @@ def test_railway_public_graphql_shapes_are_supported():
     assert result["backend"]["scheduler"]["deployment_id"] == "dep_scheduler"
 
 
+def test_railway_service_instance_latest_deployment_shape_is_supported():
+    api_graphql = {
+        "data": {
+            "serviceInstance": {
+                "latestDeployment": {
+                    "id": "dep_api",
+                    "status": "SUCCESS",
+                    "meta": {"commitHash": BACKEND},
+                }
+            }
+        }
+    }
+    worker_graphql = {
+        "data": {
+            "serviceInstance": {
+                "latestDeployment": {
+                    "id": "dep_worker",
+                    "status": "SUCCESS",
+                    "meta": {"commitHash": BACKEND},
+                }
+            }
+        }
+    }
+    scheduler_graphql = {
+        "data": {
+            "serviceInstance": {
+                "latestDeployment": {
+                    "id": "dep_scheduler",
+                    "status": "SUCCESS",
+                    "meta": {"commitHash": BACKEND},
+                }
+            }
+        }
+    }
+
+    result = run(
+        api_payload=api_graphql,
+        worker_payload=worker_graphql,
+        scheduler_payload=scheduler_graphql,
+    )
+    assert result["backend"]["api"]["deployment_id"] == "dep_api"
+    assert result["backend"]["worker"]["deployment_id"] == "dep_worker"
+    assert result["backend"]["scheduler"]["deployment_id"] == "dep_scheduler"
+
+
+def test_graphql_error_payload_fails_closed():
+    with pytest.raises(IdentityError, match="no deployments list"):
+        run(api_payload={"data": None, "errors": [{"message": "not authorized"}]})
+
+
 def test_provider_inputs_are_fixed_to_canonical_evidence_root(tmp_path: Path):
     provider_root = tmp_path / "evidence/product-qualification/runtime/provider"
     provider_root.mkdir(parents=True)

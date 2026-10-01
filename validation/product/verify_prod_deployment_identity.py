@@ -56,6 +56,12 @@ def _graphql_deployments(data: Any) -> list[dict[str, Any]]:
     if isinstance(single, dict):
         return [single]
 
+    service_instance = data.get("serviceInstance")
+    if isinstance(service_instance, dict):
+        latest = service_instance.get("latestDeployment")
+        if isinstance(latest, dict):
+            return [latest]
+
     connection = data.get("deployments")
     if not isinstance(connection, dict):
         return []
