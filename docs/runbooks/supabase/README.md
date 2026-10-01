@@ -1,9 +1,14 @@
-# C2Pro - Supabase Database Infrastructure
+# C2Pro - Supabase Database Infrastructure (Legacy Bootstrap Reference)
+
+> **Status:** Historical / compatibility reference — **NOT current production setup authority**  
+> **Reconciled:** 2026-10-01  
+> Current application migration authority is Alembic under `apps/api/alembic/`. Human login is Clerk; current tenant isolation follows the runtime tenant-context/RLS design and security migrations/tests.  
+> Do **not** bootstrap a current environment by applying the archived `001_init_schema.sql` from this guide. Use the current database/runbook/bootstrap paths and CI migration gates.
 
 **Sprint**: S0.2 / S0.3
 **Version**: 2.4.0
 **Date**: 2026-01-13
-**Status**: Production-Ready
+**Status**: Historical baseline (superseded)
 
 ---
 

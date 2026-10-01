@@ -1,4 +1,8 @@
-# C2Pro - Supabase Database Setup Instructions
+# C2Pro - Supabase Database Setup Instructions (Historical)
+
+> **Status:** Superseded setup guide / compatibility reference  
+> **Reconciled:** 2026-10-01  
+> This 2026-01 procedure predates the current Alembic migration authority and Clerk identity architecture. Do not use the archived initial SQL or Supabase Auth steps to provision a current C2Pro environment. Follow current Alembic/bootstrap/runbooks and Clerk configuration instead.
 
 **Sprint**: S0.2 / S0.3
 **Versión**: 2.4.0

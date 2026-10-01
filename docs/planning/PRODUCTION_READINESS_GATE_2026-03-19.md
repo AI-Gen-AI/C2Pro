@@ -1,7 +1,7 @@
 # C2Pro Production Readiness Gate
 
 Date: `2026-03-19`
-Status: `OPEN`
+Status: `HISTORICAL SNAPSHOT — SUPERSEDED AS CURRENT RELEASE AUTHORITY`
 Owner: `Senior Staff Architect / Engineering Leadership`
 Purpose: Convert the engineering backlog into an executive-quality release gate so the team can distinguish feature completion from true production readiness.
 
@@ -9,15 +9,17 @@ Purpose: Convert the engineering backlog into an executive-quality release gate 
 
 ## Governance Note
 
-This document defines production-readiness gates and approval expectations.
+This document records the production-readiness model as of 2026-03-19. It is retained as historical evidence and is **not** the current release or task authority.
 
-It is not the canonical task register. Any open implementation or follow-up items derived from these gates must be tracked in `C2PRO_MASTER_BACKLOG.md`.
+Current release policy: `docs/RELEASE_CRITERIA.md` and `docs/internal/RELEASE_SIGNOFF_POLICY.md`.  
+Current execution state: `.c2pro/control/`.  
+Current product lifecycle: `validation/product/c2pro-master-product-control-v1.yaml`.
 
 ---
 
 ## Executive Position
 
-`C2PRO_MASTER_BACKLOG.md` is now the primary engineering delivery backlog for known work.
+At this historical snapshot, `C2PRO_MASTER_BACKLOG.md` was the primary engineering delivery backlog. It is now a legacy/cold reference under the Single-Writer Control Plane.
 
 It is not, by itself, sufficient evidence that C2Pro is production-ready.
 

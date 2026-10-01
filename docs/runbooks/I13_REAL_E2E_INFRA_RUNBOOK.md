@@ -1,5 +1,9 @@
 # I13 Real E2E Infra Runbook
 
+**Status:** Current supporting reliability runbook  
+**Updated:** 2026-10-01  
+**Merge/release authority:** repository ruleset + `docs/RELEASE_CRITERIA.md`
+
 Date: `2026-02-15`  
 Owner: `@docs-agent`  
 Scope: I13 real E2E bootstrap + execution without service-layer mocks
@@ -45,19 +49,20 @@ pytest apps/api/tests/e2e/flows/test_i13_decision_intelligence_real_e2e.py -q
 ```
 
 Expected outcome:
-- route contract suite: `5 passed`
-- real I13 E2E suite: `5 passed`
-- no `401` auth bootstrap failures
-- no `404` route-missing failures
+- all selected I13 route/real-flow tests pass;
+- no auth-bootstrap or route-missing regression;
+- use the current test result/JUnit artifact for exact counts rather than this runbook.
 
-## CI Contract (S6 Gate)
-Blocking merge gate:
-- Workflow: `.github/workflows/tests.yml`
-- Job: `S6 I13 Real E2E (Blocking)` (`i13-real-e2e`)
+## CI / Release Contract
 
-Scheduled reliability:
+I13 is a **reliability/release evidence surface**, not a timeless protected-branch blocking job.
+
 - Workflow: `.github/workflows/i13-real-e2e-scheduled.yml`
-- Runs nightly and on manual dispatch.
+- Schedule: daily at the workflow-defined cron.
+- Manual dispatch can bind a release candidate SHA.
+- The workflow emits JUnit/diagnostic evidence and, on manual release dispatch, an I13 release summary.
+
+Whether I13 is required for a specific release is defined by the current release/Product-Control contract. Required merge checks come from the live repository ruleset, not this runbook.
 
 Artifacts produced:
 - JUnit XML for I13 suites
@@ -97,7 +102,8 @@ Rationale:
 
 ---
 
-Last Updated: 2026-02-15
+Last Updated: 2026-10-01
 
 Changelog:
+- 2026-10-01: Reconciled CI/release authority after workflow consolidation; removed stale `tests.yml` blocking-gate claim and fixed-count assertions.
 - 2026-02-15: Added first version of I13 real E2E infra runbook with bootstrap, CI contract, migration rationale, and risk notes.

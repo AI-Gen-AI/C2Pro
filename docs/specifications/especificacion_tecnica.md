@@ -5,10 +5,10 @@
 **Versión:** 1.0.0  
 **Fecha:** 29 de Diciembre de 2024  
 **Autor:** Jesús - Strategic Procurement Director  
-**Estado:** MVP - Fase 1  
+**Estado:** HISTÓRICO / SUPERSEDED  
 **Clasificación:** CONFIDENCIAL
 
-Actualización de estado (2026-03-20): esta especificación técnica funciona como baseline funcional/arquitectónica histórica. Para el estado real de implementación, hardening y release-readiness actual, deben consultarse los artefactos vigentes de planning, gates, auditoría y runbooks.
+Actualización de gobierno (2026-10-01): esta especificación de 2024 se conserva como baseline histórica de producto/MVP. **No es autoridad técnica vigente.** La arquitectura actual está en `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md` + ADRs aceptados; producto/lifecycle en `validation/product/c2pro-master-product-control-v1.yaml`. En particular, las referencias a Next.js 14, Supabase Auth como login humano y el modelo RLS basado en `auth.jwt()` describen el diseño histórico y no deben usarse para implementar el runtime actual.
 
 ---
 
