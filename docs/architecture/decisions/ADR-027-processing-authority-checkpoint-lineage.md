@@ -47,7 +47,7 @@ The document/generation authority boundary is therefore part of workflow correct
 
 - recovery no longer trades availability for state corruption;
 - LangGraph state and application state share one authority model;
-- exact HITL review binding in ADR-026 becomes meaningful.
+- authority-scoped HITL review binding in ADR-026 becomes meaningful.
 
 **Constraints**
 
