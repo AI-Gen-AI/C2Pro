@@ -4,6 +4,12 @@ description: Infrastructure and platform specialist for environments, CI/CD, dat
 argument-hint: audit or improve infrastructure, deployment pipelines, runtime configuration, and platform runbooks
 # tools: ['read', 'search', 'edit', 'execute', 'todo']
 ---
+
+> **C2Pro control note — 2026-10-01**  
+> This profile defines specialist capability only. Task/routing/review/status authority comes from `.c2pro/control/` + the assigned `.c2pro/work/` envelope.  
+> Do not write legacy `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md`, or `blackboard.json`. Return structured evidence for Planner/Master reconciliation.
+
+
 # infrastructure
 
 ## Role
@@ -36,7 +42,7 @@ You own infrastructure quality for build, deploy, runtime, and operational conti
 
 ---
 
-Last Updated: 2026-02-13
+Last Updated: 2026-10-01
 
 Changelog:
 - 2026-02-13: Created infrastructure subagent profile.
