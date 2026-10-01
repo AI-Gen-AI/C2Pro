@@ -274,6 +274,69 @@ describe("AuthSync integration", () => {
     ).toBe(false);
   });
 
+  it("ignores a superseded Organization token request that resolves after the new Organization", async () => {
+    mockOrgId = "org-a";
+    mockTenantUuid = "tenant-a";
+    mockMemberships = [{ organization: { id: "org-a" } }];
+
+    let resolveA!: (token: string) => void;
+    const tokenA = new Promise<string>((resolve) => {
+      resolveA = resolve;
+    });
+    getTokenMock.mockImplementation(async (options) => {
+      if (options?.organizationId === "org-a") {
+        return tokenA;
+      }
+      if (options?.organizationId === "org-b") {
+        return "token-b";
+      }
+      return "unexpected-unscoped-token";
+    });
+
+    const view = render(
+      <AuthSync>
+        <div>auth-child</div>
+      </AuthSync>,
+    );
+
+    await waitFor(() => {
+      expect(getTokenMock).toHaveBeenCalledWith({
+        organizationId: "org-a",
+        skipCache: true,
+      });
+    });
+
+    mockOrgId = "org-b";
+    mockTenantUuid = "tenant-b";
+    mockMemberships = [{ organization: { id: "org-b" } }];
+
+    view.rerender(
+      <AuthSync>
+        <div>auth-child</div>
+      </AuthSync>,
+    );
+
+    await waitFor(() => {
+      expect(useAuthStore.getState()).toMatchObject({
+        token: "token-b",
+        tenantId: "tenant-b",
+      });
+    });
+
+    resolveA("token-a");
+
+    await waitFor(() => {
+      expect(useAuthStore.getState()).toMatchObject({
+        token: "token-b",
+        tenantId: "tenant-b",
+      });
+    });
+
+    expect(
+      getTokenMock.mock.calls.some(([options]) => options === undefined),
+    ).toBe(false);
+  });
+
   it("does not report a 401 when the user is simply signed out", async () => {
     mockIsSignedIn = false;
 
