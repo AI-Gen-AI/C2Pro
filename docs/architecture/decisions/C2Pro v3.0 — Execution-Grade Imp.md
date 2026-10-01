@@ -1,3 +1,12 @@
+# Historical / Non-ADR Implementation Plan
+
+> **Classification:** Historical implementation plan, **not an Architecture Decision Record**.  
+> **Original plan date:** 2026-06-07.  
+> **Canonical architecture now:** [TDD v4.2](../C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md) + [ADR index](./README.md).  
+> **Important:** workflow names, phase status, coverage targets and rollout instructions below describe the repository at the plan's original date and may be superseded. Preserve this file as implementation history; do not use it as current lifecycle or CI authority.
+
+---
+
 C2Pro v3.0 — Execution-Grade Implementation Plan
 
   SDD → Contract-First → TDD → Multi-Agent Execution · Plan date 2026-06-07 · Canon: ADR-013→021
