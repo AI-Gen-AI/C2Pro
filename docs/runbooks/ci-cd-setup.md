@@ -2,7 +2,7 @@
 
 How C2Pro's GitHub Actions CI/CD works: pipelines, triggers, secrets, environments, branch protection, the release process, and how to extend CI for new apps/services.
 
-**Architecture in one paragraph**: deploys are platform-owned — Railway auto-deploys `apps/api` and Vercel auto-deploys `apps/web` on every push to `main` (Vercel also builds a preview per PR). The deploy gate is therefore **branch protection on `main`**: nothing merges without the required `CI Status` check. Releases are certified and published (tag + changelog + optional Gate 7 evidence validation) by `release.yml`, which does **not** deploy. All third-party actions are pinned to full commit SHAs; Dependabot keeps the pins fresh.
+**Architecture in one paragraph**: deploys are platform-owned — Railway auto-deploys `apps/api` from `main`; Vercel Git deployments are intentionally allowlisted to `main`, `hotfix/**`, `release-candidate/**`, and `preview/**`, and an Ignored Build Step skips allowed-branch builds when neither `apps/web` nor root dependency/workspace inputs changed. Ordinary PR branches use GitHub CI without consuming a Vercel deployment; create a `preview/**` branch only when an interactive Vercel preview is required. The deploy gate is therefore **branch protection on `main`**: nothing merges without the required checks. Releases are certified and published (tag + changelog + optional Gate 7 evidence validation) by `release.yml`, which does **not** deploy. All third-party actions are pinned to full commit SHAs; Dependabot keeps the pins fresh.
 
 ---
 
@@ -34,7 +34,8 @@ PR / push to main
 ├── dependency-review.yml    new-dep vulnerability gate     ~20s
 └── dependency-audit.yml     pip-audit + pnpm audit         (dep-file changes only)
 
-push to main additionally:  Railway deploy (api) + Vercel deploy (web) [platform-side]
+push to main additionally:  Railway deploy (api) + Vercel deploy when web/build inputs changed [platform-side]
+hotfix/**, release-candidate/**, preview/**: Vercel preview when web/build inputs changed
 tag v* :                    release.yml → certify → [Production approval] → GitHub Release
 ```
 
@@ -102,7 +103,8 @@ No longer needed by any workflow (were used by the retired `deploy-production.ym
 2. Require status checks to pass:
    - **`CI Status`** (the `ci-status` join job — the only check from `ci.yml` you should require)
    - **`gitleaks`** (from Secret Scan)
-   - Optionally **`Vercel`** (preview build = the frontend production-build gate; CI deliberately does not duplicate `next build`)
+   - **`Install Drift Guard`**
+   - Do **not** require a `Vercel` check: most PR branches deliberately do not create a Vercel deployment, and frontend production build validation already runs inside CI when web paths change.
 3. Block force pushes (default in rulesets).
 4. Do **not** require individual lane jobs (`backend-unit`, etc.) — they legitimately skip on unrelated changes; `CI Status` accounts for that.
 
@@ -111,7 +113,7 @@ With auto-deploy on `main`, this ruleset *is* the production deploy gate.
 ## Deploys, Migrations, Rollback
 
 - **Railway** (`c2pro-api` project, `C2Pro` service): builds from GitHub `apps/api` (Railpack), health check `/api/v1/health`. `start.sh` runs `alembic upgrade head` at boot — migrations apply on every backend deploy.
-- **Vercel** (`v0-c2-pro` → c2pro.io): Git integration on `main`; PR pushes build preview deployments.
+- **Vercel** (`v0-c2-pro` → c2pro.io): automatic Git deployments are allowlisted to `main`, `hotfix/**`, `release-candidate/**`, and `preview/**`. Ordinary `feat/**`, `fix/**`, `docs/**`, `diag/**`, Dependabot and other branches do not deploy automatically. Use `preview/<purpose>` when a real interactive preview is needed; allowed branches are still skipped when no web/root build input changed.
 - **Migration safety in CI**: any PR touching `apps/api/alembic/**` or `supabase/migrations/**` triggers `backend-migrations`, which recreates a scratch Postgres, applies the full chain from zero, and asserts a **single Alembic head** (the dual-head crash-loop of 2026-06 is now a PR-time failure).
 - **Rollback**: use the platform dashboards (Railway → previous deployment → Redeploy; Vercel → Deployments → Promote previous). For migration rollbacks follow `docs/runbooks/RUNBOOK_DATABASE_MIGRATION_AUTHORITY_2026-03-19.md`. Database safety first, backend second, frontend third. Do not retry a failed deploy until root cause is understood.
 
@@ -164,10 +166,11 @@ Everything is additive — no pipeline rewrites:
 
 ---
 
-Last Updated: 2026-07-12
+Last Updated: 2026-10-01
 
 Changelog:
 
+- 2026-10-01: Added explicit Vercel Git deployment allowlist and `preview/**` convention to stop per-commit preview churn; ordinary PRs remain gated by GitHub CI without consuming Vercel deployment quota. Removed `Vercel` as a branch-protection check because previews are no longer universal.
 - 2026-07-12: Full rewrite for the CI/CD overhaul — consolidated ci.yml + ci-status gate, SHA-pinned actions, CodeQL/dependency-review/dependency-audit/dependabot added, release.yml (tag-driven certification, platform-owned deploys), deploy-production.yml retired, artifact purge, advisory-job policy, extension recipe.
 - 2026-03-22: Added release promotion, rollback, and environment signoff workflow to close the release-governance leadership gap.
 - 2026-02-13: Added metadata block during repository-wide docs format pass.
