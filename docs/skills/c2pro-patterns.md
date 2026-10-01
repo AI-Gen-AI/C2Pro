@@ -215,14 +215,21 @@ Every new feature must:
 
 ## CI / GitHub Actions
 
+This skill file was originally generated from historical git analysis. The workflow table below is reconciled to the current repository; use live workflow files as executable truth.
+
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `tests.yml` | PR + push | Full pytest + vitest suite |
-| `openapi-drift.yml` | PR | Detect uncommitted schema drift |
-| `wireframe-coverage.yml` | PR | Enforce WF-01..06 test coverage |
-| `real-document-operability.yml` | PR + main | Real-doc corpus smoke tests |
-| `golden-corpus-evals.yml` | PR | Golden regression guard |
-| `qa-swarm.yml` | Manual | Multi-agent QA swarm |
-| `frontend-ci.yml` | PR | ESLint + type-check + vitest |
-| `deploy-staging.yml` | main push | Auto-deploy to staging |
-| `deploy-production.yml` | Manual | Production deploy gate |
+| `ci.yml` | PR + push + manual | Consolidated backend/frontend/migration/Docker/P0b gates; emits `CI Status` |
+| `secret-scan.yml` | PR + selected pushes | Required `gitleaks` secret gate |
+| `install-drift-guard.yml` | PR + main/develop | Required reviewed-install drift gate |
+| `codeql.yml` | PR/main/scheduled | CodeQL security analysis |
+| `dependency-review.yml` | PR | Dependency review |
+| `dependency-audit.yml` | scheduled/defined triggers | Dependency audit |
+| `openapi-drift.yml` | PR | OpenAPI drift contract |
+| `golden-corpus-evals.yml` | defined triggers | Golden/evaluation guard |
+| `i13-real-e2e-scheduled.yml` | daily + manual | I13 reliability/release-candidate evidence |
+| `release.yml` | tags + manual | Release certification/publication |
+| `c2pro-product-control-guard.yml` | Product Control changes | Product lifecycle/parity/evidence integrity |
+| `prod-synthetic-acceptance.yml` | manual | Controlled #715 production qualification |
+
+Platform deploy is provider-owned from protected `main`; the retired `deploy-staging.yml` / `deploy-production.yml` workflow model must not be reintroduced from this historical patterns document.
