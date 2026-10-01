@@ -103,6 +103,12 @@ describe("AuthSync integration", () => {
     );
 
     await waitFor(() => {
+      expect(getTokenMock).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        skipCache: true,
+      });
+    });
+    await waitFor(() => {
       expect(useAuthStore.getState()).toMatchObject({
         token: "token-123",
         tenantId: "tenant-uuid-1",
@@ -217,12 +223,21 @@ describe("AuthSync integration", () => {
     });
   });
 
-  it("refreshes the session token against the sole Organization after auto-activation", async () => {
+  it("stores only the fresh org-scoped token after auto-activating the sole Organization", async () => {
     mockOrgId = null;
     mockTenantUuid = null;
     mockMemberships = [{ organization: { id: "org-solo" } }];
+    getTokenMock.mockImplementation(async (options) =>
+      options?.organizationId === "org-solo" && options.skipCache
+        ? "org-token"
+        : "personal-token",
+    );
+    setActiveMock.mockImplementation(async ({ organization }: { organization: string }) => {
+      mockOrgId = organization;
+      mockTenantUuid = "tenant-solo";
+    });
 
-    render(
+    const view = render(
       <AuthSync>
         <div>auth-child</div>
       </AuthSync>,
@@ -231,16 +246,32 @@ describe("AuthSync integration", () => {
     await waitFor(() => {
       expect(setActiveMock).toHaveBeenCalledWith({ organization: "org-solo" });
     });
+
+    // Clerk publishes the new active Organization through its hook on the next
+    // render. The auth writer must then use the fresh org-scoped token, never a
+    // cached personal token from the pre-activation session.
+    view.rerender(
+      <AuthSync>
+        <div>auth-child</div>
+      </AuthSync>,
+    );
+
     await waitFor(() => {
       expect(getTokenMock).toHaveBeenCalledWith({
         organizationId: "org-solo",
         skipCache: true,
       });
     });
-    expect(useAuthStore.getState()).toMatchObject({
-      token: null,
-      tenantId: null,
+    await waitFor(() => {
+      expect(useAuthStore.getState()).toMatchObject({
+        token: "org-token",
+        tenantId: "tenant-solo",
+      });
     });
+
+    expect(
+      getTokenMock.mock.calls.some(([options]) => options === undefined),
+    ).toBe(false);
   });
 
   it("does not report a 401 when the user is simply signed out", async () => {
