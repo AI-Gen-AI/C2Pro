@@ -212,29 +212,20 @@ Legacy backlogs, historical TDDs and diagrams are supporting context only unless
 
 When the user provides a Suite ID:
 
-1. Analyze Suite ID from `C2PRO_TEST_SUITES_INDEX_v1.1.md`.
-2. `RED`: generate failing tests under `apps/api/tests/...`.
-3. `GREEN`: implement minimal code under `apps/api/src/...`.
+1. Resolve the suite together with the assigned `.c2pro/work/<work_id>.yaml` envelope.
+2. `RED`: generate failing tests under the appropriate test tree.
+3. `GREEN`: implement minimal code in the assigned scope.
 4. `REFACTOR`: improve only after passing tests.
-5. Update project tracking docs.
+5. Return structured `c2pro-implementation-result-v1` evidence; do not mutate legacy tracking files.
 
-## Tracking Updates
+## Tracking / completion
 
-After completing a suite:
+After completing or blocking work:
 
-- Update `C2PRO_MASTER_BACKLOG.md`.
-- Update `docs/testing/C2PRO_TDD_BACKLOG_v1.0.md` when suite tracking changes.
-- Update `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md` when platform-level architecture changes.
-
-After completing any backlog task:
-
-- Mark the task state in `C2PRO_MASTER_BACKLOG.md`.
-- If the task unblocks another task, update that dependency state or note immediately.
-- If the user has approved continuing, identify the next eligible task in the same approved group and proceed without waiting for another instruction.
-
-Use this completion note format when applicable:
-
-- `[x] Implemented (Unit Tests & Domain Logic)`
+- return tests, exact head, files changed, findings and residual risks in structured evidence;
+- do not update `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` or `blackboard.json`;
+- the Planner/Master Reconciler owns canonical control-plane transitions under `.c2pro/`;
+- if the change alters architecture or Product Control, update the owning canonical artifact in the same bounded PR rather than a legacy tracking document.
 
 ## Agent Orchestration
 
