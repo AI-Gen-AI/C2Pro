@@ -54,10 +54,10 @@ from src.analysis.adapters.graph.review_lineage import (
     claim_review_lineage_for_current_attempt,
 )
 from src.analysis.adapters.graph.schema import ProjectState
-from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.adapters.persistence.document_artifact_repository import (
     SqlAlchemyDocumentArtifactRepository,
 )
+from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.domain.contracts import DocumentArtifact
 from src.analysis.domain.trust import TrustState
 from src.analysis.application.persist_resume_analysis import (
