@@ -160,19 +160,72 @@ jobs:
           railway_graphql() {
             local payload="$1"
             local output="$2"
-            curl --fail --silent --show-error               --request POST               --url "https://backboard.railway.com/graphql/v2"               --header "Authorization: Bearer ${PROD_ACCEPTANCE_RAILWAY_API_TOKEN}"               --header "Content-Type: application/json"               --data "$payload"               --output "$output"
+            local candidate="${output}.candidate"
+            local auth_mode header_name header_value
+
+            rm -f "$candidate"
+
+            # Railway uses Bearer for account/workspace tokens and the
+            # Project-Access-Token header for environment-scoped project
+            # tokens. Qualification accepts either supported read-only auth
+            # mode without exposing or reclassifying the secret value.
+            for auth_mode in bearer project
+            do
+              if [ "$auth_mode" = "bearer" ]; then
+                header_name="Authorization"
+                header_value="Bearer ${PROD_ACCEPTANCE_RAILWAY_API_TOKEN}"
+              else
+                header_name="Project-Access-Token"
+                header_value="${PROD_ACCEPTANCE_RAILWAY_API_TOKEN}"
+              fi
+
+              if curl --fail --silent --show-error \
+                --request POST \
+                --url "https://backboard.railway.com/graphql/v2" \
+                --header "${header_name}: ${header_value}" \
+                --header "Content-Type: application/json" \
+                --data "$payload" \
+                --output "$candidate"
+              then
+                if jq -e \
+                  '((.errors // []) | length == 0) and (((.data.serviceInstance.latestDeployment.id? // "") | type) == "string") and (((.data.serviceInstance.latestDeployment.id? // "") | length) > 0)' \
+                  "$candidate" >/dev/null
+                then
+                  mv "$candidate" "$output"
+                  return 0
+                fi
+              fi
+            done
+
+            echo "Railway provider observation failed for all supported token authentication modes." >&2
+            if [ -f "$candidate" ]; then
+              jq -r '.errors[]?.message // empty' "$candidate" 2>/dev/null | head -5 >&2 || true
+            fi
+            rm -f "$candidate"
+            return 1
           }
 
-          list_query='query deployments($input: DeploymentListInput!, $first: Int) { deployments(input: $input, first: $first) { edges { node { id status meta } } } }'
-          for pair in             "api:${PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID}"             "worker:${PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID}"             "scheduler:${PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID}"
+          service_query='query serviceInstance($serviceId: String!, $environmentId: String!) { serviceInstance(serviceId: $serviceId, environmentId: $environmentId) { latestDeployment { id status meta } } }'
+          for pair in \
+            "api:${PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID}" \
+            "worker:${PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID}" \
+            "scheduler:${PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID}"
           do
             name="${pair%%:*}"
             service_id="${pair#*:}"
-            payload="$(jq -cn               --arg q "$list_query"               --arg project "$PROD_ACCEPTANCE_RAILWAY_PROJECT_ID"               --arg environment "$PROD_ACCEPTANCE_RAILWAY_ENVIRONMENT_ID"               --arg service "$service_id"               '{query:$q,variables:{input:{projectId:$project,environmentId:$environment,serviceId:$service},first:1}}')"
-            railway_graphql "$payload"               "evidence/product-qualification/runtime/provider/railway-${name}.json"
+            payload="$(jq -cn \
+              --arg q "$service_query" \
+              --arg environment "$PROD_ACCEPTANCE_RAILWAY_ENVIRONMENT_ID" \
+              --arg service "$service_id" \
+              '{query:$q,variables:{serviceId:$service,environmentId:$environment}}')"
+            railway_graphql "$payload" \
+              "evidence/product-qualification/runtime/provider/railway-${name}.json"
           done
 
-          curl --fail --silent --show-error             --url "https://api.vercel.com/v13/deployments/${PROD_INPUT_FRONTEND_DEPLOYMENT_ID}?teamId=${PROD_ACCEPTANCE_VERCEL_TEAM_ID}"             --header "Authorization: Bearer ${PROD_ACCEPTANCE_VERCEL_TOKEN}"             --output evidence/product-qualification/runtime/provider/vercel-frontend.json
+          curl --fail --silent --show-error \
+            --url "https://api.vercel.com/v13/deployments/${PROD_INPUT_FRONTEND_DEPLOYMENT_ID}?teamId=${PROD_ACCEPTANCE_VERCEL_TEAM_ID}" \
+            --header "Authorization: Bearer ${PROD_ACCEPTANCE_VERCEL_TOKEN}" \
+            --output evidence/product-qualification/runtime/provider/vercel-frontend.json
 
       - name: Verify independently observed deployment identities
         env:
