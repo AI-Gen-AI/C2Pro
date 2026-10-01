@@ -58,19 +58,11 @@ function SignedInOrganizationEffects({
       }
 
       try {
+        // Do not synchronize auth from this effect. setActive changes Clerk's
+        // active Organization and causes a rerender; the synchronization
+        // effect below is the single writer to setAuth and always requests a
+        // fresh token scoped to that active Organization.
         await setActive({ organization: organizationId });
-
-        // Clerk caches session tokens for up to one minute. Force a freshly
-        // minted token for the Organization we just activated so the first
-        // protected API request carries org_id instead of a stale personal
-        // session token.
-        const token = await getToken({
-          organizationId,
-          skipCache: true,
-        });
-        if (!token) {
-          handleAuthErrorStatus(401);
-        }
       } catch (error) {
         console.error("AuthSync: Failed to activate organization", error);
         handleAuthErrorStatus(401);
@@ -96,7 +88,12 @@ function SignedInOrganizationEffects({
 
     const sync = async () => {
       try {
-        const token = await getToken();
+        const token = organization
+          ? await getToken({
+              organizationId: organization.id,
+              skipCache: true,
+            })
+          : await getToken();
         if (!token) {
           handleAuthErrorStatus(401);
           return;
