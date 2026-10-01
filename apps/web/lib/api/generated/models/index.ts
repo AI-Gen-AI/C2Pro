@@ -126,6 +126,8 @@ export * from "./createCookieConsentApiV1ComplianceCookiesConsentPost200";
 export * from "./currentStateReport";
 export * from "./currentStateSections";
 export * from "./dashboardSummary";
+export * from "./dashboardSummaryProjectionScoreVersion";
+export * from "./dashboardSummaryProjectionStatus";
 export * from "./dashboardSummaryScoreVersion";
 export * from "./dashboardSummarySubScores";
 export * from "./dashboardSummaryWeightsUsed";

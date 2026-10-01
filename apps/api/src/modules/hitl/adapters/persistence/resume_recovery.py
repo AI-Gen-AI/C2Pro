@@ -11,11 +11,18 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
+import structlog
 from sqlalchemy import text
 
+from src.core import resume_lineage
 from src.modules.hitl.adapters.persistence import resume_ownership as claims
 from src.modules.hitl.adapters.persistence.repository import SqlAlchemyReviewQueueRepository
-from src.modules.hitl.domain.entities import ReviewItem, ReviewStatus
+from src.modules.hitl.domain.entities import (
+    AWAITING_DECISION_STATUSES,
+    ReviewItem,
+)
+
+logger = structlog.get_logger()
 
 
 @dataclass(frozen=True)
@@ -38,6 +45,12 @@ class RecoveryOutcome(StrEnum):
     ALREADY_FINALIZED = "ALREADY_FINALIZED"
     OPERATOR_REQUIRED = "OPERATOR_REQUIRED"
     NOT_VISIBLE = "NOT_VISIBLE"
+    # #758: the processing lineage this operation was created for is no longer
+    # the review's. A deterministic refusal, not a failure and not an operator
+    # problem -- a live attempt owns the document now, and it will establish
+    # its own actionable checkpoint. Deliberately NOT quarantined: the whole
+    # durable record stays exactly as it is, it merely stops being actionable.
+    LINEAGE_SUPERSEDED = "LINEAGE_SUPERSEDED"
 
 
 @dataclass(frozen=True)
@@ -183,15 +196,41 @@ async def acquire_for_reconciliation(
         if review is None:
             return RecoveryClaim(RecoveryOutcome.NOT_VISIBLE)
 
+        # #758: recovery selects by review_row_id, which survives a rebind, so
+        # a durable operation left behind by lineage A stays a perfectly valid
+        # candidate long after B took the review over. Its phase says nothing
+        # about that -- FAILED_RETRYABLE would be resumed, N17_DURABLE
+        # continued, GRAPH_COMPLETED finalized -- so the lineage is compared
+        # explicitly, against the same review row lock a rebind takes.
+        lineage = await resume_lineage.read_review_lineage(
+            session,
+            review_row_id=expected.review_row_id,
+            tenant_id=expected.tenant_id,
+            for_update=True,
+        )
+        superseded = resume_lineage.decide_resume_lineage(
+            lineage,
+            authorized_thread_id=row.thread_id,
+            operation_thread_id=row.thread_id,
+            operation_phase=row.phase,
+        ).refusal
+        if superseded is not None:
+            logger.info(
+                "hitl_resume_recovery_lineage_superseded",
+                operation_id=str(expected.operation_id),
+                phase=row.phase,
+                reason=superseded,
+                operation_thread_id=row.thread_id,
+                review_thread_id=lineage.thread_id if lineage else None,
+            )
+            return RecoveryClaim(RecoveryOutcome.LINEAGE_SUPERSEDED)
+
         feedback, reason = _feedback(row, review)
         if row.decision not in {"approve", "reject"}:
             reason = "invalid_durable_decision"
         elif not row.thread_id or not row.source_checkpoint_id:
             reason = "missing_immutable_checkpoint_identity"
-        elif review.current_status not in {
-            ReviewStatus.PENDING_REVIEW_REQUIRED,
-            ReviewStatus.PENDING_REVIEW_CONDITIONAL,
-        }:
+        elif review.current_status not in AWAITING_DECISION_STATUSES:
             reason = "review_operation_status_mismatch"
 
         if reason is not None:

@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from src.coherence.application.dtos.coherence_v2_dtos import CoherenceV2Payload
 from src.coherence.domain.v2_constants import SCORE_VERSION_V1
@@ -361,4 +361,44 @@ class DashboardSummary(BaseModel):
     score_missing_dimensions: list[str] | None = None
     last_updated: datetime
     categories_v2: "CoherenceV2Payload | None" = None
+    # #714 trusted vs projected (additive). `coherence_score`/`global_score`
+    # stay the canonical TRUSTED score; exports/reports use only those.
+    # trusted_score is coherence_score's named alias (validator below).
+    trusted_score: float | None = Field(
+        default=None,
+        description="Canonical score from trusted (approved) state only. Mirrors coherence_score.",
+    )
+    projected_score: float | None = Field(
+        default=None,
+        description=(
+            "PROVISIONAL: canonical ProjectGraph Coherence of the trusted artifacts with "
+            "every actionable pending proposal accepted unchanged. Never canonical; never "
+            "exported as the project score."
+        ),
+    )
+    projection_baseline_score: float | None = Field(
+        default=None,
+        description=(
+            "Canonical ProjectGraph Coherence of the trusted artifact set -- the same "
+            "evaluation the projection uses, so projected_delta compares like with like."
+        ),
+    )
+    projected_delta: float | None = Field(
+        default=None,
+        description="projected_score - projection_baseline_score (null when either is null).",
+    )
+    pending_review_count: int = Field(
+        default=0, description="Exact candidate versions currently awaiting human review."
+    )
+    projection_score_version: Literal["coherence-v1", "coherence-v2"] | None = None
+    projection_status: Literal["none", "provisional", "unavailable"] = "none"
+    projection_reason: str | None = None
+
+    @model_validator(mode="after")
+    def _trusted_score_is_canonical_alias(self) -> "DashboardSummary":
+        if self.trusted_score is None and self.coherence_score is not None:
+            self.trusted_score = self.coherence_score
+        elif self.trusted_score != self.coherence_score:
+            raise ValueError("trusted_score must equal canonical coherence_score")
+        return self
 

@@ -10,17 +10,29 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import logging
 import re
+from collections.abc import Mapping
 from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import text
 
+from src.analysis.adapters.graph.review_lineage import (
+    claim_review_lineage_for_current_attempt,
+)
 from src.analysis.adapters.graph.workflow import close_checkpointer_resources
 from src.analysis.factories.orchestrator_factory import AnalysisOrchestratorFactory
+from src.core import checkpoint_lineage, processing_authority
 from src.core.database import close_db, get_raw_session, init_db
 from src.core.dlq.dlq_service import DLQService
+from src.core.processing_authority import (
+    ProcessingAuthority,
+    ProcessingAuthorityLost,
+    ProcessingPhase,
+    ProcessingStage,
+)
 from src.core.tasks.celery_app import celery_app
 from src.core.tenants.types import TenantId, require_tenant_id
 from src.documents.adapters.extraction.documents_entity_extraction_service import (
@@ -73,34 +85,28 @@ logger = logging.getLogger(__name__)
 RAG_READINESS_MAX_RETRIES = 3
 PROCESSING_HEARTBEAT_INTERVAL_SECONDS = 60
 
-_PROCESSING_HEARTBEAT_SQL = text(
-    """
-    UPDATE system_recovery.document_work_index
-       SET heartbeat_at = clock_timestamp() AT TIME ZONE 'UTC'
-     WHERE document_id = CAST(:document_id AS uuid)
-       AND upload_status = :expected_status
-    """
-)
-
-
 async def _document_processing_heartbeat_loop(
     *,
-    document_id: UUID,
-    expected_status: DocumentStatus,
+    authority: ProcessingAuthority,
     interval_seconds: float = PROCESSING_HEARTBEAT_INTERVAL_SECONDS,
 ) -> None:
-    """Refresh the internal recovery lease while this worker is alive."""
+    """Renew this attempt's DB-clock lease while the worker is alive.
+
+    #711: a heartbeat renews only the EXACT attempt (attempt, owner token,
+    fence, revision, generation, stage) and only while its lease is still
+    valid. Once it is refused, authority is gone: stop renewing. The worker's
+    fenced writes fail closed on their own; heartbeat freshness is never
+    authority by itself.
+    """
     while True:
+        await asyncio.sleep(interval_seconds)
         try:
             async with get_raw_session() as heartbeat_session:
-                await heartbeat_session.execute(
-                    _PROCESSING_HEARTBEAT_SQL,
-                    {
-                        "document_id": str(document_id),
-                        "expected_status": expected_status.value,
-                    },
-                )
-                await heartbeat_session.commit()
+                renewed = await processing_authority.heartbeat(heartbeat_session, authority)
+                if renewed:
+                    await heartbeat_session.commit()
+                else:
+                    await heartbeat_session.rollback()
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -109,11 +115,21 @@ async def _document_processing_heartbeat_loop(
             logger.exception(
                 "document_processing_heartbeat_failed",
                 extra={
-                    "document_id": str(document_id),
-                    "expected_status": expected_status.value,
+                    "document_id": str(authority.document_id),
+                    "fencing_token": authority.fencing_token,
                 },
             )
-        await asyncio.sleep(interval_seconds)
+            continue
+        if not renewed:
+            logger.warning(
+                "document_processing_authority_lost",
+                extra={
+                    "document_id": str(authority.document_id),
+                    "stage": authority.stage.value,
+                    "fencing_token": authority.fencing_token,
+                },
+            )
+            return
 
 
 async def _stop_processing_heartbeat(task: asyncio.Task[None] | None) -> None:
@@ -701,15 +717,27 @@ async def _run_analysis_graph_best_effort(
     durably-checkpointed pause (see ``_run_document_analysis``).
     """
     graph_orchestrator = orchestrator or AnalysisOrchestratorFactory.create()
-    # Stable, deterministic thread_id: one document has exactly one analysis
-    # thread. Must NOT be re-randomized per call/retry -- a fresh thread_id on
-    # every retry orphans the checkpoint from the prior run, breaks
-    # LangGraph's own "resume this thread" semantics, and re-triggers a brand
-    # new HITL interrupt (and, previously, a brand new duplicate ReviewItem)
-    # every time the worker retries. Injected into initial_state too, since
-    # human_interrupt_node reads thread_id from state, not from the run()
-    # kwarg alone.
-    thread_id = f"document:{document_id}:analysis"
+    # #758: the checkpoint thread is scoped to the processing ATTEMPT that
+    # owns this run, not shared across every attempt on the document.
+    #
+    # It remains deterministic -- derived from the authority, never
+    # randomized -- so a redelivery that re-adopts the SAME grant recomputes
+    # the same thread and resumes its own checkpoint, which is what keeps a
+    # retry from re-triggering a fresh HITL interrupt. What changes is that a
+    # DIFFERENT attempt (a takeover after a lease expiry, a recovery
+    # hand-off, a reprocess) gets a different thread, so a stale worker's
+    # LangGraph appends -- which no database fence can prevent, since the
+    # saver writes outside our transactions -- land on a lineage nothing
+    # current names. Duplicate reviews are prevented by route_for_review's
+    # find_active_review guard, which is keyed on the document, not the
+    # thread.
+    #
+    # Injected into initial_state too, since human_interrupt_node reads
+    # thread_id from state, not from the run() kwarg alone.
+    thread_id = checkpoint_lineage.analysis_thread_id(
+        document_id=document_id,
+        authority=processing_authority.current_authority(),
+    )
     initial_state: dict[str, Any] = {
         "document_text": parsed_text,
         "project_id": str(document.project_id),
@@ -729,6 +757,27 @@ async def _run_analysis_graph_best_effort(
         "analysis_id": None,
         "force_full_pipeline": True,
     }
+    # #758: take the existing review's lineage over the moment this attempt
+    # becomes authoritative -- BEFORE the graph starts.
+    #
+    # Claiming it at the HITL gate is too late: from the instant this worker
+    # holds the new fence until the graph reaches N13, the active ReviewItem
+    # still names the superseded attempt. A human approving in that window
+    # resumes the dead lineage, and a direct HITL resume runs outside the
+    # processing authority, so the #711 fence cannot stop it -- for a
+    # reprocess it would resume an already superseded revision.
+    #
+    # Deliberately OUTSIDE the try below, which degrades a graph failure to
+    # "no enrichment": an unclaimable lineage must fail closed and stay
+    # retryable, never proceed to present a review that resumes someone
+    # else's checkpoint. The review is briefly unresumable until this
+    # attempt's interrupt checkpoint exists, which is the intended state.
+    await claim_review_lineage_for_current_attempt(
+        thread_id=thread_id,
+        tenant_id=str(tenant_id),
+        document_id=str(document_id),
+    )
+
     logger.info(
         "document_analysis_task_started",
         extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
@@ -871,8 +920,19 @@ async def _run_document_analysis(
     document_id: UUID,
     orchestrator: Any = None,
     automatic_retry_available: bool = False,
+    generation: int | None = None,
+    authority: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Analyze a parsed document; the N1-N17 graph is a best-effort enrichment."""
+    """Analyze a parsed document; the N1-N17 graph is a best-effort enrichment.
+
+    #711: runs only under the document's ANALYSIS authority. The authority is
+    bound for the graph run, so every durable seam the graph reaches (HITL
+    review routing, checkpoint attach, N17 persistence, graph events, node
+    error evidence, the artifact completion hook) re-verifies it in its own
+    transaction; the terminal status/metadata write is fenced the same way.
+    A worker that lost authority returns ``authority_lost`` and writes
+    nothing -- no status, no retry, no DLQ entry.
+    """
     await init_db()
 
     async with get_raw_session() as session:
@@ -891,155 +951,356 @@ async def _run_document_analysis(
         if not document.is_parsed():
             raise ValueError("document must be parsed before analysis")
 
-        parsed_text = (
-            document.document_metadata.get("parsed_text") if document.document_metadata else None
-        )
-        chunk_count = await get_document_rag_chunk_count(
-            session=session,
+        grant, claim_outcome = await _claim_processing(
+            session,
             tenant_id=tenant_id,
             document_id=document_id,
+            stage=ProcessingStage.ANALYSIS,
+            revision_id=None,
+            generation=generation,
+            authority=authority,
         )
-
-        # The N1-N17 text-analysis graph only applies to free-text documents that
-        # have RAG chunks. Structured documents (schedule/budget) carry no free
-        # text, and text documents whose embeddings are unavailable (e.g. no
-        # OPENAI_API_KEY -> zero chunks) cannot run it either. In both cases the
-        # document is still ANALYZED via the structured extraction (clauses / WBS
-        # / BOM) done during parsing — the graph is a best-effort enrichment, never
-        # a hard gate. This is what previously stranded documents in
-        # parsed_pending_analysis and the DLQ ("parsed_text not available" /
-        # "RAG chunks were not committed").
-        human_approval_required = False
-        if parsed_text and chunk_count > 0:
-            graph_result = await _run_analysis_graph_best_effort(
-                orchestrator=orchestrator,
-                document=document,
-                parsed_text=parsed_text,
-                tenant_id=tenant_id,
-                document_id=document_id,
-            )
-            analysis_id = graph_result["analysis_id"]
-            human_approval_required = graph_result["human_approval_required"]
-        else:
-            analysis_id = None
+        if grant is None:
+            await session.rollback()
             logger.info(
-                "document_analysis_graph_skipped",
-                extra={
-                    "document_id": str(document_id),
-                    "tenant_id": str(tenant_id),
-                    "reason": "no_parsed_text" if not parsed_text else "no_rag_chunks",
-                },
+                "document_analysis_not_owned",
+                extra={"document_id": str(document_id), "outcome": claim_outcome},
             )
-
-        # Structured extraction completing is not the same claim as the analysis
-        # completing. A free-text contract whose graph never ran stays in a
-        # retryable state instead of advertising success it does not have.
-        status = decide_document_status(
-            requires_text_analysis=requires_text_analysis(
-                document.document_type, parsed_text
-            ),
-            rag_chunk_count=chunk_count,
-            graph_analysis_id=analysis_id,
-        )
-        await repo.update_status(tenant_id, document_id, status)
-        completed = status is DocumentStatus.ANALYZED
-        rag_outcome = (
-            document.document_metadata.get("rag_ingestion_outcome")
-            if document.document_metadata
-            else None
-        )
-        # A LangGraph HITL interrupt is a legitimate, durably-checkpointed
-        # pause -- not a failure, and not "incomplete" in the retryable
-        # sense. Auto-retrying it would re-run the whole graph, orphan the
-        # pending review, and (pre-fix) mint a duplicate one.
-        retry = (
-            should_retry_analysis(status=status, rag_outcome=rag_outcome)
-            and not human_approval_required
-        )
-
-        # #712 truthfulness contract:
-        # - while Celery still has an automatic retry available, the durable
-        #   user-facing state remains ANALYSIS_PENDING;
-        # - FAILED_RETRYABLE is persisted only after the automatic budget is
-        #   exhausted, or immediately for a non-retryable incomplete outcome
-        #   such as MISCONFIGURED;
-        # - HITL pauses are represented by durable review_items instead.
-        terminal_incomplete = (
-            not completed
-            and not human_approval_required
-            and (not retry or not automatic_retry_available)
-        )
-        current_metadata = dict(document.document_metadata or {})
-        if current_metadata.get("analysis_last_attempt_incomplete") != terminal_incomplete:
-            if terminal_incomplete:
-                current_metadata["analysis_last_attempt_incomplete"] = True
-            else:
-                current_metadata.pop("analysis_last_attempt_incomplete", None)
-            await repo.update_metadata(tenant_id, document_id, current_metadata)
+            return {"status": claim_outcome, "document_id": str(document_id)}
         await session.commit()
-        logger.info(
-            "document_analysis_task_finished",
-            extra={
-                "document_id": str(document_id),
-                "tenant_id": str(tenant_id),
-                "analysis_id": analysis_id,
-                "persisted": bool(analysis_id),
-                "document_status": status.value,
-                "rag_chunk_count": chunk_count,
-                "automatic_retry_available": automatic_retry_available,
-                "terminal_incomplete": terminal_incomplete,
-            },
-        )
-        if human_approval_required:
-            logger.info(
-                "document_analysis_waiting_for_review",
-                extra={
-                    "document_id": str(document_id),
-                    "tenant_id": str(tenant_id),
-                    "will_retry": False,
-                },
-            )
-        elif not completed:
-            logger.warning(
-                "document_analysis_incomplete",
-                extra={
-                    "document_id": str(document_id),
-                    "tenant_id": str(tenant_id),
-                    "reason": "no_rag_chunks" if chunk_count == 0 else "graph_did_not_persist",
-                    "rag_outcome": rag_outcome,
-                    "will_retry": retry,
-                },
-            )
 
-        result = {
-            "status": (
-                "waiting_for_review"
-                if human_approval_required
-                else ("completed" if completed else "incomplete")
-            ),
-            "document_id": str(document_id),
-            "analysis_id": analysis_id,
-            "persisted": bool(analysis_id),
-            "document_status": status.value,
-            "human_approval_required": human_approval_required,
-            "will_retry": retry,
-        }
+        heartbeat = asyncio.create_task(_document_processing_heartbeat_loop(authority=grant))
+        try:
+            with processing_authority.bound_authority(grant):
+                outcome = await _analyze_owned(
+                    session=session,
+                    repo=repo,
+                    document=document,
+                    tenant_id=tenant_id,
+                    document_id=document_id,
+                    orchestrator=orchestrator,
+                    automatic_retry_available=automatic_retry_available,
+                    grant=grant,
+                )
+        except ProcessingAuthorityLost as lost:
+            await session.rollback()
+            return _authority_lost_result(document_id=document_id, grant=grant, error=lost)
+        except Exception as error:
+            await session.rollback()
+            await _release_analysis_after_failure(session, grant, error)
+            raise
+        finally:
+            await _stop_processing_heartbeat(heartbeat)
 
+    result, retry, retry_error = outcome
     # Raised outside the session block: the degraded status is already committed,
     # so the document stays honestly incomplete even when every retry is spent.
     if retry:
-        raise AnalysisIncompleteRetryableError(
-            f"document {document_id} analysis incomplete "
-            f"(rag_outcome={rag_outcome or 'unknown'}, chunks={chunk_count})"
-        )
+        raise AnalysisIncompleteRetryableError(retry_error)
     return result
 
 
-async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[str, Any]:
+async def _release_analysis_after_failure(
+    session: Any, grant: ProcessingAuthority, error: Exception
+) -> None:
+    """Give the lease back (still owned) so Celery's retry can take a new fence."""
+    try:
+        await processing_authority.settle(
+            session,
+            grant,
+            phase=ProcessingPhase.PENDING,
+            outcome="analysis_failed",
+            error=str(error),
+        )
+        await session.commit()
+    except ProcessingAuthorityLost:
+        await session.rollback()
+    except Exception:  # noqa: BLE001 - the primary analysis error must surface.
+        await session.rollback()
+        logger.exception(
+            "document_analysis_lease_release_failed",
+            extra={"document_id": str(grant.document_id)},
+        )
+
+
+async def _analyze_owned(
+    *,
+    session: Any,
+    repo: SqlAlchemyDocumentRepository,
+    document: Any,
+    tenant_id: TenantId,
+    document_id: UUID,
+    orchestrator: Any,
+    automatic_retry_available: bool,
+    grant: ProcessingAuthority,
+) -> tuple[dict[str, Any], bool, str]:
+    parsed_text = (
+        document.document_metadata.get("parsed_text") if document.document_metadata else None
+    )
+    chunk_count = await get_document_rag_chunk_count(
+        session=session,
+        tenant_id=tenant_id,
+        document_id=document_id,
+    )
+
+    # The N1-N17 text-analysis graph only applies to free-text documents that
+    # have RAG chunks. Structured documents (schedule/budget) carry no free
+    # text, and text documents whose embeddings are unavailable (e.g. no
+    # OPENAI_API_KEY -> zero chunks) cannot run it either. In both cases the
+    # document is still ANALYZED via the structured extraction (clauses / WBS
+    # / BOM) done during parsing — the graph is a best-effort enrichment, never
+    # a hard gate. This is what previously stranded documents in
+    # parsed_pending_analysis and the DLQ ("parsed_text not available" /
+    # "RAG chunks were not committed").
+    human_approval_required = False
+    if parsed_text and chunk_count > 0:
+        graph_result = await _run_analysis_graph_best_effort(
+            orchestrator=orchestrator,
+            document=document,
+            parsed_text=parsed_text,
+            tenant_id=tenant_id,
+            document_id=document_id,
+        )
+        analysis_id = graph_result["analysis_id"]
+        human_approval_required = graph_result["human_approval_required"]
+    else:
+        analysis_id = None
+        logger.info(
+            "document_analysis_graph_skipped",
+            extra={
+                "document_id": str(document_id),
+                "tenant_id": str(tenant_id),
+                "reason": "no_parsed_text" if not parsed_text else "no_rag_chunks",
+            },
+        )
+
+    # Structured extraction completing is not the same claim as the analysis
+    # completing. A free-text contract whose graph never ran stays in a
+    # retryable state instead of advertising success it does not have.
+    status = decide_document_status(
+        requires_text_analysis=requires_text_analysis(
+            document.document_type, parsed_text
+        ),
+        rag_chunk_count=chunk_count,
+        graph_analysis_id=analysis_id,
+    )
+    await repo.update_status(tenant_id, document_id, status)
+    completed = status is DocumentStatus.ANALYZED
+    rag_outcome = (
+        document.document_metadata.get("rag_ingestion_outcome")
+        if document.document_metadata
+        else None
+    )
+    # A LangGraph HITL interrupt is a legitimate, durably-checkpointed
+    # pause -- not a failure, and not "incomplete" in the retryable
+    # sense. Auto-retrying it would re-run the whole graph, orphan the
+    # pending review, and (pre-fix) mint a duplicate one.
+    retry = (
+        should_retry_analysis(status=status, rag_outcome=rag_outcome)
+        and not human_approval_required
+    )
+
+    # #712 truthfulness contract:
+    # - while Celery still has an automatic retry available, the durable
+    #   user-facing state remains ANALYSIS_PENDING;
+    # - FAILED_RETRYABLE is persisted only after the automatic budget is
+    #   exhausted, or immediately for a non-retryable incomplete outcome
+    #   such as MISCONFIGURED;
+    # - HITL pauses are represented by durable review_items instead.
+    terminal_incomplete = (
+        not completed
+        and not human_approval_required
+        and (not retry or not automatic_retry_available)
+    )
+    current_metadata = dict(document.document_metadata or {})
+    if current_metadata.get("analysis_last_attempt_incomplete") != terminal_incomplete:
+        if terminal_incomplete:
+            current_metadata["analysis_last_attempt_incomplete"] = True
+        else:
+            current_metadata.pop("analysis_last_attempt_incomplete", None)
+        await repo.update_metadata(tenant_id, document_id, current_metadata)
+    result_status = (
+        "waiting_for_review"
+        if human_approval_required
+        else ("completed" if completed else "incomplete")
+    )
+    # #711: the terminal write commits only for the exact current owner. Only
+    # a completed analysis closes the stage; an incomplete / paused one stays
+    # unowned-PENDING so a retry, the recovery sweep or a HITL resume can act.
+    await processing_authority.settle(
+        session,
+        grant,
+        phase=ProcessingPhase.COMPLETED if completed else ProcessingPhase.PENDING,
+        outcome=result_status,
+    )
+    await session.commit()
+    logger.info(
+        "document_analysis_task_finished",
+        extra={
+            "document_id": str(document_id),
+            "tenant_id": str(tenant_id),
+            "analysis_id": analysis_id,
+            "persisted": bool(analysis_id),
+            "document_status": status.value,
+            "rag_chunk_count": chunk_count,
+            "automatic_retry_available": automatic_retry_available,
+            "terminal_incomplete": terminal_incomplete,
+        },
+    )
+    if human_approval_required:
+        logger.info(
+            "document_analysis_waiting_for_review",
+            extra={
+                "document_id": str(document_id),
+                "tenant_id": str(tenant_id),
+                "will_retry": False,
+            },
+        )
+    elif not completed:
+        logger.warning(
+            "document_analysis_incomplete",
+            extra={
+                "document_id": str(document_id),
+                "tenant_id": str(tenant_id),
+                "reason": "no_rag_chunks" if chunk_count == 0 else "graph_did_not_persist",
+                "rag_outcome": rag_outcome,
+                "will_retry": retry,
+            },
+        )
+
+    result = {
+        "status": result_status,
+        "document_id": str(document_id),
+        "analysis_id": analysis_id,
+        "persisted": bool(analysis_id),
+        "document_status": status.value,
+        "human_approval_required": human_approval_required,
+        "will_retry": retry,
+    }
+    retry_error = (
+        f"document {document_id} analysis incomplete "
+        f"(rag_outcome={rag_outcome or 'unknown'}, chunks={chunk_count})"
+    )
+    return result, retry, retry_error
+
+
+class _SavepointedUseCase:
+    """Run every async call of a use case inside its own SAVEPOINT.
+
+    #711: ingestion stages all of its outputs in ONE transaction that commits
+    only after the processing authority is re-verified. A single failing
+    extraction row (e.g. a duplicate stakeholder email) must roll back only
+    itself, never poison that transaction.
+    """
+
+    def __init__(self, session: Any, use_case: Any) -> None:
+        self._session = session
+        self._use_case = use_case
+
+    def __getattr__(self, name: str) -> Any:
+        attribute = getattr(self._use_case, name)
+        if not inspect.iscoroutinefunction(attribute):
+            return attribute
+
+        async def _in_savepoint(*args: Any, **kwargs: Any) -> Any:
+            async with self._session.begin_nested():
+                return await attribute(*args, **kwargs)
+
+        return _in_savepoint
+
+
+class _StagedStakeholderRepository(SqlAlchemyStakeholderRepository):
+    """#711: stakeholders join the fenced ingestion transaction.
+
+    The public use case commits after every insert; inside ingestion that
+    commit would publish a stakeholder before the worker's authority is
+    verified. Staging (flush) keeps it in the fenced transaction.
+    """
+
+    async def commit(self) -> None:
+        await self.session.flush()
+
+
+async def _claim_processing(
+    session: Any,
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    stage: ProcessingStage,
+    revision_id: UUID | None,
+    generation: int | None,
+    authority: Mapping[str, Any] | None,
+) -> tuple[ProcessingAuthority | None, str]:
+    """Obtain this invocation's processing authority, or say why not.
+
+    A recovery message carries the exact authority the sweep claimed; it is
+    adopted once (CLAIMED -> RUNNING) and never replaced by a fresh fence just
+    because the message was (re)delivered. Any other invocation acquires, and
+    acquire never steals from a valid owner.
+    """
+    if authority is not None:
+        passed = ProcessingAuthority.from_message(authority)
+        if (
+            passed is None
+            or passed.document_id != document_id
+            or passed.tenant_id != tenant_id
+            or passed.stage is not stage
+        ):
+            return None, "authority_invalid"
+        if await processing_authority.adopt(session, passed):
+            return passed, "adopted"
+        return None, "authority_lost"
+    acquired = await processing_authority.acquire(
+        session,
+        tenant_id=tenant_id,
+        document_id=document_id,
+        stage=stage,
+        revision_id=revision_id,
+        generation=generation,
+    )
+    return acquired.authority, acquired.outcome.value
+
+
+def _authority_lost_result(
+    *, document_id: UUID, grant: ProcessingAuthority, error: ProcessingAuthorityLost
+) -> dict[str, Any]:
+    logger.warning(
+        "document_processing_authority_lost_before_write",
+        extra={
+            "document_id": str(document_id),
+            "stage": grant.stage.value,
+            "fencing_token": grant.fencing_token,
+            "reason": str(error),
+        },
+    )
+    return {
+        "status": "authority_lost",
+        "document_id": str(document_id),
+        "stage": grant.stage.value,
+        "fencing_token": grant.fencing_token,
+    }
+
+
+async def _process(
+    document_id: UUID,
+    revision_id: UUID | None = None,
+    *,
+    generation: int | None = None,
+    authority: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     """Fetch, parse, update, and trigger analysis for a document.
 
     P0b: the bytes come from the pinned revision's immutable object (or the current
     revision for messages without ``revision_id``), never from a mutable document path.
+
+    #711: the worker first obtains the document's processing authority
+    (attempt + owner token + fencing token under a DB-clock lease). Every
+    ingestion output -- stakeholders, WBS/BOM, RAG chunks, clauses, revision
+    events, metadata and the status hand-over -- is staged in ONE transaction
+    that commits only after the authority is re-verified in that same
+    transaction. A worker that lost authority (lease expired and taken over,
+    or superseded by a new revision / reprocess) commits nothing, and never
+    marks the document ERROR on the new owner's behalf.
     """
     await init_db()
 
@@ -1052,16 +1313,19 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
             return {"status": "error", "message": "Document not found"}
 
         def stakeholder_factory() -> Any:
-            stk_repo = SqlAlchemyStakeholderRepository(session=session)
-            return CreateStakeholderUseCase(repository=stk_repo, document_repository=repo)
+            stk_repo = _StagedStakeholderRepository(session=session)
+            return _SavepointedUseCase(
+                session,
+                CreateStakeholderUseCase(repository=stk_repo, document_repository=repo),
+            )
 
         def wbs_factory() -> Any:
             wbs_repo = SQLAlchemyWBSRepository(session=session)
-            return CreateWBSItemUseCase(wbs_repository=wbs_repo)
+            return _SavepointedUseCase(session, CreateWBSItemUseCase(wbs_repository=wbs_repo))
 
         def bom_factory() -> Any:
             bom_repo = SQLAlchemyBOMRepository(session=session)
-            return CreateBOMItemUseCase(bom_repository=bom_repo)
+            return _SavepointedUseCase(session, CreateBOMItemUseCase(bom_repository=bom_repo))
 
         if document.created_by is None:
             raise ValueError("document has no created_by user_id")
@@ -1071,7 +1335,7 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
             bom_use_case_factory=bom_factory,
             user_id=document.created_by,
         )
-        rag_ingestion = SqlAlchemyRagIngestionService(db_session=session)
+        rag_ingestion = SqlAlchemyRagIngestionService(db_session=session, commit=False)
 
         raw_tenant_id = await repo.get_project_tenant_id(document.project_id)
         if not raw_tenant_id:
@@ -1093,19 +1357,20 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
                 "document_status": DocumentStatus.PARSED_PENDING_ANALYSIS.value,
             }
 
+        # Resolve the pinned revision read-only BEFORE any write: a task pinned
+        # to an older revision that arrives after a newer one became current
+        # may remain historical evidence but must never move the mutable
+        # document state backwards (not even to PARSING).
+        revision_repository = SqlAlchemyDocumentRevisionRepository(session)
         source_revision: DocumentRevision | None = None
+        resolution_error: Exception | None = None
         try:
-            revision_repository = SqlAlchemyDocumentRevisionRepository(session)
             source_revision = await resolve_source_revision(
                 revision_repository=revision_repository,
                 document_id=document_id,
                 tenant_id=tenant_id,
                 revision_id=revision_id,
             )
-
-            # A task pinned to an older revision may arrive after a newer
-            # revision became current. It may remain historical evidence but
-            # must never move the mutable document state backwards.
             if revision_id is not None and source_revision is not None:
                 current_revision = await revision_repository.get_current(
                     document_id, tenant_id
@@ -1120,185 +1385,293 @@ async def _process(document_id: UUID, revision_id: UUID | None = None) -> dict[s
                         "revision_id": str(source_revision.revision_id),
                         "current_revision_id": str(current_revision.revision_id),
                     }
+        except Exception as error:  # noqa: BLE001 - recorded by the fenced failure path below
+            resolution_error = error
 
-            await repo.update_status(tenant_id, document_id, DocumentStatus.PARSING)
-            await session.commit()
-
-            storage = build_storage_service()
-            file_path = await fetch_source_file(
-                storage=storage, document=document, revision=source_revision
-            )
-
-            parsed_payload = await file_parser.parse_document_file(document, file_path)
-            logger.info("Document parsing successful for document %s.", document_id)
-
-            extraction_summary = await entity_extraction.extract_entities_from_document(
-                document=document,
-                parsed_payload=parsed_payload,
-                tenant_id=tenant_id,
-            )
-
-            rag_result = await rag_ingestion.ingest_document_chunks(
-                document=document,
-                parsed_payload=parsed_payload,
-                tenant_id=tenant_id,
-            )
-
-            document.document_metadata = document.document_metadata or {}
-            text_blocks = parsed_payload.get("text_blocks", [])
-            parsed_text = "\n\n".join(
-                block.get("text", "") for block in text_blocks if isinstance(block.get("text"), str)
-            ).strip()
-            contract_clause_count = 0
-            metadata = dict(document.document_metadata or {})
-            # #712: a fresh parse pass supersedes whatever the last analysis
-            # attempt recorded -- a stale "failed, retry me" flag must not
-            # survive a genuine re-upload/reprocess.
-            metadata.pop("analysis_last_attempt_incomplete", None)
-            # Enum value only -- provider messages can carry credentials and
-            # never belong in document metadata. Recorded so an operator (or a
-            # retry) can tell "nothing to embed" from "provider misconfigured".
-            metadata["rag_ingestion_outcome"] = rag_result.outcome.value
-            if parsed_text:
-                metadata["parsed_text"] = parsed_text
-                if document.document_type == DocumentType.CONTRACT:
-                    existing_clauses = await repo.list_clauses_for_document(tenant_id, document_id)
-                    revision_clauses = _extract_contract_clauses(
-                        document_id=document_id,
-                        project_id=document.project_id,
-                        tenant_id=tenant_id,
-                        parsed_text=parsed_text,
-                        parsed_payload=parsed_payload,
-                        revision_id=source_revision.revision_id if source_revision else None,
-                    )
-                    if not existing_clauses:
-                        for clause in revision_clauses:
-                            await repo.add_clause(tenant_id, clause)
-                        contract_clause_count = len(revision_clauses)
-                        metadata["contract_clause_count"] = contract_clause_count
-                    # P0c deliberately snapshots every revision's extraction even when the
-                    # mutable legacy clause rows already contain the prior revision.
-                    # Historical comparisons never read those mutable rows, and the events
-                    # are bound to the immutable revision this task pinned.
-                    if source_revision is not None:
-                        event_repository = SqlAlchemyProjectEventRepository(session)
-                        prior_events = await event_repository.list_for_project(
-                            document.project_id, tenant_id
-                        )
-                        for temporal_event in await build_revision_analysis_events(
-                            revision=source_revision,
-                            clauses=revision_clauses,
-                            existing_events=prior_events,
-                        ):
-                            await event_repository.append(temporal_event)
-            await repo.update_metadata(tenant_id, document_id, metadata)
-            from datetime import UTC, datetime
-
-            await repo.update_status(
-                tenant_id,
-                document_id,
-                DocumentStatus.PARSED_PENDING_ANALYSIS,
-                parsed_at=datetime.now(UTC),
-            )
-            await session.commit()
-
-            if contract_clause_count:
-                extraction_summary["contract_clauses"] = contract_clause_count
-
-            processing_details = _build_processing_details(extraction_summary)
-
-            try:
-                trigger_use_case = TriggerDocumentAnalysisUseCase(
-                    document_repository=repo,
-                )
-                trigger_result = await trigger_use_case.execute(
-                    tenant_id=tenant_id,
-                    document_id=document_id,
-                )
-                logger.info(
-                    "document_analysis_trigger_enqueued",
-                    extra={
-                        "document_id": str(document_id),
-                        "task_id": trigger_result.get("task_id"),
-                        "task_name": trigger_result.get("task_name"),
-                        "queue": trigger_result.get("queue"),
-                    },
-                )
-            except Exception as trigger_error:
-                logger.error(
-                    "document_analysis_trigger_failed",
-                    exc_info=True,
-                    extra={"document_id": str(document_id)},
-                )
-                _dispatch_failed_task(
-                    tenant_id=str(tenant_id),
-                    task_type="document_analysis",
-                    document_id=str(document_id),
-                    payload={"document_id": str(document_id)},
-                    error_message=str(trigger_error),
-                )
-                await _push_trigger_failure_to_dlq(
-                    tenant_id=tenant_id,
-                    document_id=document_id,
-                    error=trigger_error,
-                )
-
+        # #711: take processing authority, atomically with the PARSING status.
+        # The document row is locked before the authority row, the same order
+        # every other writer (reprocess, recovery) uses.
+        await repo.update_status(tenant_id, document_id, DocumentStatus.PARSING)
+        grant, claim_outcome = await _claim_processing(
+            session,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            stage=ProcessingStage.INGESTION,
+            revision_id=revision_id,
+            generation=generation,
+            authority=authority,
+        )
+        if grant is None:
+            await session.rollback()
             logger.info(
-                "document_ingestion_stop_point_reached",
-                extra={
-                    "document_id": str(document_id),
-                    "processing_stage": processing_details["processing_stage"],
-                    "analysis_status": processing_details["analysis_status"],
-                },
+                "document_ingestion_not_owned",
+                extra={"document_id": str(document_id), "outcome": claim_outcome},
             )
-            return {
-                "status": "success",
-                "document_id": str(document_id),
-                "details": processing_details,
-            }
+            return {"status": claim_outcome, "document_id": str(document_id)}
+        await session.commit()
 
+        heartbeat = asyncio.create_task(_document_processing_heartbeat_loop(authority=grant))
+        try:
+            if resolution_error is not None:
+                raise resolution_error
+            with processing_authority.bound_authority(grant):
+                return await _ingest_owned(
+                    session=session,
+                    repo=repo,
+                    document=document,
+                    tenant_id=tenant_id,
+                    document_id=document_id,
+                    source_revision=source_revision,
+                    grant=grant,
+                    entity_extraction=entity_extraction,
+                    rag_ingestion=rag_ingestion,
+                )
+        except ProcessingAuthorityLost as lost:
+            await session.rollback()
+            return _authority_lost_result(document_id=document_id, grant=grant, error=lost)
         except Exception as error:
             logger.error("Error processing document %s: %s", document_id, error, exc_info=True)
             await session.rollback()
-            if source_revision is not None:
-                # A retry must not hide this failure behind a mutable document status:
-                # persist the revision-bound failure projection before re-raising.
-                try:
-                    await SqlAlchemyProjectEventRepository(session).append(
-                        build_revision_processing_failed_event(
-                            revision=source_revision,
-                            failure_code=_temporal_failure_code(error),
-                        )
-                    )
-                except Exception as projection_error:  # pragma: no cover - preserves primary failure
-                    logger.error(
-                        "temporal_failure_projection_append_failed document_id=%s revision_id=%s error=%s",
-                        document_id,
-                        source_revision.revision_id,
-                        projection_error,
-                    )
-            await repo.update_status(
-                tenant_id, document_id, DocumentStatus.ERROR, parsing_error=str(error)
-            )
-            await session.commit()
+            try:
+                await _record_ingestion_failure(
+                    session=session,
+                    repo=repo,
+                    tenant_id=tenant_id,
+                    document_id=document_id,
+                    grant=grant,
+                    source_revision=source_revision,
+                    error=error,
+                )
+            except ProcessingAuthorityLost as lost:
+                # The failure belongs to an attempt that no longer owns the
+                # document: never mark the new owner's document ERROR.
+                await session.rollback()
+                return _authority_lost_result(document_id=document_id, grant=grant, error=lost)
             raise
+        finally:
+            await _stop_processing_heartbeat(heartbeat)
+
+
+async def _ingest_owned(
+    *,
+    session: Any,
+    repo: SqlAlchemyDocumentRepository,
+    document: Any,
+    tenant_id: TenantId,
+    document_id: UUID,
+    source_revision: DocumentRevision | None,
+    grant: ProcessingAuthority,
+    entity_extraction: DocumentsEntityExtractionService,
+    rag_ingestion: SqlAlchemyRagIngestionService,
+) -> dict[str, Any]:
+    """The owned part of ingestion: compute, stage, then commit once, fenced."""
+    storage = build_storage_service()
+    file_path = await fetch_source_file(
+        storage=storage, document=document, revision=source_revision
+    )
+
+    parsed_payload = await file_parser.parse_document_file(document, file_path)
+    logger.info("Document parsing successful for document %s.", document_id)
+
+    extraction_summary = await entity_extraction.extract_entities_from_document(
+        document=document,
+        parsed_payload=parsed_payload,
+        tenant_id=tenant_id,
+    )
+
+    rag_result = await rag_ingestion.ingest_document_chunks(
+        document=document,
+        parsed_payload=parsed_payload,
+        tenant_id=tenant_id,
+    )
+
+    document.document_metadata = document.document_metadata or {}
+    text_blocks = parsed_payload.get("text_blocks", [])
+    parsed_text = "\n\n".join(
+        block.get("text", "") for block in text_blocks if isinstance(block.get("text"), str)
+    ).strip()
+    contract_clause_count = 0
+    metadata = dict(document.document_metadata or {})
+    # #712: a fresh parse pass supersedes whatever the last analysis
+    # attempt recorded -- a stale "failed, retry me" flag must not
+    # survive a genuine re-upload/reprocess.
+    metadata.pop("analysis_last_attempt_incomplete", None)
+    # Enum value only -- provider messages can carry credentials and
+    # never belong in document metadata. Recorded so an operator (or a
+    # retry) can tell "nothing to embed" from "provider misconfigured".
+    metadata["rag_ingestion_outcome"] = rag_result.outcome.value
+    if parsed_text:
+        metadata["parsed_text"] = parsed_text
+        if document.document_type == DocumentType.CONTRACT:
+            existing_clauses = await repo.list_clauses_for_document(tenant_id, document_id)
+            revision_clauses = _extract_contract_clauses(
+                document_id=document_id,
+                project_id=document.project_id,
+                tenant_id=tenant_id,
+                parsed_text=parsed_text,
+                parsed_payload=parsed_payload,
+                revision_id=source_revision.revision_id if source_revision else None,
+            )
+            if not existing_clauses:
+                for clause in revision_clauses:
+                    await repo.add_clause(tenant_id, clause)
+                contract_clause_count = len(revision_clauses)
+                metadata["contract_clause_count"] = contract_clause_count
+            # P0c deliberately snapshots every revision's extraction even when the
+            # mutable legacy clause rows already contain the prior revision.
+            # Historical comparisons never read those mutable rows, and the events
+            # are bound to the immutable revision this task pinned.
+            if source_revision is not None:
+                event_repository = SqlAlchemyProjectEventRepository(session)
+                prior_events = await event_repository.list_for_project(
+                    document.project_id, tenant_id
+                )
+                for temporal_event in await build_revision_analysis_events(
+                    revision=source_revision,
+                    clauses=revision_clauses,
+                    existing_events=prior_events,
+                ):
+                    await event_repository.append(temporal_event)
+    await repo.update_metadata(tenant_id, document_id, metadata)
+    from datetime import UTC, datetime
+
+    await repo.update_status(
+        tenant_id,
+        document_id,
+        DocumentStatus.PARSED_PENDING_ANALYSIS,
+        parsed_at=datetime.now(UTC),
+    )
+    # #711: the single fenced commit. Re-verifies this exact attempt in the
+    # SAME transaction as every staged output, then hands the generation
+    # over to ANALYSIS. A lost authority raises and nothing is committed.
+    await processing_authority.finish_ingestion(session, grant)
+    await session.commit()
+
+    if contract_clause_count:
+        extraction_summary["contract_clauses"] = contract_clause_count
+
+    processing_details = _build_processing_details(extraction_summary)
+
+    try:
+        trigger_use_case = TriggerDocumentAnalysisUseCase(
+            document_repository=repo,
+        )
+        trigger_result = await trigger_use_case.execute(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            generation=grant.generation,
+        )
+        logger.info(
+            "document_analysis_trigger_enqueued",
+            extra={
+                "document_id": str(document_id),
+                "task_id": trigger_result.get("task_id"),
+                "task_name": trigger_result.get("task_name"),
+                "queue": trigger_result.get("queue"),
+            },
+        )
+    except Exception as trigger_error:
+        logger.error(
+            "document_analysis_trigger_failed",
+            exc_info=True,
+            extra={"document_id": str(document_id)},
+        )
+        _dispatch_failed_task(
+            tenant_id=str(tenant_id),
+            task_type="document_analysis",
+            document_id=str(document_id),
+            payload={"document_id": str(document_id)},
+            error_message=str(trigger_error),
+        )
+        await _push_trigger_failure_to_dlq(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            error=trigger_error,
+        )
+
+    logger.info(
+        "document_ingestion_stop_point_reached",
+        extra={
+            "document_id": str(document_id),
+            "processing_stage": processing_details["processing_stage"],
+            "analysis_status": processing_details["analysis_status"],
+        },
+    )
+    return {
+        "status": "success",
+        "document_id": str(document_id),
+        "details": processing_details,
+    }
+
+
+async def _record_ingestion_failure(
+    *,
+    session: Any,
+    repo: SqlAlchemyDocumentRepository,
+    tenant_id: TenantId,
+    document_id: UUID,
+    grant: ProcessingAuthority,
+    source_revision: DocumentRevision | None,
+    error: Exception,
+) -> None:
+    """Fenced failure path: only the current owner may record ERROR.
+
+    Raises ProcessingAuthorityLost when this attempt no longer owns the
+    document; then nothing (event, status, lease) is written.
+    """
+    await processing_authority.verify_in_transaction(session, grant)
+    if source_revision is not None:
+        # A retry must not hide this failure behind a mutable document status:
+        # persist the revision-bound failure projection before re-raising.
+        try:
+            async with session.begin_nested():
+                await SqlAlchemyProjectEventRepository(session).append(
+                    build_revision_processing_failed_event(
+                        revision=source_revision,
+                        failure_code=_temporal_failure_code(error),
+                    )
+                )
+        except Exception as projection_error:  # pragma: no cover - preserves primary failure
+            logger.error(
+                "temporal_failure_projection_append_failed document_id=%s revision_id=%s error=%s",
+                document_id,
+                source_revision.revision_id,
+                projection_error,
+            )
+    await repo.update_status(tenant_id, document_id, DocumentStatus.ERROR, parsing_error=str(error))
+    # Release the lease (retryable), so Celery's retry can acquire a new fence.
+    await processing_authority.settle(
+        session, grant, phase=ProcessingPhase.PENDING, outcome="ingestion_failed", error=str(error)
+    )
+    await session.commit()
+
+
+def _authority_for_delivery(
+    task: Any, authority: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """The recovery authority a delivery may adopt, if any.
+
+    #711: the claimed authority is valid for the FIRST execution only. A
+    Celery retry (``retries > 0``) is a new attempt after the previous one
+    released its lease, so it acquires normally -- acquire never takes over
+    from a valid owner. A redelivered copy of the first execution keeps the
+    claimed authority and can adopt it at most once.
+    """
+    retries = int(getattr(getattr(task, "request", None), "retries", 0) or 0)
+    return None if retries > 0 else authority
 
 
 async def _run_document_processing_task_lifecycle(
     *,
     document_id: UUID,
     revision_id: UUID | None,
+    generation: int | None = None,
+    authority: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    heartbeat = asyncio.create_task(
-        _document_processing_heartbeat_loop(
-            document_id=document_id,
-            expected_status=DocumentStatus.PARSING,
-        )
+    # #711: the heartbeat now starts inside _process, once authority is held.
+    return await _process(
+        document_id, revision_id, generation=generation, authority=authority
     )
-    try:
-        return await _process(document_id, revision_id)
-    finally:
-        await _stop_processing_heartbeat(heartbeat)
 
 
 @celery_app.task(
@@ -1312,7 +1685,11 @@ async def _run_document_processing_task_lifecycle(
     reject_on_worker_lost=True,
 )
 def process_document_async(
-    self: Any, document_id: str, revision_id: str | None = None
+    self: Any,
+    document_id: str,
+    revision_id: str | None = None,
+    generation: int | None = None,
+    authority: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Asynchronously processes a document using the appropriate parser.
@@ -1322,6 +1699,10 @@ def process_document_async(
                      retrieves the file path and other info from the database.
         revision_id: The immutable revision to read. Messages without it (legacy
                      producers, reprocess) read the document's current revision.
+        generation: #711 processing generation the producer started (reupload /
+                    reprocess). A message for an older generation is refused.
+        authority: #711 exact authority claimed by the recovery sweep; adopted
+                   once, never re-minted by a redelivered copy.
     """
     logger.info(
         "Starting document processing for task_id: %s, document_id: %s, revision_id: %s",
@@ -1333,6 +1714,8 @@ def process_document_async(
         _run_document_processing_task_lifecycle(
             document_id=UUID(document_id),
             revision_id=UUID(revision_id) if revision_id is not None else None,
+            generation=generation,
+            authority=_authority_for_delivery(self, authority),
         )
     )
 
@@ -1364,25 +1747,22 @@ async def _run_document_analysis_task_lifecycle(
     document_id: UUID,
     route_rag_unavailable_to_dlq: bool,
     automatic_retry_available: bool,
-    enable_processing_heartbeat: bool = False,
+    generation: int | None = None,
+    authority: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Own every loop-bound analysis resource for one Celery task invocation."""
+    """Own every loop-bound analysis resource for one Celery task invocation.
+
+    #711: the lease heartbeat runs inside _run_document_analysis, bound to
+    the exact authority it obtained.
+    """
     primary_error: Exception | None = None
-    heartbeat = (
-        asyncio.create_task(
-            _document_processing_heartbeat_loop(
-                document_id=document_id,
-                expected_status=DocumentStatus.PARSED_PENDING_ANALYSIS,
-            )
-        )
-        if enable_processing_heartbeat
-        else None
-    )
     try:
         return await _run_document_analysis(
             tenant_id=tenant_id,
             document_id=document_id,
             automatic_retry_available=automatic_retry_available,
+            generation=generation,
+            authority=authority,
         )
     except AnalysisIncompleteRetryableError as error:
         primary_error = error
@@ -1442,7 +1822,6 @@ async def _run_document_analysis_task_lifecycle(
             )
         raise
     finally:
-        await _stop_processing_heartbeat(heartbeat)
         await _close_document_analysis_task_resources(primary_error=primary_error)
 
 
@@ -1453,8 +1832,18 @@ async def _run_document_analysis_task_lifecycle(
     queue="document_parsing",
     **ANALYSIS_TASK_RETRY_OPTIONS,
 )
-def process_document_analysis_async(self: Any, tenant_id: str, document_id: str) -> dict[str, Any]:
-    """Run full document analysis after parsing; persists via graph N17."""
+def process_document_analysis_async(
+    self: Any,
+    tenant_id: str,
+    document_id: str,
+    generation: int | None = None,
+    authority: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run full document analysis after parsing; persists via graph N17.
+
+    #711: ``generation`` pins the generation whose ingestion handed over;
+    ``authority`` is the exact grant a recovery sweep claimed (adopted once).
+    """
     logger.info(
         "Starting document analysis for task_id: %s, document_id: %s",
         self.request.id,
@@ -1462,6 +1851,7 @@ def process_document_analysis_async(self: Any, tenant_id: str, document_id: str)
     )
     normalized_tenant_id = require_tenant_id(tenant_id)
     retries = int(getattr(self.request, "retries", 0))
+    authority = _authority_for_delivery(self, authority)
     try:
         return asyncio.run(
             _run_document_analysis_task_lifecycle(
@@ -1469,7 +1859,8 @@ def process_document_analysis_async(self: Any, tenant_id: str, document_id: str)
                 document_id=UUID(document_id),
                 route_rag_unavailable_to_dlq=retries >= RAG_READINESS_MAX_RETRIES,
                 automatic_retry_available=retries < ANALYSIS_MAX_RETRIES,
-                enable_processing_heartbeat=True,
+                generation=generation,
+                authority=authority,
             )
         )
     except RagChunksUnavailableError as error:

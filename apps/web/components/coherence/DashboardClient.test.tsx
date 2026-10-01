@@ -347,4 +347,40 @@ describe("DashboardClient", () => {
       }
     });
   });
+
+  describe("#714 trusted vs projected", () => {
+    const pendingData = {
+      ...dashboardData,
+      trusted_score: 86,
+      projected_score: 61,
+      projected_delta: -25,
+      pending_review_count: 3,
+      projection_score_version: "coherence-v1" as const,
+      projection_status: "provisional" as const,
+    };
+
+    it("keeps the trusted gauge and adds a provisional projection panel", () => {
+      render(<DashboardClient data={pendingData} projectName="North Tower" />);
+      expect(screen.getByText("Gauge 86 / 8")).toBeInTheDocument();
+      expect(screen.getByTestId("coherence-trusted-score")).toHaveTextContent("86");
+      expect(screen.getByTestId("coherence-projected-score")).toHaveTextContent("61");
+      expect(screen.getByTestId("coherence-projected-delta")).toHaveTextContent("−25");
+      expect(screen.getByTestId("coherence-pending-count")).toHaveTextContent("3");
+    });
+
+    it("exports the TRUSTED score only, never the projection", () => {
+      const popupDocument = { write: vi.fn(), close: vi.fn() };
+      vi.spyOn(window, "open").mockReturnValue({
+        document: popupDocument,
+        focus: vi.fn(),
+        print: vi.fn(),
+      } as unknown as Window);
+      render(<DashboardClient data={pendingData} projectName="North Tower" />);
+      fireEvent.click(screen.getByRole("button", { name: /export pdf/i }));
+      const html = popupDocument.write.mock.calls[0]?.[0] as string;
+      expect(html).toMatch(/Coherence Score<\/div>\s*<div class="value">86</);
+      expect(html).not.toMatch(/61/);
+      expect(html).not.toMatch(/projected/i);
+    });
+  });
 });

@@ -230,8 +230,15 @@ def _initial_state(document: DocumentORM, tenant: Tenant, thread_id: str) -> dic
     }
 
 
-async def _arrange(db, tenant, saver, register):
-    """Seed a document, run the real graph to its interrupt, wire the review."""
+async def _arrange(db, tenant, saver, register, *, with_candidate: bool = True):
+    """Seed a document, run the real graph to its interrupt, wire the review.
+
+    C2PRO #714: production's completion hook persists the interrupted run's
+    artifact as a PROPOSED candidate and binds it to the review right after
+    the interrupt; a #714 review refuses any decision until then. The
+    harness reproduces that by default. Tests that control candidate timing
+    themselves (the #714 suite) pass ``with_candidate=False``.
+    """
     document = await _seed(db, tenant)
     thread_id = register(f"document:{document.id}:analysis") or f"document:{document.id}:analysis"
     app = _build_real_graph(saver)
@@ -250,6 +257,8 @@ async def _arrange(db, tenant, saver, register):
         "document_id": str(document.id),
     }
     await db.commit()
+    if with_candidate:
+        await _persist_bound_candidate(db, tenant, document, thread_id)
     await db.refresh(review)
     await db.refresh(document)
     # Plain values: the session expires ORM objects on commit, and a later
@@ -263,6 +272,25 @@ async def _arrange(db, tenant, saver, register):
         review_item_id=review.item_id,
         checkpoint_id=checkpoint_id,
     )
+
+
+async def _persist_bound_candidate(db, tenant, document, thread_id: str) -> None:
+    """What document_artifact_completion does after a HITL interrupt (#714)."""
+    from src.analysis.adapters.persistence.document_artifact_repository import (
+        SqlAlchemyDocumentArtifactRepository,
+    )
+    from src.analysis.domain.contracts import DocumentArtifact
+    from src.analysis.domain.trust import CandidateScoring, TrustState
+
+    await SqlAlchemyDocumentArtifactRepository(db).save(
+        DocumentArtifact(document_id=str(document.id), doc_type="contract"),
+        project_id=document.project_id,
+        tenant_id=tenant.id,
+        trust_state=TrustState.PROPOSED,
+        scoring=CandidateScoring(coherence_score=90.0, score_version="coherence-v1"),
+        review_thread_id=thread_id,
+    )
+    await db.commit()
 
 
 @dataclass(frozen=True)

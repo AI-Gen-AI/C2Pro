@@ -115,6 +115,22 @@ function hasData(data: ReviewItemResponse['item_data']): boolean {
 const DEFAULT_APPROVE_MEANING = 'Mark this item as approved.';
 const DEFAULT_REJECT_MEANING = 'Mark this item as rejected and record the reason given.';
 
+/** Why Approve/Reject are disabled, first reason wins; undefined when enabled. */
+function actionsBlockedReason(state: {
+  actionsLocked: boolean;
+  exactIdentityMissing: boolean;
+  candidatePending: boolean;
+  reviewerIdentityReady: boolean;
+}): string | undefined {
+  if (state.actionsLocked) return 'Decision submitted. Refreshing the queue...';
+  if (state.exactIdentityMissing) {
+    return 'Exact review identity unavailable. Refresh the queue before deciding.';
+  }
+  if (state.candidatePending) return 'Preparing the analysis candidate for review...';
+  if (!state.reviewerIdentityReady) return 'Loading your identity...';
+  return undefined;
+}
+
 export function ReviewItemCard({
   item,
   projectId,
@@ -126,9 +142,15 @@ export function ReviewItemCard({
   const [expanded, setExpanded] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
   const overdue = isOverdue(item.sla_due_date);
+  // C2PRO #714: ESCALATED is still awaiting a (senior) human decision and is
+  // decided through the same exact-row resume path.
   const isPending =
     item.current_status === ReviewStatus.PENDING_REVIEW_REQUIRED ||
-    item.current_status === ReviewStatus.PENDING_REVIEW_CONDITIONAL;
+    item.current_status === ReviewStatus.PENDING_REVIEW_CONDITIONAL ||
+    item.current_status === ReviewStatus.ESCALATED;
+  // C2PRO #714: the exact analysis candidate is not persisted/bound yet.
+  // The backend refuses a decision regardless; never offer one here.
+  const candidatePending = item.decision_ready === false;
 
   // C2PRO P0b HITL review UX hotfix: a reviewer needs a real decision
   // title, the reason a human is in the loop at all, what the model
@@ -170,12 +192,15 @@ export function ReviewItemCard({
   // distribution -- showing it as a real score would misrepresent it.
   const confidenceIsMeaningful = item.confidence > 0;
 
-  const actionsDisabled = !reviewerIdentityReady || actionsLocked;
-  const actionsTitle = actionsLocked
-    ? 'Decision submitted. Refreshing the queue...'
-    : !reviewerIdentityReady
-      ? 'Loading your identity...'
-      : undefined;
+  const exactIdentityMissing = !item.row_id;
+  const actionsDisabled =
+    !reviewerIdentityReady || actionsLocked || candidatePending || exactIdentityMissing;
+  const actionsTitle = actionsBlockedReason({
+    actionsLocked,
+    exactIdentityMissing,
+    candidatePending,
+    reviewerIdentityReady,
+  });
 
   return (
     <div className="rounded-lg border bg-card" data-testid={`review-item-${item.item_id}`}>
@@ -270,6 +295,14 @@ export function ReviewItemCard({
               >
                 Reject
               </Button>
+              {candidatePending ? (
+                <span
+                  className="text-xs text-muted-foreground"
+                  data-testid={`candidate-preparing-${item.item_id}`}
+                >
+                  Preparing candidate…
+                </span>
+              ) : null}
             </>
           ) : null}
           <Button

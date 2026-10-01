@@ -20,6 +20,8 @@ from langgraph.types import Command
 if TYPE_CHECKING:
     from src.modules.hitl.adapters.checkpoint_service import CheckpointService
 
+from src.core import resume_lineage
+from src.core.checkpoint_lineage import is_legacy_shared_analysis_thread
 from src.core.observability.monitoring import (
     record_hitl_checkpoint_load_error,
     record_hitl_resume_attempt,
@@ -37,6 +39,7 @@ from src.modules.hitl.adapters.persistence.resume_ownership import (
     mark_graph_completed,
     record_failure,
     renew,
+    verify_trust_binding,
 )
 from src.modules.hitl.adapters.persistence.resume_recovery import (
     RecoveryOutcome as RecoveryOutcome,
@@ -47,7 +50,11 @@ from src.modules.hitl.adapters.persistence.resume_recovery import (
 from src.modules.hitl.adapters.persistence.resume_recovery import (
     acquire_for_reconciliation,
 )
-from src.modules.hitl.domain.entities import ReviewItem, ReviewStatus
+from src.modules.hitl.domain.entities import (
+    AWAITING_DECISION_STATUSES,
+    ReviewItem,
+    ReviewStatus,
+)
 from src.modules.hitl.ports.review_queue_repository import IReviewQueueRepository
 
 logger = structlog.get_logger()
@@ -136,6 +143,36 @@ class ResumeWorkflowUseCase:
     _ERR_MISSING_THREAD_ID = "Review item {review_id} missing thread_id for workflow resumption"
     _ERR_ALREADY_PROCESSED = "Review item {review_id} already processed (status: {status})"
     _ERR_CHECKPOINT_NOT_FOUND = "Checkpoint not found for thread_id {thread_id}"
+    _ERR_SHARED_LINEAGE_NO_CHECKPOINT = (
+        "Review item {review_id} records the shared pre-#758 analysis lineage "
+        "{thread_id} with no checkpoint id. That thread was shared across "
+        "processing attempts, so resuming its latest checkpoint could replay a "
+        "superseded attempt; it needs an exact checkpoint id (operator repair)."
+    )
+    # #758: the lineage this request was authorized against stopped being the
+    # review's current one. Refusing is the point -- the alternative is
+    # resuming a checkpoint a newer revision or attempt has already
+    # invalidated -- so the message says what happened and what happens next,
+    # rather than reading as a transient "try again".
+    _ERR_LINEAGE_SUPERSEDED = (
+        "Review item {review_id} can no longer be resumed through the checkpoint "
+        "lineage {thread_id} ({reason}): a newer processing attempt or document "
+        "generation owns this document now, so this decision was NOT recorded. "
+        "The current attempt presents its own review when it reaches the "
+        "human-review gate."
+    )
+
+    #: Acquisition refusals that mean "the lineage moved", not "somebody else
+    #: is working on it". Kept as data so `execute` cannot drift from the
+    #: reasons `resume_lineage` actually produces.
+    _LINEAGE_REFUSALS = frozenset(
+        {
+            resume_lineage.REVIEW_LINEAGE_REBOUND,
+            resume_lineage.REVIEW_LINEAGE_NOT_CURRENT,
+            resume_lineage.OPERATION_LINEAGE_SUPERSEDED,
+            resume_lineage.REVIEW_ROW_MISSING,
+        }
+    )
 
     def __init__(
         self,
@@ -322,6 +359,53 @@ class ResumeWorkflowUseCase:
                 "hitl_correction_snapshot_enqueue_failed",
                 event_id=str(correction.event_id),
                 project_id=str(correction.project_id),
+                exc_info=True,
+            )
+
+    async def _require_trust_ready(
+        self, *, tenant_id: UUID, row_id: UUID, document_id: UUID | None, approve: bool
+    ) -> None:
+        from src.analysis.domain.trust import CandidateNotReadyError, StaleCandidateError
+
+        try:
+            await verify_trust_binding(
+                tenant_id=tenant_id,
+                review_row_id=row_id,
+                document_id=document_id,
+                approved=approve,
+                session_factory=self._claim_session_factory,
+            )
+        except CandidateNotReadyError:
+            record_hitl_resume_error("candidate_not_ready")
+            raise
+        except StaleCandidateError as exc:
+            record_hitl_resume_error("stale_candidate")
+            raise ValueError(str(exc)) from exc
+
+    @staticmethod
+    async def _enqueue_trusted_project_graph(commit: Any) -> None:
+        """Canonical Tier-2 hand-off for a newly trusted candidate (#714).
+
+        Best-effort fast path only. The trusted commit wrote a durable
+        projection obligation in the same transaction
+        (system_recovery.trusted_projection_index); if this enqueue is lost,
+        the ``project_graph.reconcile_trusted_projections`` beat task
+        re-dispatches it, and only a completed ProjectGraph run clears it.
+        Honours the per-tenant ProjectGraph flag.
+        """
+        from src.core.tasks.project_graph_tasks import enqueue_project_graph
+        from src.core.tenants.types import require_tenant_id
+
+        try:
+            await enqueue_project_graph(
+                project_id=commit.project_id,
+                tenant_id=require_tenant_id(str(commit.tenant_id)),
+            )
+        except Exception:  # noqa: BLE001 - never fail a recorded decision
+            logger.warning(
+                "hitl_trusted_project_graph_enqueue_failed",
+                artifact_id=str(commit.binding.artifact_id),
+                project_id=str(commit.project_id),
                 exc_info=True,
             )
 
@@ -591,11 +675,7 @@ class ResumeWorkflowUseCase:
                 raise ValueError(self._ERR_NOT_FOUND.format(review_id=review_id))
 
             # 2. Validate review item is in pending status
-            pending_statuses = {
-                ReviewStatus.PENDING_REVIEW_REQUIRED,
-                ReviewStatus.PENDING_REVIEW_CONDITIONAL,
-            }
-            if review_item.current_status not in pending_statuses:
+            if review_item.current_status not in AWAITING_DECISION_STATUSES:
                 # Check if already processed (idempotency)
                 if review_item.current_status in {ReviewStatus.APPROVED, ReviewStatus.REJECTED}:
                     status = "already_processed"
@@ -635,6 +715,30 @@ class ResumeWorkflowUseCase:
                 record_hitl_resume_error("missing_thread")
                 raise ValueError(self._ERR_MISSING_THREAD_ID.format(review_id=review_id))
             if not checkpoint_id:
+                # #758: the thread-only fallback resolves "latest checkpoint on
+                # this thread", which is only safe when the thread belonged to
+                # ONE processing attempt.
+                #
+                # `document:{uuid}:analysis` is the pre-#758 DETERMINISTIC
+                # SHARED thread: every attempt on that document wrote to it, so
+                # latest-by-thread can resolve a superseded attempt's
+                # checkpoint. Refuse rather than resume superseded evidence;
+                # an operator can repair the row by pinning an exact
+                # checkpoint id, which stays permitted below.
+                #
+                # Deliberately narrow. An authority-scoped thread is
+                # attempt-pure, and a legacy UUID thread is the shape
+                # production's pending reviews actually use (they carry no
+                # checkpoint id and resume only through this fallback) -- both
+                # keep working untouched.
+                if is_legacy_shared_analysis_thread(thread_id):
+                    record_hitl_checkpoint_load_error("shared_lineage_without_checkpoint")
+                    record_hitl_resume_error("shared_lineage_without_checkpoint")
+                    raise ValueError(
+                        self._ERR_SHARED_LINEAGE_NO_CHECKPOINT.format(
+                            review_id=review_id, thread_id=thread_id
+                        )
+                    )
                 logger.warning(
                     "resuming_without_explicit_checkpoint_id",
                     review_id=str(review_id),
@@ -695,6 +799,17 @@ class ResumeWorkflowUseCase:
             document_id = self._document_id_for(review_item, {})
             project_id = self._project_id_for(review_item)
 
+            # C2PRO #714: refuse a decision on a review whose exact candidate
+            # is not bound yet (both decisions), or an approval of a stale /
+            # substituted candidate -- BEFORE any resume operation exists, so
+            # no graph runs and no failure is recorded against the review.
+            await self._require_trust_ready(
+                tenant_id=tenant_id,
+                row_id=row_id,
+                document_id=document_id,
+                approve=request.decision == WorkflowDecision.APPROVE,
+            )
+
             ownership, phase, refusal = await acquire(
                 review_row_id=row_id,
                 tenant_id=tenant_id,
@@ -740,6 +855,17 @@ class ResumeWorkflowUseCase:
                 if phase is Phase.OPERATOR_REQUIRED:
                     record_hitl_resume_error("operator_required")
                     raise ValueError(self._ERR_OPERATOR_REQUIRED.format(review_id=review_id))
+                if refusal in self._LINEAGE_REFUSALS:
+                    # FAIL CLOSED. Nothing was resumed, no decision was
+                    # recorded, and no graph ran: the lineage this request
+                    # restored a checkpoint from is not the one the review
+                    # names any more.
+                    record_hitl_resume_error("lineage_superseded")
+                    raise ValueError(
+                        self._ERR_LINEAGE_SUPERSEDED.format(
+                            review_id=review_id, thread_id=thread_id, reason=refusal
+                        )
+                    )
                 record_hitl_resume_error("already_claimed")
                 raise ValueError(self._ERR_ALREADY_CLAIMED.format(review_id=review_id))
 
@@ -789,6 +915,7 @@ class ResumeWorkflowUseCase:
         resumed_state: dict[str, Any] = {}
         terminal_checkpoint_id: str | None = None
         correction: FinalizedCorrection | None = None
+        trusted_commits: list[Any] = []
         heartbeat_task = asyncio.create_task(self._heartbeat_loop(ownership))
         try:
             if restored is None and phase is not Phase.GRAPH_COMPLETED:
@@ -807,6 +934,16 @@ class ResumeWorkflowUseCase:
                     operation_id=str(ownership.operation_id),
                 )
             else:
+                if request.decision == WorkflowDecision.APPROVE:
+                    # C2PRO #714: refuse a stale/substituted approval before
+                    # N17 can persist anything that feeds trusted state.
+                    await verify_trust_binding(
+                        tenant_id=tenant_id,
+                        review_row_id=row_id,
+                        document_id=document_id,
+                        approved=True,
+                        session_factory=self._claim_session_factory,
+                    )
                 # 7. Resume the checkpoint this ATTEMPT is entitled to.
                 #
                 # A takeover restarts from the IMMUTABLE original
@@ -906,6 +1043,7 @@ class ResumeWorkflowUseCase:
                 review_item_id=review_item.item_id,
                 session_factory=self._claim_session_factory,
                 fault=self._fault,
+                trusted_commits_out=trusted_commits,
             )
 
         except Exception as e:
@@ -939,6 +1077,11 @@ class ResumeWorkflowUseCase:
         # a replay returns above and never reaches this line.
         if correction is not None:
             self._enqueue_correction_snapshot(correction, tenant_id)
+        # C2PRO #714: the exact reviewed candidate became TRUSTED inside the
+        # finalization; only now may the canonical ProjectGraph see it. Same
+        # once-only guarantee as the correction above.
+        for commit in trusted_commits:
+            await self._enqueue_trusted_project_graph(commit)
 
         # Record success metrics + audit event
         duration = time.perf_counter() - start_time

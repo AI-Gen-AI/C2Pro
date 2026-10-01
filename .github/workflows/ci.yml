@@ -48,6 +48,7 @@ jobs:
       backend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.backend }}
       frontend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.frontend }}
       migrations: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.migrations }}
+      backend_docker: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.backend_docker }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,6 +61,8 @@ jobs:
           filters: |
             backend:
               - "apps/api/**"
+              - "core/**"
+              - "tests/unit/core/**"
               - "docker-compose.test.yml"
               - "infrastructure/database/**"
               - ".github/workflows/ci.yml"
@@ -74,6 +77,9 @@ jobs:
             migrations:
               - "apps/api/alembic/**"
               - "supabase/migrations/**"
+            backend_docker:
+              - "apps/api/**"
+              - ".github/workflows/ci.yml"
 
   # ──────────────────────────── Backend lane ────────────────────────────
 
@@ -211,6 +217,14 @@ jobs:
             --cov-report=xml:coverage.xml \
             --cov-report=term-missing:skip-covered
 
+      - name: Run repository root core unit tests
+        run: |
+          python -m pytest \
+            tests/unit/core/ \
+            --noconftest \
+            --tb=short \
+            --junit-xml=apps/api/root-core-unit-results.xml
+
       - name: Upload unit test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -218,6 +232,7 @@ jobs:
           name: unit-test-results-py${{ matrix.python-version }}
           path: |
             apps/api/unit-test-results.xml
+            apps/api/root-core-unit-results.xml
             apps/api/s5-core-ai-gates.xml
           retention-days: 14
 
@@ -1364,6 +1379,65 @@ jobs:
         working-directory: apps/web
         run: pnpm build
 
+  backend-docker-build:
+    name: Backend Docker Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend_docker == 'true'
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Inject ignored local-secret sentinels
+        run: |
+          mkdir -p apps/api/config apps/api/tmp
+          : > apps/api/config/credentials.json
+          : > apps/api/config/.env.production
+          : > apps/api/tmp/test.db
+          : > "apps/api/config/claves postgre.txt"
+
+      - name: Build production API image
+        run: docker build --file apps/api/Dockerfile --tag c2pro-api:ci apps/api
+
+      - name: Verify runtime payload
+        run: |
+          docker run --rm --entrypoint bash c2pro-api:ci -c '
+            set -euo pipefail
+            test -d /app/src
+            test -d /app/alembic
+            test -f /app/alembic.ini
+            test -f /app/scripts/run_api.sh
+            test -f /app/scripts/run_worker.sh
+            test -f /app/scripts/run_scheduler.sh
+            test -f /app/scripts/wait_for_schema.py
+            test -f /app/start.sh
+            test ! -e /app/tests
+            test ! -e /app/.env
+            test ! -e /app/.env.example
+            test ! -e /app/config/credentials.json
+            test ! -e /app/config/.env.production
+            test ! -e "/app/config/claves postgre.txt"
+            test ! -e /app/tmp/test.db
+            test ! -e /app/migrate.py
+            test ! -e /app/dev.py
+            test ! -e /app/evals
+            test ! -e /app/examples
+            test ! -e /app/test.py
+            test ! -e /app/scripts/admin_ops_bootstrap.py
+            test ! -e /app/src/golden
+            test ! -e /app/src/core/ai/test_langsmith_client.py
+            test ! -e /app/src/core/ai/example_llm_client.py
+            test ! -e /app/src/projects/adapters/http/router.py.fullversion
+            bash -n /app/scripts/run_api.sh
+            bash -n /app/scripts/run_worker.sh
+            bash -n /app/scripts/run_scheduler.sh
+            alembic heads | tee /tmp/alembic-heads
+            test "$(grep -c "(head)" /tmp/alembic-heads)" -eq 1
+          '
+
   # ──────────────────────────── Join gate ───────────────────────────────
   # The ONLY check that branch protection should require. Skipped lanes are
   # fine (path filtering); failed or cancelled required lanes are not.
@@ -1385,6 +1459,7 @@ jobs:
       - backend-modules
       - backend-coverage
       - backend-migrations
+      - backend-docker-build
       - frontend-quality
       - frontend-test
       - frontend-e2e-smoke
@@ -1480,6 +1555,7 @@ jobs:
           RESULT_BACKEND_PRESIDIO_NER: ${{ needs.backend-presidio-ner.result }}
           RESULT_BACKEND_SECURITY: ${{ needs.backend-security.result }}
           RESULT_BACKEND_MIGRATIONS: ${{ needs.backend-migrations.result }}
+          RESULT_BACKEND_DOCKER_BUILD: ${{ needs.backend-docker-build.result }}
           RESULT_FRONTEND_QUALITY: ${{ needs.frontend-quality.result }}
           RESULT_FRONTEND_TEST: ${{ needs.frontend-test.result }}
           RESULT_FRONTEND_E2E: ${{ needs.frontend-e2e-smoke.result }}
@@ -1509,6 +1585,7 @@ jobs:
             "backend-modules:$RESULT_BACKEND_MODULES"
             "backend-coverage:$RESULT_BACKEND_COVERAGE"
             "backend-migrations:$RESULT_BACKEND_MIGRATIONS"
+            "backend-docker-build:$RESULT_BACKEND_DOCKER_BUILD"
             "frontend-quality:$RESULT_FRONTEND_QUALITY"
             "frontend-test:$RESULT_FRONTEND_TEST"
             "frontend-e2e-smoke:$RESULT_FRONTEND_E2E"

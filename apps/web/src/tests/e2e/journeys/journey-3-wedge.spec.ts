@@ -9,8 +9,8 @@ const liveProjectId = "00000000-0000-0000-0000-00000000c303";
 const projectId = liveProjectId;
 const projectName = "Wedge Gate Pilot";
 const liveContractId = "00000000-0000-0000-0000-00000000d401";
-// The public HITL API is keyed by the reviewed item's ID, not the review row ID.
 const liveReviewItemId = "00000000-0000-0000-0000-00000000f601";
+const liveReviewRowId = "00000000-0000-0000-0000-00000000f701";
 const clerkE2eUserId = "user_3H0l5NCcPYLnfWokjdm2D8m3iGR";
 
 const documents = [
@@ -144,6 +144,7 @@ async function installWedgeRoutes(page: Page) {
         items: [
           {
             item_id: "review-wedge-1",
+            row_id: "review-row-wedge-1",
             item_type: "alert",
             current_status: approved ? "APPROVED" : "PENDING_REVIEW_REQUIRED",
             confidence: 0.88,
@@ -164,11 +165,12 @@ async function installWedgeRoutes(page: Page) {
     }),
   );
 
-  await page.route("**/api/hitl/queue/review-wedge-1/approve", (route) => {
+  await page.route("**/api/hitl/queue/review-row-wedge-1/approve", (route) => {
     approved = true;
     return route.fulfill({
       json: {
         item_id: "review-wedge-1",
+        row_id: "review-row-wedge-1",
         item_type: "alert",
         current_status: "APPROVED",
         confidence: 0.88,
@@ -298,7 +300,7 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
 
   const approveResponse = page.waitForResponse((response) =>
     response.request().method() === "POST" &&
-    response.url().includes(`/api/hitl/queue/${liveReviewItemId}/approve`),
+    response.url().includes(`/api/hitl/queue/${liveReviewRowId}/approve`),
   );
   await page.getByTestId(`approve-${liveReviewItemId}`).click();
   await expect(page.getByRole("dialog", { name: /approve review item/i })).toBeVisible();

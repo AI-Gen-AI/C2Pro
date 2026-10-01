@@ -56,6 +56,9 @@ class ProjectState(TypedDict):
     # be mistaken for the current one's.
     resume_provenance: dict[str, str]
     force_full_pipeline: bool
+    # C2PRO #714: exact candidate envelope (artifact_id / artifact_version /
+    # artifact_hash) a HITL review binds to, when known before N13.
+    candidate_binding: dict[str, object]
 
     # ── N1: Document Ingestion ──
     document_parsed: bool

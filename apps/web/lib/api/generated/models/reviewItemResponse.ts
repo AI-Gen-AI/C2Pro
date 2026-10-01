@@ -54,4 +54,5 @@ export interface ReviewItemResponse {
   item_data?: ReviewItemResponseItemData;
   row_id?: string | null;
   resumable?: boolean;
+  decision_ready?: boolean;
 }

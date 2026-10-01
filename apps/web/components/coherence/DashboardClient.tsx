@@ -7,6 +7,7 @@ import { RadarView } from "@/components/coherence/RadarView";
 import { AlertsDistribution } from "@/components/coherence/AlertsDistribution";
 import { CategoryDetail } from "@/components/coherence/CategoryDetail";
 import { CoherenceEmptyState } from "@/components/coherence/CoherenceEmptyState";
+import { ProjectedCoherencePanel } from "@/components/coherence/ProjectedCoherencePanel";
 import {
   Sheet,
   SheetContent,
@@ -375,6 +376,8 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
           </div>
         </div>
       </div>
+
+      <ProjectedCoherencePanel summary={data} />
 
       {/* Top Row: Gauge + Dynamic View */}
       <div

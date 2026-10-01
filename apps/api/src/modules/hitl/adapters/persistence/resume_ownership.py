@@ -155,8 +155,7 @@ _UPSERT_OPERATION_SQL = text(
     """
 )
 
-_LOAD_OPERATION_SQL = text(
-    """
+_LOAD_OPERATION = """
     SELECT id, tenant_id, review_row_id, project_id, document_id, thread_id,
            source_checkpoint_id, terminal_checkpoint_id, current_attempt_id,
            owner_token, fencing_token, decision_revision, decision,
@@ -166,8 +165,16 @@ _LOAD_OPERATION_SQL = text(
       FROM resume_operations
      WHERE review_row_id = cast(:review_row_id as uuid)
        AND tenant_id = cast(:tenant_id as uuid)
-    """
-)
+"""
+
+_LOAD_OPERATION_SQL = text(_LOAD_OPERATION)
+
+# #758: `acquire` locks the operation BEFORE it reads the review's lineage, so
+# the lock order is always resume_operations -> review_items, matching
+# finalize_v3 and the reconciler. A rebind takes those locks in the same
+# order, which is what makes the lineage comparison below a real
+# compare-and-set rather than a read that a concurrent takeover can slip past.
+_LOAD_OPERATION_FOR_UPDATE_SQL = text(_LOAD_OPERATION + " FOR UPDATE")
 
 # Acquire (or take over) ownership. Succeeds only when the operation is
 # genuinely acquirable: never owned, lease genuinely expired per
@@ -200,6 +207,21 @@ _ACQUIRE_SQL = text(
                      WHEN phase IN ('N17_DURABLE', 'GRAPH_COMPLETED') THEN phase
                      ELSE 'RUNNING'
                    END,
+           -- #758: adopt the lineage this attempt was authorized against.
+           -- :adopt_lineage is only ever true when `decide_resume_lineage`
+           -- said so, which for a CHANGED lineage requires that the operation
+           -- carries no durable business effect -- a lifecycle shell with
+           -- nothing to protect. Re-pointing it is what keeps a rebound review
+           -- approvable instead of permanently stuck on a dead lineage; an
+           -- operation with durable effects is refused before it gets here,
+           -- because its analysis and events belong to the run that made them.
+           thread_id = CASE WHEN cast(:adopt_lineage as boolean)
+                            THEN cast(:thread_id as text) ELSE thread_id END,
+           source_checkpoint_id = CASE WHEN cast(:adopt_lineage as boolean)
+                            THEN cast(:source_checkpoint_id as text)
+                            ELSE source_checkpoint_id END,
+           terminal_checkpoint_id = CASE WHEN cast(:adopt_lineage as boolean)
+                            THEN NULL ELSE terminal_checkpoint_id END,
            lease_expires_at = clock_timestamp()
                               + make_interval(secs => cast(:lease_seconds as double precision)),
            heartbeat_at = clock_timestamp(),
@@ -270,9 +292,9 @@ _HEARTBEAT_SQL = text(
 # transaction, with FOR UPDATE so the row cannot change under it.
 _VERIFY_OWNERSHIP_FOR_UPDATE_SQL = text(
     """
-    SELECT id, phase, analysis_id, fencing_token, decision_revision,
+    SELECT id, phase, analysis_id, fencing_token, decision_revision, decision,
            current_attempt_id, owner_token, project_id, document_id,
-           review_row_id, terminal_checkpoint_id,
+           review_row_id, terminal_checkpoint_id, thread_id,
            (lease_expires_at IS NOT NULL AND lease_expires_at > clock_timestamp())
                AS lease_valid
       FROM resume_operations
@@ -363,8 +385,20 @@ async def acquire(
 
     Returns (ownership, phase, reason). ``ownership`` is None when the
     caller may not run: another owner holds a live lease, the operation is
-    already finalized, or it needs an operator.
+    already finalized, it needs an operator, or -- #758 -- the checkpoint
+    lineage this resume was authorized against is no longer the review's
+    current one.
+
+    That last check is the compare-and-set the whole request hangs on.
+    ``thread_id`` is the lineage the caller READ from the review before it
+    restored a checkpoint, and everything between that read and this
+    transaction is a window in which a processing takeover or a new
+    generation can rebind the review. Binding ownership to the exact lineage
+    it was authorized against -- under the review row's own lock -- is what
+    stops a resume that resolved lineage A from running as lineage B.
     """
+    from src.core import resume_lineage
+
     new_hash = decision_hash(decision, feedback)
 
     async with _session(session_factory, tenant_id) as session:
@@ -386,7 +420,7 @@ async def acquire(
         )
         row = (
             await session.execute(
-                _LOAD_OPERATION_SQL,
+                _LOAD_OPERATION_FOR_UPDATE_SQL,
                 {"review_row_id": str(review_row_id), "tenant_id": str(tenant_id)},
             )
         ).first()
@@ -398,6 +432,31 @@ async def acquire(
             return None, phase, "operator_required"
         if phase in {Phase.FINALIZED_APPROVED, Phase.FINALIZED_REJECTED}:
             return None, phase, "already_finalized"
+
+        # #758: the operation row is locked; now fix the lineage. Ordering the
+        # locks operation -> review (never the reverse) keeps this in step with
+        # finalization and the reconciler.
+        lineage = await resume_lineage.read_review_lineage(
+            session, review_row_id=review_row_id, tenant_id=tenant_id, for_update=True
+        )
+        decided = resume_lineage.decide_resume_lineage(
+            lineage,
+            authorized_thread_id=thread_id,
+            operation_thread_id=row.thread_id,
+            operation_phase=row.phase,
+        )
+        if decided.refusal is not None:
+            logger.warning(
+                "hitl_resume_lineage_refused",
+                review_row_id=str(review_row_id),
+                operation_id=str(row.id),
+                reason=decided.refusal,
+                authorized_thread_id=thread_id,
+                review_thread_id=lineage.thread_id if lineage else None,
+                operation_thread_id=row.thread_id,
+                phase=row.phase,
+            )
+            return None, phase, decided.refusal
 
         # A changed decision is a NEW revision -- but only before the
         # business effect is durable. Afterwards the decision is immutable.
@@ -424,6 +483,9 @@ async def acquire(
                     "feedback": feedback,
                     "lease_seconds": lease_seconds,
                     "force_revision": decision_changed,
+                    "adopt_lineage": decided.adopt_operation_lineage,
+                    "thread_id": thread_id,
+                    "source_checkpoint_id": source_checkpoint_id,
                 },
             )
         ).first()
@@ -482,6 +544,8 @@ async def acquire(
         decision_revision=ownership.decision_revision,
         prior_phase=phase.value,
         decision_changed=decision_changed,
+        adopted_lineage=decided.adopt_operation_lineage,
+        thread_id=thread_id,
     )
     return ownership, Phase(ownership.phase), None
 
@@ -524,7 +588,19 @@ async def verify_in_transaction(session: Any, ownership: Ownership) -> Any:
     proceeds, and raises rather than returning a soft signal: a caller that
     forgets to check a boolean would silently become the stale writer this
     whole design exists to stop.
+
+    #758: the attempt fence alone is not enough. It proves nobody else is
+    resuming this OPERATION, not that the operation still speaks for the
+    review's current processing lineage. A processing takeover or a new
+    generation rebinds the review outside this operation entirely, and it
+    advances no resume fence, so ownership can stay perfectly valid while the
+    lineage underneath it has become historical. Every durable resume
+    writer -- N17, the graph-completed marker, finalization -- funnels through
+    here, which is why the lineage comparison lives here too rather than in
+    three places that could drift apart.
     """
+    from src.core import resume_lineage
+
     row = (
         await session.execute(
             _VERIFY_OWNERSHIP_FOR_UPDATE_SQL,
@@ -550,6 +626,27 @@ async def verify_in_transaction(session: Any, ownership: Ownership) -> Any:
         raise OwnershipError(
             f"Lease expired for operation {ownership.operation_id}; this worker "
             "no longer has authority to persist"
+        )
+    lineage = await resume_lineage.read_review_lineage(
+        session,
+        review_row_id=_uuid(row.review_row_id),
+        tenant_id=ownership.tenant_id,
+        for_update=True,
+    )
+    refusal = resume_lineage.decide_resume_lineage(
+        lineage,
+        authorized_thread_id=row.thread_id,
+        operation_thread_id=row.thread_id,
+        operation_phase=row.phase,
+    ).refusal
+    if refusal is not None:
+        raise OwnershipError(
+            f"Lineage superseded ({refusal}) for operation {ownership.operation_id}: "
+            f"it was authorized against {row.thread_id!r}, the review now records "
+            f"{(lineage.thread_id if lineage else None)!r} "
+            f"(generation {lineage.lineage_generation if lineage else None}, "
+            f"fence {lineage.lineage_fencing_token if lineage else None}); "
+            "this worker may not persist against the current review or document"
         )
     return row
 
@@ -772,6 +869,22 @@ _FINALIZE_REVIEW_SQL = text(
     """
 )
 
+# #758: generation transitions already mutate/lock the document before they
+# advance processing authority and stamp review lineage. Finalization must
+# therefore acquire the same document lock BEFORE it locks resume_operations
+# / review_items, otherwise concurrent reupload/reprocess and HITL finalization
+# form a DOCUMENT <-> REVIEW lock inversion and PostgreSQL may abort one side
+# as a deadlock victim.
+_LOCK_DOCUMENT_FOR_UPDATE_SQL = text(
+    """
+    SELECT id
+      FROM documents
+     WHERE id = cast(:document_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
+     FOR UPDATE
+    """
+)
+
 _FINALIZE_DOCUMENT_SQL = text(
     """
     UPDATE documents
@@ -837,6 +950,7 @@ async def finalize_v3(
     review_item_id: UUID | None = None,
     session_factory: Any = None,
     fault: Any = None,
+    trusted_commits_out: list[Any] | None = None,
 ) -> FinalizedCorrection | None:
     """Commit the whole post-graph outcome in ONE fenced transaction.
 
@@ -856,8 +970,31 @@ async def finalize_v3(
     and lost-response retries never reach this point, so they cannot append
     a second one; a genuinely new final decision is a new review row, hence
     a new operation, hence its own event.
+
+    C2PRO #714: the trusted-state transition rides the SAME transaction.
+    APPROVED promotes exactly the candidate bound to this review (id +
+    version + digest) to TRUSTED; REJECTED marks it REJECTED. A stale,
+    superseded or substituted binding raises and rolls the whole
+    finalization back (fail closed). A newly committed candidate is appended
+    to ``trusted_commits_out`` so the caller can enqueue the canonical
+    ProjectGraph AFTER commit, exactly once -- replays never get here.
     """
     async with _session(session_factory, ownership.tenant_id) as session:
+        # Canonical cross-aggregate lock order for the only resume path that
+        # also mutates documents: DOCUMENT -> RESUME_OPERATION -> REVIEW.
+        # Reupload/reprocess already starts from DOCUMENT before
+        # begin_generation() reaches processing authority / review lineage.
+        # Taking this tenant-scoped row lock first removes the inverse
+        # REVIEW -> DOCUMENT edge while preserving the existing lineage CAS.
+        if document_id is not None:
+            await session.execute(
+                _LOCK_DOCUMENT_FOR_UPDATE_SQL,
+                {
+                    "document_id": str(document_id),
+                    "tenant_id": str(ownership.tenant_id),
+                },
+            )
+
         row = await verify_in_transaction(session, ownership)
         phase = Phase(row.phase)
 
@@ -897,6 +1034,14 @@ async def finalize_v3(
             raise RuntimeError(
                 f"Finalization could not update review row {review_row_id}; nothing committed."
             )
+
+        trusted_commit = await _apply_trust_decision(
+            session,
+            tenant_id=ownership.tenant_id,
+            review_row_id=review_row_id,
+            document_id=document_id,
+            approved=approved,
+        )
 
         if approved:
             if fault is not None:
@@ -970,6 +1115,8 @@ async def finalize_v3(
         )
         await session.flush()
 
+    if trusted_commit is not None and trusted_commits_out is not None:
+        trusted_commits_out.append(trusted_commit)
     logger.info(
         "hitl_resume_finalized_v3",
         operation_id=str(ownership.operation_id),
@@ -977,6 +1124,158 @@ async def finalize_v3(
         correction_event_id=str(correction.event_id) if correction else None,
     )
     return correction
+
+
+_REVIEW_BINDING_SQL = text(
+    """
+    SELECT review_metadata -> :key AS binding,
+           coalesce((review_metadata ->> :marker)::boolean, false) AS required
+      FROM review_items
+     WHERE id = cast(:review_row_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
+    """
+)
+
+
+async def verify_trust_binding(
+    *,
+    tenant_id: UUID,
+    review_row_id: UUID,
+    document_id: UUID | None,
+    approved: bool = True,
+    session_factory: Any = None,
+) -> None:
+    """#714 pre-flight: fail a decision closed BEFORE the graph resumes.
+
+    Both decisions require a #714 review's candidate to be bound
+    (CandidateNotReadyError otherwise) and to still be the exact current
+    proposal (StaleCandidateError otherwise). Without this a stale approval
+    would still run N17 (persisting a COMPLETED analysis that feeds the
+    trusted score), and a stale rejection would terminate the graph, before
+    finalize_v3 refused them. Read-only; finalize_v3 re-verifies under a
+    row lock.
+    """
+    async with _session(session_factory, tenant_id) as session:
+        await _apply_trust_decision(
+            session,
+            tenant_id=tenant_id,
+            review_row_id=review_row_id,
+            document_id=document_id,
+            approved=approved,
+            dry_run=True,
+        )
+
+
+async def _apply_trust_decision(
+    session: Any,
+    *,
+    tenant_id: UUID,
+    review_row_id: UUID,
+    document_id: UUID | None,
+    approved: bool,
+    dry_run: bool = False,
+) -> Any:
+    """#714: apply the human decision to the exact bound candidate.
+
+    Returns the TrustedCommit for an approval -- NEWLY_TRUSTED, or
+    ALREADY_TRUSTED when N17 of this same operation already committed it
+    (commit_trust_in_transaction) -- else None. Raises StaleCandidateError
+    (rolling back the transaction) when the approval cannot be bound to the
+    current exact proposal.
+    """
+    from src.analysis.adapters.persistence.document_artifact_repository import (
+        SqlAlchemyDocumentArtifactRepository,
+    )
+    from src.analysis.domain.trust import (
+        REVIEW_BINDING_KEY,
+        TRUST_CANDIDATE_REQUIRED_KEY,
+        CandidateBinding,
+        CandidateNotReadyError,
+        StaleCandidateError,
+    )
+    from src.core.tenants.types import require_tenant_id
+
+    tenant = require_tenant_id(str(tenant_id))
+    review = (
+        await session.execute(
+            _REVIEW_BINDING_SQL,
+            {
+                "key": REVIEW_BINDING_KEY,
+                "marker": TRUST_CANDIDATE_REQUIRED_KEY,
+                "review_row_id": str(review_row_id),
+                "tenant_id": str(tenant_id),
+            },
+        )
+    ).first()
+    raw = review.binding if review is not None else None
+    binding = CandidateBinding.from_json(raw, default_document_id=document_id)
+    repo = SqlAlchemyDocumentArtifactRepository(session)
+
+    if binding is None:
+        if raw is None and review is not None and review.required:
+            # A #714 review whose candidate is not persisted/bound yet (the
+            # interrupt exposed the review before the completion hook ran).
+            # Neither approve nor reject may proceed: fail closed.
+            raise CandidateNotReadyError(
+                f"Review {review_row_id} is not ready for a decision: its analysis "
+                "candidate is still being prepared. Retry shortly."
+            )
+        if raw is not None:
+            raise StaleCandidateError(
+                f"Review {review_row_id} carries a malformed candidate binding"
+            )
+        if (
+            approved
+            and document_id is not None
+            and await repo.has_proposed_candidate(document_id=document_id, tenant_id=tenant)
+        ):
+            # A proposal exists that this review never saw: approving would
+            # trust unreviewed content.
+            raise StaleCandidateError(
+                f"Review {review_row_id} is not bound to the pending proposal for "
+                f"document {document_id}; refusing to trust unreviewed content"
+            )
+        # Legacy review (pre-#714): nothing was proposed, nothing to commit.
+        logger.info("hitl_trusted_commit_no_candidate", review_row_id=str(review_row_id))
+        return None
+
+    if document_id is not None and binding.document_id != document_id:
+        raise StaleCandidateError(
+            f"Review {review_row_id} binding targets document {binding.document_id}, "
+            f"not {document_id}"
+        )
+    if dry_run:
+        await repo.verify_candidate(binding, tenant_id=tenant, for_reject=not approved)
+        return None
+    if not approved:
+        await repo.reject_candidate(binding, tenant_id=tenant)
+        return None
+    return await repo.commit_candidate(binding, tenant_id=tenant)
+
+
+async def commit_trust_in_transaction(session: Any, *, tenant_id: UUID, operation: Any) -> Any:
+    """#714: promote the exact approved candidate inside N17's transaction.
+
+    N17 of an approved resume makes the analysis, alerts and canonical WBS
+    durable. Committing the exact bound candidate in that SAME transaction
+    means those outputs can never become user-visible without the trusted
+    transition: a stale, superseded or substituted binding raises
+    StaleCandidateError and rolls every N17 effect back. ``operation`` is
+    the row verify_in_transaction locked. finalize_v3 later finds the
+    candidate ALREADY_TRUSTED (idempotent) and still enqueues ProjectGraph.
+    """
+    if str(getattr(operation, "decision", "") or "").lower() != "approve":
+        return None
+    review_row_id = _uuid_or_none(getattr(operation, "review_row_id", None))
+    if review_row_id is None:
+        return None
+    return await _apply_trust_decision(
+        session,
+        tenant_id=tenant_id,
+        review_row_id=review_row_id,
+        document_id=_uuid_or_none(getattr(operation, "document_id", None)),
+        approved=True,
+    )
 
 
 def _append_correction_event(

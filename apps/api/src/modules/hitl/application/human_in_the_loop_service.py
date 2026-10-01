@@ -10,6 +10,7 @@ from typing import Any
 from uuid import UUID
 
 from src.modules.hitl.domain.entities import (
+    AWAITING_DECISION_STATUSES,
     ImpactLevel,
     ReviewItem,
     ReviewStatus,
@@ -96,10 +97,7 @@ class HumanInTheLoopService:
         if not item:
             raise ValueError(self._ERR_NOT_FOUND.format(item_id=item_id))
 
-        if item.current_status not in {
-            ReviewStatus.PENDING_REVIEW_REQUIRED,
-            ReviewStatus.PENDING_REVIEW_CONDITIONAL,
-        }:
+        if item.current_status not in AWAITING_DECISION_STATUSES:
             raise ValueError(
                 f"Item {item_id} cannot be approved from status {item.current_status.value}."
             )

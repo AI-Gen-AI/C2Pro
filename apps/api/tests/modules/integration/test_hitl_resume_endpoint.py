@@ -19,7 +19,7 @@ from uuid import UUID, uuid4
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from src.core.auth.models import Tenant
 from src.documents.adapters.persistence.models import DocumentORM
@@ -558,6 +558,15 @@ class TestCheckpointRestoration:
         CheckpointService.load_checkpoint already falls back to the latest
         checkpoint for a thread, which for a freshly-interrupted thread IS
         the interrupt point.
+
+        #758 narrows WHICH lineages that fallback is safe on, and this test
+        now uses the shape production's pending reviews actually have: a
+        legacy UUID thread. Read-only inspection found 6 pending
+        analysis_critique rows, all with checkpoint_id NULL on 36-character
+        UUID threads, resumable only through this fallback -- so it must keep
+        working. The one shape it is NOT safe on, the deterministic shared
+        `document:{id}:analysis` thread that every processing attempt wrote
+        to, is covered by the sibling test below.
         """
         item_id = uuid4()
         review = ReviewItemORM(
@@ -575,7 +584,7 @@ class TestCheckpointRestoration:
             document_id=test_document.id,
             review_type="analysis_critique",
             checkpoint_id=None,  # never captured -- must not be fatal
-            thread_id=f"document:{test_document.id}:analysis",
+            thread_id=str(uuid4()),  # production's legacy UUID lineage
         )
         db.add(review)
         await db.commit()
@@ -589,6 +598,63 @@ class TestCheckpointRestoration:
             f"Resume must succeed on thread_id alone: {response.text}"
         )
         assert response.json()["status"] in {"resumed", "APPROVED"}
+
+    async def test_resume_refuses_the_shared_lineage_without_a_checkpoint_id(
+        self,
+        authenticated_client: AsyncClient,
+        db,
+        test_project,
+        test_document,
+        test_tenant,
+        hitl_resume_override,
+    ):
+        """#758: `document:{id}:analysis` + no checkpoint id must fail closed.
+
+        Every processing attempt on a document wrote to that one deterministic
+        thread, so "latest checkpoint for the thread" can resolve a SUPERSEDED
+        attempt's checkpoint. Refusing is preferable to resuming superseded
+        evidence; an operator can repair the row by pinning an exact
+        checkpoint id, which stays permitted.
+        """
+        item_id = uuid4()
+        review = ReviewItemORM(
+            id=item_id,
+            item_id=item_id,
+            item_type="test_review",
+            tenant_id=test_tenant.id,
+            current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+            impact_level=ImpactLevel.HIGH,
+            confidence=0.2,
+            sla_due_date=datetime.now(UTC).replace(tzinfo=None),
+            item_data={},
+            review_metadata={},
+            project_id=test_project.id,
+            document_id=test_document.id,
+            review_type="analysis_critique",
+            checkpoint_id=None,
+            thread_id=f"document:{test_document.id}:analysis",
+        )
+        db.add(review)
+        await db.commit()
+
+        response = await authenticated_client.post(
+            f"/api/v1/hitl/resume/{review.id}",
+            json={"decision": "approve", "feedback": "shared lineage"},
+        )
+
+        assert response.status_code == 400, response.text
+        assert "shared" in response.text, response.text
+
+        refreshed = (
+            await db.execute(
+                select(ReviewItemORM)
+                .where(ReviewItemORM.id == item_id)
+                .execution_options(populate_existing=True)
+            )
+        ).scalars().one()
+        assert refreshed.current_status == ReviewStatus.PENDING_REVIEW_REQUIRED, (
+            "a refused resume must not record the decision"
+        )
 
 
 class TestStateInjection:

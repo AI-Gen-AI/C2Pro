@@ -399,6 +399,50 @@ class TestHumanInterruptNode:
         assert service.calls[0]["metadata"]["thread_id"] == "thread-swagger-analysis"
 
     @pytest.mark.asyncio
+    async def test_review_row_receives_exact_candidate_binding(
+        self, monkeypatch
+    ) -> None:
+        """#714: the review must bind the exact immutable candidate envelope."""
+        from src.analysis.adapters.graph import nodes
+
+        service = _FakeHitlService(ReviewStatus.APPROVED)
+        monkeypatch.setattr(
+            nodes,
+            "get_session_with_tenant",
+            lambda tenant_id: _AsyncContext(value={"tenant_id": tenant_id}),
+            raising=False,
+        )
+        monkeypatch.setattr(
+            nodes,
+            "get_hitl_service_for_graph",
+            lambda *, session, tenant_id: service,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            nodes,
+            "interrupt",
+            lambda payload: (_ for _ in ()).throw(
+                AssertionError(f"unexpected interrupt: {payload}")
+            ),
+        )
+
+        binding = {
+            "artifact_id": str(uuid4()),
+            "artifact_version": 4,
+            "artifact_hash": "a" * 64,
+        }
+        await nodes.human_interrupt_node(
+            _make_state(
+                doc_type="contract",
+                confidence_score=0.9,
+                candidate_binding=binding,
+            )
+        )
+
+        assert service.calls[0]["item_data"]["candidate_binding"] == binding
+        assert service.calls[0]["metadata"]["candidate_binding"] == binding
+
+    @pytest.mark.asyncio
     async def test_hitl_routing_failure_degrades_and_still_interrupts(
         self, monkeypatch
     ) -> None:

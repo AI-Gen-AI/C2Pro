@@ -64,6 +64,7 @@ from tests.modules.integration.test_p0b_crash_safe_resume_recovery import (
     _arrange,
     _dsn,
     _initial_state,
+    _persist_bound_candidate,
     _reload,
     independent_sessions,  # noqa: F401 - pytest fixture
     real_saver,  # noqa: F401 - pytest fixture
@@ -109,7 +110,14 @@ def _reviewer() -> Any:
 
 
 async def _post_approve(
-    maker: Any, tenant_id: UUID, item_id: UUID, *, saver: Any, app: Any, sessions: Any
+    maker: Any,
+    tenant_id: UUID,
+    item_id: UUID,
+    *,
+    saver: Any,
+    app: Any,
+    sessions: Any,
+    row_id: UUID | None = None,
 ) -> Any:
     """One ``POST /queue/{item_id}/approve`` on its OWN connection/transaction.
 
@@ -132,7 +140,7 @@ async def _post_approve(
         try:
             return await hitl_router.approve_item(
                 item_id=item_id,
-                _payload=ApproveRequest(),
+                payload=ApproveRequest(row_id=row_id),
                 _tenant_id=tenant_id,
                 current_user=_reviewer(),
                 service=SimpleNamespace(review_queue_repo=repo),
@@ -152,6 +160,7 @@ async def _post_reject(
     sessions: Any,
     reason: str = "wrong clause extraction",
     reviewer_name: str = "Reviewer",
+    row_id: UUID | None = None,
 ) -> Any:
     async with maker() as session:
         await session.execute(
@@ -168,7 +177,7 @@ async def _post_reject(
         try:
             return await hitl_router.reject_item(
                 item_id=item_id,
-                payload=RejectRequest(reason=reason),
+                payload=RejectRequest(reason=reason, row_id=row_id),
                 _tenant_id=tenant_id,
                 current_user=SimpleNamespace(id=uuid4(), full_name=reviewer_name),
                 service=SimpleNamespace(review_queue_repo=repo),
@@ -508,6 +517,9 @@ async def _rerun_to_new_review(
         "document_id": str(arranged.document_id),
     }
     await db.commit()
+    # C2PRO #714: production binds the re-run's PROPOSED candidate after the
+    # interrupt; the new review refuses a decision until then.
+    await _persist_bound_candidate(db, tenant, document, thread_id)
     await db.refresh(new_row)
     return new_row
 

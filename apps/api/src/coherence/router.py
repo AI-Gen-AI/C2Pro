@@ -1230,10 +1230,103 @@ async def get_coherence_dashboard(
         categories_v2=None,
     )
 
+    summary = await _attach_trusted_projection(summary, project_id, tenant_id, db)
+
     v2_enabled = await _v2_enabled_for(tenant_id, flags_service)
     return await _maybe_add_v2_dashboard(
         summary, project_id, last_updated, v2_enabled=v2_enabled, db=db
     )
+
+
+_PROJECTABLE_SCORE_VERSIONS = {"coherence-v1", "coherence-v2"}
+
+
+async def _attach_trusted_projection(
+    summary: DashboardSummary,
+    project_id: UUID,
+    tenant_id: UUID,
+    db: AsyncSession,
+) -> DashboardSummary:
+    """#714: add the provisional pending-review projection (additive only).
+
+    baseline = canonical ProjectGraph evaluation of the trusted artifacts;
+    projected = the same evaluation with every ACTIONABLE pending proposal
+    (bound to an awaiting review) substituted. The trusted fields are never
+    altered here, and a failure degrades to ``projection_status='unavailable'``
+    rather than hiding the trusted score.
+    """
+    from src.analysis.adapters.graph.project_graph import (
+        evaluate_artifact_set,
+        is_coherence_llm_enabled,
+    )
+    from src.analysis.adapters.persistence.document_artifact_repository import (
+        SqlAlchemyDocumentArtifactRepository,
+    )
+    from src.coherence.application.trusted_projection import project_pending_coherence
+    from src.core.tenants.types import require_tenant_id
+
+    base: DashboardSummary = summary.model_copy(update={"trusted_score": summary.coherence_score})
+    try:
+        repo = SqlAlchemyDocumentArtifactRepository(db)
+        scoped = require_tenant_id(str(tenant_id))
+        # Savepoint: a failed read must not abort the request transaction
+        # that the remaining dashboard reads still use.
+        async with db.begin_nested():
+            pending = await repo.list_pending_candidates(project_id=project_id, tenant_id=scoped)
+            trusted = (
+                await repo.list_trusted_for_project(project_id=project_id, tenant_id=scoped)
+                if pending
+                else []
+            )
+        llm_on = await is_coherence_llm_enabled(scoped) if pending else False
+
+        async def _evaluate(artifacts: list[Any]) -> Any:
+            return await evaluate_artifact_set(
+                artifacts, project_id=project_id, tenant_id=scoped, llm_on=llm_on
+            )
+
+        projection = await project_pending_coherence(
+            trusted_artifacts=trusted,
+            pending=pending,
+            evaluate=_evaluate,
+            trusted_score_version=summary.score_version,
+        )
+    except Exception:  # noqa: BLE001 - never block trusted visibility
+        logger.warning(
+            "coherence_projection_unavailable", project_id=str(project_id), exc_info=True
+        )
+        return _copy(
+            base,
+            {"projection_status": "unavailable", "projection_reason": "projection_read_failed"},
+        )
+
+    version = projection.projection_score_version
+    if version is not None and version not in _PROJECTABLE_SCORE_VERSIONS:
+        return _copy(
+            base,
+            {
+                "pending_review_count": projection.pending_review_count,
+                "projection_status": "unavailable",
+                "projection_reason": "unknown_score_version",
+            },
+        )
+    return _copy(
+        base,
+        {
+            "projection_baseline_score": projection.baseline_score,
+            "projected_score": projection.projected_score,
+            "projected_delta": projection.projected_delta,
+            "pending_review_count": projection.pending_review_count,
+            "projection_score_version": version,
+            "projection_status": projection.status.value,
+            "projection_reason": projection.reason,
+        },
+    )
+
+
+def _copy(summary: DashboardSummary, update: dict[str, Any]) -> DashboardSummary:
+    copied: DashboardSummary = summary.model_copy(update=update)
+    return copied
 
 
 async def _maybe_add_v2_dashboard(

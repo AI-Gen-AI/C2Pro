@@ -62,7 +62,9 @@ async def run_project_graph_once(
     artifact_repository: IDocumentArtifactRepository,
     trigger_event_id: UUID | None = None,
 ) -> dict[str, object]:
-    artifacts = await artifact_repository.list_active_for_project(
+    # #714: canonical input is TRUSTED artifacts only -- never a pending
+    # PROPOSED candidate, even when it is the newest row for its document.
+    artifacts = await artifact_repository.list_trusted_for_project(
         project_id=project_id,
         tenant_id=tenant_id,
     )
@@ -81,8 +83,18 @@ async def run_project_graph_once(
         "artifact_repository": artifact_repository,
     }
     result = await build_project_graph().ainvoke(graph_input)
+    # #714: acknowledge the durable trusted -> ProjectGraph obligations of
+    # exactly the artifacts this completed run loaded. The caller commits it
+    # together with the run; a failed run rolls it back and stays pending.
+    mark_projected = getattr(artifact_repository, "mark_loaded_projected", None)
+    projected = (
+        await mark_projected(project_id=project_id, tenant_id=tenant_id)
+        if mark_projected is not None
+        else 0
+    )
     return {
         "status": "ok",
+        "projected_obligations": projected,
         "artifact_count": len(artifacts),
         "node_result_count": len(result.get("node_results", [])),
         "coherence_result": _serializable(result.get("coherence_result")),
@@ -211,3 +223,91 @@ __all__ = [
     "run_project_graph",
     "run_project_graph_once",
 ]
+
+
+# -- #714 durable trusted -> ProjectGraph reconciliation ------------------------
+
+RECONCILE_BATCH_SIZE = 50
+RECONCILE_GRACE_SECONDS = 120
+MAX_RECONCILE_ENQUEUES = 12
+
+_PENDING_PROJECTIONS_SQL = text(
+    """
+    SELECT tenant_id, project_id,
+           max(enqueue_attempts) AS attempts,
+           min(coalesce(last_checked_at, created_at)) AS oldest
+      FROM system_recovery.trusted_projection_index
+     WHERE projection_state = 'pending'
+       AND created_at <= (clock_timestamp() AT TIME ZONE 'UTC')
+                          - make_interval(secs => :grace)
+     GROUP BY tenant_id, project_id
+     ORDER BY oldest
+     LIMIT :limit
+    """
+)
+
+_TOUCH_PENDING_SQL = text(
+    """
+    UPDATE system_recovery.trusted_projection_index
+       SET last_checked_at = (clock_timestamp() AT TIME ZONE 'UTC'),
+           enqueue_attempts = enqueue_attempts + :increment
+     WHERE tenant_id = cast(:tenant_id as uuid)
+       AND project_id = cast(:project_id as uuid)
+       AND projection_state = 'pending'
+    """
+)
+
+
+async def reconcile_trusted_projections(
+    *,
+    batch_size: int = RECONCILE_BATCH_SIZE,
+    grace_seconds: int = RECONCILE_GRACE_SECONDS,
+) -> dict[str, int]:
+    """Re-dispatch trusted commits whose ProjectGraph projection was lost.
+
+    Scans only the internal system_recovery routing table (no business rows,
+    no RLS bypass). A pending obligation older than the fast-path grace is
+    re-enqueued through the normal ``enqueue_project_graph``; it is only
+    ever cleared by a completed ProjectGraph run (``mark_loaded_projected``).
+    Flag-disabled tenants are skipped without being marked projected, and
+    repeated failures stop after ``MAX_RECONCILE_ENQUEUES`` so a broken
+    project cannot turn into a retry storm -- the obligation stays pending
+    as durable operator evidence.
+    """
+    counts = {"scanned": 0, "enqueued": 0, "flag_disabled": 0, "exhausted": 0}
+    await _maybe_await(init_db())
+    async with get_raw_session() as session:
+        rows = (
+            await session.execute(
+                _PENDING_PROJECTIONS_SQL, {"grace": grace_seconds, "limit": batch_size}
+            )
+        ).all()
+        for row in rows:
+            counts["scanned"] += 1
+            tenant_id = require_tenant_id(str(row.tenant_id))
+            project_id = UUID(str(row.project_id))
+            increment = 0
+            if int(row.attempts) >= MAX_RECONCILE_ENQUEUES:
+                counts["exhausted"] += 1
+                logger.error(
+                    "trusted_projection_reconcile_exhausted",
+                    extra={"project_id": str(project_id), "tenant_id": str(tenant_id)},
+                )
+            elif not await is_project_graph_enabled(tenant_id):
+                counts["flag_disabled"] += 1
+            else:
+                await enqueue_project_graph(project_id=project_id, tenant_id=tenant_id)
+                counts["enqueued"] += 1
+                increment = 1
+            await session.execute(
+                _TOUCH_PENDING_SQL,
+                {"tenant_id": str(tenant_id), "project_id": str(project_id), "increment": increment},
+            )
+        await session.commit()
+    logger.info("trusted_projection_reconcile", extra=counts)
+    return counts
+
+
+@celery_app.task(name="project_graph.reconcile_trusted_projections")
+def reconcile_trusted_projections_task() -> dict[str, int]:
+    return asyncio.run(reconcile_trusted_projections())

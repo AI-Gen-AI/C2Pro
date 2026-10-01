@@ -18,6 +18,7 @@ def test_schema_ready_only_when_database_equals_repository_head() -> None:
     assert schema_ready(expected={"head-2"}, current={"head-2"}) is True
     assert schema_ready(expected={"head-2"}, current={"head-1"}) is False
     assert schema_ready(expected={"head-2"}, current=set()) is False
+    assert schema_ready(expected={"head-2"}, current={"head-3"}) is False
 
 
 def test_database_multi_head_fails_closed() -> None:

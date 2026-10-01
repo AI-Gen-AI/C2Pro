@@ -336,7 +336,7 @@ async def test_direct_approve_resumable_review_reaches_analyzed(db: AsyncSession
 
     response = await hitl_router.approve_item(
         item_id=review.item_id,
-        _payload=ApproveRequest(),
+        payload=ApproveRequest(),
         _tenant_id=tenant.id,
         current_user=_current_user(),
         service=_service(db, tenant.id),
@@ -379,7 +379,7 @@ async def test_direct_approve_non_resumable_review_succeeds_without_resume(db: A
 
     response = await hitl_router.approve_item(
         item_id=review.item_id,
-        _payload=ApproveRequest(),
+        payload=ApproveRequest(),
         _tenant_id=tenant.id,
         current_user=_current_user(),
         service=_service(db, tenant.id),
@@ -404,7 +404,7 @@ async def test_direct_approve_nonexistent_review_404(db: AsyncSession) -> None:
     with pytest.raises(HTTPException) as exc_info:
         await hitl_router.approve_item(
             item_id=uuid4(),
-            _payload=ApproveRequest(),
+            payload=ApproveRequest(),
             _tenant_id=tenant.id,
             current_user=_current_user(),
             service=_service(db, tenant.id),
@@ -440,7 +440,7 @@ async def test_direct_approve_non_resumable_already_approved_400(db: AsyncSessio
     with pytest.raises(HTTPException) as exc_info:
         await hitl_router.approve_item(
             item_id=review.item_id,
-            _payload=ApproveRequest(),
+            payload=ApproveRequest(),
             _tenant_id=tenant.id,
             current_user=_current_user(),
             service=_service(db, tenant.id),
@@ -472,7 +472,7 @@ async def test_direct_approve_resume_failure_returns_502_and_stays_pending(db: A
     with pytest.raises(HTTPException) as exc_info:
         await hitl_router.approve_item(
             item_id=review.item_id,
-            _payload=ApproveRequest(),
+            payload=ApproveRequest(),
             _tenant_id=tenant.id,
             current_user=_current_user(),
             service=_service(db, tenant.id),
@@ -512,7 +512,7 @@ async def test_direct_approve_already_processed_is_idempotent(db: AsyncSession) 
 
     response = await hitl_router.approve_item(
         item_id=review.item_id,
-        _payload=ApproveRequest(),
+        payload=ApproveRequest(),
         _tenant_id=tenant.id,
         current_user=_current_user(),
         service=_service(db, tenant.id),

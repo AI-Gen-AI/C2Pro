@@ -29,6 +29,9 @@ from src.analysis.adapters.graph.nodes_extended import (
     _ok_node_result,
     _persist_node_error,
 )
+from src.analysis.adapters.graph.review_lineage import (
+    claim_review_lineage_for_current_attempt,
+)
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.application.classify_document_use_case import (
     ClassifyDocumentCommand,
@@ -47,6 +50,7 @@ from src.analysis.domain.contracts import RiskItem, WbsActivity
 from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.analysis.domain.prompts import DOC_TYPES
 from src.core.database import get_session_with_tenant
+from src.core.processing_authority import fence_current
 from src.shared_kernel.enums import AlertSeverity
 from src.temporal.application.project_snapshot_trigger import (
     record_project_event_and_enqueue_snapshot,
@@ -523,6 +527,20 @@ def route_after_human_interrupt(state: ProjectState) -> str:
     return "enrichment_dispatch"
 
 
+async def _claim_checkpoint_lineage_for_current_attempt(state: ProjectState) -> None:
+    """N13 defense-in-depth: re-assert the lineage claim from graph state.
+
+    #758. The authoritative claim happens BEFORE the graph starts (see
+    ``_run_analysis_graph_best_effort``); this one is idempotent and covers a
+    review that only became active during the run.
+    """
+    await claim_review_lineage_for_current_attempt(
+        thread_id=state.get("thread_id"),
+        tenant_id=state.get("tenant_id"),
+        document_id=state.get("document_id"),
+    )
+
+
 async def human_interrupt_node(state: ProjectState) -> ProjectState:
     """N13 — Route through HITL service and raise LangGraph Interrupt.
 
@@ -539,18 +557,29 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                 else ImpactLevel.MEDIUM
             )
             async with get_session_with_tenant(UUID(tenant_id)) as session:
+                # #711: a stale processing worker must not route a review.
+                await fence_current(session)
                 service = get_hitl_service_for_graph(
                     session=session, tenant_id=UUID(tenant_id),
                 )
-                metadata = {
+                metadata: dict[str, Any] = {
                     "tenant_id": tenant_id,
                     "project_id": state["project_id"],
                     "document_id": state["document_id"],
                     "review_type": "analysis_critique",
+                    # C2PRO #714: no decision until the exact candidate is
+                    # persisted and bound (see document_artifact_completion).
+                    "trust_candidate_required": True,
                 }
                 thread_id = state.get("thread_id")
                 if thread_id:
                     metadata["thread_id"] = thread_id
+                # C2PRO #714: when the exact candidate envelope is already
+                # known, bind it to the review at creation. Never trusted
+                # blindly: approval re-verifies id+version+digest in the DB.
+                candidate_binding = state.get("candidate_binding")
+                if isinstance(candidate_binding, dict):
+                    metadata["candidate_binding"] = dict(candidate_binding)
 
                 # C2PRO P0b HITL review UX hotfix: a reviewer deciding
                 # Approve/Reject needs more than a bare item_id -- these
@@ -578,6 +607,11 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         "retry_count": state.get("retry_count", 0),
                         "critique_notes": state.get("critique_notes", ""),
                         "thread_id": state.get("thread_id"),
+                        **(
+                            {"candidate_binding": dict(candidate_binding)}
+                            if isinstance(candidate_binding, dict)
+                            else {}
+                        ),
                         "reason": reason,
                         "approve_meaning": (
                             "Continue the analysis using this reviewed result. "
@@ -614,6 +648,22 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                 error_type=type(exc).__name__,
                 exc_info=True,
             )
+
+    # #758: take the review's checkpoint LINEAGE over before the interrupt
+    # becomes actionable.
+    #
+    # route_for_review deduplicates on the document, so a takeover adopts the
+    # review its predecessor created -- still carrying the SUPERSEDED thread
+    # and checkpoint. Binding the real checkpoint id afterwards is
+    # best-effort, so if it fails the only active review stays resumable
+    # through the dead attempt's lineage, and a later HITL approval runs
+    # outside processing authority where #711 can no longer repair it.
+    #
+    # Claiming the thread HERE, before interrupt() raises, is what keeps
+    # checkpoint-id capture safely best-effort: the thread alone is enough,
+    # because an authority-scoped thread holds exactly one attempt's
+    # checkpoints, so a thread-only restore is necessarily this attempt's.
+    await _claim_checkpoint_lineage_for_current_attempt(state)
 
     # C2PRO P0b true-resume hotfix: interrupt() does NOT return on the first
     # execution -- it raises GraphInterrupt and LangGraph persists the
@@ -760,6 +810,9 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
     tenant_id = UUID(state["tenant_id"])
     try:
         async with get_session_with_tenant(tenant_id) as session:
+            # #711: analysis, alerts and canonical WBS commit only for the
+            # current processing owner (same transaction as the writes).
+            await fence_current(session)
             result = await PersistAnalysisUseCase(
                 analysis_repo=SqlAlchemyAnalysisRepository(session),
                 wbs_repo=SQLAlchemyWBSRepository(session),

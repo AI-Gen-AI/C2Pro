@@ -60,7 +60,7 @@ async def test_approval_of_project_review_emits_material_correction_snapshot(mon
 
     await router.approve_item(
         item_id=item.item_id,
-        _payload=ApproveRequest(),
+        payload=ApproveRequest(),
         _tenant_id=tenant_id,
         current_user=SimpleNamespace(id=uuid4(), full_name="Reviewer"),
         service=FakeService(),

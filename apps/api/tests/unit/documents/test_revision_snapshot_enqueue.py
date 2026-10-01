@@ -32,7 +32,7 @@ def _no_processing_broker(monkeypatch):
     """Re-upload dispatches revision processing post-commit; never reach a broker here."""
     monkeypatch.setattr(
         "src.documents.application.reupload_document_use_case._enqueue_document_processing",
-        lambda _document_id, _revision_id=None: None,
+        lambda _document_id, _revision_id=None, _generation=None: None,
     )
 
 
@@ -130,6 +130,10 @@ class _ReuploadDocRepo:
 
     async def update_storage_path(self, _tenant_id, _document_id, storage_url):
         self.current_doc.storage_url = storage_url
+
+    async def begin_processing_generation(self, _tenant_id, _document_id, _revision_id=None):
+        # #711: the new revision starts a new processing generation.
+        return 2
 
     async def commit(self):
         self.commit_calls += 1
@@ -334,7 +338,7 @@ async def test_reupload_enqueues_after_successful_commit(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "src.documents.application.reupload_document_use_case._enqueue_document_processing",
-        lambda _document_id, _revision_id=None: order.append("processing"),
+        lambda _document_id, _revision_id=None, _generation=None: order.append("processing"),
     )
 
     await ReuploadDocumentUseCase(

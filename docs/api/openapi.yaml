@@ -4457,15 +4457,25 @@ components:
       - CORRECTED
       title: ApprovalStatus
     ApproveRequest:
-      properties: {}
+      properties:
+        row_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Row Id
       type: object
       title: ApproveRequest
       description: "SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is never\n\
         accepted from the client \u2014 it is derived server-side from the\nauthenticated\
         \ session (Depends(get_current_user)). A client-supplied\nreviewer field here\
         \ would let any authenticated user forge a review as\nanother user, corrupting\
-        \ the HITL audit trail. This body is currently\nempty by design; do not add\
-        \ a reviewer identity field back."
+        \ the HITL audit trail. Do not add a reviewer\nidentity field back.\n\nC2PRO\
+        \ #714: ``row_id`` pins the decision to the EXACT review row the\nreviewer\
+        \ saw (ReviewItemResponse.row_id). item_id is a business key a\nreplacement\
+        \ review for a newer candidate shares; without the row, a\ndecision from a\
+        \ stale screen would land on a review the human never saw.\nA pinned row that\
+        \ is no longer awaiting a decision fails closed."
     AttentionItem:
       properties:
         kind:
@@ -5788,6 +5798,62 @@ components:
           anyOf:
           - $ref: '#/components/schemas/CoherenceV2Payload'
           - type: 'null'
+        trusted_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Trusted Score
+          description: Canonical score from trusted (approved) state only. Mirrors
+            coherence_score.
+        projected_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Projected Score
+          description: 'PROVISIONAL: canonical ProjectGraph Coherence of the trusted
+            artifacts with every actionable pending proposal accepted unchanged. Never
+            canonical; never exported as the project score.'
+        projection_baseline_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Projection Baseline Score
+          description: Canonical ProjectGraph Coherence of the trusted artifact set
+            -- the same evaluation the projection uses, so projected_delta compares
+            like with like.
+        projected_delta:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Projected Delta
+          description: projected_score - projection_baseline_score (null when either
+            is null).
+        pending_review_count:
+          type: integer
+          title: Pending Review Count
+          description: Exact candidate versions currently awaiting human review.
+          default: 0
+        projection_score_version:
+          anyOf:
+          - type: string
+            enum:
+            - coherence-v1
+            - coherence-v2
+          - type: 'null'
+          title: Projection Score Version
+        projection_status:
+          type: string
+          enum:
+          - none
+          - provisional
+          - unavailable
+          title: Projection Status
+          default: none
+        projection_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Projection Reason
       type: object
       required:
       - project_id
@@ -8624,11 +8690,17 @@ components:
           maxLength: 2000
           title: Reason
           default: ''
+        row_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Row Id
       type: object
       title: RejectRequest
       description: 'See ApproveRequest docstring: reviewer identity is server-derived,
 
-        never client-supplied.'
+        never client-supplied; ``row_id`` pins the exact review row.'
     RelationshipExplanationCitationResponse:
       properties:
         clause_id:
@@ -8841,6 +8913,10 @@ components:
           type: boolean
           title: Resumable
           default: false
+        decision_ready:
+          type: boolean
+          title: Decision Ready
+          default: true
       type: object
       required:
       - item_id

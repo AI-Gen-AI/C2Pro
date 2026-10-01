@@ -267,7 +267,7 @@ async def test_run_project_graph_once_populates_cross_doc_coherence(
     from src.core.tasks.project_graph_tasks import run_project_graph_once
 
     class Repo:
-        async def list_active_for_project(self, *, project_id, tenant_id):
+        async def list_trusted_for_project(self, *, project_id, tenant_id):
             return [
                 _artifact("contract-doc", doc_type="contract", risk_category="LEGAL"),
                 _artifact("budget-doc", doc_type="budget", risk_category="BUDGET"),

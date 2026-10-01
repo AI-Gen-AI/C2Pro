@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.hitl.adapters.persistence.models import ResumeOperationORM, ReviewItemORM
 from src.modules.hitl.application.ports import ReviewQueueRepository
-from src.modules.hitl.domain.entities import ImpactLevel, ReviewItem, ReviewStatus
+from src.modules.hitl.domain.entities import (
+    AWAITING_DECISION_STATUSES,
+    ImpactLevel,
+    ReviewItem,
+    ReviewStatus,
+)
 
 
 class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
@@ -129,7 +134,8 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         C2PRO P0b legacy review canonical-selection hotfix: an ACTIVE row
         awaiting a human decision (PENDING_REVIEW_REQUIRED /
         PENDING_REVIEW_CONDITIONAL) must always outrank a HISTORICAL row
-        that has already been decided (APPROVED/REJECTED/CLOSED/ESCALATED),
+        that has already been decided (APPROVED/REJECTED/CLOSED). ESCALATED
+        rows are still awaiting a decision and rank as active (#714),
         regardless of which was created more recently or which happens to
         carry a thread_id. Without this, an old APPROVED row created after
         (in wall-clock time) a still-active PENDING row -- e.g. a stale
@@ -139,12 +145,9 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         """
         return case(
             (
-                ReviewItemORM.current_status.in_(
-                    [
-                        ReviewStatus.PENDING_REVIEW_REQUIRED,
-                        ReviewStatus.PENDING_REVIEW_CONDITIONAL,
-                    ]
-                ),
+                # C2PRO #714: ESCALATED is still awaiting a (senior) human
+                # decision, so it is an ACTIVE row too.
+                ReviewItemORM.current_status.in_(list(AWAITING_DECISION_STATUSES)),
                 0,
             ),
             else_=1,
@@ -341,6 +344,45 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         orm.updated_at = datetime.now(UTC).replace(tzinfo=None)
         await self.session.flush()
 
+    async def claim_checkpoint_lineage(
+        self,
+        *,
+        row_id: UUID,
+        thread_id: str,
+        lineage_generation: int | None = None,
+        lineage_fencing_token: int | None = None,
+    ) -> None:
+        """Rebind the EXACT review row to `thread_id`, clearing the old checkpoint.
+
+        #758. Addressed by primary key, and scoped to this repository's tenant
+        like every other write here. The checkpoint id is set to NULL rather
+        than left alone: it identifies a checkpoint on the SUPERSEDED thread,
+        so keeping it would leave a (thread, checkpoint) pair that does not
+        exist and that CheckpointService correctly refuses to restore. With it
+        cleared, a thread-only restore resolves this thread's own latest
+        checkpoint, which belongs to exactly one processing attempt.
+
+        The claiming attempt's ``(generation, fencing_token)`` is stamped
+        alongside the thread, so "which processing attempt owns this review's
+        lineage" becomes a stored fact rather than something inferred from the
+        thread string. Everything downstream -- resume authorization, the
+        durable-write fence, recovery -- compares that stamp with the
+        document's live grant. They are written in the SAME statement as the
+        thread, so a lineage can never be half-claimed.
+        """
+        stmt = select(ReviewItemORM).where(ReviewItemORM.id == row_id)
+        if self.tenant_id is not None:
+            stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)
+        orm = (await self.session.execute(stmt)).scalars().first()
+        if orm is None:
+            raise ValueError(f"Review row {row_id} not found.")
+        orm.thread_id = thread_id
+        orm.checkpoint_id = None
+        orm.lineage_generation = lineage_generation
+        orm.lineage_fencing_token = lineage_fencing_token
+        orm.updated_at = datetime.now(UTC).replace(tzinfo=None)
+        await self.session.flush()
+
     async def find_active_review(
         self,
         document_id: UUID,
@@ -355,12 +397,9 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         stmt = select(ReviewItemORM).where(
             ReviewItemORM.document_id == document_id,
             ReviewItemORM.review_type == review_type,
-            ReviewItemORM.current_status.in_(
-                [
-                    ReviewStatus.PENDING_REVIEW_REQUIRED,
-                    ReviewStatus.PENDING_REVIEW_CONDITIONAL,
-                ]
-            ),
+            # An escalated review is still the active one: a graph re-run
+            # must not open a second review next to it.
+            ReviewItemORM.current_status.in_(list(AWAITING_DECISION_STATUSES)),
         )
         if self.tenant_id is not None:
             stmt = stmt.where(ReviewItemORM.tenant_id == self.tenant_id)

@@ -13,6 +13,7 @@ import { CategoryDetail } from "@/components/coherence/CategoryDetail";
 import { CategoryV2Panel } from "@/components/coherence/CategoryV2Panel";
 import type { DashboardSummary } from "@/lib/api/contracts";
 import { ScoreVersionBadge } from "@/components/coherence/ScoreVersionBadge";
+import { ProjectedCoherencePanel } from "@/components/coherence/ProjectedCoherencePanel";
 import { useListProjectAlertsApiV1AlertsProjectsProjectIdGet } from "@/lib/api/generated/alerts/alerts";
 import type { AlertResponse } from "@/lib/api/generated/models";
 
@@ -142,6 +143,8 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
           ))}
         </div>
       </div>
+
+      <ProjectedCoherencePanel summary={summary} />
 
       <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
         {hasScore ? (

@@ -241,10 +241,18 @@ def _initial_state(document: DocumentORM, tenant: Tenant, thread_id: str) -> dic
     }
 
 
-async def _run_to_interrupt(app, document, tenant, thread_id) -> tuple[dict, str]:
+async def _run_to_interrupt(app, document, tenant, thread_id, *, db=None) -> tuple[dict, str]:
     cfg = {"configurable": {"thread_id": thread_id}}
     result = await app.ainvoke(_initial_state(document, tenant, thread_id), cfg)
     assert "__interrupt__" in result, "the real graph must pause at the human interrupt"
+    if db is not None:
+        # C2PRO #714: production binds the PROPOSED candidate right after the
+        # interrupt; a #714 review refuses any decision until then.
+        from tests.modules.integration.test_p0b_crash_safe_resume_recovery import (
+            _persist_bound_candidate,
+        )
+
+        await _persist_bound_candidate(db, tenant, document, thread_id)
     snapshot = await app.aget_state(cfg)
     return cfg, snapshot.config["configurable"]["checkpoint_id"]
 
@@ -295,7 +303,7 @@ async def test_red_thread_only_ainvoke_none_does_not_resume(
     app = _build_real_graph(saver)
     _DOWNSTREAM_RUNS.clear()
 
-    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id)
+    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id, db=db)
     snapshot = await app.aget_state(cfg)
 
     state = dict(snapshot.values)
@@ -328,7 +336,7 @@ async def test_command_resume_consumes_interrupt_and_runs_downstream_once(
     app = _build_real_graph(saver)
     _DOWNSTREAM_RUNS.clear()
 
-    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id)
+    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id, db=db)
 
     restored = await CheckpointService(checkpointer=saver).restore_checkpoint(
         thread_id=thread_id, checkpoint_id=checkpoint_id
@@ -361,7 +369,7 @@ async def test_reject_via_command_resume_never_runs_n17(
     app = _build_real_graph(saver)
     _DOWNSTREAM_RUNS.clear()
 
-    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id)
+    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id, db=db)
     restored = await CheckpointService(checkpointer=saver).restore_checkpoint(
         thread_id=thread_id, checkpoint_id=checkpoint_id
     )
@@ -395,7 +403,7 @@ async def test_use_case_approve_resumes_real_graph_to_n17_and_analyzed(
     app = _build_real_graph(saver)
     _DOWNSTREAM_RUNS.clear()
 
-    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id)
+    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id, db=db)
 
     # human_interrupt_node created the canonical pending review for real.
     rows = (
@@ -462,7 +470,7 @@ async def test_sequential_double_approve_executes_downstream_once(
     app = _build_real_graph(saver)
     _DOWNSTREAM_RUNS.clear()
 
-    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id)
+    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id, db=db)
     review = (
         await db.execute(select(ReviewItemORM).where(ReviewItemORM.document_id == document.id))
     ).scalars().one()
@@ -506,7 +514,7 @@ async def test_red_unguarded_concurrent_resume_duplicates_downstream(
     app = _build_real_graph(saver)
     _DOWNSTREAM_RUNS.clear()
 
-    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id)
+    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id, db=db)
     restored = await CheckpointService(checkpointer=saver).restore_checkpoint(
         thread_id=thread_id, checkpoint_id=checkpoint_id
     )
@@ -536,7 +544,7 @@ async def test_concurrent_double_approve_executes_downstream_once(
     app = _build_real_graph(saver)
     _DOWNSTREAM_RUNS.clear()
 
-    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id)
+    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id, db=db)
     review = (
         await db.execute(select(ReviewItemORM).where(ReviewItemORM.document_id == document.id))
     ).scalars().one()
@@ -594,7 +602,7 @@ async def test_resume_failure_does_not_produce_false_approval(
     app = _build_real_graph(saver)
     _DOWNSTREAM_RUNS.clear()
 
-    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id)
+    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id, db=db)
     review = (
         await db.execute(select(ReviewItemORM).where(ReviewItemORM.document_id == document.id))
     ).scalars().one()
@@ -648,7 +656,7 @@ async def test_wrong_checkpoint_resume_fails_closed(
     app = _build_real_graph(saver)
     _DOWNSTREAM_RUNS.clear()
 
-    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id)
+    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id, db=db)
     review = (
         await db.execute(select(ReviewItemORM).where(ReviewItemORM.document_id == document.id))
     ).scalars().one()
@@ -687,7 +695,7 @@ async def test_historical_row_a_is_never_targeted_by_resume(
     app = _build_real_graph(saver)
     _DOWNSTREAM_RUNS.clear()
 
-    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id)
+    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id, db=db)
     row_b = (
         await db.execute(select(ReviewItemORM).where(ReviewItemORM.document_id == document.id))
     ).scalars().one()
@@ -743,7 +751,7 @@ async def test_cross_tenant_cannot_resume(
     app = _build_real_graph(saver)
     _DOWNSTREAM_RUNS.clear()
 
-    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id)
+    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id, db=db)
     review = (
         await db.execute(select(ReviewItemORM).where(ReviewItemORM.document_id == document.id))
     ).scalars().one()
