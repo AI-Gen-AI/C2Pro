@@ -105,7 +105,7 @@ apps/api/src/core/
 ### MCP Gateway (AI Tool Access Control)
 
 - Los agentes AI solo pueden usar herramientas en el allowlist.
-- 5 funciones aprobadas para writes: `create_alert`, `update_score`, etc.
+- Write-capable tools must be explicitly allowlisted by the current MCP/tool policy; do not rely on a historical fixed count.
 - Todas las acciones se loggean en `audit_logs` con `trace_id`.
 
 ### Anonymizer Service
@@ -120,7 +120,7 @@ apps/api/src/core/
 - LangGraph (orquestacion de agentes AI)
 - LangSmith (observabilidad y tracing)
 - LangChain (framework de integracion)
-- Anthropic Claude Sonnet 4 (LLM principal)
+- LLM/model selection is governed by current application model-routing configuration; this role does not own a fixed principal model.
 - pgvector (vector embeddings en PostgreSQL)
 - Redis Pub/Sub (event bus para orquestacion)
 - Cloudflare R2 (almacenamiento de documentos)
