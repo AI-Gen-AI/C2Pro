@@ -12,15 +12,18 @@ All notable changes to C2Pro are tracked here. Format loosely follows [Keep a Ch
 - Production qualification operator runbook for the landed #715 harness.
 
 #### Changed
-- Rebuilt documentation/architecture/ADR indexes around explicit authority and lifecycle classes.
+- Rebuilt documentation/architecture/ADR indexes around **scoped authority planes**: Product Control for product lifecycle, `.c2pro` for development execution, ADR/TDD for architecture, workflows/ruleset for merge enforcement.
 - Reconciled root, backend, frontend and quick-start onboarding docs with the current toolchain and architecture.
 - Reconciled release criteria/signoff with consolidated `ci.yml`, active main ruleset, tag-driven `release.yml`, Product Control and production qualification.
 - Replaced the obsolete “docs only in backlog/blackboard” rule with an anti-sprawl lifecycle policy that permits durable ADR/TDD/spec/runbook/product contracts.
 - Marked dated testing inventories as historical baselines rather than current CI authority.
 - Updated active references from retired workflow names to the current consolidated CI/deployment topology.
+- Reconciled `agents.md` / `CLAUDE.md` with the single-writer `.c2pro` development-control model; legacy backlog/blackboard files remain read-only cold references.
+- Reconciled the active release evidence template with `release.yml`, `ci.yml`, `secret-scan.yml` and the current Gate 7 validator contract.
 
 #### Governance
 - Machine Product Control remains YAML-first/parity-guarded; this documentation reconciliation does not hand-edit its generated canonical block or promote #706/#715 lifecycle state.
+- Development execution remains single-writer under `.c2pro`; this change does not revive `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` or `blackboard.json` as write targets.
 - Historical audits, evidence bundles and dated plans remain immutable point-in-time evidence.
 
 
