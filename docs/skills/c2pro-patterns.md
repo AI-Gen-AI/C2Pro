@@ -9,6 +9,8 @@ generated: 2026-05-08
 
 # C2Pro Patterns
 
+> **Lifecycle note (2026-10-01):** this file began as a 2026-05 git-history extraction. Coding-history examples remain useful, but current control-plane and CI rules override historical patterns. Use `docs/DOCUMENTATION_AUTHORITY.md`, `.c2pro/` and `docs/runbooks/ci-cd-setup.md` for current authority.
+
 ## Commit Conventions
 
 **Format**: `<type>(<scope>): <description> — <TASK-ID>`
@@ -146,11 +148,9 @@ src/tests/
 - Schema lives at `docs/api/openapi.yaml`
 - Schemathesis contract tests run against this schema (not a live DB)
 
-### Push to Main
-```bash
-ALLOW_PUSH_MAIN=1 git push origin main   # Husky pre-push guard requires this env var
-# Use Bash tool (not PowerShell) — ALLOW_PUSH_MAIN=1 is POSIX env syntax
-```
+### Integration to Main
+
+Do not push directly to `main`. The current repository ruleset requires PR-based integration and required checks. The local `ALLOW_PUSH_MAIN` Husky escape is not an authorization mechanism.
 
 ---
 
@@ -217,12 +217,13 @@ Every new feature must:
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `tests.yml` | PR + push | Full pytest + vitest suite |
-| `openapi-drift.yml` | PR | Detect uncommitted schema drift |
-| `wireframe-coverage.yml` | PR | Enforce WF-01..06 test coverage |
-| `real-document-operability.yml` | PR + main | Real-doc corpus smoke tests |
-| `golden-corpus-evals.yml` | PR | Golden regression guard |
-| `qa-swarm.yml` | Manual | Multi-agent QA swarm |
-| `frontend-ci.yml` | PR | ESLint + type-check + vitest |
-| `deploy-staging.yml` | main push | Auto-deploy to staging |
-| `deploy-production.yml` | Manual | Production deploy gate |
+| `ci.yml` | PR + push main | Aggregate backend/frontend quality gate with `CI Status` |
+| `secret-scan.yml` | PR + selected pushes | gitleaks secret scan |
+| `c2pro-product-control-guard.yml` | relevant PR changes | Product-control parity / qualification contracts |
+| `install-drift-guard.yml` | PR | Detect unreviewed CI install drift |
+| `codeql.yml` | PR + main + schedule | SAST for Python and JS/TS |
+| `dependency-review.yml` | PR | New-dependency vulnerability review |
+| `openapi-drift.yml` | backend paths | Runtime/OpenAPI drift |
+| `real-document-operability.yml` | operator/defined triggers | Real-document operability checks |
+| `golden-corpus-evals.yml` | eval paths / dispatch | Golden regression guard |
+| `release.yml` | tag / dispatch | Release certification and GitHub Release publication |
