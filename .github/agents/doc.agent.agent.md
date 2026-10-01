@@ -48,8 +48,9 @@ You are the documentation maintainer for C2Pro. You audit, update, and archive M
 
 ---
 
-Last Updated: 2026-02-13
+Last Updated: 2026-10-01
 
 Changelog:
+- 2026-10-01: Reconciled documentation authority with Product Control and the single-writer `.c2pro` control plane.
 - 2026-02-13: Replaced placeholder content with operational rules and scope for `doc.agent`.
 - 2026-02-13: Added ask-first policy, audit checklist, and explicit safety constraints.
