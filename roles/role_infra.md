@@ -76,9 +76,10 @@ Eres el **Infra Builder** del ecosistema C2Pro. Gestionas Infrastructure as Code
 
 ### CI/CD
 
-- GitHub Actions workflows (ci, cd-staging, bundle-analysis).
-- Checks obligatorios: Typecheck, Lint, Test, Orval drift check.
-- Bundle budget enforcement para frontend.
+- Consolidated PR CI: `.github/workflows/ci.yml`.
+- Required merge checks come from the live target-branch ruleset.
+- Dedicated workflows cover secret scan, install drift, CodeQL, dependency review/audit, release and qualification.
+- Platform deploy is provider-owned from protected `main`; release certification/publication is `release.yml`.
 
 ### Containers
 
