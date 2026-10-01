@@ -1,38 +1,88 @@
 # Development Workflow
 
-> This file extends [common/git-workflow.md](./git-workflow.md) with the full feature development process that happens before git operations.
+> **Status:** ACTIVE adapter  
+> **Canonical work contract:** assigned `.c2pro/work/<work_id>.yaml`  
+> **Last reconciled:** 2026-10-01
 
-The Feature Implementation Workflow describes the development pipeline: research, planning, TDD, code review, and then committing to git.
+This file explains the default development sequence. The work envelope, current architecture and executable repository policy are authoritative.
 
-## Feature Implementation Workflow
+## 1. Validate authority and workspace
 
-0. **Research & Reuse** _(mandatory before any new implementation)_
-   - **GitHub code search first:** Run `gh search repos` and `gh search code` to find existing implementations, templates, and patterns before writing anything new.
-   - **Library docs second:** Use Context7 or primary vendor docs to confirm API behavior, package usage, and version-specific details before implementing.
-   - **Exa only when the first two are insufficient:** Use Exa for broader web research or discovery after GitHub search and primary docs.
-   - **Check package registries:** Search npm, PyPI, crates.io, and other registries before writing utility code. Prefer battle-tested libraries over hand-rolled solutions.
-   - **Search for adaptable implementations:** Look for open-source projects that solve 80%+ of the problem and can be forked, ported, or wrapped.
-   - Prefer adopting or porting a proven approach over writing net-new code when it meets the requirement.
+Before implementation:
 
-1. **Plan First**
-   - Use **planner** agent to create implementation plan
-   - Generate planning docs before coding: PRD, architecture, system_design, tech_doc, task_list
-   - Identify dependencies and risks
-   - Break down into phases
+- verify exact work ID/base SHA/branch/workspace;
+- read applicable `.c2pro/control/` policy;
+- confirm scope, out-of-scope, acceptance criteria and required tests;
+- stop on authority/workspace mismatch.
 
-2. **TDD Approach**
-   - Use **tdd-guide** agent
-   - Write tests first (RED)
-   - Implement to pass tests (GREEN)
-   - Refactor (IMPROVE)
-   - Verify 80%+ coverage
+Do not bootstrap from legacy backlog/blackboard files unless the work envelope explicitly requests reconciliation/history.
 
-3. **Code Review**
-   - Use **code-reviewer** agent immediately after writing code
-   - Address CRITICAL and HIGH issues
-   - Fix MEDIUM issues when possible
+## 2. Research proportionally
 
-4. **Commit & Push**
-   - Detailed commit messages
-   - Follow conventional commits format
-   - See [git-workflow.md](./git-workflow.md) for commit message format and PR process
+Reuse and primary-source verification are encouraged when they materially reduce risk.
+
+Use, as appropriate:
+
+- repository/code search;
+- current package/vendor documentation;
+- package registries;
+- existing project patterns/ADRs.
+
+Do not perform broad external research when the repository already contains the required contract.
+
+## 3. Plan at the right altitude
+
+For material work, capture the implementation approach before coding.
+
+Do **not** automatically create PRD/architecture/system-design/task-list Markdown files for every feature.
+
+Use the durable document owner defined by `DOCUMENTATION_STRUCTURE.md`:
+
+- ADR for a durable architecture decision;
+- TDD revision for platform-wide design;
+- spec for a durable interface/product contract;
+- runbook for operations;
+- work envelope/PR for bounded execution detail.
+
+## 4. TDD / executable contract
+
+Where the workstream requires TDD:
+
+1. RED — prove the missing/incorrect behavior.
+2. GREEN — minimum implementation satisfying the contract.
+3. REFACTOR — improve structure with tests green.
+
+For bug fixes, add regression coverage at the narrowest useful layer.
+
+Coverage thresholds are owned by current executable CI/ratchets, not a hard-coded percentage in this file.
+
+## 5. Review
+
+Apply `.c2pro/control/review-policy.yaml`.
+
+- address blocking findings;
+- preserve reviewer independence;
+- use challenger/orchestrator synthesis where the risk class requires it;
+- do not convert advisory disagreement into silent approval.
+
+## 6. CI and merge
+
+Required checks are discovered from the live target-branch ruleset plus package-specific gates.
+
+For `main`, do not hard-code a permanent list here.
+
+Evaluate only the sealed current head/run attempt. Pending is not failure; stale green runs do not qualify a new head.
+
+## 7. Completion
+
+Return structured execution evidence.
+
+Ordinary workers do not update:
+
+- `C2PRO_MASTER_BACKLOG.md`;
+- `backlogs/*.md`;
+- `blackboard.json`.
+
+The Planner/Master reconciles canonical `.c2pro` state after applicable review, CI and merge.
+
+Product lifecycle promotion, when relevant, is a separate Product Control YAML-first/evidence-guarded operation.
