@@ -153,3 +153,23 @@ The reconciliation is acceptable only if the **exact final head** passes Product
 During final review, `main` advanced after the original documentation baseline. PR #781 merged backend support for Clerk v2 organization claims, moving `main` from `a025982e...` to `33650a28a930d82a7bd65d98b50981145b3fd1d1`.
 
 **Disposition:** the documentation branch was merged forward to the new `main`, the architecture/product-control baseline was rebound to the new SHA, and the auth baseline now records the supported Clerk v2 organization-claim path. This prevents #780 from merging with a baseline that was already stale.
+
+
+### Third-round live-guidance defects
+
+The moving-base review also re-read live agent instructions instead of only the new architecture documents and found additional contradictions:
+
+- **Live agent-governance residue:** `agents.md` still described legacy blackboard/backlog post-execution enforcement after declaring those files cold/read-only.
+  - Fixed by scoping blackboard/backlog mutation/enforcement to the genuine legacy supervisor path and making `.c2pro` + structured results authoritative for modern work.
+- **Unsafe direct-main pattern:** `CLAUDE.md` and `docs/skills/c2pro-patterns.md` still documented `ALLOW_PUSH_MAIN=1 git push origin main` as a normal procedure.
+  - Fixed. Current guidance requires PR-based integration; the local Husky escape is explicitly not repository authority.
+- **Retired CI workflow map:** the patterns skill still listed retired `tests.yml`, `frontend-ci.yml`, `deploy-staging.yml` and `deploy-production.yml` as current workflows.
+  - Fixed against the current CI/runbook model.
+- **Overstated result-block enforcement:** the Claude rule claimed every CI/CD path parses worker result blocks automatically.
+  - Fixed. Schemas/parser/reconciler and control-plane validators are real; exact CI enforcement must be discovered per active workflow.
+- **Malformed evidence example:** the worker-result YAML example had nested code fences.
+  - Fixed.
+- **Documentation-agent metadata drift:** its `Last Updated` marker still read 2026-02-13 despite authority changes.
+  - Fixed to 2026-10-01.
+
+Relative-link checks over the primary modified navigation/baseline documents found no broken repository links.
