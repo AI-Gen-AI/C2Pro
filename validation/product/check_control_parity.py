@@ -485,6 +485,9 @@ def extract_canonical(doc: dict) -> dict[str, str]:
     a018 = _adr_row(doc, "ADR-018")
     a024 = _adr_row(doc, "ADR-024")
     a025 = _adr_row(doc, "ADR-025")
+    a026 = _adr_row(doc, "ADR-026")
+    a027 = _adr_row(doc, "ADR-027")
+    a028 = _adr_row(doc, "ADR-028")
     pc_wbs = _wbs_row(doc, "PWBS-PROJECT-CONTROLS")
 
     canon: dict[str, str] = {
@@ -507,6 +510,15 @@ def extract_canonical(doc: dict) -> dict[str, str]:
         "adr.ADR-025.realization": _s(a025["realization_status"]),
         "adr.ADR-025.deployment": _s(a025["deployment_status"]),
         "adr.ADR-025.prod_validation": _s(a025["prod_validation_status"]),
+        "adr.ADR-026.realization": _s(a026["realization_status"]),
+        "adr.ADR-026.deployment": _s(a026["deployment_status"]),
+        "adr.ADR-026.prod_validation": _s(a026["prod_validation_status"]),
+        "adr.ADR-027.realization": _s(a027["realization_status"]),
+        "adr.ADR-027.deployment": _s(a027["deployment_status"]),
+        "adr.ADR-027.prod_validation": _s(a027["prod_validation_status"]),
+        "adr.ADR-028.realization": _s(a028["realization_status"]),
+        "adr.ADR-028.deployment": _s(a028["deployment_status"]),
+        "adr.ADR-028.prod_validation": _s(a028["prod_validation_status"]),
         "p0b.done_digest": hashlib.sha256(_norm(p0b["done_definition"]).encode()).hexdigest()[:16],
         "p0b.invariant_ids": ",".join(_s(x) for x in p0b["invariant_ids"]),
         "p0b.next_slice": _s(p0b["next_slice"]),
