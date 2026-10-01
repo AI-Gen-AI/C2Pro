@@ -1,301 +1,116 @@
-# C2Pro Release Criteria - G7-02
+# C2Pro Release Criteria
 
-> **Document ID**: G7-02  
-> **Status**: ACTIVE  
-> **Last Updated**: 2026-03-26  
-> **Owner**: QA / DevOps
+**Status:** Current policy  
+**Updated:** 2026-10-01  
+**Product lifecycle authority:** Product Control  
+**Execution authority:** `.c2pro/control/`
 
----
+## 1. Principle
 
-## Governance Note
+A release decision is evidence-bound to an **exact commit/deployment identity**. Historical pass counts, screenshots or a previous green branch do not qualify a newer release candidate.
 
-This document defines release thresholds and evidence requirements. It does not own task execution state.
+This document defines evidence classes. It does not own task status and does not replace the protected-branch ruleset or Product Control.
 
-Any open release work derived from this document must be represented in the authoritative `.c2pro/` control/work queue. Legacy backlog IDs below are retained as historical cross-references.
+## 2. Merge gates vs release gates
 
-Legacy related task IDs:
+### Merge gates
 
-- `REL-RC1-01`
-- `REL-RC1-02`
+Required merge checks are defined by the repository ruleset and current GitHub workflows. At the 2026-10-01 reconciliation the protected-main ruleset includes required contexts such as:
 
----
+- `CI Status`;
+- `gitleaks`;
+- `Install Drift Guard`.
 
-## 1. Executive Summary
+The ruleset is authoritative if this list changes.
 
-This document defines the **minimum automated test suite** required for C2Pro release signoff. It establishes pass/fail thresholds, coverage requirements, and CI/CD integration rules for RC1 and subsequent releases.
+### Release gates
 
----
+A release can require more evidence than a merge:
 
-## 2. Test Suite Categories
+- primary CI suites for the exact SHA;
+- dependency/code/security scans;
+- Product-Control/document contract gates where applicable;
+- evaluation/golden/real-document gates for AI-affecting changes;
+- deployment identity evidence;
+- production synthetic journey / acceptance evidence when the product-control phase requires it;
+- manual Product/Security/Operations signoff where the release policy requires it.
 
-### 2.1 Category Definitions
+## 3. Current workflow map
 
-| Category              | Location                          | Run Frequency | Timeout | Block Release? |
-| --------------------- | --------------------------------- | ------------- | ------- | -------------- |
-| **Secrets Scan**      | `tests.yml` - `secrets-scan`      | Every PR/Push | 10 min  | **YES**        |
-| **S5 Core AI Gates**  | `tests.yml` - `s5-core-ai-gates`  | Every PR/Push | 15 min  | **YES**        |
-| **Unit Tests**        | `tests.yml` - `unit-tests`        | Every PR/Push | 15 min  | **YES**        |
-| **Integration Tests** | `tests.yml` - `integration-tests` | Every PR/Push | 20 min  | No (warn only) |
-| **E2E Security**      | `e2e-security-tests.yml`          | Daily + PR    | 30 min  | **YES**        |
-| **Golden Regression** | `evaluation-regression.yml`       | Daily + PR    | 60 min  | **YES**        |
-| **Real E2E**          | `i13-real-e2e-scheduled.yml`      | Daily         | 45 min  | No             |
+| Evidence class | Workflow/surface |
+| --- | --- |
+| Primary product/code CI | `.github/workflows/ci.yml` |
+| Secrets | `.github/workflows/secret-scan.yml` |
+| Install drift | `.github/workflows/install-drift-guard.yml` |
+| Dependency change | `.github/workflows/dependency-review.yml` |
+| Dependency audit | `.github/workflows/dependency-audit.yml` |
+| Static code security | `.github/workflows/codeql.yml` |
+| Product control | `.github/workflows/c2pro-product-control-guard.yml` |
+| Evaluation regression | `.github/workflows/evaluation-regression.yml` |
+| Golden corpus | `.github/workflows/golden-corpus-evals.yml` |
+| Real-document operability | `.github/workflows/real-document-operability.yml` |
+| Scheduled real E2E | `.github/workflows/i13-real-e2e-scheduled.yml` |
+| Release orchestration | `.github/workflows/release.yml` |
 
----
+Trigger/required status must be read from the workflow/ruleset itself; this table is an index.
 
-## 3. Pass/Fail Thresholds
+## 4. Blocking principles
 
-### 3.1 Secrets Scan
+A release candidate is blocked when:
 
-```
-REQUIRED: 0 secrets detected
-- Must pass gitleaks scan
-- No new secrets in diff
-```
+1. a required ruleset check is not successful;
+2. an applicable security/secret/dependency gate reports an unresolved blocking finding;
+3. exact deployment identity cannot be bound to the qualified commit;
+4. required production-journey evidence is absent/failed;
+5. Product Control still marks the required capability/gate as unqualified;
+6. evidence belongs to another SHA/deployment/environment;
+7. a required manual signoff is missing.
 
-### 3.2 S5 Core AI Gates
+External/advisory provider statuses may be non-blocking only when the repository ruleset/release contract says so and their failure is classified with evidence.
 
-```
-REQUIRED: 100% tests pass
-- I10 Stakeholder Resolution: All tests pass
-- I11 HITL Review Queue: All tests pass
-- I12 Trace Envelope: All tests pass
-- S5 Security: All tests pass
-```
+## 5. Coverage and quality
 
-### 3.3 Unit Tests
+Use the coverage ratchets enforced by the **current CI**. Do not hard-code a historical global percentage into release signoff when CI has moved to module/combined/patch ratchets.
 
-```
-REQUIRED:
-- Minimum 70% code coverage
-- 0 failures
-- 0 errors
-- Can have skipped tests (document reason)
-```
+For every release, record:
+- exact SHA;
+- exact workflow run/check URLs or artifact identifiers;
+- required suites and conclusions;
+- residual warnings/advisories;
+- waivers (if the governing policy permits them);
+- deployment identities;
+- manual signoffs.
 
-### 3.4 Integration Tests
+## 6. Release evidence
 
-```
-TARGET: 0 failures
-CURRENT: continue-on-error: true (advisory only)
-ACTION: Must fix critical failures before release
-```
+Store durable release evidence under the repository-approved release evidence path when the release workflow/policy calls for it. Evidence must be bounded and must not contain credentials, raw secrets or unrestricted provider responses.
 
-### 3.5 Golden Regression
-
-```
-REQUIRED: >= 95% accuracy vs baseline
-- baseline.json accuracy: 100% (25/25 cases)
-- Minimum acceptable: 95% (24/25 cases)
-- Regression > 5% triggers release hold
-```
-
-### 3.6 E2E Security Tests
-
-```
-REQUIRED: 0 critical/high vulnerabilities
-- SQL injection: PASS
-- XSS: PASS
-- Auth bypass: PASS
-- Tenant isolation: PASS
-```
-
----
-
-## 4. Coverage Requirements
-
-### 4.1 Minimum Coverage by Module
-
-| Module           | Minimum Coverage | Target | Priority |
-| ---------------- | ---------------- | ------ | -------- |
-| Core Auth        | 70%              | 85%    | P0       |
-| Tenant Isolation | 80%              | 90%    | P0       |
-| Documents        | 60%              | 80%    | P1       |
-| Analysis         | 60%              | 80%    | P1       |
-| Procurement      | 60%              | 80%    | P1       |
-| Golden Module    | 80%              | 84%    | P0       |
-| Coherence        | 70%              | 80%    | P1       |
-
-### 4.2 Critical Paths (100% Required)
-
-- `src/core/auth/` - Authentication flow
-- `src/core/security/` - Tenant isolation
-- `src/core/middleware/` - Request pipeline
-
----
-
-## 5. CI/CD Integration
-
-### 5.1 Required Workflows
+Suggested manifest fields:
 
 ```yaml
-# Must pass before merge to main
-workflows:
-  - tests.yml # Secrets, Unit, Integration
-  - e2e-security-tests.yml # Security validation
-  - evaluation-regression.yml # Golden dataset
+release_id: <release-id>
+commit_sha: <40-char-sha>
+environment: <staging|production>
+required_checks:
+  - name: CI Status
+    conclusion: success
+    evidence: <run/check ref>
+deployments:
+  frontend: <provider-observed id>
+  api: <provider-observed id>
+product_control:
+  status: <canonical control state/ref>
+manual_signoff:
+  product: <pending|approved|not-required>
+  security: <pending|approved|not-required>
+  operations: <pending|approved|not-required>
+waivers: []
 ```
 
-### 5.2 Release Gate Pipeline
+## 7. Waivers
 
-```
-PR Ready → All Required Jobs Pass → Manual QA → Release Approval
-                ↓
-         [secrets-scan] ✅
-         [s5-core-ai-gates] ✅
-         [unit-tests] ✅ (coverage >= 70%)
-         [golden-regression] ✅ (accuracy >= 95%)
-         [e2e-security] ✅ (0 crit/high)
-```
+A waiver must be explicit, bounded, owned, expiring and permitted by the relevant gate policy. A waiver does not turn a failed test into a pass and must not be used to bypass tenant isolation, secret exposure, identity, trusted-state or other non-waivable safety boundaries.
 
-### 5.3 Artifacts Required for Release
+## 8. Historical results
 
-| Artifact                          | Description         | Retention |
-| --------------------------------- | ------------------- | --------- |
-| `unit-test-results.xml`           | JUnit test results  | 14 days   |
-| `integration-test-results.xml`    | Integration results | 14 days   |
-| `golden-baseline-comparison.json` | Regression diff     | 30 days   |
-| `backend-release-summary.txt`     | Test summary        | 90 days   |
-
----
-
-## 6. Release Checklist
-
-### 6.1 Pre-Release (Automated)
-
-- [x] All `tests.yml` jobs pass - **334 tests passed**
-- [x] Golden regression accuracy >= 95% - **100% (25/25)**
-- [x] Code coverage >= 70% overall - **35% (50+ modules meet 70%+)**
-- [x] No new gitleaks findings - **Clean**
-
-### 6.2 Pre-Release (Manual)
-
-- [x] `G7-01` API endpoint smoke test
-- [ ] `REL-RC1-01` UAT checklist complete (`G7-03`, `docs/UAT_CHECKLIST.md`)
-- [x] `G7-04` Performance benchmarks documented
-- [x] `G7-05` DR procedures verified
-
-### 6.3 Release Signoff
-
-Release signoff must be recorded in `evidence/releases/<release-id>/signoff.md` and supported by the following artifacts:
-
-- automated suite evidence defined in this document
-- manual QA evidence from `docs/UAT_CHECKLIST.md`
-- performance/capacity evidence measured against `docs/SLA_TARGETS.md`
-- disaster recovery and rollback evidence required by the Gate 7 release bundle
-
-```
-RELEASE APPROVER CHECKLIST:
-□ All automated gates pass
-□ Golden regression within threshold
-□ Security scan clean
-□ Manual QA complete
-□ Performance targets met against docs/SLA_TARGETS.md
-□ Documentation updated
-□ evidence/releases/<release-id>/signoff.md completed
-```
-
-Execution status for release work is canonical only after `.c2pro/` reconciliation; actual release qualification additionally requires the exact release evidence/checks defined here.
-
----
-
-## 7. Test Execution Commands
-
-### 7.1 Local Verification
-
-```bash
-# Unit tests with coverage
-cd apps/api
-pytest tests/unit/ -v --cov=src --cov-fail-under=70
-
-# Golden regression
-python scripts/run_golden_regression.py --difficulty all
-
-# Full CI simulation
-cd ../..
-git push --dry-run  # Triggers all workflows
-```
-
-### 7.2 Quick Smoke Test
-
-```bash
-# Fast subset for rapid validation
-pytest tests/unit/ -m "not integration" -v --tb=short
-python scripts/run_golden_regression.py --difficulty easy
-```
-
----
-
-## 8. Failure Response
-
-### 8.1 Blocking Failures (Immediate Halt)
-
-| Failure                     | Action                     |
-| --------------------------- | -------------------------- |
-| Secrets detected            | Block PR, require fix      |
-| S5 gates fail               | Block PR, require fix      |
-| Unit tests fail             | Block PR, require fix      |
-| Golden regression > 5% drop | Block release, investigate |
-
-### 8.2 Advisory Failures (Release with Caution)
-
-| Failure               | Action                                |
-| --------------------- | ------------------------------------- |
-| Integration test fail | Log issue, track in backlog           |
-| Coverage drop < 70%   | Block release, require justification  |
-| E2E flakiness         | Log issue, allow with risk acceptance |
-
----
-
-## 9. Baseline Reference
-
-### 9.1 Current Metrics (2026-03-27)
-
-```json
-{
-  "unit_tests": {
-    "total": 334,
-    "passing": 334,
-    "coverage_overall": "35%",
-    "modules_above_70pct": "50+ modules"
-  },
-  "golden_dataset": {
-    "baseline_accuracy": 100.0,
-    "current_accuracy": 100.0,
-    "total_cases": 25,
-    "min_acceptable": 95.0
-  },
-  "security": {
-    "gitleaks": "clean",
-    "e2e_security": "pending"
-  }
-}
-```
-
----
-
-## 10. Pre-Release Verification Results (2026-03-27)
-
-### Automated Checks ✅
-
-| Check              | Status         | Details                          |
-| ------------------ | -------------- | -------------------------------- |
-| Secrets Scan       | ✅ PASS        | No secrets detected              |
-| Unit Tests         | ✅ PASS        | 334/334 tests passed             |
-| Golden Regression  | ✅ PASS        | 25/25 cases passed (100%)        |
-| Coverage Threshold | ⚠️ 35% overall | 50+ individual modules meet 70%+ |
-
-### Notes
-
-- Overall coverage (35%) is below 70% target due to router/adapter code
-- 50+ individual modules have 70%+ coverage
-- Core modules (auth, config, AI tools) have 85-100% coverage
-- Golden regression maintains 100% accuracy
-
----
-
-## 11. Document History
-
-| Date       | Author | Change                                 |
-| ---------- | ------ | -------------------------------------- |
-| 2026-03-26 | Claude | Initial creation - G7-02               |
-| 2026-03-27 | Claude | Added pre-release verification results |
+Past release counts/percentages belong in dated evidence/audits, not in this current policy. Do not use old statements such as “334 tests passed” as current release proof.

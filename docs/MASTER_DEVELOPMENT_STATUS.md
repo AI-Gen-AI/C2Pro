@@ -6,6 +6,8 @@
 This file remains only as a compatibility pointer for older references. It must not become a
 second status authority.
 
+Documentation/source-of-truth policy: `docs/DOCUMENTATION_GOVERNANCE.md`.
+
 ## Current authority
 
 ### Product programme — what C2Pro is delivering
