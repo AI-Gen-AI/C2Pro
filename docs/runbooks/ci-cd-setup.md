@@ -62,13 +62,13 @@ Typical PR wall-clock: **~3–3.5 min** (docs-only PRs: **<1 min** — every lan
 
 ## Advisory (non-blocking) jobs
 
-Three jobs run but do not gate merges. All are tracked in `backlogs/DEV_DEVOPS.md`:
+Three jobs run but do not gate merges. `backlogs/DEV_DEVOPS.md` is historical context only; current remediation must be tracked through the `.c2pro` control/work-envelope plane and the corresponding GitHub issue/PR, not by writing new status into the legacy backlog:
 
 | Job | Why advisory | How to promote to required |
 |---|---|---|
-| `backend-integration` | 14 failures + 10 errors pre-existing on main (sqlalchemy pool teardown), previously hidden by `continue-on-error` | Fix the suite (TASK-DEV-004), then move the job entry from `ADVISORY_JOBS` to `REQUIRED_JOBS` in the `ci-status` gate step of `ci.yml` |
-| `backend-typecheck` (mypy) | strict-mode baseline never enforced; large error count expected | Clean the baseline (TASK-DEV-006), then remove `continue-on-error: true` and move it into `REQUIRED_JOBS` |
-| `backend-lint` (ruff) | ~57 pre-existing violations under ruff==0.2.1 (`ruff check .` was never a CI gate; the Husky pre-commit hook does not reliably run) | Clean the baseline — 35 of 57 are `--fix`-able (TASK-DEV-009) — then move it into `REQUIRED_JOBS` |
+| `backend-integration` | 14 failures + 10 errors pre-existing on main (sqlalchemy pool teardown), previously hidden by `continue-on-error` | Fix the suite under a current `.c2pro` work item / GitHub issue (legacy reference: TASK-DEV-004), then move the job entry from `ADVISORY_JOBS` to `REQUIRED_JOBS` in the `ci-status` gate step of `ci.yml` |
+| `backend-typecheck` (mypy) | strict-mode baseline never enforced; large error count expected | Clean the baseline under current work authority (legacy reference: TASK-DEV-006), then remove `continue-on-error: true` and move it into `REQUIRED_JOBS` |
+| `backend-lint` (ruff) | ~57 pre-existing violations under ruff==0.2.1 (`ruff check .` was never a CI gate; the Husky pre-commit hook does not reliably run) | Clean the baseline under current work authority (legacy reference: TASK-DEV-009); once qualified, move it into `REQUIRED_JOBS` |
 
 ## Required Secrets and Variables
 
@@ -151,7 +151,7 @@ Everything is additive — no pipeline rewrites:
 | qa-swarm | weekly Mon 02:00 | opens draft PRs with generated tests; consumes `ANTHROPIC_API_KEY` |
 | dependency-audit | weekly Mon 06:00 | new |
 | codeql | weekly Mon 03:26 | new |
-| i13-real-e2e-scheduled | **paused** | fixture connects to Postgres 5432 instead of 5433 — re-enable the cron in the workflow after the app-side fix (`backlogs/DEV_DEVOPS.md`) |
+| i13-real-e2e-scheduled | **paused** | fixture connects to Postgres 5432 instead of 5433 — re-enable the cron only after the app-side fix is completed through current `.c2pro` / GitHub work authority; `backlogs/DEV_DEVOPS.md` is legacy context only |
 
 ## Troubleshooting
 
