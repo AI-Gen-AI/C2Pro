@@ -416,7 +416,7 @@ product_wbs:
     name: "Ops / Trust baseline and residuals"
     priority: P0
     deps: []
-    adrs: [ADR-004]
+    adrs: [ADR-004, ADR-027, ADR-028]
     user_value: "Multi-tenant isolation, PII handling, resilience, durable storage/runtime"
     realization_status: DEPLOYED
     work_status: ACTIVE
@@ -537,7 +537,7 @@ risks:
   - "R4: Honest-null erosion or blind averaging in WBS/project roll-ups."
   - "R5: Building Procurement before WBS/budget/schedule/stakeholder linkage is stable, causing rework."
   - "R6: MD/YAML drift; parity guard remains mandatory."
-  - "R7: High-velocity parallel lanes can make the MASTER stale quickly; reconcile against an exact main SHA before each planning/merge milestone."
+  - "R7: High-velocity parallel lanes can make Product Control stale quickly; reconcile against an exact main SHA before each planning/merge milestone."
 
 pr_disposition:
   "571": {action: HOLD_then_amend, reason: "historical product-closure-adjacent framing; retain only as corrected history"}
