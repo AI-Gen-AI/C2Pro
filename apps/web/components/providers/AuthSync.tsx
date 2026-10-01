@@ -86,6 +86,11 @@ function SignedInOrganizationEffects({
       return;
     }
 
+    // Any Organization change tears down this effect before the replacement
+    // effect starts. Mark this instance cancelled so an older in-flight token
+    // request can never commit after a newer Organization becomes active.
+    let cancelled = false;
+
     const sync = async () => {
       try {
         const token = organization
@@ -94,14 +99,27 @@ function SignedInOrganizationEffects({
               skipCache: true,
             })
           : await getToken();
+
+        if (cancelled) {
+          return;
+        }
+
         if (!token) {
           handleAuthErrorStatus(401);
           return;
         }
         const tenantId = getTenantIdFromOrganizationMetadata(organization);
+
+        if (cancelled) {
+          return;
+        }
+
         setAuth({ token, tenantId });
         onTokenSynchronized();
       } catch (error) {
+        if (cancelled) {
+          return;
+        }
         console.error("AuthSync: Failed to get token", error);
         handleAuthErrorStatus(401);
       }
@@ -109,7 +127,10 @@ function SignedInOrganizationEffects({
 
     void sync();
     const interval = setInterval(sync, 50_000);
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [
     isLoaded,
     organization,
