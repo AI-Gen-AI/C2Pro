@@ -25,7 +25,7 @@ class _FakeRepo:
     def __init__(self, artifacts: list[DocumentArtifact]) -> None:
         self.artifacts = artifacts
 
-    async def list_active_for_project(self, *, project_id, tenant_id):
+    async def list_trusted_for_project(self, *, project_id, tenant_id):
         return self.artifacts
 
 
@@ -214,3 +214,178 @@ async def test_document_artifact_completion_normalizes_tenant_at_state_boundary(
 
     normalize.assert_called_once_with(raw_tenant_id)
     assert captured["tenant_id"] is normalized_tenant_id
+
+
+@pytest.mark.asyncio
+async def test_hitl_candidate_persists_without_canonical_project_graph_enqueue(
+    monkeypatch,
+) -> None:
+    """#714: PROPOSED output may persist, but cannot become canonical."""
+    from src.analysis.application import document_artifact_completion
+
+    persisted: list[dict[str, object]] = []
+    enqueued: list[tuple[object, object]] = []
+
+    class FakeSession:
+        async def execute(self, _statement):
+            return None
+
+        async def commit(self) -> None:
+            return None
+
+        async def rollback(self) -> None:
+            return None
+
+    class FakeRepository:
+        def __init__(self, _session) -> None:
+            pass
+
+        async def save(self, artifact, **kwargs):
+            persisted.append({"artifact": artifact, **kwargs})
+            return artifact
+
+    @asynccontextmanager
+    async def fake_raw_session():
+        yield FakeSession()
+
+    async def no_op(*_args, **_kwargs):
+        return None
+
+    async def capture_enqueue(*, project_id, tenant_id, **_kwargs):
+        enqueued.append((project_id, tenant_id))
+
+    monkeypatch.setattr(document_artifact_completion, "init_db", no_op)
+    monkeypatch.setattr(document_artifact_completion, "get_raw_session", fake_raw_session)
+    monkeypatch.setattr(
+        document_artifact_completion,
+        "SqlAlchemyDocumentArtifactRepository",
+        FakeRepository,
+    )
+    monkeypatch.setattr(
+        document_artifact_completion,
+        "build_document_artifact",
+        lambda _state: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        document_artifact_completion,
+        "enqueue_project_graph",
+        capture_enqueue,
+    )
+
+    await document_artifact_completion._persist_artifact(
+        {
+            "project_id": str(uuid4()),
+            "tenant_id": str(uuid4()),
+            "document_id": str(uuid4()),
+            "human_approval_required": True,
+        }
+    )
+
+    assert len(persisted) == 1
+    assert enqueued == []
+
+
+@pytest.mark.asyncio
+async def test_non_hitl_artifact_still_enqueues_canonical_project_graph_once(
+    monkeypatch,
+) -> None:
+    """#714: trusted/non-gated completion preserves the existing Tier-2 path."""
+    from src.analysis.application import document_artifact_completion
+
+    enqueued: list[tuple[object, object]] = []
+
+    class FakeSession:
+        async def execute(self, _statement):
+            return None
+
+        async def commit(self) -> None:
+            return None
+
+        async def rollback(self) -> None:
+            return None
+
+    class FakeRepository:
+        def __init__(self, _session) -> None:
+            pass
+
+        async def save(self, artifact, **_kwargs):
+            return artifact
+
+    @asynccontextmanager
+    async def fake_raw_session():
+        yield FakeSession()
+
+    async def no_op(*_args, **_kwargs):
+        return None
+
+    async def capture_enqueue(*, project_id, tenant_id, **_kwargs):
+        enqueued.append((project_id, tenant_id))
+
+    monkeypatch.setattr(document_artifact_completion, "init_db", no_op)
+    monkeypatch.setattr(document_artifact_completion, "get_raw_session", fake_raw_session)
+    monkeypatch.setattr(
+        document_artifact_completion,
+        "SqlAlchemyDocumentArtifactRepository",
+        FakeRepository,
+    )
+    monkeypatch.setattr(
+        document_artifact_completion,
+        "build_document_artifact",
+        lambda _state: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        document_artifact_completion,
+        "enqueue_project_graph",
+        capture_enqueue,
+    )
+
+    project_id = uuid4()
+    tenant_id = uuid4()
+    await document_artifact_completion._persist_artifact(
+        {
+            "project_id": str(project_id),
+            "tenant_id": str(tenant_id),
+            "document_id": str(uuid4()),
+            "human_approval_required": False,
+        }
+    )
+
+    assert enqueued == [(project_id, tenant_id)]
+
+
+@pytest.mark.asyncio
+async def test_project_graph_loads_trusted_artifacts_not_merely_active_candidates(
+    monkeypatch,
+) -> None:
+    """#714: a newer PROPOSED candidate must not displace canonical TRUSTED."""
+    from src.core.tasks import project_graph_tasks
+
+    trusted = _artifact()
+    proposed = _artifact()
+
+    class TrustAwareRepo:
+        def __init__(self) -> None:
+            self.trusted_calls = 0
+            self.active_calls = 0
+
+        async def list_trusted_for_project(self, *, project_id, tenant_id):
+            self.trusted_calls += 1
+            return [trusted]
+
+        async def list_active_for_project(self, *, project_id, tenant_id):
+            self.active_calls += 1
+            return [proposed]
+
+    repo = TrustAwareRepo()
+    fake_graph = _FakeGraph()
+    monkeypatch.setattr(project_graph_tasks, "build_project_graph", lambda: fake_graph)
+
+    result = await project_graph_tasks.run_project_graph_once(
+        project_id=uuid4(),
+        tenant_id=uuid4(),
+        artifact_repository=repo,
+    )
+
+    assert result["artifact_count"] == 1
+    assert repo.trusted_calls == 1
+    assert repo.active_calls == 0

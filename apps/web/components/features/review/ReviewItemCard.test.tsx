@@ -158,3 +158,57 @@ describe('ReviewItemCard - graph-gated HITL review', () => {
     expect(screen.getByText('Technical details')).toBeInTheDocument();
   });
 });
+
+// C2PRO #714: decisions are offered only for the exact bound candidate, and an
+// ESCALATED review is still awaiting a (senior) human decision.
+describe('ReviewItemCard #714 decision readiness', () => {
+  it('disables approve/reject and says so while the candidate is not bound yet', async () => {
+    const onApprove = vi.fn();
+    const onReject = vi.fn();
+    render(
+      <ReviewItemCard
+        item={{ ...graphGatedItem, decision_ready: false }}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={onApprove}
+        onReject={onReject}
+      />,
+    );
+
+    expect(screen.getByTestId('approve-doc-456')).toBeDisabled();
+    expect(screen.getByTestId('reject-doc-456')).toBeDisabled();
+    expect(screen.getByTestId('candidate-preparing-doc-456')).toHaveTextContent(
+      /preparing candidate/i,
+    );
+    await userEvent.click(screen.getByTestId('approve-doc-456'));
+    expect(onApprove).not.toHaveBeenCalled();
+  });
+
+  it('offers decisions once the candidate is bound', () => {
+    render(
+      <ReviewItemCard
+        item={{ ...graphGatedItem, decision_ready: true }}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('approve-doc-456')).toBeEnabled();
+    expect(screen.queryByTestId('candidate-preparing-doc-456')).not.toBeInTheDocument();
+  });
+
+  it('keeps an ESCALATED review actionable', () => {
+    render(
+      <ReviewItemCard
+        item={{ ...graphGatedItem, current_status: ReviewStatus.ESCALATED, decision_ready: true }}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('approve-doc-456')).toBeEnabled();
+    expect(screen.getByTestId('reject-doc-456')).toBeEnabled();
+  });
+});

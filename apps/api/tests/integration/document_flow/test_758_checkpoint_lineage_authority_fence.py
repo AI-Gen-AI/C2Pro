@@ -51,6 +51,11 @@ from src.analysis.adapters.graph.review_lineage import (
     claim_review_lineage_for_current_attempt,
 )
 from src.analysis.adapters.graph.schema import ProjectState
+from src.analysis.adapters.persistence.document_artifact_repository import (
+    SqlAlchemyDocumentArtifactRepository,
+)
+from src.analysis.domain.contracts import DocumentArtifact
+from src.analysis.domain.trust import TrustState
 from src.core import checkpoint_lineage as lineage
 from src.core import processing_authority as pa
 from src.core import resume_lineage
@@ -394,6 +399,37 @@ async def _review(db: AsyncSession, document_id: UUID) -> Any:
             {"d": document_id},
         )
     ).all()
+
+
+async def _make_review_trust_ready(
+    db: AsyncSession,
+    worker: Any,
+    tenant_id: UUID,
+    document: Any,
+) -> None:
+    """Persist/bind a real #714 PROPOSED candidate for this #758 review.
+
+    #714 intentionally refuses every new graph-gated decision until the exact
+    candidate id/version/hash is persisted and bound. The #758 races below
+    need to get past that independent preflight so they continue testing
+    generation/lineage fencing rather than merely proving candidate-not-ready.
+    """
+    rows = await _review(db, document.id)
+    assert len(rows) == 1 and rows[0].thread_id
+    async with worker.tenant_session(tenant_id) as session:
+        await SqlAlchemyDocumentArtifactRepository(session).save(
+            DocumentArtifact(document_id=str(document.id), doc_type="contract"),
+            project_id=document.project_id,
+            tenant_id=tenant_id,
+            trust_state=TrustState.PROPOSED,
+            scoring=None,
+            review_thread_id=str(rows[0].thread_id),
+        )
+    rows = await _review(db, document.id)
+    binding = (rows[0].review_metadata or {}).get("candidate_binding")
+    assert isinstance(binding, dict) and binding.get("artifact_id"), (
+        "#714 setup failed: the #758 race must start from a decision-ready review"
+    )
 
 
 async def _owner_of(saver: AsyncPostgresSaver, thread_id: str, checkpoint_id: str | None) -> str:
@@ -1319,6 +1355,7 @@ async def test_new_generation_ends_resumability_before_analysis_runs(
     assert rows[0].checkpoint_id in a.checkpoint_ids, "the review is bound to A"
     review_item_id = rows[0].item_id
     generation_a = int((await _op(db, document.id)).generation)
+    await _make_review_trust_ready(db, worker, tenant, document)
 
     # The production generation transition, called exactly as the reprocess
     # route and the reupload use case call it: in the caller's transaction,
@@ -1505,6 +1542,7 @@ async def test_resume_is_bound_to_the_lineage_it_was_authorized_against(
     rows = await _review(db, document.id)
     assert rows[0].thread_id == a.thread_id
     review_item_id, review_row_id = rows[0].item_id, rows[0].id
+    await _make_review_trust_ready(db, worker, tenant, document)
 
     await _expire_lease()
     monkeypatch.setattr(pa, "LEASE_TTL_SECONDS", 60)

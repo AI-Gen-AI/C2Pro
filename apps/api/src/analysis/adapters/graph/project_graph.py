@@ -250,6 +250,57 @@ def _coherence_summary(
     )
 
 
+@dataclass(frozen=True)
+class ArtifactSetEvaluation:
+    """Canonical project-level Coherence evaluation of one artifact set."""
+
+    summary: ProjectCoherenceResult
+    score_version: str | None
+
+
+async def evaluate_artifact_set(
+    artifacts: list[DocumentArtifact],
+    *,
+    project_id: UUID | str,
+    tenant_id: UUID | str,
+    llm_on: bool,
+) -> ArtifactSetEvaluation:
+    """THE canonical ProjectGraph Coherence evaluation of an artifact set.
+
+    Used by the ProjectGraph (trusted artifacts) and by the #714 projection
+    (trusted artifacts with pending proposals substituted), so both go
+    through exactly the same aggregation, engine and score_version.
+    Read-only: it never persists anything.
+    """
+    signals, coverage, finding_count = _aggregate_cross_doc_inputs(artifacts)
+    engine_result = await evaluate_coherence_async(
+        [],
+        str(project_id),
+        config=EvaluationConfig(
+            low_budget_mode=not llm_on,
+            tenant_id=str(tenant_id),
+            project_id=str(project_id),
+            missing_dimensions=[
+                category
+                for category in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY")
+                if not coverage.get(category, False)
+            ],
+        ),
+        seed_signals=signals,
+        seed_coverage=coverage,
+    )
+    return ArtifactSetEvaluation(
+        summary=_coherence_summary(
+            engine_result,
+            signal_count=len(signals),
+            finding_count=finding_count,
+            artifact_count=len(artifacts),
+            llm_on=llm_on,
+        ),
+        score_version=getattr(engine_result, "score_version", None),
+    )
+
+
 async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
     started = perf_counter()
     artifacts = state.get("artifacts", [])
@@ -261,35 +312,17 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
             "node_results": _skipped("cross_doc_coherence", "no artifacts"),
         }
 
-    signals, coverage, finding_count = _aggregate_cross_doc_inputs(artifacts)
     llm_on = await is_coherence_llm_enabled(tenant_id)
     degraded = False
     overall_score_present = False
+    signal_count = 0
     try:
-        engine_result = await evaluate_coherence_async(
-            [],
-            str(project_id),
-            config=EvaluationConfig(
-                low_budget_mode=not llm_on,
-                tenant_id=str(tenant_id),
-                project_id=str(project_id),
-                missing_dimensions=[
-                    category
-                    for category in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY")
-                    if not coverage.get(category, False)
-                ],
-            ),
-            seed_signals=signals,
-            seed_coverage=coverage,
+        evaluation = await evaluate_artifact_set(
+            artifacts, project_id=project_id, tenant_id=tenant_id, llm_on=llm_on
         )
-        overall_score_present = engine_result.overall_score is not None
-        summary = _coherence_summary(
-            engine_result,
-            signal_count=len(signals),
-            finding_count=finding_count,
-            artifact_count=len(artifacts),
-            llm_on=llm_on,
-        )
+        summary = evaluation.summary
+        signal_count = summary.signal_count
+        overall_score_present = summary.overall_score is not None
         status = _ok("cross_doc_coherence", summary)
         return {"coherence_result": summary, "node_results": status}
     except Exception as exc:  # noqa: BLE001
@@ -309,7 +342,7 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
             duration_ms=duration_ms,
             overall_score_present=overall_score_present,
             degraded=degraded,
-            signal_count=len(signals),
+            signal_count=signal_count,
         )
 
 

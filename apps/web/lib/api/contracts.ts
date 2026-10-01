@@ -72,6 +72,18 @@ export interface DashboardSummary {
   last_updated: string | null;
   // ECOA v2 additive field (ADR-009 §7.2). Null when `coherence_v2_enabled` is off.
   categories_v2?: CoherenceV2Payload | null;
+  // #714 trusted vs projected (additive). `coherence_score` stays the
+  // canonical TRUSTED score; exports use only that.
+  trusted_score?: number | null;
+  /** PROVISIONAL: score if every pending proposal is accepted unchanged. Never canonical. */
+  projected_score?: number | null;
+  /** Canonical ProjectGraph evaluation of the trusted artifacts (the delta's baseline). */
+  projection_baseline_score?: number | null;
+  projected_delta?: number | null;
+  pending_review_count?: number;
+  projection_score_version?: "coherence-v1" | "coherence-v2" | null;
+  projection_status?: "none" | "provisional" | "unavailable";
+  projection_reason?: string | null;
 }
 
 export interface ProjectListItem extends ProjectResponse {

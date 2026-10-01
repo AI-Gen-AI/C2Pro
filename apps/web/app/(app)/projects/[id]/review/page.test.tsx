@@ -63,6 +63,7 @@ const mockUseQueue = vi.mocked(useListReviewQueueApiV1HitlQueueGet);
 const MOCK_ITEMS = [
   {
     item_id: 'item-1',
+    row_id: 'row-1',
     item_type: 'alert',
     current_status: 'PENDING_REVIEW_REQUIRED',
     confidence: 0.85,
@@ -75,6 +76,7 @@ const MOCK_ITEMS = [
   },
   {
     item_id: 'item-2',
+    row_id: 'row-2',
     item_type: 'finding',
     current_status: 'APPROVED',
     confidence: 0.92,
@@ -87,6 +89,7 @@ const MOCK_ITEMS = [
   },
   {
     item_id: 'item-3',
+    row_id: 'row-3',
     item_type: 'alert',
     current_status: 'REJECTED',
     confidence: 0.45,
@@ -209,7 +212,7 @@ describe('ReviewPage', () => {
       // Reviewer identity is server-derived from the authenticated session
       // (EPIC-OPS-DOCFLOW Stream C); the client must never supply it.
       expect(mockApproveMutate).toHaveBeenCalledWith({
-        itemId: 'item-1',
+        itemId: 'row-1',
         data: {},
       });
     });
@@ -250,7 +253,7 @@ describe('ReviewPage', () => {
     await waitFor(() => {
       // Reason only — reviewer identity is server-derived, never client-supplied.
       expect(mockRejectMutate).toHaveBeenCalledWith({
-        itemId: 'item-1',
+        itemId: 'row-1',
         data: {
           reason: 'Insufficient evidence',
         },
@@ -286,7 +289,7 @@ describe('ReviewPage', () => {
     });
   });
 
-  it('targets item_id (not row_id) on approve even when a distinct row_id is present -- guards the journey-3-wedge URL contract', async () => {
+  it('targets the exact row_id rather than reusable item_id on approve', async () => {
     setupMock({
       data: {
         items: [
@@ -303,13 +306,34 @@ describe('ReviewPage', () => {
 
     await waitFor(() => {
       expect(mockApproveMutate).toHaveBeenCalledWith({
-        itemId: 'item-1',
+        itemId: 'row-distinct-999',
         data: {},
       });
     });
     expect(mockApproveMutate).not.toHaveBeenCalledWith(
-      expect.objectContaining({ itemId: 'row-distinct-999' }),
+      expect.objectContaining({ itemId: 'item-1' }),
     );
+  });
+
+  it('fails closed when a pending review lacks exact row identity', () => {
+    setupMock({
+      data: {
+        items: [
+          { ...MOCK_ITEMS[0], row_id: null, resumable: true },
+        ],
+        total: 1,
+      },
+    });
+    render(<ReviewPage />);
+
+    expect(screen.getByTestId('approve-item-1')).toBeDisabled();
+    expect(screen.getByTestId('reject-item-1')).toBeDisabled();
+    expect(screen.getByTestId('approve-item-1')).toHaveAttribute(
+      'title',
+      expect.stringMatching(/exact review identity unavailable/i),
+    );
+    expect(mockApproveMutate).not.toHaveBeenCalled();
+    expect(mockRejectMutate).not.toHaveBeenCalled();
   });
 
   it('describes a resumable item approval as resuming the analysis workflow', async () => {

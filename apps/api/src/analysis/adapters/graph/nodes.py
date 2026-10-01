@@ -562,15 +562,24 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                 service = get_hitl_service_for_graph(
                     session=session, tenant_id=UUID(tenant_id),
                 )
-                metadata = {
+                metadata: dict[str, Any] = {
                     "tenant_id": tenant_id,
                     "project_id": state["project_id"],
                     "document_id": state["document_id"],
                     "review_type": "analysis_critique",
+                    # C2PRO #714: no decision until the exact candidate is
+                    # persisted and bound (see document_artifact_completion).
+                    "trust_candidate_required": True,
                 }
                 thread_id = state.get("thread_id")
                 if thread_id:
                     metadata["thread_id"] = thread_id
+                # C2PRO #714: when the exact candidate envelope is already
+                # known, bind it to the review at creation. Never trusted
+                # blindly: approval re-verifies id+version+digest in the DB.
+                candidate_binding = state.get("candidate_binding")
+                if isinstance(candidate_binding, dict):
+                    metadata["candidate_binding"] = dict(candidate_binding)
 
                 # C2PRO P0b HITL review UX hotfix: a reviewer deciding
                 # Approve/Reject needs more than a bare item_id -- these
@@ -598,6 +607,11 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         "retry_count": state.get("retry_count", 0),
                         "critique_notes": state.get("critique_notes", ""),
                         "thread_id": state.get("thread_id"),
+                        **(
+                            {"candidate_binding": dict(candidate_binding)}
+                            if isinstance(candidate_binding, dict)
+                            else {}
+                        ),
                         "reason": reason,
                         "approve_meaning": (
                             "Continue the analysis using this reviewed result. "

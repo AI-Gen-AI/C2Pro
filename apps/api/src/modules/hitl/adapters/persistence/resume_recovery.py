@@ -17,7 +17,10 @@ from sqlalchemy import text
 from src.core import resume_lineage
 from src.modules.hitl.adapters.persistence import resume_ownership as claims
 from src.modules.hitl.adapters.persistence.repository import SqlAlchemyReviewQueueRepository
-from src.modules.hitl.domain.entities import ReviewItem, ReviewStatus
+from src.modules.hitl.domain.entities import (
+    AWAITING_DECISION_STATUSES,
+    ReviewItem,
+)
 
 logger = structlog.get_logger()
 
@@ -227,10 +230,7 @@ async def acquire_for_reconciliation(
             reason = "invalid_durable_decision"
         elif not row.thread_id or not row.source_checkpoint_id:
             reason = "missing_immutable_checkpoint_identity"
-        elif review.current_status not in {
-            ReviewStatus.PENDING_REVIEW_REQUIRED,
-            ReviewStatus.PENDING_REVIEW_CONDITIONAL,
-        }:
+        elif review.current_status not in AWAITING_DECISION_STATUSES:
             reason = "review_operation_status_mismatch"
 
         if reason is not None:

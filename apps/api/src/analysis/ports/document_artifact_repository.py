@@ -28,6 +28,13 @@ class IDocumentArtifactRepository(Protocol):
         tenant_id: TenantId,
     ) -> list[DocumentArtifact]: ...
 
+    async def list_trusted_for_project(
+        self,
+        *,
+        project_id: UUID,
+        tenant_id: TenantId,
+    ) -> list[DocumentArtifact]: ...
+
     async def list_superseded_for_document(
         self,
         *,

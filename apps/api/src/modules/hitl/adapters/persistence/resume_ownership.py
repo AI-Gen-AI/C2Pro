@@ -292,7 +292,7 @@ _HEARTBEAT_SQL = text(
 # transaction, with FOR UPDATE so the row cannot change under it.
 _VERIFY_OWNERSHIP_FOR_UPDATE_SQL = text(
     """
-    SELECT id, phase, analysis_id, fencing_token, decision_revision,
+    SELECT id, phase, analysis_id, fencing_token, decision_revision, decision,
            current_attempt_id, owner_token, project_id, document_id,
            review_row_id, terminal_checkpoint_id, thread_id,
            (lease_expires_at IS NOT NULL AND lease_expires_at > clock_timestamp())
@@ -950,6 +950,7 @@ async def finalize_v3(
     review_item_id: UUID | None = None,
     session_factory: Any = None,
     fault: Any = None,
+    trusted_commits_out: list[Any] | None = None,
 ) -> FinalizedCorrection | None:
     """Commit the whole post-graph outcome in ONE fenced transaction.
 
@@ -969,6 +970,14 @@ async def finalize_v3(
     and lost-response retries never reach this point, so they cannot append
     a second one; a genuinely new final decision is a new review row, hence
     a new operation, hence its own event.
+
+    C2PRO #714: the trusted-state transition rides the SAME transaction.
+    APPROVED promotes exactly the candidate bound to this review (id +
+    version + digest) to TRUSTED; REJECTED marks it REJECTED. A stale,
+    superseded or substituted binding raises and rolls the whole
+    finalization back (fail closed). A newly committed candidate is appended
+    to ``trusted_commits_out`` so the caller can enqueue the canonical
+    ProjectGraph AFTER commit, exactly once -- replays never get here.
     """
     async with _session(session_factory, ownership.tenant_id) as session:
         # Canonical cross-aggregate lock order for the only resume path that
@@ -1025,6 +1034,14 @@ async def finalize_v3(
             raise RuntimeError(
                 f"Finalization could not update review row {review_row_id}; nothing committed."
             )
+
+        trusted_commit = await _apply_trust_decision(
+            session,
+            tenant_id=ownership.tenant_id,
+            review_row_id=review_row_id,
+            document_id=document_id,
+            approved=approved,
+        )
 
         if approved:
             if fault is not None:
@@ -1098,6 +1115,8 @@ async def finalize_v3(
         )
         await session.flush()
 
+    if trusted_commit is not None and trusted_commits_out is not None:
+        trusted_commits_out.append(trusted_commit)
     logger.info(
         "hitl_resume_finalized_v3",
         operation_id=str(ownership.operation_id),
@@ -1105,6 +1124,158 @@ async def finalize_v3(
         correction_event_id=str(correction.event_id) if correction else None,
     )
     return correction
+
+
+_REVIEW_BINDING_SQL = text(
+    """
+    SELECT review_metadata -> :key AS binding,
+           coalesce((review_metadata ->> :marker)::boolean, false) AS required
+      FROM review_items
+     WHERE id = cast(:review_row_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
+    """
+)
+
+
+async def verify_trust_binding(
+    *,
+    tenant_id: UUID,
+    review_row_id: UUID,
+    document_id: UUID | None,
+    approved: bool = True,
+    session_factory: Any = None,
+) -> None:
+    """#714 pre-flight: fail a decision closed BEFORE the graph resumes.
+
+    Both decisions require a #714 review's candidate to be bound
+    (CandidateNotReadyError otherwise) and to still be the exact current
+    proposal (StaleCandidateError otherwise). Without this a stale approval
+    would still run N17 (persisting a COMPLETED analysis that feeds the
+    trusted score), and a stale rejection would terminate the graph, before
+    finalize_v3 refused them. Read-only; finalize_v3 re-verifies under a
+    row lock.
+    """
+    async with _session(session_factory, tenant_id) as session:
+        await _apply_trust_decision(
+            session,
+            tenant_id=tenant_id,
+            review_row_id=review_row_id,
+            document_id=document_id,
+            approved=approved,
+            dry_run=True,
+        )
+
+
+async def _apply_trust_decision(
+    session: Any,
+    *,
+    tenant_id: UUID,
+    review_row_id: UUID,
+    document_id: UUID | None,
+    approved: bool,
+    dry_run: bool = False,
+) -> Any:
+    """#714: apply the human decision to the exact bound candidate.
+
+    Returns the TrustedCommit for an approval -- NEWLY_TRUSTED, or
+    ALREADY_TRUSTED when N17 of this same operation already committed it
+    (commit_trust_in_transaction) -- else None. Raises StaleCandidateError
+    (rolling back the transaction) when the approval cannot be bound to the
+    current exact proposal.
+    """
+    from src.analysis.adapters.persistence.document_artifact_repository import (
+        SqlAlchemyDocumentArtifactRepository,
+    )
+    from src.analysis.domain.trust import (
+        REVIEW_BINDING_KEY,
+        TRUST_CANDIDATE_REQUIRED_KEY,
+        CandidateBinding,
+        CandidateNotReadyError,
+        StaleCandidateError,
+    )
+    from src.core.tenants.types import require_tenant_id
+
+    tenant = require_tenant_id(str(tenant_id))
+    review = (
+        await session.execute(
+            _REVIEW_BINDING_SQL,
+            {
+                "key": REVIEW_BINDING_KEY,
+                "marker": TRUST_CANDIDATE_REQUIRED_KEY,
+                "review_row_id": str(review_row_id),
+                "tenant_id": str(tenant_id),
+            },
+        )
+    ).first()
+    raw = review.binding if review is not None else None
+    binding = CandidateBinding.from_json(raw, default_document_id=document_id)
+    repo = SqlAlchemyDocumentArtifactRepository(session)
+
+    if binding is None:
+        if raw is None and review is not None and review.required:
+            # A #714 review whose candidate is not persisted/bound yet (the
+            # interrupt exposed the review before the completion hook ran).
+            # Neither approve nor reject may proceed: fail closed.
+            raise CandidateNotReadyError(
+                f"Review {review_row_id} is not ready for a decision: its analysis "
+                "candidate is still being prepared. Retry shortly."
+            )
+        if raw is not None:
+            raise StaleCandidateError(
+                f"Review {review_row_id} carries a malformed candidate binding"
+            )
+        if (
+            approved
+            and document_id is not None
+            and await repo.has_proposed_candidate(document_id=document_id, tenant_id=tenant)
+        ):
+            # A proposal exists that this review never saw: approving would
+            # trust unreviewed content.
+            raise StaleCandidateError(
+                f"Review {review_row_id} is not bound to the pending proposal for "
+                f"document {document_id}; refusing to trust unreviewed content"
+            )
+        # Legacy review (pre-#714): nothing was proposed, nothing to commit.
+        logger.info("hitl_trusted_commit_no_candidate", review_row_id=str(review_row_id))
+        return None
+
+    if document_id is not None and binding.document_id != document_id:
+        raise StaleCandidateError(
+            f"Review {review_row_id} binding targets document {binding.document_id}, "
+            f"not {document_id}"
+        )
+    if dry_run:
+        await repo.verify_candidate(binding, tenant_id=tenant, for_reject=not approved)
+        return None
+    if not approved:
+        await repo.reject_candidate(binding, tenant_id=tenant)
+        return None
+    return await repo.commit_candidate(binding, tenant_id=tenant)
+
+
+async def commit_trust_in_transaction(session: Any, *, tenant_id: UUID, operation: Any) -> Any:
+    """#714: promote the exact approved candidate inside N17's transaction.
+
+    N17 of an approved resume makes the analysis, alerts and canonical WBS
+    durable. Committing the exact bound candidate in that SAME transaction
+    means those outputs can never become user-visible without the trusted
+    transition: a stale, superseded or substituted binding raises
+    StaleCandidateError and rolls every N17 effect back. ``operation`` is
+    the row verify_in_transaction locked. finalize_v3 later finds the
+    candidate ALREADY_TRUSTED (idempotent) and still enqueues ProjectGraph.
+    """
+    if str(getattr(operation, "decision", "") or "").lower() != "approve":
+        return None
+    review_row_id = _uuid_or_none(getattr(operation, "review_row_id", None))
+    if review_row_id is None:
+        return None
+    return await _apply_trust_decision(
+        session,
+        tenant_id=tenant_id,
+        review_row_id=review_row_id,
+        document_id=_uuid_or_none(getattr(operation, "document_id", None)),
+        approved=True,
+    )
 
 
 def _append_correction_event(

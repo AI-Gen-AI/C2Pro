@@ -54,11 +54,16 @@ from src.analysis.adapters.graph.review_lineage import (
     claim_review_lineage_for_current_attempt,
 )
 from src.analysis.adapters.graph.schema import ProjectState
+from src.analysis.adapters.persistence.document_artifact_repository import (
+    SqlAlchemyDocumentArtifactRepository,
+)
 from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.application.persist_resume_analysis import (
     ResumeProvenance,
     persist_resume_analysis_atomically,
 )
+from src.analysis.domain.contracts import DocumentArtifact
+from src.analysis.domain.trust import TrustState
 from src.core import checkpoint_lineage, resume_lineage
 from src.core import processing_authority as pa
 from src.core.auth.models import User
@@ -285,6 +290,24 @@ async def _arrange(
     }
     await db.commit()
     review_row_id = review.id
+
+    # #714 trust boundary: production persists/binds the interrupted run's
+    # exact candidate before any human decision can proceed. These #758 tests
+    # exercise lineage/recovery races, not candidate-readiness, so reproduce
+    # that real precondition here instead of bypassing the trust gate.
+    await SqlAlchemyDocumentArtifactRepository(db).save(
+        DocumentArtifact(document_id=str(document_id), doc_type="contract"),
+        project_id=project_id,
+        tenant_id=tenant_id,
+        trust_state=TrustState.PROPOSED,
+        scoring=None,
+        review_thread_id=thread_a,
+    )
+    await db.commit()
+    await db.refresh(review)
+    assert (review.review_metadata or {}).get("candidate_binding"), (
+        "#714 setup failed: #758 recovery tests require a decision-ready review"
+    )
 
     lineage = await _lineage(db, tenant_id, review_row_id)
     assert lineage is not None and lineage.thread_id == thread_a
