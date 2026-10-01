@@ -29,6 +29,15 @@ adr.ADR-024.prod_validation=NONE
 adr.ADR-025.realization=PARTIAL
 adr.ADR-025.deployment=NONE
 adr.ADR-025.prod_validation=NONE
+adr.ADR-026.realization=WIRED
+adr.ADR-026.deployment=NONE
+adr.ADR-026.prod_validation=NONE
+adr.ADR-027.realization=WIRED
+adr.ADR-027.deployment=NONE
+adr.ADR-027.prod_validation=NONE
+adr.ADR-028.realization=SCAFFOLDED
+adr.ADR-028.deployment=NONE
+adr.ADR-028.prod_validation=NONE
 p0b.done_digest=b43576250582d032
 p0b.invariant_ids=INV-1,INV-UX,INV-COH
 p0b.next_slice=P0b-L4-5
@@ -149,7 +158,7 @@ Example: all documents may consistently prove a 7-day delay. **Coherence can be 
 
 ## 4. ADR realization — current truth
 
-The 2026-09-26 reconciliation advances **realization** where merged code now proves wiring, while deliberately leaving deployment/production validation conservative.
+The 2026-10-01 reconciliation advances **realization** where merged code proves wiring, while deliberately leaving deployment/production validation conservative.
 
 | ADR | Design | Realization | Deployment | Prod validation | Current meaning |
 |---|---|---|---|---|---|
@@ -165,10 +174,13 @@ The 2026-09-26 reconciliation advances **realization** where merged code now pro
 | ADR-023 Agentic Coherence | Proposed | DESIGNED | NONE | NONE | roadmap/design only. |
 | ADR-024 Single-document Activation | Accepted | WIRED | **PARTIAL** | NONE | L4-1..L4-5 implementation is merged/release-ready; real production incidents reached HITL, but the full Health outcome is not PROD_VALIDATED. |
 | **ADR-025 Canonical Project Controls WBS Backbone** | **Accepted** | **PARTIAL** | **NONE** | **NONE** | canonical runtime WBS authority and several cross-domain references are now on main; one-logical-root/baseline/linkage completion and production proof remain open. |
+| **ADR-026 Trusted-State Commit Boundary** | **Accepted** | **WIRED** | **NONE** | **NONE** | #714 trusted-state commit/projected-Coherence semantics are merged; no deployed-runtime or full production-journey validation is claimed. |
+| **ADR-027 Processing Authority & Checkpoint Lineage** | **Accepted** | **WIRED** | **NONE** | **NONE** | #711/#758 authority and checkpoint-lineage fencing are merged; deployment/production acceptance stays under #706/#715. |
+| **ADR-028 Production Qualification / Composite Runtime** | **Accepted** | **SCAFFOLDED** | **NONE** | **NONE** | #715/#733 harness and provider-identity/evidence contracts are merged; #715 execution/acceptance and #690 identity/tenant prerequisite remain open. |
 
 ADR-025 has moved beyond “nested-set substrate only”: runtime application writes target `wbs_nodes`; the legacy WBS stores are write-blocked; RACI and BOM references point to the canonical nodes; MCP views consume the same hierarchy; schedule clauses and spend derive from it. What remains unproven is the complete Project Controls exit gate: one logical root under every write path, baseline/change governance, complete Budget/Schedule/Stakeholder/Procurement/Alert/Evidence/Change semantics and a production user journey.
 
-## 5. Product WBS — 2026-09-26 reconciliation
+## 5. Product WBS — 2026-10-01 reconciliation
 
 | Product WBS | Pri | Realization | Work | What it means now |
 |---|---:|---|---|---|
@@ -324,14 +336,13 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 
 ## 12. Next authorized sequence
 
-1. **Parallel external prerequisite — #690:** establish the dedicated non-customer Clerk Production org/user through the supported operator path; do not reuse customer/CI identities and do not manually synthesize DB mappings.
-2. **#711 / PR #719 — finish recovery authority:** preserve the now-correct current-main migration chain; complete the processing owner/attempt/fencing protocol and the deterministic A→lease-expiry→B takeover→A stale-write rejection test. Exact-head CI/review remains mandatory but is not the completion criterion.
-3. **Fix-forward merged #712 and #713:** close API/UI retry parity + strict REJECT/document atomicity for #712; close canonical parsed-text/offset construction + partial-block bbox exactness for #713. Treat existing deployments as evidence of wiring, not acceptance.
-4. **#714 Trusted-State Commit:** PR #726 may continue RED/test scaffolding, but migration/canonical implementation and merge remain gated on corrected landed #711/#712/#713 contracts. Pending/rejected candidates never mutate canonical state; approval/correction binds the exact reviewed version/hash and commits once.
-5. **#715 final deployed proof:** only after #690 plus corrected #711–#714 are merged/deployed, run AUTH → PROJECT → UPLOAD → PARSE/EXTRACT → ANALYSIS → EVIDENCE → HEALTH → HITL → REFRESH/RELOGIN → RECOVERY against exact Railway/Vercel identities. Fail closed on mocks, HITL bypass, fixture mismatch and any unreviewed Railway staged configuration change.
-6. **Qualification evidence:** capture P0b assertions (#683) inside #715 where applicable, then qualify P0c (#686) and P0d (#687) on the same clean synthetic tenant/project when their own gates are met.
-7. **Parallel non-blocking control-plane cleanup:** finish #724 Wave 1, then #725 Wave 2. These improve development governance and review integrity but never substitute for #706 production evidence.
-8. **Stop/reconcile after the P0 wave:** Line B rebinds exact runtime/evidence and only then considers lifecycle promotion. P1 Project Controls, broader Coherence, Alerts/Actions and Procurement remain planning context until fresh explicit authorization.
-9. **Control-plane discipline:** branch completion, CI green, mergeability or deployment success never advances `PROD_VALIDATED` automatically.
+1. **Parallel external prerequisite — #690:** establish the dedicated non-customer Clerk Production org/user through the supported operator path; do not reuse customer/CI identities or manually synthesize customer-like mappings.
+2. **Close the still-open #706 fix-forward workstreams #712 and #713:** #711, #714 and #758 are already closed and must remain historical dependencies rather than active blockers.
+3. **#715 final deployed proof:** after #690 plus required #712/#713 acceptance blockers are resolved, rebind exact Railway API/Worker/Scheduler and Vercel identities and execute AUTH → PROJECT → UPLOAD → PARSE/EXTRACT → ANALYSIS → EVIDENCE → HEALTH → HITL → REFRESH/RELOGIN → RECOVERY on the dedicated synthetic tenant.
+4. **Fail closed during #715:** no mocks, HITL/auth bypass, expected-ID substitution for provider observation, fixture mismatch or unresolved/unreviewed staged production configuration.
+5. **Qualification evidence:** capture P0b assertions (#683) inside the accepted #715 journey where applicable; then qualify P0c (#686) and P0d (#687) only when their own evidence contracts pass.
+6. **Explicit reconciliation before promotion:** an accepted evidence bundle is necessary but never self-promoting. Line B must reconcile Product Control deliberately before any lifecycle field changes.
+7. **Stop/reconcile after the P0 wave:** only then consider fresh authorization for P1 Project Controls, broader Coherence, Alerts/Actions or Procurement.
+8. **Control-plane discipline:** branch completion, CI green, mergeability, deployment success or documentation reconciliation never advances `PROD_VALIDATED` automatically.
 
 **No direct `main` or production mutation is authorized by this reconciliation. Human-reviewed merge remains mandatory.**
