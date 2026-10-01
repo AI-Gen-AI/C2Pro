@@ -332,7 +332,7 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 - Procurement before the remaining Project Controls contract closes would still create rework.
 - High coherence must never suppress visible critical alerts.
 - WBS/project roll-ups must remain evidence/coverage-aware.
-- High-velocity parallel lanes can stale the MASTER quickly; each planning milestone should reconcile against an exact `main` SHA.
+- High-velocity parallel lanes can stale Product Control quickly; each planning milestone should reconcile against an exact `main` SHA.
 
 ## 12. Next authorized sequence
 
