@@ -8,8 +8,10 @@ import { handleAuthErrorStatus } from "@/lib/api/client";
 import { useAuthStore } from "@/stores/auth";
 import { getTenantIdFromOrganizationMetadata } from "@/lib/clerk-tenant";
 
+type ClerkGetToken = ReturnType<typeof useAuth>["getToken"];
+
 interface SignedInOrganizationEffectsProps {
-  getToken: () => Promise<string | null>;
+  getToken: ClerkGetToken;
   isLoaded: boolean;
   organization: ReturnType<typeof useOrganization>["organization"];
   setAuth: (auth: { token: string | null; tenantId: string | null }) => void;
@@ -30,6 +32,7 @@ function SignedInOrganizationEffects({
       },
     });
   const organizationMemberships = userMemberships.data ?? [];
+  const activationAttemptedFor = React.useRef<string | null>(null);
 
   useEffect(() => {
     if (!isLoaded || !orgListLoaded || organization) {
@@ -41,8 +44,48 @@ function SignedInOrganizationEffects({
     }
 
     const [membership] = organizationMemberships;
-    void setActive?.({ organization: membership.organization.id });
-  }, [isLoaded, orgListLoaded, organization, organizationMemberships, setActive]);
+    const organizationId = membership.organization.id;
+
+    if (activationAttemptedFor.current === organizationId) {
+      return;
+    }
+    activationAttemptedFor.current = organizationId;
+
+    const activateOrganization = async () => {
+      if (!setActive) {
+        handleAuthErrorStatus(401);
+        return;
+      }
+
+      try {
+        await setActive({ organization: organizationId });
+
+        // Clerk caches session tokens for up to one minute. Force a freshly
+        // minted token for the Organization we just activated so the first
+        // protected API request carries org_id instead of a stale personal
+        // session token.
+        const token = await getToken({
+          organizationId,
+          skipCache: true,
+        });
+        if (!token) {
+          handleAuthErrorStatus(401);
+        }
+      } catch (error) {
+        console.error("AuthSync: Failed to activate organization", error);
+        handleAuthErrorStatus(401);
+      }
+    };
+
+    void activateOrganization();
+  }, [
+    getToken,
+    isLoaded,
+    orgListLoaded,
+    organization,
+    organizationMemberships,
+    setActive,
+  ]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -83,7 +126,7 @@ function SignedInOrganizationEffects({
 }
 
 interface SignedInAuthSyncProps {
-  getToken: () => Promise<string | null>;
+  getToken: ClerkGetToken;
   isLoaded: boolean;
   queryClient: ReturnType<typeof useQueryClient>;
   setAuth: (auth: { token: string | null; tenantId: string | null }) => void;
