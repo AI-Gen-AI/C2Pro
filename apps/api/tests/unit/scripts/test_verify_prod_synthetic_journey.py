@@ -79,7 +79,8 @@ def test_verifier_sets_tenant_rls_context_inside_readonly_transaction() -> None:
     preflight = source.index("checks = await _preflight_checks(")
     assert read_only < rls_context < preflight
     assert "{TENANT_ID_KEY: str(tenant_id)}" in source
-    assert "BYPASSRLS" not in source
+    assert "ALTER ROLE" not in source
+    assert "SET ROLE" not in source
 
 
 def test_verifier_output_path_is_fixed_to_canonical_evidence_file(tmp_path: Path) -> None:
