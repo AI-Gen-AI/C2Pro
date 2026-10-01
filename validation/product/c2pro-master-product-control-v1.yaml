@@ -1,7 +1,7 @@
 schema: c2pro-product-control-v1
 schema_version: 7
 repository: AI-Gen-AI/C2Pro
-generated: "2026-09-27"
+generated: "2026-10-01"
 control_status: reconciliation
 
 # Machine source of truth for product programme state. Edit this file first;
@@ -48,7 +48,7 @@ development_execution_authority:
     This product plane records target/state; it does not authorize merges or production mutation.
 
 production_position:
-  reconciled_against_main_sha: 0db53883a8942f7097fe9ce2e0e6c63397948fbb
+  reconciled_against_main_sha: a025982e101b14407dc9012b97841d3b77c35b34
   deployed_runtime_sha: UNVERIFIED
   observed_production_evidence:
     - "kuwait2 doc c510de21: enqueue -> worker -> SUCCESS on dedicated Railway Redis (historical P0a evidence)"
@@ -69,7 +69,7 @@ production_position:
     - "P0b L4-5 is release-ready and merged but still not PROD_VALIDATED end-to-end on the current runtime"
     - "P0c What Changed is WIRED on main but deployment/prod-validation of the complete user journey is not proven"
     - "P0d Current State Reporting is WIRED on main but deployment/prod-validation is not proven"
-    - "#706 full production end-user GOAL remains open: #710 is deployed; #712 and #713 are merged/deployed but have unresolved fix-forward acceptance defects; #711 and #714 remain incomplete; #715 has not run"
+    - "#706 full production end-user GOAL remains open: #710/#711/#714 implementations are closed; #758 checkpoint-lineage fencing is closed; #712 and #713 remain open fix-forward acceptance work; #715 harness is merged but the full production qualification has not been accepted; #690 remains an external prerequisite"
     - "ADR-025 now has canonical-WBS authority and several cross-domain links wired on main, but one-logical-root, baseline/change governance, remaining alert/evidence/change linkage and production journey are not fully proven"
     - "Procurement Plan -> BoQ/RFQ -> award -> governed stakeholder communications is not delivered end-to-end"
 
@@ -116,19 +116,37 @@ reconciliation_delta_2026_09_27:
     - "Parallel Line B governance cleanup remains non-product: #724 Wave 1 removes live legacy backlog/blackboard authority from active guidance, and #725 Wave 2 is queued to enforce exact-PR/head independent review, reviewer independence, risk-policy floors and fail-closed synthesis in the reconciler."
     - "PR #726/#714 has started as DRAFT RED scaffolding from main with focused trusted-state tests only and no trusted-state migration yet. This is preparatory work, not accepted implementation; mergeable #714 integration remains gated on corrected #711/#712/#713 contracts."
   control_conclusion: >
-    The operational north-star remains #706. Production currently runs Railway backend 0db53883a8942f7097fe9ce2e0e6c63397948fbb
-    and Vercel frontend 6e98ec53f814bd29dee4607e375600c4560c7d70. #712/#713 code is deployed but not accepted:
-    both require fix-forward for documented semantic defects and both merged without independent review records.
-    #711 is rebased onto current main and its Alembic lineage is now linear by design, but exact-head CI remains a
-    control gate and the decisive functional blocker is still processing ownership/fencing: after takeover, a stale
-    worker must be unable to make any later canonical durable mutation. Line A owns the implementation; Claude is the
-    principal implementation route and Gemini the adversarial QA/challenger route under canonical routing. #714 has
-    begun only as PR #726 DRAFT/RED test scaffolding with no migration; its mergeable implementation must consume
-    corrected #711/#712/#713 contracts rather than fork another lifecycle model. #715 remains unexecuted and #690
-    remains an external prerequisite. In parallel, #724 Wave 1 and #725 Wave 2 remove legacy governance ambiguity and
-    harden exact-head review enforcement; they are control-plane work and do not substitute for #706 product proof.
-    The unresolved Railway staged API patch remains a fail-closed #715 concern. None of these merge/deployment/control
-    facts promotes P0b/P0c/P0d or proves product_value_delivered.
+    The operational north-star remains #706. Since the 2026-09-27 reconciliation, #711 and #714
+    implementations have closed and #758 has closed the checkpoint-lineage authority defect discovered
+    during exact-head review. #715's synthetic production acceptance harness is merged, but #715 remains
+    open because a harness implementation is not an accepted production run. #690 remains an external
+    prerequisite, while #712 and #713 remain open fix-forward acceptance workstreams. The repository
+    therefore has stronger correctness and qualification machinery without changing the central lifecycle
+    claim: merge/CI/deployment/control facts do not promote P0b/P0c/P0d or prove product_value_delivered.
+
+
+reconciliation_delta_2026_10_01:
+  previous_main_sha: 0db53883a8942f7097fe9ce2e0e6c63397948fbb
+  current_main_sha: a025982e101b14407dc9012b97841d3b77c35b34
+  material_main_advances:
+    - "#711 durable processing/recovery work is closed; later #758 closes the checkpoint-lineage authority gap that independent review found at the LangGraph persistence boundary."
+    - "#714 trusted-state commit and projected-Coherence implementation is merged/closed after #758 fencing was integrated. Pending/rejected candidates remain non-authoritative; approval is bound to exact reviewed state."
+    - "#715 production synthetic acceptance harness implementation is merged on main. The issue remains open because implementation of the harness is not equivalent to an accepted full-journey production qualification."
+    - "#775 closes the Clerk organization-token synchronization races: active-org auth uses the organization-scoped cache-bypassed token and superseded org-token requests cannot overwrite newer auth state."
+    - "#779 bounds automatic Vercel Git deployments to main, hotfix/**, release-candidate/** and preview/**, while GitHub CI remains authoritative for ordinary PRs."
+    - "R17 Sonar/security-hotspot cleanup completed without Product Control promotion; code quality/security evidence is a control, not user-value acceptance."
+  still_open_acceptance:
+    - "#706 full production end-user journey GOAL"
+    - "#715 accepted full production qualification"
+    - "#690 dedicated non-customer production qualification identity/tenant evidence"
+    - "#712 truthful lifecycle fix-forward"
+    - "#713 evidence-locator truthfulness fix-forward"
+  control_conclusion: >
+    Repository realization has advanced substantially, including trusted-state commit semantics,
+    processing/checkpoint authority fencing and the production qualification harness. None of those
+    merge facts self-promotes lifecycle state. Product value remains unvalidated until the dedicated
+    production qualification prerequisites are satisfied and an accepted full end-user journey
+    provides bounded evidence. P0b/P0c/P0d qualification lanes therefore remain conservative.
 
 north_star:
   full_product: >
