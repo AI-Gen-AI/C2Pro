@@ -1,17 +1,16 @@
 
-# C2Pro v4.0 — Technical Design Document (TDD)
 
 > **Lifecycle:** Supporting historical design — not current architecture authority.  
-> **Current synthesis:** `docs/architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md`  
-> **Decision authority:** `docs/architecture/decisions/`  
-> Reclassified 2026-10-01.
+> **Current authority:** `docs/architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md` + accepted ADRs in `docs/architecture/decisions/`.  
+> The dated content below is preserved as written for historical traceability; its former authority/status statements are superseded. Reclassified 2026-10-01.
 
+# C2Pro v4.0 — Technical Design Document (TDD)
 
 > **Document Type:** Technical Design Baseline with Governance Addendum  
 > **Version:** 4.0  
 > **Original Date:** 2026-02-10  
 > **Last Reviewed:** 2026-03-29  
-> **Historical status:** ACTIVE REFERENCE as of 2026-03-29; now supporting only  
+> **Status:** ACTIVE REFERENCE — valid with governance caveats below  
 > **Supersedes:** TDD v3.0 (2026-02-08), FRONTEND_TESTING_PLAN.md (deprecated)  
 > **Input:** Frontend Master Plan v1.0 (Phase 1–3 verified), Architecture Plan v2.1  
 > **Audience:** Engineering Team, Tech Leads, DevOps, QA, Architecture Review Board  
@@ -24,17 +23,17 @@
 
 This document remains useful, but it is no longer sufficient as the standalone platform specification.
 
-Current interpretation rules for this historical snapshot:
+Current interpretation rules:
 
-1. This March-era rule is superseded. Product state now belongs to Product Control and development execution to the `.c2pro/` single-writer control plane.
+1. `C2PRO_MASTER_BACKLOG.md` is the delivery and release source of truth.
 2. `docs/architecture/decisions/006-post-reorganization-architecture.md` is the canonical repository-structure baseline.
 3. This document is primarily the frontend implementation baseline and should not override later backend, security, or release-governance documents.
 
-Historical project-state snapshot recorded in the 2026-03-29 addendum:
+Current project state aligned to the repository:
 
 - C2Pro is a monorepo with `apps/api` and `apps/web`, not a frontend-only program.
 - The backend is the critical production path: multi-tenant FastAPI, PostgreSQL RLS, LangGraph orchestration, golden regression, and release-gate evidence.
-- The former `C2PRO_MASTER_BACKLOG.md` authority statement is historical; use the current control planes named above for live status.
+- `C2PRO_MASTER_BACKLOG.md` records the current canonical open work, with remaining blockers concentrated in security hardening and release signoff evidence.
 - Architectural decisions made after 2026-02-10 must be read together with ADR-006, LangGraph checkpointing docs, and the current testing roadmap.
 
 Known limits of this document:
