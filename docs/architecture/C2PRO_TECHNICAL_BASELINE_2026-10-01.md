@@ -154,8 +154,8 @@ A processing generation/attempt owns an authority fence. After takeover or repro
 
 - stale application writes are rejected;
 - stale checkpoint lineage cannot be selected as current;
-- HITL resumes the exact persisted checkpoint tuple;
-- thread-only “latest checkpoint” lookup cannot cross an authority boundary.
+- HITL resumes the exact persisted checkpoint tuple when `checkpoint_id` capture succeeded;
+- if no checkpoint ID was captured, thread-only “latest checkpoint” lookup is allowed only within the same authority-scoped attempt lineage and cannot cross an authority boundary.
 
 See ADR-027.
 
