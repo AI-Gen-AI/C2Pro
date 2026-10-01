@@ -25,9 +25,17 @@ Create a new file here only when it represents a **durable reusable contract or 
 
 ### B. Machine-backed control
 
+C2Pro has separate control planes:
+
+**Product programme / lifecycle**
 - `validation/product/` is authoritative for Product Control machine state.
 - Generated/canonical Product Control Markdown must be updated through its parity workflow.
 - Never hand-edit a generated control block to make status look current.
+
+**Development execution**
+- `.c2pro/control/` + assigned `.c2pro/work/` envelopes are the canonical development-control write plane.
+- `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md`, and `blackboard.json` are legacy/read-only reconciliation sources for ordinary workers.
+- New execution state/evidence must not be reintroduced into legacy Markdown backlogs.
 
 ### C. Task/status tracking
 
@@ -70,14 +78,17 @@ Standalone `TASK-..._REPORT.md`, `FEATURE_X_IMPLEMENTATION_SUMMARY.md` and simil
 
 When documentation conflicts:
 
-1. executable/machine-enforced control and schema;
-2. accepted ADR;
-3. current TDD;
-4. current specs/product contracts;
-5. runbooks/testing docs;
-6. planning docs;
-7. historical audits/evidence;
-8. working/session notes.
+Authority is scoped by concern; there is no universal single file:
+
+1. executable/runtime/schema/ruleset truth for actual behavior and merge enforcement;
+2. Product Control machine state for product programme/lifecycle;
+3. `.c2pro` machine state for development execution/control;
+4. accepted ADRs for durable architecture decisions;
+5. current TDD for platform-wide design;
+6. current specs/product contracts and runbooks;
+7. testing/planning documents within their declared scope;
+8. historical audits/evidence;
+9. working/session notes.
 
 A newer timestamp alone does not override a higher-authority source.
 
@@ -95,6 +106,8 @@ When applicable:
 
 ## 5. Current canonical entry points
 
+- `.c2pro/control/` + assigned `.c2pro/work/` (development execution)
+- `validation/product/c2pro-master-product-control-v1.yaml` (product lifecycle)
 - `docs/README.md`
 - `docs/ARCHITECTURE_INDEX.md`
 - `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md`
