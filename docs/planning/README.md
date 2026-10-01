@@ -5,13 +5,13 @@
 
 Product lifecycle status is owned by `validation/product/c2pro-master-product-control-v1.yaml`. Development execution state is owned by `.c2pro/control/`. Plans here remain useful for intent, sequencing and historical rationale.
 
-This folder is reserved for active, current planning documents that still drive execution.
+This folder contains planning artifacts from multiple project eras. They may still explain intent or sequencing, but none is a live status authority unless an owning control-plane document explicitly references it.
 
-## Current Canonical Planning
+## Planning references
 
-- `ROADMAP_v2.4.0.md`
-- `COHERENCE_SCORE_ENHANCEMENT_ANALYSIS.md`
-- `COHERENCE_SCORE_IMPLEMENTATION_PLAN.md`
+- `ROADMAP_v2.4.0.md` — historical strategic roadmap/supporting context.
+- `COHERENCE_SCORE_ENHANCEMENT_ANALYSIS.md` — focused analysis/supporting input.
+- `COHERENCE_SCORE_IMPLEMENTATION_PLAN.md` — historical/focused implementation plan; current Coherence decisions are governed by ADR-009 and Product Control.
 
 ## Archive Policy
 
