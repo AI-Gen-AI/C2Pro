@@ -6,7 +6,9 @@ import { AuthSync } from "@/components/providers/AuthSync";
 import { useAuthStore } from "@/stores/auth";
 
 const queryClientClearSpy = vi.fn();
-const getTokenMock = vi.fn<() => Promise<string>>();
+const getTokenMock = vi.fn<
+  (options?: { organizationId?: string; skipCache?: boolean }) => Promise<string>
+>();
 const handleAuthErrorStatus = vi.fn();
 const setActiveMock = vi.fn();
 const useOrganizationListMock = vi.fn();
@@ -208,6 +210,32 @@ describe("AuthSync integration", () => {
 
     await waitFor(() => {
       expect(handleAuthErrorStatus).toHaveBeenCalledWith(401);
+    });
+    expect(useAuthStore.getState()).toMatchObject({
+      token: null,
+      tenantId: null,
+    });
+  });
+
+  it("refreshes the session token against the sole Organization after auto-activation", async () => {
+    mockOrgId = null;
+    mockTenantUuid = null;
+    mockMemberships = [{ organization: { id: "org-solo" } }];
+
+    render(
+      <AuthSync>
+        <div>auth-child</div>
+      </AuthSync>,
+    );
+
+    await waitFor(() => {
+      expect(setActiveMock).toHaveBeenCalledWith({ organization: "org-solo" });
+    });
+    await waitFor(() => {
+      expect(getTokenMock).toHaveBeenCalledWith({
+        organizationId: "org-solo",
+        skipCache: true,
+      });
     });
     expect(useAuthStore.getState()).toMatchObject({
       token: null,
