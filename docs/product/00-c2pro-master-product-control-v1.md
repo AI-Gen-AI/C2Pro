@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
 **Status:** Reconciliation snapshot (read-only) · **Date:** 2026-10-01 · **Schema:** v7  
-**reconciled_against_main_sha:** `a025982e101b14407dc9012b97841d3b77c35b34` · **deployed_runtime_sha:** `UNVERIFIED`  
+**reconciled_against_main_sha:** `33650a28a930d82a7bd65d98b50981145b3fd1d1` · **deployed_runtime_sha:** `UNVERIFIED`  
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This document is the human projection of the machine product-control plane. It does not grant execution authority. Direct `main`, merge and production mutation remain governed outside this document.
@@ -10,7 +10,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=a025982e101b14407dc9012b97841d3b77c35b34
+reconciled_against_main_sha=33650a28a930d82a7bd65d98b50981145b3fd1d1
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
@@ -105,7 +105,7 @@ This resolves the earlier ambiguity that could have led the product toward paral
 
 Three facts remain deliberately separate:
 
-- `reconciled_against_main_sha = a025982e101b14407dc9012b97841d3b77c35b34` — repository baseline used for this reconciliation.
+- `reconciled_against_main_sha = 33650a28a930d82a7bd65d98b50981145b3fd1d1` — repository baseline used for this reconciliation.
 - `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is composite. Railway API `ab0a2cfa-2565-4e74-bdc5-26b3066d4bdb`, Worker `7d2fdcb4-7606-4c80-836e-6dfd852e55a4` and Scheduler `5f59ff9f-9a78-4065-93f6-b9a3c8f5e4e3` are SUCCESS at #723 merge commit `0db53883a8942f7097fe9ce2e0e6c63397948fbb`. Vercel production `dpl_2z3ivCtezP7RKZ1b3wmDmAi7PUB5` is READY at #722 merge commit `6e98ec53f814bd29dee4607e375600c4560c7d70`. Backend and frontend SHAs therefore legitimately differ and must be rebound separately at qualification time.
 - Railway also reports one unresolved STAGED API environment patch `7fcd5228-be1b-4be5-8e72-9692c854ddbf`; the available read-only API does not expose its internal delta, so #715 must fail closed unless staged changes are zero or the exact delta is operator-reviewed and bound to the qualification evidence.
 - Fresh API logs report `coherence_analysis=True`; this proves production Coherence is enabled, but does not by itself prove the separate per-tenant ADR-017 ProjectGraph gate.
@@ -114,6 +114,8 @@ Three facts remain deliberately separate:
 ### 2.1 What changed in the 2026-10-01 reconciliation
 
 Since the 2026-09-27 control snapshot, repository realization advanced materially while production-validation state remains deliberately conservative:
+
+- **#781** merged backend support for Clerk v2 organization claim shapes while preserving tenant-validation semantics.
 
 - **#711** durable processing/recovery work is closed.
 - **#758** closes the LangGraph checkpoint-lineage authority defect found during independent review: stale processing lineage cannot become selectable as current after takeover/reprocess.
