@@ -11,7 +11,7 @@
 1. **Project is the intelligence boundary.** Documents are evidence inputs to an evolving project state, not isolated products.
 2. **Evidence before assertion.** Unsupported state remains unknown/null; it is never converted to zero or a fabricated green state.
 3. **One project, one canonical hierarchical WBS.** Budget, schedule, procurement, stakeholders/RACI, alerts, evidence and changes attach to that hierarchy or explicitly to project scope.
-4. **Human approval is a trust boundary.** Proposed/untrusted state cannot mutate canonical trusted project state before exact approval.
+4. **HITL review is an exact trust boundary when review is required.** A policy-routed non-gated completion may become trusted without human action; a HITL-gated candidate remains proposed/untrusted until exact review approval.
 5. **Processing authority is fenced.** A stale worker or stale checkpoint lineage cannot become current after processing ownership changes.
 6. **Health, Coherence and Alerts are distinct signals.** They share the six dimensions but answer different questions.
 7. **Qualification evidence is non-authoritative.** CI, deployment and evidence bundles can prove prerequisites; they never self-promote lifecycle state.
@@ -125,18 +125,23 @@ A project can therefore be highly coherent and still have a critical TIME alert 
 
 ## 7. Trusted-state commit boundary
 
-Analysis may create **proposed/untrusted** candidates. Canonical ProjectGraph/Health/Coherence state is mutated only after a human action is bound to the exact reviewed candidate/version/hash and exact checkpoint lineage.
+C2Pro currently has two completion paths and they must not be conflated:
 
-Required semantics:
+1. **Policy-approved / non-gated completion.** When routing explicitly sets `human_approval_required=False`, the completion hook persists the artifact as `TRUSTED` and may enqueue canonical ProjectGraph without a human review action.
+2. **HITL-gated completion.** When human review is required (or the state does not explicitly opt out), the artifact is persisted as `PROPOSED`; canonical ProjectGraph enqueue is blocked until the exact bound candidate is approved/corrected through the review workflow.
+
+ADR-026 governs the second path. For HITL-gated candidates:
 
 - pending review does not mutate trusted state;
 - rejected state does not mutate trusted state;
 - correction supersedes the prior proposal and must bind the corrected candidate;
-- approval commits exactly once;
+- approval commits the exact reviewed candidate exactly once;
 - exports default to trusted state unless explicitly labelled as a scenario/projection;
 - projected Coherence is hypothetical and visually/semantically distinct from trusted Coherence.
 
-See ADR-026.
+The present `ConfidenceRouter` uses confidence/impact thresholds and can auto-approve high-confidence LOW/MEDIUM-impact items. ADR-020's richer policy intent (including mandatory human review for named consequential decision classes) therefore remains a **partially realized policy boundary**, not something this baseline claims is fully enforced.
+
+See ADR-020 and ADR-026.
 
 ## 8. Processing authority and checkpoint lineage
 
