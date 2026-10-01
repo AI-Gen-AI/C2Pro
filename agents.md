@@ -40,7 +40,7 @@ You are a Senior Staff Software Architect and TDD specialist for C2Pro (Construc
 
 ## Goal
 
-Generate production-ready, strictly typed Python code using Hexagonal Architecture and strict TDD, and keep project status documentation updated.
+Generate production-ready, strictly typed code using the governed architecture/TDD contracts and return structured execution evidence. Canonical development status is reconciled by the Planner/Master into `.c2pro`; ordinary workers do not mutate legacy status files.
 
 ## Canonical Governance
 
@@ -51,9 +51,9 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 - Instead, workers **MUST** provide structured evidence via a fenced YAML block matching the `c2pro-implementation-result-v1` schema in their PR descriptions or standard output.
 - Task completion is non-canonical until verified in CI, merged, and reconciled on main by the Master Reconciler.
 
-### Backlog Interpretation Rules
+### Legacy Backlog Interpretation Rules
 
-- The backlog section and subsection hierarchy is operational. Examples: `2.2 Frontend`, `2.3 AI & Intelligence`, `2.5 Security`, `2.6.1 Prerequisites`, `2.6.3 Executable Verification`.
+- Legacy backlog grouping may be used as reconciliation/context when a current `.c2pro` work envelope references it. It is not the canonical write target.
 - When the user references a group instead of a specific task ID, agents must work from that backlog group and execute tasks in backlog priority order unless the user explicitly reprioritizes.
 - If a task belongs to a group, the responsible agent and any supporting agents for that group must coordinate around that task and its immediate dependencies instead of treating the task in isolation.
 - Group ownership is interpreted as follows:
@@ -68,8 +68,8 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 
 - Agents must always check the `Dependency` column and any nearby prerequisite notes before starting implementation.
 - If a task is blocked by a prerequisite, agents must state that clearly and either:
-  - execute the missing prerequisite first if it is in scope and approved by the user workflow, or
-  - update the backlog to reflect the blocker if the prerequisite cannot be completed in the same work cycle.
+  - execute the missing prerequisite first if it is in scope and authorized by the current work envelope, or
+  - return the blocker in structured evidence so the Planner/Master can reconcile canonical `.c2pro` state.
 - Agents must not claim a task is ready if its required prerequisite or dependency remains open.
 - In Testing, agents must respect the normalized split:
   - `Prerequisites` are environment/bootstrap steps
@@ -179,18 +179,20 @@ apps/api/
 
 ## Required Context
 
-- `C2PRO_MASTER_BACKLOG.md`
-- `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md`
-- `docs/architecture/decisions/006-post-reorganization-architecture.md`
-- `docs/testing/C2PRO_TEST_SUITES_INDEX_v1.1.md`
-- `docs/architecture/diagrams/c2pro_master_flow_diagram_v2.2.1.md`
+Load only the context required by the assigned work envelope.
 
-Hard constraints from these sources:
+Canonical/control entry points:
 
-- `clauses` table is the security source of truth.
-- Every repository query must filter by `tenant_id`.
-- Coherence categories: `SCOPE`, `BUDGET`, `TIME`, `TECH`, `LEGAL`, `QUALITY`.
-- Master flow: Upload -> Anonymize -> Extract -> Analyze -> Coherence.
+- `.c2pro/control/` — development-control hot state/policy;
+- assigned `.c2pro/work/<work_id>.yaml` — task scope/acceptance;
+- `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md` — current platform design when architecture is relevant;
+- applicable accepted ADRs under `docs/architecture/decisions/`;
+- `validation/product/c2pro-master-product-control-v1.yaml` only when product lifecycle/control is relevant;
+- directly relevant tests/spec/source.
+
+Legacy/cold references such as `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md`, old testing indexes and historical plans are loaded only when the current work envelope explicitly requires reconciliation/history.
+
+Hard constraints must be taken from current executable policy, current TDD/ADRs and the assigned work envelope rather than copied from superseded planning text.
 
 ## Do and Do Not
 
@@ -218,23 +220,19 @@ When the user provides a Suite ID:
 4. `REFACTOR`: improve only after passing tests.
 5. Update project tracking docs.
 
-## Tracking Updates
+## Tracking / Completion Updates
 
-After completing a suite:
+Ordinary workers MUST NOT mark legacy Markdown/JSON backlogs complete.
 
-- Update `C2PRO_MASTER_BACKLOG.md`.
-- Update `docs/testing/C2PRO_TDD_BACKLOG_v1.0.md` when suite tracking changes.
-- Update `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md` when platform-level architecture changes.
+At completion:
 
-After completing any backlog task:
+1. run the required tests/checks from the work envelope;
+2. return a fenced YAML result matching `c2pro-implementation-result-v1`;
+3. include exact base/head SHA, files, tests, CI/findings/residual risks and PR URL where applicable;
+4. allow the authorized Planner/Master reconciler to update canonical `.c2pro` development state after review/CI/merge;
+5. update ADR/TDD/spec/runbook only when the work changes that durable contract, following `.claude/rules/DOCUMENTATION_STRUCTURE.md`.
 
-- Mark the task state in `C2PRO_MASTER_BACKLOG.md`.
-- If the task unblocks another task, update that dependency state or note immediately.
-- If the user has approved continuing, identify the next eligible task in the same approved group and proceed without waiting for another instruction.
-
-Use this completion note format when applicable:
-
-- `[x] Implemented (Unit Tests & Domain Logic)`
+Product lifecycle promotion is separate and must follow Product Control parity/evidence rules.
 
 ## Agent Orchestration
 
