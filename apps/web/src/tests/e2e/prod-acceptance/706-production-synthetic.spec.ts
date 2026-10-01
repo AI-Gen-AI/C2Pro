@@ -72,7 +72,8 @@ function baseUrl(): string {
 }
 
 function requireHitl(): boolean {
-  return process.env.PROD_ACCEPTANCE_REQUIRE_HITL === "1";
+  const raw = process.env.PROD_ACCEPTANCE_REQUIRE_HITL?.toLowerCase();
+  return raw === "1" || raw === "true";
 }
 
 function responsePath(response: Response): string {
