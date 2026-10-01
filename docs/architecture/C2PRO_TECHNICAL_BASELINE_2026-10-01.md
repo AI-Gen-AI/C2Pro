@@ -1,7 +1,7 @@
 # C2Pro Technical Architecture Baseline — 2026-10-01
 
 **Status:** Canonical current-state architecture baseline  
-**Baseline main SHA:** `a025982e101b14407dc9012b97841d3b77c35b34`  
+**Baseline main SHA:** `33650a28a930d82a7bd65d98b50981145b3fd1d1`  
 **Scope:** implemented architecture and active product-control boundaries, not a product-release claim
 
 > This document describes the architecture that exists or is explicitly governed on the baseline above. It does **not** imply that the complete end-user journey is production validated. Product lifecycle truth remains in `validation/product/c2pro-master-product-control-v1.yaml`.
@@ -66,6 +66,9 @@ The API, worker and scheduler have separate lifecycle ownership even when they s
 - **Deployment:** Vercel
 
 ### Auth synchronization invariant
+
+Backend auth also accepts Clerk v2 organization claim shapes merged via #781; organization/tenant derivation must remain compatible with both supported Clerk claim forms without weakening tenant validation.
+
 
 When an organization is active, the organization-scoped, cache-bypassed Clerk token is the token synchronized into the application auth store. Superseded organization token requests are cancelled/ignored before they can overwrite newer organization state. This prevents stale personal or previous-organization tokens from winning a race.
 
