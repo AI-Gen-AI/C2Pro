@@ -1,18 +1,18 @@
 # Agent Orchestration
 
-> **Two rosters live in this file.** The **Real Delegate Roster** below governs the multi-terminal orchestration (external models run in the user's terminals, coordinated by the Orchestrator). The **Available Agents** table further down lists in-session Claude Code sub-agent types. When they conflict, the Real Delegate Roster wins for orchestration decisions.
+> **Role policy, not model inventory.** Functional roles and hard limits are durable. Model/terminal assignment is session-specific and comes from the active control/session configuration; do not treat this file as a live model roster.
 
 ## Real Delegate Roster & Guardrails
 
-Roles are **functional and model-agnostic**. Capabilities and hard limits attach to the **role**, not the model — a model dispatched as `Auditor` is read-only for that task even if it holds write roles elsewhere. The assignment table (which model currently fills each role) is a swappable layer: more terminals/models can be added and roles reassigned without changing the role definitions.
+Roles are **functional and model-agnostic**. Capabilities and hard limits attach to the **role**, not the model — a model dispatched as `Auditor` is read-only for that task even if it holds write roles elsewhere.
 
-Always dispatch by **role + currently-assigned model** (e.g. "Test/QA → DeepSeek"), never by a generic "an LLM".
+Dispatch by **role + the session/control assignment actually in force**. Never infer the active model from a stale documentation table.
 
 ### Roles
 
 | Role | Purpose / may do | Hard limits (MUST NOT) |
 |---|---|---|
-| **Orchestrator** | Owns dispatch and review gating; delegates canonical control reconciliation. | Never accept delegate narrative over git/CI truth; do not let ordinary workers mutate canonical control state. |
+| **Orchestrator** | Owns dispatch, review gating and merge-readiness decisions; delegates canonical control reconciliation. | Never accept delegate narrative over git/CI truth; never override the active `.c2pro` merge policy; do not let ordinary workers mutate canonical control state. |
 | **Backend** | Edit `apps/api/src` + Alembic migrations; run backend; push branches; open PRs. | No self-merge; no backlog edits inside code PRs. |
 | **Frontend** | Edit `apps/web`; run web; push; open PRs. | No self-merge; no backlog edits. |
 | **Full-Stack** | Cross-cutting features spanning `apps/api` + `apps/web`; push; open PRs. | No self-merge; no backlog edits. |
@@ -21,27 +21,16 @@ Always dispatch by **role + currently-assigned model** (e.g. "Test/QA → DeepSe
 | **Verification Auditor** | **READ-ONLY.** Read code, run read-only checks, produce written findings/reports. | **NEVER edit, commit, or push ANY file; never merge; never edit the backlog.** Report only. |
 | **Reconciler** | Single writer for `.c2pro/control/` / work-queue reconciliation; may update durable docs in a dedicated documentation/control PR. | No unrelated product-code edits; never infer lifecycle promotion from worker completion alone. |
 
-### Assignment (current — swappable)
+### Assignment
 
-| Role | Assigned model / terminal |
-|---|---|
-| Orchestrator | Fable (Opus 4.8), in-session |
-| Backend | Codex · Sonnet |
-| Frontend | Sonnet |
-| Full-Stack | Codex |
-| DevOps / Infra | Codex |
-| Test / QA | DeepSeek |
-| Verification Auditor | Gemini |
-| Reconciler | Assigned in-session by Orchestrator |
-
-One model may hold multiple roles; roles may be reassigned across terminals/models. When a new terminal/model is added, register it here against a role.
+Runtime model/terminal assignment is **session-specific**. Resolve it from the active control/session configuration used by the orchestrator. Do not edit role policy merely because a model is reassigned.
 
 ### Shared guardrails (all roles)
 
-- **No self-merge** — the Orchestrator gates and merges every PR after verifying scope, diff-vs-criteria, and CI-green on all required jobs.
+- **No self-merge** — workers never merge their own change. Merge authorization/action follows the active `.c2pro` merge policy; when it is `human_merge`, the agent stops at merge-ready evidence.
 - **Canonical control writes go only via the Reconciler** under `.c2pro/`. Durable documentation follows `docs/DOCUMENTATION_GOVERNANCE.md`; legacy backlogs/blackboard remain read-only compatibility references.
 - **Verify CI green** (all required jobs) before declaring any task done — local pass is not sufficient.
-- **Name the real role + assigned model** on every dispatch; never a generic "an LLM".
+- **Name the functional role** and use the model/terminal assigned by the active session/control configuration.
 - **High-blast-radius files** (`apps/api/tests/_bootstrap.py`, `conftest.py`, `.github/workflows/ci.yml`, `apps/api/alembic/env.py`, `pyproject.toml`, `requirements.txt`) get extra scrutiny and an explicit behavior-preserving check.
 
 ## Available Agents

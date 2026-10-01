@@ -279,13 +279,13 @@ Shared state:
 - `.c2pro/work/` — assigned worker envelopes
 - `blackboard.json` / `C2PRO_MASTER_BACKLOG.md` — legacy compatibility/cold references only
 
-### Blackboard Integration & Task Lifecycle
+### Control Plane Integration & Task Lifecycle
 
 **Every worker role must:**
 
 1. **Before starting work:**
-   - Read `blackboard.json` and legacy backlog files as read-only cold references.
    - Read `.c2pro/control/` and the assigned `.c2pro/work/` envelope to get task specs.
+   - Read legacy backlog/blackboard material only when the assigned work explicitly requires historical/compatibility context.
 
 2. **During execution:**
    - Do NOT attempt to write to `blackboard.json`, `C2PRO_MASTER_BACKLOG.md`, or `backlogs/*.md`.
@@ -307,8 +307,8 @@ Shared state:
 
 ### Role Assignment & Execution Rule
 
-- When the user assigns a backlog group, agents must treat that group as the active work queue.
-- Within that queue, agents execute by priority, prerequisite readiness, and task order as mapped from `.c2pro/control/work-queue.yaml`.
+- When the user assigns a work group, resolve it against the active `.c2pro/control/work-queue.yaml` and bounded work envelopes.
+- Execute only eligible work by priority, prerequisite readiness and declared scope; legacy backlog grouping is contextual, not write authority.
 
 ## State Management & Documentation Updates (CRITICAL)
 
@@ -329,7 +329,7 @@ The master/planner remains the sole writer allowed to reconcile this returned ev
 - Classify signals as `REQUIRED_GATE`, `ADVISORY_CHECK`, or `OBSERVABILITY_SIGNAL`; unresolved signals remain visible and conservatively block authorization without being mislabeled as failures.
 - Evaluate only the sealed head SHA and current workflow run/attempt. Pending is not failed, and earlier attempts cannot satisfy the current attempt.
 - Archive the frozen policy hash, classified signals, run/attempt identities, final gate matrix, and decision reason in reconciliation evidence.
-- Advisory failures do not block when every policy-required and package-specific gate succeeds and repository mergeability permits the merge.
+- Advisory failures do not block when every policy-required and package-specific gate succeeds and repository mergeability permits authorization. The actual merge action still follows the active `.c2pro` merge policy (for example `human_merge`).
 
 ### Category-specific Backlogs & Support Docs
 - Category-specific backlog files in `backlogs/` (such as `backlogs/BCK_BACKEND.md`, `backlogs/FRT_FRONTEND.md`, etc.) are read-only cold references for workers during the transition.
