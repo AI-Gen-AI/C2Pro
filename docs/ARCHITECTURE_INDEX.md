@@ -5,15 +5,17 @@
 > **Status:** Current  
 > **Purpose:** Canonical navigation and authority map for C2Pro architecture
 
-## Read order
+## Authority entry points
 
-1. `validation/product/c2pro-master-product-control-v1.yaml` — machine lifecycle/control state.
-2. `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md` — current platform design.
-3. `docs/architecture/decisions/README.md` — accepted/proposed architectural decisions.
-4. `docs/product/qualification-evidence-contract-v1.md` — qualification evidence rules.
-5. `docs/product/production-qualification-operator-runbook.md` — production acceptance procedure.
-6. Current runbooks/testing contracts.
-7. Planning and historical evidence.
+Authority is scoped by concern:
+
+1. `validation/product/c2pro-master-product-control-v1.yaml` — **product programme/lifecycle**.
+2. `.c2pro/control/` + assigned `.c2pro/work/` — **development execution/control**.
+3. `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md` — **current platform design**.
+4. `docs/architecture/decisions/README.md` — **durable architecture decisions**.
+5. `docs/product/qualification-evidence-contract-v1.md` + operator runbook — **qualification procedure/evidence**.
+6. live workflows/ruleset — **merge/release executable enforcement**.
+7. planning/historical evidence — contextual, never a higher authority than the scoped sources above.
 
 ## Current platform baseline
 
