@@ -24,13 +24,13 @@
 
 This document remains useful, but it is no longer sufficient as the standalone platform specification.
 
-Current interpretation rules:
+Current interpretation rules for this historical snapshot:
 
 1. This March-era rule is superseded. Product state now belongs to Product Control and development execution to the `.c2pro/` single-writer control plane.
 2. `docs/architecture/decisions/006-post-reorganization-architecture.md` is the canonical repository-structure baseline.
 3. This document is primarily the frontend implementation baseline and should not override later backend, security, or release-governance documents.
 
-Current project state aligned to the repository:
+Historical project-state snapshot recorded in the 2026-03-29 addendum:
 
 - C2Pro is a monorepo with `apps/api` and `apps/web`, not a frontend-only program.
 - The backend is the critical production path: multi-tenant FastAPI, PostgreSQL RLS, LangGraph orchestration, golden regression, and release-gate evidence.
