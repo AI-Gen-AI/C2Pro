@@ -1,94 +1,92 @@
-# C2Pro - Contract Intelligence Platform
+# C2Pro — Contract & Project Intelligence Platform
 
-[![Tests](https://github.com/AI-Gen-AI/c2pro/actions/workflows/tests.yml/badge.svg)](https://github.com/AI-Gen-AI/c2pro/actions/workflows/tests.yml)
-[![E2E Security](https://github.com/AI-Gen-AI/c2pro/actions/workflows/e2e-security-tests.yml/badge.svg)](https://github.com/AI-Gen-AI/c2pro/actions/workflows/e2e-security-tests.yml)
+[![CI](https://github.com/AI-Gen-AI/C2Pro/actions/workflows/ci.yml/badge.svg)](https://github.com/AI-Gen-AI/C2Pro/actions/workflows/ci.yml)
+[![Secret Scan](https://github.com/AI-Gen-AI/C2Pro/actions/workflows/secret-scan.yml/badge.svg)](https://github.com/AI-Gen-AI/C2Pro/actions/workflows/secret-scan.yml)
+[![Install Drift Guard](https://github.com/AI-Gen-AI/C2Pro/actions/workflows/install-drift-guard.yml/badge.svg)](https://github.com/AI-Gen-AI/C2Pro/actions/workflows/install-drift-guard.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![License: Proprietary](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 
-> Sistema de auditoría tridimensional (Contrato + Cronograma + Presupuesto) con IA para detectar incoherencias antes de que generen sobrecostes.
+> Continuous, evidence-backed contract, project-controls and procurement intelligence for complex project environments.
 
-## 🎉 Estado Actual: Sprint S2 en Progreso (65%)
+## Current engineering posture
 
-**CTO Gates 1-4 Validados** ✅ | **Security Foundation Production Ready**
+C2Pro is beyond its original Sprint/Security-Foundation framing. The repository now contains:
 
-- ✅ 19 tablas con RLS desplegadas en staging
-- ✅ 42 tests de seguridad implementados
-- ✅ Frontend type safety 95%
-- 🟡 Sprint S2: Wireframes + Coherence Engine
+- project-centric intelligence and typed ProjectGraph architecture;
+- canonical Project Controls/WBS governance;
+- Health / Coherence / change / alert / HITL surfaces;
+- explicit Trusted-State Commit semantics (`persisted != trusted`);
+- machine-backed Product Control and qualification evidence contracts;
+- consolidated CI with security, coverage, integration, E2E and Docker gates;
+- a landed synthetic production-acceptance harness.
 
-### 🚀 Comenzar Ahora
+**Important:** harness implementation/merge is not the same as production qualification. Current lifecycle truth is owned by Product Control and current evidence, not this README.
 
-**¿Primera vez aquí?** Lee la [Guía de Inicio Rápido](./QUICK_START.md) para poner en marcha el backend en 5 minutos.
+## Product model
 
-**¿Desarrollas en Windows?** Revisa nuestra [Guía de Configuración para Windows](./docs/development/windows-setup.md) para evitar problemas comunes.
+The current architecture is project-first:
 
-**Desarrollador?** Ve a [apps/api/README.md](./apps/api/README.md) para documentación técnica completa.
+`Evidence → Project State → Canonical WBS / Project Controls → Health / Coherence / Change / Alerts / HITL → governed decisions`
 
----
+Core invariants:
 
-## 🎯 Problema que Resolvemos
+- evidence remains traceable to source;
+- unknown/insufficient evidence is not coerced to zero;
+- one project owns one canonical hierarchical WBS;
+- pending AI output does not become canonical merely because it is persisted;
+- consequential approval binds the exact reviewed candidate/version/hash.
 
-El 15-30% de sobrecostes en proyectos de construcción e ingeniería se deben a desconexión entre:
+## Architecture
 
-- Lo que dice el **contrato**
-- Lo que planifica el **cronograma**
-- Lo que presupuesta el **plan económico**
-
-C2Pro cruza automáticamente estos documentos y detecta incoherencias antes de que cuesten dinero.
-
-## 🏗️ Arquitectura
-
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                         C2Pro                               │
+├─────────────────────────────────────────────────────────────┤
+│ Web       Next.js / Clerk / typed API / Playwright         │
+│ API       FastAPI / Pydantic / SQLAlchemy / LangGraph      │
+│ Data      PostgreSQL/Supabase + RLS / Redis                │
+│ Control   Product Control YAML + guarded Markdown parity   │
+│ CI        CI Status + gitleaks + Install Drift Guard       │
+│ Runtime   Railway planes + Vercel frontend                 │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-┌─────────────────────────────────────────────────────────┐
-│                    C2PRO MVP                            │
-├─────────────────────────────────────────────────────────┤
-│  Frontend: Next.js 14 + Tailwind + shadcn/ui (Vercel)  │
-│  Backend: FastAPI + Pydantic v2 (Railway)              │
-│  Database: Supabase PostgreSQL (RLS enabled)           │
-│  Cache: Upstash Redis                                   │
-│  Storage: Cloudflare R2                                 │
-│  AI: Claude API (Sonnet)                                │
-└─────────────────────────────────────────────────────────┘
-```
+The current platform design is [TDD v4.2](./docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md).
 
-## 📁 Estructura del Proyecto
+## Repository structure
 
-```
-
+```text
 c2pro/
 ├── apps/
-│   ├── web/                  # Frontend Next.js
-│   └── api/                  # Backend FastAPI
-├── packages/                 # Shared packages (futuro)
-├── infrastructure/           # Infraestructura (DB, scripts operativos)
+│   ├── api/                  # FastAPI backend
+│   └── web/                  # Next.js frontend
+├── validation/
+│   └── product/              # machine Product Control / qualification guards
 ├── docs/
-│   ├── README.md             # Índice principal de documentación
-│   ├── architecture/         # ADRs, diagramas y diseño técnico
-│   ├── api/                  # OpenAPI y ejemplos de API
-│   ├── specifications/       # Especificaciones técnicas y funcionales
-│   ├── runbooks/             # Guías operativas y de entorno
-│   ├── planning/             # Roadmap y planificación activa
-│   ├── testing/              # Inventarios y estrategia de tests
-│   ├── audits/               # Auditorías vigentes como referencia
-│   ├── assets/               # Cronogramas y material de apoyo
-│   └── archive/              # Históricos, duplicados y reportes cerrados
-├── context/                  # Working memory no canónica
-├── sandbox/                  # Experimentos aislados y prototipos
-└── docker-compose.yml        # Desarrollo local
+│   ├── architecture/         # TDD, ADRs, diagrams
+│   ├── product/              # Product Control projection / qualification contracts
+│   ├── runbooks/             # operational procedures
+│   ├── specifications/       # durable specifications
+│   ├── testing/              # test strategy and registries
+│   ├── planning/             # planning intent (not runtime proof)
+│   └── audits/               # dated point-in-time evidence
+├── evidence/                 # release / qualification evidence
+├── context/                  # non-canonical working context
+└── .github/workflows/        # CI, security, release, qualification
 ```
 
-## 📚 Navegación de Documentación
+## Documentation and authority
 
-- Índice principal: [docs/README.md](./docs/README.md)
-- Política de working context: [context/README.md](./context/README.md)
-- Quick start operativo: [QUICK_START.md](./QUICK_START.md)
-- Arquitectura: [docs/architecture/](./docs/architecture/)
-- Runbooks: [docs/runbooks/](./docs/runbooks/)
-- Testing: [docs/testing/](./docs/testing/)
-- Planning activo: [docs/planning/](./docs/planning/)
-- Histórico archivado: [docs/archive/](./docs/archive/)
+Start with:
+
+- [Documentation index](./docs/README.md)
+- [Architecture index](./docs/ARCHITECTURE_INDEX.md)
+- [TDD v4.2](./docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md)
+- [ADR index](./docs/architecture/decisions/README.md)
+- [Master Product Control](./docs/product/00-c2pro-master-product-control-v1.md)
+- [Qualification evidence contract](./docs/product/qualification-evidence-contract-v1.md)
+- [Production qualification runbook](./docs/product/production-qualification-operator-runbook.md)
+
+Architecture/design documents do not override machine-backed Product Control lifecycle state.
 
 ## 🚀 Quick Start
 
