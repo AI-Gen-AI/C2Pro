@@ -266,6 +266,56 @@ describe("AuthSync", () => {
     expect(setAuth).not.toHaveBeenCalled();
   });
 
+  it("fails closed when Clerk does not expose setActive for the sole organization", async () => {
+    organizationId = null;
+    organizationTenantId = null;
+    organizationMemberships = [{ organization: { id: "org-solo" } }];
+    useOrganizationListMock.mockImplementation(() => ({
+      isLoaded: true,
+      setActive: undefined,
+      userMemberships: {
+        data: organizationMemberships,
+      },
+    }));
+
+    renderWithProviders(
+      <AuthSync>
+        <div>Child</div>
+      </AuthSync>,
+    );
+
+    await waitFor(() => {
+      expect(handleAuthErrorStatus).toHaveBeenCalledWith(401);
+    });
+    expect(getTokenMock).not.toHaveBeenCalled();
+    expect(setAuth).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the forced org-scoped token refresh returns null", async () => {
+    organizationId = null;
+    organizationTenantId = null;
+    organizationMemberships = [{ organization: { id: "org-solo" } }];
+    getTokenMock.mockResolvedValueOnce(null);
+
+    renderWithProviders(
+      <AuthSync>
+        <div>Child</div>
+      </AuthSync>,
+    );
+
+    await waitFor(() => {
+      expect(setActiveMock).toHaveBeenCalledWith({ organization: "org-solo" });
+    });
+    await waitFor(() => {
+      expect(handleAuthErrorStatus).toHaveBeenCalledWith(401);
+    });
+    expect(getTokenMock).toHaveBeenCalledWith({
+      organizationId: "org-solo",
+      skipCache: true,
+    });
+    expect(setAuth).not.toHaveBeenCalled();
+  });
+
   it("does not auto-activate when multiple organization memberships are available", async () => {
     organizationId = null;
     organizationTenantId = null;
