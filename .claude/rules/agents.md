@@ -1,99 +1,90 @@
-# Agent Orchestration
+# Agent Orchestration — Claude Adapter
 
-> **Two rosters live in this file.** The **Real Delegate Roster** below governs the multi-terminal orchestration (external models run in the user's terminals, coordinated by the Orchestrator). The **Available Agents** table further down lists in-session Claude Code sub-agent types. When they conflict, the Real Delegate Roster wins for orchestration decisions.
+> **Status:** ACTIVE adapter  
+> **Canonical development authority:** `.c2pro/control/` + assigned `.c2pro/work/` envelope  
+> **Last reconciled:** 2026-10-01
 
-## Real Delegate Roster & Guardrails
+This file contains Claude-facing guidance only. It must not define an independent roster, backlog, routing table or merge policy.
 
-Roles are **functional and model-agnostic**. Capabilities and hard limits attach to the **role**, not the model — a model dispatched as `Auditor` is read-only for that task even if it holds write roles elsewhere. The assignment table (which model currently fills each role) is a swappable layer: more terminals/models can be added and roles reassigned without changing the role definitions.
+## Canonical sources
 
-Always dispatch by **role + currently-assigned model** (e.g. "Test/QA → DeepSeek"), never by a generic "an LLM".
+Read the applicable machine control before dispatching development work:
 
-### Roles
+- `.c2pro/control/current.yaml`
+- `.c2pro/control/routing.yaml`
+- `.c2pro/control/review-policy.yaml`
+- `.c2pro/control/workspace-policy.yaml`
+- assigned `.c2pro/work/<work_id>.yaml`
 
-| Role | Purpose / may do | Hard limits (MUST NOT) |
-|---|---|---|
-| **Orchestrator** | Owns dispatch, the review-gate, merges, and delegates backlog reconciliation. Gates every PR (8-step). | Never self-merge by proxy; never accept a delegate report over git truth; never edit the backlog in-place (routes to Reconciler). |
-| **Backend** | Edit `apps/api/src` + Alembic migrations; run backend; push branches; open PRs. | No self-merge; no backlog edits inside code PRs. |
-| **Frontend** | Edit `apps/web`; run web; push; open PRs. | No self-merge; no backlog edits. |
-| **Full-Stack** | Cross-cutting features spanning `apps/api` + `apps/web`; push; open PRs. | No self-merge; no backlog edits. |
-| **DevOps / Infra** | CI (`.github/workflows`), Docker, deploy, dependency bumps (`requirements.txt`), migration lifecycle; push; open PRs. | No self-merge; never weaken security/CI gates or skip hooks without explicit Orchestrator sign-off. |
-| **Test / QA** | Tests only: `apps/api/tests` + test-infra (`_bootstrap.py`, `conftest.py`); run suites; RED-first; push; open PRs. | **No `src/` business-logic edits**; no self-merge; no backlog edits. |
-| **Verification Auditor** | **READ-ONLY.** Read code, run read-only checks, produce written findings/reports. | **NEVER edit, commit, or push ANY file; never merge; never edit the backlog.** Report only. |
-| **Reconciler** | Edit `C2PRO_MASTER_BACKLOG.md` + docs markdown via a committed `docs(backlog)` PR. Dispatched in-session by the Orchestrator. | No `src/` or `tests/` edits; no self-merge (Orchestrator gates). |
+Legacy `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` and `blackboard.json` are read-only/cold reconciliation sources and are not normal bootstrap context.
 
-### Assignment (current — swappable)
+## Role / worker separation
 
-| Role | Assigned model / terminal |
-|---|---|
-| Orchestrator | Fable (Opus 4.8), in-session |
-| Backend | Codex · Sonnet |
-| Frontend | Sonnet |
-| Full-Stack | Codex |
-| DevOps / Infra | Codex |
-| Test / QA | DeepSeek |
-| Verification Auditor | Gemini |
-| Reconciler | Haiku (dispatched in-session by Orchestrator) |
+The canonical routing policy currently distinguishes:
 
-One model may hold multiple roles; roles may be reassigned across terminals/models. When a new terminal/model is added, register it here against a role.
+- **role** — required function for the work;
+- **worker** — execution identity;
+- **surface/harness** — how the worker is invoked;
+- **model/provider** — replaceable route/runtime identity.
 
-### Shared guardrails (all roles)
+Do not hard-code a model as permanent owner of a role in this file.
 
-- **No self-merge** — the Orchestrator gates and merges every PR after verifying scope, diff-vs-criteria, and CI-green on all required jobs.
-- **Backlog & markdown edits go only via the Reconciler** in a committed PR — never in-place, never bundled into a code PR (the shared worktree resets and wipes uncommitted edits).
-- **Verify CI green** (all required jobs) before declaring any task done — local pass is not sufficient.
-- **Name the real role + assigned model** on every dispatch; never a generic "an LLM".
-- **High-blast-radius files** (`apps/api/tests/_bootstrap.py`, `conftest.py`, `.github/workflows/ci.yml`, `apps/api/alembic/env.py`, `pyproject.toml`, `requirements.txt`) get extra scrutiny and an explicit behavior-preserving check.
+Current routing policy, not this prose, determines eligible workers and preferences.
 
-## Available Agents
+## Review independence
 
-Located in `~/.claude/agents/` or `.claude/agents/`, depending on install level:
+Follow `.c2pro/control/review-policy.yaml`.
 
-| Agent                | Purpose                 | When to Use                   |
-| -------------------- | ----------------------- | ----------------------------- |
-| planner              | Implementation planning | Complex features, refactoring |
-| architect            | System design           | Architectural decisions       |
-| tdd-guide            | Test-driven development | New features, bug fixes       |
-| code-reviewer        | Code review             | After writing code            |
-| security-reviewer    | Security analysis       | Before commits                |
-| build-error-resolver | Fix build errors        | When build fails              |
-| e2e-runner           | E2E testing             | Critical user flows           |
-| refactor-cleaner     | Dead code cleanup       | Code maintenance              |
-| doc-updater          | Documentation           | Updating docs                 |
-| rust-reviewer        | Rust code review        | Rust projects                 |
+Key invariants:
 
-## Immediate Agent Usage
+- material self-approval is forbidden;
+- when independent principal review is required, implementation worker and reviewer differ;
+- subordinate results cannot satisfy a required principal-review gate;
+- architecture/security/high-blast-radius work requires the stronger review policy defined in machine control;
+- unresolved material disagreement escalates according to control policy.
 
-No user prompt needed:
+## Workspace safety
 
-1. Complex feature requests - Use **planner** agent
-2. Code just written/modified - Use **code-reviewer** agent
-3. Bug fix or new feature - Use **tdd-guide** agent
-4. Architectural decision - Use **architect** agent
+Follow `.c2pro/control/workspace-policy.yaml`.
 
-## Parallel Task Execution
+Workers may validate the assigned workspace but must not independently create, remove, reset, clean or repurpose controlled workspaces unless the canonical policy/work envelope grants that authority.
 
-ALWAYS use parallel Task execution for independent operations:
+On mismatch: fail closed with the configured workspace-guard behavior.
 
-```markdown
-# GOOD: Parallel execution
+## Execution lifecycle
 
-Launch 3 agents in parallel:
+1. Validate work ID, base SHA, branch/workspace and effective authority.
+2. Load only the context needed by the bounded work envelope.
+3. Execute the assigned role inside scope/out-of-scope boundaries.
+4. Run required tests/checks.
+5. Return structured `c2pro-implementation-result-v1` evidence.
+6. Obtain the independent review/challenger required by risk class.
+7. Let the Planner/Master reconciler update canonical development state only after required evidence/CI/merge.
 
-1. Agent 1: Security analysis of auth module
-2. Agent 2: Performance review of cache system
-3. Agent 3: Type checking of utilities
+## Parallel execution
 
-# BAD: Sequential when unnecessary
+Parallelize only work that:
 
-First agent 1, then agent 2, then agent 3
-```
+- has independent write surfaces/workspaces;
+- does not violate dependency ordering;
+- does not create conflicting ownership of the same canonical file/contract;
+- preserves independent review requirements.
 
-## Multi-Perspective Analysis
+Do not parallelize merely to maximize model count.
 
-For complex problems, use split role sub-agents:
+## Documentation
 
-- Factual reviewer
-- Senior engineer
-- Security expert
-- Consistency reviewer
-- Redundancy checker
+Follow `DOCUMENTATION_STRUCTURE.md`.
+
+- Durable architecture decision → ADR.
+- Platform-wide design change → current TDD.
+- Operator procedure → runbook.
+- Product lifecycle → Product Control YAML-first flow.
+- Development task/control state → `.c2pro`.
+- Temporary analysis → non-canonical working context/PR discussion.
+
+Never create a second task/status authority in Claude-specific files.
+
+## Historical agent files
+
+Other role/agent definitions may remain for compatibility/tool integration. They are subordinate to the canonical `.c2pro` routing/review/workspace policies whenever they disagree.
