@@ -15,4 +15,4 @@ Use:
 
 The previous contents of this file mixed a separate ADR numbering scheme with the canonical decision directory. That created ambiguity, especially around duplicated ADR numbers.
 
-Historical decision context remains preserved in Git history and the archived/audit materials. New architecture decisions must be filed in the canonical ADR directory rather than appended here.
+Historical decision context remains preserved in Git history and in [`docs/archive/architecture/decisions/DECISION_LOG_legacy_2026-03-22.md`](./archive/architecture/decisions/DECISION_LOG_legacy_2026-03-22.md). New architecture decisions must be filed in the canonical ADR directory rather than appended here.
