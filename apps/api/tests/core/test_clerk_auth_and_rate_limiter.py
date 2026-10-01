@@ -21,6 +21,7 @@ from src.core.middleware.clerk_auth import (
     get_clerk_jwks,
     get_clerk_user,
     get_current_tenant_id,
+    normalize_clerk_claims,
     require_admin,
     require_organization,
     require_tenant,
@@ -81,6 +82,41 @@ def test_clerk_user_properties_and_roles():
     assert user.tenant_id == tenant_id
     assert user.service_tier == "pro"
     assert user.is_demo is True
+
+
+def test_normalize_clerk_v2_compact_organization_claims():
+    """Clerk v2 compact o.* claims must become the canonical C2Pro org context."""
+    claims = {
+        "v": 2,
+        "sub": "user_v2",
+        "org_id": "org_stale_legacy",
+        "org_role": "org:member",
+        "o": {"id": "org_v2", "rol": "admin", "slg": "qualification"},
+    }
+
+    normalized = normalize_clerk_claims(claims)
+
+    assert normalized["org_id"] == "org_v2"
+    assert normalized["org_role"] == "admin"
+    assert normalized["org_slug"] == "qualification"
+    assert claims["org_id"] == "org_stale_legacy"
+
+
+def test_clerk_user_supports_clerk_v2_compact_organization_claim():
+    """Derived ClerkUser state must work with Clerk session-token v2."""
+    user = ClerkUser(
+        {
+            "v": 2,
+            "sub": "user_v2",
+            "o": {"id": "org_v2", "rol": "admin", "slg": "qualification"},
+        }
+    )
+
+    assert user.org_id == "org_v2"
+    assert user.org_role == "admin"
+    assert user.org_slug == "qualification"
+    assert user.has_org() is True
+    assert user.is_org_admin is True
 
 
 @pytest.mark.asyncio
