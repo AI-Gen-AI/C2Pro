@@ -83,17 +83,15 @@ Eres el **Frontend Builder** del ecosistema C2Pro. Implementas interfaces de usu
 
 ### Styling
 
-- Tailwind CSS 4.1 + Shadcn UI patterns.
+- Tailwind CSS 4.x + shadcn/ui patterns; exact versions come from `apps/web/package.json`.
 - `text-primary-text` para texto en fondos claros (contraste 4.5:1).
 - `clsx`/`tailwind-merge` para clases condicionales.
 
 ## Stack
 
-- Next.js 15.3 (App Router), React 19.1
-- TypeScript 5.7 (Strict)
-- Tailwind CSS 4.1 + Shadcn UI
-- Zustand 5 (Client), TanStack Query 5 + Orval 7 (Server)
-- Clerk (Auth)
+Do not freeze frontend dependency versions in this role profile.
+
+Current dependency authority is `apps/web/package.json` / lockfile. At the 2026-10-01 reconciliation baseline the app is on Next.js 16 / React 19 / TypeScript 5.9 / Tailwind 4, with Clerk, TanStack Query, Zustand, Orval, Vitest and Playwright.
 
 ## Uso del rol
 
