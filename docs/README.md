@@ -17,7 +17,8 @@ This directory is organized by **authority and lifecycle**, not simply by file a
 
 | Class | Location | Authority |
 |---|---|---|
-| Machine Product Control | `validation/product/` | Lifecycle/control source of truth |
+| Product Control machine state | `validation/product/` | Product programme/lifecycle authority |
+| Development control machine state | `.c2pro/control/` + `.c2pro/work/` | Development execution/write authority |
 | Architecture decisions | `architecture/decisions/` | Durable architecture authority |
 | Platform TDD | `architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md` | Current platform-wide design |
 | Product/spec contracts | `product/`, `specifications/` | Durable functional/qualification contracts |
@@ -56,7 +57,8 @@ When current architecture changes, create/update the current canonical document 
 
 ## Documentation rules
 
-- Prefer one canonical owner per concept.
+- Prefer one canonical owner per concern; do not pretend one file owns product, development, architecture and runtime truth simultaneously.
+- Treat `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` and `blackboard.json` as legacy/cold references under the single-writer control policy.
 - Do not create task-specific report sprawl.
 - Do not hand-edit generated Product Control canonical blocks.
 - Do not use planning docs as proof that a feature is landed.
