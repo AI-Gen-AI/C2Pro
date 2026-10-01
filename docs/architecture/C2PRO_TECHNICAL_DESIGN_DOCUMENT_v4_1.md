@@ -3,7 +3,9 @@
 > **Document Type:** Canonical Platform Technical Design
 > **Version:** 4.1
 > **Date:** 2026-03-29
-> **Status:** Current
+> **Status:** Superseded (2026-10-01)  
+> **Superseded by:** `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md`  
+> **Historical note:** retained as the 2026-03-29 platform baseline; do not use its backlog/source-of-truth or stack statements as current authority.
 > **Supersedes:** `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md` as the primary platform-wide technical design
 > **Audience:** Engineering, QA, DevOps, Security, Product, Architecture Review Board
 

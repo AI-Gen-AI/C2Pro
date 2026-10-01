@@ -32,8 +32,9 @@ Canonical set ratified 2026-06-07 by multi-model arbitration (DeepSeek / Codex /
 - [ADR-023 Agentic Coherence Architecture](./ADR-023-agentic-coherence-architecture.md) — **Proposed; not required for current product-control activation**
 - [ADR-024 Single-Document Activation](./ADR-024-single-document-activation.md) — **Accepted P0b product activation**
 - [ADR-025 Canonical Project Controls Backbone — One Hierarchical WBS per Project](./ADR-025-canonical-project-controls-wbs-backbone.md) — **Accepted P1 Product Foundation**
+- [ADR-026 Processing Authority, Checkpoint Lineage and HITL Resume Fencing](./ADR-026-processing-authority-checkpoint-lineage.md) — **Accepted execution/reliability boundary (#711/#758/#759)**
 
-**Critical path:** 013 → 014 → 015 (revisions) → 016 (change) → 018/024 (current-state product) → 025 (canonical Project Controls backbone). ADR-017/023 extend relational/agentic depth but are not allowed to block the user-visible product path.
+**Critical path:** 013 → 014 → 015 (revisions) → 016 (change) → 018/024 (current-state product) → 025 (canonical Project Controls backbone). ADR-026 is a cross-cutting execution/recovery boundary, not a product-phase successor to ADR-025. ADR-017/023 extend relational/agentic depth but are not allowed to block the user-visible product path.
 
 **Product-control red line:** a project has one canonical hierarchical WBS. Budget, Schedule, Procurement, Stakeholders/RACI, Alerts, Evidence and Changes attach to that tree (or explicitly project-level scope). Discipline branches are not separate WBSs.
 
@@ -46,3 +47,7 @@ Canonical set ratified 2026-06-07 by multi-model arbitration (DeepSeek / Codex /
 - [Architecture index](../README.md)
 - [Archived decisions](../../archive/architecture/decisions/)
 - [Documentation index](../../README.md)
+
+## In-flight decision not yet promoted
+
+#714 Trusted-State Commit / ProjectGraph projected Coherence remains Proposed/In-flight. Its spec/plan may be used as design input, but it is not an Accepted ADR until its own decision/merge/reconciliation lifecycle completes.

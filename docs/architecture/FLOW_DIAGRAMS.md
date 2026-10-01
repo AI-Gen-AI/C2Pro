@@ -1,8 +1,9 @@
 # C2Pro — Flow Diagrams (Post-Reorganization)
 
 **Date:** 2026-02-24
-**Status:** Current (reflects code after Phases 1–5)
-**Reference:** ADR-006, `DEMO_VS_PROD_CONTRACT.md`
+**Status:** Supporting historical snapshot — not canonical for current platform composition
+**Reference:** ADR-006, `DEMO_VS_PROD_CONTRACT.md`  
+**Current authority:** `C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md` + Accepted ADRs
 
 > These diagrams supersede all pre-reorganization diagrams found in
 > `docs/audits/STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` and

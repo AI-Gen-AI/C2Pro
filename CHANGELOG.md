@@ -4,6 +4,17 @@ All notable changes to C2Pro are tracked here. Format loosely follows [Keep a Ch
 
 ## [Unreleased]
 
+### Documentation / architecture reconciliation (#771)
+
+- Established `docs/DOCUMENTATION_GOVERNANCE.md` as the authority/lifecycle map for product control, development control, architecture, proposals and historical evidence.
+- Added canonical Platform TDD v4.2 and superseded v4.1 without rewriting historical content.
+- Added ADR-026 for the landed #711/#758/#759 processing-authority, checkpoint-lineage and HITL-resume fencing decision.
+- Rewrote the LangGraph checkpointing guide around package-managed PostgreSQL schema, owner-only bootstrap, restricted runtime readiness, authority-scoped thread identity and exact HITL checkpoint tuple.
+- Reconciled active indexes/README away from legacy backlog/Supabase-Auth/Sprint-S2 assumptions.
+- Marked older flow diagrams as supporting/historical rather than presenting them as current authority.
+- Recorded the unresolved repository license-metadata inconsistency instead of inventing a legal resolution.
+
+
 ### EPIC-ECOA-V2-HOTFIX-AND-CUTOVER — Coherence Score™ v2 hotfix and cutover
 
 Trademark-critical fix for ADR-009 §1 P1 + §14 violations in the v1 coherence engine. Bug repro: `POST /api/v1/coherence/evaluate/diagnostics` on a 2-document SCOPE-only project returned `overall_score=15` (a `mean × coverage_ratio` collapse forbidden by ADR-009 §1 P1) instead of `null` + `score_reason="insufficient_active_weight"`.
