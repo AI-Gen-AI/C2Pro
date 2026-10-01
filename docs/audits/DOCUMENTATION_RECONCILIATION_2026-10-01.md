@@ -121,6 +121,28 @@ A second pass treated the reconciliation PR as an external architecture/governan
 - **Aggregate status ambiguity:** associating ADR-027/028 directly with a Product-WBS row already marked DEPLOYED could be read as a deployment claim.
   - Removed that aggregate implication; per-ADR lifecycle rows remain authoritative.
 
+### Second adversarial round
+
+A later Codex pass on the expanded reconciliation found five additional material points:
+
+1. **P1 — trust guarantee was too broad.** Runtime policy can auto-approve a non-gated high-confidence LOW/MEDIUM-impact item and persist it as trusted without human action.
+   - Fixed by scoping ADR-026 and the technical baseline to **HITL-gated candidates**.
+   - Product Control now records the remaining ADR-020 policy-realization gap: current routing is confidence/impact based and does not yet encode all named consequential decision classes from the ADR.
+
+2. **P1 — residual legacy writes in `agents.md`.** A later completion section still told workers to update the legacy master backlog.
+   - Fixed. Suite/task completion now returns structured evidence to the single-writer control plane; legacy tracking mutation instructions were removed.
+
+3. **P2 — design status was not parity-guarded.**
+   - Fixed for ADR-018, ADR-024, ADR-025 and ADR-026..028. The canonical block now includes design + realization + deployment + production-validation state; negative drift tests cover design status.
+
+4. **P2 — architecture precedence mixed product status with design authority.**
+   - Fixed. Accepted ADRs govern architecture/design questions; Product Control governs lifecycle/readiness questions; `.c2pro` governs execution.
+
+5. **P2 — the v4.0 historical snapshot had been rewritten instead of merely superseded.**
+   - Fixed. The March document content is restored verbatim beneath a 2026-10-01 historical/supersession banner.
+
+The requested final automated Codex re-review could not run because the repository's Codex review quota was exhausted. This is recorded explicitly; it is **not** treated as an implicit PASS. Final acceptance therefore requires exact-head automated guards plus manual reconciliation of every raised thread.
+
 ## Review conclusion
 
 The reconciliation is acceptable only if the **exact final head** passes Product-Control parity/tests, CI, secret/install/dependency/security gates and the final adversarial review has no unresolved material finding. Earlier green heads are not sufficient evidence for later documentation commits.
