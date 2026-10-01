@@ -1,3 +1,10 @@
+> **DEPRECATED LEGACY DECISION LOG — 2026-10-01**  
+> This file preserves an early 2026 decision inventory and its historical numbering. It is **not** the canonical ADR registry and MUST NOT receive new architecture decisions.  
+> Current authority: [ADR index](./architecture/decisions/README.md) + [TDD v4.2](./architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md).  
+> Where an entry below conflicts with an accepted ADR/current TDD or current code, the newer scoped authority wins.
+
+---
+
 # C2Pro Architecture Decision Record (ADR) Log
 
 > **Version:** 1.0.0
