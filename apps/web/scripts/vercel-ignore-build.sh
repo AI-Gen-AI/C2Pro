@@ -13,6 +13,10 @@ current_sha="${VERCEL_GIT_COMMIT_SHA:-}"
 # same policy here as defense in depth in case the project setting/config is
 # evaluated differently during a Git-triggered deployment.
 case "$branch" in
+  "")
+    # Manual/CLI or otherwise non-Git deployment: there is no branch to
+    # classify, so preserve the operator-requested build.
+    ;;
   main|hotfix/*|release-candidate/*|preview/*)
     ;;
   *)
