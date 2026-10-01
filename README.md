@@ -33,7 +33,8 @@ Core invariants:
 | Project intelligence | ProjectState, temporal/change model, ProjectGraph |
 | Project Controls | canonical hierarchical WBS, linked domain planes |
 | Trust | HITL + Trusted-State Commit |
-| Product control | machine YAML + guarded Markdown projection |
+| Product lifecycle control | `validation/product/` machine YAML + guarded Markdown projection |
+| Development control | `.c2pro/control/` + bounded `.c2pro/work/` envelopes |
 | CI | consolidated `CI Status`, secret and install-drift gates |
 | Runtime | Railway service planes + Vercel frontend |
 
@@ -48,10 +49,11 @@ Start here:
 3. [TDD v4.2](./docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md)
 4. [ADR index](./docs/architecture/decisions/README.md)
 5. [Master Product Control](./docs/product/00-c2pro-master-product-control-v1.md)
-6. [Qualification evidence contract](./docs/product/qualification-evidence-contract-v1.md)
-7. [Production qualification operator runbook](./docs/product/production-qualification-operator-runbook.md)
+6. [Development-control status pointer](./docs/MASTER_DEVELOPMENT_STATUS.md)
+7. [Qualification evidence contract](./docs/product/qualification-evidence-contract-v1.md)
+8. [Production qualification operator runbook](./docs/product/production-qualification-operator-runbook.md)
 
-**Lifecycle state is not owned by this README.** Machine Product Control and current evidence take precedence.
+**Authority is scoped by concern.** Product lifecycle is machine-controlled under `validation/product/`; development execution is controlled under `.c2pro/`; architecture is governed by accepted ADRs/current TDD; runtime/merge truth comes from executable code, evidence and the live ruleset.
 
 ## Repository map
 
@@ -60,6 +62,7 @@ c2pro/
 ├── apps/
 │   ├── api/                  # FastAPI backend
 │   └── web/                  # Next.js frontend
+├── .c2pro/                   # canonical development-control hot state / work envelopes
 ├── validation/
 │   └── product/              # machine Product Control / qualification guards
 ├── docs/
@@ -161,8 +164,9 @@ For a durable architecture change:
 
 1. update or add an ADR;
 2. update the current TDD if platform-wide;
-3. update Product Control through its machine-backed workflow if lifecycle/control changes;
-4. update affected runbooks/specs/tests;
-5. preserve historical documents rather than rewriting history.
+3. update Product Control through its machine-backed workflow if **product lifecycle** changes;
+4. reconcile `.c2pro` through the authorized Planner/Master flow if **development-control state** changes;
+5. update affected runbooks/specs/tests;
+6. preserve historical documents rather than rewriting history.
 
 Documentation lifecycle rules: [`.claude/rules/DOCUMENTATION_STRUCTURE.md`](./.claude/rules/DOCUMENTATION_STRUCTURE.md).
