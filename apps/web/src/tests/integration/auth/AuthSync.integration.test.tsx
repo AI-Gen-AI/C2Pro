@@ -325,11 +325,16 @@ describe("AuthSync integration", () => {
 
     resolveA("token-a");
 
-    await waitFor(() => {
-      expect(useAuthStore.getState()).toMatchObject({
-        token: "token-b",
-        tenantId: "tenant-b",
-      });
+    // Drain the resolved A request all the way through the async effect
+    // continuation. Without the cancellation guard, A would overwrite B
+    // before this macrotask boundary and this assertion would fail.
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(useAuthStore.getState()).toMatchObject({
+      token: "token-b",
+      tenantId: "tenant-b",
     });
 
     expect(
