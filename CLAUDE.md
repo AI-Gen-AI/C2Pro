@@ -180,7 +180,7 @@ These rules in `.claude/rules/` override general defaults. The repository uses t
 - **Active pipeline** is `apps/api/src/analysis/adapters/graph/` — any file named `orchestration/` elsewhere is dead or legacy.
 - `context/` and `sandbox/` are explicitly non-canonical — do not cite as sources of truth.
 - The root `package.json` is misnamed (`"name": "package.json"`); pnpm workspace is still the real entry point.
-- **Push to `main`** requires `ALLOW_PUSH_MAIN=1 git push` (Husky pre-push guard).
+- **Do not push directly to `main`.** The active repository ruleset requires PR-based integration; `ALLOW_PUSH_MAIN` is only a local Husky escape mechanism and does not grant repository authority.
 - **`docs/api/openapi.yaml` is generated** — produced by `make openapi` (`apps/api/scripts/generate_openapi.py`). Do not hand-edit; regenerate after route changes.
 
 ## graphify
