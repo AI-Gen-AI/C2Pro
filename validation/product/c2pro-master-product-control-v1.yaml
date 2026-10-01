@@ -22,7 +22,7 @@ parity:
     - product_semantics.canonical_dimensions
     - PWBS-PROJECT-CONTROLS.priority
     - "product_wbs[*].id + realization_status + work_status (canonical 8-plane set)"
-    - "adr(ADR-018,ADR-024,ADR-025,ADR-026,ADR-027,ADR-028).{realization_status,deployment_status,prod_validation_status}"
+    - "adr(ADR-018,ADR-024,ADR-025,ADR-026,ADR-027,ADR-028).{design_status,realization_status,deployment_status,prod_validation_status}"
     - p0b_vertical_contract.done_definition (sha256-16 digest)
     - p0b_vertical_contract.invariant_ids
     - "qualification_control.lanes[*].{qualification_status,bundle_ref,bundle_sha256,lifecycle_targets}"
