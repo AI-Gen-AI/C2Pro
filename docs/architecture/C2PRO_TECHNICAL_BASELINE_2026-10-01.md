@@ -191,18 +191,34 @@ Allowed branches additionally skip Vercel builds when no web/root build input ch
 
 Operational detail: `docs/runbooks/ci-cd-setup.md`.
 
-## 11. Architecture authority order
+## 11. Authority boundaries
 
-When documents disagree, use this order:
+Do not use one mixed precedence list for different questions.
 
-1. machine product control: `validation/product/c2pro-master-product-control-v1.yaml`;
-2. accepted ADRs: `docs/architecture/decisions/`;
-3. this current-state baseline;
-4. machine development control under `.c2pro/` and `validation/development/`;
-5. current runbooks/specifications;
-6. historical TDDs, plans, audit reports and archived material.
+### Architecture / design questions
 
-Code/CI proves realization; it does not silently rewrite an ADR. If implementation intentionally changes an accepted architecture decision, amend/supersede the ADR explicitly.
+When documents disagree about **what the architecture is intended to be**:
+
+1. accepted ADRs in `docs/architecture/decisions/`;
+2. this dated current-state technical baseline;
+3. focused current architecture specifications/runbooks;
+4. historical TDDs, plans and audit reports.
+
+Product Control records lifecycle/evidence status; it does **not** override an accepted architecture decision.
+
+### Product lifecycle / readiness questions
+
+When asking whether a capability is designed, realized, deployed or production validated:
+
+1. machine Product Control: `validation/product/c2pro-master-product-control-v1.yaml`;
+2. guarded human projection: `docs/product/00-c2pro-master-product-control-v1.md`;
+3. exact-head CI/deployment/qualification evidence as referenced by the control plane.
+
+### Development execution questions
+
+Current work authority lives under `.c2pro/control/`, `.c2pro/work/` and the machine development controls under `validation/development/`.
+
+Code/CI proves realization evidence; it does not silently rewrite an ADR. If implementation intentionally changes an accepted architecture decision, amend/supersede that ADR explicitly.
 
 ## 12. Current non-claims
 
