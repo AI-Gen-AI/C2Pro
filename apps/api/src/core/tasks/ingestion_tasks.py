@@ -19,9 +19,12 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import text
 
+from src.analysis.adapters.graph.review_lineage import (
+    claim_review_lineage_for_current_attempt,
+)
 from src.analysis.adapters.graph.workflow import close_checkpointer_resources
 from src.analysis.factories.orchestrator_factory import AnalysisOrchestratorFactory
-from src.core import processing_authority
+from src.core import checkpoint_lineage, processing_authority
 from src.core.database import close_db, get_raw_session, init_db
 from src.core.dlq.dlq_service import DLQService
 from src.core.processing_authority import (
@@ -714,15 +717,27 @@ async def _run_analysis_graph_best_effort(
     durably-checkpointed pause (see ``_run_document_analysis``).
     """
     graph_orchestrator = orchestrator or AnalysisOrchestratorFactory.create()
-    # Stable, deterministic thread_id: one document has exactly one analysis
-    # thread. Must NOT be re-randomized per call/retry -- a fresh thread_id on
-    # every retry orphans the checkpoint from the prior run, breaks
-    # LangGraph's own "resume this thread" semantics, and re-triggers a brand
-    # new HITL interrupt (and, previously, a brand new duplicate ReviewItem)
-    # every time the worker retries. Injected into initial_state too, since
-    # human_interrupt_node reads thread_id from state, not from the run()
-    # kwarg alone.
-    thread_id = f"document:{document_id}:analysis"
+    # #758: the checkpoint thread is scoped to the processing ATTEMPT that
+    # owns this run, not shared across every attempt on the document.
+    #
+    # It remains deterministic -- derived from the authority, never
+    # randomized -- so a redelivery that re-adopts the SAME grant recomputes
+    # the same thread and resumes its own checkpoint, which is what keeps a
+    # retry from re-triggering a fresh HITL interrupt. What changes is that a
+    # DIFFERENT attempt (a takeover after a lease expiry, a recovery
+    # hand-off, a reprocess) gets a different thread, so a stale worker's
+    # LangGraph appends -- which no database fence can prevent, since the
+    # saver writes outside our transactions -- land on a lineage nothing
+    # current names. Duplicate reviews are prevented by route_for_review's
+    # find_active_review guard, which is keyed on the document, not the
+    # thread.
+    #
+    # Injected into initial_state too, since human_interrupt_node reads
+    # thread_id from state, not from the run() kwarg alone.
+    thread_id = checkpoint_lineage.analysis_thread_id(
+        document_id=document_id,
+        authority=processing_authority.current_authority(),
+    )
     initial_state: dict[str, Any] = {
         "document_text": parsed_text,
         "project_id": str(document.project_id),
@@ -742,6 +757,27 @@ async def _run_analysis_graph_best_effort(
         "analysis_id": None,
         "force_full_pipeline": True,
     }
+    # #758: take the existing review's lineage over the moment this attempt
+    # becomes authoritative -- BEFORE the graph starts.
+    #
+    # Claiming it at the HITL gate is too late: from the instant this worker
+    # holds the new fence until the graph reaches N13, the active ReviewItem
+    # still names the superseded attempt. A human approving in that window
+    # resumes the dead lineage, and a direct HITL resume runs outside the
+    # processing authority, so the #711 fence cannot stop it -- for a
+    # reprocess it would resume an already superseded revision.
+    #
+    # Deliberately OUTSIDE the try below, which degrades a graph failure to
+    # "no enrichment": an unclaimable lineage must fail closed and stay
+    # retryable, never proceed to present a review that resumes someone
+    # else's checkpoint. The review is briefly unresumable until this
+    # attempt's interrupt checkpoint exists, which is the intended state.
+    await claim_review_lineage_for_current_attempt(
+        thread_id=thread_id,
+        tenant_id=str(tenant_id),
+        document_id=str(document_id),
+    )
+
     logger.info(
         "document_analysis_task_started",
         extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},

@@ -20,6 +20,8 @@ from langgraph.types import Command
 if TYPE_CHECKING:
     from src.modules.hitl.adapters.checkpoint_service import CheckpointService
 
+from src.core import resume_lineage
+from src.core.checkpoint_lineage import is_legacy_shared_analysis_thread
 from src.core.observability.monitoring import (
     record_hitl_checkpoint_load_error,
     record_hitl_resume_attempt,
@@ -136,6 +138,36 @@ class ResumeWorkflowUseCase:
     _ERR_MISSING_THREAD_ID = "Review item {review_id} missing thread_id for workflow resumption"
     _ERR_ALREADY_PROCESSED = "Review item {review_id} already processed (status: {status})"
     _ERR_CHECKPOINT_NOT_FOUND = "Checkpoint not found for thread_id {thread_id}"
+    _ERR_SHARED_LINEAGE_NO_CHECKPOINT = (
+        "Review item {review_id} records the shared pre-#758 analysis lineage "
+        "{thread_id} with no checkpoint id. That thread was shared across "
+        "processing attempts, so resuming its latest checkpoint could replay a "
+        "superseded attempt; it needs an exact checkpoint id (operator repair)."
+    )
+    # #758: the lineage this request was authorized against stopped being the
+    # review's current one. Refusing is the point -- the alternative is
+    # resuming a checkpoint a newer revision or attempt has already
+    # invalidated -- so the message says what happened and what happens next,
+    # rather than reading as a transient "try again".
+    _ERR_LINEAGE_SUPERSEDED = (
+        "Review item {review_id} can no longer be resumed through the checkpoint "
+        "lineage {thread_id} ({reason}): a newer processing attempt or document "
+        "generation owns this document now, so this decision was NOT recorded. "
+        "The current attempt presents its own review when it reaches the "
+        "human-review gate."
+    )
+
+    #: Acquisition refusals that mean "the lineage moved", not "somebody else
+    #: is working on it". Kept as data so `execute` cannot drift from the
+    #: reasons `resume_lineage` actually produces.
+    _LINEAGE_REFUSALS = frozenset(
+        {
+            resume_lineage.REVIEW_LINEAGE_REBOUND,
+            resume_lineage.REVIEW_LINEAGE_NOT_CURRENT,
+            resume_lineage.OPERATION_LINEAGE_SUPERSEDED,
+            resume_lineage.REVIEW_ROW_MISSING,
+        }
+    )
 
     def __init__(
         self,
@@ -635,6 +667,30 @@ class ResumeWorkflowUseCase:
                 record_hitl_resume_error("missing_thread")
                 raise ValueError(self._ERR_MISSING_THREAD_ID.format(review_id=review_id))
             if not checkpoint_id:
+                # #758: the thread-only fallback resolves "latest checkpoint on
+                # this thread", which is only safe when the thread belonged to
+                # ONE processing attempt.
+                #
+                # `document:{uuid}:analysis` is the pre-#758 DETERMINISTIC
+                # SHARED thread: every attempt on that document wrote to it, so
+                # latest-by-thread can resolve a superseded attempt's
+                # checkpoint. Refuse rather than resume superseded evidence;
+                # an operator can repair the row by pinning an exact
+                # checkpoint id, which stays permitted below.
+                #
+                # Deliberately narrow. An authority-scoped thread is
+                # attempt-pure, and a legacy UUID thread is the shape
+                # production's pending reviews actually use (they carry no
+                # checkpoint id and resume only through this fallback) -- both
+                # keep working untouched.
+                if is_legacy_shared_analysis_thread(thread_id):
+                    record_hitl_checkpoint_load_error("shared_lineage_without_checkpoint")
+                    record_hitl_resume_error("shared_lineage_without_checkpoint")
+                    raise ValueError(
+                        self._ERR_SHARED_LINEAGE_NO_CHECKPOINT.format(
+                            review_id=review_id, thread_id=thread_id
+                        )
+                    )
                 logger.warning(
                     "resuming_without_explicit_checkpoint_id",
                     review_id=str(review_id),
@@ -740,6 +796,17 @@ class ResumeWorkflowUseCase:
                 if phase is Phase.OPERATOR_REQUIRED:
                     record_hitl_resume_error("operator_required")
                     raise ValueError(self._ERR_OPERATOR_REQUIRED.format(review_id=review_id))
+                if refusal in self._LINEAGE_REFUSALS:
+                    # FAIL CLOSED. Nothing was resumed, no decision was
+                    # recorded, and no graph ran: the lineage this request
+                    # restored a checkpoint from is not the one the review
+                    # names any more.
+                    record_hitl_resume_error("lineage_superseded")
+                    raise ValueError(
+                        self._ERR_LINEAGE_SUPERSEDED.format(
+                            review_id=review_id, thread_id=thread_id, reason=refusal
+                        )
+                    )
                 record_hitl_resume_error("already_claimed")
                 raise ValueError(self._ERR_ALREADY_CLAIMED.format(review_id=review_id))
 

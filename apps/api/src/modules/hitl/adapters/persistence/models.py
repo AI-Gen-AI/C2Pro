@@ -71,6 +71,15 @@ class ReviewItemORM(Base):
     review_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     review_decision: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # C2PRO #758: WHICH processing attempt's lineage `thread_id` belongs to.
+    # Stamped from the #711 authority by the attempt that claims the lineage,
+    # and compared against the document's live grant to decide whether this
+    # review may still be resumed (src/core/resume_lineage.py). NULL means the
+    # row was bound before this identity existed -- legacy, and deliberately
+    # exempt from that comparison rather than refused by it.
+    lineage_generation: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    lineage_fencing_token: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utc_now_naive, nullable=False,
     )
@@ -85,6 +94,10 @@ class ReviewItemORM(Base):
         Index("ix_review_items_checkpoint_id", "checkpoint_id"),
         Index("ix_review_items_thread_id", "thread_id"),
         Index("ix_review_items_project_status", "project_id", "current_status"),
+        # C2PRO #758: find_active_review and the generation-transition stamp
+        # both address (document_id, current_status); document_id carried only
+        # a foreign key, so both were sequential scans.
+        Index("ix_review_items_document_status", "document_id", "current_status"),
         {"info": {"rls_policy": "tenant_isolation"}},
     )
 

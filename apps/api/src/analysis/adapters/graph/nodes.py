@@ -29,6 +29,9 @@ from src.analysis.adapters.graph.nodes_extended import (
     _ok_node_result,
     _persist_node_error,
 )
+from src.analysis.adapters.graph.review_lineage import (
+    claim_review_lineage_for_current_attempt,
+)
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.application.classify_document_use_case import (
     ClassifyDocumentCommand,
@@ -524,6 +527,20 @@ def route_after_human_interrupt(state: ProjectState) -> str:
     return "enrichment_dispatch"
 
 
+async def _claim_checkpoint_lineage_for_current_attempt(state: ProjectState) -> None:
+    """N13 defense-in-depth: re-assert the lineage claim from graph state.
+
+    #758. The authoritative claim happens BEFORE the graph starts (see
+    ``_run_analysis_graph_best_effort``); this one is idempotent and covers a
+    review that only became active during the run.
+    """
+    await claim_review_lineage_for_current_attempt(
+        thread_id=state.get("thread_id"),
+        tenant_id=state.get("tenant_id"),
+        document_id=state.get("document_id"),
+    )
+
+
 async def human_interrupt_node(state: ProjectState) -> ProjectState:
     """N13 — Route through HITL service and raise LangGraph Interrupt.
 
@@ -617,6 +634,22 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                 error_type=type(exc).__name__,
                 exc_info=True,
             )
+
+    # #758: take the review's checkpoint LINEAGE over before the interrupt
+    # becomes actionable.
+    #
+    # route_for_review deduplicates on the document, so a takeover adopts the
+    # review its predecessor created -- still carrying the SUPERSEDED thread
+    # and checkpoint. Binding the real checkpoint id afterwards is
+    # best-effort, so if it fails the only active review stays resumable
+    # through the dead attempt's lineage, and a later HITL approval runs
+    # outside processing authority where #711 can no longer repair it.
+    #
+    # Claiming the thread HERE, before interrupt() raises, is what keeps
+    # checkpoint-id capture safely best-effort: the thread alone is enough,
+    # because an authority-scoped thread holds exactly one attempt's
+    # checkpoints, so a thread-only restore is necessarily this attempt's.
+    await _claim_checkpoint_lineage_for_current_attempt(state)
 
     # C2PRO P0b true-resume hotfix: interrupt() does NOT return on the first
     # execution -- it raises GraphInterrupt and LangGraph persists the
