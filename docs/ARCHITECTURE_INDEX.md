@@ -3,7 +3,7 @@
 > **Version:** 2.0.0  
 > **Last Updated:** 2026-10-01  
 > **Status:** Canonical navigation  
-> **Baseline:** `main@a025982e101b14407dc9012b97841d3b77c35b34`
+> **Baseline:** `main@33650a28a930d82a7bd65d98b50981145b3fd1d1`
 
 ## Authority order
 
