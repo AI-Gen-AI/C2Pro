@@ -224,7 +224,7 @@ describe("AuthSync", () => {
     expect(setAuth).not.toHaveBeenCalled();
   });
 
-  it("auto-activates the only organization membership when no org is active", async () => {
+  it("auto-activates the only organization membership and refreshes an org-scoped token", async () => {
     organizationId = null;
     organizationTenantId = null;
     organizationMemberships = [{ organization: { id: "org-solo" } }];
@@ -238,6 +238,31 @@ describe("AuthSync", () => {
     await waitFor(() => {
       expect(setActiveMock).toHaveBeenCalledWith({ organization: "org-solo" });
     });
+    await waitFor(() => {
+      expect(getTokenMock).toHaveBeenCalledWith({
+        organizationId: "org-solo",
+        skipCache: true,
+      });
+    });
+    expect(setAuth).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the only organization cannot be activated", async () => {
+    organizationId = null;
+    organizationTenantId = null;
+    organizationMemberships = [{ organization: { id: "org-solo" } }];
+    setActiveMock.mockRejectedValueOnce(new Error("activation failed"));
+
+    renderWithProviders(
+      <AuthSync>
+        <div>Child</div>
+      </AuthSync>,
+    );
+
+    await waitFor(() => {
+      expect(handleAuthErrorStatus).toHaveBeenCalledWith(401);
+    });
+    expect(getTokenMock).not.toHaveBeenCalled();
     expect(setAuth).not.toHaveBeenCalled();
   });
 
