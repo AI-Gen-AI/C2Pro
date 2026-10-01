@@ -64,12 +64,13 @@ def test_new_architecture_adrs_are_parity_checked() -> None:
     canon = c.extract_canonical(c.load_yaml())
     md = c.parse_md_block(_MD_TEXT)
     expected = {
-        "ADR-026": ("WIRED", "NONE", "NONE"),
-        "ADR-027": ("WIRED", "NONE", "NONE"),
-        "ADR-028": ("SCAFFOLDED", "NONE", "NONE"),
+        "ADR-026": ("Accepted", "WIRED", "NONE", "NONE"),
+        "ADR-027": ("Accepted", "WIRED", "NONE", "NONE"),
+        "ADR-028": ("Accepted", "SCAFFOLDED", "NONE", "NONE"),
     }
-    for adr, (realization, deployment, prod_validation) in expected.items():
+    for adr, (design, realization, deployment, prod_validation) in expected.items():
         values = {
+            f"adr.{adr}.design": design,
             f"adr.{adr}.realization": realization,
             f"adr.{adr}.deployment": deployment,
             f"adr.{adr}.prod_validation": prod_validation,
@@ -77,6 +78,15 @@ def test_new_architecture_adrs_are_parity_checked() -> None:
         for key, value in values.items():
             assert canon[key] == value
             assert md[key] == value
+
+
+def test_adr_design_status_md_drift_is_detected() -> None:
+    mutated = _MD_TEXT.replace(
+        "adr.ADR-026.design=Accepted",
+        "adr.ADR-026.design=Proposed",
+    )
+    problems = _compare_with_mutated_md(mutated)
+    assert any("VALUE DRIFT" in p and "adr.ADR-026.design" in p for p in problems), problems
 
 
 def test_new_architecture_adr_md_drift_is_detected() -> None:
