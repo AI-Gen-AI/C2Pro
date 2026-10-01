@@ -267,11 +267,11 @@ Model-to-role assignment is configured in `core/session_config.json`:
 Available models are registered in `core/models.yaml` (claude_code, codex_cli, gemini_cli, opencode_cli).
 Change the assignment at any time — no role files need modification.
 
-Shared state:
+Legacy compatibility state:
 
-- `blackboard.json` — ephemeral session state (active tasks, retries, errors, role assignments)
-- `C2PRO_MASTER_BACKLOG.md` — permanent project task register (cold read source of truth)
-- The Planner reads the Backlog for context, writes the session plan to the Blackboard.
+- `blackboard.json` and `C2PRO_MASTER_BACKLOG.md` belong to the legacy supervisor path only.
+- Modern `C2PRO-*` work uses `.c2pro/control/`, `.c2pro/work/` and structured worker results.
+- The legacy Planner may use backlog/blackboard only for genuine legacy `TASK-*` execution; this is not the modern control path.
 
 ### Blackboard Integration & Task Lifecycle
 
@@ -301,8 +301,8 @@ Shared state:
 
 ### Role Assignment & Execution Rule
 
-- When the user assigns a backlog group, agents must treat that group as the active work queue.
-- Within that queue, agents execute by priority, prerequisite readiness, and task order as mapped from `.c2pro/control/work-queue.yaml`.
+- When the user references a historical backlog group, use it only as discovery/context and resolve executable work through the current `.c2pro` queue/work envelope.
+- Modern execution order is governed by priority, prerequisite readiness and task order in `.c2pro/control/work-queue.yaml`.
 
 ## State Management & Documentation Updates (CRITICAL)
 
@@ -340,15 +340,17 @@ The master/planner remains the sole writer allowed to reconcile this returned ev
 
 **Enforcement:**
 
-- Pre-execution hooks verify `backlog_id` exists
-- Post-execution hooks verify backlog was updated
-- Schema validation prevents invalid blackboard writes
+- Modern control-plane validation is performed by `scripts/development/validate_c2pro_control.py`, `.c2pro` schemas, workspace guards and the result parser/reconciler.
+- The legacy supervisor may still enforce legacy `backlog_id`/blackboard rules for genuine legacy `TASK-*` work only.
+- Do not interpret legacy post-execution backlog checks as authorization to mutate cold files from modern work.
 
 ---
 
-Last Updated: 2026-04-03
+Last Updated: 2026-10-01
 
 Changelog:
+
+- 2026-10-01: Reconciled agent governance with the single-writer `.c2pro` control plane; legacy backlog/blackboard mutation is restricted to the legacy supervisor path only.
 
 - 2026-04-05: **File Organization Rule Added** — Added mandatory rule to use existing category backlog files (`backlogs/FRT_FRONTEND.md`, `backlogs/BCK_BACKEND.md`, etc.) instead of creating new documentation files. All agent-specific work (analysis, specifications, decisions, debt) must be added to section "2. Specifications" of the relevant category backlog. This prevents file proliferation and keeps agent knowledge consolidated in one place per category.
 
