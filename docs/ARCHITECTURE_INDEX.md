@@ -24,7 +24,7 @@ Authority is scoped by concern:
 | [TDD v4.2](./architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md) | Current platform-wide technical design |
 | [ADR index](./architecture/decisions/README.md) | Durable architecture decisions |
 | [Flow diagrams](./architecture/FLOW_DIAGRAMS.md) | System flow reference |
-| [LangGraph checkpointing](./architecture/LANGGRAPH_CHECKPOINTING.md) | Checkpoint/state persistence reference |
+| [LangGraph checkpointing](./architecture/LANGGRAPH_CHECKPOINTING.md) | Dated implementation note; ADR-017/026 + code are current authority |
 | [Product Control](./product/00-c2pro-master-product-control-v1.md) | Human projection of machine product-control state |
 | [Qualification evidence contract](./product/qualification-evidence-contract-v1.md) | Evidence binding/promotion rules |
 | [Production qualification runbook](./product/production-qualification-operator-runbook.md) | #715 operator procedure |
