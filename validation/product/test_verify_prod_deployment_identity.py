@@ -64,6 +64,8 @@ def test_provider_observation_proves_all_four_runtime_identities():
     assert result["backend"]["worker"]["commit_sha"] == BACKEND
     assert result["backend"]["scheduler"]["commit_sha"] == BACKEND
     assert result["frontend"]["commit_sha"] == FRONTEND
+    assert "expected_commit_sha" not in result["backend"]
+    assert "expected_commit_sha" not in result["frontend"]
 
 
 @pytest.mark.parametrize("service", ["api", "worker", "scheduler"])
