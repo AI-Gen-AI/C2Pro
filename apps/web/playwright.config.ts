@@ -47,6 +47,7 @@ export default defineConfig({
         // directory may itself contain "pj01-".
         /(^|[\\/])pj01-[^\\/]*\.spec\.ts$/,
         /(^|[\\/])p0c-what-changed\.spec\.ts$/,
+        /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
       ],
       use: {
         ...devices["Desktop Chrome"],
@@ -116,6 +117,50 @@ export default defineConfig({
         type: "e2e",
         priority: "p0",
         description: "Single-document Health journey with inline auth gate",
+      },
+    },
+    {
+      // Read-only/manual-only qualification identity preflight. It performs a
+      // real Clerk sign-in and ordinary projects read, then signs out. No
+      // project/document mutation is allowed in this project.
+      name: "prod-identity-preflight",
+      testMatch: [
+        /(^|[\\/])prod-acceptance[\\/]706-production-identity-preflight\.spec\.ts$/,
+      ],
+      use: {
+        ...devices["Desktop Chrome"],
+        trace: "off",
+        screenshot: "off",
+        video: "off",
+      },
+      metadata: {
+        suite: "ISSUE-690-PROD-IDENTITY-PREFLIGHT",
+        type: "production-qualification-readonly",
+        priority: "p0",
+        manualOnly: true,
+        description:
+          "Real Clerk production auth + synthetic tenant/org binding without product mutation",
+      },
+    },
+    {
+      // Manual-only production qualification. No testing-token setup, no
+      // storageState and no managed local web server. The caller must set
+      // PLAYWRIGHT_SKIP_WEBSERVER=1 and point PLAYWRIGHT_BASE_URL at c2pro.io.
+      name: "prod-acceptance",
+      testMatch: [/(^|[\\/])prod-acceptance[\\/]706-production-synthetic\.spec\.ts$/],
+      use: {
+        ...devices["Desktop Chrome"],
+        trace: "off",
+        screenshot: "off",
+        video: "off",
+      },
+      metadata: {
+        suite: "ISSUE-706-PROD-ACCEPTANCE",
+        type: "production-qualification",
+        priority: "p0",
+        manualOnly: true,
+        description:
+          "Real Clerk production auth -> synthetic project -> upload -> Health/evidence/HITL -> relogin",
       },
     },
     {
