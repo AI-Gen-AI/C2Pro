@@ -37,14 +37,14 @@ FastAPI 0.141 (Railway API)
   ├── Celery Worker
   ├── Celery Scheduler
   ├── LangGraph + PostgreSQL checkpoints
-  ├── Cloudflare R2
+  ├── Configured object storage (R2-compatible provider path)
   └── governed AI/provider adapters
 ```
 
 Core architecture rules:
 
 - project state is the intelligence boundary;
-- one project has one canonical hierarchical WBS;
+- one project → one canonical hierarchical WBS is the architectural invariant; complete one-root enforcement remains PARTIAL in Product Control;
 - missing evidence is Unknown/null, never fabricated zero/green;
 - Health, Coherence and Alerts are distinct signals;
 - HITL approval is an exact trusted-state commit boundary;
