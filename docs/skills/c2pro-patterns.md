@@ -126,13 +126,15 @@ src/tests/
 6. Mirror in `supabase/tests/NN_table_rls.sql` — SQL-level RLS verification test
 7. `make db-migrate` to apply
 
-### Task Lifecycle
-1. Add `| [ ] | P1 | TASK-XXX-NNN | ... |` row to appropriate `backlogs/BCK_*.md`
-2. Add entry to `C2PRO_MASTER_BACKLOG.md` (MANDATORY — single source of truth)
-3. Implement with branch named `<type>/<kebab-description>`
-4. Commit with `— TASK-XXX-NNN` in message
-5. Mark complete: `chore(backlog): mark TASK-XXX-NNN complete — <sha-of-impl-commit>`
-6. Update `C2PRO_MASTER_BACKLOG.md` `[ ] → [x]`
+### Task Lifecycle (current control plane)
+1. Read the assigned `.c2pro/work/<work_id>.yaml` and relevant `.c2pro/control/` state.
+2. Validate branch/worktree binding before changing files.
+3. Implement/test within the assigned scope.
+4. Return `c2pro-implementation-result-v1` evidence in PR/output.
+5. Independent review + required CI qualify the exact head.
+6. Master/Planner reconciliation — not the worker — updates canonical control state.
+
+Legacy `C2PRO_MASTER_BACKLOG.md`, domain backlogs and `blackboard.json` are cold/read-only references for ordinary workers.
 
 ### Ruff Lint Fixes
 - Auto-fix: `chore(lint): auto-fix N violations (W, UP, I rules) — TASK-BCK-040`
@@ -217,12 +219,14 @@ Every new feature must:
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `tests.yml` | PR + push | Full pytest + vitest suite |
-| `openapi-drift.yml` | PR | Detect uncommitted schema drift |
-| `wireframe-coverage.yml` | PR | Enforce WF-01..06 test coverage |
-| `real-document-operability.yml` | PR + main | Real-doc corpus smoke tests |
-| `golden-corpus-evals.yml` | PR | Golden regression guard |
-| `qa-swarm.yml` | Manual | Multi-agent QA swarm |
-| `frontend-ci.yml` | PR | ESLint + type-check + vitest |
-| `deploy-staging.yml` | main push | Auto-deploy to staging |
-| `deploy-production.yml` | Manual | Production deploy gate |
+| `ci.yml` | PR / configured pushes | Primary backend/frontend/acceptance quality pipeline |
+| `secret-scan.yml` | PR / push | Gitleaks secret scan |
+| `install-drift-guard.yml` | PR | Python install-policy drift |
+| `dependency-review.yml` | PR | Dependency-change review |
+| `dependency-audit.yml` | Scheduled/manual | Dependency vulnerability audit |
+| `codeql.yml` | PR / push | CodeQL analysis |
+| `c2pro-product-control-guard.yml` | PR | Product-control/document contract gates |
+| `openapi-drift.yml` | PR | Generated API drift |
+| `real-document-operability.yml` | configured | Real-document operability |
+| `golden-corpus-evals.yml` | configured | Golden regression guard |
+| `qa-swarm.yml` | Manual | Multi-agent QA support |

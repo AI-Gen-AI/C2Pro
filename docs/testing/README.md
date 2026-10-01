@@ -1,25 +1,25 @@
-# Testing Documentation
+# C2Pro Testing Documentation
 
-This section groups the main test planning, inventory, registry, and reporting documents.
+**Status:** Current index  
+**Updated:** 2026-10-01
 
 ## Governance
 
-- `C2PRO_MASTER_BACKLOG.md` owns active task status across the project.
-- Testing documents in this folder provide test scope, suite detail, and evidence, but they do not replace the canonical project backlog.
+Testing documents define suite intent, methodology and durable test contracts. They do **not** own project execution state.
+
+- active execution/control → `.c2pro/control/` + assigned work envelope;
+- product qualification/lifecycle → Product Control;
+- exact pass/fail evidence → CI/checks/artifacts for the exact SHA;
+- legacy backlog references → cold/historical context only.
 
 ## Contents
 
-- [TDD backlog](./C2PRO_TDD_BACKLOG_v1.0.md)
+- [TDD backlog](./C2PRO_TDD_BACKLOG_v1.0.md) — detailed historical/technical test planning; do not treat its task state as current execution authority.
 - [TDD test registry](./C2PRO_TDD_TEST_REGISTRY.md)
 - [Test suites index](./C2PRO_TEST_SUITES_INDEX_v1.1.md)
 - [Auth sync test plan](./FS1_AUTH_SYNC_TEST_PLAN.md)
-- [Phase 4 TDD roadmap](./PHASE4_TDD_IMPLEMENTATION_ROADMAP.md)
-- [Test inventory](./TEST_INVENTORY_2026-03-02.md)
-- [Test suite report](./TEST_SUITE_REPORT.md)
+- other domain-specific testing references in this directory.
 
-## Related Sections
+## Rule
 
-- [Documentation index](../README.md)
-- [Runbooks](../runbooks/README.md)
-- [Archive reports](../archive/reports/)
-- [Top-level tests folder](../../tests/README.md)
+A test's existence is not evidence that it passed on the current SHA. Cite/run the exact CI/test result required by the decision or release gate.

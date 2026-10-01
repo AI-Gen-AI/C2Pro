@@ -11,9 +11,9 @@
 
 This document defines release thresholds and evidence requirements. It does not own task execution state.
 
-Any open release work derived from this document must be tracked in `C2PRO_MASTER_BACKLOG.md`.
+Any open release work derived from this document must be represented in the authoritative `.c2pro/` control/work queue. Legacy backlog IDs below are retained as historical cross-references.
 
-Current related backlog items:
+Legacy related task IDs:
 
 - `REL-RC1-01`
 - `REL-RC1-02`
@@ -194,7 +194,7 @@ RELEASE APPROVER CHECKLIST:
 □ evidence/releases/<release-id>/signoff.md completed
 ```
 
-Execution status for the manual release tasks above is canonical only in `C2PRO_MASTER_BACKLOG.md`.
+Execution status for release work is canonical only after `.c2pro/` reconciliation; actual release qualification additionally requires the exact release evidence/checks defined here.
 
 ---
 

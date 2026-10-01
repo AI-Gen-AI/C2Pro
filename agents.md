@@ -51,7 +51,7 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 - Instead, workers **MUST** provide structured evidence via a fenced YAML block matching the `c2pro-implementation-result-v1` schema in their PR descriptions or standard output.
 - Task completion is non-canonical until verified in CI, merged, and reconciled on main by the Master Reconciler.
 
-### Backlog Interpretation Rules
+### Legacy Backlog Interpretation Rules (read-only compatibility)
 
 - The backlog section and subsection hierarchy is operational. Examples: `2.2 Frontend`, `2.3 AI & Intelligence`, `2.5 Security`, `2.6.1 Prerequisites`, `2.6.3 Executable Verification`.
 - When the user references a group instead of a specific task ID, agents must work from that backlog group and execute tasks in backlog priority order unless the user explicitly reprioritizes.
@@ -69,7 +69,7 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 - Agents must always check the `Dependency` column and any nearby prerequisite notes before starting implementation.
 - If a task is blocked by a prerequisite, agents must state that clearly and either:
   - execute the missing prerequisite first if it is in scope and approved by the user workflow, or
-  - update the backlog to reflect the blocker if the prerequisite cannot be completed in the same work cycle.
+  - report the blocker in the structured worker result if it cannot be completed in the same work cycle; the Master Reconciler updates canonical control state.
 - Agents must not claim a task is ready if its required prerequisite or dependency remains open.
 - In Testing, agents must respect the normalized split:
   - `Prerequisites` are environment/bootstrap steps
@@ -179,8 +179,9 @@ apps/api/
 
 ## Required Context
 
-- `C2PRO_MASTER_BACKLOG.md`
-- `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md`
+- `.c2pro/control/current.yaml` and relevant `.c2pro/control/` policy
+- assigned `.c2pro/work/<work_id>.yaml`
+- `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md`
 - `docs/architecture/decisions/006-post-reorganization-architecture.md`
 - `docs/testing/C2PRO_TEST_SUITES_INDEX_v1.1.md`
 - `docs/architecture/diagrams/c2pro_master_flow_diagram_v2.2.1.md`
@@ -220,17 +221,13 @@ When the user provides a Suite ID:
 
 ## Tracking Updates
 
-After completing a suite:
+After completing a suite/task:
 
-- Update `C2PRO_MASTER_BACKLOG.md`.
-- Update `docs/testing/C2PRO_TDD_BACKLOG_v1.0.md` when suite tracking changes.
-- Update `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md` when platform-level architecture changes.
-
-After completing any backlog task:
-
-- Mark the task state in `C2PRO_MASTER_BACKLOG.md`.
-- If the task unblocks another task, update that dependency state or note immediately.
-- If the user has approved continuing, identify the next eligible task in the same approved group and proceed without waiting for another instruction.
+- Return exact test/CI evidence through the structured `c2pro-implementation-result-v1` result.
+- Update durable testing documentation only when the suite contract/index itself changed.
+- Update TDD/ADR documentation only when platform architecture/decision changed.
+- Do **not** mark legacy backlogs complete; the Master Reconciler updates canonical `.c2pro/` control state.
+- Report newly unblocked work/dependencies in the structured result.
 
 Use this completion note format when applicable:
 
@@ -278,9 +275,9 @@ Change the assignment at any time — no role files need modification.
 
 Shared state:
 
-- `blackboard.json` — ephemeral session state (active tasks, retries, errors, role assignments)
-- `C2PRO_MASTER_BACKLOG.md` — permanent project task register (cold read source of truth)
-- The Planner reads the Backlog for context, writes the session plan to the Blackboard.
+- `.c2pro/control/` — canonical current planning/routing state (Planner/Master single writer)
+- `.c2pro/work/` — assigned worker envelopes
+- `blackboard.json` / `C2PRO_MASTER_BACKLOG.md` — legacy compatibility/cold references only
 
 ### Blackboard Integration & Task Lifecycle
 
@@ -344,14 +341,14 @@ The master/planner remains the sole writer allowed to reconcile this returned ev
 - Audit trail for all work completed
 - Prevents duplicate work and task drift
 - Enables automated progress tracking and reporting
-- Avoids creating multiple unorganized files
-- Each agent category has a single source of truth for their domain
+- Avoids competing worker writes to control state
+- Keeps legacy domain backlogs available as historical/context references while `.c2pro` remains authoritative
 
 **Enforcement:**
 
-- Pre-execution hooks verify `backlog_id` exists
-- Post-execution hooks verify backlog was updated
-- Schema validation prevents invalid blackboard writes
+- Pre-execution guards verify control/workspace/branch binding
+- Structured worker results are schema-validated
+- Master reconciliation is the only path that promotes worker evidence into canonical control state
 
 ---
 

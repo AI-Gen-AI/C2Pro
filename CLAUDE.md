@@ -1,197 +1,145 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code and compatible coding agents working in C2Pro.
 
 ## Project
 
-C2Pro — Contract Intelligence Platform. Tridimensional audit (Contract + Schedule + Budget) that uses AI to detect incoherencies before they cause cost overruns. Monorepo managed with pnpm workspaces (`pnpm-workspace.yaml` → `apps/*`).
+C2Pro is a multi-tenant Contract & Project Intelligence platform. Core product concepts include evidence/provenance, Coherence/Health, Project Controls and Human-in-the-Loop review.
 
-**Core differentiators**: Coherence Score™ (cross-document incoherence metric) and HITL (Human-in-the-Loop approval gates). These are first-class domain concepts — treat them as such in all design decisions.
+## Canonical context — read this first
+
+1. `docs/DOCUMENTATION_GOVERNANCE.md`
+2. `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md`
+3. `docs/architecture/decisions/README.md`
+4. `.c2pro/control/` + your assigned `.c2pro/work/<work_id>.yaml`
+5. exact code/tests/CI for the SHA you are changing
+
+Product lifecycle status comes from `validation/product/c2pro-master-product-control-v1.yaml`, not from a backlog or README.
+
+Legacy `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` and `blackboard.json` are cold/read-only references for ordinary workers.
 
 ## Stack
 
-- **Backend** (`apps/api`): FastAPI + Pydantic v2, SQLAlchemy + Alembic, Python 3.11+.
-- **Frontend** (`apps/web`): Next.js 16 + React 19, Tailwind v4, shadcn/ui, Vitest + Playwright (MSW for mocks).
-- **Infra**: Supabase PostgreSQL (RLS), Upstash Redis, Cloudflare R2, Claude API (Sonnet).
-- **Auth**: Clerk (JWT). The `apps/api/src/core/middleware/clerk_auth.py` middleware validates Clerk JWTs. `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, and `CLERK_JWKS_URL` are required env vars.
-- **Tooling**: Makefile is the primary entrypoint; `pnpm` at the root; `pip`/`pytest` inside `apps/api`.
+- **Backend:** FastAPI 0.141.x, Pydantic v2, SQLAlchemy/Alembic, Python 3.11.
+- **Frontend:** Next.js 16.3.6, React 19.2.7, TypeScript 5.9, Tailwind 4.
+- **Auth:** Clerk JWT → internal tenant/user mapping → PostgreSQL RLS.
+- **Persistence:** PostgreSQL/Supabase + pgvector; Alembic application migration authority.
+- **Async:** Celery + Redis.
+- **Storage:** Cloudflare R2/S3-compatible.
+- **AI:** Anthropic-oriented application layer behind adapters; LangChain/LangSmith.
+- **Orchestration:** LangGraph 1.2.10 + `langgraph-checkpoint-postgres==3.1.2`.
+- **Tooling:** Node 22, pnpm 10, pytest, Vitest, Playwright.
 
-## Common Commands
+## Common commands
 
-All orchestrated through the root `Makefile` — run `make help` for the full list.
-
-### Setup
 ```bash
-make setup                  # Supabase cloud setup (installs api deps, creates .env)
-make setup-local            # Docker-based setup (api + web + infra)
-make backend-init           # Install deps + run migrations (runs apps/api/setup.py)
+make help
+make setup-local
+make dev
+make test
+make test-api
+make test-web
+make lint
+make typecheck
+make build
+make openapi
+pnpm verify:openspec
 ```
 
-### Development
+Database:
 ```bash
-make backend-dev            # Backend only, Supabase cloud (runs apps/api/dev.py)
-make dev-api                # Backend uvicorn reload (requires venv activated)
-make dev-web                # Frontend only (cd apps/web && pnpm dev)
-make dev                    # Full local dev (Docker infra + instructions for api/web)
-```
-
-### Tests
-```bash
-make test                   # Full test suite
-make test-api               # Backend: pytest in apps/api
-make test-api-cov           # Backend with coverage
-make test-web               # Frontend: vitest in apps/web
-
-# Single test (backend)
-cd apps/api && pytest tests/path/to/test_file.py::TestClass::test_name -xvs
-
-# Single test (frontend)
-cd apps/web && pnpm vitest run path/to/file.test.tsx
-
-# Skip real AI calls in backend tests
-C2PRO_AI_MOCK=1 pytest apps/api/...
-```
-
-### Lint / Format / Types / Build
-```bash
-make lint                   # lint-api (ruff) + lint-web (eslint)
-make format                 # black/ruff for api, prettier for web
-make typecheck              # mypy + tsc
-make build                  # build-api + build-web
-```
-
-### Database
-```bash
-make db-migrate                              # alembic upgrade head
-make db-migrate-create MSG="description"     # new Alembic revision
+make db-migrate
+make db-migrate-create MSG="description"
 make db-migrate-status
-make db-reset                                # DESTRUCTIVE
-make db-shell                                # psql into local DB
-```
-
-### OpenAPI / OpenSpec
-```bash
-make openapi                # Regenerate OpenAPI YAML from runtime (apps/api/scripts/generate_openapi.py)
-pnpm verify:openspec        # Verify OpenSpec change workflow (scripts/verify_openspec_change.py)
 ```
 
 ## Architecture
 
-### Backend (`apps/api/src`)
+### Backend
+`apps/api/src/` is domain-oriented/hexagonal.
 
-Domain-oriented FastAPI app. Key directories:
+- `analysis/adapters/graph/` — active LangGraph pipeline.
+- `core/ai/` — provider/model routing/cost/AI infrastructure.
+- `core/middleware/` and `core/auth/` — identity, tenant and request boundaries.
+- `modules/` — hexagonal feature modules.
+- top-level bounded contexts include documents, projects, alerts, coherence, procurement, WBS and stakeholders.
 
-#### Infrastructure / Cross-cutting (`core/`)
-- `core/auth/` — Auth routes and Clerk JWT validation bootstrap
-- `core/middleware/` — `TenantIsolationMiddleware`, `RateLimitMiddleware`, `APIContractMiddleware`, `RequestLoggingMiddleware`, `clerk_auth.py` — all lazy-imported via PEP 562
-- `core/database.py`, `core/cache.py` — SQLAlchemy async engine + Redis init/teardown
-- `core/ai/` — **Claude API integration layer**: `llm_client.py` (API wrapper with retry/fallback), `model_router.py` + `model_routing.yaml` (route to Haiku/Sonnet/Opus by cost), `prompt_cache.py`, `usage_analytics.py` (per-tenant token/cost tracking), `tools/` (`@register_tool` definitions), `service.py`
+### Frontend
+`apps/web/` uses the Next.js App Router:
+- `app/(app)/` — authenticated product;
+- `app/(auth)/` — Clerk auth;
+- `components/`, `hooks/`, `lib/` — shared/domain UI;
+- Vitest and Playwright test surfaces.
 
-#### `ai/` (thin shim)
-Re-exports from `analysis.adapters.graph` and `core.ai`. Contains a simplified extraction-critique-save graph for tests (`ai/graph/workflow.py`). Not the primary code path — look in `core/ai/` for the real implementations.
+## Processing and checkpoint invariants
 
-#### Active Analysis Pipeline (`analysis/adapters/graph/`)
-**This is the real orchestration path.** A LangGraph `StateGraph` on `ProjectState`:
+Do not reintroduce a document-wide shared checkpoint lineage for owned analysis.
 
-| Node | ID | Purpose |
-|---|---|---|
-| `document_ingestion` | N1 | Load raw document |
-| `pii_anonymizer` | N2 | Strip PII before sending to Claude |
-| `router` | N3 | Route by `doc_type` (contract/schedule/budget) |
-| `risk_extractor` | N4 | Extract contract risks |
-| `wbs_extractor` | N5 | Extract WBS structure |
-| `stakeholder_extractor` | N6 | Identify stakeholders |
-| `raci_generator` | N7 | Build RACI matrix |
-| `coherence_scorer` | N8 | **Coherence Score™** computation (mid-migration to v2 per ADR-009, evidence-aware; v1 remains primary, v2 runs shadow) |
-| `budget_parser` | N9 | Parse budget line items |
-| `knowledge_graph` | N10 | Build cross-document knowledge graph |
-| `decision_intelligence` | N11 | Decision Intelligence analysis |
-| `critique` | N12 | Quality gate — retry loop or proceed |
-| `human_interrupt` | N13/N14 | **HITL gate** — pause for human approval |
-| `citation_validator` | N15 | Validate AI citations against source |
-| `final_assembler` | N16 | Assemble final result |
-| `save_to_db` | N17 | Persist to PostgreSQL |
+Normal owned thread:
+`document:{document_id}:g{generation}:f{fencing_token}:analysis`
 
-Set `C2PRO_AI_MOCK=1` to bypass Claude calls (routes directly to N6 in the critique branch).
+Canonical durable writes re-verify exact processing authority in the same transaction. HITL resume binds the exact persisted checkpoint tuple. See ADR-026.
 
-#### Feature Modules (`modules/`)
-Hexagonal-architecture modules (domain / application / ports / adapters):
-- `modules/hitl/` — Human-in-the-Loop: approval workflows, notification settings router
-- `modules/decision_intelligence/` — Decision Intelligence engine (`runtime.py` builds services at startup)
-- `modules/coherence/` — Coherence scoring internals
-- `modules/ingestion/`, `modules/extraction/`, `modules/retrieval/` — Document pipeline stages
-- `modules/scoring/`, `modules/governance/`, `modules/wbs_bom/` — Scoring, audit, WBS/BOM linking
-- `modules/ai/`, `modules/analysis/`, `modules/graph/` — Module-scoped AI and graph adapters
+## Single-Writer Control Plane
 
-#### Feature Domains (top-level)
-`documents/`, `projects/`, `alerts/`, `wbs/`, `coherence/`, `anonymizer/`, `mcp/`, `bulk_operations/`, `gamification/`, `golden/`, `procurement/`, `stakeholders/` — each bounded context with its own `adapters/http/router.py`.
+Ordinary implementation, QA and review workers:
 
-`shared_kernel/` — shared domain types (`dtos.py`, `enums.py`).
+- read `.c2pro/control/` and assigned work envelope;
+- do not mutate `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` or `blackboard.json`;
+- return a fenced YAML result matching `c2pro-implementation-result-v1`;
+- report new findings/residual risks in that result;
+- do not self-promote completion/lifecycle status.
 
-### Frontend (`apps/web`)
+Only the Planner/Master Reconciler writes canonical planning/control state.
 
-Next.js App Router:
-- `app/(app)/` — authenticated product surface (projects, documents, coherence, WBS, budget, RACI, alerts, HITL).
-- `app/(auth)/` — auth flows (Clerk-managed).
-- `app/api/` — route handlers.
-- `components/` — shared UI (`ui/` = shadcn primitives, `layout/`, `features/`, domain components).
-- MSW workers in `apps/web/public/` (configured via root `package.json` `msw.workerDirectory`).
+## Documentation
 
-### Monorepo Layout
+Follow `.claude/rules/DOCUMENTATION_STRUCTURE.md`.
 
+- architecture decision → ADR;
+- platform composition → current TDD;
+- durable operational procedure → runbook;
+- test methodology/index → `docs/testing/`;
+- proposed design/plan → approved spec/plan location with Proposed/In-flight status;
+- historical evidence → archive/audit.
+
+Do not create standalone completion-summary Markdown when PR evidence/structured result is sufficient.
+
+## Security baseline
+
+- new tenant data surfaces require correct RLS/isolation;
+- PII handling precedes external model exposure where required;
+- do not bypass MCP/auth wrappers;
+- do not log credentials/DSNs/tokens;
+- platform-operator identity is distinct from tenant identity;
+- ownership/fencing failures are fail-closed.
+
+## Database gotchas
+
+- Alembic is application migration authority.
+- Supabase SQL/config surfaces exist for platform/local/security support; follow migration authority runbook.
+- checkpoint schema DDL is owner-bootstrap work via `apps/api/scripts/checkpoint_bootstrap.py`; runtime does not call `AsyncPostgresSaver.setup()`.
+
+## CI
+
+Primary PR pipeline is `.github/workflows/ci.yml`; dedicated guards include secret scan, install drift, dependency review/audit, CodeQL and Product-Control Guard. The branch ruleset is authoritative for required merge contexts.
+
+Never bypass a gate to make CI green. Fix the defect or document a genuinely non-blocking external/advisory status.
+
+## Source layout
+
+```text
+apps/               executables (api, web)
+.c2pro/             canonical development control/work envelopes
+docs/               architecture, ADRs, runbooks, testing, audits
+infrastructure/     operational/database support
+supabase/           Supabase CLI/platform surface
+schemas/            shared schemas
+roles/, skills/     agent role/skill definitions
+context/, sandbox/  non-canonical working/experimental material
+backlogs/           legacy/cold domain references
 ```
-apps/          — executables (api, web)
-infrastructure/ — DB scripts, operational scripts
-supabase/      — Supabase CLI workspace (local config + CLI migrations)
-core/          — root-level Python: supervisor.py, guardrails.py, shared agent config
-schemas/       — shared JSON schemas
-roles/, skills/, agent_skills/, evals/ — AI agent definitions, eval harnesses, skill_registry.yaml
-openspec/      — OpenSpec change workflow
-docs/          — canonical: architecture ADRs, runbooks, planning, testing, audits
-context/, sandbox/ — NON-CANONICAL: working memory / experiments
-backlogs/      — BCK_*.md task specs (see project rules)
-blackboard/    — SESSION_*.md active session notes
-```
-
-## Project-Specific Rules (CRITICAL)
-
-These rules in `.claude/rules/` override general defaults. Backlog/task source of truth: `C2PRO_MASTER_BACKLOG.md` (root) and `backlogs/BCK_*.md` (per-domain, e.g. `backlogs/BCK_BACKEND.md`).
-
-1. **`CRITICAL_BACKLOG_REQUIREMENT.md`** — Every task (created, updated, or completed) MUST be reflected in `C2PRO_MASTER_BACKLOG.md`. Update `[ ] → [x]` with verification details and append to the Change Log.
-
-2. **`DOCUMENTATION_STRUCTURE.md`** — **Never create task-specific standalone markdown files** (no `TASK-XXX_SUMMARY.md`, no `FEATURE_*_PLAN.md`). All task documentation goes in exactly two places:
-   - `backlogs/BCK_*.md` — specs, status, implementation details (inline).
-   - `blackboard/SESSION_*.md` — active session scratch notes; consolidate back into backlogs when done.
-   The root has many legacy `TASK-*`, `UNIFY-*`, `SPRINT_*` files — these predate the rule. Do not add new ones.
-
-3. **Commit attribution** disabled globally — do not add Co-Authored-By trailers.
-
-4. **`.claude/rules/agents.md` → Real Delegate Roster** — multi-terminal orchestration is governed by functional, model-agnostic roles (Orchestrator, Backend, Frontend, Full-Stack, DevOps/Infra, Test/QA, Verification Auditor, Reconciler). Hard limits attach to the role, not the model. Always dispatch by role + assigned model; the Verification Auditor role is strictly read-only; backlog edits go only through the Reconciler role.
-
-## Security Baseline
-
-- **Multi-tenant RLS** is enforced at the PostgreSQL layer. Any new table needs RLS policies.
-- **PII anonymization** (`apps/api/src/anonymizer/` and N2 `pii_anonymizer_node`) must run before data reaches Claude.
-- **MCP endpoints** are security-hardened (Gate 3). Don't bypass auth wrappers in `apps/api/src/mcp/`.
-- Required env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET_KEY`, `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `ANTHROPIC_API_KEY`, `REDIS_URL`, `R2_*`.
-
-## Gotchas
-
-- **Two `core/` directories**: root `core/` (supervisor, guardrails, agent config) vs `apps/api/src/core/` (backend infrastructure). They are unrelated.
-- **Two AI directories**: `apps/api/src/core/ai/` has all real AI code (LLM client, model router, prompt cache, usage tracking). `apps/api/src/ai/` is a thin re-export shim for tests. `core/ai/orchestration/` was deleted (TASK-BCK-027) — do not recreate it.
-- **Two migration systems**: Alembic (`apps/api/alembic/`, authoritative) and Supabase CLI (`supabase/`). Keep in sync when touching schema.
-- **Active pipeline** is `apps/api/src/analysis/adapters/graph/` — any file named `orchestration/` elsewhere is dead or legacy.
-- `context/` and `sandbox/` are explicitly non-canonical — do not cite as sources of truth.
-- The root `package.json` is misnamed (`"name": "package.json"`); pnpm workspace is still the real entry point.
-- **Push to `main`** requires `ALLOW_PUSH_MAIN=1 git push` (Husky pre-push guard).
-- **`docs/api/openapi.yaml` is generated** — produced by `make openapi` (`apps/api/scripts/generate_openapi.py`). Do not hand-edit; regenerate after route changes.
 
 ## graphify
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
-
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+When `graphify-out/graph.json` exists, prefer `graphify query/path/explain` for scoped codebase navigation. Update the graph after material code changes where the workflow requires it.
