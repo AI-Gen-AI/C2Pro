@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 C2Pro — Contract Intelligence Platform. Tridimensional audit (Contract + Schedule + Budget) that uses AI to detect incoherencies before they cause cost overruns. Monorepo managed with pnpm workspaces (`pnpm-workspace.yaml` → `apps/*`).
 
-**Core differentiators**: Coherence Score™ (cross-document incoherence metric) and HITL (Human-in-the-Loop approval gates). These are first-class domain concepts — treat them as such in all design decisions.
+**Product architecture**: evidence-backed Project Health, relational Coherence, temporal/change intelligence, one canonical hierarchical WBS, Alerts/HITL, and governed procurement/project-control workflows. Health, Coherence and Alerts are distinct first-class domain signals.
 
 ## Stack
 
 - **Backend** (`apps/api`): FastAPI + Pydantic v2, SQLAlchemy + Alembic, Python 3.11+.
 - **Frontend** (`apps/web`): Next.js 16 + React 19, Tailwind v4, shadcn/ui, Vitest + Playwright (MSW for mocks).
-- **Infra**: Supabase PostgreSQL (RLS), Upstash Redis, Cloudflare R2, Claude API (Sonnet).
+- **Infra**: Supabase PostgreSQL (RLS), Redis, Cloudflare R2-compatible object storage, Railway runtime services, Vercel frontend. AI calls use governed provider adapters.
 - **Auth**: Clerk (JWT). The `apps/api/src/core/middleware/clerk_auth.py` middleware validates Clerk JWTs. `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, and `CLERK_JWKS_URL` are required env vars.
 - **Tooling**: Makefile is the primary entrypoint; `pnpm` at the root; `pip`/`pytest` inside `apps/api`.
 
@@ -147,22 +147,19 @@ core/          — root-level Python: supervisor.py, guardrails.py, shared agent
 schemas/       — shared JSON schemas
 roles/, skills/, agent_skills/, evals/ — AI agent definitions, eval harnesses, skill_registry.yaml
 openspec/      — OpenSpec change workflow
-docs/          — canonical: architecture ADRs, runbooks, planning, testing, audits
+docs/          — human documentation; authority depends on lifecycle/type (see docs/DOCUMENTATION_AUTHORITY.md)
 context/, sandbox/ — NON-CANONICAL: working memory / experiments
-backlogs/      — BCK_*.md task specs (see project rules)
-blackboard/    — SESSION_*.md active session notes
+backlogs/      — READ-ONLY cold legacy task history
+blackboard/    — legacy/session evidence; not canonical control state
 ```
 
 ## Project-Specific Rules (CRITICAL)
 
-These rules in `.claude/rules/` override general defaults. Backlog/task source of truth: `C2PRO_MASTER_BACKLOG.md` (root) and `backlogs/BCK_*.md` (per-domain, e.g. `backlogs/BCK_BACKEND.md`).
+These rules in `.claude/rules/` override general defaults. The repository uses the **Single-Writer Control Plane**:
 
-1. **`CRITICAL_BACKLOG_REQUIREMENT.md`** — Every task (created, updated, or completed) MUST be reflected in `C2PRO_MASTER_BACKLOG.md`. Update `[ ] → [x]` with verification details and append to the Change Log.
+1. **`CRITICAL_BACKLOG_REQUIREMENT.md`** — `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md`, and `blackboard.json` are READ-ONLY cold references for ordinary workers. Development execution authority is `.c2pro/control/` plus the assigned `.c2pro/work/<work_id>.yaml`; completion becomes canonical only after review/CI/merge/reconciliation.
 
-2. **`DOCUMENTATION_STRUCTURE.md`** — **Never create task-specific standalone markdown files** (no `TASK-XXX_SUMMARY.md`, no `FEATURE_*_PLAN.md`). All task documentation goes in exactly two places:
-   - `backlogs/BCK_*.md` — specs, status, implementation details (inline).
-   - `blackboard/SESSION_*.md` — active session scratch notes; consolidate back into backlogs when done.
-   The root has many legacy `TASK-*`, `UNIFY-*`, `SPRINT_*` files — these predate the rule. Do not add new ones.
+2. **`DOCUMENTATION_STRUCTURE.md`** — Do not create task-summary Markdown by default. Durable architecture decisions go to ADRs, product control/evidence contracts to `docs/product/`, operational procedures to `docs/runbooks/`, and dated audits to `docs/audits/`. Product status and execution state stay in their owning machine control planes.
 
 3. **Commit attribution** disabled globally — do not add Co-Authored-By trailers.
 
