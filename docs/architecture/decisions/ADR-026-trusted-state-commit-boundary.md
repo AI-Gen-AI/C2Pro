@@ -21,7 +21,7 @@ This ADR does **not** require every analysis to enter HITL. The current policy r
 
 1. Analysis produces a candidate in `PROPOSED/UNTRUSTED` state.
 2. A pending or rejected candidate cannot mutate canonical ProjectGraph, Health or Coherence.
-3. Human approval is bound to the exact candidate/version/hash and its exact processing/checkpoint lineage.
+3. Human approval is bound to the exact candidate/version/hash and to its processing-authority lineage. When an exact checkpoint ID has been durably captured, resume binds to that checkpoint; if capture is unavailable, the only permitted fallback is within the same authority-scoped processing thread.
 4. Approval commits the trusted candidate exactly once.
 5. A correction creates/supersedes candidate state before commit; the superseded proposal can never be committed.
 6. Canonical exports use trusted state by default.
@@ -49,7 +49,7 @@ The following invariants apply whenever a candidate is routed through HITL:
 - **TS-3:** `APPROVED` commits the exact reviewed candidate exactly once.
 - **TS-4:** `CORRECTED` commits only the corrected/superseding candidate.
 - **TS-5:** trusted Health/Coherence excludes rejected findings.
-- **TS-6:** approval cannot be rebound to another candidate, version, checkpoint or processing generation.
+- **TS-6:** approval cannot be rebound to another candidate, version or processing generation. When a checkpoint ID is present, resume cannot rebind to another checkpoint; if it is absent, fallback cannot leave the authority-scoped processing thread.
 - **TS-7:** projected/scenario state is never silently exported as canonical state.
 
 ## Scope boundary
@@ -69,7 +69,7 @@ The following invariants apply whenever a candidate is routed through HITL:
 
 **Constraints**
 
-- review/candidate/checkpoint identity must be persisted durably;
+- review/candidate and processing-lineage identity must be persisted durably; checkpoint-ID capture is best-effort, and any fallback must remain within the same authority-scoped lineage;
 - processing lineage must itself be trustworthy (ADR-027);
 - migrations and projections must preserve the distinction between proposed and trusted state.
 
