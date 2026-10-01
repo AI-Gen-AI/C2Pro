@@ -45,9 +45,10 @@ def test_all_backend_runtime_roles_are_provider_verified() -> None:
     assert '"api:${PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID}"' in source
     assert '"worker:${PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID}"' in source
     assert '"scheduler:${PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID}"' in source
-    assert 'evidence/product-qualification/runtime/provider/railway-api.json' in source
-    assert 'evidence/product-qualification/runtime/provider/railway-worker.json' in source
-    assert 'evidence/product-qualification/runtime/provider/railway-scheduler.json' in source
+    assert '"evidence/product-qualification/runtime/provider/railway-${name}.json"' in source
+    assert '"api:${PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID}"' in source
+    assert '"worker:${PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID}"' in source
+    assert '"scheduler:${PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID}"' in source
     assert "--railway-api-json" not in source
     assert "--railway-worker-json" not in source
     assert "--railway-scheduler-json" not in source
