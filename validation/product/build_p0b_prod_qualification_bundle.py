@@ -27,6 +27,19 @@ class BundleBuildError(RuntimeError):
     """Qualification inputs are incomplete or contradictory."""
 
 
+def _require_full_sha(value: str, label: str) -> str:
+    """Return a canonical full Git SHA or fail closed."""
+    normalized = value.strip().lower()
+    if not FULL_SHA_RE.fullmatch(normalized):
+        raise BundleBuildError(f"{label} must be a 40-character Git SHA")
+    return normalized
+
+
+def _sha256(path: Path) -> str:
+    """Return the SHA-256 digest for an evidence artifact."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 
 def _canonical_evidence_path(
     expected: Path, *, label: str, repo_root: Path = REPO_ROOT
