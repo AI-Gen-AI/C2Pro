@@ -4,7 +4,7 @@ name: C2Pro Product-Control Guard
 #   - MD <-> YAML exact value parity (contradiction / missing canonical block => fail)
 #   - per-field status-enum validity (including work_status)
 #   - positive + negative drift-detection tests
-# Docs/control only: NO backend/frontend/database setup; the sole dependency is PyYAML.
+# Docs/control only: NO backend/frontend/database setup; dependencies are pinned PyYAML + pytest.
 
 on:
   pull_request:
@@ -33,13 +33,19 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
-      - name: Install minimal dependency (PyYAML only)
-        run: python -m pip install --disable-pip-version-check "pyyaml==6.0.3"
+      - name: Install minimal control-test dependencies
+        run: python -m pip install --disable-pip-version-check "pyyaml==6.0.3" "pytest==9.1.1"
       - name: Parity + enum guard (MD<->YAML exact values; status enums)
         run: python validation/product/check_control_parity.py
       - name: Positive + negative drift-detection tests
         run: python validation/product/test_control_parity.py
       - name: Product qualification evidence contract tests
         run: python validation/product/test_qualification_evidence.py
+      - name: Production qualification pytest contracts
+        run: |
+          python -m pytest -q \
+            validation/product/test_build_p0b_prod_qualification_bundle_paths.py \
+            validation/product/test_prod_synthetic_workflow_contract.py \
+            validation/product/test_verify_prod_deployment_identity.py
       - name: Validate committed product qualification evidence bundles
         run: python validation/product/validate_qualification_evidence.py
