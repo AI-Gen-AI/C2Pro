@@ -4,6 +4,7 @@
 **Date:** 2026-10-01  
 **Decision class:** Trust, HITL and canonical-state architecture  
 **Implementation lineage:** #714 / PR #726  
+**Basis:** Retrospective codification of the accepted issue/PR contracts and merged implementation evidence; this ADR creates no new runtime authority.
 **Related:** ADR-013, ADR-014, ADR-017, ADR-018, ADR-020, ADR-027
 
 ## Context
