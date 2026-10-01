@@ -1,5 +1,9 @@
 # C2Pro v4.1 — Platform Technical Design Document
 
+> **Lifecycle:** Supporting historical design — not the current architecture authority.  
+> Current synthesis: `docs/architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md`; accepted decisions: `docs/architecture/decisions/`. Reclassified 2026-10-01.
+
+
 > **Document Type:** Canonical Platform Technical Design
 > **Version:** 4.1
 > **Date:** 2026-03-29
