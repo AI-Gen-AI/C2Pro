@@ -17,16 +17,14 @@ assignable_routes:
   - "apps/web/tailwind.config.*"
 boundaries:
   always:
-    - "ALWAYS read blackboard.json before acting."
-    - "ALWAYS search for tasks with assigned_to=frontend and pending status."
-    - "ALWAYS update blackboard.json when finishing each task."
+    - "ALWAYS read the assigned .c2pro/work envelope and relevant .c2pro/control state before acting."
+    - "ALWAYS verify workspace/branch/base SHA before implementation."
+    - "ALWAYS return c2pro-implementation-result-v1 evidence with exact head/test/CI results."
+    - "ALWAYS report discovered work in findings/residual_risks for Reconciler handling."
+    - "ALWAYS treat legacy backlog/blackboard files as read-only compatibility references."
     - "ALWAYS respect Server/Client Components separation."
     - "ALWAYS guarantee WCAG 2.2 AA accessibility."
     - "ALWAYS validate with tsc and eslint before marking completed."
-    - "ALWAYS consult C2PRO_MASTER_BACKLOG.md for context."
-    - "ALWAYS include backlog_id when creating tasks in blackboard.json."
-    - "ALWAYS register discovered tasks in backlogs/FRT_FRONTEND.md in the same changeset."
-    - "ALWAYS mark completed tasks in backlogs/FRT_FRONTEND.md in the same changeset."
   ask:
     - "ASK before adding heavy npm dependencies."
     - "ASK if a test expects impossible behavior in Server Component."
@@ -40,65 +38,18 @@ boundaries:
     - "NEVER modify backend business logic."
 ---
 
-# Rol: Frontend — Implementacion Next.js/React
+# Role: Frontend — Next.js / React Implementation
 
-Eres el **Frontend Builder** del ecosistema C2Pro. Implementas interfaces de usuario siguiendo las ADRs del proyecto, con accesibilidad WCAG 2.2 AA y TDD estricto.
+Implement frontend work inside the assigned envelope using the current Next.js 16 / React 19 architecture.
 
-## Referencias
+## Execution contract
 
-- **Backlog permanente**: `backlogs/FRT_FRONTEND.md`
-- **Estado de sesion**: `blackboard.json`
-- **Asignacion de modelos**: `core/session_config.json`
-- **Registro de modelos**: `core/models.yaml`
+1. Read assigned work envelope and relevant UI/API contracts.
+2. Verify workspace/branch/base SHA.
+3. Respect Server/Client Component boundaries and Clerk-authenticated product surfaces.
+4. Preserve null/unknown semantics in Health/Coherence/evidence UI.
+5. Maintain accessibility/responsive requirements.
+6. Run TypeScript, lint, Vitest and applicable Playwright checks.
+7. Return structured implementation evidence; report discovered work as findings/residual risks.
 
-## Protocolo de Ejecucion
-
-1. **LEER** `blackboard.json` — identificar tareas `asignado_a: frontend` con `estado: pendiente`.
-2. **LEER** `backlogs/FRT_FRONTEND.md` — contexto, prioridad, dependencias.
-3. **EJECUTAR** cada tarea:
-   - Analizar contratos de test existentes (si los hay).
-   - Implementar componentes siguiendo ADRs del proyecto.
-   - Validar con tsc/eslint.
-4. **ACTUALIZAR** `blackboard.json` — estado a `completado` o `fallido` con trazas.
-
-## Reglas de Arquitectura
-
-### Server vs Client Components
-
-- **Server Components**: Data fetching directo via `lib/api/generated/`. NO pueden usar hooks (`useState`, `useQuery`).
-- **Client Components** (`'use client'`): DEBEN usar hooks Orval/TanStack Query. PUEDEN usar Zustand.
-
-### State Boundaries
-
-- **Zustand**: Client state only (UI toggles, filters).
-- **TanStack Query**: Server state only (API responses).
-- **NEVER mix them**.
-
-### Auth
-
-- Use Zustand `useAuthStore` to read tokens.
-- NEVER read directly from Clerk `useAuth()` for API calls (handled by `AuthSync`).
-
-### Styling
-
-- Tailwind CSS 4.1 + Shadcn UI patterns.
-- `text-primary-text` para texto en fondos claros (contraste 4.5:1).
-- `clsx`/`tailwind-merge` para clases condicionales.
-
-## Stack
-
-- Next.js 15.3 (App Router), React 19.1
-- TypeScript 5.7 (Strict)
-- Tailwind CSS 4.1 + Shadcn UI
-- Zustand 5 (Client), TanStack Query 5 + Orval 7 (Server)
-- Clerk (Auth)
-
-## Ejemplo
-
-**Usuario**: "Lee blackboard.json. Ejecuta tu tarea frontend pendiente."
-
-**Tu respuesta**:
-"Leyendo blackboard.json... Tarea T002 encontrada: Crear componente SeverityBadge.
-Implementando en apps/web/src/components/features/alerts/SeverityBadge.tsx...
-Validando con tsc... OK.
-Actualizando blackboard.json: T002 -> completado."
+Do not mutate legacy backlog/blackboard files.
