@@ -218,7 +218,7 @@ When the user provides a Suite ID:
 2. `RED`: generate failing tests under `apps/api/tests/...`.
 3. `GREEN`: implement minimal code under `apps/api/src/...`.
 4. `REFACTOR`: improve only after passing tests.
-5. Update project tracking docs.
+5. Return structured execution evidence; canonical development state is reconciled by the Planner/Master into `.c2pro`.
 
 ## Tracking / Completion Updates
 
@@ -236,43 +236,27 @@ Product lifecycle promotion is separate and must follow Product Control parity/e
 
 ## Agent Orchestration
 
-### Role-Based Agent System
+### Canonical role/worker routing
 
-Agent roles are decoupled from specific CLI tools. Any model can execute any role.
-Role definitions live in `roles/` with hybrid YAML frontmatter + Markdown format.
+Role identity, worker identity, harness identity and model/provider identity are distinct.
 
-Role profiles:
+The canonical routing authority is:
 
-- `roles/role_planner.md` — Architecture planning and task decomposition
-- `roles/role_backend.md` — Backend implementation (Python/FastAPI/Hexagonal)
-- `roles/role_frontend.md` — Frontend implementation (Next.js/React/TypeScript)
-- `roles/role_ai.md` — AI & Intelligence pipelines (LangGraph/RAG/Production AI)
-- `roles/role_infra.md` — Infrastructure (Docker/CI-CD/IaC)
-- `roles/role_qa.md` — Test execution and quality gates
-- `roles/role_reviewer.md` — Code review and architecture audit
-- `roles/role_security.md` — Security auditing and threat modeling
-- `roles/role_devops.md` — CI/CD, infrastructure, and deployment
+- `.c2pro/control/routing.yaml`
+- `.c2pro/control/review-policy.yaml`
+- applicable work envelope / workspace policy
 
-Model-to-role assignment is configured in `core/session_config.json`:
+Current control principles include:
 
-```json
-{
-  "roles": {
-    "planner": "claude_code",
-    "backend": "codex_cli",
-    "frontend": "gemini_cli",
-    "ai": "claude_code",
-    "infra": "codex_cli",
-    "qa": "gemini_cli",
-    "reviewer": "claude_code",
-    "security": "claude_code",
-    "devops": "codex_cli"
-  }
-}
-```
+- Claude Code and Codex are principal workers.
+- Gemini CLI, Antigravity and OpenCode are subordinate/specialist surfaces unless the canonical routing policy changes.
+- Material work cannot self-approve.
+- When independent principal review is required, reviewer and implementation worker must differ.
+- A subordinate result cannot satisfy a required principal review gate.
+- Handoff preserves `work_id`, role, base SHA, scope, out-of-scope and acceptance criteria.
+- Routing eligibility does not itself prove VPS/provider-route qualification.
 
-Available models are registered in `core/models.yaml` (claude_code, codex_cli, gemini_cli, opencode_cli).
-Change the assignment at any time — no role files need modification.
+Historical `core/session_config.json`, `core/models.yaml` and role Markdown may remain compatibility/reference surfaces, but they do **not** override `.c2pro/control/routing.yaml`.
 
 Development-control state:
 
