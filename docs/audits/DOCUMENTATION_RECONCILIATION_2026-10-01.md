@@ -81,3 +81,46 @@ These should be cleaned only when there is a clear duplicate/authority problem. 
 - current product non-claims preserved;
 - implementation-era trust/fencing/qualification decisions are documented;
 - CI/documentation gates pass on the reconciliation PR.
+
+
+## Adversarial review findings
+
+A second pass treated the reconciliation PR as an external architecture/governance review rather than a formatting exercise.
+
+### P2 findings from independent Codex review
+
+1. **Live agent-instruction contradiction:** `.claude/rules/DOCUMENTATION_STRUCTURE.md` had been modernized while `CLAUDE.md` still instructed workers to treat legacy backlogs as the task source of truth.
+   - **Disposition:** fixed. `CLAUDE.md`, `agents.md`, the documentation agent and the C2Pro patterns skill now route current execution through the single-writer `.c2pro/` control plane.
+
+2. **Historical snapshot mutation:** the 2026-09-27 Product-Control reconciliation conclusion had been overwritten with 2026-10-01 facts.
+   - **Disposition:** fixed. The 2026-09-27 block is restored as immutable historical truth; later facts live only in `reconciliation_delta_2026_10_01`.
+
+3. **Unregistered ADR lifecycle:** ADR-026..028 existed in the human catalogue but were absent from Product Control and parity enforcement.
+   - **Disposition:** fixed. Machine lifecycle rows, Markdown projection, parity extraction and negative drift tests now cover ADR-026, ADR-027 and ADR-028.
+
+### Additional adversarial findings
+
+- **Stale authorized sequence:** Product Control still told operators to complete #711/#714 before #715 even though those workstreams had already closed.
+  - Fixed to route current work through #690 + open #712/#713, then execute #715.
+
+- **Historical material still presenting itself as current:** v4.0/v4.1 TDDs, the planning index and the legacy orchestration guide retained current/canonical language.
+  - Reclassified explicitly; current authority now points to the dated technical baseline, ADR catalogue and owning control planes.
+
+- **Legacy decision-log traceability:** replacing the duplicate decision log with a pointer removed authority but made historical content less discoverable.
+  - The original log is now preserved under `docs/archive/architecture/decisions/` and linked from the compatibility pointer.
+
+- **Storage proof overstatement:** repository code proves a configured R2-compatible storage path and shared HTTP/worker storage factory, but this documentation reconciliation did not independently observe the current production storage provider.
+  - Current baseline wording now distinguishes implemented/configured object storage from runtime provider qualification.
+
+- **WBS design vs realization:** “one project → one canonical WBS” is a binding architecture invariant, while complete one-root enforcement remains PARTIAL.
+  - Current baseline/README now state both facts together.
+
+- **Retrospective ADR provenance:** ADR-026..028 codify decisions already accepted through issue/PR contracts.
+  - Each ADR now states that it is retrospective codification and creates no new runtime authority.
+
+- **Aggregate status ambiguity:** associating ADR-027/028 directly with a Product-WBS row already marked DEPLOYED could be read as a deployment claim.
+  - Removed that aggregate implication; per-ADR lifecycle rows remain authoritative.
+
+## Review conclusion
+
+The reconciliation is acceptable only if the **exact final head** passes Product-Control parity/tests, CI, secret/install/dependency/security gates and the final adversarial review has no unresolved material finding. Earlier green heads are not sufficient evidence for later documentation commits.
