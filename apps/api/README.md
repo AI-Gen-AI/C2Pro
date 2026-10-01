@@ -1,333 +1,175 @@
-# C2Pro API - Backend
+# C2Pro API
 
-Backend de la plataforma C2Pro, construido con FastAPI, PostgreSQL (Supabase) y Python 3.11+.
+FastAPI backend for C2Pro's project-centric contract and project intelligence platform.
 
-## Document Navigation
+## Start with
 
-- [Repository README](../../README.md)
-- [Documentation index](../../docs/README.md)
-- [Architecture index](../../docs/architecture/README.md)
-- [API docs index](../../docs/api/README.md)
-- [Runbooks index](../../docs/runbooks/README.md)
-- [Testing docs index](../../docs/testing/README.md)
-- [API tests README](./tests/README.md)
+- [Repository quick start](../../QUICK_START.md)
+- [Current TDD v4.2](../../docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md)
+- [ADR index](../../docs/architecture/decisions/README.md)
+- [Database/runbooks](../../docs/runbooks/README.md)
+- [Testing documentation](../../docs/testing/README.md)
+- [API OpenAPI artifact](../../docs/api/README.md)
 
-## 🚀 Quick Start
+## Runtime stack
 
-### 1. Configurar Variables de Entorno
+Verified from the current backend manifests:
+
+- Python 3.11+
+- FastAPI 0.141.1
+- Pydantic v2
+- SQLAlchemy async + PostgreSQL
+- Alembic
+- Redis / Celery
+- LangGraph + PostgreSQL checkpointing
+- Clerk-backed authentication/tenant context
+- Anthropic/LangChain/LangSmith integration surfaces
+
+Do not treat version numbers in historical architecture/audit documents as current dependency authority. `requirements.txt` / lock/config files are authoritative.
+
+## Architecture
+
+The backend is a modular monolith with domain/application/port/adapter boundaries where the bounded context has been migrated to that structure.
+
+Major current concerns include:
+
+- projects and canonical Project Controls/WBS;
+- documents/evidence;
+- analysis and ProjectGraph;
+- Coherence / Health;
+- HITL and Trusted-State Commit;
+- procurement/stakeholders;
+- security/tenant isolation;
+- observability;
+- Product Control validation/qualification support.
+
+Architecture invariants are defined by the current TDD and ADRs, not this README.
+
+## Local setup
+
+From the repository root:
 
 ```bash
-# Desde la raíz del proyecto
 cp .env.example .env
-# Editar .env con tus credenciales de Supabase
+python scripts/validate_local_postgres_password.py
+docker compose up -d postgres redis minio minio-setup
 ```
 
-**Variables críticas a configurar:**
-- `DATABASE_URL`: Connection string de Supabase
-- `SUPABASE_URL`: URL de tu proyecto Supabase
-- `SUPABASE_ANON_KEY`: Anon key de Supabase
-- `SUPABASE_SERVICE_ROLE_KEY`: Service role key de Supabase
-- `JWT_SECRET_KEY`: Clave secreta para JWT (cambiar en producción)
-
-### 2. Setup Inicial
+Then:
 
 ```bash
 cd apps/api
-python setup.py
-```
-
-Este script:
-- �
- Verifica la versión de Python
-- �
- Valida el archivo .env
-- �
- Instala dependencias
-- �
- Ejecuta migraciones de base de datos
-- �
- Crea directorios necesarios
-
-### 3. Iniciar Servidor de Desarrollo
-
-```bash
-python dev.py
-```
-
-El servidor estará disponible en:
-- **API**: http://localhost:8000
-- **Documentación**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-
-## 📦 Estructura del Proyecto
-
-```
-apps/api/
-├── alembic/               # Migraciones de base de datos
-│   ├── versions/          # Scripts de migración
-│   └── env.py            # Configuración de Alembic
-├── src/
-│   ├── main.py           # Aplicación FastAPI principal
-│   ├── config.py         # Configuración global
-│   ├── core/             # Core funcionalidad
-│   │   ├── database.py   # Setup de SQLAlchemy
-│   │   ├── security.py   # Utilidades de seguridad
-│   │   ├── middleware.py # Middlewares custom
-│   │   └── exceptions.py # Excepciones custom
-│   └── modules/          # Módulos de negocio
-│       ├── auth/         # Autenticación y usuarios
-│       │   ├── models.py
-│       │   ├── schemas.py
-│       │   ├── service.py
-│       │   └── router.py
-│       ├── projects/     # Gestión de proyectos
-│       └── documents/    # Gestión de documentos
-├── tests/                # Tests
-├── storage/              # Almacenamiento local (dev)
-├── requirements.txt      # Dependencias Python
-├── setup.py             # Script de setup
-├── dev.py               # Script de desarrollo
-└── migrate.py           # Helper de migraciones
-```
-
-## 🗄️ Base de Datos
-
-### Gestión de Migraciones
-
-```bash
-# Aplicar todas las migraciones
-python migrate.py upgrade
-
-# Ver migración actual
-python migrate.py current
-
-# Ver historial
-python migrate.py history
-
-# Crear nueva migración
-python migrate.py create "descripcion del cambio"
-
-# Revertir última migración
-python migrate.py downgrade
-```
-
-### Migraciones Supabase (SQL)
-
-Desde la raiz del repo:
-```bash
-python infrastructure/supabase/run_migrations.py --env staging --dry-run
-python infrastructure/supabase/run_migrations.py --env staging
-```
-
-### Modelos Actuales (Sprint 1)
-
-- **Tenant**: Organizaciones (multi-tenancy)
-- **User**: Usuarios del sistema
-- **Project**: Proyectos de construcción
-
-## 🔐 Autenticación
-
-El sistema usa JWT tokens para autenticación:
-
-1. **Registro**: `POST /api/v1/auth/register`
-2. **Login**: `POST /api/v1/auth/login`
-3. **Obtener usuario actual**: `GET /api/v1/auth/me`
-
-### Ejemplo de uso:
-
-```python
-import requests
-
-# Registro
-response = requests.post("http://localhost:8000/api/v1/auth/register", json={
-    "company_name": "Mi Empresa",
-    "email": "usuario@ejemplo.com",
-    "password": "Password123!",
-    "password_confirm": "Password123!",
-    "first_name": "Juan",
-    "last_name": "Pérez",
-    "accept_terms": True
-})
-
-tokens = response.json()["tokens"]
-access_token = tokens["access_token"]
-
-# Usar token en requests
-headers = {"Authorization": f"Bearer {access_token}"}
-projects = requests.get("http://localhost:8000/api/v1/projects", headers=headers)
-```
-
-## 🛠️ Desarrollo
-
-### Instalar Dependencias
-
-```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
+alembic upgrade head
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Ejecutar Tests
+See `QUICK_START.md` for Windows/alternative paths.
+
+## Authentication
+
+The current production-facing auth architecture is Clerk-backed.
+
+Backend auth code validates Clerk identity and resolves the internal tenant/user context required by protected application routes. Local JWT/test paths exist for supported test/bootstrap scenarios but must not be mistaken for the canonical production identity contract.
+
+Relevant configuration lives in `src/config.py` and repository environment examples.
+
+See:
+
+- `docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md`
+- `src/core/auth/`
+- `src/core/middleware/`
+
+## Database and migrations
+
+Application schema history is managed with Alembic under `apps/api/alembic/`.
+
+Typical local commands:
 
 ```bash
-pytest
-pytest --cov=src tests/  # Con coverage
-```
-
-### Linting y Formato
-
-```bash
-# Formato con black
-black src/
-
-# Linting con ruff
-ruff check src/
-
-# Type checking con mypy
-mypy src/
-```
-
-## 📋 Endpoints Disponibles (Sprint 1)
-
-### Autenticación (`/api/v1/auth`)
-- `POST /register` - Registrar nuevo usuario y empresa
-- `POST /login` - Login con email/password
-- `POST /refresh` - Refrescar access token
-- `GET /me` - Obtener usuario actual
-- `PUT /me` - Actualizar perfil
-- `POST /logout` - Logout
-- `POST /change-password` - Cambiar contraseña
-
-### Proyectos (`/api/v1/projects`)
-- `GET /` - Listar proyectos (paginado)
-- `POST /` - Crear proyecto
-- `GET /stats` - Estadísticas de proyectos
-- `GET /{id}` - Obtener proyecto
-- `PUT /{id}` - Actualizar proyecto
-- `DELETE /{id}` - Eliminar proyecto
-- `PATCH /{id}/status` - Actualizar estado
-
-## 🔧 Configuración
-
-### Variables de Entorno Críticas
-
-```bash
-# Base de datos
-DATABASE_URL=postgresql://postgres.<project_ref>:[PASSWORD]@aws-<region>.pooler.supabase.com:6543/postgres
-# Directo (si necesitas conexion directa)
-# DATABASE_URL=postgresql://postgres:[PASSWORD]@db.<project>.supabase.co:5432/postgres
-# Supabase local (CLI)
-# DATABASE_URL=postgresql://postgres:postgres@localhost:54322/postgres
-# Docker compose (PostgreSQL local)
-# Set POSTGRES_PASSWORD in the repo-root .env first.
-# Use URI-unreserved characters only: A-Z a-z 0-9 . _ ~ -
-# POSTGRES_PASSWORD=<choose-a-local-password>
-# DATABASE_URL=postgresql://postgres:<same-local-password>@localhost:5432/c2pro
-
-# Supabase
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_ANON_KEY=eyJ...
-SUPABASE_SERVICE_ROLE_KEY=eyJ...
-
-# JWT
-JWT_SECRET_KEY=your-secret-key-min-32-chars
-JWT_ALGORITHM=HS256
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
-
-# CORS (JSON array; single quotes keep the inner double quotes in bash and are valid in .env)
-CORS_ORIGINS='["http://localhost:3000","http://localhost:3001"]'
-```
-
-#### Settings complejas: solo JSON
-
-Los campos lista/diccionario se decodifican como **JSON** desde el entorno y desde `.env` antes de cualquier validador de C2Pro; un valor CSV (o vacío) falla al arrancar con `SettingsError`. Aplica a `CORS_ORIGINS`, `CORS_METHODS`, `CORS_HEADERS`, `ALLOWED_DOCUMENT_TYPES`, `BUDGET_ALERT_ADMIN_EMAILS` (arrays) e `INTEGRATION_API_KEYS` (objeto clave → tenant_id). Para vaciar una lista usa `[]` (o `{}` para el objeto).
-
-```bash
-# bash / zsh
-export CORS_ORIGINS='["http://localhost:3000","http://localhost:3001"]'
-export BUDGET_ALERT_ADMIN_EMAILS='["admin@example.com"]'
-export INTEGRATION_API_KEYS='{"key":"tenant"}'
-```
-
-```powershell
-# PowerShell (comillas simples = literal)
-$env:CORS_ORIGINS = '["http://localhost:3000","http://localhost:3001"]'
-$env:BUDGET_ALERT_ADMIN_EMAILS = '["admin@example.com"]'
-$env:INTEGRATION_API_KEYS = '{"key":"tenant"}'
-```
-
-```env
-# .env (python-dotenv: sin comillas o con comillas simples)
-CORS_ORIGINS=["http://localhost:3000","http://localhost:3001"]
-BUDGET_ALERT_ADMIN_EMAILS=["admin@example.com"]
-INTEGRATION_API_KEYS={"key":"tenant"}
-```
-
-Excepción deliberada: `PLATFORM_OPERATOR_USER_IDS` es **CSV** de IDs de usuario de Clerk (`PLATFORM_OPERATOR_USER_IDS=user_abc,user_def`); un array JSON se rechaza.
-
-### Opcionales (para funcionalidad completa)
-
-```bash
-# Redis (cache)
-REDIS_URL=redis://localhost:6379
-
-# Anthropic (AI)
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Storage (R2/S3)
-STORAGE_PROVIDER=local  # local, r2, s3
-```
-
-## 🚨 Troubleshooting
-
-### Error de conexión a base de datos
-
-1. Verifica que `DATABASE_URL` esté correcta
-2. Asegúrate de tener acceso a la base de datos de Supabase
-3. Revisa que la IP esté permitida en Supabase
-
-### Error al ejecutar migraciones
-
-```bash
-# Resetear migraciones (CUIDADO: elimina datos)
-alembic downgrade base
+alembic heads
+alembic current
 alembic upgrade head
 ```
 
-### Puerto 8000 ya en uso
+Database changes must preserve:
+
+- tenant isolation / RLS contracts;
+- migration ordering and mirror requirements;
+- canonical WBS constraints;
+- function/role privilege boundaries;
+- rollback/upgrade semantics required by the affected gate.
+
+Use the current database migration runbooks instead of old Sprint-1 migration instructions.
+
+## Tests
 
 ```bash
-# Matar proceso en el puerto
-# Windows
-netstat -ano | findstr :8000
-taskkill /PID <PID> /F
+cd apps/api
+source .venv/bin/activate
 
-# Linux/Mac
-lsof -ti:8000 | xargs kill -9
+python -m pytest
+python -m ruff check .
+python -m mypy src
 ```
 
-## 📚 Recursos
+CI runs a substantially broader matrix than one local `pytest`, including security, migrated-schema, integration, core/coherence/modules, coverage and Docker/runtime payload gates.
 
-- [FastAPI Docs](https://fastapi.tiangolo.com/)
-- [SQLAlchemy Docs](https://docs.sqlalchemy.org/)
-- [Alembic Docs](https://alembic.sqlalchemy.org/)
-- [Pydantic Docs](https://docs.pydantic.dev/)
-- [Supabase Docs](https://supabase.com/docs)
-- [C2Pro architecture docs](../../docs/architecture/README.md)
-- [C2Pro runbooks](../../docs/runbooks/README.md)
-- [C2Pro testing docs](../../docs/testing/README.md)
+Executable CI truth: `.github/workflows/ci.yml`.
 
-## 🎯 Próximos Pasos (Roadmap)
+## OpenAPI
 
-- [ ] Módulo de Documentos (upload, parsing)
-- [ ] Módulo de Análisis (coherencia)
-- [ ] Extracción de Stakeholders
-- [ ] Generación de WBS/BOM
-- [ ] Tests unitarios e integración
-- [ ] CI/CD con GitHub Actions
-- [ ] Deployment en producción
+Regenerate the canonical API artifact after applicable contract/router changes:
 
-## 📝 Notas
+```bash
+make openapi
+```
 
-- El sistema implementa **multi-tenancy** completo con aislamiento de datos
-- Todos los endpoints protegidos requieren autenticación JWT
-- Los logs están estructurados con `structlog`
-- El middleware de tenant isolation es **crítico** para seguridad
+Commit generated contract changes together with the implementation and allow OpenAPI/API-drift tests to arbitrate consistency.
+
+## Trusted-State Commit
+
+Consequential HITL-gated output follows:
+
+`candidate persisted → exact review binding → trusted commit → canonical ProjectGraph/Health/Coherence`
+
+Persistence alone does not grant trust.
+
+See ADR-026.
+
+## Security
+
+Backend changes must consider:
+
+- authenticated tenant identity;
+- fail-closed tenant-scoped persistence;
+- RLS/database privileges;
+- secret handling;
+- exact approval/identity binding;
+- evidence truthfulness;
+- safe retries/idempotency;
+- production/runtime separation.
+
+Cross-tenant leakage and trust-boundary violations are release-blocking defect classes.
+
+## Operations
+
+Do not use backend scripts against production merely because they are callable locally.
+
+For production qualification use the dedicated protected workflow/runbook:
+
+- `.github/workflows/prod-synthetic-acceptance.yml`
+- `docs/product/production-qualification-operator-runbook.md`
+
+## Source-of-truth note
+
+This file intentionally avoids static endpoint inventories and sprint percentages because those decay quickly.
+
+For current API shape use:
+
+- running OpenAPI;
+- `docs/api/openapi.yaml`;
+- current routers/source;
+- executable tests.
