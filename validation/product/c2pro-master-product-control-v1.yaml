@@ -22,7 +22,7 @@ parity:
     - product_semantics.canonical_dimensions
     - PWBS-PROJECT-CONTROLS.priority
     - "product_wbs[*].id + realization_status + work_status (canonical 8-plane set)"
-    - "adr(ADR-018,ADR-024,ADR-025).{realization_status,deployment_status,prod_validation_status}"
+    - "adr(ADR-018,ADR-024,ADR-025,ADR-026,ADR-027,ADR-028).{realization_status,deployment_status,prod_validation_status}"
     - p0b_vertical_contract.done_definition (sha256-16 digest)
     - p0b_vertical_contract.invariant_ids
     - "qualification_control.lanes[*].{qualification_status,bundle_ref,bundle_sha256,lifecycle_targets}"
@@ -116,14 +116,19 @@ reconciliation_delta_2026_09_27:
     - "Parallel Line B governance cleanup remains non-product: #724 Wave 1 removes live legacy backlog/blackboard authority from active guidance, and #725 Wave 2 is queued to enforce exact-PR/head independent review, reviewer independence, risk-policy floors and fail-closed synthesis in the reconciler."
     - "PR #726/#714 has started as DRAFT RED scaffolding from main with focused trusted-state tests only and no trusted-state migration yet. This is preparatory work, not accepted implementation; mergeable #714 integration remains gated on corrected #711/#712/#713 contracts."
   control_conclusion: >
-    The operational north-star remains #706. Since the 2026-09-27 reconciliation, #711 and #714
-    implementations have closed and #758 has closed the checkpoint-lineage authority defect discovered
-    during exact-head review. #715's synthetic production acceptance harness is merged, but #715 remains
-    open because a harness implementation is not an accepted production run. #690 remains an external
-    prerequisite, while #712 and #713 remain open fix-forward acceptance workstreams. The repository
-    therefore has stronger correctness and qualification machinery without changing the central lifecycle
-    claim: merge/CI/deployment/control facts do not promote P0b/P0c/P0d or prove product_value_delivered.
-
+    The operational north-star remains #706. Production currently runs Railway backend 0db53883a8942f7097fe9ce2e0e6c63397948fbb
+    and Vercel frontend 6e98ec53f814bd29dee4607e375600c4560c7d70. #712/#713 code is deployed but not accepted:
+    both require fix-forward for documented semantic defects and both merged without independent review records.
+    #711 is rebased onto current main and its Alembic lineage is now linear by design, but exact-head CI remains a
+    control gate and the decisive functional blocker is still processing ownership/fencing: after takeover, a stale
+    worker must be unable to make any later canonical durable mutation. Line A owns the implementation; Claude is the
+    principal implementation route and Gemini the adversarial QA/challenger route under canonical routing. #714 has
+    begun only as PR #726 DRAFT/RED test scaffolding with no migration; its mergeable implementation must consume
+    corrected #711/#712/#713 contracts rather than fork another lifecycle model. #715 remains unexecuted and #690
+    remains an external prerequisite. In parallel, #724 Wave 1 and #725 Wave 2 remove legacy governance ambiguity and
+    harden exact-head review enforcement; they are control-plane work and do not substitute for #706 product proof.
+    The unresolved Railway staged API patch remains a fail-closed #715 concern. None of these merge/deployment/control
+    facts promotes P0b/P0c/P0d or proves product_value_delivered.
 
 reconciliation_delta_2026_10_01:
   previous_main_sha: 0db53883a8942f7097fe9ce2e0e6c63397948fbb
@@ -231,7 +236,7 @@ corrected_current_claims:
     truth: "Rejected. They are three different signals sharing the six canonical dimensions."
 
 adr_namespaces:
-  v3_canon: "docs/architecture/decisions/ADR-004,009,013..025 — C2Pro v3.0 spine"
+  v3_canon: "docs/architecture/decisions/ADR-004,009,013..028 — C2Pro v3.0 spine"
   foundational: "docs/architecture/decisions/001..006"
   coherence_era: "docs/architecture/adr/ADR-001..003"
   collisions:
@@ -275,6 +280,9 @@ adr_realization:
   - {adr: "ADR-023-agentic-coherence", ns: v3_canon, priority: P1, design_status: Proposed, realization_status: DESIGNED, deployment_status: NONE, prod_validation_status: NONE, evidence: "ADR + roadmap", gap: "not built"}
   - {adr: "ADR-024-single-doc-activation", ns: v3_canon, priority: P0b, design_status: Accepted, realization_status: WIRED, deployment_status: PARTIAL, prod_validation_status: NONE, evidence: "L4-1..L4-5 implementation is merged/release-ready; production incidents prove the path reached HITL but not the completed Health outcome", gap: "deploy current hardened main and obtain end-to-end production validation"}
   - {adr: "ADR-025-canonical-project-controls-wbs-backbone", ns: v3_canon, priority: P1, design_status: Accepted, realization_status: PARTIAL, deployment_status: NONE, prod_validation_status: NONE, evidence: "wbs_nodes is canonical runtime authority on main; legacy WBS writes are blocked; RACI/BOM/MCP plus schedule/spend consumers are reconciled", gap: "one-logical-root, baseline/change governance, complete budget/schedule/alert/evidence/change linkage and deployment/prod-validation remain open"}
+  - {adr: "ADR-026-trusted-state-commit", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: WIRED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#714 trusted-state commit/projected-Coherence implementation merged on main after #758 lineage fencing", gap: "no independent deployed-runtime or full production-journey validation claim"}
+  - {adr: "ADR-027-processing-authority-checkpoint-lineage", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: WIRED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#711 processing authority plus #758 checkpoint-lineage fencing merged on main", gap: "deployment/production acceptance remains governed by the #706/#715 qualification path"}
+  - {adr: "ADR-028-production-qualification-composite-runtime", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#715/#733 harness, provider-identity verifier and evidence contracts are merged", gap: "#715 run/acceptance and #690 dedicated qualification identity/tenant remain open"}
 
 coherence_runtime_reconciliation:
   status: COMPLETE
@@ -294,11 +302,11 @@ capability_planes:
   - {id: ACT-HEALTH, name: "Activation / Health (single-document)", adrs: [ADR-018, ADR-024, ADR-022]}
   - {id: COHERENCE-XDOC, name: "Relational Coherence / cross-document", adrs: [ADR-009, ADR-017, ADR-023]}
   - {id: TEMPORAL-CHANGE, name: "Temporal / Change-Impact", adrs: [ADR-015, ADR-016]}
-  - {id: ALERTS-ACTIONS-HITL, name: "Alert visibility + later Action/HITL automation", adrs: [ADR-019, ADR-020]}
+  - {id: ALERTS-ACTIONS-HITL, name: "Alert visibility + later Action/HITL automation", adrs: [ADR-019, ADR-020, ADR-026]}
   - {id: PROJECT-CONTROLS, name: "Canonical WBS / Budget / Schedule / Deliverables / Stakeholders", adrs: [ADR-018, ADR-025]}
   - {id: PROCUREMENT, name: "Procurement workflows (Plan/RfQ/BoQ/RACI/comms)", adrs: [ADR-025]}
   - {id: EXEC-REPORTING, name: "Current-state / executive / briefing / portfolio reporting", adrs: [ADR-021]}
-  - {id: OPS-TRUST, name: "Ops / Trust (RLS, PII, resilience, infra)", adrs: [ADR-004]}
+  - {id: OPS-TRUST, name: "Ops / Trust (RLS, PII, resilience, infra)", adrs: [ADR-004, ADR-027, ADR-028]}
 
 product_wbs:
   - id: PWBS-ACT-HEALTH
@@ -540,9 +548,9 @@ pr_disposition:
   "650": {action: MERGED_HITL_V3_IDEMPOTENCY, reason: "final decision audit idempotency + exact-identity reconciliation integrated"}
 
 next_authorized_action:
-  - "In parallel, close #690 through the supported Clerk Production operator path; Line B must not manually create customer-like DB identities or reuse customer/CI tenants."
-  - "Continue only the already-authorized #706 P0 remediation wave in Line A: #710 is DONE/live; #711-#714 must reach their required merged/deployed acceptance before the final production journey. Line B does not duplicate those implementation lanes."
-  - "When #690 and required #711-#714 remediation are READY, implement/execute #715 synthetic production acceptance. Rebind exact Railway API/Worker/Scheduler plus Vercel production identities immediately before the run; no mocks or HITL bypass flags."
-  - "Capture the #683 P0b Health/persistence assertions inside the #715 deployed journey where applicable; a pre-remediation diagnostic run must not be promoted as final #706/P0b production evidence."
-  - "After accepted #715/#683 evidence, Line B reconciles Product Control; then #686 P0c and #687 P0d may qualify on the same clean synthetic tenant/project where their own gates are met."
-  - "Stop after the P0 qualification wave for a fresh reconciliation before any P1/Coherence/Procurement implementation. No direct main/production mutation or lifecycle promotion is authorized by this snapshot."
+  - "Close #690 through the supported Clerk Production operator path; do not reuse customer/CI identities and do not synthesize customer-like mappings outside normal production administration."
+  - "Close the still-open #706 fix-forward workstreams #712 and #713 on exact reviewed heads; #711/#714/#758 are already closed and must not be reopened by this control snapshot."
+  - "After #690 plus the required open #712/#713 acceptance blockers are resolved and the deployed runtime is rebound, execute #715 against the dedicated synthetic tenant. The merged harness is tooling, not acceptance."
+  - "Immediately before #715, independently bind exact Railway API/Worker/Scheduler and Vercel production identities and fail closed on unresolved staged configuration, mocks, auth bypass or fixture mismatch."
+  - "Capture the #683 P0b Health/persistence assertions inside the accepted #715 journey where applicable; then qualify #686 P0c and #687 P0d only where their own evidence contracts pass."
+  - "After the P0 qualification wave, reconcile Product Control explicitly before any lifecycle promotion or new P1/Coherence/Procurement authorization. No documentation/CI/deployment event self-promotes state."
