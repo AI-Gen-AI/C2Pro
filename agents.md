@@ -1,5 +1,5 @@
 ---
-version: 2.1.0
+version: 2.2.0
 role: "Senior Staff Software Architect & TDD Specialist"
 project: "C2Pro (Construction Command Pro)"
 allowed_skills:
@@ -274,37 +274,41 @@ Model-to-role assignment is configured in `core/session_config.json`:
 Available models are registered in `core/models.yaml` (claude_code, codex_cli, gemini_cli, opencode_cli).
 Change the assignment at any time — no role files need modification.
 
-Shared state:
+Development-control state:
 
-- `blackboard.json` — ephemeral session state (active tasks, retries, errors, role assignments)
-- `C2PRO_MASTER_BACKLOG.md` — permanent project task register (cold read source of truth)
-- The Planner reads the Backlog for context, writes the session plan to the Blackboard.
+- `.c2pro/control/` — canonical hot planning/control state.
+- `.c2pro/work/<work_id>.yaml` — canonical assigned work envelope.
+- `.c2pro/handoff/` and referenced Git/PR/CI evidence — continuation/provenance where defined by the active control schema.
+- `blackboard.json`, `C2PRO_MASTER_BACKLOG.md`, and `backlogs/*.md` — legacy/cold reconciliation sources only; ordinary workers do not load them by default and never write them.
 
-### Blackboard Integration & Task Lifecycle
+### Single-Writer Development Task Lifecycle
 
 **Every worker role must:**
 
 1. **Before starting work:**
-   - Read `blackboard.json` and legacy backlog files as read-only cold references.
-   - Read `.c2pro/control/` and the assigned `.c2pro/work/` envelope to get task specs.
+   - Validate the assigned workspace and branch.
+   - Read the applicable `.c2pro/control/` policy and assigned `.c2pro/work/` envelope.
+   - Load only directly relevant source/tests/spec/ADR context.
+   - Load legacy backlog/blackboard material only when the work envelope explicitly requires reconciliation/history.
 
 2. **During execution:**
-   - Do NOT attempt to write to `blackboard.json`, `C2PRO_MASTER_BACKLOG.md`, or `backlogs/*.md`.
+   - Stay inside the bounded work envelope.
+   - Do NOT write `blackboard.json`, `C2PRO_MASTER_BACKLOG.md`, or `backlogs/*.md`.
 
 3. **After completion:**
-   - Provide structured worker evidence (fenced YAML result block matching the `c2pro-implementation-result-v1` schema) in standard output or the PR description.
-   - Do NOT commit result files or write to legacy backlog files.
+   - Provide structured worker evidence (fenced YAML result matching `c2pro-implementation-result-v1`) in standard output or the PR description.
+   - The Planner / Master Orchestrator reconciles completion/new work into canonical `.c2pro/` state only after applicable review, CI and merge evidence.
 
 4. **When discovering new work:**
-   - Do NOT write new entries directly to legacy backlogs.
-   - Include any newly discovered subtasks or risks in the `findings` and `residual_risks` arrays of your structured result block.
+   - Return the finding/blocker in structured evidence.
+   - Do not create a competing task register or revive legacy backlog writes.
 
-**Multi-agent coordination & Handoff Boundary:**
+**Multi-agent coordination & handoff boundary:**
 
-- **Legacy Supervisor (`core/supervisor.py`):** Dedicated to **legacy compatibility only** (managing genuine `TASK-*` legacy workitems). It reads role assignments from `core/session_config.json` and orchestrates legacy sequential execution via `blackboard.json`.
-- **New Control Plane (`.c2pro`):** Dedicated to modern `C2PRO-*` tasks assigned to workers/orchestrators.
-- **Handoff Boundary:** Under transition mode `dual_read_single_write_new_control`, if a modern `C2PRO-*` task is submitted to the legacy supervisor, execution **must stop immediately** before agent/worker invocation, returning `NEW_CONTROL_HANDOFF_REQUIRED`. This guarantees that modern tasks are executed purely outside the legacy blackboard runner and do not mutate legacy files.
-- **Native automated new-control orchestration:** Fully reserved for future G2 / Agent Academy.
+- **Legacy Supervisor (`core/supervisor.py`)** is compatibility-only for genuine legacy `TASK-*` work.
+- **New Control Plane (`.c2pro`)** owns modern `C2PRO-*` work.
+- Under `dual_read_single_write_new_control`, modern work submitted to the legacy supervisor must stop before worker invocation and return `NEW_CONTROL_HANDOFF_REQUIRED`.
+- Provider/model identity is replaceable runtime state; work identity and authority remain bound to the work envelope.
 
 ### Role Assignment & Execution Rule
 
@@ -343,19 +347,23 @@ The master/planner remains the sole writer allowed to reconcile this returned ev
 - Prevents duplicate work and task drift
 - Enables automated progress tracking and reporting
 - Avoids creating multiple unorganized files
-- Each agent category has a single source of truth for their domain
+- Keeps development execution authority in one machine-readable control plane per concern
 
 **Enforcement:**
 
-- Pre-execution hooks verify `backlog_id` exists
-- Post-execution hooks verify backlog was updated
-- Schema validation prevents invalid blackboard writes
+- Pre-execution guards validate the assigned work/control envelope and workspace binding.
+- Ordinary workers cannot use legacy backlog files as canonical write targets.
+- Completion evidence remains non-canonical until Planner/Master reconciliation after the required gates.
 
 ---
 
-Last Updated: 2026-04-03
+Last Updated: 2026-10-01
 
 Changelog:
+
+> Entries before 2026-10-01 are historical records of earlier governance. They do not override the current Single-Writer `.c2pro` contract above.
+
+- 2026-10-01: Reconciled agent governance with `.c2pro` single-writer development control; legacy backlog/blackboard surfaces are read-only cold references; workers return structured evidence instead of mutating legacy status files.
 
 - 2026-04-05: **File Organization Rule Added** — Added mandatory rule to use existing category backlog files (`backlogs/FRT_FRONTEND.md`, `backlogs/BCK_BACKEND.md`, etc.) instead of creating new documentation files. All agent-specific work (analysis, specifications, decisions, debt) must be added to section "2. Specifications" of the relevant category backlog. This prevents file proliferation and keeps agent knowledge consolidated in one place per category.
 
