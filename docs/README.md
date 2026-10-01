@@ -1,54 +1,65 @@
-# Documentation Index
+# C2Pro Documentation Index
 
-This repository now separates documentation by lifecycle and function.
+This directory is organized by **authority and lifecycle**, not simply by file age.
 
-## Current Canonical Areas
+## Start here
 
-- `architecture/`
-  - ADRs, diagrams, architecture notes, and the current technical design document.
-- `api/`
-  - OpenAPI artifacts and API examples.
-- `specifications/`
-  - Product and technical specifications.
-- `runbooks/`
-  - Operational and environment procedures.
-- `planning/`
-  - Active roadmap and planning material that still guides execution.
-- `testing/`
-  - Test inventories, registries, reports, and active testing roadmaps.
-- `audits/`
-  - Audit reports that remain useful as reference.
-- `coherence_engine/`
-  - Domain-specific scoring and engine reference material.
-- `performance/`
-  - Performance baselines and optimization notes.
-- `assets/`
-  - Schedules, exported artifacts, and sample contract documents.
-- `internal/`
-  - Internal lessons learned and non-product-facing reference notes.
+1. [Architecture index](./ARCHITECTURE_INDEX.md)
+2. [Platform TDD v4.2](./architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md)
+3. [Architecture decisions](./architecture/decisions/README.md)
+4. [Master Product Control](./product/00-c2pro-master-product-control-v1.md)
+5. [Qualification evidence contract](./product/qualification-evidence-contract-v1.md)
+6. [Production qualification operator runbook](./product/production-qualification-operator-runbook.md)
+7. [Runbooks](./runbooks/README.md)
+8. [Testing](./testing/README.md)
 
-## Navigation Links
+## Authority model
 
-- [Architecture index](./architecture/README.md)
-- [API index](./api/README.md)
-- [Runbooks index](./runbooks/README.md)
-- [Testing index](./testing/README.md)
-- [Specifications index](./specifications/README.md)
-- [Audits index](./audits/README.md)
-- [Coherence engine index](./coherence_engine/README.md)
-- [Performance index](./performance/README.md)
-- [Assets index](./assets/README.md)
-- [Archive index](./archive/README.md)
+| Class | Location | Authority |
+|---|---|---|
+| Machine Product Control | `validation/product/` | Lifecycle/control source of truth |
+| Architecture decisions | `architecture/decisions/` | Durable architecture authority |
+| Platform TDD | `architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md` | Current platform-wide design |
+| Product/spec contracts | `product/`, `specifications/` | Durable functional/qualification contracts |
+| Runbooks | `runbooks/` | Operator procedure |
+| Testing | `testing/` | Test strategy/registry |
+| Planning | `planning/` | Intent/plan; not proof of landed behavior |
+| Audits/evidence | `audits/`, `evidence/` | Point-in-time evidence |
+| Archive | `archive/` | Superseded/non-current material |
 
-## Historical Material
+## Current canonical areas
 
-- `archive/`
-  - Superseded reports, dated status documents, duplicate copies, archived planning bundles, implementation summaries, and reference-code artifacts that should not be treated as active source.
+- `architecture/` — TDDs, ADRs, diagrams and architecture notes.
+- `product/` — Product Control projection and production/qualification contracts.
+- `api/` — OpenAPI artifacts and API references.
+- `specifications/` — durable product and technical specifications.
+- `runbooks/` — operational/environment procedures.
+- `testing/` — test inventories, registries and strategy.
+- `planning/` — roadmap/plans that still guide authorized future work.
+- `audits/` — dated audit evidence; do not treat old findings as current without re-verification.
+- `performance/` — baselines and performance notes.
+- `internal/` — internal policy/reference.
 
-## Documentation Rules
+## Historical material
 
-- Keep only human-facing documentation in `docs/`.
-- Keep executable code, tests, SQL, and config in app, infrastructure, or ops folders.
-- Archive dated status snapshots instead of leaving them at the top level.
-- Prefer one canonical copy of a document. Duplicate variants go to `archive/duplicates/`.
-- Use `sandbox/` for standalone experiments or prototype apps that are not part of the canonical documentation tree.
+Historical documents should normally stay unchanged. Their date and context are part of the evidence.
+
+Examples:
+
+- superseded TDDs;
+- completed implementation plans;
+- dated production-readiness reports;
+- old release evidence;
+- archived session/audit material.
+
+When current architecture changes, create/update the current canonical document rather than rewriting old evidence.
+
+## Documentation rules
+
+- Prefer one canonical owner per concept.
+- Do not create task-specific report sprawl.
+- Do not hand-edit generated Product Control canonical blocks.
+- Do not use planning docs as proof that a feature is landed.
+- Do not use a merged implementation PR as proof of production validation.
+- Verify workflow names and required checks against the live repository/ruleset.
+- If sources conflict, follow the authority hierarchy in `.claude/rules/DOCUMENTATION_STRUCTURE.md`.
