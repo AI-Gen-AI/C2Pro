@@ -869,6 +869,22 @@ _FINALIZE_REVIEW_SQL = text(
     """
 )
 
+# #758: generation transitions already mutate/lock the document before they
+# advance processing authority and stamp review lineage. Finalization must
+# therefore acquire the same document lock BEFORE it locks resume_operations
+# / review_items, otherwise concurrent reupload/reprocess and HITL finalization
+# form a DOCUMENT <-> REVIEW lock inversion and PostgreSQL may abort one side
+# as a deadlock victim.
+_LOCK_DOCUMENT_FOR_UPDATE_SQL = text(
+    """
+    SELECT id
+      FROM documents
+     WHERE id = cast(:document_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
+     FOR UPDATE
+    """
+)
+
 _FINALIZE_DOCUMENT_SQL = text(
     """
     UPDATE documents
@@ -955,6 +971,21 @@ async def finalize_v3(
     a new operation, hence its own event.
     """
     async with _session(session_factory, ownership.tenant_id) as session:
+        # Canonical cross-aggregate lock order for the only resume path that
+        # also mutates documents: DOCUMENT -> RESUME_OPERATION -> REVIEW.
+        # Reupload/reprocess already starts from DOCUMENT before
+        # begin_generation() reaches processing authority / review lineage.
+        # Taking this tenant-scoped row lock first removes the inverse
+        # REVIEW -> DOCUMENT edge while preserving the existing lineage CAS.
+        if document_id is not None:
+            await session.execute(
+                _LOCK_DOCUMENT_FOR_UPDATE_SQL,
+                {
+                    "document_id": str(document_id),
+                    "tenant_id": str(ownership.tenant_id),
+                },
+            )
+
         row = await verify_in_transaction(session, ownership)
         phase = Phase(row.phase)
 
