@@ -84,7 +84,7 @@ def graph_enqueues(monkeypatch) -> list[tuple[UUID, UUID]]:
 @pytest.fixture
 def completion_sessions(monkeypatch, independent_sessions):  # noqa: F811
     """Drive the REAL completion hook on the test database."""
-    maker_holder: dict[str, Any] = {}
+    maker_holder: dict[str, Any] = {"sessions": independent_sessions}
 
     @asynccontextmanager
     async def _raw_session():
@@ -148,6 +148,40 @@ async def _propose(completion_sessions, arranged, tenant_id, *, title="AI risk")
     await document_artifact_completion._persist_artifact(
         _final_state(arranged, tenant_id, gated=True, title=title)
     )
+
+    # This suite shortcuts a full re-analysis by calling the completion hook
+    # directly. Production reaches that hook only after a real graph run has
+    # produced an exact checkpoint. #758 correctly rejects a shared legacy
+    # thread without one, so mirror production's binding for any successor
+    # review opened by the shortcut.
+    async with completion_sessions["sessions"](tenant_id) as session:
+        reviews = list(
+            (
+                await session.execute(
+                    select(ReviewItemORM)
+                    .where(ReviewItemORM.document_id == arranged.document_id)
+                    .order_by(ReviewItemORM.created_at.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        pending = next(
+            (
+                row
+                for row in reviews
+                if row.current_status
+                in {
+                    ReviewStatus.PENDING_REVIEW_REQUIRED,
+                    ReviewStatus.PENDING_REVIEW_CONDITIONAL,
+                    ReviewStatus.ESCALATED,
+                }
+            ),
+            None,
+        )
+        assert pending is not None
+        if pending.checkpoint_id is None:
+            pending.checkpoint_id = arranged.checkpoint_id
 
 
 async def _rows(sessions, tenant_id: UUID, document_id: UUID) -> list[DocumentArtifactORM]:
