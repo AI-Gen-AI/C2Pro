@@ -4,6 +4,7 @@
 **Date:** 2026-10-01  
 **Decision class:** Release/qualification governance and runtime identity  
 **Implementation lineage:** #715 / PR #733  
+**Basis:** Retrospective codification of the accepted issue/PR contracts and merged implementation evidence; this ADR creates no new runtime authority.
 **Related:** ADR-024, ADR-026, ADR-027, `docs/product/qualification-evidence-contract-v1.md`
 
 ## Context
