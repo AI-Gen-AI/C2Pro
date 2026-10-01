@@ -54,7 +54,7 @@ The following invariants apply whenever a candidate is routed through HITL:
 
 ## Scope boundary
 
-**In scope:** analyses for which review is required; proposal/trust state, exact candidate/review/checkpoint binding, correction/rejection semantics and projected-vs-trusted separation.
+**In scope:** analyses for which review is required; proposal/trust state, exact candidate/review binding, processing-authority/checkpoint-lineage semantics, correction/rejection behavior and projected-vs-trusted separation.
 
 **Out of scope:** the business policy that decides which analyses may bypass HITL. ADR-020 defines the intended automation boundary; current confidence/impact routing is only a partial realization of that richer policy.
 
