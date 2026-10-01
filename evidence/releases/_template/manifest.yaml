@@ -3,7 +3,7 @@
 
 release_id: "<YYYY-MM-DD-rc#>"
 commit_sha: "<40-char-git-sha>"
-promotion_workflow: ".github/workflows/deploy-production.yml"
+promotion_workflow: ".github/workflows/release.yml"
 release_type: standard  # mvr | standard | ga
 
 # Minimum thresholds (from RELEASE_SIGNOFF_POLICY.md)
@@ -19,34 +19,36 @@ thresholds:
 
 required_suites:
   backend:
-    workflow: ".github/workflows/tests.yml"
+    workflow: ".github/workflows/ci.yml"
     status: pending  # pass | failure | pending
     artifact: "<run-id> - backend-release-summary (artifact <id>) - <url>"
     jobs:
-      secrets_scan: pending
+      ci_status: pending
       unit_tests: pending
       integration_tests: pending
-      s5_core_ai_gates: pending
+      security_suite: pending
+      combined_coverage: pending
     coverage: null  # percentage when available
     note: ""
 
   frontend:
-    workflow: ".github/workflows/frontend-ci.yml"
+    workflow: ".github/workflows/ci.yml"
     status: pending
     artifact: "<run-id> - frontend-release-summary (artifact <id>) - <url>"
     jobs:
-      typecheck: pending
-      lint: pending
-      tests_e2e: pending
-      api_drift_check: pending
+      ci_status: pending
+      typecheck_lint: pending
+      tests_api_drift: pending
+      e2e_smoke: pending
+      production_build: pending
     note: ""
 
   security:
-    workflow: ".github/workflows/e2e-security-tests.yml"
+    workflow: ".github/workflows/secret-scan.yml + .github/workflows/ci.yml"
     status: pending
-    artifact: "<run-id> - security-release-summary (artifact <id>) - <url>"
+    artifact: "<run-id/check-run refs> - gitleaks + backend security evidence - <url(s)>"
     coverage: null
-    note: ""
+    note: "Record exact gitleaks and affected CI security checks for the release commit."
 
   evaluation:
     workflow: ".github/workflows/evaluation-regression.yml"
@@ -61,10 +63,10 @@ required_suites:
 
   reliability:
     workflow: ".github/workflows/i13-real-e2e-scheduled.yml"
-    status: not_required  # not_required for mvr/standard, required for ga
-    artifact: "<run-id> - i13-release-summary (artifact <id>) - <url>"
+    status: pending  # validator requires PASS whenever a Gate 7 bundle is supplied
+    artifact: "<run-id> - i13 release-candidate evidence (artifact <id>) - <url>"
     mode: release-dispatch
-    note: ""
+    note: "If reliability evidence is not required for a release class, omit the Gate 7 bundle or revise the validator/policy through a separate governed change; do not mark an included required suite not_required."
 
 swagger_workbook:
   status: pending  # pending | complete | partial
