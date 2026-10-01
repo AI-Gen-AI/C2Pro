@@ -31,6 +31,7 @@ comparison and not a blanket halt.
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -854,3 +855,211 @@ async def test_the_generation_stamp_never_rewrites_a_decided_review(
     decided = await _reload(db, ReviewItemORM, arranged.review_row_id)
     assert decided.lineage_generation is None, "a decided review must not be stamped"
     assert decided.lineage_fencing_token is None
+
+
+# ── P1-4: canonical lock order across generation transition/finalization ──────
+
+
+def _bounded_sessions(sessions: Any):
+    """Wrap the real session factory with finite PostgreSQL lock/statement bounds."""
+
+    @asynccontextmanager
+    async def factory(tenant_id: UUID | None):
+        async with sessions(tenant_id) as session:
+            await session.execute(text("SET LOCAL lock_timeout = '3s'"))
+            await session.execute(text("SET LOCAL statement_timeout = '8s'"))
+            yield session
+
+    return factory
+
+
+async def _graph_completed_owner(
+    arranged: _Arranged, tenant_id: UUID, sessions: Any
+) -> Any:
+    """Reach the real GRAPH_COMPLETED phase required by approval finalization."""
+    ownership = await _own(arranged, tenant_id, sessions)
+    await _make_n17_durable(arranged, tenant_id, ownership, sessions)
+    assert await resume_ownership.mark_graph_completed(
+        ownership=ownership,
+        terminal_checkpoint_id="cp-lock-order-758",
+        document_id=str(arranged.document_id),
+        session_factory=sessions,
+    )
+    return ownership
+
+
+async def _generation_transition_holding_document(
+    *,
+    sessions: Any,
+    tenant_id: UUID,
+    document_id: UUID,
+    acquired: asyncio.Event,
+    release: asyncio.Event,
+) -> int:
+    """Production-shaped reupload/reprocess: DOCUMENT first, then begin_generation."""
+    async with sessions(tenant_id) as session:
+        await session.execute(text("SET LOCAL lock_timeout = '3s'"))
+        await session.execute(text("SET LOCAL statement_timeout = '8s'"))
+        # update_version/reprocess mutates this row before begin_generation(),
+        # which is the production edge that originally inverted finalization.
+        await session.execute(
+            text(
+                "UPDATE documents SET upload_status = 'uploaded' "
+                "WHERE id = :d AND tenant_id = :t"
+            ),
+            {"d": document_id, "t": tenant_id},
+        )
+        generation = await pa.begin_generation(
+            session, tenant_id=tenant_id, document_id=document_id, revision_id=None
+        )
+        acquired.set()
+        await asyncio.wait_for(release.wait(), timeout=5)
+        return generation
+
+
+async def _assert_finalize_first_serializes(
+    *,
+    db: AsyncSession,
+    tenant_id: UUID,
+    arranged: _Arranged,
+    sessions: Any,
+    approved: bool,
+) -> None:
+    """Finalization owns DOCUMENT; generation must queue behind it, never deadlock."""
+    bounded = _bounded_sessions(sessions)
+    ownership = (
+        await _graph_completed_owner(arranged, tenant_id, sessions)
+        if approved
+        else await _own(arranged, tenant_id, sessions)
+    )
+    finalize_holds = asyncio.Event()
+    release_finalize = asyncio.Event()
+
+    async def fault(point: str) -> None:
+        if point == "document":
+            finalize_holds.set()
+            await asyncio.wait_for(release_finalize.wait(), timeout=5)
+
+    finalizer = asyncio.create_task(
+        resume_ownership.finalize_v3(
+            ownership=ownership,
+            review_row_id=arranged.review_row_id,
+            approved=approved,
+            approved_by="Reviewer",
+            feedback="",
+            document_id=arranged.document_id,
+            session_factory=bounded,
+            fault=fault,
+        )
+    )
+    await asyncio.wait_for(finalize_holds.wait(), timeout=5)
+
+    generation_started = asyncio.Event()
+    release_generation = asyncio.Event()
+    generation = asyncio.create_task(
+        _generation_transition_holding_document(
+            sessions=bounded,
+            tenant_id=tenant_id,
+            document_id=arranged.document_id,
+            acquired=generation_started,
+            release=release_generation,
+        )
+    )
+
+    # Generation cannot acquire DOCUMENT while finalization owns it.
+    await asyncio.sleep(0.15)
+    assert not generation_started.is_set(), (
+        "generation acquired the document while finalization should own its row lock"
+    )
+    assert not generation.done(), "generation should serialize, not fail/deadlock"
+
+    release_finalize.set()
+    await asyncio.wait_for(finalizer, timeout=5)
+
+    await asyncio.wait_for(generation_started.wait(), timeout=5)
+    release_generation.set()
+    await asyncio.wait_for(generation, timeout=5)
+
+    review = await _reload(db, ReviewItemORM, arranged.review_row_id)
+    expected_status = "APPROVED" if approved else "REJECTED"
+    assert str(review.current_status.value) == expected_status
+
+
+async def test_finalize_approval_serializes_before_generation_transition(
+    db: AsyncSession, test_user: User, real_saver: Any, sessions: Any
+) -> None:
+    saver, register = real_saver
+    tenant_id = UUID(str(test_user.tenant_id))
+    arranged = await _arrange(db, tenant_id, saver, register)
+    await _assert_finalize_first_serializes(
+        db=db,
+        tenant_id=tenant_id,
+        arranged=arranged,
+        sessions=sessions,
+        approved=True,
+    )
+
+
+async def test_finalize_rejection_serializes_before_generation_transition(
+    db: AsyncSession, test_user: User, real_saver: Any, sessions: Any
+) -> None:
+    saver, register = real_saver
+    tenant_id = UUID(str(test_user.tenant_id))
+    arranged = await _arrange(db, tenant_id, saver, register)
+    await _assert_finalize_first_serializes(
+        db=db,
+        tenant_id=tenant_id,
+        arranged=arranged,
+        sessions=sessions,
+        approved=False,
+    )
+
+
+async def test_generation_transition_makes_inflight_approval_fail_closed(
+    db: AsyncSession, test_user: User, real_saver: Any, sessions: Any
+) -> None:
+    """Generation-first serializes approval, then the existing lineage CAS rejects A."""
+    saver, register = real_saver
+    tenant_id = UUID(str(test_user.tenant_id))
+    arranged = await _arrange(db, tenant_id, saver, register)
+    ownership = await _graph_completed_owner(arranged, tenant_id, sessions)
+    bounded = _bounded_sessions(sessions)
+
+    generation_holds = asyncio.Event()
+    release_generation = asyncio.Event()
+    generation = asyncio.create_task(
+        _generation_transition_holding_document(
+            sessions=bounded,
+            tenant_id=tenant_id,
+            document_id=arranged.document_id,
+            acquired=generation_holds,
+            release=release_generation,
+        )
+    )
+    await asyncio.wait_for(generation_holds.wait(), timeout=5)
+
+    finalizer = asyncio.create_task(
+        resume_ownership.finalize_v3(
+            ownership=ownership,
+            review_row_id=arranged.review_row_id,
+            approved=True,
+            approved_by="Reviewer",
+            feedback="",
+            document_id=arranged.document_id,
+            session_factory=bounded,
+        )
+    )
+
+    # It must wait for the generation transaction's DOCUMENT lock.
+    await asyncio.sleep(0.15)
+    assert not finalizer.done(), "finalization should serialize behind generation"
+
+    release_generation.set()
+    await asyncio.wait_for(generation, timeout=5)
+
+    with pytest.raises(OwnershipError, match="Lineage superseded"):
+        await asyncio.wait_for(finalizer, timeout=5)
+
+    await _assert_nothing_was_finalized(
+        db, arranged, expected_phase=Phase.GRAPH_COMPLETED
+    )
