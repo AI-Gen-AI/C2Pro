@@ -12,7 +12,8 @@ For current truth use:
 2. `.github/workflows/ci.yml` and dedicated security/validation workflows;
 3. active GitHub ruleset for required merge checks;
 4. Product Control for product qualification/lifecycle;
-5. this folder for strategy, traceability and historical inventory.
+5. `.c2pro` for development work/control state;
+6. this folder for strategy, traceability and historical inventory.
 
 ## Current CI model
 
