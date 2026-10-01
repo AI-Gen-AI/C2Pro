@@ -109,7 +109,6 @@ reconciliation_delta_2026_09_27:
   current_main_sha: 0db53883a8942f7097fe9ce2e0e6c63397948fbb
   commits_ahead: 61
   material_main_advances:
-    - "#781 merged backend support for Clerk v2 organization claim shapes; auth/tenant derivation remains fail-closed while accepting the supported v1/v2 claim forms."
     - "PR #722/#713 merged at 6e98ec53f814bd29dee4607e375600c4560c7d70 and deployed to both backend and Vercel production, adding evidence-provenance improvements. It merged with zero review records while two Line B truthfulness blockers remained: parsed-text/block-index offset canonicalization and partial-block bbox exactness. Issue #713 therefore remains OPEN for fix-forward; the merge is not acceptance evidence."
     - "PR #723/#712 merged at 0db53883a8942f7097fe9ce2e0e6c63397948fbb and deployed to Railway backend. It merged with zero review records and no remediation commits after the last Line B hold. Backend/UI retry eligibility and strict REJECT-to-document atomicity therefore remain fix-forward blockers; issue #712 remains OPEN."
     - "PR #719/#711 is now rebased on current main at head 6c0e93ca9871f1cfd4d6f6098d11187e61b44b57. Its Alembic lineage has been corrected to 20260923_0001 -> 20260927_0001 (#712 landed) -> 20260927_0711 (#711), so the single-head design is correct; exact-head CI proof is still running and processing stale-writer ownership/fencing remains the functional acceptance blocker."
@@ -133,8 +132,9 @@ reconciliation_delta_2026_09_27:
 
 reconciliation_delta_2026_10_01:
   previous_main_sha: 0db53883a8942f7097fe9ce2e0e6c63397948fbb
-  current_main_sha: a025982e101b14407dc9012b97841d3b77c35b34
+  current_main_sha: 33650a28a930d82a7bd65d98b50981145b3fd1d1
   material_main_advances:
+    - "#781 merged backend support for Clerk v2 organization claim shapes; auth/tenant derivation remains fail-closed while accepting the supported v1/v2 claim forms."
     - "#711 durable processing/recovery work is closed; later #758 closes the checkpoint-lineage authority gap that independent review found at the LangGraph persistence boundary."
     - "#714 trusted-state commit and projected-Coherence implementation is merged/closed after #758 fencing was integrated. Pending/rejected candidates remain non-authoritative; approval is bound to exact reviewed state."
     - "#715 production synthetic acceptance harness implementation is merged on main. The issue remains open because implementation of the harness is not equivalent to an accepted full-journey production qualification."
