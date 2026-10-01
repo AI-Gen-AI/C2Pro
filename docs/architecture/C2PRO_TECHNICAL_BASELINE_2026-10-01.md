@@ -1,0 +1,225 @@
+# C2Pro Technical Architecture Baseline — 2026-10-01
+
+**Status:** Canonical current-state architecture baseline  
+**Baseline main SHA:** `a025982e101b14407dc9012b97841d3b77c35b34`  
+**Scope:** implemented architecture and active product-control boundaries, not a product-release claim
+
+> This document describes the architecture that exists or is explicitly governed on the baseline above. It does **not** imply that the complete end-user journey is production validated. Product lifecycle truth remains in `validation/product/c2pro-master-product-control-v1.yaml`.
+
+## 1. Architectural principles
+
+1. **Project is the intelligence boundary.** Documents are evidence inputs to an evolving project state, not isolated products.
+2. **Evidence before assertion.** Unsupported state remains unknown/null; it is never converted to zero or a fabricated green state.
+3. **One project, one canonical hierarchical WBS.** Budget, schedule, procurement, stakeholders/RACI, alerts, evidence and changes attach to that hierarchy or explicitly to project scope.
+4. **Human approval is a trust boundary.** Proposed/untrusted state cannot mutate canonical trusted project state before exact approval.
+5. **Processing authority is fenced.** A stale worker or stale checkpoint lineage cannot become current after processing ownership changes.
+6. **Health, Coherence and Alerts are distinct signals.** They share the six dimensions but answer different questions.
+7. **Qualification evidence is non-authoritative.** CI, deployment and evidence bundles can prove prerequisites; they never self-promote lifecycle state.
+8. **Multi-tenancy fails closed.** Tenant isolation, RLS, scoped repositories and auth context are security invariants.
+
+## 2. Current runtime topology
+
+```text
+Browser
+  │
+  ▼
+Next.js 16 / React 19 (Vercel)
+  │  Clerk auth + organization-scoped token
+  ▼
+FastAPI 0.141.x (Railway API service)
+  │
+  ├── PostgreSQL / Supabase
+  │     ├── tenant-scoped domain state
+  │     ├── RLS
+  │     ├── pgvector evidence/retrieval
+  │     └── LangGraph Postgres checkpoints
+  │
+  ├── Redis
+  │     ├── Celery broker/runtime coordination
+  │     └── bounded cache/event use
+  │
+  ├── Railway Worker service
+  │     └── durable document / analysis processing
+  │
+  ├── Railway Scheduler service
+  │     └── periodic recovery / scheduled work
+  │
+  ├── Cloudflare R2
+  │     └── document/blob storage
+  │
+  └── AI providers through governed adapters
+        └── extraction / reasoning / specialist paths
+```
+
+The API, worker and scheduler have separate lifecycle ownership even when they share an image. Frontend and backend deployments may legitimately run different commit SHAs; production qualification binds each observed runtime independently.
+
+## 3. Frontend
+
+- **Next.js:** 16.3.6
+- **React:** 19.2.7
+- **Node:** 22.x
+- **Package manager:** pnpm 10+
+- **Auth:** Clerk via `@clerk/nextjs`
+- **Server/client boundary:** Next.js App Router conventions plus generated API clients/TanStack Query on interactive surfaces
+- **State:** Zustand where client-side synchronization is required
+- **Testing:** Vitest + Playwright
+- **Deployment:** Vercel
+
+### Auth synchronization invariant
+
+When an organization is active, the organization-scoped, cache-bypassed Clerk token is the token synchronized into the application auth store. Superseded organization token requests are cancelled/ignored before they can overwrite newer organization state. This prevents stale personal or previous-organization tokens from winning a race.
+
+## 4. Backend and persistence
+
+- **FastAPI:** 0.141.1
+- **Python:** 3.11+
+- **Pydantic:** v2
+- **SQLAlchemy:** async 2.x
+- **PostgreSQL:** canonical transactional store
+- **Supabase:** managed PostgreSQL/RLS platform integration
+- **Alembic:** migration authority
+- **Celery 5.6:** durable asynchronous execution
+- **Redis:** queue/cache/event substrate
+- **LangGraph 1.2:** governed graph orchestration
+- **LangGraph Postgres checkpointer:** persisted graph checkpoints
+- **pgvector:** evidence/retrieval vector support
+
+Repositories do not gain authority merely by writing data. Canonical writes must satisfy tenant, lifecycle, processing-authority and trusted-state invariants.
+
+## 5. Canonical project model
+
+The project aggregate is the unit of intelligence. The principal architectural spine is:
+
+```text
+Project
+├── Evidence / Documents / Revisions
+├── Clauses / Obligations / Findings
+├── Canonical WBS
+│   ├── Schedule / milestones
+│   ├── Budget / cost state
+│   ├── Procurement mappings
+│   ├── Stakeholders / RACI
+│   ├── Alerts / actions
+│   └── Evidence / change linkage
+├── Project events / snapshots
+├── Health
+├── Relational Coherence
+└── Change / temporal intelligence
+```
+
+The WBS is a single hierarchy per project. Discipline-specific trees are not separate canonical WBSs.
+
+## 6. Three user-facing intelligence signals
+
+The canonical dimensions are:
+
+`SCOPE · BUDGET · TIME · TECHNICAL · LEGAL · QUALITY`
+
+| Signal | Question | Non-negotiable rule |
+|---|---|---|
+| Health / coverage | Do we have enough evidence, and what can we truthfully say? | Missing evidence = Unknown/null |
+| Coherence | Do reconcilable project facts agree? | High coherence does not mean healthy |
+| Alerts | What concrete condition needs attention? | Category is dimensional; trigger is orthogonal |
+
+A project can therefore be highly coherent and still have a critical TIME alert if all evidence consistently proves a delay.
+
+## 7. Trusted-state commit boundary
+
+Analysis may create **proposed/untrusted** candidates. Canonical ProjectGraph/Health/Coherence state is mutated only after a human action is bound to the exact reviewed candidate/version/hash and exact checkpoint lineage.
+
+Required semantics:
+
+- pending review does not mutate trusted state;
+- rejected state does not mutate trusted state;
+- correction supersedes the prior proposal and must bind the corrected candidate;
+- approval commits exactly once;
+- exports default to trusted state unless explicitly labelled as a scenario/projection;
+- projected Coherence is hypothetical and visually/semantically distinct from trusted Coherence.
+
+See ADR-026.
+
+## 8. Processing authority and checkpoint lineage
+
+Celery redelivery/recovery is safe only when durable writes and LangGraph checkpoint selection share the same authority model.
+
+A processing generation/attempt owns an authority fence. After takeover or reprocess/revision supersession:
+
+- stale application writes are rejected;
+- stale checkpoint lineage cannot be selected as current;
+- HITL resumes the exact persisted checkpoint tuple;
+- thread-only “latest checkpoint” lookup cannot cross an authority boundary.
+
+See ADR-027.
+
+## 9. Production qualification
+
+The production synthetic acceptance harness is intentionally separate from ordinary CI.
+
+It binds:
+
+- canonical repository/main identity;
+- independently observed Railway API/Worker/Scheduler identities;
+- independently observed Vercel deployment identity;
+- dedicated synthetic production tenant/identity;
+- real Clerk authentication;
+- tenant-scoped durable-state evidence;
+- bounded evidence artifacts without secrets.
+
+The evidence bundle is necessary for promotion but cannot promote Product Control by itself. See ADR-028 and `docs/product/qualification-evidence-contract-v1.md`.
+
+## 10. CI/CD and deployment governance
+
+`main` is protected by repository rulesets. Current required checks are:
+
+- `CI Status`
+- `gitleaks`
+- `Install Drift Guard`
+
+Vercel is **not** a required PR status because ordinary PR branches do not automatically deploy. Automatic Vercel Git deployments are allowlisted to:
+
+- `main`
+- `hotfix/**`
+- `release-candidate/**`
+- `preview/**`
+
+Allowed branches additionally skip Vercel builds when no web/root build input changed. Railway owns backend deployment from the protected production branch.
+
+Operational detail: `docs/runbooks/ci-cd-setup.md`.
+
+## 11. Architecture authority order
+
+When documents disagree, use this order:
+
+1. machine product control: `validation/product/c2pro-master-product-control-v1.yaml`;
+2. accepted ADRs: `docs/architecture/decisions/`;
+3. this current-state baseline;
+4. machine development control under `.c2pro/` and `validation/development/`;
+5. current runbooks/specifications;
+6. historical TDDs, plans, audit reports and archived material.
+
+Code/CI proves realization; it does not silently rewrite an ADR. If implementation intentionally changes an accepted architecture decision, amend/supersede the ADR explicitly.
+
+## 12. Current non-claims
+
+As of this baseline:
+
+- `#706` remains open: the full production end-user journey is not yet declared operational.
+- `#715` remains open: the production synthetic harness exists, but a successful full-journey qualification has not been accepted.
+- `#690` remains open: dedicated production qualification identity/tenant evidence remains an external prerequisite.
+- `#712` and `#713` remain open fix-forward workstreams.
+- No documentation change in this reconciliation promotes P0b/P0c/P0d to `PROD_VALIDATED`.
+
+## 13. Related decisions
+
+- ADR-013 — Typed Graph Contract & Runtime Correctness
+- ADR-014 — Project State Model
+- ADR-015 — Temporal Intelligence
+- ADR-016 — Semantic Diff / Change Impact
+- ADR-017 — ProjectGraph orchestration
+- ADR-018 — Project Health
+- ADR-020 — HITL workflow
+- ADR-024 — Single-document activation
+- ADR-025 — Canonical WBS
+- ADR-026 — Trusted-State Commit
+- ADR-027 — Processing Authority / Checkpoint Lineage
+- ADR-028 — Production Qualification / Composite Runtime Identity
