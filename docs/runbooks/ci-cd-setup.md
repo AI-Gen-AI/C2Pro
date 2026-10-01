@@ -95,20 +95,18 @@ No longer needed by any workflow (were used by the retired `deploy-production.ym
 | `Preview` / `c2pro-api / production` | Created by the Vercel / Railway GitHub apps | Leave alone |
 | `staging` | Leftover from deleted `deploy-staging.yml` | Delete |
 
-## Branch Protection for `main` (do this — currently unprotected)
+## Branch Protection for `main` — active repository ruleset
 
-**Settings → Branches → Add branch ruleset** (or classic protection rule) for `main`:
+The active repository ruleset `Protect main` applies to the default branch. It requires a pull request, blocks non-fast-forward updates, and requires these status checks:
 
-1. Require a pull request before merging (approvals: per team size; 0 is acceptable solo, the check gate still applies).
-2. Require status checks to pass:
+
    - **`CI Status`** (the `ci-status` join job — the only check from `ci.yml` you should require)
    - **`gitleaks`** (from Secret Scan)
    - **`Install Drift Guard`**
    - Do **not** require a `Vercel` check: most PR branches deliberately do not create a Vercel deployment, and frontend production build validation already runs inside CI when web paths change.
-3. Block force pushes (default in rulesets).
-4. Do **not** require individual lane jobs (`backend-unit`, etc.) — they legitimately skip on unrelated changes; `CI Status` accounts for that.
+Do **not** add individual lane jobs as required checks: they legitimately skip on unrelated changes and `CI Status` is the aggregate gate. Do **not** require Vercel because ordinary PR branches deliberately do not deploy.
 
-With auto-deploy on `main`, this ruleset *is* the production deploy gate.
+With auto-deploy on `main`, this active ruleset is the repository-side production deploy gate.
 
 ## Deploys, Migrations, Rollback
 
