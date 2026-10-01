@@ -416,7 +416,7 @@ product_wbs:
     name: "Ops / Trust baseline and residuals"
     priority: P0
     deps: []
-    adrs: [ADR-004, ADR-027, ADR-028]
+    adrs: [ADR-004]
     user_value: "Multi-tenant isolation, PII handling, resilience, durable storage/runtime"
     realization_status: DEPLOYED
     work_status: ACTIVE
