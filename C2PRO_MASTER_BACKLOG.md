@@ -1,5 +1,9 @@
 # C2PRO Master Backlog - Index & Overview
 
+> **Lifecycle: Cold historical backlog / compatibility reference.**  
+> **Not current product or execution authority.** Product state: `validation/product/c2pro-master-product-control-v1.yaml`; execution: `.c2pro/control/`. Reclassified 2026-10-01.
+
+
 > ## ⚠️ LEGACY / COLD REFERENCE — NOT THE CURRENT PRODUCT SOURCE OF TRUTH
 > This backlog is retained as **historical reference only**. The canonical product-programme
 > source of truth is now the **product-control plane**:
