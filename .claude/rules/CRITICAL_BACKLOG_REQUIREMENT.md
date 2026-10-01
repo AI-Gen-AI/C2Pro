@@ -41,9 +41,8 @@ A task's completion is **NOT canonical** until it undergoes review, CI verificat
 
 ## Structured Worker Result (c2pro-implementation-result-v1)
 
-When returning evidence, include a fenced YAML block in your PR/output matching this structure exactly:
+When returning evidence, include a fenced YAML block in your PR/output matching this structure:
 
-```yaml
 ```yaml
 schema: c2pro-implementation-result-v1
 work_id: C2PRO-DEV-XX
@@ -63,13 +62,14 @@ residual_risks:
 recommendation: approve
 pr_url: null
 ```
-```
 
 ---
 
 ## Enforcement
 
-This single-writer contract is enforced by:
-1. Automated validations in `core/supervisor.py` (which bypass legacy Markdown checks for new control tasks).
-2. Project and role-level rules.
-3. CI/CD validation gates that parse and validate the returned result blocks.
+This single-writer contract is supported by:
+1. the `.c2pro` schemas and `scripts/development/validate_c2pro_control.py`;
+2. workspace/routing guards and the result parser/reconciler;
+3. project and role-level rules.
+
+Do not assume every PR CI run parses worker-result text automatically; discover the active workflow/gates for the exact workstream.
