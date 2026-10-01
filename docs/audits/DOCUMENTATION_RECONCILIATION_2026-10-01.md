@@ -173,3 +173,19 @@ The moving-base review also re-read live agent instructions instead of only the 
   - Fixed to 2026-10-01.
 
 Relative-link checks over the primary modified navigation/baseline documents found no broken repository links.
+
+
+### Fourth adversarial round — exact-head semantic reconciliation
+
+A later Line B review re-checked the exact PR head against both the live runtime and the authority rules introduced by this reconciliation. Three material defects were found and corrected:
+
+1. **P1 — historical Product-Control snapshot regression.** A post-2026-09-27 fact (#781 Clerk v2 organization-claim support) had been inserted into `reconciliation_delta_2026_09_27.material_main_advances`, re-contaminating the historical snapshot.
+   - **Disposition:** fixed. The 2026-09-27 block is again immutable; #781 now appears only in the 2026-10-01 reconciliation, whose `current_main_sha` is rebound to `33650a28a930d82a7bd65d98b50981145b3fd1d1`.
+
+2. **P1 — checkpoint exactness was overstated.** ADR-026/ADR-027 and the technical baseline said HITL always resumes an exact persisted checkpoint tuple. The runtime deliberately captures `checkpoint_id` best-effort; if capture is unavailable, resume can fall back to the latest checkpoint on the same authority-scoped thread.
+   - **Disposition:** fixed in documentation rather than changing runtime inside this reconciliation PR. The documented invariant is now: exact checkpoint binding when a checkpoint ID exists; otherwise thread-only fallback is confined to the same processing-attempt lineage and cannot cross an authority boundary.
+
+3. **P2 — live CI remediation still pointed at a legacy backlog.** The CI runbook routed current advisory-suite and paused-E2E remediation into `backlogs/DEV_DEVOPS.md`, contradicting the new single-writer control-plane policy.
+   - **Disposition:** fixed. The backlog is explicitly historical context; current remediation must be tracked through `.c2pro` plus the corresponding GitHub issue/PR.
+
+The prior automated Codex reviews were anchored to earlier heads and therefore do not constitute review of the remediated exact head. Final acceptance still requires exact-head CI plus a fresh independent review after these corrections.
