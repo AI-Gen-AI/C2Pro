@@ -114,6 +114,12 @@ describe("AuthSync", () => {
 
     await waitFor(() => expect(screen.getByText("Child")).toBeInTheDocument());
     await waitFor(() =>
+      expect(getTokenMock).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        skipCache: true,
+      }),
+    );
+    await waitFor(() =>
       expect(setAuth).toHaveBeenCalledWith({
         token: "token-123",
         tenantId: "tenant-uuid-1",
@@ -224,7 +230,7 @@ describe("AuthSync", () => {
     expect(setAuth).not.toHaveBeenCalled();
   });
 
-  it("auto-activates the only organization membership and refreshes an org-scoped token", async () => {
+  it("auto-activates the only organization membership but does not synchronize before it is active", async () => {
     organizationId = null;
     organizationTenantId = null;
     organizationMemberships = [{ organization: { id: "org-solo" } }];
@@ -238,12 +244,7 @@ describe("AuthSync", () => {
     await waitFor(() => {
       expect(setActiveMock).toHaveBeenCalledWith({ organization: "org-solo" });
     });
-    await waitFor(() => {
-      expect(getTokenMock).toHaveBeenCalledWith({
-        organizationId: "org-solo",
-        skipCache: true,
-      });
-    });
+    expect(getTokenMock).not.toHaveBeenCalled();
     expect(setAuth).not.toHaveBeenCalled();
   });
 
@@ -291,9 +292,9 @@ describe("AuthSync", () => {
     expect(setAuth).not.toHaveBeenCalled();
   });
 
-  it("fails closed when the forced org-scoped token refresh returns null", async () => {
-    organizationId = null;
-    organizationTenantId = null;
+  it("fails closed when the active Organization token refresh returns null", async () => {
+    organizationId = "org-solo";
+    organizationTenantId = "tenant-solo";
     organizationMemberships = [{ organization: { id: "org-solo" } }];
     getTokenMock.mockResolvedValueOnce(null);
 
@@ -304,15 +305,13 @@ describe("AuthSync", () => {
     );
 
     await waitFor(() => {
-      expect(setActiveMock).toHaveBeenCalledWith({ organization: "org-solo" });
-    });
-    await waitFor(() => {
       expect(handleAuthErrorStatus).toHaveBeenCalledWith(401);
     });
     expect(getTokenMock).toHaveBeenCalledWith({
       organizationId: "org-solo",
       skipCache: true,
     });
+    expect(setActiveMock).not.toHaveBeenCalled();
     expect(setAuth).not.toHaveBeenCalled();
   });
 
