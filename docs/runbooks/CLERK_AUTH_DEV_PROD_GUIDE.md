@@ -95,7 +95,7 @@ Implemented in repo:
 - sign-in page exists in `apps/web/app/(auth)/sign-in/[[...sign-in]]/page.tsx`
 - sign-up page exists in `apps/web/app/(auth)/sign-up/[[...sign-up]]/page.tsx`
 - backend Clerk settings exist in `apps/api/src/config.py`
-- production deploy workflows exist in `.github/workflows/deploy-production.yml`
+- production deployment is platform-owned (Railway/Vercel auto-deploy from protected `main`); `.github/workflows/release.yml` certifies/publishes releases, and `.github/workflows/prod-synthetic-acceptance.yml` handles controlled product qualification
 
 Not proven by repo alone:
 
