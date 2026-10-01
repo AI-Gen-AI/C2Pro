@@ -1,4 +1,4 @@
-# ADR-026: Trusted-State Commit Boundary and Exact Review Binding
+# ADR-026: HITL-Gated Trusted-State Commit Boundary and Exact Review Binding
 
 **Status:** Accepted / implemented on `main`  
 **Date:** 2026-10-01  
@@ -9,13 +9,15 @@
 
 ## Context
 
-C2Pro uses AI-assisted extraction and ProjectGraph analysis, but human review is intended to be a real trust boundary. A review workflow is unsafe if a pending or rejected candidate can alter canonical project state, or if an approval can be replayed against a different candidate/checkpoint than the one the reviewer saw.
+C2Pro uses AI-assisted extraction and ProjectGraph analysis. When routing requires human review, that review must be a real trust boundary. A gated workflow is unsafe if a pending or rejected candidate can alter canonical project state, or if an approval can be replayed against a different candidate/checkpoint than the one the reviewer saw.
 
 This is not merely a UI-state problem. It is a canonical-state integrity problem.
 
 ## Decision
 
-C2Pro separates **proposal state** from **trusted canonical state**.
+For **HITL-gated analyses**, C2Pro separates **proposal state** from **trusted canonical state**.
+
+This ADR does **not** require every analysis to enter HITL. The current policy router may explicitly produce a non-gated completion (`human_approval_required=False`); that path can persist `TRUSTED` state and enqueue ProjectGraph without a human action. Whether the router's automation policy is sufficiently narrow for each business decision class remains governed by ADR-020 and is tracked separately from the exact-binding invariant defined here.
 
 1. Analysis produces a candidate in `PROPOSED/UNTRUSTED` state.
 2. A pending or rejected candidate cannot mutate canonical ProjectGraph, Health or Coherence.
@@ -40,6 +42,8 @@ but it remains hypothetical. It must:
 
 ## Invariants
 
+The following invariants apply whenever a candidate is routed through HITL:
+
 - **TS-1:** `PENDING_REVIEW` never changes trusted ProjectGraph state.
 - **TS-2:** `REJECTED` never changes trusted ProjectGraph state.
 - **TS-3:** `APPROVED` commits the exact reviewed candidate exactly once.
@@ -47,6 +51,12 @@ but it remains hypothetical. It must:
 - **TS-5:** trusted Health/Coherence excludes rejected findings.
 - **TS-6:** approval cannot be rebound to another candidate, version, checkpoint or processing generation.
 - **TS-7:** projected/scenario state is never silently exported as canonical state.
+
+## Scope boundary
+
+**In scope:** analyses for which review is required; proposal/trust state, exact candidate/review/checkpoint binding, correction/rejection semantics and projected-vs-trusted separation.
+
+**Out of scope:** the business policy that decides which analyses may bypass HITL. ADR-020 defines the intended automation boundary; current confidence/impact routing is only a partial realization of that richer policy.
 
 ## Consequences
 
