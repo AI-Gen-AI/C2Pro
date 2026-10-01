@@ -1,54 +1,47 @@
-# Documentation Index
+# C2Pro Documentation
 
-This repository now separates documentation by lifecycle and function.
+**Status:** Current index  
+**Updated:** 2026-10-01
 
-## Current Canonical Areas
+Start with [Documentation Governance](./DOCUMENTATION_GOVERNANCE.md).
 
-- `architecture/`
-  - ADRs, diagrams, architecture notes, and the current technical design document.
-- `api/`
-  - OpenAPI artifacts and API examples.
-- `specifications/`
-  - Product and technical specifications.
-- `runbooks/`
-  - Operational and environment procedures.
-- `planning/`
-  - Active roadmap and planning material that still guides execution.
-- `testing/`
-  - Test inventories, registries, reports, and active testing roadmaps.
-- `audits/`
-  - Audit reports that remain useful as reference.
-- `coherence_engine/`
-  - Domain-specific scoring and engine reference material.
-- `performance/`
-  - Performance baselines and optimization notes.
-- `assets/`
-  - Schedules, exported artifacts, and sample contract documents.
-- `internal/`
-  - Internal lessons learned and non-product-facing reference notes.
+## Canonical / current
 
-## Navigation Links
+### Architecture
+- [Architecture Index](./ARCHITECTURE_INDEX.md)
+- [Platform Technical Design v4.2](./architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md)
+- [Architecture Decisions](./architecture/decisions/README.md)
+- [LangGraph Checkpointing and Lineage](./architecture/LANGGRAPH_CHECKPOINTING.md)
 
-- [Architecture index](./architecture/README.md)
-- [API index](./api/README.md)
-- [Runbooks index](./runbooks/README.md)
-- [Testing index](./testing/README.md)
-- [Specifications index](./specifications/README.md)
-- [Audits index](./audits/README.md)
-- [Coherence engine index](./coherence_engine/README.md)
-- [Performance index](./performance/README.md)
-- [Assets index](./assets/README.md)
-- [Archive index](./archive/README.md)
+### Product / execution authority
+- Machine Product Control: `../validation/product/c2pro-master-product-control-v1.yaml`
+- [Human Product Control projection](./product/00-c2pro-master-product-control-v1.md)
+- Development control: `../.c2pro/control/`
+- [Master Development Status](./MASTER_DEVELOPMENT_STATUS.md)
 
-## Historical Material
+### Operations / validation
+- [Runbooks](./runbooks/)
+- [Testing](./testing/)
+- [API documentation](./api/)
+- [Release criteria](./RELEASE_CRITERIA.md)
 
-- `archive/`
-  - Superseded reports, dated status documents, duplicate copies, archived planning bundles, implementation summaries, and reference-code artifacts that should not be treated as active source.
+## Proposed / in-flight
 
-## Documentation Rules
+- `docs/superpowers/specs/` — design specifications.
+- `docs/superpowers/plans/` — implementation plans.
+- Open issues/PRs — current proposals and implementation candidates.
 
-- Keep only human-facing documentation in `docs/`.
-- Keep executable code, tests, SQL, and config in app, infrastructure, or ops folders.
-- Archive dated status snapshots instead of leaving them at the top level.
-- Prefer one canonical copy of a document. Duplicate variants go to `archive/duplicates/`.
-- Use `sandbox/` for standalone experiments or prototype apps that are not part of the canonical documentation tree.
+A spec/plan does not become canonical architecture merely because it is detailed.
+
+## Supporting evidence
+
+- `docs/audits/` — dated reviews, reconciliations and evidence packs.
+- `docs/testing/` — suite/methodology references.
+- `docs/workflows/` — workflow/operator guidance (check status header before use).
+
+## Historical
+
+- `docs/archive/` — retained for traceability.
+- Superseded TDDs/diagrams remain when links/history matter, but carry a supersession notice.
+
+Legacy `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` and `blackboard.json` are not worker write targets under the Single-Writer Control Plane.
