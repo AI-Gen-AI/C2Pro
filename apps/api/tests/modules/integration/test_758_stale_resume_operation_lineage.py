@@ -58,12 +58,12 @@ from src.analysis.adapters.persistence.document_artifact_repository import (
     SqlAlchemyDocumentArtifactRepository,
 )
 from src.analysis.adapters.persistence.models import Analysis
-from src.analysis.domain.contracts import DocumentArtifact
-from src.analysis.domain.trust import TrustState
 from src.analysis.application.persist_resume_analysis import (
     ResumeProvenance,
     persist_resume_analysis_atomically,
 )
+from src.analysis.domain.contracts import DocumentArtifact
+from src.analysis.domain.trust import TrustState
 from src.core import checkpoint_lineage, resume_lineage
 from src.core import processing_authority as pa
 from src.core.auth.models import User
