@@ -44,8 +44,8 @@ FastAPI 0.141.x (Railway API service)
   ├── Railway Scheduler service
   │     └── periodic recovery / scheduled work
   │
-  ├── Cloudflare R2
-  │     └── document/blob storage
+  ├── Configured object storage
+  │     └── R2-compatible implementation is the default code path; runtime provider binding is qualified separately
   │
   └── AI providers through governed adapters
         └── extraction / reasoning / specialist paths
@@ -107,7 +107,7 @@ Project
 └── Change / temporal intelligence
 ```
 
-The WBS is a single hierarchy per project. Discipline-specific trees are not separate canonical WBSs.
+The canonical invariant is one WBS hierarchy per project; discipline-specific trees are not separate canonical WBSs. Product Control still classifies ADR-025 realization as PARTIAL because complete one-logical-root enforcement and the remaining cross-domain linkages are not yet fully proven.
 
 ## 6. Three user-facing intelligence signals
 
