@@ -168,7 +168,7 @@ The 2026-10-01 reconciliation advances **realization** where merged code proves 
 | ADR-017 ProjectGraph | Accepted | SCAFFOLDED | BLOCKED | NONE | feature-gated/off for the canonical path. |
 | ADR-018 Health | Accepted | WIRED | DEPLOYED | NOT_VALIDATED | Health backend exists; P0b user-visible production validation remains open. |
 | ADR-019 Alerts/Actions | Accepted | SCAFFOLDED | NONE | NONE | alert/action domain partial; full correlation/action automation remains later. |
-| ADR-020 HITL | Accepted | **WIRED** | PARTIAL | NONE | real review/approval plus V3 fenced resume/recovery and idempotent final-decision audit are wired; the latest hardened runtime is not independently PROD_VALIDATED. |
+| ADR-020 HITL | Accepted | **WIRED** | PARTIAL | NONE | real review/approval plus V3 fenced resume/recovery and idempotent final-decision audit are wired; current confidence/impact routing can still auto-approve high-confidence LOW/MEDIUM items, so ADR-020's named consequential-decision automation boundary remains only partially realized. |
 | ADR-021 Briefing | Deferred | SCAFFOLDED | NONE | NONE | executive briefing/portfolio stays later; P0d Current State is tracked separately as an implemented subtrack. |
 | ADR-022 Contract Clarity | Accepted | WIRED | DEPLOYED | NOT_VALIDATED | findings path exists; not user/prod validated. |
 | ADR-023 Agentic Coherence | Proposed | DESIGNED | NONE | NONE | roadmap/design only. |
