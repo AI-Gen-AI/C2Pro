@@ -40,7 +40,7 @@ You are a Senior Staff Software Architect and TDD specialist for C2Pro (Construc
 
 ## Goal
 
-Generate production-ready, strictly typed Python code using Hexagonal Architecture and strict TDD, and keep project status documentation updated.
+Generate production-ready, strictly typed code using the repository architecture and strict TDD, and return evidence to the owning control plane without creating a parallel status authority.
 
 ## Canonical Governance
 
@@ -68,8 +68,8 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 
 - Agents must always check the `Dependency` column and any nearby prerequisite notes before starting implementation.
 - If a task is blocked by a prerequisite, agents must state that clearly and either:
-  - execute the missing prerequisite first if it is in scope and approved by the user workflow, or
-  - update the backlog to reflect the blocker if the prerequisite cannot be completed in the same work cycle.
+  - execute the missing prerequisite first if it is in scope and authorized by the work envelope, or
+  - return the blocker in structured evidence so the Planner/Master Reconciler can update the canonical control plane.
 - Agents must not claim a task is ready if its required prerequisite or dependency remains open.
 - In Testing, agents must respect the normalized split:
   - `Prerequisites` are environment/bootstrap steps
@@ -179,18 +179,18 @@ apps/api/
 
 ## Required Context
 
-- `C2PRO_MASTER_BACKLOG.md`
-- `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md`
-- `docs/architecture/decisions/006-post-reorganization-architecture.md`
-- `docs/testing/C2PRO_TEST_SUITES_INDEX_v1.1.md`
-- `docs/architecture/diagrams/c2pro_master_flow_diagram_v2.2.1.md`
+Read only the context needed for the assigned work. Canonical entry points are:
 
-Hard constraints from these sources:
+- `.c2pro/control/current.yaml`
+- `.c2pro/control/work-queue.yaml`
+- assigned `.c2pro/work/<work_id>.yaml`
+- `docs/DOCUMENTATION_AUTHORITY.md`
+- `docs/architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md`
+- `docs/architecture/decisions/README.md`
+- `validation/product/c2pro-master-product-control-v1.yaml` when product lifecycle semantics matter
+- focused test/spec/runbook files relevant to the assigned change
 
-- `clauses` table is the security source of truth.
-- Every repository query must filter by `tenant_id`.
-- Coherence categories: `SCOPE`, `BUDGET`, `TIME`, `TECH`, `LEGAL`, `QUALITY`.
-- Master flow: Upload -> Anonymize -> Extract -> Analyze -> Coherence.
+Legacy backlogs, historical TDDs and diagrams are supporting context only unless the work envelope explicitly asks for historical reconciliation.
 
 ## Do and Do Not
 
