@@ -47,7 +47,7 @@ Core architecture rules:
 - one project → one canonical hierarchical WBS is the architectural invariant; complete one-root enforcement remains PARTIAL in Product Control;
 - missing evidence is Unknown/null, never fabricated zero/green;
 - Health, Coherence and Alerts are distinct signals;
-- HITL approval is an exact trusted-state commit boundary;
+- when HITL review is required, approval is an exact trusted-state commit boundary; policy-approved non-gated completions are a separate path;
 - processing authority and checkpoint lineage are fenced across takeover/reprocess;
 - CI/deployment/evidence do not self-promote Product Control.
 
