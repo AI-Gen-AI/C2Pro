@@ -4,6 +4,7 @@
 **Date:** 2026-10-01  
 **Decision class:** Concurrency, recovery and workflow-state integrity  
 **Implementation lineage:** #711 and #758 / PR #759  
+**Basis:** Retrospective codification of the accepted issue/PR contracts and merged implementation evidence; this ADR creates no new runtime authority.
 **Related:** ADR-015, ADR-017, ADR-020, ADR-026
 
 ## Context
