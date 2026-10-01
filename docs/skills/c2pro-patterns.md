@@ -35,7 +35,7 @@ Types by frequency:
 - `ddd` — domain-driven design migration
 - `security` — RLS, secret channel, auth
 
-**Task ID pattern**: always append `— TASK-XXX-000` or `(TASK-XXX-000..NNN)` at end of message body.
+**Historical task-ID pattern (2026-05 sample):** many commits appended `TASK-*` identifiers. For current work, use the identifier/work ID from the assigned `.c2pro` envelope when traceability is required; do not invent or force a legacy `TASK-*` ID.
 
 **Special prefixes**:
 - `[openapi]` — marks OpenAPI schema regeneration commits for CI drift gate detection
@@ -186,7 +186,7 @@ src/tests/
 └── e2e/          # Playwright end-to-end tests
 ```
 
-**Coverage targets**: 70%+ (enforced by CI coverage gates)
+**Coverage:** use the exact current CI ratchets and suite-specific gates; do not infer a universal 70% threshold from this historical pattern file. The backend combined coverage ratchet is defined in current CI/config and may differ from aspirational targets.
 
 ---
 
