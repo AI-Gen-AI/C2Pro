@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
-**Status:** Reconciliation snapshot (read-only) · **Date:** 2026-09-27 · **Schema:** v7  
-**reconciled_against_main_sha:** `0db53883a8942f7097fe9ce2e0e6c63397948fbb` · **deployed_runtime_sha:** `UNVERIFIED`  
+**Status:** Reconciliation snapshot (read-only) · **Date:** 2026-10-01 · **Schema:** v7  
+**reconciled_against_main_sha:** `a025982e101b14407dc9012b97841d3b77c35b34` · **deployed_runtime_sha:** `UNVERIFIED`  
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This document is the human projection of the machine product-control plane. It does not grant execution authority. Direct `main`, merge and production mutation remain governed outside this document.
@@ -10,7 +10,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=0db53883a8942f7097fe9ce2e0e6c63397948fbb
+reconciled_against_main_sha=a025982e101b14407dc9012b97841d3b77c35b34
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
@@ -90,29 +90,33 @@ This resolves the earlier ambiguity that could have led the product toward paral
 
 Three facts remain deliberately separate:
 
-- `reconciled_against_main_sha = 0db53883a8942f7097fe9ce2e0e6c63397948fbb` — repository baseline used for this reconciliation.
+- `reconciled_against_main_sha = a025982e101b14407dc9012b97841d3b77c35b34` — repository baseline used for this reconciliation.
 - `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is composite. Railway API `ab0a2cfa-2565-4e74-bdc5-26b3066d4bdb`, Worker `7d2fdcb4-7606-4c80-836e-6dfd852e55a4` and Scheduler `5f59ff9f-9a78-4065-93f6-b9a3c8f5e4e3` are SUCCESS at #723 merge commit `0db53883a8942f7097fe9ce2e0e6c63397948fbb`. Vercel production `dpl_2z3ivCtezP7RKZ1b3wmDmAi7PUB5` is READY at #722 merge commit `6e98ec53f814bd29dee4607e375600c4560c7d70`. Backend and frontend SHAs therefore legitimately differ and must be rebound separately at qualification time.
 - Railway also reports one unresolved STAGED API environment patch `7fcd5228-be1b-4be5-8e72-9692c854ddbf`; the available read-only API does not expose its internal delta, so #715 must fail closed unless staged changes are zero or the exact delta is operator-reviewed and bound to the qualification evidence.
 - Fresh API logs report `coherence_analysis=True`; this proves production Coherence is enabled, but does not by itself prove the separate per-tenant ADR-017 ProjectGraph gate.
 - `product_value_delivered = false` — P0a reliability is closed and several product lanes are now wired on `main`, but the north-star P0b journey is still not PROD_VALIDATED.
 
-### 2.1 What changed since the previous 2026-09-27 control baseline
+### 2.1 What changed in the 2026-10-01 reconciliation
 
-The previous reconciled repository baseline was `c04b5567ad579259abd73037fa6cca2aa33891fc`. Current `main` is **61 commits ahead** at `0db53883a8942f7097fe9ce2e0e6c63397948fbb`.
+Since the 2026-09-27 control snapshot, repository realization advanced materially while production-validation state remains deliberately conservative:
 
-Material facts in this interval:
+- **#711** durable processing/recovery work is closed.
+- **#758** closes the LangGraph checkpoint-lineage authority defect found during independent review: stale processing lineage cannot become selectable as current after takeover/reprocess.
+- **#714 / PR #726** trusted-state commit and projected-Coherence implementation is merged/closed after the lineage fence was integrated. Pending/rejected candidates remain non-authoritative; approval binds exact reviewed state.
+- **#715 / PR #733** production synthetic acceptance harness implementation is merged. **#715 remains open** because implementing the harness is not the same as executing and accepting the full production journey.
+- **#775** closes Clerk organization-token synchronization races so stale personal/previous-organization token work cannot overwrite current organization auth state.
+- **#779** bounds automatic Vercel Git deployments to `main`, `hotfix/**`, `release-candidate/**` and `preview/**`; ordinary PRs remain governed by GitHub CI without consuming automatic preview quota.
+- R17 Sonar/security-hotspot cleanup is complete. This improves repository quality/security posture but does not count as product-value validation.
 
-- **#713 / PR #722:** evidence-provenance and locator improvements merged as `6e98ec53...` and are live in both Railway and Vercel production. However, the exact merged head had **zero review records** and still contains two documented truthfulness defects: parsed-text/block-index offset canonicalization and partial-block bbox exactness. Issue #713 remains OPEN for fix-forward. Merge/deploy is not acceptance.
-- **#712 / PR #723:** truthful lifecycle work merged as `0db53883...` and is live in Railway backend. The exact merged head also had **zero review records** and no remediation commits after the Line B hold. Backend/UI retry eligibility and strict REJECT-to-document atomicity remain fix-forward blockers. Issue #712 remains OPEN.
-- **#711 / PR #719 integration status:** #719 is now rebased on current `main` at head `6c0e93ca...`. Its migration chain has been linearized as `20260923_0001 -> 20260927_0001 (#712) -> 20260927_0711 (#711)`. The single-head design is correct; exact-head CI is still a control gate and the remaining functional acceptance blocker is processing ownership/fencing after takeover.
-- **Production is currently composite:** Railway backend is `0db53883...`; Vercel production is `6e98ec53...`. No #723 Vercel production deployment is observed after the #722 READY deployment.
-- **Parallel Line B governance lane:** #724 Wave 1 is active to remove residual live authority from legacy backlog/blackboard guidance; #725 Wave 2 is prepared to bind independent review to exact PR/head and enforce independence/risk-policy/synthesis fail-closed. This lane improves development governance but does not count toward #706 product acceptance.
-- **#714 preparation has started, not integration:** PR #726 is DRAFT/RED and currently contains focused trusted-state tests only; it deliberately has no trusted-state migration yet because #711 still owns the immediately preceding migration. This work may refine acceptance tests, but must not become mergeable canonical implementation until corrected #711/#712/#713 contracts are stable.
-- **Runtime preflight drift persists:** Railway still carries unresolved staged API patch `7fcd5228-be1b-4be5-8e72-9692c854ddbf`; #715 must fail closed unless that delta is explicitly reviewed/bound or staged changes return to zero.
+Still open for the end-user GOAL:
 
-The GOAL remains **#706 operational closure**. #710 is live. #712 and #713 are merged/deployed but **not accepted**; both require fix-forward. #711 is now integrated onto current-main migration topology, but still requires the owner/fence invariant and its real-Postgres stale-writer race proof. Under canonical routing, Claude is the principal implementation route for that bounded fencing delta and Gemini is the adversarial QA/challenger route. #714 must consume the corrected upstream contracts; #715 has not run and #690 remains an external prerequisite.
+- **#706** full production end-user journey;
+- **#715** accepted full production qualification;
+- **#690** dedicated non-customer production qualification identity/tenant evidence;
+- **#712** truthful lifecycle fix-forward;
+- **#713** evidence-locator truthfulness fix-forward.
 
-CI green, merge state and deployment success remain controls only. None promotes P0b/P0c/P0d or changes `product_value_delivered=false`.
+Therefore `product_value_delivered=false` and P0b/P0c/P0d qualification lanes remain unchanged. No merge, CI, deployment or documentation event in this reconciliation self-promotes lifecycle state.
 
 ### 2.2 Qualification Control v1 — evidence is necessary, never self-promoting
 
