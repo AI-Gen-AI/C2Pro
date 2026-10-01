@@ -18,29 +18,26 @@ It does not replace detailed ADRs, product-control contracts, implementation pla
 
 Historical documents remain valid evidence of the state at their date. They must not be silently rewritten to look current.
 
-## 2. Authority and read order
+## 2. Authority model
 
-Use the following order when sources appear to disagree:
+C2Pro uses **scoped authority planes**. There is intentionally no universal Markdown “single source of truth”.
 
-1. **Machine-enforced product control**
-   - `validation/product/c2pro-master-product-control-v1.yaml`
-   - parity/validation code under `validation/product/`
-2. **Accepted ADRs**
-   - `docs/architecture/decisions/`
-3. **This TDD**
-   - platform-wide architecture and authority map
-4. **Current specifications / product contracts**
-   - `docs/product/`, `docs/specifications/`, current design specs
-5. **Operational runbooks**
-   - `docs/runbooks/`
-6. **Testing and CI contracts**
-   - workflows + validation code are executable truth; docs explain them
-7. **Planning documents**
-   - future/authorized implementation intent, not proof of landed behavior
-8. **Historical audits/evidence**
-   - point-in-time evidence; never current authority unless explicitly promoted
+| Concern | Canonical authority |
+|---|---|
+| Actual runtime/schema behavior | executable code, schema/migrations and runtime evidence |
+| Required merge checks | active GitHub ruleset + current workflows |
+| Product programme/lifecycle | `validation/product/c2pro-master-product-control-v1.yaml` + parity/evidence validators |
+| Development execution/control | `.c2pro/control/` + assigned `.c2pro/work/` envelopes |
+| Durable architecture | accepted ADRs |
+| Platform-wide design | this current TDD |
+| Operator procedure | current runbooks |
+| Historical proof | immutable/dated evidence, PR/CI/Git history |
 
-Task/status documents must not override machine-backed lifecycle state, accepted ADR semantics, or executable CI/runtime contracts.
+Legacy `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` and `blackboard.json` are cold/read-only reconciliation sources, not current control write targets.
+
+Planning documents describe authorized intent; they do not prove landed/deployed/validated state.
+
+When two sources conflict, resolve the conflict within the relevant authority plane instead of allowing a lower-scope document to override it.
 
 ## 3. Product architecture
 
@@ -67,7 +64,8 @@ C2Pro is a monorepo centered on:
 |---|---|---|
 | Backend API | `apps/api` | FastAPI, domain/application/adapters, persistence, AI orchestration |
 | Frontend | `apps/web` | Next.js product UI, Clerk auth, typed API consumption, E2E |
-| Product control | `validation/product` + `docs/product` | machine lifecycle/control + human projection |
+| Product control | `validation/product` + `docs/product` | product programme/lifecycle machine control + human projection |
+| Development control | `.c2pro/control` + `.c2pro/work` | hot work/control state under single-writer governance |
 | CI / security | `.github/workflows` + validation tests | merge/release quality gates |
 | Architecture | `docs/architecture` | TDD, ADRs, diagrams, architecture notes |
 | Evidence | `evidence/` | immutable qualification/release evidence where applicable |
@@ -218,7 +216,7 @@ Rules:
 
 Documents are classified as:
 
-- **Canonical active:** current TDD, accepted ADRs, machine-backed product control, active runbooks/specs.
+- **Canonical active:** current TDD, accepted ADRs, scoped machine control planes (`validation/product`, `.c2pro`), active runbooks/specs.
 - **Planning:** authorized intent that may not yet be landed.
 - **Historical evidence:** dated audits, release evidence, superseded TDDs and implementation reports.
 - **Working context:** temporary analysis/session material; never authority.
@@ -247,7 +245,7 @@ Any newer machine Product Control reconciliation supersedes this dated status se
 
 Update this TDD only for platform-wide architectural changes.
 
-Use ADRs for durable architectural decisions, runbooks for operator procedures, Product Control for lifecycle authority, and evidence bundles for proof.
+Use ADRs for durable architectural decisions, runbooks for operator procedures, Product Control for product lifecycle, `.c2pro` for development execution state, and evidence bundles/PR/CI for proof.
 
 ---
 
