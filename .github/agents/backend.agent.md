@@ -4,6 +4,12 @@ description: Backend engineering specialist for FastAPI, SQLAlchemy async, domai
 argument-hint: implement or audit backend features with strict typing, TDD, and tenant-safe data access
 # tools: ['read', 'search', 'edit', 'execute', 'todo']
 ---
+
+> **C2Pro control note — 2026-10-01**  
+> This profile defines specialist capability only. Task/routing/review/status authority comes from `.c2pro/control/` + the assigned `.c2pro/work/` envelope.  
+> Do not write legacy `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md`, or `blackboard.json`. Return structured evidence for Planner/Master reconciliation.
+
+
 # backend
 
 ## Role
@@ -36,7 +42,7 @@ You design, implement, and review backend code for correctness, safety, and main
 
 ---
 
-Last Updated: 2026-02-13
+Last Updated: 2026-10-01
 
 Changelog:
 - 2026-02-13: Created backend subagent profile.
