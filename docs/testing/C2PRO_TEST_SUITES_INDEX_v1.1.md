@@ -1,5 +1,8 @@
 # C2Pro - ÍNDICE EXHAUSTIVO DE TEST SUITES v1.1
 
+> **Historical testing baseline:** this document preserves the test plan/inventory at its original date. It is not the current CI or release-gate authority. For current enforcement use `.github/workflows/ci.yml`, the active GitHub ruleset, `docs/RELEASE_CRITERIA.md`, and current test code. Do not rewrite historical counts to match today's repository.
+
+
 > **Versión:** 1.1.1  
 > **Fecha:** 2026-01-31  
 > **Última Actualización:** 2026-02-14  
