@@ -31,16 +31,16 @@
     {
       "behavior": {
         "env": {},
-        "run": "python -m pip install --disable-pip-version-check \"pyyaml==6.0.3\"",
+        "run": "python -m pip install --disable-pip-version-check \"pyyaml==6.0.3\" \"pytest==9.1.1\"",
         "shell": null,
         "working_directory": null
       },
-      "context": ".github/workflows/c2pro-product-control-guard.yml::jobs.product-control-guard::name:Install minimal dependency (PyYAML only)",
+      "context": ".github/workflows/c2pro-product-control-guard.yml::jobs.product-control-guard::name:Install minimal control-test dependencies",
       "file": ".github/workflows/c2pro-product-control-guard.yml",
       "owner": "@AI-Gen-AI",
-      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
-      "remediation_issue": "#600",
-      "sha256": "9b7c9e9229f49e1cc07eb06a1729e31e61ba9ad062458201952e11e761bd3c23"
+      "reason": "Reviewed under #733: pinned PyYAML + pytest are the minimal dependencies required to execute product-control parity and production-qualification pytest contracts in the isolated guard.",
+      "remediation_issue": "#733",
+      "sha256": "b21f0dd4c3fe39401cec2a43720866bfeed99c77e1c21e6843d5af30b54abd03"
     },
     {
       "behavior": {
