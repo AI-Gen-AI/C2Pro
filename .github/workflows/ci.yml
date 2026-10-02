@@ -950,6 +950,14 @@ jobs:
           test -n "$CLERK_E2E_USER_ID" && test "$CLERK_E2E_USER_ID" != "null"
           echo "CLERK_E2E_USER_ID=$CLERK_E2E_USER_ID" >> "$GITHUB_ENV"
 
+      # The shared E2E identity now follows the real Clerk v2 Organization
+      # contract. Reconcile the dedicated development Organization before
+      # seeding so CLERK_E2E_ORG_ID is the same value seen by the authenticated
+      # browser and persisted on the deterministic tenant.
+      - name: Reconcile dedicated Clerk E2E Organization fixture
+        if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && env.CLERK_SECRET_KEY != '' }}
+        run: python apps/api/scripts/provision_clerk_e2e_fixture.py
+
       - name: Seed FRT-192 full-stack E2E wedge
         if: ${{ vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') && env.CLERK_SECRET_KEY != '' }}
         working-directory: apps/api
