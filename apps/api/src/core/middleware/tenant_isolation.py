@@ -389,8 +389,6 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
 
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
-        elif request.url.path.endswith("/process/stream"):
-            token = request.query_params.get("access_token")
 
         if not token:
             if request.url.path.endswith("/process/stream"):
