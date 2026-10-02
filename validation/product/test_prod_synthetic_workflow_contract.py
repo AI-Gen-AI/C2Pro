@@ -147,6 +147,33 @@ def test_identity_preflight_has_explicit_bounded_test_timeout() -> None:
     assert "test.setTimeout(IDENTITY_PREFLIGHT_TIMEOUT_MS)" in spec
 
 
+def test_prod_auth_signout_selector_matches_application_header() -> None:
+    helper = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "support"
+        / "prod-auth.synthetic.ts"
+    ).read_text(encoding="utf-8")
+    header = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "components"
+        / "layout"
+        / "AppHeader.tsx"
+    ).read_text(encoding="utf-8")
+
+    assert 'aria-label="User menu"' in header
+    assert "Sign out" in header
+    assert 'name: /user menu/i' in helper
+    assert 'name: /sign out/i' in helper
+
+
 def test_prod_auth_observes_the_browser_canonical_production_origin() -> None:
     helper = (
         REPO_ROOT

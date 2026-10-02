@@ -166,7 +166,7 @@ export async function signInSyntheticProductionUser(
 }
 
 export async function signOutThroughUi(page: Page): Promise<void> {
-  const userButton = page.getByRole("button", { name: /open user button/i });
+  const userButton = page.getByRole("button", { name: /user menu/i });
   await expect(userButton).toBeVisible({ timeout: 30_000 });
   await userButton.click();
   const signOut = page.getByRole("menuitem", { name: /sign out/i });
