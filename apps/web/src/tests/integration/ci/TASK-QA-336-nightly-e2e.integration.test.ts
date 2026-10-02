@@ -44,7 +44,26 @@ describe("TASK-QA-336 nightly full E2E lane", () => {
     );
   });
 
-  it("[TASK-QA-336-RED-03] keeps dev as the Playwright default but supports production smoke", () => {
+  it("[TASK-QA-336-RED-03] reconciles the Clerk Organization before seeding the real-backend smoke", () => {
+    const workflowPath = resolve(process.cwd(), "..", "..", ".github", "workflows", "ci.yml");
+    const workflow = readFileSync(workflowPath, "utf8");
+    const smokeJob = workflow.slice(
+      workflow.indexOf("frontend-e2e-smoke:"),
+      workflow.indexOf("frontend-build:"),
+    );
+
+    const reconcile = smokeJob.indexOf(
+      "- name: Reconcile dedicated Clerk E2E Organization fixture",
+    );
+    const seed = smokeJob.indexOf("- name: Seed FRT-192 full-stack E2E wedge");
+    expect(reconcile).toBeGreaterThan(-1);
+    expect(seed).toBeGreaterThan(reconcile);
+    expect(smokeJob).toContain(
+      "run: python apps/api/scripts/provision_clerk_e2e_fixture.py",
+    );
+  });
+
+  it("[TASK-QA-336-RED-04] keeps dev as the Playwright default but supports production smoke", () => {
     const configPath = resolve(process.cwd(), "playwright.config.ts");
     const config = readFileSync(configPath, "utf8");
 

@@ -132,6 +132,21 @@ def test_dispatch_inputs_are_not_interpolated_directly_into_shell_source() -> No
     assert all("${{ inputs." not in block for block in run_sources)
 
 
+def test_identity_preflight_has_explicit_bounded_test_timeout() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-identity-preflight.spec.ts"
+    ).read_text(encoding="utf-8")
+    assert "IDENTITY_PREFLIGHT_TIMEOUT_MS = 5 * 60_000" in spec
+    assert "test.setTimeout(IDENTITY_PREFLIGHT_TIMEOUT_MS)" in spec
+
+
 def test_identity_preflight_is_the_default_non_mutating_mode() -> None:
     source = _source()
     assert 'default: "identity-preflight"' in source
