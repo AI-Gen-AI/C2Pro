@@ -54,15 +54,54 @@ async function activeOrganizationId(page: Page): Promise<string | null> {
   return page.evaluate(() => window.Clerk?.organization?.id ?? null);
 }
 
-async function waitForClerkSession(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () =>
-      window.Clerk?.session?.status === "active" &&
-      Boolean(window.Clerk?.user) &&
-      Boolean(window.Clerk?.organization),
-    undefined,
-    { timeout: 60_000 },
-  );
+type SafeClerkDiagnostics = {
+  pathname: string;
+  sessionStatus: string | null;
+  hasUser: boolean;
+  hasOrganization: boolean;
+};
+
+async function safeClerkDiagnostics(page: Page): Promise<SafeClerkDiagnostics> {
+  return page.evaluate(() => ({
+    pathname: window.location.pathname,
+    sessionStatus: window.Clerk?.session?.status ?? null,
+    hasUser: Boolean(window.Clerk?.user),
+    hasOrganization: Boolean(window.Clerk?.organization),
+  }));
+}
+
+async function waitForSignedInClerkUser(page: Page): Promise<void> {
+  try {
+    await page.waitForFunction(
+      () =>
+        window.Clerk?.session?.status === "active" &&
+        Boolean(window.Clerk?.user),
+      undefined,
+      { timeout: 60_000 },
+    );
+  } catch {
+    const facts = await safeClerkDiagnostics(page);
+    throw new Error(
+      "PROD_ACCEPTANCE_CLERK_SESSION_NOT_ACTIVE:" +
+        JSON.stringify(facts),
+    );
+  }
+}
+
+async function waitForActiveOrganization(page: Page): Promise<void> {
+  try {
+    await page.waitForFunction(
+      () => Boolean(window.Clerk?.organization),
+      undefined,
+      { timeout: 60_000 },
+    );
+  } catch {
+    const facts = await safeClerkDiagnostics(page);
+    throw new Error(
+      "PROD_ACCEPTANCE_CLERK_ORGANIZATION_NOT_ACTIVE:" +
+        JSON.stringify(facts),
+    );
+  }
 }
 
 export async function signInSyntheticProductionUser(
@@ -83,8 +122,15 @@ export async function signInSyntheticProductionUser(
   await passwordInput.fill(password);
   await page.getByRole("button", { name: /^continue$/i }).click();
 
-  await page.waitForURL(/\/projects(?:\?|$|\/)/, { timeout: 60_000 });
-  await waitForClerkSession(page);
+  // AUTH is proven by the real Clerk production session, not by whether the
+  // SignIn component happens to complete its forceRedirectUrl navigation.
+  // Once the session exists, enter the protected app explicitly so AuthSync can
+  // activate the user's sole Organization and emit the application tenant.
+  await waitForSignedInClerkUser(page);
+  if (!/\/projects(?:\?|$|\/)/.test(new URL(page.url()).pathname)) {
+    await page.goto(`${baseOrigin}/projects`);
+  }
+  await waitForActiveOrganization(page);
 
   // Force one ordinary product read so the exact application tenant header is
   // observed from AuthSync/Zustand, not inferred from a JWT or copied secret.

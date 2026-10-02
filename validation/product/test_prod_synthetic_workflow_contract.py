@@ -147,6 +147,39 @@ def test_identity_preflight_has_explicit_bounded_test_timeout() -> None:
     assert "test.setTimeout(IDENTITY_PREFLIGHT_TIMEOUT_MS)" in spec
 
 
+def test_prod_auth_proves_real_clerk_session_before_protected_navigation() -> None:
+    helper = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "support"
+        / "prod-auth.synthetic.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "@clerk/testing" not in helper
+    submit = helper.index(
+        'page.getByRole("button", { name: /^continue$/i }).click();',
+        helper.index('input[name="password"]'),
+    )
+    signed_in = helper.index("await waitForSignedInClerkUser(page);", submit)
+    protected_navigation = helper.index(
+        "await page.goto(`${baseOrigin}/projects`);",
+        signed_in,
+    )
+    organization = helper.index(
+        "await waitForActiveOrganization(page);",
+        protected_navigation,
+    )
+
+    assert submit < signed_in < protected_navigation < organization
+    assert "PROD_ACCEPTANCE_CLERK_SESSION_NOT_ACTIVE" in helper
+    assert "PROD_ACCEPTANCE_CLERK_ORGANIZATION_NOT_ACTIVE" in helper
+
+
 def test_identity_preflight_is_the_default_non_mutating_mode() -> None:
     source = _source()
     assert 'default: "identity-preflight"' in source
