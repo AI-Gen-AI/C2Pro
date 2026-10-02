@@ -147,6 +147,27 @@ def test_identity_preflight_has_explicit_bounded_test_timeout() -> None:
     assert "test.setTimeout(IDENTITY_PREFLIGHT_TIMEOUT_MS)" in spec
 
 
+def test_prod_auth_observes_the_browser_canonical_production_origin() -> None:
+    helper = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "support"
+        / "prod-auth.synthetic.ts"
+    ).read_text(encoding="utf-8")
+
+    configured = helper.index("const configuredOrigin = requireProductionOrigin(productionBaseUrl());")
+    goto_sign_in = helper.index("await page.goto(`${configuredOrigin}/sign-in`);", configured)
+    canonical = helper.index("const baseOrigin = requireProductionOrigin(page.url());", goto_sign_in)
+    observer = helper.index("const observed = observeApplicationAuth(page, baseOrigin);", canonical)
+
+    assert configured < goto_sign_in < canonical < observer
+
+
 def test_prod_auth_proves_real_clerk_session_before_protected_navigation() -> None:
     helper = (
         REPO_ROOT

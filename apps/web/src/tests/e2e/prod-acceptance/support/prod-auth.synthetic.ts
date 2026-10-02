@@ -107,11 +107,17 @@ async function waitForActiveOrganization(page: Page): Promise<void> {
 export async function signInSyntheticProductionUser(
   page: Page,
 ): Promise<BrowserIdentityFacts> {
-  const baseOrigin = requireProductionOrigin(productionBaseUrl());
+  const configuredOrigin = requireProductionOrigin(productionBaseUrl());
   const { email, password } = credentials();
-  const observed = observeApplicationAuth(page, baseOrigin);
 
-  await page.goto(`${baseOrigin}/sign-in`);
+  await page.goto(`${configuredOrigin}/sign-in`);
+
+  // Vercel may canonicalize between the two explicitly approved production
+  // hosts (c2pro.io <-> www.c2pro.io). Observe the origin the browser actually
+  // landed on, but validate it against the same strict production allowlist
+  // before accepting any application-auth evidence.
+  const baseOrigin = requireProductionOrigin(page.url());
+  const observed = observeApplicationAuth(page, baseOrigin);
   const identifier = page.locator('input[name="identifier"]');
   await expect(identifier).toBeVisible({ timeout: 30_000 });
   await identifier.fill(email);
