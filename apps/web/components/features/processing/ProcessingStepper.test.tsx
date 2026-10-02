@@ -95,9 +95,10 @@ describe("S2-10 RED - ProcessingStepper", () => {
 
     expect(MockEventSource.instances).toHaveLength(1);
     expect(MockEventSource.instances[0]?.withCredentials).toBe(true);
-    expect(MockEventSource.instances[0]?.url).toContain(
-      "/api/v1/analysis/projects/proj_demo_001/process/stream?access_token=test-token",
+    expect(MockEventSource.instances[0]?.url).toBe(
+      "/api/v1/analysis/projects/proj_demo_001/process/stream",
     );
+    expect(MockEventSource.instances[0]?.url).not.toContain("access_token");
   });
 
   it("[S2-10-RED-01b] rejects non-credentialed stream config", () => {
