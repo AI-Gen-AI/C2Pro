@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { buildBackendUrl } from "./route-utils";
 
@@ -10,7 +11,11 @@ async function getProxyPath(context: RouteContext): Promise<string> {
   return resolvedParams.proxy.join("/");
 }
 
-function buildHeaders(request: NextRequest): HeadersInit {
+function isProcessingStreamPath(path: string): boolean {
+  return path.endsWith("/process/stream");
+}
+
+async function buildHeaders(request: NextRequest, path: string): Promise<HeadersInit> {
   const headers: Record<string, string> = {};
 
   const authorization = request.headers.get("authorization");
@@ -19,6 +24,15 @@ function buildHeaders(request: NextRequest): HeadersInit {
 
   if (authorization) {
     headers.Authorization = authorization;
+  } else if (isProcessingStreamPath(path)) {
+    // Native EventSource cannot set an Authorization header. For the same-origin
+    // SSE proxy, resolve the Clerk session server-side from its secure cookie and
+    // forward the short-lived bearer only on the backend hop. Never put it in a URL.
+    const { getToken } = await auth();
+    const token = await getToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
   }
 
   if (tenantId) {
@@ -40,7 +54,7 @@ async function proxyRequest(
   try {
     const path = await getProxyPath(context);
     const url = buildBackendUrl(path, request);
-    const headers = buildHeaders(request);
+    const headers = await buildHeaders(request, path);
     const init: RequestInit = {
       method,
       headers,
