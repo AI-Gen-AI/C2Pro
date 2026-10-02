@@ -91,13 +91,10 @@ export function createProcessingEventSource(
     throw new Error("Authenticated SSE session required");
   }
 
-  const source = new EventSource(
-    getStreamProjectProcessingUrl(projectId, { access_token: token }),
-    {
-      ...init,
-      withCredentials: true,
-    },
-  );
+  const source = new EventSource(getStreamProjectProcessingUrl(projectId), {
+    ...init,
+    withCredentials: true,
+  });
   eventSourcesByProject.set(projectId, source);
   return source;
 }
