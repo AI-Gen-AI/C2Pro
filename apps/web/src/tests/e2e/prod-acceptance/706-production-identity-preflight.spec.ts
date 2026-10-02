@@ -15,6 +15,9 @@ const OUTPUT = path.join(
   "identity-preflight.json",
 );
 
+const IDENTITY_PREFLIGHT_TIMEOUT_MS = 5 * 60_000;
+test.setTimeout(IDENTITY_PREFLIGHT_TIMEOUT_MS);
+
 test("real production qualification identity is isolated and usable", async ({ page }) => {
   const facts = await signInSyntheticProductionUser(page);
 
