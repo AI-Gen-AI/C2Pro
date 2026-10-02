@@ -25,8 +25,12 @@ class MockEventSource {
   static instances: MockEventSource[] = [];
   onerror: (() => void) | null = null;
   readonly listeners = new Map<string, Listener[]>();
+  readonly url: string;
+  readonly withCredentials: boolean;
 
-  constructor() {
+  constructor(url: string, init?: EventSourceInit) {
+    this.url = url;
+    this.withCredentials = init?.withCredentials ?? false;
     MockEventSource.instances.push(this);
   }
 
@@ -62,6 +66,17 @@ describe("AnalysisProgressTracker", () => {
       "EventSource",
       MockEventSource as unknown as typeof EventSource,
     );
+  });
+
+  it("opens credentialed SSE without a bearer token in the URL", () => {
+    render(<AnalysisProgressTracker projectId="proj-123" />);
+
+    expect(MockEventSource.instances).toHaveLength(1);
+    expect(MockEventSource.instances[0]?.url).toBe(
+      "/api/v1/analysis/projects/proj-123/process/stream",
+    );
+    expect(MockEventSource.instances[0]?.url).not.toContain("access_token");
+    expect(MockEventSource.instances[0]?.withCredentials).toBe(true);
   });
 
   it("turns stream auth loss into a session-expired state", () => {

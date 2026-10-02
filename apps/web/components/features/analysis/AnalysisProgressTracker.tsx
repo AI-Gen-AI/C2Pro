@@ -213,11 +213,17 @@ export function AnalysisProgressTracker({
     setLocalError(null);
 
     const { token } = useAuthStore.getState();
+    if (!token) {
+      const message = "Session expired";
+      setLocalError(message);
+      handleAuthErrorStatus(401);
+      if (onError) onError(message);
+      return;
+    }
+
     const eventSource = new EventSource(
-      getStreamProjectProcessingUrl(
-        projectId,
-        token ? { access_token: token } : undefined,
-      ),
+      getStreamProjectProcessingUrl(projectId),
+      { withCredentials: true },
     );
 
     eventSource.addEventListener("stage", (event) => {

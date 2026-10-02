@@ -337,10 +337,9 @@ async def analyze_document(
 async def stream_project_processing(
     project_id: UUID,
     _request: RequestType,
-    # SSE: the browser's EventSource cannot set an Authorization header, so it
-    # passes the token via ?access_token=. TenantIsolationMiddleware reads that
-    # for /process/stream and populates request.state; CurrentTenantId consumes
-    # it. (get_current_user only reads the Authorization header -> 401 for SSE.)
+    # Native EventSource cannot set Authorization headers. The same-origin
+    # Next.js proxy resolves the Clerk session server-side and forwards the bearer
+    # on the backend hop; tokens are never accepted from URL query parameters.
     tenant_id: CurrentTenantId,
     db: Annotated[AsyncSession, Depends(get_session)],
 ) -> StreamingResponse:
