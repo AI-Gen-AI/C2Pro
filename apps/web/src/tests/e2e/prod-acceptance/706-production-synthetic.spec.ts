@@ -118,10 +118,14 @@ async function resolveConfiguredProductionBackendOrigin(
   page: Page,
 ): Promise<string> {
   const runtimeBackendUrlPath = "/api/runtime/backend-url";
+  // Vercel can canonicalize c2pro.io <-> www.c2pro.io. Bind this trust
+  // anchor to the browser origin actually reached after auth/navigation,
+  // then re-validate it against the strict production frontend allowlist.
+  const frontendOrigin = requireProductionOrigin(page.url());
   let response: APIResponse;
   try {
     response = await page.request.get(
-      `${baseUrl()}${runtimeBackendUrlPath}`,
+      `${frontendOrigin}${runtimeBackendUrlPath}`,
       {
         failOnStatusCode: false,
         maxRedirects: 0,
