@@ -129,7 +129,7 @@ Still open for the end-user GOAL:
 
 - **#706** full production end-user journey;
 - **#715** accepted full production qualification;
-- **#690** dedicated non-customer production qualification identity/tenant evidence — **CLOSED** from bounded production run #30 preflight evidence;
+- **#690** dedicated non-customer production qualification identity/tenant evidence;
 - **#712** truthful lifecycle fix-forward;
 - **#713** evidence-locator truthfulness fix-forward.
 
@@ -142,7 +142,7 @@ After the 2026-10-01 snapshot, `main` advanced by 38 commits to `314fc39b0b4c25c
 - **#782-#787 / #715** harden the production-qualification path around Railway identity observation, tenant RLS context, bounded Clerk preflight waits and canonical production authentication. **#715 remains open**; these merges are harness/runtime hardening, not accepted qualification.
 - **#790 / #789** moves SSE bearer handling behind the same-origin server proxy and rejects bearer tokens in query strings.
 - **#793 / #792** ensures an explicit `human_approval_required=True` reaches the router as HIGH impact, so confidence cannot auto-approve a state that already requires human review. The broader LOW/MEDIUM non-gated policy path still exists when no explicit human requirement is set.
-- **#706, #715, #712 and #713 remain open**. **#690 is closed.** #792 remains open intentionally until a fresh #715 full production journey proves explicit HITL in production.
+- **#706, #715, #690, #712 and #713 remain open**. #792 is also still open pending acceptance/closure.
 
 No Product-Control lifecycle field is promoted by this revalidation.
 
