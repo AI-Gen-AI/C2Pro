@@ -546,3 +546,50 @@ def test_direct_processing_polls_quiesce_browser_background_requests() -> None:
         second_quiesce,
     )
     assert approve < second_quiesce < analyzed_poll
+
+
+def test_upload_auth_context_uses_configured_backend_origin_not_frontend_allowlist() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "async function resolveConfiguredProductionBackendOrigin(" in spec
+    assert '"/api/runtime/backend-url"' in spec
+    assert "configuredBackendOrigin" in spec
+
+    capture_start = spec.index("function captureObservedApiAuthContext(")
+    capture_end = spec.index("async function loadHealth(", capture_start)
+    capture = spec[capture_start:capture_end]
+
+    assert "requireProductionOrigin(response.url())" not in capture
+    assert "new URL(response.url()).origin" in capture
+    assert "observedOrigin !== configuredBackendOrigin" in capture
+    assert "PROD_ACCEPTANCE_BACKEND_ORIGIN_MISMATCH" in capture
+
+
+def test_configured_backend_origin_requires_https_absolute_url() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    helper_start = spec.index("async function resolveConfiguredProductionBackendOrigin(")
+    helper_end = spec.index("function captureObservedApiAuthContext(", helper_start)
+    helper = spec[helper_start:helper_end]
+
+    assert 'response.status() !== 200' in helper
+    assert 'parsed.protocol !== "https:"' in helper
+    assert "PROD_ACCEPTANCE_BACKEND_ORIGIN_INVALID" in helper
