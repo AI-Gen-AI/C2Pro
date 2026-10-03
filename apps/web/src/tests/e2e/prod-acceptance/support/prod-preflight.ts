@@ -20,6 +20,13 @@ export const PROD_ACCEPTANCE_FIXTURE = path.resolve(
 export const PROD_ACCEPTANCE_FIXTURE_SHA256 =
   "f0bc7170cf002570be58f9225f9affc534720a4756fa1da39ae7ad328d63a9b9";
 
+export const PROD_ACCEPTANCE_HITL_FIXTURE = path.resolve(
+  HERE,
+  "../../../../../../api/tests/fixtures/documents/real/budget-scope-summary.txt",
+);
+export const PROD_ACCEPTANCE_HITL_FIXTURE_SHA256 =
+  "8a84ac001e00eefbac3a84080d2e7850a9dfc04aaaebb45da50632eebdf2d1fa";
+
 export const PROD_ACCEPTANCE_REQUIRED_ENV = [
   "PROD_ACCEPTANCE_RUN_ID",
   "PROD_ACCEPTANCE_BASE_URL",
