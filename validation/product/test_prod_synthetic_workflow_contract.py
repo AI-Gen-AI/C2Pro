@@ -358,7 +358,7 @@ def test_health_poll_reuses_observed_browser_auth_headers() -> None:
 
     assert "observedApiAuthHeaders" in spec
     assert 'headers: observedApiAuthHeaders' in health_poll
-    assert '"Authorization"' in spec
+    assert "Authorization:" in spec
     assert '"X-Tenant-ID"' in spec
 
 
