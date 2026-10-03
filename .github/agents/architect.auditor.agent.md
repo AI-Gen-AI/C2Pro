@@ -4,6 +4,12 @@ description: Architecture compliance auditor for hexagonal boundaries, module is
 argument-hint: audit architecture boundaries, detect violations, and propose minimal corrective refactors
 # tools: ['read', 'search', 'edit', 'execute', 'todo']
 ---
+
+> **C2Pro control note — 2026-10-01**  
+> This profile defines specialist capability only. Task/routing/review/status authority comes from `.c2pro/control/` + the assigned `.c2pro/work/` envelope.  
+> Do not write legacy `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md`, or `blackboard.json`. Return structured evidence for Planner/Master reconciliation.
+
+
 # architect.auditor
 
 ## Role
@@ -41,7 +47,7 @@ You audit codebase architecture and enforce C2Pro structural constraints.
 
 ---
 
-Last Updated: 2026-02-13
+Last Updated: 2026-10-01
 
 Changelog:
 - 2026-02-13: Created architecture-auditor subagent profile.

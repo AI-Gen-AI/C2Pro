@@ -127,12 +127,16 @@ src/tests/
 7. `make db-migrate` to apply
 
 ### Task Lifecycle
-1. Add `| [ ] | P1 | TASK-XXX-NNN | ... |` row to appropriate `backlogs/BCK_*.md`
-2. Add entry to `C2PRO_MASTER_BACKLOG.md` (MANDATORY — single source of truth)
-3. Implement with branch named `<type>/<kebab-description>`
-4. Commit with `— TASK-XXX-NNN` in message
-5. Mark complete: `chore(backlog): mark TASK-XXX-NNN complete — <sha-of-impl-commit>`
-6. Update `C2PRO_MASTER_BACKLOG.md` `[ ] → [x]`
+
+Development control uses the single-writer `.c2pro` plane.
+
+1. Read the assigned `.c2pro/work/<work_id>.yaml` envelope and relevant `.c2pro/control/` policy.
+2. Implement on the bounded branch/workspace and satisfy the envelope acceptance/tests.
+3. Return structured `c2pro-implementation-result-v1` evidence in PR/output.
+4. Do **not** mutate `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` or `blackboard.json`; those are legacy/cold references.
+5. Completion becomes canonical only after review/CI/merge and Planner/Master reconciliation into `.c2pro`.
+6. If the work changes product lifecycle, reconcile Product Control separately through its YAML-first parity/evidence contract.
+
 
 ### Ruff Lint Fixes
 - Auto-fix: `chore(lint): auto-fix N violations (W, UP, I rules) — TASK-BCK-040`
@@ -215,14 +219,21 @@ Every new feature must:
 
 ## CI / GitHub Actions
 
+This skill file was originally generated from historical git analysis. The workflow table below is reconciled to the current repository; use live workflow files as executable truth.
+
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `tests.yml` | PR + push | Full pytest + vitest suite |
-| `openapi-drift.yml` | PR | Detect uncommitted schema drift |
-| `wireframe-coverage.yml` | PR | Enforce WF-01..06 test coverage |
-| `real-document-operability.yml` | PR + main | Real-doc corpus smoke tests |
-| `golden-corpus-evals.yml` | PR | Golden regression guard |
-| `qa-swarm.yml` | Manual | Multi-agent QA swarm |
-| `frontend-ci.yml` | PR | ESLint + type-check + vitest |
-| `deploy-staging.yml` | main push | Auto-deploy to staging |
-| `deploy-production.yml` | Manual | Production deploy gate |
+| `ci.yml` | PR + push + manual | Consolidated backend/frontend/migration/Docker/P0b gates; emits `CI Status` |
+| `secret-scan.yml` | PR + selected pushes | Required `gitleaks` secret gate |
+| `install-drift-guard.yml` | PR + main/develop | Required reviewed-install drift gate |
+| `codeql.yml` | PR/main/scheduled | CodeQL security analysis |
+| `dependency-review.yml` | PR | Dependency review |
+| `dependency-audit.yml` | scheduled/defined triggers | Dependency audit |
+| `openapi-drift.yml` | PR | OpenAPI drift contract |
+| `golden-corpus-evals.yml` | defined triggers | Golden/evaluation guard |
+| `i13-real-e2e-scheduled.yml` | daily + manual | I13 reliability/release-candidate evidence |
+| `release.yml` | tags + manual | Release certification/publication |
+| `c2pro-product-control-guard.yml` | Product Control changes | Product lifecycle/parity/evidence integrity |
+| `prod-synthetic-acceptance.yml` | manual | Controlled #715 production qualification |
+
+Platform deploy is provider-owned from protected `main`; the retired `deploy-staging.yml` / `deploy-production.yml` workflow model must not be reintroduced from this historical patterns document.

@@ -6,15 +6,21 @@ paths:
 
 # Python Hooks
 
-> Project-level install note: common guidance was flattened into this `.claude/rules/` directory; treat this file as the Python-specific companion to the shared hooks rules.
+> Project-local guidance; repository config/CI is authoritative.
 
-## PostToolUse Hooks
+## Post-edit checks
 
-Configure in `~/.claude/settings.json`:
+Prefer repository-native tools:
 
-- **black/ruff**: Auto-format `.py` files after edit
-- **mypy/pyright**: Run type checking after editing `.py` files
+- **ruff** for lint/format checks;
+- **mypy** for backend type checking where the current configuration applies;
+- targeted pytest for changed behavior.
+
+Do not assume `black` or `pyright` is part of the repository contract unless current manifests/configuration add them.
+
+Avoid automatic format-on-edit behavior that produces broad unrelated diffs.
 
 ## Warnings
 
-- Warn about `print()` statements in edited files (use `logging` module instead)
+- avoid raw `print()` in production code when structured logging is expected;
+- never allow editor hooks to expose environment values/secrets in output.

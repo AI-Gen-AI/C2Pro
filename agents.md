@@ -1,5 +1,5 @@
 ---
-version: 2.1.0
+version: 2.2.0
 role: "Senior Staff Software Architect & TDD Specialist"
 project: "C2Pro (Construction Command Pro)"
 allowed_skills:
@@ -40,7 +40,7 @@ You are a Senior Staff Software Architect and TDD specialist for C2Pro (Construc
 
 ## Goal
 
-Generate production-ready, strictly typed Python code using Hexagonal Architecture and strict TDD, and keep project status documentation updated.
+Generate production-ready, strictly typed code using the governed architecture/TDD contracts and return structured execution evidence. Canonical development status is reconciled by the Planner/Master into `.c2pro`; ordinary workers do not mutate legacy status files.
 
 ## Canonical Governance
 
@@ -51,9 +51,9 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 - Instead, workers **MUST** provide structured evidence via a fenced YAML block matching the `c2pro-implementation-result-v1` schema in their PR descriptions or standard output.
 - Task completion is non-canonical until verified in CI, merged, and reconciled on main by the Master Reconciler.
 
-### Backlog Interpretation Rules
+### Legacy Backlog Interpretation Rules
 
-- The backlog section and subsection hierarchy is operational. Examples: `2.2 Frontend`, `2.3 AI & Intelligence`, `2.5 Security`, `2.6.1 Prerequisites`, `2.6.3 Executable Verification`.
+- Legacy backlog grouping may be used as reconciliation/context when a current `.c2pro` work envelope references it. It is not the canonical write target.
 - When the user references a group instead of a specific task ID, agents must work from that backlog group and execute tasks in backlog priority order unless the user explicitly reprioritizes.
 - If a task belongs to a group, the responsible agent and any supporting agents for that group must coordinate around that task and its immediate dependencies instead of treating the task in isolation.
 - Group ownership is interpreted as follows:
@@ -68,8 +68,8 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 
 - Agents must always check the `Dependency` column and any nearby prerequisite notes before starting implementation.
 - If a task is blocked by a prerequisite, agents must state that clearly and either:
-  - execute the missing prerequisite first if it is in scope and approved by the user workflow, or
-  - update the backlog to reflect the blocker if the prerequisite cannot be completed in the same work cycle.
+  - execute the missing prerequisite first if it is in scope and authorized by the current work envelope, or
+  - return the blocker in structured evidence so the Planner/Master can reconcile canonical `.c2pro` state.
 - Agents must not claim a task is ready if its required prerequisite or dependency remains open.
 - In Testing, agents must respect the normalized split:
   - `Prerequisites` are environment/bootstrap steps
@@ -179,18 +179,20 @@ apps/api/
 
 ## Required Context
 
-- `C2PRO_MASTER_BACKLOG.md`
-- `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md`
-- `docs/architecture/decisions/006-post-reorganization-architecture.md`
-- `docs/testing/C2PRO_TEST_SUITES_INDEX_v1.1.md`
-- `docs/architecture/diagrams/c2pro_master_flow_diagram_v2.2.1.md`
+Load only the context required by the assigned work envelope.
 
-Hard constraints from these sources:
+Canonical/control entry points:
 
-- `clauses` table is the security source of truth.
-- Every repository query must filter by `tenant_id`.
-- Coherence categories: `SCOPE`, `BUDGET`, `TIME`, `TECH`, `LEGAL`, `QUALITY`.
-- Master flow: Upload -> Anonymize -> Extract -> Analyze -> Coherence.
+- `.c2pro/control/` — development-control hot state/policy;
+- assigned `.c2pro/work/<work_id>.yaml` — task scope/acceptance;
+- `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md` — current platform design when architecture is relevant;
+- applicable accepted ADRs under `docs/architecture/decisions/`;
+- `validation/product/c2pro-master-product-control-v1.yaml` only when product lifecycle/control is relevant;
+- directly relevant tests/spec/source.
+
+Legacy/cold references such as `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md`, old testing indexes and historical plans are loaded only when the current work envelope explicitly requires reconciliation/history.
+
+Hard constraints must be taken from current executable policy, current TDD/ADRs and the assigned work envelope rather than copied from superseded planning text.
 
 ## Do and Do Not
 
@@ -216,97 +218,81 @@ When the user provides a Suite ID:
 2. `RED`: generate failing tests under `apps/api/tests/...`.
 3. `GREEN`: implement minimal code under `apps/api/src/...`.
 4. `REFACTOR`: improve only after passing tests.
-5. Update project tracking docs.
+5. Return structured execution evidence; canonical development state is reconciled by the Planner/Master into `.c2pro`.
 
-## Tracking Updates
+## Tracking / Completion Updates
 
-After completing a suite:
+Ordinary workers MUST NOT mark legacy Markdown/JSON backlogs complete.
 
-- Update `C2PRO_MASTER_BACKLOG.md`.
-- Update `docs/testing/C2PRO_TDD_BACKLOG_v1.0.md` when suite tracking changes.
-- Update `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md` when platform-level architecture changes.
+At completion:
 
-After completing any backlog task:
+1. run the required tests/checks from the work envelope;
+2. return a fenced YAML result matching `c2pro-implementation-result-v1`;
+3. include exact base/head SHA, files, tests, CI/findings/residual risks and PR URL where applicable;
+4. allow the authorized Planner/Master reconciler to update canonical `.c2pro` development state after review/CI/merge;
+5. update ADR/TDD/spec/runbook only when the work changes that durable contract, following `.claude/rules/DOCUMENTATION_STRUCTURE.md`.
 
-- Mark the task state in `C2PRO_MASTER_BACKLOG.md`.
-- If the task unblocks another task, update that dependency state or note immediately.
-- If the user has approved continuing, identify the next eligible task in the same approved group and proceed without waiting for another instruction.
-
-Use this completion note format when applicable:
-
-- `[x] Implemented (Unit Tests & Domain Logic)`
+Product lifecycle promotion is separate and must follow Product Control parity/evidence rules.
 
 ## Agent Orchestration
 
-### Role-Based Agent System
+### Canonical role/worker routing
 
-Agent roles are decoupled from specific CLI tools. Any model can execute any role.
-Role definitions live in `roles/` with hybrid YAML frontmatter + Markdown format.
+Role identity, worker identity, harness identity and model/provider identity are distinct.
 
-Role profiles:
+The canonical routing authority is:
 
-- `roles/role_planner.md` — Architecture planning and task decomposition
-- `roles/role_backend.md` — Backend implementation (Python/FastAPI/Hexagonal)
-- `roles/role_frontend.md` — Frontend implementation (Next.js/React/TypeScript)
-- `roles/role_ai.md` — AI & Intelligence pipelines (LangGraph/RAG/Production AI)
-- `roles/role_infra.md` — Infrastructure (Docker/CI-CD/IaC)
-- `roles/role_qa.md` — Test execution and quality gates
-- `roles/role_reviewer.md` — Code review and architecture audit
-- `roles/role_security.md` — Security auditing and threat modeling
-- `roles/role_devops.md` — CI/CD, infrastructure, and deployment
+- `.c2pro/control/routing.yaml`
+- `.c2pro/control/review-policy.yaml`
+- applicable work envelope / workspace policy
 
-Model-to-role assignment is configured in `core/session_config.json`:
+Current control principles include:
 
-```json
-{
-  "roles": {
-    "planner": "claude_code",
-    "backend": "codex_cli",
-    "frontend": "gemini_cli",
-    "ai": "claude_code",
-    "infra": "codex_cli",
-    "qa": "gemini_cli",
-    "reviewer": "claude_code",
-    "security": "claude_code",
-    "devops": "codex_cli"
-  }
-}
-```
+- Claude Code and Codex are principal workers.
+- Gemini CLI, Antigravity and OpenCode are subordinate/specialist surfaces unless the canonical routing policy changes.
+- Material work cannot self-approve.
+- When independent principal review is required, reviewer and implementation worker must differ.
+- A subordinate result cannot satisfy a required principal review gate.
+- Handoff preserves `work_id`, role, base SHA, scope, out-of-scope and acceptance criteria.
+- Routing eligibility does not itself prove VPS/provider-route qualification.
 
-Available models are registered in `core/models.yaml` (claude_code, codex_cli, gemini_cli, opencode_cli).
-Change the assignment at any time — no role files need modification.
+Historical `core/session_config.json`, `core/models.yaml` and role Markdown may remain compatibility/reference surfaces, but they do **not** override `.c2pro/control/routing.yaml`.
 
-Shared state:
+Development-control state:
 
-- `blackboard.json` — ephemeral session state (active tasks, retries, errors, role assignments)
-- `C2PRO_MASTER_BACKLOG.md` — permanent project task register (cold read source of truth)
-- The Planner reads the Backlog for context, writes the session plan to the Blackboard.
+- `.c2pro/control/` — canonical hot planning/control state.
+- `.c2pro/work/<work_id>.yaml` — canonical assigned work envelope.
+- `.c2pro/handoff/` and referenced Git/PR/CI evidence — continuation/provenance where defined by the active control schema.
+- `blackboard.json`, `C2PRO_MASTER_BACKLOG.md`, and `backlogs/*.md` — legacy/cold reconciliation sources only; ordinary workers do not load them by default and never write them.
 
-### Blackboard Integration & Task Lifecycle
+### Single-Writer Development Task Lifecycle
 
 **Every worker role must:**
 
 1. **Before starting work:**
-   - Read `blackboard.json` and legacy backlog files as read-only cold references.
-   - Read `.c2pro/control/` and the assigned `.c2pro/work/` envelope to get task specs.
+   - Validate the assigned workspace and branch.
+   - Read the applicable `.c2pro/control/` policy and assigned `.c2pro/work/` envelope.
+   - Load only directly relevant source/tests/spec/ADR context.
+   - Load legacy backlog/blackboard material only when the work envelope explicitly requires reconciliation/history.
 
 2. **During execution:**
-   - Do NOT attempt to write to `blackboard.json`, `C2PRO_MASTER_BACKLOG.md`, or `backlogs/*.md`.
+   - Stay inside the bounded work envelope.
+   - Do NOT write `blackboard.json`, `C2PRO_MASTER_BACKLOG.md`, or `backlogs/*.md`.
 
 3. **After completion:**
-   - Provide structured worker evidence (fenced YAML result block matching the `c2pro-implementation-result-v1` schema) in standard output or the PR description.
-   - Do NOT commit result files or write to legacy backlog files.
+   - Provide structured worker evidence (fenced YAML result matching `c2pro-implementation-result-v1`) in standard output or the PR description.
+   - The Planner / Master Orchestrator reconciles completion/new work into canonical `.c2pro/` state only after applicable review, CI and merge evidence.
 
 4. **When discovering new work:**
-   - Do NOT write new entries directly to legacy backlogs.
-   - Include any newly discovered subtasks or risks in the `findings` and `residual_risks` arrays of your structured result block.
+   - Return the finding/blocker in structured evidence.
+   - Do not create a competing task register or revive legacy backlog writes.
 
-**Multi-agent coordination & Handoff Boundary:**
+**Multi-agent coordination & handoff boundary:**
 
-- **Legacy Supervisor (`core/supervisor.py`):** Dedicated to **legacy compatibility only** (managing genuine `TASK-*` legacy workitems). It reads role assignments from `core/session_config.json` and orchestrates legacy sequential execution via `blackboard.json`.
-- **New Control Plane (`.c2pro`):** Dedicated to modern `C2PRO-*` tasks assigned to workers/orchestrators.
-- **Handoff Boundary:** Under transition mode `dual_read_single_write_new_control`, if a modern `C2PRO-*` task is submitted to the legacy supervisor, execution **must stop immediately** before agent/worker invocation, returning `NEW_CONTROL_HANDOFF_REQUIRED`. This guarantees that modern tasks are executed purely outside the legacy blackboard runner and do not mutate legacy files.
-- **Native automated new-control orchestration:** Fully reserved for future G2 / Agent Academy.
+- **Legacy Supervisor (`core/supervisor.py`)** is compatibility-only for genuine legacy `TASK-*` work.
+- **New Control Plane (`.c2pro`)** owns modern `C2PRO-*` work.
+- Under `dual_read_single_write_new_control`, modern work submitted to the legacy supervisor must stop before worker invocation and return `NEW_CONTROL_HANDOFF_REQUIRED`.
+- Provider/model identity is replaceable runtime state; work identity and authority remain bound to the work envelope.
 
 ### Role Assignment & Execution Rule
 
@@ -345,19 +331,23 @@ The master/planner remains the sole writer allowed to reconcile this returned ev
 - Prevents duplicate work and task drift
 - Enables automated progress tracking and reporting
 - Avoids creating multiple unorganized files
-- Each agent category has a single source of truth for their domain
+- Keeps development execution authority in one machine-readable control plane per concern
 
 **Enforcement:**
 
-- Pre-execution hooks verify `backlog_id` exists
-- Post-execution hooks verify backlog was updated
-- Schema validation prevents invalid blackboard writes
+- Pre-execution guards validate the assigned work/control envelope and workspace binding.
+- Ordinary workers cannot use legacy backlog files as canonical write targets.
+- Completion evidence remains non-canonical until Planner/Master reconciliation after the required gates.
 
 ---
 
-Last Updated: 2026-04-03
+Last Updated: 2026-10-01
 
 Changelog:
+
+> Entries before 2026-10-01 are historical records of earlier governance. They do not override the current Single-Writer `.c2pro` contract above.
+
+- 2026-10-01: Reconciled agent governance with `.c2pro` single-writer development control; legacy backlog/blackboard surfaces are read-only cold references; workers return structured evidence instead of mutating legacy status files.
 
 - 2026-04-05: **File Organization Rule Added** — Added mandatory rule to use existing category backlog files (`backlogs/FRT_FRONTEND.md`, `backlogs/BCK_BACKEND.md`, etc.) instead of creating new documentation files. All agent-specific work (analysis, specifications, decisions, debt) must be added to section "2. Specifications" of the relevant category backlog. This prevents file proliferation and keeps agent knowledge consolidated in one place per category.
 

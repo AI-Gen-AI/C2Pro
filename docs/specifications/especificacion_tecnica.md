@@ -1,3 +1,11 @@
+> **HISTORICAL PRODUCT/TECHNICAL BASELINE — 2024/early-2026**  
+> Preserve this specification as origin/product context. Its stack versions, auth provider, endpoint inventory, AI model/pricing assumptions and roadmap are **not current implementation authority**.  
+> Current platform design: [TDD v4.2](../architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md).  
+> Current product lifecycle: [Master Product Control](../product/00-c2pro-master-product-control-v1.md) (machine source in `validation/product/`).  
+> Current API/runtime truth: executable code, generated OpenAPI, migrations, CI and runtime evidence.
+
+---
+
 # C2PRO - Especificación Técnica
 
 ## Contract Intelligence Platform

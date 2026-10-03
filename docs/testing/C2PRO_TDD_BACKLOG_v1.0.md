@@ -1,5 +1,8 @@
 # C2Pro - TDD Backlog Completo v1.0
 
+> **Historical testing baseline:** this document preserves the test plan/inventory at its original date. It is not the current CI or release-gate authority. For current enforcement use `.github/workflows/ci.yml`, the active GitHub ruleset, `docs/RELEASE_CRITERIA.md`, and current test code. Do not rewrite historical counts to match today's repository.
+
+
 > **Versión:** 1.9  
 > **Fecha:** 2026-02-17  
 > **Última Actualización:** 2026-02-17  

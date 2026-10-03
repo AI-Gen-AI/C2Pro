@@ -1,8 +1,10 @@
 # I13 Real E2E Infra Runbook
 
 Date: `2026-02-15`  
-Owner: `@docs-agent`  
+Last reconciled: `2026-10-01`  
 Scope: I13 real E2E bootstrap + execution without service-layer mocks
+
+> **Lifecycle note:** the bootstrap/test procedure remains useful, but the original February CI topology is superseded. Current workflow/ruleset state below is authoritative for CI integration.
 
 ## Objective
 Allow any engineer to run I13 real E2E deterministically from docs only, with:
@@ -50,14 +52,18 @@ Expected outcome:
 - no `401` auth bootstrap failures
 - no `404` route-missing failures
 
-## CI Contract (S6 Gate)
-Blocking merge gate:
-- Workflow: `.github/workflows/tests.yml`
-- Job: `S6 I13 Real E2E (Blocking)` (`i13-real-e2e`)
+## CI / Reliability Contract
 
-Scheduled reliability:
+I13 is no longer documented as a standalone required merge job in the retired `tests.yml` workflow.
+
+Current merge gating is owned by consolidated `.github/workflows/ci.yml` and the active `main` ruleset.
+
+Scheduled/release-candidate reliability:
 - Workflow: `.github/workflows/i13-real-e2e-scheduled.yml`
-- Runs nightly and on manual dispatch.
+- Daily cron at `0 4 * * *`.
+- Manual dispatch may bind a `release_commit_sha` for release-candidate evidence.
+
+For exact merge requirements, read the live ruleset and `CI Status` join contract.
 
 Artifacts produced:
 - JUnit XML for I13 suites
@@ -97,7 +103,8 @@ Rationale:
 
 ---
 
-Last Updated: 2026-02-15
+Last Updated: 2026-10-01
 
 Changelog:
 - 2026-02-15: Added first version of I13 real E2E infra runbook with bootstrap, CI contract, migration rationale, and risk notes.
+- 2026-10-01: Reconciled retired `tests.yml` reference with consolidated CI and current scheduled I13 reliability workflow.

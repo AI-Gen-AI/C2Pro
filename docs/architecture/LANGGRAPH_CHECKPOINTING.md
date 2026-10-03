@@ -1,3 +1,10 @@
+> **DATED IMPLEMENTATION NOTE — last implementation snapshot 2026-03-20**  
+> This document explains the checkpointing implementation as it existed at that date. It is not the current architectural authority for ProjectGraph/trust/fencing semantics.  
+> Current architecture: [ADR-017](./decisions/ADR-017-projectgraph-two-tier-orchestration.md) + [ADR-026](./decisions/ADR-026-trusted-state-commit-and-approval-binding.md) + current code/migrations/tests.  
+> Commands/table names/examples below must be re-verified against the repository before operational use.
+
+---
+
 # LangGraph PostgreSQL Checkpointing
 
 **Task:** B-3 (AUDIT-TASK-3.1)

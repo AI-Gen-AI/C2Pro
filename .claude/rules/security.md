@@ -6,26 +6,35 @@ paths:
 
 # Python Security
 
-> Project-level install note: common guidance was flattened into this `.claude/rules/` directory; treat this file as the Python-specific companion to the shared security rules.
+> C2Pro-specific security contracts and executable tests override generic examples.
 
-## Secret Management
+## Secrets
 
-```python
-import os
-from dotenv import load_dotenv
+Read secrets from environment/approved secret stores. Never:
 
-load_dotenv()
+- commit credentials;
+- log tokens/DSNs/passwords;
+- copy production secrets into fixtures/examples;
+- persist raw provider responses when bounded normalized evidence is sufficient.
 
-api_key = os.environ["OPENAI_API_KEY"]  # Raises KeyError if missing
-```
+Fail closed when required configuration is absent.
 
-## Security Scanning
+## C2Pro boundaries
 
-- Use **bandit** for static security analysis:
-  ```bash
-  bandit -r src/
-  ```
+Security review must consider, where relevant:
 
-## Reference
+- tenant isolation/RLS;
+- Clerk identity → tenant/org mapping;
+- database function/role privilege boundaries;
+- PII anonymization before external AI providers;
+- exact approval/deployment identity binding;
+- trusted-state commit semantics;
+- safe retry/idempotency;
+- filesystem/path containment;
+- CI/supply-chain integrity.
 
-See skill: `django-security` for Django-specific security guidelines (if applicable).
+## Scanning
+
+Use the repository's current security tooling and workflows (for example gitleaks, CodeQL, dependency review/audit and targeted security tests) rather than assuming a generic scanner is a required gate.
+
+Do not weaken a quality/security baseline merely to produce green status.

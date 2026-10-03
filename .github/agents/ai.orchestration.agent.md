@@ -4,6 +4,12 @@ description: AI platform and orchestration specialist for LangChain, LangGraph, 
 argument-hint: review and improve AI flows, prompt chains, graph orchestration, observability, and safety controls
 # tools: ['read', 'search', 'edit', 'execute', 'web', 'todo']
 ---
+
+> **C2Pro control note — 2026-10-01**  
+> This profile defines specialist capability only. Task/routing/review/status authority comes from `.c2pro/control/` + the assigned `.c2pro/work/` envelope.  
+> Do not write legacy `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md`, or `blackboard.json`. Return structured evidence for Planner/Master reconciliation.
+
+
 # ai.orchestration
 
 ## Role
@@ -40,7 +46,7 @@ Use `AI Orchestration Agent` as the canonical team name.
 
 ---
 
-Last Updated: 2026-02-13
+Last Updated: 2026-10-01
 
 Changelog:
 - 2026-02-13: Created AI orchestration subagent profile for LangChain/LangGraph/LangSmith workflows.

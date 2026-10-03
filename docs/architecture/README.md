@@ -1,19 +1,27 @@
 # Architecture
 
-This section contains the current technical design, architectural decisions, diagrams, and focused notes.
+This section contains C2Pro's current platform design, durable architecture decisions, diagrams and focused architecture notes.
 
-## Contents
+## Canonical entry points
 
-- [Platform technical design v4.1](./C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md)
-- [Frontend technical design baseline v4.0](./C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md)
-- [Flow diagrams overview](./FLOW_DIAGRAMS.md)
-- [Architecture decisions](./decisions/)
+- [Platform Technical Design v4.2](./C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md) — **current platform baseline**
+- [Architecture Decision Records](./decisions/README.md)
+- [Flow diagrams](./FLOW_DIAGRAMS.md)
+- [LangGraph checkpointing](./LANGGRAPH_CHECKPOINTING.md) — dated implementation note; re-verify against ADR-017/026 + current code
 - [Detailed diagrams](./diagrams/)
 - [Architecture notes](./notes/)
 
-## Related Sections
+## Historical/supporting baselines
 
+- [Platform TDD v4.1](./C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md) — superseded March 2026 platform baseline.
+- [TDD v4.0](./C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md) — earlier frontend-heavy/supporting reference.
+
+Do not rewrite historical TDDs to make them current. Platform-wide changes belong in the current TDD and/or a new ADR.
+
+## Related authority
+
+- [Architecture index](../ARCHITECTURE_INDEX.md)
 - [Documentation index](../README.md)
-- [API documentation](../api/README.md)
-- [Specifications](../specifications/README.md)
-- [Archived architecture](../archive/architecture/)
+- [Master Product Control](../product/00-c2pro-master-product-control-v1.md)
+- [Qualification evidence contract](../product/qualification-evidence-contract-v1.md)
+- [Production qualification runbook](../product/production-qualification-operator-runbook.md)

@@ -1,387 +1,211 @@
-# C2Pro - Quick Start Guide
+# C2Pro — Quick Start
 
-Get the full-stack application running locally in **execution mode** (real backend) or **demo mode** (frontend-only with mock data).
+Run the current C2Pro stack locally using the repository's pinned toolchain and supported development paths.
 
-## Related Docs
+## Authority
 
-- [Repository README](./README.md)
-- [Documentation index](./docs/README.md)
-- [Runbooks index](./docs/runbooks/README.md)
-- [API README](./apps/api/README.md)
-- [Web setup README](./apps/web/README_SETUP.md)
-- [Clerk auth dev vs production guide](./docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md)
+- Platform architecture: [TDD v4.2](./docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md)
+- Auth: [Clerk dev/prod guide](./docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md)
+- Database/migrations: [Runbooks](./docs/runbooks/README.md)
+- CI/release: [Release criteria](./docs/RELEASE_CRITERIA.md)
+- Exact environment contract: `.env.example` and app-specific examples
 
----
+Do not use this quick start as production configuration guidance.
 
 ## Prerequisites
 
-| Tool | Version | Check |
-|------|---------|-------|
-| Python | 3.11+ | `python --version` |
-| Node.js | 20+ | `node --version` |
-| npm | 10+ | `npm --version` |
-| Docker + Compose | Latest | `docker compose version` |
-| Git | Any | `git --version` |
+| Tool | Repository contract |
+|---|---|
+| Python | 3.11+ |
+| Node.js | >=22 <23 |
+| pnpm | >=10; root pins pnpm 10.25.0 |
+| Docker + Compose | current supported version |
+| Git | current supported version |
 
----
+The repository enforces pnpm; do not substitute npm/yarn.
 
-## 1. Execution Mode (Real Backend + Frontend)
-
-This is the production-like setup where both the API and the web app connect to real services.
-
-### 1.1 Start infrastructure services
-
-Create the local environment file first and set an explicit PostgreSQL password:
+## 1. Clone and install
 
 ```bash
+git clone https://github.com/AI-Gen-AI/C2Pro.git
+cd C2Pro
+
 cp .env.example .env
-# Edit .env and set POSTGRES_PASSWORD to a local-only value.
-python scripts/validate_local_postgres_password.py
-docker compose up -d postgres redis minio minio-setup
+# Configure LOCAL/DEVELOPMENT values only.
+
+pnpm install --frozen-lockfile
+
+cd apps/api
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cd ../..
 ```
 
-This starts:
-- **PostgreSQL 15** on `localhost:5432` (user: `postgres`, password: value from `POSTGRES_PASSWORD` in `.env`, db: `c2pro`)
-- **Redis 7** on `localhost:6379`
-- **MinIO** on `localhost:9000` (console: `localhost:9001`, user/pass: `minioadmin`)
+On Windows PowerShell, activate the Python environment with the platform-appropriate `.venv` activation script or use WSL/Docker.
 
-Wait for all services to be healthy:
+## 2. Local infrastructure
+
+Set a local PostgreSQL password in the repo-root `.env`, then:
 
 ```bash
+python scripts/validate_local_postgres_password.py
+docker compose up -d postgres redis minio minio-setup
 docker compose ps
 ```
 
-### 1.2 Configure environment
+Canonical local defaults are defined by `docker-compose.yml`; do not copy production credentials or DSNs into local files.
 
-Edit the `.env` created above with your credentials. For **local Docker** development, use these values:
+For CI-like disposable test infrastructure use the test bootstrap/runbooks rather than assuming the development ports equal CI ports.
 
-```bash
-# Database - Docker PostgreSQL
-# Use URI-unreserved characters only: A-Z a-z 0-9 . _ ~ -
-POSTGRES_PASSWORD=<choose-a-local-password>
-DATABASE_URL=postgresql://postgres:<same-local-password>@localhost:5432/c2pro
-
-# Supabase -  Required for auth (get from https://supabase.com/dashboard)
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=eyJ...
-SUPABASE_SERVICE_ROLE_KEY=eyJ...
-
-# JWT -  Generate a random 32+ character string
-JWT_SECRET_KEY=change-me-to-a-random-string-at-least-32-chars
-
-# Redis -  Docker Redis
-REDIS_URL=redis://localhost:6379
-
-# Storage -  Use local filesystem for development
-STORAGE_PROVIDER=local
-
-# AI -  Optional, required for AI features
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-> **Required variables:** `POSTGRES_PASSWORD` (for local Docker Compose), `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET_KEY`
-
-> **Existing local database:** if you already have an existing postgres_data volume created before this change, PostgreSQL keeps the password stored inside that volume and ignores a new initialization password. To preserve local data, start only PostgreSQL, open a local psql session, rotate the role interactively, then start the remaining services:
->
-> ```bash
-> docker compose up -d postgres
-> docker compose exec postgres psql -U postgres -d postgres
-> \password postgres
-> # Enter the same URI-unreserved password configured as POSTGRES_PASSWORD in .env.
-> docker compose up -d redis minio minio-setup
-> ```
->
-> If the local PostgreSQL database is disposable, remove only its Compose-managed volume; do not use `docker compose down -v`, which also deletes Redis, MinIO and uploads volumes:
->
-> ```bash
-> docker compose stop postgres
-> docker compose rm -sf postgres
-> docker compose config --format json | python -c 'import json, subprocess, sys; name=json.load(sys.stdin)["volumes"]["postgres_data"]["name"]; subprocess.run(["docker", "volume", "rm", name], check=True)'
-> docker compose up -d postgres
-> ```
->
-> This destroys **only local PostgreSQL data** in the Compose project.
-
-### 1.3 Start backend
+## 3. Database schema
 
 ```bash
 cd apps/api
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run database migrations
+source .venv/bin/activate
 alembic upgrade head
-
-# Start dev server (hot-reload enabled)
-python dev.py
+cd ../..
 ```
 
-The API will be available at:
-- **API:** http://localhost:8000
-- **Swagger docs:** http://localhost:8000/docs
-- **Health check:** http://localhost:8000/health
+Alembic is the application migration authority. Follow the database migration runbooks for Supabase/mirror requirements and production operations.
 
-### 1.4 Start frontend
+## 4. Start the backend
 
-In a **new terminal**:
+```bash
+cd apps/api
+source .venv/bin/activate
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Useful local endpoints:
+
+- API: `http://localhost:8000`
+- OpenAPI UI: `http://localhost:8000/docs`
+- Health: `http://localhost:8000/health`
+
+## 5. Start the frontend
+
+In another terminal:
 
 ```bash
 cd apps/web
-
-# Install dependencies
-pnpm install
-
-# Start dev server
-to fi
+pnpm dev
 ```
 
-The web app will be available at http://localhost:3000.
+Web: `http://localhost:3000`
 
-### 1.5 Verify it works
+The current frontend uses Clerk. Configure development Clerk values from `apps/web/.env.example` / repo environment examples when testing authenticated flows.
 
-```bash
-# Backend health
-curl http://localhost:8000/health
-# Expected: {"status":"ok","app":"C2Pro API","version":"1.0.0",...}
+## 6. Demo mode
 
-# Register a user
-curl -X POST http://localhost:8000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "company_name": "My Company",
-    "email": "user@example.com",
-    "password": "Password123!",
-    "password_confirm": "Password123!",
-    "first_name": "Test",
-    "last_name": "User",
-    "accept_terms": true
-  }'
-
-# Login
-curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "password": "Password123!"}'
-```
-
----
-
-## 2. Demo Mode (Frontend-Only, No Backend Required)
-
-Demo mode runs the frontend with **MSW (Mock Service Worker)** intercepting all API calls. No backend, database, or external services are needed.
-
-### 2.1 Start the frontend in demo mode
+For frontend-only product exploration where the supported demo mocks apply:
 
 ```bash
 cd apps/web
-
-# Install dependencies (if not already done)
-pnpm install
-
-# Start with demo mode enabled
 NEXT_PUBLIC_APP_MODE=demo pnpm dev
 ```
 
-The web app will be available at http://localhost:3000 with a "DEMO" banner.
+Demo mode is not production proof and must never be used for production qualification.
 
-### How demo mode works
+## 7. Common quality commands
 
-- `NEXT_PUBLIC_APP_MODE=demo` activates MSW in the browser via `providers.tsx`
-- MSW intercepts all HTTP calls to the API and returns realistic mock data
-- Mock handlers are in `apps/web/mocks/handlers/` (~50 endpoints covered)
-- Mock data is in `apps/web/mocks/data/`
-- No backend, database, or Redis required
-
-### Switching back to execution mode
-
-Stop the dev server and restart without the env variable:
+### Backend
 
 ```bash
-pnpm dev
-# NEXT_PUBLIC_APP_MODE defaults to "production" -  no MSW, real API calls
+cd apps/api
+source .venv/bin/activate
+
+python -m ruff check .
+python -m mypy src
+python -m pytest
 ```
-
----
-
-## 3. Full-Stack with Docker Compose
-
-To run everything (backend + infrastructure) in Docker:
-
-```bash
-# Ensure .env exists with valid credentials
-cp .env.example .env  # then edit
-python scripts/validate_local_postgres_password.py
-
-# Start all services
-docker compose up -d
-
-# Check status
-docker compose ps
-docker compose logs -f api
-```
-
-Services:
-| Service | URL | Purpose |
-|---------|-----|---------|
-| `api` | http://localhost:8000 | FastAPI backend |
-| `postgres` | localhost:5432 | PostgreSQL database |
-| `redis` | localhost:6379 | Cache + task queue |
-| `minio` | http://localhost:9001 | Storage (S3-compatible) |
-
-Then start the frontend separately:
-
-```bash
-cd apps/web && pnpm dev
-```
-
----
-
-## 4. Makefile Shortcuts
-
-```bash
-make help              # List all commands
-
-# Setup
-make setup             # Full setup (Supabase cloud)
-make setup-local       # Setup with Docker PostgreSQL
-make backend-init      # Run setup.py (deps + migrations)
-
-# Development
-make dev-infra         # Start Docker services only
-make dev-api           # Start backend with reload
-make dev-web           # Start frontend
-make backend-dev       # Start backend (Supabase mode)
-
-# Database
-make db-migrate        # Apply migrations
-make db-migrate-status # Check migration status
-make db-migrate-create MSG="description"  # Create migration
-
-# Testing
-make test-api          # Backend tests
-make test-web          # Frontend tests
-make test              # All tests
-
-# Quality
-make lint              # Run linters
-make format            # Format code
-make typecheck         # Type checking
-```
-
----
-
-## 5. Environment Variables Reference
-
-### Required (No Defaults)
-
-| Variable | Purpose |
-|----------|---------|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_ANON_KEY` | Supabase anonymous key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
-| `JWT_SECRET_KEY` | JWT signing secret (32+ chars) |
-
-### Backend (Optional)
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `ENVIRONMENT` | `development` | `development` / `staging` / `production` |
-| `DEBUG` | `false` | Enable debug mode |
-| `LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
-| `REDIS_URL` | `None` | Redis for cache + Celery |
-| `ANTHROPIC_API_KEY` | `None` | Claude API for AI features |
-| `STORAGE_PROVIDER` | `r2` | `r2` / `s3` / `local` |
-| `CORS_ORIGINS` | `["http://localhost:3000","http://localhost:3001"]` | Allowed CORS origins (JSON array) |
-| `MAX_UPLOAD_SIZE_MB` | `50` | Max file upload size |
-| `SENTRY_DSN` | `None` | Error tracking |
-
-**Complex settings are JSON only.** `CORS_ORIGINS`, `CORS_METHODS`, `CORS_HEADERS`, `ALLOWED_DOCUMENT_TYPES`, `BUDGET_ALERT_ADMIN_EMAILS` (JSON arrays) and `INTEGRATION_API_KEYS` (JSON object, API key → tenant_id) are JSON-decoded from the environment and `.env` before validation; a CSV or empty value fails at startup. Use `[]` / `{}` for empty. Quote for your shell:
-
-- bash: `export CORS_ORIGINS='["http://localhost:3000","http://localhost:3001"]'`
-- PowerShell: `$env:CORS_ORIGINS = '["http://localhost:3000","http://localhost:3001"]'`
-- `.env`: `CORS_ORIGINS=["http://localhost:3000","http://localhost:3001"]`
-
-Exception: `PLATFORM_OPERATOR_USER_IDS` is a CSV of Clerk user IDs (`user_abc,user_def`); a JSON array is rejected.
 
 ### Frontend
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `NEXT_PUBLIC_APP_MODE` | `production` | `production` / `demo` |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000/api/v1` | Backend API base URL |
-| `NEXT_PUBLIC_SENTRY_DSN` | `None` | Frontend error tracking |
+```bash
+cd apps/web
 
-### Feature Flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `FEATURE_COHERENCE_ANALYSIS` | `true` | Contract coherence scoring |
-| `FEATURE_WBS_GENERATION` | `true` | Work Breakdown Structure |
-| `FEATURE_BOM_GENERATION` | `true` | Bill of Materials |
-| `FEATURE_STAKEHOLDER_EXTRACTION` | `true` | Stakeholder detection |
-| `FEATURE_RACI_GENERATION` | `false` | RACI matrix (Phase 2) |
-| `FEATURE_RFQ_GENERATION` | `false` | RFQ generation (Phase 2) |
-| `FEATURE_EXPEDITING_VISION` | `false` | Expediting (Phase 3) |
-
----
-
-## 6. Troubleshooting
-
-### Backend won't start
-
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+pnpm test:e2e
 ```
-RuntimeError: Database not initialized
-```
-Run `cd apps/api && alembic upgrade head` to apply migrations.
 
-```
-ValidationError: database_url field required
-```
-Ensure `.env` exists at the repo root with `DATABASE_URL` set.
-
-```
-Connection refused (port 5432)
-```
-Start PostgreSQL: `docker compose up -d postgres`
-
-### Frontend won't connect to backend
-
-Ensure `NEXT_PUBLIC_API_URL` points to the running backend (default: `http://localhost:8000/api/v1`). Check that the backend is healthy with `curl http://localhost:8000/health`.
-
-### Port already in use
+### Repository helpers
 
 ```bash
-# Kill process on port 8000 (backend)
-lsof -ti:8000 | xargs kill -9
-
-# Kill process on port 3000 (frontend)
-lsof -ti:3000 | xargs kill -9
+make help
+make openapi
+make test
+make lint
+make typecheck
+make build
 ```
 
-### AI features not working
+The live CI workflow is `.github/workflows/ci.yml`; local commands are useful preflight, not a substitute for required GitHub checks.
 
-Set `ANTHROPIC_API_KEY` in `.env` with a valid key from https://console.anthropic.com/.
+## 8. Authentication
 
----
+User-facing authentication is Clerk-backed.
 
-## Architecture Overview
+Relevant development settings include:
 
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- `CLERK_SECRET_KEY`
+- `CLERK_ISSUER`
+- `CLERK_JWKS_URL`
+
+Use development/test Clerk instances for local/E2E work. Follow the Clerk runbook before any production auth operation.
+
+Do not assume the legacy local email/password JWT examples represent the canonical production path.
+
+## 9. Troubleshooting
+
+### Database connection refused
+
+```bash
+docker compose ps
+docker compose up -d postgres
 ```
-C2Pro/
-%%% apps/
-%   %%% api/              # FastAPI backend (Python 3.11)
-%   %   %%% src/          # Source code (DDD bounded contexts)
-%   %   %%% dev.py        # Dev server entry point
-%   %   %%% setup.py      # Initial setup script
-%   %   -%%% alembic/      # Database migrations
-%   -%%% web/              # Next.js frontend (React 19)
-%       %%% app/          # App Router pages
-%       %%% components/   # UI components (shadcn/ui)
-%       %%% mocks/        # MSW handlers + demo data
-%       -%%% stores/       # Zustand state management
-%%% infrastructure/       # Docker, migrations, scripts
-%%% docker-compose.yml    # Local dev services
-%%% .env.example          # Environment template
--%%% Makefile              # Development shortcuts
+
+Check `DATABASE_URL` against the environment/port you actually started.
+
+### Redis unavailable
+
+```bash
+docker compose up -d redis
+docker compose logs redis
 ```
+
+### Migration mismatch
+
+```bash
+cd apps/api
+alembic current
+alembic heads
+alembic upgrade head
+```
+
+There must be one authoritative head for release/CI contracts that require a clean migration chain.
+
+### Frontend cannot authenticate
+
+Check the Clerk development keys and configured URLs. See:
+
+- `apps/web/.env.example`
+- `docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md`
+
+### Frontend cannot reach API
+
+Check the frontend API URL variables against the local backend address and verify `http://localhost:8000/health`.
+
+## 10. Production qualification warning
+
+Do not adapt local/demo/E2E shortcuts to production.
+
+The controlled production qualification path is:
+
+[Production Qualification Operator Runbook](./docs/product/production-qualification-operator-runbook.md)
+
+It uses a dedicated synthetic production identity/tenant, exact deployment identity checks and bounded evidence.

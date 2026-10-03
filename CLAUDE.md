@@ -55,7 +55,7 @@ C2PRO_AI_MOCK=1 pytest apps/api/...
 ### Lint / Format / Types / Build
 ```bash
 make lint                   # lint-api (ruff) + lint-web (eslint)
-make format                 # black/ruff for api, prettier for web
+make format                 # ruff format for api, prettier for web
 make typecheck              # mypy + tsc
 make build                  # build-api + build-web
 ```
@@ -149,24 +149,49 @@ roles/, skills/, agent_skills/, evals/ — AI agent definitions, eval harnesses,
 openspec/      — OpenSpec change workflow
 docs/          — canonical: architecture ADRs, runbooks, planning, testing, audits
 context/, sandbox/ — NON-CANONICAL: working memory / experiments
-backlogs/      — BCK_*.md task specs (see project rules)
-blackboard/    — SESSION_*.md active session notes
+.c2pro/       — canonical development-control hot state and work envelopes
+backlogs/      — legacy/read-only category backlog references
+blackboard/    — legacy/session history; non-canonical unless explicitly referenced
 ```
 
 ## Project-Specific Rules (CRITICAL)
 
-These rules in `.claude/rules/` override general defaults. Backlog/task source of truth: `C2PRO_MASTER_BACKLOG.md` (root) and `backlogs/BCK_*.md` (per-domain, e.g. `backlogs/BCK_BACKEND.md`).
+C2Pro has **multiple authority planes**. Do not collapse them into one Markdown backlog.
 
-1. **`CRITICAL_BACKLOG_REQUIREMENT.md`** — Every task (created, updated, or completed) MUST be reflected in `C2PRO_MASTER_BACKLOG.md`. Update `[ ] → [x]` with verification details and append to the Change Log.
+1. **Development execution control**
+   - Canonical hot/write state: `.c2pro/control/` and assigned `.c2pro/work/` envelopes.
+   - Ordinary implementation/review workers MUST treat `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md`, and `blackboard.json` as read-only legacy/cold references.
+   - Completion is non-canonical until CI/review/merge and Planner/Master reconciliation.
+   - See `.claude/rules/CRITICAL_BACKLOG_REQUIREMENT.md`.
 
-2. **`DOCUMENTATION_STRUCTURE.md`** — **Never create task-specific standalone markdown files** (no `TASK-XXX_SUMMARY.md`, no `FEATURE_*_PLAN.md`). All task documentation goes in exactly two places:
-   - `backlogs/BCK_*.md` — specs, status, implementation details (inline).
-   - `blackboard/SESSION_*.md` — active session scratch notes; consolidate back into backlogs when done.
-   The root has many legacy `TASK-*`, `UNIFY-*`, `SPRINT_*` files — these predate the rule. Do not add new ones.
+2. **Product programme / lifecycle**
+   - Machine source: `validation/product/c2pro-master-product-control-v1.yaml`.
+   - Human projection: `docs/product/00-c2pro-master-product-control-v1.md`.
+   - Product lifecycle changes are YAML-first and parity/evidence guarded.
+   - A merged PR does not itself mean deployed or production-validated.
 
-3. **Commit attribution** disabled globally — do not add Co-Authored-By trailers.
+3. **Architecture**
+   - Current platform TDD: `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md`.
+   - Durable decisions: `docs/architecture/decisions/`.
+   - Do not use old plans/backlogs to override accepted ADRs/current TDD.
 
-4. **`.claude/rules/agents.md` → Real Delegate Roster** — multi-terminal orchestration is governed by functional, model-agnostic roles (Orchestrator, Backend, Frontend, Full-Stack, DevOps/Infra, Test/QA, Verification Auditor, Reconciler). Hard limits attach to the role, not the model. Always dispatch by role + assigned model; the Verification Auditor role is strictly read-only; backlog edits go only through the Reconciler role.
+4. **Documentation lifecycle**
+   - Follow `.claude/rules/DOCUMENTATION_STRUCTURE.md`.
+   - Durable ADR/TDD/spec/runbook/product contracts are allowed and expected when appropriate.
+   - One-off task report sprawl remains prohibited.
+   - Historical evidence/plans remain historical; do not rewrite them to look current.
+
+5. **Worker evidence**
+   - Workers return the structured `c2pro-implementation-result-v1` evidence block in PR/output.
+   - Workers do not directly mutate legacy backlog/status files.
+   - Only the authorized Planner/Master reconciler mutates canonical development-control state.
+
+6. **Commit attribution**
+   - Do not add `Co-Authored-By` trailers when repository policy disables them.
+
+7. **Role/model separation**
+   - Dispatch by governed role/work envelope; model/provider identity is replaceable runtime state.
+   - Verification/review authority follows the current `.c2pro`/development-control policy, not historical role-to-model prose.
 
 ## Security Baseline
 
@@ -182,7 +207,7 @@ These rules in `.claude/rules/` override general defaults. Backlog/task source o
 - **Two migration systems**: Alembic (`apps/api/alembic/`, authoritative) and Supabase CLI (`supabase/`). Keep in sync when touching schema.
 - **Active pipeline** is `apps/api/src/analysis/adapters/graph/` — any file named `orchestration/` elsewhere is dead or legacy.
 - `context/` and `sandbox/` are explicitly non-canonical — do not cite as sources of truth.
-- The root `package.json` is misnamed (`"name": "package.json"`); pnpm workspace is still the real entry point.
+- The root `package.json` defines the `c2pro-monorepo` workspace and pins pnpm; use pnpm as the JavaScript package manager.
 - **Push to `main`** requires `ALLOW_PUSH_MAIN=1 git push` (Husky pre-push guard).
 - **`docs/api/openapi.yaml` is generated** — produced by `make openapi` (`apps/api/scripts/generate_openapi.py`). Do not hand-edit; regenerate after route changes.
 

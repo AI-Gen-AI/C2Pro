@@ -1,122 +1,121 @@
-# Documentation Structure - MUST FOLLOW
+# Documentation Structure — Canonical Lifecycle Rules
 
-## ⚠️ CRITICAL RULE - NO EXCEPTIONS ⚠️
+## Purpose
 
-**NEVER create additional task-specific documentation files.**
+Keep C2Pro documentation authoritative without recreating the documentation sprawl that this rule originally prevented.
 
-This is MANDATORY to:
-- Avoid unnecessary work
-- Keep context unified
-- Maintain single source of truth
-- Prevent documentation sprawl
+The old rule "all task documentation must live only in backlogs/ or blackboard/" is **superseded**. It conflicts with the repository's current canonical ADR, Product Control, specification, runbook and evidence structure.
+
+The anti-sprawl objective remains mandatory.
+
+## 1. Document classes
+
+### A. Canonical architecture and product documents
+
+Allowed locations:
+
+- `docs/architecture/` — TDDs, ADRs, diagrams, architecture notes
+- `docs/product/` — Product Control human projection, qualification contracts/operator runbooks
+- `docs/specifications/` — durable product/technical specifications
+- `docs/runbooks/` — operational procedures
+- `docs/testing/` — durable test strategy/registry
+- `docs/internal/` — durable internal policy that is not product-facing
+
+Create a new file here only when it represents a **durable reusable contract or decision**, not a one-off task report.
+
+### B. Machine-backed control
+
+C2Pro has separate control planes:
+
+**Product programme / lifecycle**
+- `validation/product/` is authoritative for Product Control machine state.
+- Generated/canonical Product Control Markdown must be updated through its parity workflow.
+- Never hand-edit a generated control block to make status look current.
+
+**Development execution**
+- `.c2pro/control/` + assigned `.c2pro/work/` envelopes are the canonical development-control write plane.
+- `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md`, and `blackboard.json` are legacy/read-only reconciliation sources for ordinary workers.
+- New execution state/evidence must not be reintroduced into legacy Markdown backlogs.
+
+### C. Task/status tracking
+
+Use the repository's active task/control authority for execution status.
+
+- Do not create a second status register in a design document.
+- A durable ADR/spec may link to an issue/task but must not become the live task board.
+- If an older backlog file is historical/deprecated, do not revive it merely because a legacy rule references it.
+
+### D. Working/session material
+
+- `blackboard/` and `context/working/` are temporary/non-authoritative.
+- Consolidate durable conclusions into the appropriate canonical document.
+- Archive or leave historical session evidence clearly non-canonical.
+
+### E. Historical evidence
+
+- dated audits;
+- release evidence;
+- superseded TDDs;
+- completed implementation reports;
+- historical plans.
+
+Do **not** rewrite historical evidence to make it look current.
+
+## 2. Anti-sprawl rule
+
+Before creating a document, ask:
+
+1. Is this a durable architecture decision? → ADR.
+2. Is it platform-wide design? → current TDD.
+3. Is it an operator procedure? → runbook.
+4. Is it a durable product/qualification contract? → docs/product or specification.
+5. Is it temporary task/session analysis? → issue/backlog/blackboard, not a new docs file.
+6. Does a canonical document already own this subject? → update that document instead.
+
+Standalone `TASK-..._REPORT.md`, `FEATURE_X_IMPLEMENTATION_SUMMARY.md` and similar one-off files remain prohibited unless they are explicitly historical evidence being archived.
+
+## 3. Authority precedence
+
+When documentation conflicts:
+
+Authority is scoped by concern; there is no universal single file:
+
+1. executable/runtime/schema/ruleset truth for actual behavior and merge enforcement;
+2. Product Control machine state for product programme/lifecycle;
+3. `.c2pro` machine state for development execution/control;
+4. accepted ADRs for durable architecture decisions;
+5. current TDD for platform-wide design;
+6. current specs/product contracts and runbooks;
+7. testing/planning documents within their declared scope;
+8. historical audits/evidence;
+9. working/session notes.
+
+A newer timestamp alone does not override a higher-authority source.
+
+## 4. Completion discipline
+
+A change is not complete merely because code lands.
+
+When applicable:
+
+- update affected ADR/TDD/runbook/spec;
+- update Product Control through its machine-backed workflow;
+- preserve historical evidence;
+- verify links/workflow names against the live repository;
+- avoid status claims that exceed available evidence.
+
+## 5. Current canonical entry points
+
+- `.c2pro/control/` + assigned `.c2pro/work/` (development execution)
+- `validation/product/c2pro-master-product-control-v1.yaml` (product lifecycle)
+- `docs/README.md`
+- `docs/ARCHITECTURE_INDEX.md`
+- `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md`
+- `docs/architecture/decisions/README.md`
+- `docs/product/00-c2pro-master-product-control-v1.md`
+- `docs/product/qualification-evidence-contract-v1.md`
 
 ---
 
-## The Rule
-
-**ALL task documentation MUST go in exactly TWO locations:**
-
-1. **`backlogs/BCK_*.md`** - Task specifications, completion status, implementation details
-2. **`blackboard/SESSION_*.md`** - Active session work, scratch notes, temporary analysis
-
-**NEVER create files like:**
-- ❌ `TASK-BCK-027_ORCHESTRATION_AUDIT_REPORT.md`
-- ❌ `TASK-BCK-026_ALERT_UNIFICATION_PLAN.md`
-- ❌ `FEATURE_XYZ_IMPLEMENTATION_GUIDE.md`
-- ❌ Any other task-specific standalone files
-
----
-
-## Correct Approach
-
-### For Task Documentation
-```
-✅ Add to backlogs/BCK_BACKEND.md under the task section
-✅ Include all findings, decisions, and implementation details inline
-✅ Update completion checklists directly in the backlog
-```
-
-### For Session Work
-```
-✅ Use blackboard/SESSION_*.md for active work
-✅ Consolidate findings back into backlogs/ when task completes
-✅ Delete or archive session notes after consolidation
-```
-
----
-
-## Why This Matters
-
-1. **Context Efficiency**: All task info in one place = faster lookups
-2. **No Duplication**: Single source of truth for each task
-3. **Less Noise**: Fewer files = clearer project structure
-4. **Token Savings**: Claude doesn't need to read multiple files for one task
-5. **Maintenance**: Updates happen in one place, not scattered across files
-
----
-
-## Examples
-
-### ❌ WRONG - Multiple Files
-```
-TASK-BCK-027/
-├── ORCHESTRATION_AUDIT_REPORT.md (485 lines)
-├── IMPLEMENTATION_PLAN.md (320 lines)
-└── COMPLETION_SUMMARY.md (150 lines)
-
-backlogs/BCK_BACKEND.md:
-- Brief reference to external files
-```
-
-**Problem**: 955 lines scattered across 3 files + backlog. Context fragmented.
-
-### ✅ CORRECT - Unified Documentation
-```
-backlogs/BCK_BACKEND.md:
-#### TASK-BCK-027: Orchestration System Reconciliation
-
-**Implementation Status**: ✅ Completed (Module Deleted)
-
-**Audit Finding**:
-- core/ai/orchestration/ had ZERO production usage
-- analysis/adapters/graph/ is active N1-N17 pipeline
-- No overlap - different purposes
-- Decision: DELETE unused module instead of consolidating
-
-**Files Deleted**:
-- apps/api/src/core/ai/orchestration/ (4 files)
-- apps/api/tests/unit/core/ai/orchestration/ (3 files)
-
-**Verification**: 85/85 core AI tests passing
-
-**Checklist**:
-- [x] Audit completed
-- [x] Module deleted
-- [x] Tests passing
-```
-
-**Result**: All information in one place, ~150 lines total in backlog.
-
----
-
-## Enforcement
-
-This rule is enforced by:
-1. ✅ Project rules in `.claude/rules/DOCUMENTATION_STRUCTURE.md`
-2. ✅ Manual review before marking tasks complete
-3. ✅ Claude session instructions (this file)
-
-**Violation = Immediate correction required**
-
----
-
-## Related Rules
-
-- `.claude/rules/CRITICAL_BACKLOG_REQUIREMENT.md` - All tasks MUST be in C2PRO_MASTER_BACKLOG.md
-- This file - All task documentation MUST be in backlogs/ or blackboard/ ONLY
-
----
-
-*Last Updated*: 2026-04-06
-*Severity*: **CRITICAL**
-*Violation Impact*: Wasted effort, context fragmentation, maintenance burden
+*Last Updated: 2026-10-01*  
+*Status: ACTIVE — supersedes the April 2026 two-location-only rule*

@@ -6,34 +6,35 @@ paths:
 
 # Python Testing
 
-> Project-level install note: common guidance was flattened into this `.claude/rules/` directory; treat this file as the Python-specific companion to the shared testing rules.
+> Repository test code + current CI are executable truth.
 
 ## Framework
 
-Use **pytest** as the testing framework.
+Use **pytest** for Python tests and follow the markers/fixtures already defined by the backend configuration.
+
+## Scope
+
+Choose the narrowest meaningful layer:
+
+- unit for pure logic/contracts;
+- integration for DB/adapter/cross-component behavior;
+- security for tenant/trust/privilege boundaries;
+- E2E/acceptance only where the user-observable journey is required.
 
 ## Coverage
 
-```bash
-pytest --cov=src --cov-report=term-missing
-```
+Do not hard-code a project-wide percentage in this rule.
 
-## Test Organization
+Use the current coverage ratchets/gates in `.github/workflows/ci.yml`, backend configuration and package-specific contracts.
 
-Use `pytest.mark` for test categorization:
+A local coverage report is supporting evidence, not a substitute for required CI.
 
-```python
-import pytest
+## TDD
 
-@pytest.mark.unit
-def test_calculate_total():
-    ...
+When the assigned work requires TDD:
 
-@pytest.mark.integration
-def test_database_connection():
-    ...
-```
+- RED → prove the defect/missing behavior;
+- GREEN → minimal implementation;
+- REFACTOR → preserve green.
 
-## Reference
-
-See skill: `python-testing` for detailed pytest patterns and fixtures.
+Security/trust-boundary tests should fail closed.

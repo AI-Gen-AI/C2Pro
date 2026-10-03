@@ -1,445 +1,135 @@
-# C2Pro Web - Next.js 14 Setup Documentation
+# C2Pro Web
 
-**Status:** ✅ Complete
-**Date:** January 21, 2026
-**Task:** CE-S2-011 - Setup Next.js 14 + Tailwind + shadcn/ui
+Current frontend setup and development reference.
 
-## Documentation Navigation
+> Historical note: this file originally documented the January 2026 Next.js 14 bootstrap. The frontend has since evolved materially; current dependency authority is `apps/web/package.json`.
 
-- [Repository README](../../README.md)
-- [Documentation index](../../docs/README.md)
-- [Architecture index](../../docs/architecture/README.md)
-- [Wireframes](../../docs/wireframes/README.md)
-- [Specifications](../../docs/specifications/README.md)
-- [Testing docs index](../../docs/testing/README.md)
+## Current stack
+
+Verified from `apps/web/package.json` at the 2026-10-01 documentation audit baseline:
+
+- Next.js 16.3.6
+- React / React DOM 19.2.7
+- TypeScript 5.9.3
+- Tailwind CSS 4.3.2
+- Clerk `@clerk/nextjs`
+- TanStack React Query
+- Zustand
+- Orval generated API contracts
+- Vitest 4
+- Playwright 1.61
+
+Toolchain:
+
+- Node >=22 <23
+- pnpm >=10
+- repository package manager: pnpm 10.25.0
+
+## Documentation
+
 - [Quick start](../../QUICK_START.md)
+- [Current TDD](../../docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_2.md)
+- [Architecture decisions](../../docs/architecture/decisions/README.md)
+- [Clerk auth guide](../../docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md)
+- [Testing docs](../../docs/testing/README.md)
 
----
+## Install
 
-## Overview
-
-The C2Pro frontend is built with:
-- **Next.js 14.2.35** - React framework with App Router
-- **React 18.2.0** - UI library
-- **TypeScript 5.3.3** - Type safety
-- **Tailwind CSS 3.4.19** - Utility-first CSS
-- **shadcn/ui** - Component library based on Radix UI
-- **TanStack React Query 5.87.1** - Server state management
-- **Axios 1.7.7** - HTTP client
-
----
-
-## Directory Structure
-
-```
-apps/web/
-├── app/                      # Next.js App Router
-│   ├── (auth)/              # Authentication routes (login, register)
-│   ├── (app)/         # Dashboard routes (protected)
-│   │   ├── projects/
-│   │   ├── alerts/
-│   │   ├── documents/
-│   │   ├── evidence/
-│   │   ├── stakeholders/
-│   │   ├── raci/
-│   │   └── layout.tsx       # Dashboard layout with sidebar
-│   ├── api/                 # API routes
-│   │   └── [...proxy]/      # Backend API proxy
-│   ├── globals.css          # Global styles + Tailwind
-│   ├── layout.tsx           # Root layout
-│   └── providers.tsx        # React Query & Auth providers
-│
-├── components/              # React components
-│   ├── ui/                 # shadcn/ui components
-│   ├── layout/             # Layout components (sidebar, header)
-│   └── dashboard/          # Dashboard-specific components
-│
-├── lib/                    # Utilities and helpers
-│   ├── api/               # API client and utilities
-│   ├── utils.ts           # Utility functions
-│   └── mockData.ts        # Mock data for development
-│
-├── hooks/                  # Custom React hooks
-│   ├── use-toast.ts       # Toast notifications hook
-│   ├── useProject.ts      # Project data fetching
-│   └── ...
-│
-├── types/                  # TypeScript type definitions
-│   ├── project.ts         # Project-related types
-│   ├── backend.ts         # API response types
-│   ├── document.ts        # Document types
-│   ├── highlight.ts       # PDF highlight types
-│   └── coherence.ts       # Coherence analysis types
-│
-├── public/                 # Static assets
-├── .env.local             # Environment variables
-├── next.config.js         # Next.js configuration
-├── tailwind.config.ts     # Tailwind configuration
-├── components.json        # shadcn/ui configuration
-├── tsconfig.json          # TypeScript configuration
-└── package.json           # Dependencies
-```
-
----
-
-## Installation
-
-### Prerequisites
-- Node.js 20.x or later
-- npm 10.x or later
-
-### Steps
+From repository root:
 
 ```bash
-# Navigate to web directory
+pnpm install --frozen-lockfile
+```
+
+Do not use npm/yarn; the monorepo enforces pnpm.
+
+## Environment
+
+Use `apps/web/.env.example` as the current development template.
+
+Authenticated development requires the applicable Clerk development settings. Never place live production secrets in local committed files.
+
+The frontend API target must match the backend environment you are running.
+
+## Run locally
+
+```bash
 cd apps/web
-
-# Install dependencies
-pnpm install
-
-# Install next-themes (if not already installed)
-pnpm add next-themes
-
-# Start development server
 pnpm dev
 ```
 
----
+Default local URL: `http://localhost:3000`.
 
-## Configuration
-
-### Environment Variables
-
-Create or update `.env.local`:
+## Quality commands
 
 ```bash
-# API Base URL
-NEXT_PUBLIC_API_URL=http://localhost:8000
-
-# Optional: Supabase (if using)
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-```
-
-### Tailwind CSS
-
-Configured in `tailwind.config.ts`:
-- Custom color system with CSS variables
-- shadcn/ui integration
-- Inter font family
-- Custom animations
-
-### shadcn/ui Components
-
-Configuration in `components.json`:
-- Style: default
-- RSC: true (React Server Components)
-- Base color: slate
-- CSS variables: true
-
-**Installed Components:**
-- accordion, alert, avatar, badge, button, card, checkbox, dialog, dropdown-menu
-- input, label, progress, scroll-area, select, separator, sheet, skeleton
-- sonner (toasts), switch, tabs, toast, tooltip
-
-### TypeScript
-
-Configured in `tsconfig.json`:
-- Strict mode enabled
-- Path aliases: `@/*` points to project root
-- Target: ES2017
-- Module: ESNext
-- JSX: preserve
-
----
-
-## Development
-
-### Start Dev Server
-
-```bash
-pnpm dev
-```
-
-Server runs on `http://localhost:3000`
-
-### Build for Production
-
-```bash
-pnpm build
-```
-
-### Start Production Server
-
-```bash
-pnpm start
-```
-
-### Linting
-
-```bash
+pnpm typecheck
 pnpm lint
+pnpm test
+pnpm test:all
+pnpm test:coverage
+pnpm build
+pnpm test:e2e
 ```
 
----
+Generated API drift check:
 
-## Routes
-
-### Public Routes (auth)
-- `/login` - User login
-- `/register` - User registration
-
-### Protected Routes (app)
-- `/` - Dashboard home
-- `/projects` - Projects list
-- `/projects/new` - Create new project
-- `/projects/[id]` - Project detail
-- `/projects/[id]/documents` - Project documents
-- `/projects/[id]/analysis` - Project analysis
-- `/projects/[id]/evidence` - Evidence viewer
-- `/alerts` - Alerts management
-- `/documents` - Documents list
-- `/evidence` - Global evidence viewer
-- `/stakeholders` - Stakeholders management
-- `/raci` - RACI matrix
-- `/settings` - User settings
-- `/observability` - Observability dashboard (admin)
-
-### API Routes
-- `/api/[...proxy]` - Proxies requests to backend API
-
----
-
-## Type System
-
-### Core Types
-
-Located in `types/`:
-
-**project.ts:**
-- `Project`, `ProjectStatus`, `ProjectType`
-- `Alert`, `Severity`, `AlertStatus`
-- `Activity`, `Stakeholder`, `KPIData`
-
-**backend.ts:**
-- `ApiResponse<T>`, `PaginatedResponse<T>`
-- `AlertResponse`, `ProjectResponse`, `DocumentResponse`
-- `ErrorResponse`
-
-**highlight.ts:**
-- `Highlight`, `Rectangle`, `HighlightState`
-- Helper functions for creating highlights
-
----
-
-## API Integration
-
-### API Client
-
-Located in `lib/api/`:
-
-**client.ts** - Axios instance with interceptors
-**auth.ts** - Authentication utilities
-**config.ts** - API configuration
-**index.ts** - Exported API functions
-
-**Placeholder Functions (to be implemented):**
-- `getDocumentAlerts(documentId)` - Fetch alerts for document
-- `createHighlightsFromAlerts(alerts)` - Create PDF highlights
-- `getDocumentEntities(documentId, pageHeight?)` - Fetch extracted entities
-- `createHighlightsFromEntities(entities)` - Create entity highlights
-- `getProjectDocuments(projectId)` - Fetch project documents
-
-### React Query
-
-Configured in `app/providers.tsx`:
-- TanStack React Query for server state
-- Automatic refetching
-- Cache management
-- Error handling
-
----
-
-## Styling
-
-### Global Styles
-
-`app/globals.css`:
-- Tailwind directives
-- Custom CSS variables for colors
-- Font imports (Inter Variable, JetBrains Mono)
-- shadcn/ui base styles
-
-### Design System
-
-**Colors:**
-- Primary: slate
-- Background/Foreground: White/Dark
-- Severity colors (critical, high, medium, low)
-- Status colors (success, warning, error, info)
-
-**Typography:**
-- Default font: Inter (variable)
-- Mono font: JetBrains Mono
-
-**Spacing:**
-- Base unit: 8px
-- Consistent padding and margins
-
----
-
-## Components
-
-### Layout Components
-
-**AppSidebar** - Main navigation sidebar
-**AppHeader** - Top header bar
-**AppLayout** - Dashboard layout wrapper
-
-### UI Components (shadcn/ui)
-
-All UI components are in `components/ui/`:
-- Consistent API and styling
-- Accessible by default (Radix UI primitives)
-- Customizable with Tailwind
-
-### Dashboard Components
-
-**ActivityTimeline** - Recent activity feed
-**RecentProjectsCard** - Recent projects list
-**TopAlertsCard** - Critical alerts display
-**KPICardsGrid** - Key metrics cards
-**GaugeChart** - Coherence score visualization
-
----
-
-## Build Output
-
-Successfully compiled with 15 static pages:
-- All dashboard routes generated
-- One runtime error in `/stakeholders` (useSearchParams needs Suspense boundary)
-- Production-ready build created in `.next/`
-
----
-
-## Known Issues
-
-### 1. Stakeholders Page - useSearchParams
-
-**Issue:** Pre-rendering error in `/stakeholders` page
-**Cause:** `useSearchParams()` requires Suspense boundary
-**Fix:** Wrap component using useSearchParams in `<Suspense>`
-
-```tsx
-import { Suspense } from 'react';
-
-export default function StakeholdersPage() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <StakeholdersContent />
-    </Suspense>
-  );
-}
+```bash
+pnpm generate:api:check
 ```
 
-### 2. API Integration
+The consolidated repository CI is authoritative for merge gating.
 
-**Status:** Placeholder functions implemented
-**Action Required:** Implement actual API calls when backend endpoints are ready
+## Architecture
 
-### 3. Authentication
+The web app uses Next.js App Router with:
 
-**Status:** Temporarily disabled (commented out in `layout.tsx`)
-**Action Required:** Re-enable when backend auth is ready
+- authenticated product surfaces;
+- Clerk session/auth integration;
+- typed backend API contracts;
+- React Query for server state;
+- Zustand where client state is appropriate;
+- Playwright for end-to-end journeys;
+- explicit production-acceptance project/config that disables unsafe evidence capture for the protected qualification path.
 
----
+Do not infer the current route inventory from the original January bootstrap document. Source and tests are authoritative.
 
-## Next Steps
+## Coherence and trust UI semantics
 
-### Immediate (Sprint 2)
-1. Fix useSearchParams Suspense boundary issue
-2. Re-enable authentication when backend is ready
-3. Connect API placeholder functions to real backend
+The UI must preserve backend truth semantics:
 
-### Short Term (Sprint 3-4)
-1. Implement Evidence Viewer with PDF rendering
-2. Add real-time updates for alerts
-3. Implement Stakeholder Power/Interest matrix
-4. Build RACI matrix editor
+- null/insufficient-evidence score is not rendered as zero;
+- trusted score is canonical;
+- projected/pending-review score is visibly hypothetical;
+- pending/rejected candidate state must not appear as accepted canonical project state;
+- evidence locators must not fabricate page/bbox precision.
 
-### Long Term (Sprint 5+)
-1. Add unit and integration tests
-2. Implement E2E tests with Playwright
-3. Add error boundaries
-4. Optimize performance (code splitting, lazy loading)
+See ADR-009 and ADR-026.
 
----
+## Demo mode
 
-## Dependencies
+Where `NEXT_PUBLIC_APP_MODE=demo` is supported, demo mode is a product demonstration mechanism, not a production-validation path.
 
-### Core
-- next: 14.2.35
-- react: 18.2.0
-- typescript: 5.3.3
+Never reuse demo/mock shortcuts for production qualification.
 
-### Styling
-- tailwindcss: 3.4.19
-- tailwindcss-animate: 1.0.7
-- @fontsource-variable/inter: 5.2.8
-- @fontsource/jetbrains-mono: 5.2.8
+## Production qualification
 
-### UI Components
-- @radix-ui/*: Multiple packages for primitives
-- lucide-react: 0.562.0 (icons)
-- sonner: 1.7.4 (toasts)
-- class-variance-authority: 0.7.1
-- clsx: 2.1.1
-- tailwind-merge: 3.4.0
+The protected #715 Playwright path lives under `src/tests/e2e/prod-acceptance/`.
 
-### Data Fetching
-- @tanstack/react-query: 5.87.1
-- axios: 1.7.7
+It has a stricter security contract than ordinary E2E:
 
-### PDF & Documents
-- pdfjs-dist: 5.4.530
-- react-pdf: 10.3.0
+- canonical production origin before credentials;
+- dedicated synthetic production identity/tenant;
+- exact provider/runtime binding;
+- no arbitrary screenshots/video/trace leakage;
+- fail closed before mutation when preflight is invalid.
 
-### Utilities
-- date-fns: 3.6.0
-- recharts: 2.15.4 (charts)
-- react-resizable-panels: 2.1.9
-- @dnd-kit/core: 6.1.0 (drag and drop)
-- next-themes: Latest (theme management)
+Operator procedure:
 
----
+`docs/product/production-qualification-operator-runbook.md`
 
-## Acceptance Criteria
+## Dependency/version policy
 
-✅ Next.js 14 configured with TypeScript
-✅ Tailwind CSS configured and working
-✅ shadcn/ui components installed and configured
-✅ Project structure created with all routes
-✅ Base layout components implemented
-✅ App renders successfully
-✅ Production build completes successfully
-✅ Type safety enforced throughout
+Do not copy version tables from this README into architecture decisions.
 
----
-
-## Team Notes
-
-- All wireframes are documented in `docs/wireframes/`
-- Backend API specification in `apps/api/README.md`
-- Use `mockData.ts` for development until backend is ready
-- Follow shadcn/ui patterns for new components
-- Keep components small and focused
-- Use TypeScript strict mode - no `any` types
-- Canonical project documentation starts at `docs/README.md`
-
----
-
-**Task Completed:** CE-S2-011
-**Status:** ✅ Complete
-**Completion Date:** January 21, 2026
-**Story Points:** 2
-**Time Spent:** ~4 hours (mostly fixing TypeScript errors)
+When versions change, `package.json` / lockfile remain authoritative; update this short stack summary only when it materially helps onboarding.

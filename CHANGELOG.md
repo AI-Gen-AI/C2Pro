@@ -4,6 +4,29 @@ All notable changes to C2Pro are tracked here. Format loosely follows [Keep a Ch
 
 ## [Unreleased]
 
+### Documentation / Architecture Governance — #776
+
+#### Added
+- Platform TDD v4.2 as the current architecture baseline, preserving v4.1/v4.0 as historical references.
+- ADR-026: Trusted-State Commit and exact approval binding (`persisted != trusted`).
+- Production qualification operator runbook for the landed #715 harness.
+
+#### Changed
+- Rebuilt documentation/architecture/ADR indexes around **scoped authority planes**: Product Control for product lifecycle, `.c2pro` for development execution, ADR/TDD for architecture, workflows/ruleset for merge enforcement.
+- Reconciled root, backend, frontend and quick-start onboarding docs with the current toolchain and architecture.
+- Reconciled release criteria/signoff with consolidated `ci.yml`, active main ruleset, tag-driven `release.yml`, Product Control and production qualification.
+- Replaced the obsolete “docs only in backlog/blackboard” rule with an anti-sprawl lifecycle policy that permits durable ADR/TDD/spec/runbook/product contracts.
+- Marked dated testing inventories as historical baselines rather than current CI authority.
+- Updated active references from retired workflow names to the current consolidated CI/deployment topology.
+- Reconciled `agents.md` / `CLAUDE.md` with the single-writer `.c2pro` development-control model; legacy backlog/blackboard files remain read-only cold references.
+- Reconciled the active release evidence template with `release.yml`, `ci.yml`, `secret-scan.yml` and the current Gate 7 validator contract.
+
+#### Governance
+- Machine Product Control remains YAML-first/parity-guarded; this documentation reconciliation does not hand-edit its generated canonical block or promote #706/#715 lifecycle state.
+- Development execution remains single-writer under `.c2pro`; this change does not revive `C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` or `blackboard.json` as write targets.
+- Historical audits, evidence bundles and dated plans remain immutable point-in-time evidence.
+
+
 ### EPIC-ECOA-V2-HOTFIX-AND-CUTOVER — Coherence Score™ v2 hotfix and cutover
 
 Trademark-critical fix for ADR-009 §1 P1 + §14 violations in the v1 coherence engine. Bug repro: `POST /api/v1/coherence/evaluate/diagnostics` on a 2-document SCOPE-only project returned `overall_score=15` (a `mean × coverage_ratio` collapse forbidden by ADR-009 §1 P1) instead of `null` + `score_reason="insufficient_active_weight"`.
@@ -14,7 +37,7 @@ Trademark-critical fix for ADR-009 §1 P1 + §14 violations in the v1 coherence 
 - Runtime `CategoryRegistry` loader and Pydantic v2 validation (`TASK-BCK-084`) enforcing structural constraints, default weights (sum=1.0), priors (0-1), threshold hierarchy, and regex integrity. Switched YAML config to use `text-embedding-3-small`.
 - ADR-009 §14 active-weight guard in `apps/api/src/coherence/scoring.py:_calculate_detailed_with_coverage`. When the sum of weights of assessed categories falls below `MIN_ACTIVE_WEIGHT (0.35)`, the engine returns `score=None` with `reason="insufficient_active_weight"` instead of collapsing to a low integer. Mirrors the v2 implementation in `services/v2/aggregator_v2.py`.
 - Frontend "Pending evidence" empty state per ADR-009 §18. Null `coherence_score` and null per-category sub-scores render as neutral `—` / `Pending`, never as `0` or red.
-- CI guard step in `.github/workflows/frontend-ci.yml` ("Coherence score-path null-fallback guard") that fails the build if `?? 0` or `|| 0` appears on coherence score paths in `apps/web/components/coherence/**` or `apps/web/lib/api/contracts.ts`. `weights_used` fallbacks are exempted.
+- CI guard step in the frontend lane of consolidated `.github/workflows/ci.yml` ("Coherence score-path null-fallback guard") that fails the build if `?? 0` or `|| 0` appears on coherence score paths in `apps/web/components/coherence/**` or `apps/web/lib/api/contracts.ts`. `weights_used` fallbacks are exempted.
 - New backend tests: 16 across `apps/api/tests/coherence/test_scoring_min_active_weight.py`, `test_router_score_reason_propagation.py`, `test_enriched_overall_score_nullable.py`, `test_v1_to_v2_adapter_phase_b.py`, and `apps/api/tests/integration/coherence/test_diagnostics_partial_coverage.py`.
 - New frontend tests: 4 null-safe regression tests in `apps/web/components/coherence/DashboardClient.test.tsx` (sort ordering, BreakdownChart NaN-free, PDF `—`, XLS String `—`).
 - `docs/superpowers/specs/2026-05-25-ecoa-v2-hotfix-and-cutover-design.md` (spec) and `docs/superpowers/plans/2026-05-25-ecoa-v2-hotfix-and-cutover.md` (plan).
