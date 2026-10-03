@@ -48,7 +48,7 @@ development_execution_authority:
     This product plane records target/state; it does not authorize merges or production mutation.
 
 production_position:
-  reconciled_against_main_sha: 314fc39b0b4c25c8c0ca99977314ba1bb9083208
+  reconciled_against_main_sha: 9893cd42049c3cd2bbf9e8d891df0725b35ef082
   deployed_runtime_sha: UNVERIFIED
   observed_production_evidence:
     - "kuwait2 doc c510de21: enqueue -> worker -> SUCCESS on dedicated Railway Redis (historical P0a evidence)"
@@ -69,7 +69,7 @@ production_position:
     - "P0b L4-5 is release-ready and merged but still not PROD_VALIDATED end-to-end on the current runtime"
     - "P0c What Changed is WIRED on main but deployment/prod-validation of the complete user journey is not proven"
     - "P0d Current State Reporting is WIRED on main but deployment/prod-validation is not proven"
-    - "#706 full production end-user GOAL remains open: #710/#711/#714 implementations are closed; #758 checkpoint-lineage fencing is closed; #712 and #713 remain open fix-forward acceptance work; #715 harness is merged but the full production qualification has not been accepted; #690 remains an external prerequisite"
+    - "#706 full production end-user GOAL remains open: #710/#711/#714 implementations are closed; #758 checkpoint-lineage fencing is closed; #712 and #713 remain open acceptance/fix-forward authorities; #715 harness is merged but the full production qualification has not been accepted; #690 prerequisite is closed from production run #30 evidence; #792 remains open until the next full production journey proves explicit HITL"
     - "ADR-025 now has canonical-WBS authority and several cross-domain links wired on main, but one-logical-root, baseline/change governance, remaining alert/evidence/change linkage and production journey are not fully proven"
     - "Procurement Plan -> BoQ/RFQ -> award -> governed stakeholder communications is not delivered end-to-end"
 
@@ -174,6 +174,34 @@ reconciliation_delta_2026_10_03:
     authentication/SSE hardening and the explicit-human-review fix. These are material realization improvements
     but do not prove the full production journey or self-promote any lifecycle lane. Product value remains
     unvalidated; P0b/P0c/P0d qualification state stays conservative.
+
+reconciliation_delta_2026_10_03_post_780:
+  previous_main_sha: 314fc39b0b4c25c8c0ca99977314ba1bb9083208
+  current_main_sha: 9893cd42049c3cd2bbf9e8d891df0725b35ef082
+  material_main_advances:
+    - "#780 merged the documentation/architecture reconciliation and closed Line B's reconciliation branch; this changes control truth, not product lifecycle state."
+    - "#690 is CLOSED. Production synthetic run #30 (37080656693) passed the dedicated tenant/identity and real production auth preflights with no customer data; its later full-journey failure was at the HITL seam, not the identity prerequisite."
+    - "#793 is merged and Railway-deployed; #792 remains OPEN by design until a fresh #715 full production journey proves REVIEW_REQUIRED -> explicit durable human decision -> ANALYZED without confidence-only auto-approval."
+    - "#798 is README-only local Postgres validator documentation; #799/#800 are GitHub Actions efficiency/hygiene changes. None changes end-user runtime semantics or promotes lifecycle state."
+  line_a_next_work:
+    canonical_issue: 715
+    parent_goal: 706
+    A1: "identity-preflight on the current composite production binding; must PASS before any product mutation"
+    A2: "full-journey with require_hitl=true only after A1 PASS"
+    decisive_path: "AUTH -> PROJECT -> UPLOAD -> PARSE/EXTRACT -> ANALYSIS -> EVIDENCE -> REVIEW_REQUIRED -> exactly one addressable review item -> explicit UI approval -> ANALYZED -> HEALTH -> REFRESH/RELOGIN -> read-only durable verification"
+    failure_policy: "stop at the first failing seam; remediate only that bounded defect; do not weaken auth/RLS/HITL or manually repair production state"
+    return_to_line_b: "bounded non-secret evidence bundle for explicit P0b Product-Control reconciliation; PASS never self-promotes lifecycle state"
+  still_open_acceptance:
+    - "#706 full production end-user journey GOAL"
+    - "#715 accepted full production qualification"
+    - "#712 truthful lifecycle acceptance/fix-forward authority"
+    - "#713 evidence-locator truthfulness acceptance/fix-forward authority"
+    - "#792 explicit-human-review production acceptance"
+  control_conclusion: >
+    The identity/tenant prerequisite is now closed and the next bounded product action is no longer additional
+    documentation or prerequisite work. Line A should execute #715 A1 and, only after A1 PASS, A2 on the current
+    composite production binding. A2 is the acceptance vehicle for #792 and exercises the landed #712/#713
+    truthfulness fixes. No CI, merge, deployment or successful preflight self-promotes P0b/P0c/P0d.
 
 north_star:
   full_product: >
@@ -304,7 +332,7 @@ adr_realization:
   - {adr: "ADR-025-canonical-project-controls-wbs-backbone", ns: v3_canon, priority: P1, design_status: Accepted, realization_status: PARTIAL, deployment_status: NONE, prod_validation_status: NONE, evidence: "wbs_nodes is canonical runtime authority on main; legacy WBS writes are blocked; RACI/BOM/MCP plus schedule/spend consumers are reconciled", gap: "one-logical-root, baseline/change governance, complete budget/schedule/alert/evidence/change linkage and deployment/prod-validation remain open"}
   - {adr: "ADR-026-trusted-state-commit", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: WIRED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#714 trusted-state commit/projected-Coherence implementation merged on main after #758 lineage fencing", gap: "no independent deployed-runtime or full production-journey validation claim"}
   - {adr: "ADR-027-processing-authority-checkpoint-lineage", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: WIRED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#711 processing authority plus #758 checkpoint-lineage fencing merged on main", gap: "deployment/production acceptance remains governed by the #706/#715 qualification path"}
-  - {adr: "ADR-028-production-qualification-composite-runtime", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#715/#733 harness, provider-identity verifier and evidence contracts are merged", gap: "#715 run/acceptance and #690 dedicated qualification identity/tenant remain open"}
+  - {adr: "ADR-028-production-qualification-composite-runtime", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#715/#733 harness, provider-identity verifier and evidence contracts are merged; #690 prerequisite closed from production run #30 identity/tenant evidence", gap: "#715 full-journey acceptance remains open; #792 acceptance is bound to that journey"}
 
 coherence_runtime_reconciliation:
   status: COMPLETE
@@ -570,9 +598,9 @@ pr_disposition:
   "650": {action: MERGED_HITL_V3_IDEMPOTENCY, reason: "final decision audit idempotency + exact-identity reconciliation integrated"}
 
 next_authorized_action:
-  - "Close #690 through the supported Clerk Production operator path; do not reuse customer/CI identities and do not synthesize customer-like mappings outside normal production administration."
-  - "Close the still-open #706 fix-forward workstreams #712 and #713 on exact reviewed heads; #711/#714/#758 are already closed and must not be reopened by this control snapshot."
-  - "After #690 plus the required open #712/#713 acceptance blockers are resolved and the deployed runtime is rebound, execute #715 against the dedicated synthetic tenant. The merged harness is tooling, not acceptance."
-  - "Immediately before #715, independently bind exact Railway API/Worker/Scheduler and Vercel production identities and fail closed on unresolved staged configuration, mocks, auth bypass or fixture mismatch."
-  - "Capture the #683 P0b Health/persistence assertions inside the accepted #715 journey where applicable; then qualify #686 P0c and #687 P0d only where their own evidence contracts pass."
+  - "#690 is CLOSED from bounded production run #30 identity/tenant evidence. Do not reopen or replace that prerequisite unless new contradictory production evidence appears."
+  - "Treat #712 and #713 as still-open acceptance/fix-forward authorities whose landed code must now be exercised through the canonical #715 production journey; do not block A1 merely because the issues are administratively open."
+  - "Execute #715 in two bounded Line-A steps on the current production composite binding: A1 identity-preflight first; only after A1 PASS, A2 full production journey with require_hitl=true. The merged harness is tooling, not acceptance."
+  - "For #715 use the current provider-bound composite runtime recorded in the issue dispatch package and let the workflow independently re-verify Railway API/Worker/Scheduler, Vercel production identity, zero staged changes, fixture digest, auth/RLS and recovery evidence before mutation."
+  - "On A2 PASS, close #792 only if the journey proves REVIEW_REQUIRED -> one explicit UI decision -> ANALYZED on the same governed lineage with one durable correction/decision and no duplicate trusted effects. Capture #712/#713 and #683 assertions inside the same bounded evidence bundle where applicable; then return the bundle to Line B for explicit P0b reconciliation before any P0c/P0d qualification."
   - "After the P0 qualification wave, reconcile Product Control explicitly before any lifecycle promotion or new P1/Coherence/Procurement authorization. No documentation/CI/deployment event self-promotes state."
