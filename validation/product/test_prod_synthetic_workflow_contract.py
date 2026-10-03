@@ -410,7 +410,7 @@ def test_health_poll_has_fail_closed_status_diagnostics() -> None:
     assert "assessment_count=" in spec
 
 
-def test_health_poll_uses_observed_canonical_browser_origin() -> None:
+def test_health_poll_uses_observed_canonical_api_origin() -> None:
     spec = (
         REPO_ROOT
         / "apps"
@@ -423,7 +423,7 @@ def test_health_poll_uses_observed_canonical_browser_origin() -> None:
     ).read_text(encoding="utf-8")
 
     assert "ObservedApiAuthContext" in spec
-    assert "requireProductionOrigin(response.url())" in spec
+    assert "requireProductionApiOrigin(response.url())" in spec
 
     start = spec.index("async function loadHealth(")
     end = spec.index("async function waitForHealth(", start)
