@@ -581,7 +581,7 @@ master_defects:
   - "D7: Merged/release-ready code must not be confused with deployed or PROD_VALIDATED product value."
   - "D8: ADR numbering remains ambiguous across namespaces."
   - "D9: ADR-025 canonical runtime authority and several cross-domain links are now on main; one logical root, WBS baseline/change governance, remaining alert/evidence/change linkage and production journey remain PARTIAL."
-  - "D10: Alert visibility is separated from later Action/HITL automation; HITL runtime itself has materially advanced but the richer P2 action programme remains incomplete."
+  - "D10: Alert visibility is separated from later Action/HITL automation; #793 preserves explicit human-required review against confidence auto-approval, but fresh #715 production evidence is still required and the richer P2 action programme remains incomplete."
 
 risks:
   - "R1: Treating reliability, merge or release-readiness as product completion."
@@ -601,9 +601,11 @@ pr_disposition:
   "650": {action: MERGED_HITL_V3_IDEMPOTENCY, reason: "final decision audit idempotency + exact-identity reconciliation integrated"}
 
 next_authorized_action:
-  - "Close #690 through the supported Clerk Production operator path; do not reuse customer/CI identities and do not synthesize customer-like mappings outside normal production administration."
-  - "Close the still-open #706 fix-forward workstreams #712 and #713 on exact reviewed heads; #711/#714/#758 are already closed and must not be reopened by this control snapshot."
-  - "After #690 plus the required open #712/#713 acceptance blockers are resolved and the deployed runtime is rebound, execute #715 against the dedicated synthetic tenant. The merged harness is tooling, not acceptance."
-  - "Immediately before #715, independently bind exact Railway API/Worker/Scheduler and Vercel production identities and fail closed on unresolved staged configuration, mocks, auth bypass or fixture mismatch."
-  - "Capture the #683 P0b Health/persistence assertions inside the accepted #715 journey where applicable; then qualify #686 P0c and #687 P0d only where their own evidence contracts pass."
+  - "#690 is completed from bounded production run-#30 identity/tenant preflight evidence; do not reopen identity provisioning unless a fresh preflight proves drift."
+  - "Rebind the exact current Railway API/Worker/Scheduler and Vercel production identities, then execute #715 first in identity-preflight mode. Fail closed on deployment drift, active staged configuration, mocks, auth bypass, tenant mismatch or fixture mismatch."
+  - "Only after the fresh #715 identity-preflight passes, execute the same bound runtime in full-journey mode with require_hitl=true. The required path is review_required -> exactly one addressable review item -> explicit UI approval -> analyzed -> Health -> refresh/relogin -> read-only durable verification."
+  - "#792 remains open until that production journey proves the #793 explicit-human-review fix. If the journey fails, open/remediate only the first failing seam; do not broaden the programme or self-promote lifecycle state."
+  - "#712 and #713 remain open acceptance/fix-forward authorities. Their merged implementation deltas are supporting evidence; use the canonical #715 journey to validate the user-visible lifecycle/evidence semantics before closure."
+  - "Capture the #683 P0b Health/persistence assertions inside the accepted #715 journey. Return the bounded bundle to Line B for explicit Product-Control reconciliation; the run itself never self-promotes P0b."
+  - "After accepted P0b disposition, execute #686 P0c What Changed qualification and then #687 P0d Current State qualification where their own evidence contracts pass, preferably preserving the same clean synthetic project/evidence chain."
   - "After the P0 qualification wave, reconcile Product Control explicitly before any lifecycle promotion or new P1/Coherence/Procurement authorization. No documentation/CI/deployment event self-promotes state."
