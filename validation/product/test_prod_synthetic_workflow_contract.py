@@ -381,10 +381,10 @@ def test_health_poll_is_bounded_and_ui_navigation_follows_convergence() -> None:
     analyzed = spec.index('expect(terminal.lifecycle_status).toBe("analyzed");')
     wait_health = spec.index("const health = await waitForHealth(page, projectId);", analyzed)
     analysis_nav = spec.index(
-        "apiAuthContext.origin}/projects/${projectId}/analysis",
+        "baseUrl()}/projects/${projectId}/analysis",
         analyzed,
     )
-    assert "const apiAuthContext = requireObservedApiAuthContext();" in spec[wait_health:analysis_nav]
+    assert "apiAuthContext.origin}/projects/${projectId}/analysis" not in spec
     assert wait_health < analysis_nav
 
 
@@ -575,7 +575,7 @@ def test_upload_auth_context_uses_configured_backend_origin_not_frontend_allowli
     assert "configuredBackendOrigin" in spec
 
     capture_start = spec.index("function captureObservedApiAuthContext(")
-    capture_end = spec.index("async function loadHealth(", capture_start)
+    capture_end = spec.index("async function loadDocument(", capture_start)
     capture = spec[capture_start:capture_end]
 
     assert "requireProductionOrigin(response.url())" not in capture
@@ -601,5 +601,6 @@ def test_configured_backend_origin_requires_https_absolute_url() -> None:
     helper = spec[helper_start:helper_end]
 
     assert 'response.status() !== 200' in helper
+    assert "maxRedirects: 0" in helper
     assert 'parsed.protocol !== "https:"' in helper
     assert "PROD_ACCEPTANCE_BACKEND_ORIGIN_INVALID" in helper
