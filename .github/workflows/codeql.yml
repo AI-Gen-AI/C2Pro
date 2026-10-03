@@ -7,6 +7,27 @@ name: CodeQL
 on:
   push:
     branches: [main]
+    paths:
+      - "**/*.py"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/package.json"
+      - "**/package-lock.json"
+      - "**/npm-shrinkwrap.json"
+      - "**/yarn.lock"
+      - "**/pnpm-lock.yaml"
+      - "**/pnpm-workspace.yaml"
+      - "**/requirements*.txt"
+      - "**/pyproject.toml"
+      - "**/poetry.lock"
+      - "**/Pipfile"
+      - "**/Pipfile.lock"
+      - "**/uv.lock"
+      - "**/tsconfig*.json"
+      - "**/jsconfig*.json"
+      - ".github/workflows/codeql.yml"
   pull_request:
     branches: [main]
     paths:
