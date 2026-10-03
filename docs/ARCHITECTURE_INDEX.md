@@ -1,9 +1,9 @@
 # C2Pro Architecture Documentation Index
 
 > **Version:** 2.0.0  
-> **Last Updated:** 2026-10-01  
+> **Last Updated:** 2026-10-03  
 > **Status:** Canonical navigation  
-> **Baseline:** `main@33650a28a930d82a7bd65d98b50981145b3fd1d1`
+> **Baseline:** `main@314fc39b0b4c25c8c0ca99977314ba1bb9083208`
 
 ## Authority order
 
@@ -58,7 +58,7 @@ Do not use architecture documents to infer PROD validation.
 - machine: `validation/product/c2pro-master-product-control-v1.yaml`
 - human: `docs/product/00-c2pro-master-product-control-v1.md`
 
-At the 2026-10-01 reconciliation, #706 remains open and no documentation change here promotes P0b/P0c/P0d.
+At the 2026-10-03 revalidation, #706 remains open and no documentation change here promotes P0b/P0c/P0d.
 
 ## Supporting / historical documents
 
