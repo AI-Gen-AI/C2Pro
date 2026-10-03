@@ -512,3 +512,36 @@ def test_production_journey_resets_observed_api_auth_context() -> None:
     sign_in = journey.index("await signInSyntheticProductionUser(page);")
     reset = journey.index("observedApiAuthContext = null;")
     assert reset < sign_in
+
+
+def test_direct_processing_polls_quiesce_browser_background_requests() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    assert 'async function quiesceBrowserPage(page: Page): Promise<void>' in spec
+    assert 'await page.goto("about:blank");' in spec
+    assert spec.count("await quiesceBrowserPage(page);") == 2
+
+    journey = spec[
+        spec.index('test("real user completes the canonical production journey"') :
+    ]
+    upload = journey.index("const upload = await uploadFixture(page, projectId);")
+    first_quiesce = journey.index("await quiesceBrowserPage(page);", upload)
+    first_poll = journey.index("let terminal = await waitForDocumentAttentionOrCompletion(", first_quiesce)
+    assert upload < first_quiesce < first_poll
+
+    approve = journey.index("await approveExactDocumentReview(", first_poll)
+    second_quiesce = journey.index("await quiesceBrowserPage(page);", approve)
+    analyzed_poll = journey.index(
+        "terminal = await waitForAnalyzed(page, projectId, upload.documentId);",
+        second_quiesce,
+    )
+    assert approve < second_quiesce < analyzed_poll
