@@ -62,12 +62,15 @@ interface HealthVector {
   pending_review_count?: number | null;
 }
 
-type ObservedApiAuthHeaders = {
-  Authorization: string;
-  "X-Tenant-ID": string;
+type ObservedApiAuthContext = {
+  origin: string;
+  headers: {
+    Authorization: string;
+    "X-Tenant-ID": string;
+  };
 };
 
-let observedApiAuthHeaders: ObservedApiAuthHeaders | null = null;
+let observedApiAuthContext: ObservedApiAuthContext | null = null;
 
 const CANONICAL_CATEGORIES = new Set([
   "SCOPE",
@@ -130,9 +133,12 @@ async function loadDocument(
   const authorization = requestHeaders.authorization;
   const tenantId = requestHeaders["x-tenant-id"];
   if (authorization && tenantId) {
-    observedApiAuthHeaders = {
-      Authorization: authorization,
-      "X-Tenant-ID": tenantId,
+    observedApiAuthContext = {
+      origin: requireProductionOrigin(response.url()),
+      headers: {
+        Authorization: authorization,
+        "X-Tenant-ID": tenantId,
+      },
     };
   }
   const payload = (await response.json()) as DocumentsPayload | DocumentRecord[];
@@ -218,17 +224,17 @@ async function loadHealth(
   vector: HealthVector | null;
   retryAfterSeconds: number | null;
 }> {
-  if (!observedApiAuthHeaders) {
-    throw new Error("PROD_ACCEPTANCE_HEALTH_AUTH_HEADERS_MISSING");
+  if (!observedApiAuthContext) {
+    throw new Error("PROD_ACCEPTANCE_HEALTH_AUTH_CONTEXT_MISSING");
   }
 
   let response: APIResponse;
   try {
     response = await page.request.get(
-      `${baseUrl()}/api/v1/projects/${projectId}/health`,
+      `${observedApiAuthContext.origin}/api/v1/projects/${projectId}/health`,
       {
         failOnStatusCode: false,
-        headers: observedApiAuthHeaders,
+        headers: observedApiAuthContext.headers,
         timeout: 60_000,
       },
     );
@@ -457,7 +463,12 @@ test.describe("Issue #706 production synthetic acceptance", () => {
         matchesProjectApiPath(responsePath(response), projectId, "health"),
       { timeout: 60_000 },
     );
-    await page.goto(`${baseUrl()}/projects/${projectId}/analysis`);
+    if (!observedApiAuthContext) {
+      throw new Error("PROD_ACCEPTANCE_HEALTH_AUTH_CONTEXT_MISSING");
+    }
+    await page.goto(
+      `${observedApiAuthContext.origin}/projects/${projectId}/analysis`,
+    );
     await refreshedHealth;
     const assessments = health.single_document_coverage?.assessments ?? [];
     expect(assessments).toHaveLength(6);

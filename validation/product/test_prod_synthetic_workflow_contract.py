@@ -357,8 +357,8 @@ def test_health_poll_reuses_observed_browser_auth_headers() -> None:
     end = spec.index("async function createProject(", start)
     health_poll = spec[start:end]
 
-    assert "observedApiAuthHeaders" in spec
-    assert 'headers: observedApiAuthHeaders' in health_poll
+    assert "observedApiAuthContext" in spec
+    assert 'headers: observedApiAuthContext.headers' in health_poll
     assert "Authorization:" in spec
     assert '"X-Tenant-ID"' in spec
 
@@ -381,7 +381,7 @@ def test_health_poll_is_bounded_and_ui_navigation_follows_convergence() -> None:
     analyzed = spec.index('expect(terminal.lifecycle_status).toBe("analyzed");')
     wait_health = spec.index("const health = await waitForHealth(page, projectId);", analyzed)
     analysis_nav = spec.index(
-        'await page.goto(`${baseUrl()}/projects/${projectId}/analysis`);',
+        "observedApiAuthContext.origin}/projects/${projectId}/analysis",
         analyzed,
     )
     assert wait_health < analysis_nav
@@ -407,3 +407,27 @@ def test_health_poll_has_fail_closed_status_diagnostics() -> None:
     assert "Retry-After" in spec
     assert "last_status=" in spec
     assert "assessment_count=" in spec
+
+
+def test_health_poll_uses_observed_canonical_browser_origin() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "ObservedApiAuthContext" in spec
+    assert "requireProductionOrigin(response.url())" in spec
+
+    start = spec.index("async function loadHealth(")
+    end = spec.index("async function waitForHealth(", start)
+    health_loader = spec[start:end]
+
+    assert "observedApiAuthContext.origin" in health_loader
+    assert "headers: observedApiAuthContext.headers" in health_loader
+    assert '${baseUrl()}/api/v1/projects/${projectId}/health' not in health_loader
