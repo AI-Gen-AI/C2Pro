@@ -35,7 +35,6 @@ def traced_coherence_node(
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         def _span_context(
             args: tuple[Any, ...],
-            langsmith_client: Any,
         ) -> tuple[Any, dict[str, Any]]:
             state = args[0]
             span_attributes = {
@@ -76,7 +75,7 @@ def traced_coherence_node(
                 langsmith_client = get_client()
                 if not langsmith_client.is_enabled:
                     return await func(*args, **kwargs)
-                state, span_attributes = _span_context(args, langsmith_client)
+                state, span_attributes = _span_context(args)
 
                 span = None
                 caught_error: Exception | None = None
@@ -114,7 +113,7 @@ def traced_coherence_node(
             langsmith_client = get_client()
             if not langsmith_client.is_enabled:
                 return func(*args, **kwargs)
-            state, span_attributes = _span_context(args, langsmith_client)
+            state, span_attributes = _span_context(args)
 
             span = None
             caught_error: Exception | None = None
