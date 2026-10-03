@@ -107,11 +107,14 @@ class CategoryConfinedGate:
         )
 
 
-def test_graphs_register_async_llm_and_rag_nodes():
+def test_graphs_register_async_io_nodes():
     graph = graph_module.build_coherence_subgraph()
     parallel_graph = graph_module.build_parallel_coherence_subgraph()
 
     for state_graph in (graph, parallel_graph):
+        assert inspect.iscoroutinefunction(
+            _registered_callable(state_graph, "prepare_context")
+        )
         assert inspect.iscoroutinefunction(
             _registered_callable(state_graph, "llm_semantic_evaluate")
         )
@@ -171,7 +174,8 @@ async def test_async_graph_llm_node_uses_main_loop_with_category_confined_gate(
         data={"category": "BUDGET", "document_type": "budget"},
     )
 
-    def fake_prepare_context(state):
+    async def fake_prepare_context(state):
+        observed.append((threading.get_ident(), asyncio.get_running_loop()))
         return {
             "enriched_clauses": [
                 ClauseWithEmbedding(clause=legal_clause, category="LEGAL"),
@@ -206,7 +210,7 @@ async def test_async_graph_llm_node_uses_main_loop_with_category_confined_gate(
             )
         }
 
-    monkeypatch.setattr(graph_module, "prepare_context", fake_prepare_context)
+    monkeypatch.setattr(graph_module, "prepare_context_async", fake_prepare_context)
     monkeypatch.setattr(graph_module, "deterministic_evaluate", empty_node)
     monkeypatch.setattr(graph_module, "llm_semantic_evaluate_async", fake_llm_node)
     monkeypatch.setattr(graph_module, "rag_similarity_check_async", empty_async_node)
@@ -224,7 +228,7 @@ async def test_async_graph_llm_node_uses_main_loop_with_category_confined_gate(
         ),
     )
 
-    assert observed == [(main_thread, main_loop)]
+    assert observed == [(main_thread, main_loop), (main_thread, main_loop)]
     findings_by_clause = {
         signal.clause_id: signal for signal in result.finding_signals
         if signal.rule_id.startswith("R-")
