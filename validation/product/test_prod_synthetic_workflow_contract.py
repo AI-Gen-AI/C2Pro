@@ -410,7 +410,7 @@ def test_health_poll_has_fail_closed_status_diagnostics() -> None:
     assert "assessment_count=" in spec
 
 
-def test_health_poll_uses_observed_canonical_api_origin() -> None:
+def test_health_poll_uses_observed_configured_backend_origin() -> None:
     spec = (
         REPO_ROOT
         / "apps"
@@ -423,7 +423,12 @@ def test_health_poll_uses_observed_canonical_api_origin() -> None:
     ).read_text(encoding="utf-8")
 
     assert "ObservedApiAuthContext" in spec
-    assert "requireProductionApiOrigin(response.url())" in spec
+    capture_start = spec.index("function captureObservedApiAuthContext(")
+    capture_end = spec.index("async function loadDocument(", capture_start)
+    capture = spec[capture_start:capture_end]
+    assert "origin: configuredBackendOrigin" in capture
+    assert "observedOrigin !== configuredBackendOrigin" in capture
+    assert "requireProductionApiOrigin(response.url())" not in capture
 
     start = spec.index("async function loadHealth(")
     end = spec.index("async function waitForHealth(", start)
@@ -474,7 +479,7 @@ def test_document_poll_is_bounded_to_six_requests_per_minute() -> None:
     assert "Retry-After" in spec
 
 
-def test_upload_captures_canonical_auth_context_for_direct_document_poll() -> None:
+def test_upload_captures_verified_backend_auth_context_for_direct_document_poll() -> None:
     spec = (
         REPO_ROOT
         / "apps"
@@ -490,9 +495,14 @@ def test_upload_captures_canonical_auth_context_for_direct_document_poll() -> No
         spec.index("async function uploadFixture(") :
         spec.index("async function approveExactDocumentReview(")
     ]
-    assert "captureObservedApiAuthContext(response)" in upload
-    assert "requireProductionApiOrigin(response.url())" in spec
-    assert "requireProductionOrigin(response.url())" not in spec
+    configured = upload.index("await resolveConfiguredProductionBackendOrigin(page)")
+    accepted = upload.index("const accepted = page.waitForResponse(")
+    captured = upload.index(
+        "captureObservedApiAuthContext(response, configuredBackendOrigin)"
+    )
+    assert configured < accepted < captured
+    assert "requireProductionApiOrigin(response.url())" not in spec
+    assert "requireProductionOrigin(response.url())" not in upload
 
 
 def test_production_journey_resets_observed_api_auth_context() -> None:
