@@ -318,3 +318,23 @@ def test_production_workflow_has_no_duplicate_step_names() -> None:
 
     duplicates = sorted({name for name in step_names if step_names.count(name) > 1})
     assert duplicates == [], f"duplicate production workflow steps: {duplicates}"
+
+
+def test_health_poll_does_not_reload_analysis_dashboard() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    start = spec.index("async function waitForHealth(")
+    end = spec.index("async function createProject(", start)
+    health_poll = spec[start:end]
+
+    assert "page.goto(" not in health_poll
+    assert "page.request.get(" in health_poll
