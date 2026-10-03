@@ -12,7 +12,6 @@ import {
 import {
   buildSyntheticProjectName,
   PROD_ACCEPTANCE_FIXTURE,
-  requireProductionApiOrigin,
   requireProductionOrigin,
 } from "./support/prod-preflight";
 import {
@@ -73,13 +72,6 @@ type ObservedApiAuthContext = {
 
 let observedApiAuthContext: ObservedApiAuthContext | null = null;
 
-function requireObservedApiAuthContext(): ObservedApiAuthContext {
-  if (!observedApiAuthContext) {
-    throw new Error("PROD_ACCEPTANCE_API_AUTH_CONTEXT_MISSING");
-  }
-  return observedApiAuthContext;
-}
-
 const CANONICAL_CATEGORIES = new Set([
   "SCOPE",
   "BUDGET",
@@ -122,7 +114,68 @@ function matchesProjectApiPath(
   );
 }
 
-function captureObservedApiAuthContext(response: Response): void {
+async function resolveConfiguredProductionBackendOrigin(
+  page: Page,
+): Promise<string> {
+  const runtimeBackendUrlPath = "/api/runtime/backend-url";
+  let response: APIResponse;
+  try {
+    response = await page.request.get(
+      `${baseUrl()}${runtimeBackendUrlPath}`,
+      {
+        failOnStatusCode: false,
+        maxRedirects: 0,
+        timeout: 60_000,
+      },
+    );
+  } catch (error) {
+    const candidateName = error instanceof Error ? error.name : "";
+    const errorName = /^[A-Za-z0-9_.-]+$/.test(candidateName)
+      ? candidateName
+      : "UnknownError";
+    // Do not propagate Playwright transport call logs because the frontend
+    // request context can include authenticated session cookies.
+    // eslint-disable-next-line preserve-caught-error -- security redaction boundary
+    throw new Error(
+      `PROD_ACCEPTANCE_BACKEND_ORIGIN_REQUEST_ERROR:${errorName}`,
+    );
+  }
+  if (response.status() !== 200) {
+    throw new Error(
+      `PROD_ACCEPTANCE_BACKEND_ORIGIN_INVALID:status=${response.status()}`,
+    );
+  }
+
+  const payload = (await response.json()) as { apiBaseUrl?: unknown };
+  if (typeof payload.apiBaseUrl !== "string") {
+    throw new Error("PROD_ACCEPTANCE_BACKEND_ORIGIN_INVALID");
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(payload.apiBaseUrl);
+  } catch {
+    throw new Error("PROD_ACCEPTANCE_BACKEND_ORIGIN_INVALID");
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.username !== "" ||
+    parsed.password !== ""
+  ) {
+    throw new Error("PROD_ACCEPTANCE_BACKEND_ORIGIN_INVALID");
+  }
+  return parsed.origin;
+}
+
+function captureObservedApiAuthContext(
+  response: Response,
+  configuredBackendOrigin: string,
+): void {
+  const observedOrigin = new URL(response.url()).origin;
+  if (observedOrigin !== configuredBackendOrigin) {
+    throw new Error("PROD_ACCEPTANCE_BACKEND_ORIGIN_MISMATCH");
+  }
+
   const requestHeaders = response.request().headers();
   const authorization = requestHeaders.authorization;
   const tenantId = requestHeaders["x-tenant-id"];
@@ -130,7 +183,7 @@ function captureObservedApiAuthContext(response: Response): void {
     throw new Error("PROD_ACCEPTANCE_API_AUTH_CONTEXT_MISSING");
   }
   observedApiAuthContext = {
-    origin: requireProductionApiOrigin(response.url()),
+    origin: configuredBackendOrigin,
     headers: {
       Authorization: authorization,
       "X-Tenant-ID": tenantId,
@@ -157,6 +210,7 @@ async function loadDocument(
       `${observedApiAuthContext.origin}/api/v1/projects/${projectId}/documents`,
       {
         failOnStatusCode: false,
+        maxRedirects: 0,
         headers: observedApiAuthContext.headers,
         timeout: 60_000,
       },
@@ -173,6 +227,9 @@ async function loadDocument(
   }
 
   const status = response.status();
+  if (status >= 300 && status < 400) {
+    throw new Error(`PROD_ACCEPTANCE_DOCUMENT_REDIRECT_REJECTED:${status}`);
+  }
   if (status === 401 || status === 403) {
     throw new Error(`PROD_ACCEPTANCE_DOCUMENT_AUTH_FAILED:${status}`);
   }
@@ -299,6 +356,7 @@ async function loadHealth(
       `${observedApiAuthContext.origin}/api/v1/projects/${projectId}/health`,
       {
         failOnStatusCode: false,
+        maxRedirects: 0,
         headers: observedApiAuthContext.headers,
         timeout: 60_000,
       },
@@ -315,6 +373,9 @@ async function loadHealth(
   }
   const status = response.status();
 
+  if (status >= 300 && status < 400) {
+    throw new Error(`PROD_ACCEPTANCE_HEALTH_REDIRECT_REJECTED:${status}`);
+  }
   if (status === 401 || status === 403) {
     throw new Error(`PROD_ACCEPTANCE_HEALTH_AUTH_FAILED:${status}`);
   }
@@ -417,6 +478,9 @@ async function uploadFixture(
   await expect(surface).toBeVisible({ timeout: 15_000 });
   await page.setInputFiles('input[type="file"]', PROD_ACCEPTANCE_FIXTURE);
 
+  const configuredBackendOrigin =
+    await resolveConfiguredProductionBackendOrigin(page);
+
   const accepted = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
@@ -428,7 +492,7 @@ async function uploadFixture(
   if (!response.ok()) {
     throw new Error(`PROD_ACCEPTANCE_UPLOAD_REJECTED:${response.status()}`);
   }
-  captureObservedApiAuthContext(response);
+  captureObservedApiAuthContext(response, configuredBackendOrigin);
   const payload = (await response.json()) as {
     id?: string;
     document_id?: string;
@@ -532,10 +596,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
         matchesProjectApiPath(responsePath(response), projectId, "health"),
       { timeout: 60_000 },
     );
-    const apiAuthContext = requireObservedApiAuthContext();
-    await page.goto(
-      `${apiAuthContext.origin}/projects/${projectId}/analysis`,
-    );
+    await page.goto(`${baseUrl()}/projects/${projectId}/analysis`);
     await refreshedHealth;
     const assessments = health.single_document_coverage?.assessments ?? [];
     expect(assessments).toHaveLength(6);

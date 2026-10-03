@@ -381,10 +381,10 @@ def test_health_poll_is_bounded_and_ui_navigation_follows_convergence() -> None:
     analyzed = spec.index('expect(terminal.lifecycle_status).toBe("analyzed");')
     wait_health = spec.index("const health = await waitForHealth(page, projectId);", analyzed)
     analysis_nav = spec.index(
-        "apiAuthContext.origin}/projects/${projectId}/analysis",
+        "baseUrl()}/projects/${projectId}/analysis",
         analyzed,
     )
-    assert "const apiAuthContext = requireObservedApiAuthContext();" in spec[wait_health:analysis_nav]
+    assert "apiAuthContext.origin}/projects/${projectId}/analysis" not in spec
     assert wait_health < analysis_nav
 
 
@@ -404,13 +404,16 @@ def test_health_poll_has_fail_closed_status_diagnostics() -> None:
     assert "PROD_ACCEPTANCE_HEALTH_REQUEST_ERROR" in spec
     start = spec.index("async function loadHealth(")
     end = spec.index("async function waitForHealth(", start)
-    assert "cause:" not in spec[start:end]
+    health_loader = spec[start:end]
+    assert "cause:" not in health_loader
+    assert "maxRedirects: 0" in health_loader
+    assert "PROD_ACCEPTANCE_HEALTH_REDIRECT_REJECTED" in health_loader
     assert "Retry-After" in spec
     assert "last_status=" in spec
     assert "assessment_count=" in spec
 
 
-def test_health_poll_uses_observed_canonical_api_origin() -> None:
+def test_health_poll_uses_observed_configured_backend_origin() -> None:
     spec = (
         REPO_ROOT
         / "apps"
@@ -423,7 +426,12 @@ def test_health_poll_uses_observed_canonical_api_origin() -> None:
     ).read_text(encoding="utf-8")
 
     assert "ObservedApiAuthContext" in spec
-    assert "requireProductionApiOrigin(response.url())" in spec
+    capture_start = spec.index("function captureObservedApiAuthContext(")
+    capture_end = spec.index("async function loadDocument(", capture_start)
+    capture = spec[capture_start:capture_end]
+    assert "origin: configuredBackendOrigin" in capture
+    assert "observedOrigin !== configuredBackendOrigin" in capture
+    assert "requireProductionApiOrigin(response.url())" not in capture
 
     start = spec.index("async function loadHealth(")
     end = spec.index("async function waitForHealth(", start)
@@ -452,6 +460,8 @@ def test_document_poll_does_not_reload_documents_dashboard() -> None:
 
     assert "page.goto(" not in document_poll
     assert "page.request.get(" in document_poll
+    assert "maxRedirects: 0" in document_poll
+    assert "PROD_ACCEPTANCE_DOCUMENT_REDIRECT_REJECTED" in document_poll
 
 
 def test_document_poll_is_bounded_to_six_requests_per_minute() -> None:
@@ -474,7 +484,7 @@ def test_document_poll_is_bounded_to_six_requests_per_minute() -> None:
     assert "Retry-After" in spec
 
 
-def test_upload_captures_canonical_auth_context_for_direct_document_poll() -> None:
+def test_upload_captures_verified_backend_auth_context_for_direct_document_poll() -> None:
     spec = (
         REPO_ROOT
         / "apps"
@@ -490,9 +500,14 @@ def test_upload_captures_canonical_auth_context_for_direct_document_poll() -> No
         spec.index("async function uploadFixture(") :
         spec.index("async function approveExactDocumentReview(")
     ]
-    assert "captureObservedApiAuthContext(response)" in upload
-    assert "requireProductionApiOrigin(response.url())" in spec
-    assert "requireProductionOrigin(response.url())" not in spec
+    configured = upload.index("await resolveConfiguredProductionBackendOrigin(page)")
+    accepted = upload.index("const accepted = page.waitForResponse(")
+    captured = upload.index(
+        "captureObservedApiAuthContext(response, configuredBackendOrigin)"
+    )
+    assert configured < accepted < captured
+    assert "requireProductionApiOrigin(response.url())" not in spec
+    assert "requireProductionOrigin(response.url())" not in upload
 
 
 def test_production_journey_resets_observed_api_auth_context() -> None:
@@ -546,3 +561,53 @@ def test_direct_processing_polls_quiesce_browser_background_requests() -> None:
         second_quiesce,
     )
     assert approve < second_quiesce < analyzed_poll
+
+
+def test_upload_auth_context_uses_configured_backend_origin_not_frontend_allowlist() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "async function resolveConfiguredProductionBackendOrigin(" in spec
+    assert '"/api/runtime/backend-url"' in spec
+    assert "configuredBackendOrigin" in spec
+
+    capture_start = spec.index("function captureObservedApiAuthContext(")
+    capture_end = spec.index("async function loadDocument(", capture_start)
+    capture = spec[capture_start:capture_end]
+
+    assert "requireProductionOrigin(response.url())" not in capture
+    assert "new URL(response.url()).origin" in capture
+    assert "observedOrigin !== configuredBackendOrigin" in capture
+    assert "PROD_ACCEPTANCE_BACKEND_ORIGIN_MISMATCH" in capture
+
+
+def test_configured_backend_origin_requires_https_absolute_url() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    helper_start = spec.index("async function resolveConfiguredProductionBackendOrigin(")
+    helper_end = spec.index("function captureObservedApiAuthContext(", helper_start)
+    helper = spec[helper_start:helper_end]
+
+    assert 'response.status() !== 200' in helper
+    assert "maxRedirects: 0" in helper
+    assert "PROD_ACCEPTANCE_BACKEND_ORIGIN_REQUEST_ERROR" in helper
+    assert "cause:" not in helper
+    assert 'parsed.protocol !== "https:"' in helper
+    assert "PROD_ACCEPTANCE_BACKEND_ORIGIN_INVALID" in helper
