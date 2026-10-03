@@ -50,7 +50,7 @@ p0b.next_slice=P0b-L4-5
 wbs.PWBS-EXEC-REPORTING.current_state.realization=WIRED
 wbs.PWBS-EXEC-REPORTING.current_state.deployment=NONE
 wbs.PWBS-EXEC-REPORTING.current_state.prod_validation=NONE
-qualification.P0b.status=COLLECTING
+qualification.P0b.status=REQUIRED
 qualification.P0b.bundle_ref=NONE
 qualification.P0b.evidence_digest=NONE
 qualification.P0b.targets_digest=4e87140a2424a0aa
@@ -171,7 +171,7 @@ Schema v7 adds a compact Product-Control integration for P0b, P0c and P0d. Detai
 
 Initial state is deliberately non-promoted:
 
-- **P0b:** `COLLECTING`; run #30 provided valid prerequisite/identity evidence but the full journey failed at HITL. A future accepted PASS may support ADR-024 `prod_validation_status=PROD_VALIDATED` plus P0b-L4-5 `DONE`. ADR-018 is intentionally not auto-promoted.
+- **P0b:** `REQUIRED`; run #30 provided valid prerequisite/identity evidence but failed before a qualification bundle could be built and validated. A future accepted PASS may support ADR-024 `prod_validation_status=PROD_VALIDATED` plus P0b-L4-5 `DONE`. ADR-018 is intentionally not auto-promoted.
 - **P0c:** `REQUIRED`; no accepted bundle. A future PASS maps atomically to ADR-015 and ADR-016 production validation.
 - **P0d:** `REQUIRED`; no accepted bundle. Qualification maps only to `PWBS-EXEC-REPORTING.current_state`; the deferred `executive_portfolio` subtrack remains independent.
 
