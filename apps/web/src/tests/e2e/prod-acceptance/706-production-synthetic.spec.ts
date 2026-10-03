@@ -124,8 +124,9 @@ function matchesProjectApiPath(
 async function resolveConfiguredProductionBackendOrigin(
   page: Page,
 ): Promise<string> {
+  const runtimeBackendUrlPath = "/api/runtime/backend-url";
   const response = await page.request.get(
-    `${baseUrl()}/api/runtime/backend-url`,
+    `${baseUrl()}${runtimeBackendUrlPath}`,
     {
       failOnStatusCode: false,
       timeout: 60_000,
