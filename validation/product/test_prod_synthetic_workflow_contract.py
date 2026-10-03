@@ -431,3 +431,83 @@ def test_health_poll_uses_observed_canonical_browser_origin() -> None:
     assert "observedApiAuthContext.origin" in health_loader
     assert "headers: observedApiAuthContext.headers" in health_loader
     assert '${baseUrl()}/api/v1/projects/${projectId}/health' not in health_loader
+
+
+def test_document_poll_does_not_reload_documents_dashboard() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    start = spec.index("async function loadDocument(")
+    end = spec.index("async function waitForDocumentAttentionOrCompletion(", start)
+    document_poll = spec[start:end]
+
+    assert "page.goto(" not in document_poll
+    assert "page.request.get(" in document_poll
+
+
+def test_document_poll_is_bounded_to_six_requests_per_minute() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "DOCUMENT_POLL_INTERVAL_MS = 10_000" in spec
+    start = spec.index("async function pollDocumentUntilTerminal(")
+    end = spec.index("async function waitForDocumentAttentionOrCompletion(", start)
+    document_poll = spec[start:end]
+    assert "PROCESSING_TIMEOUT_MS" in document_poll
+    assert "Retry-After" in spec
+
+
+def test_upload_captures_canonical_auth_context_for_direct_document_poll() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    upload = spec[
+        spec.index("async function uploadFixture(") :
+        spec.index("async function approveExactDocumentReview(")
+    ]
+    assert "captureObservedApiAuthContext(response)" in upload
+    assert "requireProductionOrigin(response.url())" in spec
+
+
+def test_production_journey_resets_observed_api_auth_context() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    journey = spec[
+        spec.index('test("real user completes the canonical production journey"') :
+    ]
+    sign_in = journey.index("await signInSyntheticProductionUser(page);")
+    reset = journey.index("observedApiAuthContext = null;")
+    assert reset < sign_in
