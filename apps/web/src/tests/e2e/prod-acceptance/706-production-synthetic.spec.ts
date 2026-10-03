@@ -72,6 +72,13 @@ type ObservedApiAuthContext = {
 
 let observedApiAuthContext: ObservedApiAuthContext | null = null;
 
+function requireObservedApiAuthContext(): ObservedApiAuthContext {
+  if (!observedApiAuthContext) {
+    throw new Error("PROD_ACCEPTANCE_API_AUTH_CONTEXT_MISSING");
+  }
+  return observedApiAuthContext;
+}
+
 const CANONICAL_CATEGORIES = new Set([
   "SCOPE",
   "BUDGET",
@@ -201,7 +208,6 @@ const DOCUMENT_FAILURE_STATES = new Set([
   "needs_changes",
   "error",
 ]);
-const POLL_INTERVALS_MS = [1_000, 2_000, 5_000];
 const DOCUMENT_POLL_INTERVAL_MS = 10_000;
 const HEALTH_POLL_INTERVAL_MS = 10_000;
 const HEALTH_POLL_MAX_REQUESTS = 6;
@@ -519,11 +525,9 @@ test.describe("Issue #706 production synthetic acceptance", () => {
         matchesProjectApiPath(responsePath(response), projectId, "health"),
       { timeout: 60_000 },
     );
-    if (!observedApiAuthContext) {
-      throw new Error("PROD_ACCEPTANCE_HEALTH_AUTH_CONTEXT_MISSING");
-    }
+    const apiAuthContext = requireObservedApiAuthContext();
     await page.goto(
-      `${observedApiAuthContext.origin}/projects/${projectId}/analysis`,
+      `${apiAuthContext.origin}/projects/${projectId}/analysis`,
     );
     await refreshedHealth;
     const assessments = health.single_document_coverage?.assessments ?? [];
