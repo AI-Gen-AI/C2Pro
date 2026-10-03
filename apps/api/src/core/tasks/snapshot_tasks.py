@@ -5,7 +5,6 @@ TS-INT-TASK-SNAP-001
 
 from __future__ import annotations
 
-import asyncio
 import inspect
 import logging
 from typing import Any
@@ -15,6 +14,7 @@ from sqlalchemy import select, text
 
 from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
 from src.core.database import get_raw_session, init_db
+from src.core.tasks.async_runtime import run_async_db_task
 from src.core.tasks.celery_app import celery_app
 from src.core.tenants.types import TenantId, require_tenant_id
 from src.project_state.adapters.persistence.project_state_repository import (
@@ -108,7 +108,7 @@ def write_project_snapshot(
     trigger: str,
     source_event_id: str | None = None,
 ) -> dict[str, str]:
-    return asyncio.run(
+    return run_async_db_task(
         _write_project_snapshot_async(
             project_id=UUID(project_id),
             tenant_id=require_tenant_id(tenant_id),
@@ -140,4 +140,4 @@ async def _enqueue_daily_project_snapshots_async(batch_size: int = 500) -> dict[
 
 @celery_app.task(name="project_snapshots.enqueue_daily", bind=True)
 def enqueue_daily_project_snapshots(self: Any, batch_size: int = 500) -> dict[str, int | str]:  # noqa: ARG001
-    return asyncio.run(_enqueue_daily_project_snapshots_async(batch_size=batch_size))
+    return run_async_db_task(_enqueue_daily_project_snapshots_async(batch_size=batch_size))
