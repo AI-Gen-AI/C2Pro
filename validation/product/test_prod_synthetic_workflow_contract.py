@@ -338,3 +338,67 @@ def test_health_poll_does_not_reload_analysis_dashboard() -> None:
 
     assert "page.goto(" not in health_poll
     assert "page.request.get(" in health_poll
+
+
+def test_health_poll_reuses_observed_browser_auth_headers() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    start = spec.index("async function loadHealth(")
+    end = spec.index("async function createProject(", start)
+    health_poll = spec[start:end]
+
+    assert "observedApiAuthHeaders" in spec
+    assert 'headers: observedApiAuthHeaders' in health_poll
+    assert '"Authorization"' in spec
+    assert '"X-Tenant-ID"' in spec
+
+
+def test_health_poll_is_bounded_and_ui_navigation_follows_convergence() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "HEALTH_POLL_INTERVAL_MS = 10_000" in spec
+    assert "HEALTH_POLL_MAX_REQUESTS = 6" in spec
+
+    analyzed = spec.index('expect(terminal.lifecycle_status).toBe("analyzed");')
+    wait_health = spec.index("const health = await waitForHealth(page, projectId);", analyzed)
+    analysis_nav = spec.index(
+        'await page.goto(`${baseUrl()}/projects/${projectId}/analysis`);',
+        analyzed,
+    )
+    assert wait_health < analysis_nav
+
+
+def test_health_poll_has_fail_closed_status_diagnostics() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "PROD_ACCEPTANCE_HEALTH_AUTH_FAILED" in spec
+    assert "Retry-After" in spec
+    assert "last_status=" in spec
+    assert "assessment_count=" in spec
