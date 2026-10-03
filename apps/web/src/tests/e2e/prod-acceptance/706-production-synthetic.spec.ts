@@ -118,14 +118,28 @@ async function resolveConfiguredProductionBackendOrigin(
   page: Page,
 ): Promise<string> {
   const runtimeBackendUrlPath = "/api/runtime/backend-url";
-  const response = await page.request.get(
-    `${baseUrl()}${runtimeBackendUrlPath}`,
-    {
-      failOnStatusCode: false,
-      maxRedirects: 0,
-      timeout: 60_000,
-    },
-  );
+  let response: APIResponse;
+  try {
+    response = await page.request.get(
+      `${baseUrl()}${runtimeBackendUrlPath}`,
+      {
+        failOnStatusCode: false,
+        maxRedirects: 0,
+        timeout: 60_000,
+      },
+    );
+  } catch (error) {
+    const candidateName = error instanceof Error ? error.name : "";
+    const errorName = /^[A-Za-z0-9_.-]+$/.test(candidateName)
+      ? candidateName
+      : "UnknownError";
+    // Do not propagate Playwright transport call logs because the frontend
+    // request context can include authenticated session cookies.
+    // eslint-disable-next-line preserve-caught-error -- security redaction boundary
+    throw new Error(
+      `PROD_ACCEPTANCE_BACKEND_ORIGIN_REQUEST_ERROR:${errorName}`,
+    );
+  }
   if (response.status() !== 200) {
     throw new Error(
       `PROD_ACCEPTANCE_BACKEND_ORIGIN_INVALID:status=${response.status()}`,
