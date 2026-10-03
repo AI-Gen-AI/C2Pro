@@ -1,7 +1,7 @@
 # C2Pro Architecture
 
 **Status:** Canonical architecture navigation  
-**Last reconciled:** 2026-10-01
+**Last reconciled:** 2026-10-03
 
 ## Read in this order
 
@@ -12,7 +12,7 @@
 
 ## Current canonical material
 
-- `C2PRO_TECHNICAL_BASELINE_2026-10-01.md` — current-state synthesis aligned with `main`.
+- `C2PRO_TECHNICAL_BASELINE_2026-10-01.md` — current-state synthesis originally baselined 2026-10-01 and revalidated against current `main` on 2026-10-03.
 - `decisions/` — accepted/proposed ADRs and durable architecture decisions.
 - `development/` — development-control architecture.
 - `diagrams/` — detailed architecture/flow diagrams.
