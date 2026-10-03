@@ -399,6 +399,51 @@ class TestHumanInterruptNode:
         assert service.calls[0]["metadata"]["thread_id"] == "thread-swagger-analysis"
 
     @pytest.mark.asyncio
+    async def test_explicit_human_requirement_forces_high_impact_even_at_high_confidence(
+        self, monkeypatch
+    ) -> None:
+        """#792: a graph-level human requirement must never auto-approve by confidence."""
+        from src.analysis.adapters.graph import nodes
+        from src.modules.hitl.domain.entities import ImpactLevel
+
+        service = _FakeHitlService(ReviewStatus.PENDING_REVIEW_REQUIRED)
+        monkeypatch.setattr(
+            nodes,
+            "get_session_with_tenant",
+            lambda tenant_id: _AsyncContext(value={"tenant_id": tenant_id}),
+            raising=False,
+        )
+        monkeypatch.setattr(
+            nodes,
+            "get_hitl_service_for_graph",
+            lambda *, session, tenant_id: service,
+            raising=False,
+        )
+
+        class InterruptReached(RuntimeError):
+            pass
+
+        def _interrupt(payload: dict[str, Any]) -> None:
+            assert payload["reason"] == "approval_required"
+            raise InterruptReached()
+
+        monkeypatch.setattr(nodes, "interrupt", _interrupt)
+
+        with pytest.raises(InterruptReached):
+            await nodes.human_interrupt_node(
+                _make_state(
+                    doc_type="contract",
+                    confidence_score=0.9,
+                    retry_count=2,
+                    human_approval_required=True,
+                    thread_id="thread-required-review",
+                )
+            )
+
+        assert service.calls[0]["confidence"] == pytest.approx(0.9)
+        assert service.calls[0]["impact_level"] is ImpactLevel.HIGH
+
+    @pytest.mark.asyncio
     async def test_review_row_receives_exact_candidate_binding(
         self, monkeypatch
     ) -> None:
