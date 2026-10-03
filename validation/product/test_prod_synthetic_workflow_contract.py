@@ -407,3 +407,27 @@ def test_health_poll_has_fail_closed_status_diagnostics() -> None:
     assert "Retry-After" in spec
     assert "last_status=" in spec
     assert "assessment_count=" in spec
+
+
+def test_health_poll_uses_observed_canonical_browser_origin() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "ObservedApiAuthContext" in spec
+    assert "requireProductionOrigin(response.url())" in spec
+
+    start = spec.index("async function loadHealth(")
+    end = spec.index("async function waitForHealth(", start)
+    health_loader = spec[start:end]
+
+    assert "observedApiAuthContext.origin" in health_loader
+    assert "headers: observedApiAuthContext.headers" in health_loader
+    assert '${baseUrl()}/api/v1/projects/${projectId}/health' not in health_loader
