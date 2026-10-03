@@ -72,13 +72,6 @@ type ObservedApiAuthContext = {
 
 let observedApiAuthContext: ObservedApiAuthContext | null = null;
 
-function requireObservedApiAuthContext(): ObservedApiAuthContext {
-  if (!observedApiAuthContext) {
-    throw new Error("PROD_ACCEPTANCE_API_AUTH_CONTEXT_MISSING");
-  }
-  return observedApiAuthContext;
-}
-
 const CANONICAL_CATEGORIES = new Set([
   "SCOPE",
   "BUDGET",
@@ -203,6 +196,7 @@ async function loadDocument(
       `${observedApiAuthContext.origin}/api/v1/projects/${projectId}/documents`,
       {
         failOnStatusCode: false,
+        maxRedirects: 0,
         headers: observedApiAuthContext.headers,
         timeout: 60_000,
       },
@@ -219,6 +213,9 @@ async function loadDocument(
   }
 
   const status = response.status();
+  if (status >= 300 && status < 400) {
+    throw new Error(`PROD_ACCEPTANCE_DOCUMENT_REDIRECT_REJECTED:${status}`);
+  }
   if (status === 401 || status === 403) {
     throw new Error(`PROD_ACCEPTANCE_DOCUMENT_AUTH_FAILED:${status}`);
   }
@@ -345,6 +342,7 @@ async function loadHealth(
       `${observedApiAuthContext.origin}/api/v1/projects/${projectId}/health`,
       {
         failOnStatusCode: false,
+        maxRedirects: 0,
         headers: observedApiAuthContext.headers,
         timeout: 60_000,
       },
@@ -361,6 +359,9 @@ async function loadHealth(
   }
   const status = response.status();
 
+  if (status >= 300 && status < 400) {
+    throw new Error(`PROD_ACCEPTANCE_HEALTH_REDIRECT_REJECTED:${status}`);
+  }
   if (status === 401 || status === 403) {
     throw new Error(`PROD_ACCEPTANCE_HEALTH_AUTH_FAILED:${status}`);
   }
