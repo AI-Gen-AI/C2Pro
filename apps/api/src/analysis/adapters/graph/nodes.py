@@ -551,9 +551,17 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
     tenant_id = state.get("tenant_id")
     if tenant_id:
         try:
+            # Reaching N13 with an explicit human-approval requirement is
+            # itself a hard review boundary. Confidence must never downgrade
+            # that requirement back into an automatic approval. This happens
+            # legitimately when critique retries are exhausted even if the
+            # extractor's aggregate confidence remains high (#792).
             impact = (
                 ImpactLevel.HIGH
-                if state.get("confidence_score", 0) < 0.5
+                if (
+                    bool(state.get("human_approval_required"))
+                    or state.get("confidence_score", 0) < 0.5
+                )
                 else ImpactLevel.MEDIUM
             )
             async with get_session_with_tenant(UUID(tenant_id)) as session:
