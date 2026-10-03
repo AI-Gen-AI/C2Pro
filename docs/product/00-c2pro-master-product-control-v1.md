@@ -366,7 +366,7 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 - Coherence v2 global authoritative cutover remains unproven.
 - ADR-025 canonical authority is real, but one-logical-root enforcement, baseline/change governance and complete cross-domain linkage/drill-down remain PARTIAL.
 - The real production predecessor schema already disproved the assumption that clean scratch migrations fully represent production history; deployment qualification must include real predecessor-shape evidence.
-- HITL has materially hardened, but the latest V3 runtime must not be assumed deployed solely because it is merged.
+- HITL has materially hardened and #793 is Railway-deployed, but the explicit human-review boundary still requires fresh #715 production acceptance before it is treated as validated user-journey evidence.
 - Procurement before the remaining Project Controls contract closes would still create rework.
 - High coherence must never suppress visible critical alerts.
 - WBS/project roll-ups must remain evidence/coverage-aware.
@@ -374,13 +374,14 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 
 ## 12. Next authorized sequence
 
-1. **Parallel external prerequisite — #690:** establish the dedicated non-customer Clerk Production org/user through the supported operator path; do not reuse customer/CI identities or manually synthesize customer-like mappings.
-2. **Close the still-open #706 fix-forward workstreams #712 and #713:** #711, #714 and #758 are already closed and must remain historical dependencies rather than active blockers.
-3. **#715 final deployed proof:** after #690 plus required #712/#713 acceptance blockers are resolved, rebind exact Railway API/Worker/Scheduler and Vercel identities and execute AUTH → PROJECT → UPLOAD → PARSE/EXTRACT → ANALYSIS → EVIDENCE → HEALTH → HITL → REFRESH/RELOGIN → RECOVERY on the dedicated synthetic tenant.
-4. **Fail closed during #715:** no mocks, HITL/auth bypass, expected-ID substitution for provider observation, fixture mismatch or unresolved/unreviewed staged production configuration.
-5. **Qualification evidence:** capture P0b assertions (#683) inside the accepted #715 journey where applicable; then qualify P0c (#686) and P0d (#687) only when their own evidence contracts pass.
-6. **Explicit reconciliation before promotion:** an accepted evidence bundle is necessary but never self-promoting. Line B must reconcile Product Control deliberately before any lifecycle field changes.
-7. **Stop/reconcile after the P0 wave:** only then consider fresh authorization for P1 Project Controls, broader Coherence, Alerts/Actions or Procurement.
-8. **Control-plane discipline:** branch completion, CI green, mergeability, deployment success or documentation reconciliation never advances `PROD_VALIDATED` automatically.
+1. **#690 prerequisite is complete:** production run #30 proved the dedicated synthetic tenant and real production identity preflights. Do not reopen provisioning unless a fresh preflight proves drift.
+2. **#715 identity-preflight:** rebind exact current Railway API/Worker/Scheduler and Vercel production identities, verify no active staged configuration, and rerun the non-mutating production identity/tenant preflight.
+3. **#715 full journey:** only after preflight PASS, execute AUTH → PROJECT → UPLOAD → PARSE/EXTRACT → ANALYSIS → EVIDENCE → **REVIEW_REQUIRED → explicit UI approval → ANALYZED** → HEALTH → REFRESH/RELOGIN → durable read-only verification with `require_hitl=true`.
+4. **#792 acceptance:** close only when that run proves the #793 human-review fix in production. A failure opens/remediates only the first failing seam; it does not broaden the programme or promote lifecycle state.
+5. **#712 / #713 acceptance:** keep these as open acceptance/fix-forward authorities until the canonical #715 journey validates their user-visible lifecycle and evidence semantics; their landed code is supporting evidence, not self-closing proof.
+6. **Qualification evidence:** capture P0b assertions (#683) inside the accepted #715 journey and return the bounded evidence bundle to Line B for explicit Product-Control reconciliation.
+7. **Then P0c → P0d:** after P0b disposition, execute #686 What Changed qualification and then #687 Current State qualification, preferably preserving the same clean synthetic project/evidence chain where valid.
+8. **Stop/reconcile after the P0 wave:** only then consider fresh authorization for P1 Project Controls, broader Coherence, Alerts/Actions or Procurement.
+9. **Control-plane discipline:** branch completion, CI green, mergeability, deployment success or documentation reconciliation never advances `PROD_VALIDATED` automatically.
 
 **No direct `main` or production mutation is authorized by this reconciliation. Human-reviewed merge remains mandatory.**
