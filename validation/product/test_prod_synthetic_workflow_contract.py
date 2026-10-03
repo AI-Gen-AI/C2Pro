@@ -332,7 +332,7 @@ def test_health_poll_does_not_reload_analysis_dashboard() -> None:
         / "706-production-synthetic.spec.ts"
     ).read_text(encoding="utf-8")
 
-    start = spec.index("async function waitForHealth(")
+    start = spec.index("async function loadHealth(")
     end = spec.index("async function createProject(", start)
     health_poll = spec[start:end]
 
