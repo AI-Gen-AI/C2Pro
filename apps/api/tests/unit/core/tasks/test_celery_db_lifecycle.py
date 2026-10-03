@@ -93,7 +93,7 @@ async def test_close_db_clears_engine_and_session_factory(
 
 
 def test_all_db_owning_celery_asyncio_wrappers_use_shared_lifecycle() -> None:
-    repo_root = Path(__file__).resolve().parents[5]
+    repo_root = Path(__file__).resolve().parents[6]
     task_root = repo_root / "apps" / "api" / "src" / "core" / "tasks"
 
     required = {
