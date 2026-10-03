@@ -129,6 +129,7 @@ async function resolveConfiguredProductionBackendOrigin(
     `${baseUrl()}${runtimeBackendUrlPath}`,
     {
       failOnStatusCode: false,
+      maxRedirects: 0,
       timeout: 60_000,
     },
   );
@@ -580,10 +581,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
         matchesProjectApiPath(responsePath(response), projectId, "health"),
       { timeout: 60_000 },
     );
-    const apiAuthContext = requireObservedApiAuthContext();
-    await page.goto(
-      `${apiAuthContext.origin}/projects/${projectId}/analysis`,
-    );
+    await page.goto(`${baseUrl()}/projects/${projectId}/analysis`);
     await refreshedHealth;
     const assessments = health.single_document_coverage?.assessments ?? [];
     expect(assessments).toHaveLength(6);
