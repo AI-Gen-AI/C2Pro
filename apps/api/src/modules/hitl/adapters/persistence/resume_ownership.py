@@ -773,6 +773,48 @@ class GraphCompletedMarker:
     project_id: UUID
 
 
+_LOAD_GRAPH_COMPLETED_MARKER_SQL = text(
+    """
+    SELECT event_id, project_id
+      FROM project_events
+     WHERE tenant_id = cast(:tenant_id as uuid)
+       AND resume_operation_id = cast(:operation_id as uuid)
+       AND event_type = 'graph.completed'
+     ORDER BY created_at ASC, event_id ASC
+     LIMIT 1
+    """
+)
+
+
+async def get_graph_completed_marker(
+    *,
+    ownership: Ownership,
+    session_factory: Any = None,
+) -> GraphCompletedMarker | None:
+    """Load the exact graph-completion event already committed for this operation.
+
+    Recovery enters at ``GRAPH_COMPLETED`` without replaying the graph, so it
+    must reuse the original event identity.  The database uniqueness contract
+    makes this a single durable marker rather than a "latest event" guess.
+    """
+    async with _session(session_factory, ownership.tenant_id) as session:
+        row = (
+            await session.execute(
+                _LOAD_GRAPH_COMPLETED_MARKER_SQL,
+                {
+                    "tenant_id": str(ownership.tenant_id),
+                    "operation_id": str(ownership.operation_id),
+                },
+            )
+        ).first()
+    if row is None:
+        return None
+    return GraphCompletedMarker(
+        event_id=_uuid(row.event_id),
+        project_id=_uuid(row.project_id),
+    )
+
+
 async def mark_graph_completed(
     *,
     ownership: Ownership,
