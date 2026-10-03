@@ -6,6 +6,7 @@ import { expect, test, type Page, type Response } from "@playwright/test";
 import {
   buildSyntheticProjectName,
   PROD_ACCEPTANCE_FIXTURE,
+  PROD_ACCEPTANCE_HITL_FIXTURE,
   requireProductionOrigin,
 } from "./support/prod-preflight";
 import {
@@ -247,6 +248,7 @@ async function createProject(page: Page, projectName: string): Promise<string> {
 async function uploadFixture(
   page: Page,
   projectId: string,
+  fixturePath: string = PROD_ACCEPTANCE_FIXTURE,
 ): Promise<{ documentId: string; taskId: string }> {
   await expect(page.getByTestId("documents-page")).toBeVisible({
     timeout: 30_000,
@@ -254,7 +256,7 @@ async function uploadFixture(
   await page.getByRole("button", { name: /upload document/i }).click();
   const surface = page.getByTestId("document-upload-surface");
   await expect(surface).toBeVisible({ timeout: 15_000 });
-  await page.setInputFiles('input[type="file"]', PROD_ACCEPTANCE_FIXTURE);
+  await page.setInputFiles('input[type="file"]', fixturePath);
 
   const accepted = page.waitForResponse(
     (response) =>
@@ -337,6 +339,9 @@ test.describe("Issue #706 production synthetic acceptance", () => {
 
     let hitlExercised = false;
     let exercisedReviewItemId: string | null = null;
+    let hitlProjectId: string | null = null;
+    let hitlDocumentId: string | null = null;
+
     if (terminal.lifecycle_status === "review_required") {
       if ((terminal.review_count ?? 0) !== 1 || !terminal.review_item_id) {
         throw new Error(
@@ -344,6 +349,8 @@ test.describe("Issue #706 production synthetic acceptance", () => {
         );
       }
       exercisedReviewItemId = terminal.review_item_id;
+      hitlProjectId = projectId;
+      hitlDocumentId = upload.documentId;
       await approveExactDocumentReview(
         page,
         projectId,
@@ -352,9 +359,51 @@ test.describe("Issue #706 production synthetic acceptance", () => {
       hitlExercised = true;
       terminal = await waitForAnalyzed(page, projectId, upload.documentId);
     } else if (requireHitl()) {
-      throw new Error(
-        `PROD_ACCEPTANCE_HITL_REQUIRED_NOT_REACHED:${terminal.lifecycle_status ?? "null"}`,
+      // The canonical contract fixture can legitimately auto-approve. #715
+      // requires one real human decision, so fall back to a sanitized budget
+      // fixture whose graph path deterministically routes to manual review.
+      hitlProjectId = await createProject(page, `${projectName}-hitl`);
+      const hitlUpload = await uploadFixture(
+        page,
+        hitlProjectId,
+        PROD_ACCEPTANCE_HITL_FIXTURE,
       );
+      hitlDocumentId = hitlUpload.documentId;
+
+      writeRunEvidence({
+        run_id: runId,
+        project_id: projectId,
+        document_id: upload.documentId,
+        upload_task_id: upload.taskId,
+        hitl_project_id: hitlProjectId,
+        hitl_document_id: hitlDocumentId,
+        hitl_upload_task_id: hitlUpload.taskId,
+        hitl_exercised: false,
+      });
+
+      const hitlTerminal = await waitForDocumentAttentionOrCompletion(
+        page,
+        hitlProjectId,
+        hitlDocumentId,
+      );
+      if (
+        hitlTerminal.lifecycle_status !== "review_required" ||
+        (hitlTerminal.review_count ?? 0) !== 1 ||
+        !hitlTerminal.review_item_id
+      ) {
+        throw new Error(
+          `PROD_ACCEPTANCE_DEDICATED_HITL_NOT_REACHED:${hitlTerminal.lifecycle_status ?? "null"}`,
+        );
+      }
+
+      exercisedReviewItemId = hitlTerminal.review_item_id;
+      await approveExactDocumentReview(
+        page,
+        hitlProjectId,
+        exercisedReviewItemId,
+      );
+      hitlExercised = true;
+      await waitForAnalyzed(page, hitlProjectId, hitlDocumentId);
     }
 
     expect(terminal.lifecycle_status).toBe("analyzed");
@@ -467,6 +516,8 @@ test.describe("Issue #706 production synthetic acceptance", () => {
         coherence_available: false,
       },
       evidence_clause_id: clauseId,
+      hitl_project_id: hitlProjectId,
+      hitl_document_id: hitlDocumentId,
       review_item_id: exercisedReviewItemId,
       hitl_exercised: hitlExercised,
       relogin_verified: true,
