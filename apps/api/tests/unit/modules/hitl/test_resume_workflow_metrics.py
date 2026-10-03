@@ -114,6 +114,7 @@ def v3_ownership(monkeypatch):
     use case stopped calling them at all.
     """
     from src.modules.hitl.adapters.persistence.resume_ownership import (
+        GraphCompletedMarker,
         Ownership,
         Phase,
     )
@@ -151,7 +152,7 @@ def v3_ownership(monkeypatch):
 
     async def _mark(**kwargs):
         calls["mark_graph_completed"].append(kwargs)
-        return True
+        return GraphCompletedMarker(event_id=uuid4(), project_id=ownership.project_id)
 
     async def _finalize(**kwargs):
         calls["finalize_v3"].append(kwargs)
@@ -172,6 +173,11 @@ def v3_ownership(monkeypatch):
     monkeypatch.setattr(f"{module}.record_failure", _fail)
     monkeypatch.setattr(f"{module}.renew", _renew)
     monkeypatch.setattr(f"{module}.verify_trust_binding", _verify_trust_binding)
+    monkeypatch.setattr(
+        ResumeWorkflowUseCase,
+        "_enqueue_graph_completed_snapshot",
+        staticmethod(lambda _marker, _tenant_id: None),
+    )
     return SimpleNamespace(ownership=ownership, calls=calls)
 
 
