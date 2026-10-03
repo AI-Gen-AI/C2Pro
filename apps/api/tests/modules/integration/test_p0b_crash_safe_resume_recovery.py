@@ -532,8 +532,26 @@ async def test_cp3_crash_after_n17_before_completion_marker_does_not_duplicate(
 
 
 async def test_cp3b_crash_after_completion_marker_finalizes_without_replaying_graph(
-    real_saver, independent_sessions, db: AsyncSession, test_user: User
+    real_saver,
+    independent_sessions,
+    db: AsyncSession,
+    test_user: User,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from src.temporal.application import project_snapshot_trigger
+    from src.temporal.domain.project_snapshot import SnapshotTrigger
+
+    snapshot_enqueues: list[dict[str, object]] = []
+
+    def capture_snapshot_enqueue(**kwargs: object) -> None:
+        snapshot_enqueues.append(kwargs)
+
+    monkeypatch.setattr(
+        project_snapshot_trigger,
+        "enqueue_project_snapshot",
+        capture_snapshot_enqueue,
+    )
+
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
     arranged = await _arrange(db, tenant, saver, register)
@@ -554,6 +572,14 @@ async def test_cp3b_crash_after_completion_marker_finalizes_without_replaying_gr
     assert op.phase == Phase.GRAPH_COMPLETED.value
     assert op.analysis_id is not None, "durable completion identity recorded"
 
+    assert not any(
+        call.get("trigger") == SnapshotTrigger.GRAPH_COMPLETED
+        for call in snapshot_enqueues
+    ), (
+        "graph completion must not project into trusted Health before "
+        "finalize_v3 commits the human approval boundary"
+    )
+
     # Recovery finalizes WITHOUT touching the graph at all.
     class _MustNotRun:
         checkpointer = saver
@@ -567,6 +593,33 @@ async def test_cp3b_crash_after_completion_marker_finalizes_without_replaying_gr
     assert response.status == "resumed"
     assert len(N17_RUNS) == 1, "N17 must not run again"
     assert await _counts(db, arranged.project_id) == (1, 1)
+
+    await db.rollback()
+    completed_events = (
+        await db.execute(
+            select(ProjectEventORM).where(
+                ProjectEventORM.project_id == arranged.project_id,
+                ProjectEventORM.event_type == "graph.completed",
+            )
+        )
+    ).scalars().all()
+    assert len(completed_events) == 1
+    graph_completed_enqueues = [
+        call
+        for call in snapshot_enqueues
+        if call.get("trigger") == SnapshotTrigger.GRAPH_COMPLETED
+    ]
+    assert graph_completed_enqueues == [
+        {
+            "project_id": arranged.project_id,
+            "tenant_id": tenant.id,
+            "trigger": SnapshotTrigger.GRAPH_COMPLETED,
+            "source_event_id": completed_events[0].event_id,
+        }
+    ], (
+        "recovery from durable GRAPH_COMPLETED must publish the original event "
+        "exactly once, but only after trusted finalization succeeds"
+    )
 
     assert (await _reload(db, ReviewItemORM, arranged.review_row_id)).current_status == (
         ReviewStatus.APPROVED.value
