@@ -607,5 +607,7 @@ def test_configured_backend_origin_requires_https_absolute_url() -> None:
 
     assert 'response.status() !== 200' in helper
     assert "maxRedirects: 0" in helper
+    assert "PROD_ACCEPTANCE_BACKEND_ORIGIN_REQUEST_ERROR" in helper
+    assert "cause:" not in helper
     assert 'parsed.protocol !== "https:"' in helper
     assert "PROD_ACCEPTANCE_BACKEND_ORIGIN_INVALID" in helper
