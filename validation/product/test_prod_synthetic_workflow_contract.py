@@ -357,8 +357,8 @@ def test_health_poll_reuses_observed_browser_auth_headers() -> None:
     end = spec.index("async function createProject(", start)
     health_poll = spec[start:end]
 
-    assert "observedApiAuthHeaders" in spec
-    assert 'headers: observedApiAuthHeaders' in health_poll
+    assert "observedApiAuthContext" in spec
+    assert 'headers: observedApiAuthContext.headers' in health_poll
     assert "Authorization:" in spec
     assert '"X-Tenant-ID"' in spec
 
@@ -381,7 +381,7 @@ def test_health_poll_is_bounded_and_ui_navigation_follows_convergence() -> None:
     analyzed = spec.index('expect(terminal.lifecycle_status).toBe("analyzed");')
     wait_health = spec.index("const health = await waitForHealth(page, projectId);", analyzed)
     analysis_nav = spec.index(
-        'await page.goto(`${baseUrl()}/projects/${projectId}/analysis`);',
+        "observedApiAuthContext.origin}/projects/${projectId}/analysis",
         analyzed,
     )
     assert wait_health < analysis_nav
