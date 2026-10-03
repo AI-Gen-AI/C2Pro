@@ -150,6 +150,9 @@ db-shell: ## Abrir shell de PostgreSQL
 # ===========================================
 # TESTING
 # ===========================================
+ci-local: ## CI local temporal (sin gates protegidos de GitHub)
+	./scripts/ci/local_ci_fallback.sh
+
 test: ## Ejecutar todos los tests
 	@make test-api
 	@make test-web
