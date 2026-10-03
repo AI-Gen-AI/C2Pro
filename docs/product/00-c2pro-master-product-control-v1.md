@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
 **Status:** Reconciliation snapshot (read-only) · **Date:** 2026-10-03 · **Schema:** v7  
-**reconciled_against_main_sha:** `314fc39b0b4c25c8c0ca99977314ba1bb9083208` · **deployed_runtime_sha:** `UNVERIFIED`  
+**reconciled_against_main_sha:** `9893cd42049c3cd2bbf9e8d891df0725b35ef082` · **deployed_runtime_sha:** `UNVERIFIED`  
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This document is the human projection of the machine product-control plane. It does not grant execution authority. Direct `main`, merge and production mutation remain governed outside this document.
@@ -10,7 +10,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=314fc39b0b4c25c8c0ca99977314ba1bb9083208
+reconciled_against_main_sha=9893cd42049c3cd2bbf9e8d891df0725b35ef082
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
@@ -105,9 +105,9 @@ This resolves the earlier ambiguity that could have led the product toward paral
 
 Three facts remain deliberately separate:
 
-- `reconciled_against_main_sha = 314fc39b0b4c25c8c0ca99977314ba1bb9083208` — current repository baseline after the 2026-10-03 revalidation.
-- `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is composite. Railway API `ab0a2cfa-2565-4e74-bdc5-26b3066d4bdb`, Worker `7d2fdcb4-7606-4c80-836e-6dfd852e55a4` and Scheduler `5f59ff9f-9a78-4065-93f6-b9a3c8f5e4e3` are SUCCESS at #723 merge commit `0db53883a8942f7097fe9ce2e0e6c63397948fbb`. Vercel production `dpl_2z3ivCtezP7RKZ1b3wmDmAi7PUB5` is READY at #722 merge commit `6e98ec53f814bd29dee4607e375600c4560c7d70`. Backend and frontend SHAs therefore legitimately differ and must be rebound separately at qualification time.
-- Railway also reports one unresolved STAGED API environment patch `7fcd5228-be1b-4be5-8e72-9692c854ddbf`; the available read-only API does not expose its internal delta, so #715 must fail closed unless staged changes are zero or the exact delta is operator-reviewed and bound to the qualification evidence.
+- `reconciled_against_main_sha = 9893cd42049c3cd2bbf9e8d891df0725b35ef082` — current repository baseline after #780 plus the later docs/CI-only #798–#800 changes.
+- `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton because production is composite. The latest #715 dispatch binding records Railway backend commit `314fc39b0b4c25c8c0ca99977314ba1bb9083208` with API `37d1fe0b-4223-4654-806a-23b6d2b73264`, Worker `7ee88c11-596a-4188-b378-14502659b806` and Scheduler `96d11273-0af9-4691-b013-42296a247906` previously observed SUCCESS; Vercel production commit `12b7f09edc0e1cf864906268ddc5b8e75d3f8a4c` with deployment `dpl_FgMfbquSUcyBgPVw2SdetDe7UZQ1` previously observed READY. Backend and frontend SHAs legitimately differ; #715 A1 must independently re-verify every provider identity before mutation.
+- Railway staged changes were last observed clear (`stagedChanges=null`; historical pending row `changes=[]`). This remains an A1 fail-closed precondition rather than assumed truth.
 - Fresh API logs report `coherence_analysis=True`; this proves production Coherence is enabled, but does not by itself prove the separate per-tenant ADR-017 ProjectGraph gate.
 - `product_value_delivered = false` — P0a reliability is closed and several product lanes are now wired on `main`, but the north-star P0b journey is still not PROD_VALIDATED.
 
@@ -146,7 +146,19 @@ After the 2026-10-01 snapshot, `main` advanced by 38 commits to `314fc39b0b4c25c
 
 No Product-Control lifecycle field is promoted by this revalidation.
 
-### 2.3 Qualification Control v1 — evidence is necessary, never self-promoting
+### 2.3 Post-#780 master reconciliation — 2026-10-03
+
+Current repository control is rebound to `main@9893cd42049c3cd2bbf9e8d891df0725b35ef082`.
+
+- **#780** is merged and Line B's documentation/authority reconciliation is closed.
+- **#690** is closed from production synthetic run #30: dedicated tenant/identity, no customer data, real production auth and tenant-isolation preflights passed.
+- Run #30 later failed at the HITL seam. **#793** is merged/deployed as the runtime fix, while **#792 stays open** until the next #715 full production journey proves the explicit-human boundary in production.
+- **#798** is README-only local-DB documentation; **#799/#800** are CI-efficiency/hygiene changes. None changes end-user runtime semantics or Product-Control lifecycle state.
+- The next bounded product work is therefore **#715 A1 → A2**, not additional prerequisite or documentation work.
+
+No lifecycle field is promoted by this reconciliation.
+
+### 2.4 Qualification Control v1 — evidence is necessary, never self-promoting
 
 Schema v7 adds a compact Product-Control integration for P0b, P0c and P0d. Detailed runtime/scenario/assertion evidence remains in the non-authoritative Phase-A bundles introduced by #678. Product Control stores only the qualification status, accepted bundle reference/hash and the fixed capability → lifecycle mapping.
 
@@ -195,7 +207,7 @@ The 2026-10-03 revalidation preserves **realization** advances where merged code
 | **ADR-025 Canonical Project Controls WBS Backbone** | **Accepted** | **PARTIAL** | **NONE** | **NONE** | canonical runtime WBS authority and several cross-domain references are now on main; one-logical-root/baseline/linkage completion and production proof remain open. |
 | **ADR-026 Trusted-State Commit Boundary** | **Accepted** | **WIRED** | **NONE** | **NONE** | #714 trusted-state commit/projected-Coherence semantics are merged; no deployed-runtime or full production-journey validation is claimed. |
 | **ADR-027 Processing Authority & Checkpoint Lineage** | **Accepted** | **WIRED** | **NONE** | **NONE** | #711/#758 authority and checkpoint-lineage fencing are merged; deployment/production acceptance stays under #706/#715. |
-| **ADR-028 Production Qualification / Composite Runtime** | **Accepted** | **SCAFFOLDED** | **NONE** | **NONE** | #715/#733 harness and provider-identity/evidence contracts are merged; #715 execution/acceptance and #690 identity/tenant prerequisite remain open. |
+| **ADR-028 Production Qualification / Composite Runtime** | **Accepted** | **SCAFFOLDED** | **NONE** | **NONE** | #715/#733 harness and provider-identity/evidence contracts are merged; #690 prerequisite is closed from run #30 identity/tenant evidence; #715 full-journey acceptance remains open and is the acceptance vehicle for #792. |
 
 ADR-025 has moved beyond “nested-set substrate only”: runtime application writes target `wbs_nodes`; the legacy WBS stores are write-blocked; RACI and BOM references point to the canonical nodes; MCP views consume the same hierarchy; schedule clauses and spend derive from it. What remains unproven is the complete Project Controls exit gate: one logical root under every write path, baseline/change governance, complete Budget/Schedule/Stakeholder/Procurement/Alert/Evidence/Change semantics and a production user journey.
 
@@ -355,13 +367,13 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 
 ## 12. Next authorized sequence
 
-1. **Parallel external prerequisite — #690:** establish the dedicated non-customer Clerk Production org/user through the supported operator path; do not reuse customer/CI identities or manually synthesize customer-like mappings.
-2. **Close the still-open #706 fix-forward workstreams #712 and #713:** #711, #714 and #758 are already closed and must remain historical dependencies rather than active blockers.
-3. **#715 final deployed proof:** after #690 plus required #712/#713 acceptance blockers are resolved, rebind exact Railway API/Worker/Scheduler and Vercel identities and execute AUTH → PROJECT → UPLOAD → PARSE/EXTRACT → ANALYSIS → EVIDENCE → HEALTH → HITL → REFRESH/RELOGIN → RECOVERY on the dedicated synthetic tenant.
-4. **Fail closed during #715:** no mocks, HITL/auth bypass, expected-ID substitution for provider observation, fixture mismatch or unresolved/unreviewed staged production configuration.
-5. **Qualification evidence:** capture P0b assertions (#683) inside the accepted #715 journey where applicable; then qualify P0c (#686) and P0d (#687) only when their own evidence contracts pass.
-6. **Explicit reconciliation before promotion:** an accepted evidence bundle is necessary but never self-promoting. Line B must reconcile Product Control deliberately before any lifecycle field changes.
-7. **Stop/reconcile after the P0 wave:** only then consider fresh authorization for P1 Project Controls, broader Coherence, Alerts/Actions or Procurement.
-8. **Control-plane discipline:** branch completion, CI green, mergeability, deployment success or documentation reconciliation never advances `PROD_VALIDATED` automatically.
+1. **#690 prerequisite is complete.** Run #30 proved the dedicated non-customer production tenant/identity and real production auth preflight. Do not reopen it unless contradictory production evidence appears.
+2. **Line A / #715 — A1 identity preflight:** run the non-mutating production identity/provider preflight on the current composite production binding. A1 must PASS before any product mutation.
+3. **Line A / #715 — A2 full production journey:** only after A1 PASS, execute `AUTH → PROJECT → UPLOAD → PARSE/EXTRACT → ANALYSIS → EVIDENCE → REVIEW_REQUIRED → exactly one addressable review item → explicit UI approval → ANALYZED → HEALTH → REFRESH/RELOGIN → read-only durable verification` with `require_hitl=true`.
+4. **#792 acceptance is bound to A2:** close #792 only if A2 proves no confidence-only automatic approval, one explicit durable human decision/correction, same governed lineage and no duplicate trusted/durable effects.
+5. **#712/#713 remain acceptance/fix-forward authorities:** their landed lifecycle/evidence fixes must be exercised by A2. Administrative openness does not block A1.
+6. **Fail closed:** on the first failing seam, stop and remediate only that bounded defect. Do not weaken auth/RLS/HITL, substitute expected provider IDs for observation, accept fixture mismatch, or manually repair production state.
+7. **Return evidence to Line B:** A2 PASS returns one bounded non-secret bundle for explicit P0b Product-Control reconciliation. PASS never self-promotes lifecycle state.
+8. **Only after explicit P0b reconciliation:** qualify P0c/P0d where their own evidence contracts pass, then stop/reconcile before authorizing P1 Project Controls or downstream Procurement.
 
 **No direct `main` or production mutation is authorized by this reconciliation. Human-reviewed merge remains mandatory.**
