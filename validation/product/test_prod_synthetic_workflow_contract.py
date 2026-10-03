@@ -579,6 +579,13 @@ def test_upload_auth_context_uses_configured_backend_origin_not_frontend_allowli
     assert '"/api/runtime/backend-url"' in spec
     assert "configuredBackendOrigin" in spec
 
+    helper_start = spec.index("async function resolveConfiguredProductionBackendOrigin(")
+    helper_end = spec.index("function captureObservedApiAuthContext(", helper_start)
+    helper = spec[helper_start:helper_end]
+    assert "const frontendOrigin = requireProductionOrigin(page.url());" in helper
+    assert '`${frontendOrigin}${runtimeBackendUrlPath}`' in helper
+    assert '`${baseUrl()}${runtimeBackendUrlPath}`' not in helper
+
     capture_start = spec.index("function captureObservedApiAuthContext(")
     capture_end = spec.index("async function loadDocument(", capture_start)
     capture = spec[capture_start:capture_end]
