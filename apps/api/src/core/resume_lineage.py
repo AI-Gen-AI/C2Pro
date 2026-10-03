@@ -305,6 +305,15 @@ async def stamp_superseded_reviews(
     to bring legacy rows -- bound before this identity existed, so carrying
     no generation and otherwise indistinguishable from a current one -- into
     the same comparison.
+
+    Lock order (#758): this runs LAST in the generation transition, after the
+    document row and the authority row, which is what makes the caller's
+    order ``documents -> document_processing_operations -> review_items`` --
+    a prefix of the canonical order documented in
+    ``src/modules/hitl/adapters/persistence/resume_ownership``. It must stay
+    last: taking the review before the document here would invert against
+    the lineage claim, which necessarily holds the authority row (its #711
+    fence) before it touches the review.
     """
     rows = (
         await session.execute(
