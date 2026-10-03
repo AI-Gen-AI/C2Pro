@@ -366,11 +366,11 @@ def prepare_context(state: CoherenceGraphState) -> NodeOutput:
 
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 future = pool.submit(asyncio.run, prepare_context_async(state))
-                return future.result()
+                return cast(NodeOutput, future.result())
         else:
-            return loop.run_until_complete(prepare_context_async(state))
+            return cast(NodeOutput, loop.run_until_complete(prepare_context_async(state)))
     except RuntimeError:
-        return asyncio.run(prepare_context_async(state))
+        return cast(NodeOutput, asyncio.run(prepare_context_async(state)))
 
 
 # =============================================================================
