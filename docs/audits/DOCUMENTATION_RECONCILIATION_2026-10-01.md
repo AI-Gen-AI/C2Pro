@@ -212,3 +212,18 @@ The intervening changes were material to the documented trust/qualification surf
 - no P0b/P0c/P0d lifecycle state was promoted.
 
 This round converts the prior exact-head acceptance evidence into historical evidence only. The new exact head must independently pass Product-Control parity/guards and the repository CI/security checks before merge.
+
+
+### Sixth adversarial round — exact-head Codex review after 2026-10-03 revalidation
+
+Codex successfully reviewed exact head `ee777ea91f9c66a28dd3dc01876461d0b7467089` and raised two P2 documentation defects.
+
+1. **Mixed architecture/lifecycle precedence in the canonical architecture index.**
+   - `docs/ARCHITECTURE_INDEX.md` still placed machine Product Control first under a single “Architecture decisions” ordering, contradicting `docs/DOCUMENTATION_AUTHORITY.md` and the technical baseline.
+   - **Disposition:** fixed. The index now separates architecture/design, product lifecycle/readiness and development-execution authority. Accepted ADRs lead architecture/design; Product Control leads lifecycle/readiness.
+
+2. **Obsolete advisory-job classification in the CI runbook.**
+   - `docs/runbooks/ci-cd-setup.md` still labelled `backend-lint`, `backend-typecheck` and `backend-integration` advisory even though active `.github/workflows/ci.yml` includes all three in `REQUIRED_JOBS` and defines `ADVISORY_JOBS=()`.
+   - **Disposition:** fixed. Pipeline labels and the gate-classification section now match active CI; the runbook explicitly states that there are currently no advisory jobs.
+
+These fixes are documentation-only and do not promote product lifecycle state. Because they changed the PR head, both CI and independent review must be evaluated again on the new exact head before merge.
