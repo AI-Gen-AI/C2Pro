@@ -39,6 +39,7 @@ import structlog
 from sqlalchemy import text
 
 from src.core import resume_lineage
+from src.core.tasks.async_runtime import run_async_db_task
 from src.core.tasks.celery_app import celery_app
 
 logger = structlog.get_logger()
@@ -214,4 +215,4 @@ def reconcile_abandoned_resumes(
     self: Any,  # noqa: ARG001
     batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> dict[str, Any]:
-    return asyncio.run(_sweep_async(batch_size=batch_size))
+    return run_async_db_task(_sweep_async(batch_size=batch_size))
