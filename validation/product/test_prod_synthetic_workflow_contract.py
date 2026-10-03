@@ -381,9 +381,10 @@ def test_health_poll_is_bounded_and_ui_navigation_follows_convergence() -> None:
     analyzed = spec.index('expect(terminal.lifecycle_status).toBe("analyzed");')
     wait_health = spec.index("const health = await waitForHealth(page, projectId);", analyzed)
     analysis_nav = spec.index(
-        "observedApiAuthContext.origin}/projects/${projectId}/analysis",
+        "apiAuthContext.origin}/projects/${projectId}/analysis",
         analyzed,
     )
+    assert "const apiAuthContext = requireObservedApiAuthContext();" in spec[wait_health:analysis_nav]
     assert wait_health < analysis_nav
 
 
