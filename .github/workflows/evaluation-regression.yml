@@ -113,6 +113,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
+          retention-days: 3
           name: coherence-eval-results
           path: apps/api/coherence-eval-results.xml
 
@@ -165,6 +166,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
+          retention-days: 3
           name: extraction-eval-results
           path: apps/api/extraction-eval-results.xml
 
@@ -216,6 +218,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
+          retention-days: 3
           name: retrieval-eval-results
           path: apps/api/retrieval-eval-results.xml
 
@@ -322,6 +325,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
+          retention-days: 3
           name: golden-eval-results-json
           path: apps/api/golden-eval-results.json
 
@@ -329,6 +333,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
+          retention-days: 3
           name: golden-eval-results
           path: apps/api/golden-eval-results.xml
 
@@ -478,4 +483,4 @@ jobs:
         with:
           name: evaluation-release-summary
           path: release-evidence/evaluation-release-summary.txt
-          retention-days: 14
+          retention-days: 3

@@ -101,7 +101,7 @@ jobs:
         with:
           name: coverage-report
           path: apps/api/coverage.xml
-          retention-days: 7
+          retention-days: 3
 
       - name: Render quality gate report
         if: always()
@@ -116,7 +116,7 @@ jobs:
         with:
           name: qa-swarm-quality-report
           path: quality-report.md
-          retention-days: 90
+          retention-days: 3
 
   # ───────────────────────────────────────────────────────────────────────────
   # Job 2: QA Swarm execution
@@ -206,5 +206,5 @@ jobs:
           name: qa-swarm-logs-${{ github.run_id }}
           path: |
             apps/api/tests/**/*_swarm.py
-          retention-days: 14
+          retention-days: 3
           if-no-files-found: ignore

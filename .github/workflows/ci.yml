@@ -148,6 +148,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          retention-days: 3
           name: mypy-report
           path: apps/api/mypy-report.txt
           if-no-files-found: warn
@@ -234,7 +235,7 @@ jobs:
             apps/api/unit-test-results.xml
             apps/api/root-core-unit-results.xml
             apps/api/s5-core-ai-gates.xml
-          retention-days: 14
+          retention-days: 3
 
       - name: Upload unit coverage report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -245,7 +246,7 @@ jobs:
             apps/api/coverage.xml
             apps/api/.coverage
           include-hidden-files: true
-          retention-days: 14
+          retention-days: 3
 
   # SEC-003: CI verification that the Presidio NER gate actually runs (not silently
   # degraded to regex-only). Installs es_core_news_md by pinned wheel URL (avoids
@@ -296,7 +297,7 @@ jobs:
         with:
           name: presidio-ner-test-results
           path: apps/api/presidio-ner-test-results.xml
-          retention-days: 14
+          retention-days: 3
 
   backend-security:
     name: Backend Security Suite (multi-tenant isolation)
@@ -493,7 +494,7 @@ jobs:
           name: c25-c26-security-coverage
           path: apps/api/.coverage.c25*
           include-hidden-files: true
-          retention-days: 14
+          retention-days: 3
 
       - name: Upload security test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -501,7 +502,7 @@ jobs:
         with:
           name: backend-security-results
           path: apps/api/security-test-results.xml
-          retention-days: 14
+          retention-days: 3
 
       - name: Database logs on failure
         if: failure()
@@ -559,7 +560,7 @@ jobs:
         with:
           name: integration-test-results
           path: apps/api/integration-test-results.xml
-          retention-days: 14
+          retention-days: 3
 
       - name: Cleanup
         if: always()
@@ -598,11 +599,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          retention-days: 3
           name: core-test-results
           path: apps/api/core-test-results.xml
       - name: Upload core coverage data
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          retention-days: 3
           name: core-coverage
           path: apps/api/.coverage
           include-hidden-files: true
@@ -643,11 +646,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          retention-days: 3
           name: coherence-test-results
           path: apps/api/coherence-test-results.xml
       - name: Upload coherence coverage data
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          retention-days: 3
           name: coherence-coverage
           path: apps/api/.coverage
           include-hidden-files: true
@@ -688,11 +693,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          retention-days: 3
           name: modules-test-results
           path: apps/api/modules-test-results.xml
       - name: Upload modules coverage data
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          retention-days: 3
           name: modules-coverage
           path: apps/api/.coverage
           include-hidden-files: true
@@ -754,7 +761,7 @@ jobs:
         with:
           name: backend-combined-coverage
           path: apps/api/merged-coverage.xml
-          retention-days: 14
+          retention-days: 3
       - name: Upload merged backend coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
@@ -1107,7 +1114,7 @@ jobs:
         with:
           name: playwright-report
           path: apps/web/playwright-report/
-          retention-days: 7
+          retention-days: 3
 
       - name: Upload E2E backend log on failure
         if: failure()
@@ -1116,7 +1123,7 @@ jobs:
           name: e2e-backend-log
           path: ${{ runner.temp }}/c2pro-e2e-api.log
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 3
 
       - name: Cleanup E2E backend infrastructure
         if: always()
@@ -1340,7 +1347,7 @@ jobs:
           path: |
             apps/web/playwright-report/
             apps/web/test-results/
-          retention-days: 14
+          retention-days: 3
 
       - name: Upload P0b service logs on failure
         if: failure()
@@ -1351,7 +1358,7 @@ jobs:
             ${{ runner.temp }}/c2pro-p0b-api.log
             ${{ runner.temp }}/c2pro-p0b-worker.log
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 3
 
       - name: Cleanup
         if: always()
@@ -1553,7 +1560,7 @@ jobs:
         with:
           name: ci-quality-report
           path: quality-report.md
-          retention-days: 90
+          retention-days: 3
 
       - name: Evaluate required gates
         env:
