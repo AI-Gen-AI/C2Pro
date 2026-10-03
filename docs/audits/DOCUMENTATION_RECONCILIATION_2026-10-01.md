@@ -189,3 +189,26 @@ A later Line B review re-checked the exact PR head against both the live runtime
    - **Disposition:** fixed. The backlog is explicitly historical context; current remediation must be tracked through `.c2pro` plus the corresponding GitHub issue/PR.
 
 The prior automated Codex reviews were anchored to earlier heads and therefore do not constitute review of the remediated exact head. Final acceptance still requires exact-head CI plus a fresh independent review after these corrections.
+
+
+### Fifth adversarial round — 2026-10-03 moving-base revalidation
+
+Before final merge, Line B re-checked the documentation branch against current `main` rather than treating the 2026-10-01 baseline as indefinitely current. `main` had advanced by 38 commits from `33650a28a930d82a7bd65d98b50981145b3fd1d1` to `314fc39b0b4c25c8c0ca99977314ba1bb9083208`.
+
+The intervening changes were material to the documented trust/qualification surfaces:
+
+- **#782-#787 / #715** hardened production identity observation, tenant-RLS verifier context, bounded Clerk production-preflight waits, session-first canonical-origin authentication and production sign-out selectors.
+- **#790 / #789** moved SSE bearer handling behind the same-origin server proxy and rejected bearer tokens in query strings.
+- **#793 / #792** fixed a trust-boundary defect: an explicit `human_approval_required=True` state now forces HIGH impact before confidence routing, so confidence cannot auto-approve a state that already requires human review.
+
+**Disposition:**
+
+- current `main` was merged into the documentation branch without altering historical 2026-09-27 or 2026-10-01 reconciliation deltas;
+- Product Control now adds a distinct `reconciliation_delta_2026_10_03` and updates only its current reconciliation pointer;
+- the human Product-Control projection is rebound to the same current SHA;
+- ADR-026 and the technical baseline now record the #793 explicit-human-boundary hardening while preserving the still-valid non-gated LOW/MEDIUM policy path;
+- the technical baseline remains the dated 2026-10-01 artifact but is explicitly marked revalidated on 2026-10-03 rather than silently rewriting its provenance;
+- #706, #715, #690, #712 and #713 remain open; #792 is also still open pending acceptance/closure;
+- no P0b/P0c/P0d lifecycle state was promoted.
+
+This round converts the prior exact-head acceptance evidence into historical evidence only. The new exact head must independently pass Product-Control parity/guards and the repository CI/security checks before merge.
