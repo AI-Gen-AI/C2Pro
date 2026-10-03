@@ -110,46 +110,88 @@ function matchesProjectApiPath(
   );
 }
 
-function documentListResponse(response: Response, projectId: string): boolean {
-  return (
-    response.request().method() === "GET" &&
-    response.status() === 200 &&
-    matchesProjectApiPath(responsePath(response), projectId, "documents")
-  );
+function captureObservedApiAuthContext(response: Response): void {
+  const requestHeaders = response.request().headers();
+  const authorization = requestHeaders.authorization;
+  const tenantId = requestHeaders["x-tenant-id"];
+  if (!authorization || !tenantId) {
+    throw new Error("PROD_ACCEPTANCE_API_AUTH_CONTEXT_MISSING");
+  }
+  observedApiAuthContext = {
+    origin: requireProductionOrigin(response.url()),
+    headers: {
+      Authorization: authorization,
+      "X-Tenant-ID": tenantId,
+    },
+  };
 }
 
 async function loadDocument(
   page: Page,
   projectId: string,
   documentId: string,
-): Promise<DocumentRecord> {
-  const responsePromise = page.waitForResponse(
-    (response) => documentListResponse(response, projectId),
-    { timeout: 60_000 },
-  );
-  await page.goto(`${baseUrl()}/projects/${projectId}/documents`);
-  const response = await responsePromise;
-  const requestHeaders = response.request().headers();
-  const authorization = requestHeaders.authorization;
-  const tenantId = requestHeaders["x-tenant-id"];
-  if (authorization && tenantId) {
-    observedApiAuthContext = {
-      origin: requireProductionOrigin(response.url()),
-      headers: {
-        Authorization: authorization,
-        "X-Tenant-ID": tenantId,
+): Promise<{
+  status: number;
+  record: DocumentRecord | null;
+  retryAfterSeconds: number | null;
+}> {
+  if (!observedApiAuthContext) {
+    throw new Error("PROD_ACCEPTANCE_DOCUMENT_AUTH_CONTEXT_MISSING");
+  }
+
+  let response: APIResponse;
+  try {
+    response = await page.request.get(
+      `${observedApiAuthContext.origin}/api/v1/projects/${projectId}/documents`,
+      {
+        failOnStatusCode: false,
+        headers: observedApiAuthContext.headers,
+        timeout: 60_000,
       },
+    );
+  } catch (error) {
+    const candidateName = error instanceof Error ? error.name : "";
+    const errorName = /^[A-Za-z0-9_.-]+$/.test(candidateName)
+      ? candidateName
+      : "UnknownError";
+    // Do not propagate Playwright transport call logs because they can include
+    // Authorization/X-Tenant-ID from this direct authenticated request.
+    // eslint-disable-next-line preserve-caught-error -- security redaction boundary
+    throw new Error(`PROD_ACCEPTANCE_DOCUMENT_REQUEST_ERROR:${errorName}`);
+  }
+
+  const status = response.status();
+  if (status === 401 || status === 403) {
+    throw new Error(`PROD_ACCEPTANCE_DOCUMENT_AUTH_FAILED:${status}`);
+  }
+  if (status >= 400 && status < 500 && status !== 429) {
+    throw new Error(`PROD_ACCEPTANCE_DOCUMENT_HTTP_${status}`);
+  }
+  if (status === 429) {
+    const rawRetryAfter = response.headers()["retry-after"];
+    const parsedRetryAfter = rawRetryAfter
+      ? Number.parseInt(rawRetryAfter, 10)
+      : Number.NaN;
+    return {
+      status,
+      record: null,
+      retryAfterSeconds:
+        Number.isFinite(parsedRetryAfter) && parsedRetryAfter > 0
+          ? parsedRetryAfter
+          : null,
     };
   }
+  if (status !== 200) {
+    return { status, record: null, retryAfterSeconds: null };
+  }
+
   const payload = (await response.json()) as DocumentsPayload | DocumentRecord[];
   const items = Array.isArray(payload) ? payload : (payload.items ?? []);
   const record = items.find((item) => item.id === documentId);
   if (!record) {
-    throw new Error(
-      `PROD_ACCEPTANCE_DOCUMENT_NOT_LISTED:${documentId}`,
-    );
+    throw new Error(`PROD_ACCEPTANCE_DOCUMENT_NOT_LISTED:${documentId}`);
   }
-  return record;
+  return { status, record, retryAfterSeconds: null };
 }
 
 const DOCUMENT_TERMINAL_PATTERN =
@@ -160,6 +202,7 @@ const DOCUMENT_FAILURE_STATES = new Set([
   "error",
 ]);
 const POLL_INTERVALS_MS = [1_000, 2_000, 5_000];
+const DOCUMENT_POLL_INTERVAL_MS = 10_000;
 const HEALTH_POLL_INTERVAL_MS = 10_000;
 const HEALTH_POLL_MAX_REQUESTS = 6;
 
@@ -168,28 +211,39 @@ async function pollDocumentUntilTerminal(
   projectId: string,
   documentId: string,
 ): Promise<DocumentRecord> {
-  let latest = await loadDocument(page, projectId, documentId);
+  const deadline = Date.now() + PROCESSING_TIMEOUT_MS;
+  let latest: DocumentRecord | null = null;
+  let lastHttpStatus = 0;
 
-  try {
-    await expect
-      .poll(
-        async () => {
-          latest = await loadDocument(page, projectId, documentId);
-          return String(latest.lifecycle_status ?? "").toLowerCase();
-        },
-        {
-          timeout: PROCESSING_TIMEOUT_MS,
-          intervals: POLL_INTERVALS_MS,
-        },
-      )
-      .toMatch(DOCUMENT_TERMINAL_PATTERN);
-  } catch {
-    throw new Error(
-      `PROD_ACCEPTANCE_PROCESSING_TIMEOUT:last_lifecycle=${latest.lifecycle_status ?? "null"};last_status=${latest.status ?? "null"}`,
-    );
+  while (Date.now() < deadline) {
+    const observation = await loadDocument(page, projectId, documentId);
+    lastHttpStatus = observation.status;
+    if (observation.record) {
+      latest = observation.record;
+      const lifecycle = String(latest.lifecycle_status ?? "").toLowerCase();
+      if (DOCUMENT_TERMINAL_PATTERN.test(lifecycle)) {
+        return latest;
+      }
+    }
+
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) break;
+    const retryMs =
+      observation.status === 429 && observation.retryAfterSeconds
+        ? Math.max(
+            DOCUMENT_POLL_INTERVAL_MS,
+            observation.retryAfterSeconds * 1_000,
+          )
+        : DOCUMENT_POLL_INTERVAL_MS;
+    await page.waitForTimeout(Math.min(retryMs, 60_000, remainingMs));
   }
 
-  return latest;
+  throw new Error(
+    "PROD_ACCEPTANCE_PROCESSING_TIMEOUT:" +
+      `last_http_status=${lastHttpStatus};` +
+      `last_lifecycle=${latest?.lifecycle_status ?? "null"};` +
+      `last_status=${latest?.status ?? "null"}`,
+  );
 }
 
 async function waitForDocumentAttentionOrCompletion(
@@ -363,6 +417,7 @@ async function uploadFixture(
   if (!response.ok()) {
     throw new Error(`PROD_ACCEPTANCE_UPLOAD_REJECTED:${response.status()}`);
   }
+  captureObservedApiAuthContext(response);
   const payload = (await response.json()) as {
     id?: string;
     document_id?: string;
@@ -411,6 +466,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
     const runId = process.env.PROD_ACCEPTANCE_RUN_ID;
     if (!runId) throw new Error("PROD_ACCEPTANCE_MISSING_ENV:PROD_ACCEPTANCE_RUN_ID");
 
+    observedApiAuthContext = null;
     await signInSyntheticProductionUser(page);
 
     const projectName = buildSyntheticProjectName();
