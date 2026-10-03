@@ -1,10 +1,11 @@
 # C2Pro Technical Architecture Baseline — 2026-10-01
 
-**Status:** Canonical current-state architecture baseline  
-**Baseline main SHA:** `33650a28a930d82a7bd65d98b50981145b3fd1d1`  
+**Status:** Canonical current-state architecture baseline · revalidated 2026-10-03  
+**Original baseline main SHA:** `33650a28a930d82a7bd65d98b50981145b3fd1d1`  
+**Revalidated against main SHA:** `314fc39b0b4c25c8c0ca99977314ba1bb9083208`  
 **Scope:** implemented architecture and active product-control boundaries, not a product-release claim
 
-> This document describes the architecture that exists or is explicitly governed on the baseline above. It does **not** imply that the complete end-user journey is production validated. Product lifecycle truth remains in `validation/product/c2pro-master-product-control-v1.yaml`.
+> This document describes the architecture that exists or is explicitly governed on the revalidated baseline above. It does **not** imply that the complete end-user journey is production validated. Product lifecycle truth remains in `validation/product/c2pro-master-product-control-v1.yaml`.
 
 ## 1. Architectural principles
 
@@ -142,7 +143,7 @@ ADR-026 governs the second path. For HITL-gated candidates:
 - exports default to trusted state unless explicitly labelled as a scenario/projection;
 - projected Coherence is hypothetical and visually/semantically distinct from trusted Coherence.
 
-The present `ConfidenceRouter` uses confidence/impact thresholds and can auto-approve high-confidence LOW/MEDIUM-impact items. ADR-020's richer policy intent (including mandatory human review for named consequential decision classes) therefore remains a **partially realized policy boundary**, not something this baseline claims is fully enforced.
+The present `ConfidenceRouter` uses confidence/impact thresholds and can auto-approve high-confidence LOW/MEDIUM-impact items. After #793/#792, an explicit graph-level `human_approval_required=True` is forced to HIGH impact before routing, so confidence cannot downgrade an already-required human review into automatic approval. ADR-020's richer policy intent for named consequential decision classes nevertheless remains a **partially realized policy boundary**, not something this baseline claims is fully enforced.
 
 See ADR-020 and ADR-026.
 
@@ -173,7 +174,7 @@ It binds:
 - tenant-scoped durable-state evidence;
 - bounded evidence artifacts without secrets.
 
-The evidence bundle is necessary for promotion but cannot promote Product Control by itself. See ADR-028 and `docs/product/qualification-evidence-contract-v1.md`.
+The evidence bundle is necessary for promotion but cannot promote Product Control by itself. Since the original 2026-10-01 baseline, #782-#787 hardened identity observation, RLS context, bounded Clerk preflight and canonical production auth for #715; those merges improve the harness but do not constitute an accepted full-journey qualification. See ADR-028 and `docs/product/qualification-evidence-contract-v1.md`.
 
 ## 10. CI/CD and deployment governance
 
@@ -225,12 +226,13 @@ Code/CI proves realization evidence; it does not silently rewrite an ADR. If imp
 
 ## 12. Current non-claims
 
-As of this baseline:
+As of the 2026-10-03 revalidation:
 
 - `#706` remains open: the full production end-user journey is not yet declared operational.
 - `#715` remains open: the production synthetic harness exists, but a successful full-journey qualification has not been accepted.
 - `#690` remains open: dedicated production qualification identity/tenant evidence remains an external prerequisite.
 - `#712` and `#713` remain open fix-forward workstreams.
+- `#792` remains open pending acceptance/closure even though #793 merged the explicit-human-review runtime fix.
 - No documentation change in this reconciliation promotes P0b/P0c/P0d to `PROD_VALIDATED`.
 
 ## 13. Related decisions
