@@ -33,6 +33,7 @@ from src.core.processing_authority import (
     ProcessingPhase,
     ProcessingStage,
 )
+from src.core.tasks.async_runtime import run_async_db_task
 from src.core.tasks.celery_app import celery_app
 from src.core.tenants.types import TenantId, require_tenant_id
 from src.documents.adapters.extraction.documents_entity_extraction_service import (
@@ -1710,7 +1711,7 @@ def process_document_async(
         document_id,
         revision_id,
     )
-    return asyncio.run(
+    return run_async_db_task(
         _run_document_processing_task_lifecycle(
             document_id=UUID(document_id),
             revision_id=UUID(revision_id) if revision_id is not None else None,

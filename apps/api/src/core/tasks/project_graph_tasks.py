@@ -5,7 +5,6 @@ TS-UT-ADR017-TRG-001
 
 from __future__ import annotations
 
-import asyncio
 import inspect
 import logging
 from typing import Any
@@ -24,6 +23,7 @@ from src.analysis.adapters.persistence.document_artifact_repository import (
 from src.analysis.ports.document_artifact_repository import IDocumentArtifactRepository
 from src.core.database import get_raw_session, init_db
 from src.core.dlq.dlq_service import DLQService
+from src.core.tasks.async_runtime import run_async_db_task
 from src.core.tasks.celery_app import celery_app
 from src.core.tasks.project_graph_governance import ProjectGraphGovernance
 from src.core.tenants.types import TenantId, require_tenant_id
@@ -178,6 +178,22 @@ async def record_project_graph_dead_letter(
     )
 
 
+async def _record_project_graph_dead_letter_with_db(
+    *,
+    project_id: UUID,
+    tenant_id: TenantId,
+    trigger_event_id: UUID | None,
+    error: Exception,
+) -> UUID:
+    await _maybe_await(init_db())
+    return await record_project_graph_dead_letter(
+        project_id=project_id,
+        tenant_id=tenant_id,
+        trigger_event_id=trigger_event_id,
+        error=error,
+    )
+
+
 @celery_app.task(
     name="project_graph.run",
     bind=True,
@@ -196,7 +212,7 @@ def run_project_graph(
     tenant_uuid = require_tenant_id(tenant_id)
     trigger_uuid = UUID(trigger_event_id) if trigger_event_id else None
     try:
-        return asyncio.run(
+        return run_async_db_task(
             _run_project_graph_async(
                 project_id=project_uuid,
                 tenant_id=tenant_uuid,
@@ -205,8 +221,8 @@ def run_project_graph(
         )
     except Exception as exc:
         if self.request.retries >= self.max_retries:
-            asyncio.run(
-                record_project_graph_dead_letter(
+            run_async_db_task(
+                _record_project_graph_dead_letter_with_db(
                     project_id=project_uuid,
                     tenant_id=tenant_uuid,
                     trigger_event_id=trigger_uuid,
@@ -310,4 +326,4 @@ async def reconcile_trusted_projections(
 
 @celery_app.task(name="project_graph.reconcile_trusted_projections")
 def reconcile_trusted_projections_task() -> dict[str, int]:
-    return asyncio.run(reconcile_trusted_projections())
+    return run_async_db_task(reconcile_trusted_projections())

@@ -32,6 +32,7 @@ from sqlalchemy import text
 
 from src.core import processing_authority
 from src.core.processing_authority import ProcessingStage
+from src.core.tasks.async_runtime import run_async_db_task
 from src.core.tasks.celery_app import celery_app
 from src.documents.domain.models import DocumentStatus
 from src.documents.ports.rag_ingestion_service import RagIngestionOutcome
@@ -480,7 +481,7 @@ def reconcile_stale_processing(
     stale_after_seconds: int = DEFAULT_STALE_AFTER_SECONDS,
 ) -> dict[str, int | str]:
     _ = self
-    return asyncio.run(
+    return run_async_db_task(
         _sweep_async(
             batch_size=batch_size,
             stale_after_seconds=stale_after_seconds,
