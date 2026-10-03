@@ -12,7 +12,7 @@ def test_actions_storage_policy_has_no_violations():
 
 
 def test_storage_policy_bounds_transient_artifacts():
-    assert policy.MAX_ARTIFACT_RETENTION_DAYS == 7
+    assert policy.MAX_ARTIFACT_RETENTION_DAYS == 3
 
 
 def test_storage_policy_does_not_admit_self_hosted_runner():

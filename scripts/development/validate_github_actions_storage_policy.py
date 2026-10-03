@@ -8,7 +8,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
-MAX_ARTIFACT_RETENTION_DAYS = 7
+MAX_ARTIFACT_RETENTION_DAYS = 3
 STANDARD_PUBLIC_GITHUB_HOSTED_RUNNERS = {
     "ubuntu-slim",
     "ubuntu-latest",

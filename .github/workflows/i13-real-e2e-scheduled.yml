@@ -108,7 +108,7 @@ jobs:
         with:
           name: i13-scheduled-real-e2e-junit
           path: apps/api/i13-scheduled-real-e2e-results.xml
-          retention-days: 7
+          retention-days: 3
 
       - name: Upload scheduled I13 diagnostics
         if: always()
@@ -116,7 +116,7 @@ jobs:
         with:
           name: i13-scheduled-real-e2e-diagnostics
           path: apps/api/ci-artifacts/
-          retention-days: 7
+          retention-days: 3
 
       - name: Create I13 release summary
         if: always() && github.event_name == 'workflow_dispatch'
@@ -138,7 +138,7 @@ jobs:
         with:
           name: i13-release-summary
           path: apps/api/release-evidence/i13-release-summary.txt
-          retention-days: 7
+          retention-days: 3
 
       - name: Cleanup
         if: always()

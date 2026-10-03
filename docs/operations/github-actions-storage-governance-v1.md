@@ -12,8 +12,8 @@ C2Pro is a public repository. Standard GitHub-hosted runners are therefore the c
 
 ## Storage policy
 
-- repository artifact/log retention target: 7 days;
-- every `actions/upload-artifact` step must declare `retention-days` between 1 and 7;
+- repository artifact/log retention target: 7 days; transient workflow artifacts: maximum 3 days;
+- every `actions/upload-artifact` step must declare `retention-days` between 1 and 3;
 - no workflow may silently fall back to GitHub's 90-day artifact default;
 - standard GitHub-hosted runner labels only;
 - no larger runner or self-hosted runner without an explicit governance change;
@@ -36,7 +36,7 @@ Historical artifact cleanup is intentionally limited to regenerable CI evidence 
 
 - introduces a non-standard, larger, or self-hosted runner;
 - uploads an artifact without an explicit retention period;
-- sets artifact retention above 7 days;
+- sets artifact retention above 3 days;
 - introduces an unreviewed reusable workflow job.
 
 The lightweight development-control workflow watches `.github/workflows/**`, so storage-policy regressions are checked whenever workflow definitions change.
