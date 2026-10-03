@@ -230,7 +230,7 @@ As of the 2026-10-03 revalidation:
 
 - `#706` remains open: the full production end-user journey is not yet declared operational.
 - `#715` remains open: the production synthetic harness exists, but a successful full-journey qualification has not been accepted.
-- `#690` remains open: dedicated production qualification identity/tenant evidence remains an external prerequisite.
+- `#690` is closed: bounded production run #30 proved the dedicated production qualification identity/tenant prerequisite; this closure does **not** promote P0b/P0c/P0d.
 - `#712` and `#713` remain open fix-forward workstreams.
 - `#792` remains open pending acceptance/closure even though #793 merged the explicit-human-review runtime fix.
 - No documentation change in this reconciliation promotes P0b/P0c/P0d to `PROD_VALIDATED`.
