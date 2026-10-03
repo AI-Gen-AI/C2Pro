@@ -45,4 +45,4 @@ jobs:
         with:
           name: wireframe-coverage
           path: apps/web/wireframe-coverage.json
-          retention-days: 30
+          retention-days: 7

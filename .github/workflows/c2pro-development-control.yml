@@ -7,14 +7,16 @@ on:
       - ".c2pro/**"
       - "scripts/development/**"
       - "tests/development/**"
-      - ".github/workflows/c2pro-development-control.yml"
+      - "scripts/development/validate_github_actions_storage_policy.py"
+      - ".github/workflows/**"
   push:
     branches: [main]
     paths:
       - ".c2pro/**"
       - "scripts/development/**"
       - "tests/development/**"
-      - ".github/workflows/c2pro-development-control.yml"
+      - "scripts/development/validate_github_actions_storage_policy.py"
+      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:
@@ -39,6 +41,9 @@ jobs:
 
       - name: Validate control and context budget
         run: python scripts/development/validate_c2pro_control.py
+
+      - name: Validate GitHub Actions storage policy
+        run: python scripts/development/validate_github_actions_storage_policy.py
 
       - name: Run regression tests
         run: python -m pytest -q --confcutdir=tests/development tests/development/test_c2pro_control_plane.py
