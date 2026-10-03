@@ -204,11 +204,13 @@ async def close_db() -> None:
     Cierra conexión a la base de datos.
     Llamar en shutdown de la aplicación.
     """
-    global _engine
+    global _engine, _session_factory
 
-    if _engine:
-        await _engine.dispose()
-        _engine = None
+    engine = _engine
+    _engine = None
+    _session_factory = None
+    if engine:
+        await engine.dispose()
         logger.info("database_engine_closed")
 
 
