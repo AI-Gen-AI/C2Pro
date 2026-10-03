@@ -84,7 +84,7 @@ qualification_control:
     lifecycle state; Product Control changes remain an explicit reviewed action.
   lanes:
     P0b:
-      qualification_status: COLLECTING
+      qualification_status: REQUIRED
       bundle_ref: null
       bundle_sha256: null
       lifecycle_targets:
@@ -525,7 +525,7 @@ implementation_lanes:
 
 phase_roadmap:
   - {phase: "P0a", name: "Reliability & Operability Baseline", status: CLOSED, evidence: "baseline closed; residual ops work remains separately tracked"}
-  - {phase: "P0b", name: "Single-document Health activation", status: "ACTIVE / QUALIFICATION_COLLECTING", plane: ACT-HEALTH, adrs: [ADR-024, ADR-018, ADR-022], notes: "L4-1..L4-5 implementation is merged/release-ready; production run #30 provided prerequisite evidence but failed at HITL. L4-5 remains PARTIAL until a rerun on the #793 backend completes the production done-definition."}
+  - {phase: "P0b", name: "Single-document Health activation", status: "ACTIVE / PROD_VALIDATION_PENDING", plane: ACT-HEALTH, adrs: [ADR-024, ADR-018, ADR-022], notes: "L4-1..L4-5 implementation is merged/release-ready; production run #30 provided prerequisite evidence but failed before a qualification bundle could be built. L4-5 remains PARTIAL until a rerun on the #793 backend completes the production done-definition."}
   - {phase: "P0c", name: "What Changed / Temporal Change", status: "WIRED_ON_MAIN / NOT_PROD_VALIDATED", planes: [TEMPORAL-CHANGE], adrs: [ADR-015, ADR-016], notes: "revision-bound events, change projection, timeline/detail API and What Changed UI are merged on main."}
   - {phase: "P0d", name: "Current State Reporting", status: "WIRED_ON_MAIN / NOT_PROD_VALIDATED", planes: [EXEC-REPORTING], adrs: [ADR-021], notes: "Current State domain/API/UI/export are merged on main; executive/portfolio extension remains deferred."}
   - {phase: "P1", name: "Project Controls Backbone + Coherence + alert visibility", status: "ACTIVE / PARTIAL", planes: [PROJECT-CONTROLS, COHERENCE-XDOC], adrs: [ADR-025, ADR-018, ADR-009, ADR-017, ADR-023], notes: "canonical WBS authority and several RACI/BOM/schedule/spend integrations are on main; complete one-root/baseline/linkage/drill-down plus Coherence cutover remain open; full Action/HITL remains P2."}
