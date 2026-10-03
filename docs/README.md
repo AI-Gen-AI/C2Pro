@@ -1,7 +1,7 @@
 # C2Pro Documentation Index
 
 **Status:** Canonical navigation  
-**Last reconciled:** 2026-10-01
+**Last reconciled:** 2026-10-03
 
 Before using any document as a source of truth, read [Documentation Authority and Lifecycle](./DOCUMENTATION_AUTHORITY.md).
 
@@ -57,7 +57,7 @@ Before using any document as a source of truth, read [Documentation Authority an
 
 ## Current reconciliation
 
-The repository-wide documentation reconciliation dated 2026-10-01 is recorded at:
+The repository-wide documentation reconciliation originated on 2026-10-01 and was revalidated against current `main` on 2026-10-03. Its audit trail is recorded at:
 
 [DOCUMENTATION_RECONCILIATION_2026-10-01.md](./audits/DOCUMENTATION_RECONCILIATION_2026-10-01.md)
 
