@@ -106,8 +106,8 @@ This resolves the earlier ambiguity that could have led the product toward paral
 Three facts remain deliberately separate:
 
 - `reconciled_against_main_sha = 9893cd42049c3cd2bbf9e8d891df0725b35ef082` — current repository baseline after #780 plus the later docs/CI-only #798–#800 changes.
-- `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is composite. Railway API `ab0a2cfa-2565-4e74-bdc5-26b3066d4bdb`, Worker `7d2fdcb4-7606-4c80-836e-6dfd852e55a4` and Scheduler `5f59ff9f-9a78-4065-93f6-b9a3c8f5e4e3` are SUCCESS at #723 merge commit `0db53883a8942f7097fe9ce2e0e6c63397948fbb`. Vercel production `dpl_2z3ivCtezP7RKZ1b3wmDmAi7PUB5` is READY at #722 merge commit `6e98ec53f814bd29dee4607e375600c4560c7d70`. Backend and frontend SHAs therefore legitimately differ and must be rebound separately at qualification time.
-- Railway also reports one unresolved STAGED API environment patch `7fcd5228-be1b-4be5-8e72-9692c854ddbf`; the available read-only API does not expose its internal delta, so #715 must fail closed unless staged changes are zero or the exact delta is operator-reviewed and bound to the qualification evidence.
+- `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton because production is composite. The latest #715 dispatch binding records Railway backend commit `314fc39b0b4c25c8c0ca99977314ba1bb9083208` with API `37d1fe0b-4223-4654-806a-23b6d2b73264`, Worker `7ee88c11-596a-4188-b378-14502659b806` and Scheduler `96d11273-0af9-4691-b013-42296a247906` previously observed SUCCESS; Vercel production commit `12b7f09edc0e1cf864906268ddc5b8e75d3f8a4c` with deployment `dpl_FgMfbquSUcyBgPVw2SdetDe7UZQ1` previously observed READY. Backend and frontend SHAs legitimately differ; #715 A1 must independently re-verify every provider identity before mutation.
+- Railway staged changes were last observed clear (`stagedChanges=null`; historical pending row `changes=[]`). This remains an A1 fail-closed precondition rather than assumed truth.
 - Fresh API logs report `coherence_analysis=True`; this proves production Coherence is enabled, but does not by itself prove the separate per-tenant ADR-017 ProjectGraph gate.
 - `product_value_delivered = false` — P0a reliability is closed and several product lanes are now wired on `main`, but the north-star P0b journey is still not PROD_VALIDATED.
 
@@ -158,7 +158,7 @@ Current repository control is rebound to `main@9893cd42049c3cd2bbf9e8d891df0725b
 
 No lifecycle field is promoted by this reconciliation.
 
-### 2.3 Qualification Control v1 — evidence is necessary, never self-promoting
+### 2.4 Qualification Control v1 — evidence is necessary, never self-promoting
 
 Schema v7 adds a compact Product-Control integration for P0b, P0c and P0d. Detailed runtime/scenario/assertion evidence remains in the non-authoritative Phase-A bundles introduced by #678. Product Control stores only the qualification status, accepted bundle reference/hash and the fixed capability → lifecycle mapping.
 
