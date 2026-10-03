@@ -116,6 +116,34 @@ def _require_string(mapping: dict[str, Any], key: str) -> str:
     return value.strip()
 
 
+def _require_hitl_alignment(
+    run: dict[str, Any], identifiers: dict[str, Any]
+) -> dict[str, str]:
+    if run.get("hitl_exercised") is not True:
+        raise BundleBuildError("final P0b qualification requires real HITL exercise")
+
+    run_project = _require_string(run, "hitl_project_id")
+    run_document = _require_string(run, "hitl_document_id")
+    run_review = _require_string(run, "review_item_id")
+
+    verifier_project = _require_string(identifiers, "hitl_project_id")
+    verifier_document = _require_string(identifiers, "hitl_document_id")
+    verifier_review = _require_string(identifiers, "hitl_review_item_id")
+
+    if run_project != verifier_project:
+        raise BundleBuildError("HITL project identifiers disagree")
+    if run_document != verifier_document:
+        raise BundleBuildError("HITL document identifiers disagree")
+    if run_review != verifier_review:
+        raise BundleBuildError("HITL review identifiers disagree")
+
+    return {
+        "hitl_project_id": run_project,
+        "hitl_document_id": run_document,
+        "review_item_id": run_review,
+    }
+
+
 def _assert_pass_verifier(verifier: dict[str, Any]) -> None:
     if verifier.get("verdict") != "PASS":
         raise BundleBuildError("post-run verifier did not PASS")
@@ -159,8 +187,10 @@ def build_bundle(
         raise BundleBuildError("browser and verifier identifiers disagree")
     if run.get("relogin_verified") is not True:
         raise BundleBuildError("browser did not prove relogin durability")
-    if require_hitl and run.get("hitl_exercised") is not True:
-        raise BundleBuildError("final P0b qualification requires real HITL exercise")
+
+    hitl_alignment: dict[str, str] | None = None
+    if require_hitl:
+        hitl_alignment = _require_hitl_alignment(run, identifiers)
 
     health = run.get("health")
     if not isinstance(health, dict):
@@ -229,7 +259,8 @@ def build_bundle(
         },
     ]
     if require_hitl:
-        review_item_id = _require_string(run, "review_item_id")
+        assert hitl_alignment is not None
+        review_item_id = hitl_alignment["review_item_id"]
         evidence_refs.append(
             {
                 "id": "hitl-review",
@@ -322,6 +353,15 @@ def build_bundle(
                 "project_id": project_id,
                 "document_id": document_id,
                 "source_revision_id": source_revision_id,
+                **(
+                    {
+                        "hitl_project_id": hitl_alignment["hitl_project_id"],
+                        "hitl_document_id": hitl_alignment["hitl_document_id"],
+                        "hitl_review_item_id": hitl_alignment["review_item_id"],
+                    }
+                    if hitl_alignment is not None
+                    else {}
+                ),
             },
         },
         "assertions": assertions,
