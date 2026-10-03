@@ -1,7 +1,7 @@
 schema: c2pro-product-control-v1
 schema_version: 7
 repository: AI-Gen-AI/C2Pro
-generated: "2026-10-01"
+generated: "2026-10-03"
 control_status: reconciliation
 
 # Machine source of truth for product programme state. Edit this file first;
@@ -48,7 +48,7 @@ development_execution_authority:
     This product plane records target/state; it does not authorize merges or production mutation.
 
 production_position:
-  reconciled_against_main_sha: 33650a28a930d82a7bd65d98b50981145b3fd1d1
+  reconciled_against_main_sha: 314fc39b0b4c25c8c0ca99977314ba1bb9083208
   deployed_runtime_sha: UNVERIFIED
   observed_production_evidence:
     - "kuwait2 doc c510de21: enqueue -> worker -> SUCCESS on dedicated Railway Redis (historical P0a evidence)"
@@ -153,6 +153,27 @@ reconciliation_delta_2026_10_01:
     merge facts self-promotes lifecycle state. Product value remains unvalidated until the dedicated
     production qualification prerequisites are satisfied and an accepted full end-user journey
     provides bounded evidence. P0b/P0c/P0d qualification lanes therefore remain conservative.
+
+reconciliation_delta_2026_10_03:
+  previous_main_sha: 33650a28a930d82a7bd65d98b50981145b3fd1d1
+  current_main_sha: 314fc39b0b4c25c8c0ca99977314ba1bb9083208
+  commits_ahead: 38
+  material_main_advances:
+    - "#715 hardening continued through PRs #782-#787: Railway production identity observation, tenant RLS context for the read-only verifier, bounded Clerk production-preflight waits, session-first canonical-origin auth and current sign-out selectors are now merged. These changes strengthen the qualification harness but do not constitute accepted production qualification."
+    - "#790/#789 hardens analysis/processing SSE auth: bearer credentials are forwarded server-side and query-string bearer tokens are rejected/removed from client URLs. This is security/runtime hardening, not a Product-Control promotion."
+    - "#793/#792 preserves the explicit human-review boundary: when graph state says human_approval_required=True, N13 forces HIGH impact so confidence cannot auto-approve that item. High-confidence LOW/MEDIUM items may still follow the non-gated policy path when no explicit human requirement exists."
+  still_open_acceptance:
+    - "#706 full production end-user journey GOAL"
+    - "#715 accepted full production qualification"
+    - "#690 dedicated non-customer production qualification identity/tenant evidence"
+    - "#712 truthful lifecycle fix-forward"
+    - "#713 evidence-locator truthfulness fix-forward"
+    - "#792 remains open pending acceptance/closure even though the #793 runtime fix is merged"
+  control_conclusion: >
+    Main advanced by 38 commits after the 2026-10-01 reconciliation, primarily through production-qualification,
+    authentication/SSE hardening and the explicit-human-review fix. These are material realization improvements
+    but do not prove the full production journey or self-promote any lifecycle lane. Product value remains
+    unvalidated; P0b/P0c/P0d qualification state stays conservative.
 
 north_star:
   full_product: >
