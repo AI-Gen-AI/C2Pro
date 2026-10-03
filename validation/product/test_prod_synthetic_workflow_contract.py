@@ -255,7 +255,7 @@ def test_full_journey_has_a_dedicated_deterministic_hitl_fixture() -> None:
     assert "PROD_ACCEPTANCE_HITL_FIXTURE" in support
     assert "PROD_ACCEPTANCE_HITL_FIXTURE_SHA256" in support
     assert "PROD_ACCEPTANCE_HITL_FIXTURE_SHA256" in source
-    assert "prod-hitl-budget-scope-summary.txt" in source
+    assert "apps/api/tests/fixtures/documents/real/budget-scope-summary.txt" in source
     assert "hitl_project_id" in journey
     assert "hitl_document_id" in journey
     assert "`${projectName}-hitl`" in journey
