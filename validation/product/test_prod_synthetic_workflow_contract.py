@@ -401,6 +401,9 @@ def test_health_poll_has_fail_closed_status_diagnostics() -> None:
 
     assert "PROD_ACCEPTANCE_HEALTH_AUTH_FAILED" in spec
     assert "PROD_ACCEPTANCE_HEALTH_REQUEST_ERROR" in spec
+    start = spec.index("async function loadHealth(")
+    end = spec.index("async function waitForHealth(", start)
+    assert "cause:" not in spec[start:end]
     assert "Retry-After" in spec
     assert "last_status=" in spec
     assert "assessment_count=" in spec
