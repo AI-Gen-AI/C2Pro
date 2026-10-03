@@ -70,6 +70,19 @@ def test_verifier_forces_read_only_transaction_and_has_no_write_sql() -> None:
         assert keyword not in source
 
 
+def test_verifier_sets_tenant_rls_context_inside_readonly_transaction() -> None:
+    source = SCRIPT.read_text(encoding="utf-8")
+    read_only = source.index('text("SET TRANSACTION READ ONLY")')
+    rls_context = source.index(
+        'text("SELECT set_config(\'app.current_tenant\', :tenant_id, true)")'
+    )
+    preflight = source.index("checks = await _preflight_checks(")
+    assert read_only < rls_context < preflight
+    assert "{TENANT_ID_KEY: str(tenant_id)}" in source
+    assert "ALTER ROLE" not in source
+    assert "SET ROLE" not in source
+
+
 def test_verifier_output_path_is_fixed_to_canonical_evidence_file(tmp_path: Path) -> None:
     expected = tmp_path / "evidence/product-qualification/runtime/verifier.json"
     assert MODULE._verifier_output_path(repo_root=tmp_path) == expected

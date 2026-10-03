@@ -2,6 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const fetchMock = vi.fn();
+const getTokenMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@clerk/nextjs/server", () => ({
+  auth: vi.fn(async () => ({ getToken: getTokenMock })),
+}));
+
 let GET: typeof import("./route").GET;
 let buildBackendUrl: typeof import("./route-utils").buildBackendUrl;
 
@@ -10,6 +16,8 @@ describe("API proxy coherence routing", () => {
     // route-utils resolves the server-only backend URL during module import.
     vi.stubEnv("BACKEND_URL", "http://localhost:8000/api/v1");
     vi.stubGlobal("fetch", fetchMock);
+    getTokenMock.mockReset();
+    getTokenMock.mockResolvedValue(null);
     vi.resetModules();
 
     ({ GET } = await import("./route"));
@@ -72,6 +80,37 @@ describe("API proxy coherence routing", () => {
     const url = buildBackendUrl("api/v1/projects/proj-1", request);
 
     expect(url).toBe("http://localhost:8000/api/v1/projects/proj-1");
+  });
+
+  it("injects the Clerk bearer server-side for SSE without putting it in the URL", async () => {
+    getTokenMock.mockResolvedValue("server-clerk-token");
+    fetchMock.mockResolvedValue(
+      new Response("event: complete\ndata: {}\n\n", {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      }),
+    );
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/v1/analysis/projects/proj-1/process/stream",
+    );
+
+    const response = await GET(request, {
+      params: Promise.resolve({
+        proxy: ["v1", "analysis", "projects", "proj-1", "process", "stream"],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      "http://localhost:8000/api/v1/analysis/projects/proj-1/process/stream",
+    );
+    expect(url).not.toContain("access_token");
+    expect(new Headers(init.headers).get("authorization")).toBe(
+      "Bearer server-clerk-token",
+    );
   });
 
   it("preserves backend 401 responses for the frontend auth handler", async () => {

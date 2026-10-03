@@ -32,6 +32,19 @@ def test_observed_shas_are_not_operator_self_assertions() -> None:
     assert "PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: ${{ env.PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA }}" in source
 
 
+def test_railway_provider_supports_both_documented_token_headers_and_fails_closed() -> None:
+    source = _source()
+    provider = source[
+        source.index("Observe production deployment identities from providers") :
+        source.index("Verify independently observed deployment identities")
+    ]
+    assert '"Authorization"' in provider
+    assert '"Project-Access-Token"' in provider
+    assert "Railway provider observation failed for all supported token authentication modes." in provider
+    assert "(.errors // [])" in provider
+    assert "serviceInstance(serviceId:" in provider
+
+
 def test_provider_identity_is_checked_before_browser_mutation() -> None:
     source = _source()
     observe = source.index("Observe production deployment identities from providers")
@@ -119,6 +132,102 @@ def test_dispatch_inputs_are_not_interpolated_directly_into_shell_source() -> No
     assert all("${{ inputs." not in block for block in run_sources)
 
 
+def test_identity_preflight_has_explicit_bounded_test_timeout() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-identity-preflight.spec.ts"
+    ).read_text(encoding="utf-8")
+    assert "IDENTITY_PREFLIGHT_TIMEOUT_MS = 5 * 60_000" in spec
+    assert "test.setTimeout(IDENTITY_PREFLIGHT_TIMEOUT_MS)" in spec
+
+
+def test_prod_auth_signout_selector_matches_application_header() -> None:
+    helper = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "support"
+        / "prod-auth.synthetic.ts"
+    ).read_text(encoding="utf-8")
+    header = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "components"
+        / "layout"
+        / "AppHeader.tsx"
+    ).read_text(encoding="utf-8")
+
+    assert 'aria-label="User menu"' in header
+    assert "Sign out" in header
+    assert 'name: /user menu/i' in helper
+    assert 'name: /sign out/i' in helper
+
+
+def test_prod_auth_observes_the_browser_canonical_production_origin() -> None:
+    helper = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "support"
+        / "prod-auth.synthetic.ts"
+    ).read_text(encoding="utf-8")
+
+    configured = helper.index("const configuredOrigin = requireProductionOrigin(productionBaseUrl());")
+    goto_sign_in = helper.index("await page.goto(`${configuredOrigin}/sign-in`);", configured)
+    canonical = helper.index("const baseOrigin = requireProductionOrigin(page.url());", goto_sign_in)
+    observer = helper.index("const observed = observeApplicationAuth(page, baseOrigin);", canonical)
+
+    assert configured < goto_sign_in < canonical < observer
+
+
+def test_prod_auth_proves_real_clerk_session_before_protected_navigation() -> None:
+    helper = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "support"
+        / "prod-auth.synthetic.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "@clerk/testing" not in helper
+    submit = helper.index(
+        'page.getByRole("button", { name: /^continue$/i }).click();',
+        helper.index('input[name="password"]'),
+    )
+    signed_in = helper.index("await waitForSignedInClerkUser(page);", submit)
+    protected_navigation = helper.index(
+        "await page.goto(`${baseOrigin}/projects`);",
+        signed_in,
+    )
+    organization = helper.index(
+        "await waitForActiveOrganization(page);",
+        protected_navigation,
+    )
+
+    assert submit < signed_in < protected_navigation < organization
+    assert "PROD_ACCEPTANCE_CLERK_SESSION_NOT_ACTIVE" in helper
+    assert "PROD_ACCEPTANCE_CLERK_ORGANIZATION_NOT_ACTIVE" in helper
+
+
 def test_identity_preflight_is_the_default_non_mutating_mode() -> None:
     source = _source()
     assert 'default: "identity-preflight"' in source
@@ -155,7 +264,7 @@ def test_production_playwright_projects_disable_sensitive_artifacts() -> None:
         assert 'video: "off"' in snippet
 
 
-def test_provider_observation_is_bound_to_canonical_service_and_project_ids() -> None:
+def test_provider_observation_is_bound_to_canonical_service_and_environment_ids() -> None:
     source = _source()
     provider = source[
         source.index("Observe production deployment identities from providers") :
@@ -165,6 +274,8 @@ def test_provider_observation_is_bound_to_canonical_service_and_project_ids() ->
     assert '"api:${PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID}"' in provider
     assert '"worker:${PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID}"' in provider
     assert '"scheduler:${PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID}"' in provider
+    assert 'environment "$PROD_ACCEPTANCE_RAILWAY_ENVIRONMENT_ID"' in provider
+    assert "serviceInstance(serviceId:" in provider
     assert "query deployment($id:" not in provider
 
     verifier = source[

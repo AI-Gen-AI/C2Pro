@@ -267,31 +267,23 @@ async def test_tenant_isolation_middleware_inactive_tenant():
 
 
 @pytest.mark.asyncio
-async def test_tenant_isolation_middleware_sse_stream_token_in_query():
-    """SSE streams pueden enviar token en query params."""
+async def test_tenant_isolation_middleware_sse_stream_rejects_token_in_query():
+    """SSE bearer tokens in URLs are never accepted."""
     middleware = TenantIsolationMiddleware(None)
-    call_next = AsyncMock(return_value=Response(content="ok", status_code=200))
-
-    tenant_id = uuid4()
-    user_id = uuid4()
+    call_next = AsyncMock()
     token = jwt.encode(
-        {"sub": str(user_id), "tenant_id": str(tenant_id), "type": "access"},
+        {"sub": str(uuid4()), "tenant_id": str(uuid4()), "type": "access"},
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
     )
 
     request = create_mock_request("/api/v1/process/stream", query_params={"access_token": token})
+    response = await middleware.dispatch(request, call_next)
 
-    with patch(
-        "src.core.middleware.tenant_isolation.is_token_revoked_async", AsyncMock(return_value=False)
-    ):
-        with patch.object(middleware, "_validate_tenant_exists", AsyncMock(return_value=True)):
-            with patch("structlog.contextvars.bind_contextvars"):
-                response = await middleware.dispatch(request, call_next)
-
-    assert response.status_code == 200
-    assert request.state.tenant_id == tenant_id
-    assert request.state.user_id == user_id
+    assert response.status_code == 401
+    content = json.loads(response.body)
+    assert content["reason_code"] == "authenticated_sse_session_required"
+    call_next.assert_not_called()
 
 
 @pytest.mark.asyncio

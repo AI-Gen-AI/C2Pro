@@ -266,6 +266,13 @@ async def verify(
             transaction = await conn.begin()
             try:
                 await conn.execute(text("SET TRANSACTION READ ONLY"))
+                # The qualification role is intentionally not BYPASSRLS.
+                # Establish the same tenant-scoped GUC used by the application
+                # so forced RLS remains active while the verifier stays read-only.
+                await conn.execute(
+                    text("SELECT set_config('app.current_tenant', :tenant_id, true)"),
+                    {TENANT_ID_KEY: str(tenant_id)},
+                )
                 checks = await _preflight_checks(
                     conn,
                     tenant_id=tenant_id,
