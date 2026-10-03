@@ -32,6 +32,7 @@ from src.core.observability.monitoring import (
 from src.modules.hitl.adapters.persistence.resume_ownership import (
     DEFAULT_LEASE_SECONDS,
     FinalizedCorrection,
+    GraphCompletedMarker,
     Ownership,
     Phase,
     acquire,
@@ -334,6 +335,30 @@ class ResumeWorkflowUseCase:
             self._graph_app = _gga()
         return self._graph_app
 
+
+    @staticmethod
+    def _enqueue_graph_completed_snapshot(
+        marker: GraphCompletedMarker, tenant_id: UUID
+    ) -> None:
+        """Project a committed graph completion without coupling it to the DB tx."""
+        from src.core.tenants.types import require_tenant_id
+        from src.temporal.application import project_snapshot_trigger
+        from src.temporal.domain.project_snapshot import SnapshotTrigger
+
+        try:
+            project_snapshot_trigger.enqueue_project_snapshot(
+                project_id=marker.project_id,
+                tenant_id=require_tenant_id(tenant_id),
+                trigger=SnapshotTrigger.GRAPH_COMPLETED,
+                source_event_id=marker.event_id,
+            )
+        except Exception:  # noqa: BLE001 - projection cannot roll back graph truth
+            logger.warning(
+                "graph_completed_snapshot_enqueue_failed",
+                event_id=str(marker.event_id),
+                project_id=str(marker.project_id),
+                exc_info=True,
+            )
 
     @staticmethod
     def _enqueue_correction_snapshot(correction: FinalizedCorrection, tenant_id: UUID) -> None:
@@ -1010,12 +1035,14 @@ class ResumeWorkflowUseCase:
                                 review_id=review_id, thread_id=thread_id
                             )
                         )
-                    await mark_graph_completed(
+                    graph_completion = await mark_graph_completed(
                         ownership=ownership,
                         terminal_checkpoint_id=terminal_checkpoint_id,
                         document_id=str(document_id) if document_id else None,
                         session_factory=self._claim_session_factory,
                     )
+                    if graph_completion is not None:
+                        self._enqueue_graph_completed_snapshot(graph_completion, tenant_id)
 
                 if self._fault is not None:
                     await self._fault("after_terminal_marker_before_finalize")
