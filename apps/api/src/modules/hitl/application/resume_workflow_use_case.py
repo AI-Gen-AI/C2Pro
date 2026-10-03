@@ -37,6 +37,7 @@ from src.modules.hitl.adapters.persistence.resume_ownership import (
     Phase,
     acquire,
     finalize_v3,
+    get_graph_completed_marker,
     mark_graph_completed,
     record_failure,
     renew,
@@ -940,6 +941,7 @@ class ResumeWorkflowUseCase:
         resumed_state: dict[str, Any] = {}
         terminal_checkpoint_id: str | None = None
         correction: FinalizedCorrection | None = None
+        graph_completion: GraphCompletedMarker | None = None
         trusted_commits: list[Any] = []
         heartbeat_task = asyncio.create_task(self._heartbeat_loop(ownership))
         try:
@@ -952,11 +954,23 @@ class ResumeWorkflowUseCase:
             if phase is Phase.GRAPH_COMPLETED:
                 # Durable evidence says this operation already reached a
                 # verified terminal checkpoint. Finalize only -- replaying
-                # the graph here is the post-N17 split brain.
+                # the graph here is the post-N17 split brain. Reuse the exact
+                # already-committed event identity, but DO NOT project it yet:
+                # ADR-026 forbids trusted Health before finalization commits.
+                graph_completion = await get_graph_completed_marker(
+                    ownership=ownership,
+                    session_factory=self._claim_session_factory,
+                )
+                if graph_completion is None:
+                    raise RuntimeError(
+                        "GRAPH_COMPLETED operation is missing its durable "
+                        "graph.completed event; refusing projection/finalization"
+                    )
                 logger.warning(
                     "hitl_resume_recovering_at_graph_completed",
                     review_id=str(review_id),
                     operation_id=str(ownership.operation_id),
+                    graph_completed_event_id=str(graph_completion.event_id),
                 )
             else:
                 if request.decision == WorkflowDecision.APPROVE:
@@ -1041,8 +1055,11 @@ class ResumeWorkflowUseCase:
                         document_id=str(document_id) if document_id else None,
                         session_factory=self._claim_session_factory,
                     )
-                    if graph_completion is not None:
-                        self._enqueue_graph_completed_snapshot(graph_completion, tenant_id)
+                    if graph_completion is None:
+                        raise RuntimeError(
+                            "verified terminal graph did not persist its "
+                            "graph.completed marker"
+                        )
 
                 if self._fault is not None:
                     await self._fault("after_terminal_marker_before_finalize")
@@ -1097,6 +1114,15 @@ class ResumeWorkflowUseCase:
             heartbeat_task.cancel()
             with suppress(asyncio.CancelledError):
                 await heartbeat_task
+
+        # #795 / ADR-026: graph.completed becomes Health-visible only AFTER
+        # finalize_v3 committed the human trust decision. Recovery reuses the
+        # original durable event id; it never invents a new completion event.
+        if (
+            request.decision == WorkflowDecision.APPROVE
+            and graph_completion is not None
+        ):
+            self._enqueue_graph_completed_snapshot(graph_completion, tenant_id)
 
         # C2PRO #649: the decision's hitl.correction committed WITH the
         # finalization; only its snapshot projection is triggered here,
