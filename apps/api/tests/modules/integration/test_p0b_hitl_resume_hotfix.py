@@ -476,6 +476,24 @@ async def test_full_hitl_lifecycle_resume_to_n17_to_analyzed_and_health_readable
     }
     resuming_app = _FakeResumingGraphApp(resume_state)
     checkpoint_service = _FakeResumeCheckpointService(resume_state)
+
+    # #795 regression: the HITL V3 path must publish the exact durable
+    # graph.completed event as a GRAPH_COMPLETED snapshot trigger. Health reads
+    # project snapshots, not analyses.result_json directly.
+    from src.temporal.application import project_snapshot_trigger
+    from src.temporal.domain.project_snapshot import SnapshotTrigger
+
+    snapshot_enqueues: list[dict[str, object]] = []
+
+    def capture_snapshot_enqueue(**kwargs: object) -> None:
+        snapshot_enqueues.append(kwargs)
+
+    monkeypatch.setattr(
+        project_snapshot_trigger,
+        "enqueue_project_snapshot",
+        capture_snapshot_enqueue,
+    )
+
     use_case = ResumeWorkflowUseCase(
         review_queue_repo=review_repo,
         checkpoint_service=checkpoint_service,
@@ -532,6 +550,23 @@ async def test_full_hitl_lifecycle_resume_to_n17_to_analyzed_and_health_readable
     assert len(events) == 1
     assert events[0].payload["analysis_id"] == str(analysis_row.id)
     assert events[0].payload["document_id"] == str(document.id)
+
+    graph_completed_enqueues = [
+        call
+        for call in snapshot_enqueues
+        if call.get("trigger") == SnapshotTrigger.GRAPH_COMPLETED
+    ]
+    assert graph_completed_enqueues == [
+        {
+            "project_id": document.project_id,
+            "tenant_id": document.tenant_id,
+            "trigger": SnapshotTrigger.GRAPH_COMPLETED,
+            "source_event_id": events[0].event_id,
+        }
+    ], (
+        "approved HITL resume must enqueue the exact durable graph.completed "
+        "event so SnapshotWriter can project single_document_coverage for Health"
+    )
 
     # 9. Document becomes ANALYZED (the gap this hotfix closes: N17 alone
     # never touched Document.upload_status -- ResumeWorkflowUseCase must).
