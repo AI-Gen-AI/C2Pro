@@ -5,7 +5,6 @@ TS-IT-TSR-001
 
 from __future__ import annotations
 
-import asyncio
 import re
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
@@ -15,6 +14,7 @@ from sqlalchemy import CursorResult, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_raw_session, init_db
+from src.core.tasks.async_runtime import run_async_db_task
 from src.core.tasks.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
@@ -213,4 +213,4 @@ async def _run_snapshot_retention_async() -> dict[str, object]:
     retry_backoff=True,
 )
 def run_snapshot_retention(_self: Any) -> dict[str, object]:
-    return asyncio.run(_run_snapshot_retention_async())
+    return run_async_db_task(_run_snapshot_retention_async())
