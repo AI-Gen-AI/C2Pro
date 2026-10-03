@@ -41,7 +41,7 @@ from .nodes import (
     deterministic_evaluate,
     format_output,
     llm_semantic_evaluate_async,
-    prepare_context,
+    prepare_context_async,
     rag_similarity_check_async,
     scoring_arbiter,
 )
@@ -111,7 +111,7 @@ def build_coherence_subgraph() -> CoherenceStateGraph:
     graph = StateGraph(CoherenceGraphState)
 
     # Add nodes
-    graph.add_node("prepare_context", prepare_context)
+    graph.add_node("prepare_context", prepare_context_async)
     graph.add_node("deterministic_evaluate", deterministic_evaluate)
     graph.add_node("llm_semantic_evaluate", llm_semantic_evaluate_async)
     graph.add_node("rag_similarity_check", rag_similarity_check_async)
@@ -166,7 +166,7 @@ def build_parallel_coherence_subgraph() -> CoherenceStateGraph:
     graph = StateGraph(CoherenceGraphState)
 
     # Add nodes
-    graph.add_node("prepare_context", prepare_context)
+    graph.add_node("prepare_context", prepare_context_async)
     graph.add_node("deterministic_evaluate", deterministic_evaluate)
     graph.add_node("llm_semantic_evaluate", llm_semantic_evaluate_async)
     graph.add_node("rag_similarity_check", rag_similarity_check_async)
