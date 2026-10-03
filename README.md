@@ -99,6 +99,15 @@ Older platform TDDs and roadmaps remain useful as history/supporting design, but
 - Docker / Docker Compose for local infrastructure
 - configured Clerk/Supabase/provider credentials as required by the selected flow
 
+Before starting local infrastructure, copy the environment template and validate the
+PostgreSQL password contract:
+
+```bash
+cp .env.example .env
+python scripts/validate_local_postgres_password.py
+docker compose up -d
+```
+
 ### Backend
 
 ```bash
