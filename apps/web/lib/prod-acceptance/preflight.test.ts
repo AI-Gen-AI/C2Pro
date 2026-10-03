@@ -5,6 +5,7 @@ import {
   type ProdPreflightFailureCode,
   assertProdPreflight,
   requireProdAcceptanceEnv,
+  requireProductionApiOrigin,
   requireProductionOrigin,
   syntheticProjectName,
 } from "./preflight";
@@ -55,6 +56,25 @@ describe("production acceptance preflight", () => {
     expect(() => requireProductionOrigin("https://preview.example.com")).toThrowError(
       expect.objectContaining({ code: "NON_PRODUCTION_HOST" }),
     );
+  });
+
+  it("uses a separate exact allowlist for the production API origin", () => {
+    expect(
+      requireProductionApiOrigin(
+        "https://c2pro-production.up.railway.app/api/v1/projects/123/documents",
+      ),
+    ).toBe("https://c2pro-production.up.railway.app");
+
+    for (const candidate of [
+      "http://c2pro-production.up.railway.app/api/v1",
+      "https://c2pro-production.up.railway.app:8443/api/v1",
+      "https://preview.up.railway.app/api/v1",
+      "https://c2pro.io/api/v1",
+    ]) {
+      expect(() => requireProductionApiOrigin(candidate)).toThrowError(
+        expect.objectContaining({ code: "NON_PRODUCTION_API_HOST" }),
+      );
+    }
   });
 
   it("fails closed before mutation on tenant or organization mismatch", () => {

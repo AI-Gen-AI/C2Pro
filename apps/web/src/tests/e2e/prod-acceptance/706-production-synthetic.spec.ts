@@ -12,6 +12,7 @@ import {
 import {
   buildSyntheticProjectName,
   PROD_ACCEPTANCE_FIXTURE,
+  requireProductionApiOrigin,
   requireProductionOrigin,
 } from "./support/prod-preflight";
 import {
@@ -129,7 +130,7 @@ function captureObservedApiAuthContext(response: Response): void {
     throw new Error("PROD_ACCEPTANCE_API_AUTH_CONTEXT_MISSING");
   }
   observedApiAuthContext = {
-    origin: requireProductionOrigin(response.url()),
+    origin: requireProductionApiOrigin(response.url()),
     headers: {
       Authorization: authorization,
       "X-Tenant-ID": tenantId,

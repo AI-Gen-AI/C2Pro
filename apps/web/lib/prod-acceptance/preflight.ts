@@ -7,10 +7,12 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const RUN_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$/;
 const PRODUCTION_HOSTS = new Set(["c2pro.io", "www.c2pro.io"]);
+const PRODUCTION_API_HOSTS = new Set(["c2pro-production.up.railway.app"]);
 
 export type ProdPreflightFailureCode =
   | "INVALID_BASE_URL"
   | "NON_PRODUCTION_HOST"
+  | "NON_PRODUCTION_API_HOST"
   | "INVALID_RUN_ID"
   | "INVALID_TENANT_ID"
   | "WRONG_TENANT"
@@ -72,6 +74,23 @@ export function requireProductionOrigin(baseUrl: string): string {
     !PRODUCTION_HOSTS.has(parsed.hostname)
   ) {
     throw new ProdPreflightError("NON_PRODUCTION_HOST");
+  }
+  return parsed.origin;
+}
+
+export function requireProductionApiOrigin(apiUrl: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(apiUrl);
+  } catch {
+    throw new ProdPreflightError("INVALID_BASE_URL");
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.port !== "" ||
+    !PRODUCTION_API_HOSTS.has(parsed.hostname)
+  ) {
+    throw new ProdPreflightError("NON_PRODUCTION_API_HOST");
   }
   return parsed.origin;
 }
