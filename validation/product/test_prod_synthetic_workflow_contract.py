@@ -262,6 +262,7 @@ def test_production_playwright_projects_disable_sensitive_artifacts() -> None:
         assert 'trace: "off"' in snippet
         assert 'screenshot: "off"' in snippet
         assert 'video: "off"' in snippet
+        assert "recordHar" not in snippet
 
 
 def test_provider_observation_is_bound_to_canonical_service_and_environment_ids() -> None:
@@ -399,6 +400,7 @@ def test_health_poll_has_fail_closed_status_diagnostics() -> None:
     ).read_text(encoding="utf-8")
 
     assert "PROD_ACCEPTANCE_HEALTH_AUTH_FAILED" in spec
+    assert "PROD_ACCEPTANCE_HEALTH_REQUEST_ERROR" in spec
     assert "Retry-After" in spec
     assert "last_status=" in spec
     assert "assessment_count=" in spec
