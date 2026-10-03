@@ -1,7 +1,13 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { expect, test, type Page, type Response } from "@playwright/test";
+import {
+  expect,
+  test,
+  type APIResponse,
+  type Page,
+  type Response,
+} from "@playwright/test";
 
 import {
   buildSyntheticProjectName,
@@ -55,6 +61,13 @@ interface HealthVector {
   projected_delta?: number | null;
   pending_review_count?: number | null;
 }
+
+type ObservedApiAuthHeaders = {
+  Authorization: string;
+  "X-Tenant-ID": string;
+};
+
+let observedApiAuthHeaders: ObservedApiAuthHeaders | null = null;
 
 const CANONICAL_CATEGORIES = new Set([
   "SCOPE",
@@ -113,6 +126,15 @@ async function loadDocument(
   );
   await page.goto(`${baseUrl()}/projects/${projectId}/documents`);
   const response = await responsePromise;
+  const requestHeaders = response.request().headers();
+  const authorization = requestHeaders.authorization;
+  const tenantId = requestHeaders["x-tenant-id"];
+  if (authorization && tenantId) {
+    observedApiAuthHeaders = {
+      Authorization: authorization,
+      "X-Tenant-ID": tenantId,
+    };
+  }
   const payload = (await response.json()) as DocumentsPayload | DocumentRecord[];
   const items = Array.isArray(payload) ? payload : (payload.items ?? []);
   const record = items.find((item) => item.id === documentId);
@@ -132,6 +154,8 @@ const DOCUMENT_FAILURE_STATES = new Set([
   "error",
 ]);
 const POLL_INTERVALS_MS = [1_000, 2_000, 5_000];
+const HEALTH_POLL_INTERVAL_MS = 10_000;
+const HEALTH_POLL_MAX_REQUESTS = 6;
 
 async function pollDocumentUntilTerminal(
   page: Page,
@@ -189,40 +213,106 @@ async function waitForAnalyzed(
 async function loadHealth(
   page: Page,
   projectId: string,
-): Promise<HealthVector> {
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === "GET" &&
-      response.status() === 200 &&
-      matchesProjectApiPath(responsePath(response), projectId, "health"),
-    { timeout: 60_000 },
-  );
-  await page.goto(`${baseUrl()}/projects/${projectId}/analysis`);
-  return (await responsePromise).json() as Promise<HealthVector>;
+): Promise<{
+  status: number;
+  vector: HealthVector | null;
+  retryAfterSeconds: number | null;
+}> {
+  if (!observedApiAuthHeaders) {
+    throw new Error("PROD_ACCEPTANCE_HEALTH_AUTH_HEADERS_MISSING");
+  }
+
+  let response: APIResponse;
+  try {
+    response = await page.request.get(
+      `${baseUrl()}/api/v1/projects/${projectId}/health`,
+      {
+        failOnStatusCode: false,
+        headers: observedApiAuthHeaders,
+        timeout: 60_000,
+      },
+    );
+  } catch (error) {
+    const candidateName = error instanceof Error ? error.name : "";
+    const errorName = /^[A-Za-z0-9_.-]+$/.test(candidateName)
+      ? candidateName
+      : "UnknownError";
+    // Intentionally omit the original caught error because Playwright transport
+    // call logs can contain Authorization/X-Tenant-ID. This boundary must redact them.
+    // eslint-disable-next-line preserve-caught-error -- security redaction boundary
+    throw new Error(`PROD_ACCEPTANCE_HEALTH_REQUEST_ERROR:${errorName}`);
+  }
+  const status = response.status();
+
+  if (status === 401 || status === 403) {
+    throw new Error(`PROD_ACCEPTANCE_HEALTH_AUTH_FAILED:${status}`);
+  }
+  if (status >= 400 && status < 500 && status !== 429) {
+    throw new Error(`PROD_ACCEPTANCE_HEALTH_HTTP_${status}`);
+  }
+
+  if (status === 429) {
+    // Honor Retry-After without exposing any credential or response payload.
+    const rawRetryAfter = response.headers()["retry-after"];
+    const parsedRetryAfter = rawRetryAfter ? Number.parseInt(rawRetryAfter, 10) : Number.NaN;
+    return {
+      status,
+      vector: null,
+      retryAfterSeconds:
+        Number.isFinite(parsedRetryAfter) && parsedRetryAfter > 0
+          ? parsedRetryAfter
+          : null,
+    };
+  }
+
+  if (status !== 200) {
+    return { status, vector: null, retryAfterSeconds: null };
+  }
+
+  return {
+    status,
+    vector: (await response.json()) as HealthVector,
+    retryAfterSeconds: null,
+  };
 }
 
 async function waitForHealth(
   page: Page,
   projectId: string,
 ): Promise<HealthVector> {
-  let vector = await loadHealth(page, projectId);
-  try {
-    await expect
-      .poll(
-        async () => {
-          vector = await loadHealth(page, projectId);
-          return Boolean(vector.single_document_coverage);
-        },
-        {
-          timeout: PROCESSING_TIMEOUT_MS,
-          intervals: POLL_INTERVALS_MS,
-        },
-      )
-      .toBe(true);
-  } catch {
-    throw new Error("PROD_ACCEPTANCE_HEALTH_TIMEOUT");
+  let lastStatus = 0;
+  let lastVector: HealthVector | null = null;
+
+  for (let attempt = 1; attempt <= HEALTH_POLL_MAX_REQUESTS; attempt += 1) {
+    const observation = await loadHealth(page, projectId);
+    lastStatus = observation.status;
+    if (observation.vector) {
+      lastVector = observation.vector;
+      if (lastVector.single_document_coverage) {
+        return lastVector;
+      }
+    }
+
+    if (attempt === HEALTH_POLL_MAX_REQUESTS) break;
+
+    const retryMs =
+      observation.status === 429 && observation.retryAfterSeconds
+        ? Math.max(
+            HEALTH_POLL_INTERVAL_MS,
+            observation.retryAfterSeconds * 1_000,
+          )
+        : HEALTH_POLL_INTERVAL_MS;
+    await page.waitForTimeout(Math.min(retryMs, 60_000));
   }
-  return vector;
+
+  const coverage = lastVector?.single_document_coverage ?? null;
+  const assessmentCount = coverage?.assessments?.length ?? 0;
+  throw new Error(
+    "PROD_ACCEPTANCE_HEALTH_TIMEOUT:" +
+      `last_status=${lastStatus};` +
+      `coverage_document_id=${coverage?.document_id ?? "null"};` +
+      `assessment_count=${assessmentCount}`,
+  );
 }
 
 async function createProject(page: Page, projectName: string): Promise<string> {
@@ -360,6 +450,15 @@ test.describe("Issue #706 production synthetic acceptance", () => {
     expect(terminal.lifecycle_status).toBe("analyzed");
 
     const health = await waitForHealth(page, projectId);
+    const refreshedHealth = page.waitForResponse(
+      (response) =>
+        response.request().method() === "GET" &&
+        response.status() === 200 &&
+        matchesProjectApiPath(responsePath(response), projectId, "health"),
+      { timeout: 60_000 },
+    );
+    await page.goto(`${baseUrl()}/projects/${projectId}/analysis`);
+    await refreshedHealth;
     const assessments = health.single_document_coverage?.assessments ?? [];
     expect(assessments).toHaveLength(6);
     expect(new Set(assessments.map((item) => item.category))).toEqual(
