@@ -190,15 +190,17 @@ async function loadHealth(
   page: Page,
   projectId: string,
 ): Promise<HealthVector> {
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === "GET" &&
-      response.status() === 200 &&
-      matchesProjectApiPath(responsePath(response), projectId, "health"),
-    { timeout: 60_000 },
+  const response = await page.request.get(
+    `${baseUrl()}/api/v1/projects/${projectId}/health`,
+    {
+      failOnStatusCode: false,
+      timeout: 60_000,
+    },
   );
-  await page.goto(`${baseUrl()}/projects/${projectId}/analysis`);
-  return (await responsePromise).json() as Promise<HealthVector>;
+  if (response.status() !== 200) {
+    throw new Error(`PROD_ACCEPTANCE_HEALTH_HTTP_${response.status()}`);
+  }
+  return response.json() as Promise<HealthVector>;
 }
 
 async function waitForHealth(
@@ -359,6 +361,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
 
     expect(terminal.lifecycle_status).toBe("analyzed");
 
+    await page.goto(`${baseUrl()}/projects/${projectId}/analysis`);
     const health = await waitForHealth(page, projectId);
     const assessments = health.single_document_coverage?.assessments ?? [];
     expect(assessments).toHaveLength(6);
