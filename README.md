@@ -9,7 +9,7 @@ C2Pro is an evidence-backed contract, project-controls and procurement intellige
 
 It connects documents and project state through a governed project model, one canonical hierarchical WBS, temporal/change intelligence, Health, relational Coherence, Alerts/HITL and traceable evidence.
 
-## Current status — 2026-10-01
+## Current status — revalidated 2026-10-03
 
 Do not infer product readiness from this README.
 
@@ -19,7 +19,7 @@ Do not infer product readiness from this README.
 - **Architecture authority:** accepted ADRs under `docs/architecture/decisions/`
 - **Current architecture synthesis:** `docs/architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md`
 
-At this baseline, the full production end-user GOAL **#706 remains open**. The production acceptance harness is implemented, but a merged harness is not equivalent to an accepted production qualification. Product Control remains conservative until explicit evidence promotes lifecycle state.
+At this revalidated baseline, the full production end-user GOAL **#706 remains open**. The production acceptance harness is implemented, but a merged harness is not equivalent to an accepted production qualification. Product Control remains conservative until explicit evidence promotes lifecycle state.
 
 ## Architecture at a glance
 
