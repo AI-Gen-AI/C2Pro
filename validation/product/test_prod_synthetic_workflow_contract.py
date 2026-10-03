@@ -491,7 +491,8 @@ def test_upload_captures_canonical_auth_context_for_direct_document_poll() -> No
         spec.index("async function approveExactDocumentReview(")
     ]
     assert "captureObservedApiAuthContext(response)" in upload
-    assert "requireProductionOrigin(response.url())" in spec
+    assert "requireProductionApiOrigin(response.url())" in spec
+    assert "requireProductionOrigin(response.url())" not in spec
 
 
 def test_production_journey_resets_observed_api_auth_context() -> None:
