@@ -99,6 +99,10 @@ function requireHitl(): boolean {
   return raw === "1" || raw === "true";
 }
 
+async function quiesceBrowserPage(page: Page): Promise<void> {
+  await page.goto("about:blank");
+}
+
 function responsePath(response: Response): string {
   return new URL(response.url()).pathname;
 }
@@ -478,6 +482,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
     const projectName = buildSyntheticProjectName();
     const projectId = await createProject(page, projectName);
     const upload = await uploadFixture(page, projectId);
+    await quiesceBrowserPage(page);
 
     writeRunEvidence({
       run_id: runId,
@@ -508,6 +513,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
         exercisedReviewItemId,
       );
       hitlExercised = true;
+      await quiesceBrowserPage(page);
       terminal = await waitForAnalyzed(page, projectId, upload.documentId);
     } else if (requireHitl()) {
       throw new Error(
