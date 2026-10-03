@@ -404,7 +404,10 @@ def test_health_poll_has_fail_closed_status_diagnostics() -> None:
     assert "PROD_ACCEPTANCE_HEALTH_REQUEST_ERROR" in spec
     start = spec.index("async function loadHealth(")
     end = spec.index("async function waitForHealth(", start)
-    assert "cause:" not in spec[start:end]
+    health_loader = spec[start:end]
+    assert "cause:" not in health_loader
+    assert "maxRedirects: 0" in health_loader
+    assert "PROD_ACCEPTANCE_HEALTH_REDIRECT_REJECTED" in health_loader
     assert "Retry-After" in spec
     assert "last_status=" in spec
     assert "assessment_count=" in spec
@@ -457,6 +460,8 @@ def test_document_poll_does_not_reload_documents_dashboard() -> None:
 
     assert "page.goto(" not in document_poll
     assert "page.request.get(" in document_poll
+    assert "maxRedirects: 0" in document_poll
+    assert "PROD_ACCEPTANCE_DOCUMENT_REDIRECT_REJECTED" in document_poll
 
 
 def test_document_poll_is_bounded_to_six_requests_per_minute() -> None:
