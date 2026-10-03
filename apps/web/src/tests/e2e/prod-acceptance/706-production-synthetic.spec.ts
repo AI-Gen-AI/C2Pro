@@ -237,8 +237,8 @@ async function loadHealth(
     const errorName = /^[A-Za-z0-9_.-]+$/.test(candidateName)
       ? candidateName
       : "UnknownError";
-    // Intentionally omit cause: Playwright transport errors can embed request
-    // call logs containing Authorization/X-Tenant-ID. This boundary must redact them.
+    // Intentionally omit the original caught error because Playwright transport
+    // call logs can contain Authorization/X-Tenant-ID. This boundary must redact them.
     // eslint-disable-next-line preserve-caught-error -- security redaction boundary
     throw new Error(`PROD_ACCEPTANCE_HEALTH_REQUEST_ERROR:${errorName}`);
   }
