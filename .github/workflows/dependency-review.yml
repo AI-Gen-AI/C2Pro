@@ -5,6 +5,24 @@ name: Dependency Review
 
 on:
   pull_request:
+    paths:
+      - "**/package.json"
+      - "**/package-lock.json"
+      - "**/npm-shrinkwrap.json"
+      - "**/yarn.lock"
+      - "**/pnpm-lock.yaml"
+      - "**/pnpm-workspace.yaml"
+      - "**/requirements*.txt"
+      - "**/pyproject.toml"
+      - "**/poetry.lock"
+      - "**/Pipfile"
+      - "**/Pipfile.lock"
+      - "**/uv.lock"
+      - "**/go.mod"
+      - "**/go.sum"
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - ".github/workflows/dependency-review.yml"
 
 concurrency:
   group: dependency-review-${{ github.ref }}
