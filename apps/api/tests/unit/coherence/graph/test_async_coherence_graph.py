@@ -107,11 +107,14 @@ class CategoryConfinedGate:
         )
 
 
-def test_graphs_register_async_llm_and_rag_nodes():
+def test_graphs_register_db_touching_and_async_nodes_on_async_path():
     graph = graph_module.build_coherence_subgraph()
     parallel_graph = graph_module.build_parallel_coherence_subgraph()
 
     for state_graph in (graph, parallel_graph):
+        assert inspect.iscoroutinefunction(
+            _registered_callable(state_graph, "prepare_context")
+        )
         assert inspect.iscoroutinefunction(
             _registered_callable(state_graph, "llm_semantic_evaluate")
         )
