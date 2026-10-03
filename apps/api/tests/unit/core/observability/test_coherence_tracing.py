@@ -142,6 +142,38 @@ def test_traced_coherence_node_preserves_async_callable_shape(monkeypatch: Any) 
     assert fake_client.ended_spans == [(fake_client.spans[0], None)]
 
 
+
+def test_traced_coherence_node_marks_async_cancellation_as_error(
+    monkeypatch: Any,
+) -> None:
+    """Cancelled async nodes must not be recorded as successful spans."""
+    fake_client = _FakeLangSmithClient()
+    monkeypatch.setattr(
+        "src.core.observability.coherence_tracing.get_client",
+        lambda: fake_client,
+    )
+
+    @traced_coherence_node("prepare_context")
+    async def _prepare_context(state: CoherenceGraphState) -> dict[str, Any]:
+        raise asyncio.CancelledError
+
+    state = CoherenceGraphState(
+        project_id="project-123",
+        config=EvaluationConfig(tenant_id="tenant-456"),
+    )
+
+    try:
+        asyncio.run(_prepare_context(state))
+    except asyncio.CancelledError:
+        pass
+    else:
+        raise AssertionError("expected cancellation to propagate")
+
+    assert len(fake_client.ended_spans) == 1
+    _, recorded_error = fake_client.ended_spans[0]
+    assert isinstance(recorded_error, RuntimeError)
+    assert str(recorded_error) == "coherence node cancelled"
+
 def test_traced_coherence_node_fails_open_when_telemetry_start_fails(
     monkeypatch: Any,
 ) -> None:

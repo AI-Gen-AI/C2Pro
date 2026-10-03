@@ -4,6 +4,7 @@ with strict validation against an allowlisted schema to prevent data leakage.
 """
 from __future__ import annotations
 
+import asyncio
 import functools
 import inspect
 from collections.abc import Callable
@@ -98,6 +99,9 @@ def traced_coherence_node(
                         result=result,
                     )
                     return result
+                except asyncio.CancelledError:
+                    caught_error = RuntimeError("coherence node cancelled")
+                    raise
                 except Exception as exc:
                     caught_error = exc
                     raise
