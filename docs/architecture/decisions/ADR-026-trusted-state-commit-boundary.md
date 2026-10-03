@@ -3,7 +3,7 @@
 **Status:** Accepted / implemented on `main`  
 **Date:** 2026-10-01  
 **Decision class:** Trust, HITL and canonical-state architecture  
-**Implementation lineage:** #714 / PR #726  
+**Implementation lineage:** #714 / PR #726; explicit-human-boundary hardening #792 / PR #793  
 **Basis:** Retrospective codification of the accepted issue/PR contracts and merged implementation evidence; this ADR creates no new runtime authority.
 **Related:** ADR-013, ADR-014, ADR-017, ADR-018, ADR-020, ADR-027
 
@@ -17,7 +17,7 @@ This is not merely a UI-state problem. It is a canonical-state integrity problem
 
 For **HITL-gated analyses**, C2Pro separates **proposal state** from **trusted canonical state**.
 
-This ADR does **not** require every analysis to enter HITL. The current policy router may explicitly produce a non-gated completion (`human_approval_required=False`); that path can persist `TRUSTED` state and enqueue ProjectGraph without a human action. Whether the router's automation policy is sufficiently narrow for each business decision class remains governed by ADR-020 and is tracked separately from the exact-binding invariant defined here.
+This ADR does **not** require every analysis to enter HITL. The current policy router may explicitly produce a non-gated completion (`human_approval_required=False`); that path can persist `TRUSTED` state and enqueue ProjectGraph without a human action. After #793/#792, an explicit `human_approval_required=True` state is elevated to HIGH impact before confidence routing, so confidence cannot erase an already-required human review. Whether the remaining non-gated automation policy is sufficiently narrow for each business decision class remains governed by ADR-020 and is tracked separately from the exact-binding invariant defined here.
 
 1. Analysis produces a candidate in `PROPOSED/UNTRUSTED` state.
 2. A pending or rejected candidate cannot mutate canonical ProjectGraph, Health or Coherence.
