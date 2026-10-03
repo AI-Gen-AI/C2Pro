@@ -1,7 +1,13 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { expect, test, type Page, type Response } from "@playwright/test";
+import {
+  expect,
+  test,
+  type APIResponse,
+  type Page,
+  type Response,
+} from "@playwright/test";
 
 import {
   buildSyntheticProjectName,
@@ -216,14 +222,23 @@ async function loadHealth(
     throw new Error("PROD_ACCEPTANCE_HEALTH_AUTH_HEADERS_MISSING");
   }
 
-  const response = await page.request.get(
-    `${baseUrl()}/api/v1/projects/${projectId}/health`,
-    {
-      failOnStatusCode: false,
-      headers: observedApiAuthHeaders,
-      timeout: 60_000,
-    },
-  );
+  let response: APIResponse;
+  try {
+    response = await page.request.get(
+      `${baseUrl()}/api/v1/projects/${projectId}/health`,
+      {
+        failOnStatusCode: false,
+        headers: observedApiAuthHeaders,
+        timeout: 60_000,
+      },
+    );
+  } catch (error) {
+    const candidateName = error instanceof Error ? error.name : "";
+    const errorName = /^[A-Za-z0-9_.-]+$/.test(candidateName)
+      ? candidateName
+      : "UnknownError";
+    throw new Error(`PROD_ACCEPTANCE_HEALTH_REQUEST_ERROR:${errorName}`);
+  }
   const status = response.status();
 
   if (status === 401 || status === 403) {
