@@ -1,8 +1,11 @@
 # Architecture Decisions
 
-This section contains the active architecture decision records for the current repository state.
+**Status:** Canonical ADR catalogue  
+**Last reconciled:** 2026-10-01
 
-## Current ADR Set
+This directory is the authoritative human catalogue of durable architecture decisions. Product lifecycle status is separate and remains owned by Product Control.
+
+## Foundational decisions
 
 - [001 Modular monolith architecture](./001-modular-monolith-architecture.md)
 - [002 Supabase for MVP](./002-supabase-for-mvp.md)
@@ -10,39 +13,64 @@ This section contains the active architecture decision records for the current r
 - [004 Frontend layer rules](./004-frontend-layer-rules.md)
 - [005 Three-layer SC test strategy](./005-three-layer-sc-test-strategy.md)
 - [006 Post-reorganization architecture](./006-post-reorganization-architecture.md)
+
+## Coherence-era decisions
+
+- [ADR-001 Coherence dead-code deletion](../adr/ADR-001-coherence-deadcode-deletion.md)
+- [ADR-002 Coherence score versioning](../adr/ADR-002-coherence-score-versioning.md)
+- [ADR-003 Coherence alert ledger](../adr/ADR-003-coherence-alert-ledger-v0-v1.md)
 - [ADR-004 Circuit breakers](./ADR-004-circuit-breakers.md)
-- [ADR-009 Coherence Score v2 — Evidence-Aware, Explainable, Bottom-Up](./ADR-009-evidence-oriented-coherence-orchestration.md)
+- [ADR-009 Evidence-oriented Coherence orchestration](./ADR-009-evidence-oriented-coherence-orchestration.md)
 
-> **Reserved (in-flight, not yet filed):** ADR-010 (Evidence Maturity), ADR-011 (Evidence Intelligence), ADR-012 (deferred) are referenced in `CHANGELOG.md` / `CLAUDE.md`. The v3.0 canon starts at ADR-013 to avoid collision.
+> Historical numbering contains collisions between foundational `004-...` and later `ADR-004`. Do not infer chronology from the number alone. New decisions continue the v3 canon sequence.
 
-## C2Pro v3.0 — Project Intelligence Overlay (ADR-013 → ADR-025)
+## C2Pro v3 / Project Intelligence spine
 
-Canonical set ratified 2026-06-07 by multi-model arbitration (DeepSeek / Codex / Claude / Gemini blueprints + Architecture Challenger verdict; sources in [`docs/audits/`](../../audits/)). Cross-cutting invariant **INV-1 (Evidence & Provenance, tiered)** is defined in ADR-013 and extends the in-flight evidence layer. Later accepted product decisions extend the original set without rewriting its history.
+- [ADR-013 Typed Graph Contract & Runtime Correctness](./ADR-013-typed-graph-contract-runtime-correctness.md)
+- [ADR-014 Project State Model](./ADR-014-project-state-model.md)
+- [ADR-015 Temporal Intelligence Layer](./ADR-015-temporal-intelligence-layer.md)
+- [ADR-016 Semantic Diff & Change-Impact Engine](./ADR-016-semantic-diff-change-impact-engine.md)
+- [ADR-017 ProjectGraph Orchestration](./ADR-017-projectgraph-two-tier-orchestration.md)
+- [ADR-018 Project Health Engine](./ADR-018-project-health-engine.md)
+- [ADR-019 Alert Correlation & Action Lifecycle](./ADR-019-alert-correlation-action-lifecycle.md)
+- [ADR-020 HITL Workflow System](./ADR-020-hitl-workflow-system.md)
+- [ADR-021 Read-Model & Briefing Projection](./ADR-021-read-model-briefing-projection.md)
+- [ADR-022 Contract Clarity Findings](./ADR-022-contract-clarity-findings.md)
+- [ADR-023 Agentic Coherence Architecture](./ADR-023-agentic-coherence-architecture.md)
+- [ADR-024 Single-Document Activation](./ADR-024-single-document-activation.md)
+- [ADR-025 Canonical Project Controls / WBS Backbone](./ADR-025-canonical-project-controls-wbs-backbone.md)
+- [ADR-026 Trusted-State Commit Boundary](./ADR-026-trusted-state-commit-boundary.md)
+- [ADR-027 Processing Authority & Checkpoint-Lineage Fencing](./ADR-027-processing-authority-checkpoint-lineage.md)
+- [ADR-028 Production Qualification & Composite Runtime Identity](./ADR-028-production-qualification-composite-runtime.md)
 
-- [ADR-013 Typed Graph Contract & Runtime Correctness Baseline](./ADR-013-typed-graph-contract-runtime-correctness.md) — **P0 Foundation**
-- [ADR-014 Project State Model (Canonical Aggregate)](./ADR-014-project-state-model.md) — **P0 Foundation / keystone** · hosts the Future Bounded-Context Reservation Plan (Procurement, Stakeholder)
-- [ADR-015 Temporal Intelligence Layer](./ADR-015-temporal-intelligence-layer.md) — **P0 Foundation**
-- [ADR-016 Semantic Diff & Change-Impact Engine](./ADR-016-semantic-diff-change-impact-engine.md) — **P0→P1 Core (the wedge)**
-- [ADR-017 ProjectGraph Orchestration (Two-Tier, Async)](./ADR-017-projectgraph-two-tier-orchestration.md) — **P1 Core**
-- [ADR-018 Project Health Engine](./ADR-018-project-health-engine.md) — **P0/P1 primary product surface; six-dimension Health/Coherence/Alerts clarification 2026-09-13**
-- [ADR-019 Alert Correlation & Action Lifecycle](./ADR-019-alert-correlation-action-lifecycle.md) — **P2 Action/HITL differentiation; alert visibility is cross-cutting**
-- [ADR-020 HITL Workflow System](./ADR-020-hitl-workflow-system.md) — **P2 Differentiation**
-- [ADR-021 Read-Model & Briefing Projection](./ADR-021-read-model-briefing-projection.md) — **P3 · Deferred**
-- [ADR-022 Contract Clarity Findings (Health v0, Findings-Only)](./ADR-022-contract-clarity-findings.md) — **P2 · extends ADR-018** · resolves TASK-V3-P1-SCOPE-11
-- [ADR-023 Agentic Coherence Architecture](./ADR-023-agentic-coherence-architecture.md) — **Proposed; not required for current product-control activation**
-- [ADR-024 Single-Document Activation](./ADR-024-single-document-activation.md) — **Accepted P0b product activation**
-- [ADR-025 Canonical Project Controls Backbone — One Hierarchical WBS per Project](./ADR-025-canonical-project-controls-wbs-backbone.md) — **Accepted P1 Product Foundation**
+## Current critical architecture path
 
-**Critical path:** 013 → 014 → 015 (revisions) → 016 (change) → 018/024 (current-state product) → 025 (canonical Project Controls backbone). ADR-017/023 extend relational/agentic depth but are not allowed to block the user-visible product path.
+`ADR-013 → ADR-014 → ADR-015 → ADR-016 → ADR-018/024 → ADR-025`
 
-**Product-control red line:** a project has one canonical hierarchical WBS. Budget, Schedule, Procurement, Stakeholders/RACI, Alerts, Evidence and Changes attach to that tree (or explicitly project-level scope). Discipline branches are not separate WBSs.
+Trust and operational correctness cross-cut that path:
 
-**Evidence red line:** `Unknown` remains null/insufficient evidence. Coherence/Health/Alerts may drill down through the WBS only when evidence supports the statement; no blind arithmetic roll-up and no unknown-to-zero conversion.
+`ADR-020 → ADR-026 → ADR-027 → ADR-028`
 
-**Rejected from canon:** Passive Ingestion Mesh as an ADR; full event sourcing; absolute evidence veto; agent-mesh orchestration as a prerequisite for product value; BIM/IFC, mobile field app, native Gantt, Neo4j, NL rules engine, plugin marketplace before validated need.
+## Interpretation rules
 
-## Related Sections
+- **Accepted design != deployed != PROD_VALIDATED.**
+- Realization/deployment/prod-validation fields belong to Product Control.
+- A merged implementation may satisfy an ADR without proving production user value.
+- If implementation intentionally contradicts an accepted ADR, amend/supersede the ADR explicitly.
+- Operational CI tuning does not require an ADR unless it changes a durable authority/security boundary.
 
-- [Architecture index](../README.md)
-- [Archived decisions](../../archive/architecture/decisions/)
-- [Documentation index](../../README.md)
+## Product red lines
+
+- one project → one canonical hierarchical WBS;
+- Unknown/null is never coerced to zero/green;
+- Health, Coherence and Alerts are different signals;
+- pending/rejected AI output cannot mutate trusted canonical state;
+- stale processing/checkpoint lineage cannot become current;
+- production evidence cannot self-promote Product Control.
+
+## Related
+
+- [Current technical baseline](../C2PRO_TECHNICAL_BASELINE_2026-10-01.md)
+- [Architecture index](../../ARCHITECTURE_INDEX.md)
+- [Documentation authority](../../DOCUMENTATION_AUTHORITY.md)
+- [Archived architecture](../../archive/architecture/)

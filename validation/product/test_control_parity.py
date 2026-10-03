@@ -59,6 +59,45 @@ def test_md_missing_key_detected() -> None:
     assert any("MD missing" in p and "adr.ADR-024.realization" in p for p in problems), problems
 
 
+def test_new_architecture_adrs_are_parity_checked() -> None:
+    """ADR-026..028 lifecycle state is machine-owned and must project exactly to Markdown."""
+    canon = c.extract_canonical(c.load_yaml())
+    md = c.parse_md_block(_MD_TEXT)
+    expected = {
+        "ADR-026": ("Accepted", "WIRED", "NONE", "NONE"),
+        "ADR-027": ("Accepted", "WIRED", "NONE", "NONE"),
+        "ADR-028": ("Accepted", "SCAFFOLDED", "NONE", "NONE"),
+    }
+    for adr, (design, realization, deployment, prod_validation) in expected.items():
+        values = {
+            f"adr.{adr}.design": design,
+            f"adr.{adr}.realization": realization,
+            f"adr.{adr}.deployment": deployment,
+            f"adr.{adr}.prod_validation": prod_validation,
+        }
+        for key, value in values.items():
+            assert canon[key] == value
+            assert md[key] == value
+
+
+def test_adr_design_status_md_drift_is_detected() -> None:
+    mutated = _MD_TEXT.replace(
+        "adr.ADR-026.design=Accepted",
+        "adr.ADR-026.design=Proposed",
+    )
+    problems = _compare_with_mutated_md(mutated)
+    assert any("VALUE DRIFT" in p and "adr.ADR-026.design" in p for p in problems), problems
+
+
+def test_new_architecture_adr_md_drift_is_detected() -> None:
+    mutated = _MD_TEXT.replace(
+        "adr.ADR-026.realization=WIRED",
+        "adr.ADR-026.realization=DEPLOYED",
+    )
+    problems = _compare_with_mutated_md(mutated)
+    assert any("VALUE DRIFT" in p and "adr.ADR-026.realization" in p for p in problems), problems
+
+
 def test_wbs_realization_contradiction_detected() -> None:
     mutated = _MD_TEXT.replace("wbs.PWBS-OPS-TRUST.realization=DEPLOYED", "wbs.PWBS-OPS-TRUST.realization=NONE")
     problems = _compare_with_mutated_md(mutated)

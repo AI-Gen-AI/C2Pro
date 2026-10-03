@@ -13,11 +13,11 @@ PR / push to main
 │
 ├── ci.yml ──────────────── detect-changes (paths-filter)
 │     ├─ backend lane (apps/api/** changed)
-│     │    ├─ backend-lint          ruff                    ~40s   ADVISORY
-│     │    ├─ backend-typecheck     mypy                    ~2m    ADVISORY
+│     │    ├─ backend-lint          ruff                    ~40s   required
+│     │    ├─ backend-typecheck     mypy                    ~2m    required
 │     │    ├─ backend-unit          pytest unit + ADR/S5    ~3m    required
 │     │    ├─ backend-security      multi-tenant isolation  ~3m    required
-│     │    ├─ backend-integration   pytest integration      ~3m    ADVISORY
+│     │    ├─ backend-integration   pytest integration      ~3m    required
 │     │    └─ backend-migrations    alembic from scratch    ~2.5m  required (only on migration changes)
 │     ├─ frontend lane (apps/web/** changed)
 │     │    ├─ frontend-quality      tsc + eslint + ADR-009  ~1.5m  required
@@ -60,15 +60,13 @@ Typical PR wall-clock: **~3–3.5 min** (docs-only PRs: **<1 min** — every lan
 | `real-document-operability.yml` | — | — | — | ✓ (operator) | — |
 | `release.yml` | — | — | — | ✓ | ✓ `v*` |
 
-## Advisory (non-blocking) jobs
+## CI gate classification
 
-Three jobs run but do not gate merges. All are tracked in `backlogs/DEV_DEVOPS.md`:
+The active `ci-status` gate currently has **no advisory jobs** (`ADVISORY_JOBS=()`). In particular, `backend-lint`, `backend-typecheck` and `backend-integration` are all members of `REQUIRED_JOBS` and therefore fail `CI Status` when their affected lane runs and does not succeed.
 
-| Job | Why advisory | How to promote to required |
-|---|---|---|
-| `backend-integration` | 14 failures + 10 errors pre-existing on main (sqlalchemy pool teardown), previously hidden by `continue-on-error` | Fix the suite (TASK-DEV-004), then move the job entry from `ADVISORY_JOBS` to `REQUIRED_JOBS` in the `ci-status` gate step of `ci.yml` |
-| `backend-typecheck` (mypy) | strict-mode baseline never enforced; large error count expected | Clean the baseline (TASK-DEV-006), then remove `continue-on-error: true` and move it into `REQUIRED_JOBS` |
-| `backend-lint` (ruff) | ~57 pre-existing violations under ruff==0.2.1 (`ruff check .` was never a CI gate; the Husky pre-commit hook does not reliably run) | Clean the baseline — 35 of 57 are `--fix`-able (TASK-DEV-009) — then move it into `REQUIRED_JOBS` |
+Path-filtered lanes may legitimately report `skipped`; the aggregate `CI Status` accepts only `success` or `skipped` for every required lane.
+
+Historical TASK-DEV references describing those jobs as advisory are retained only as history. Any future gate reclassification must be made in `.github/workflows/ci.yml` first and then reflected here; current remediation belongs to the `.c2pro` control/work-envelope plane plus the corresponding GitHub issue/PR.
 
 ## Required Secrets and Variables
 
@@ -95,20 +93,18 @@ No longer needed by any workflow (were used by the retired `deploy-production.ym
 | `Preview` / `c2pro-api / production` | Created by the Vercel / Railway GitHub apps | Leave alone |
 | `staging` | Leftover from deleted `deploy-staging.yml` | Delete |
 
-## Branch Protection for `main` (do this — currently unprotected)
+## Branch Protection for `main` — active repository ruleset
 
-**Settings → Branches → Add branch ruleset** (or classic protection rule) for `main`:
+The active repository ruleset `Protect main` applies to the default branch. It requires a pull request, blocks non-fast-forward updates, and requires these status checks:
 
-1. Require a pull request before merging (approvals: per team size; 0 is acceptable solo, the check gate still applies).
-2. Require status checks to pass:
+
    - **`CI Status`** (the `ci-status` join job — the only check from `ci.yml` you should require)
    - **`gitleaks`** (from Secret Scan)
    - **`Install Drift Guard`**
    - Do **not** require a `Vercel` check: most PR branches deliberately do not create a Vercel deployment, and frontend production build validation already runs inside CI when web paths change.
-3. Block force pushes (default in rulesets).
-4. Do **not** require individual lane jobs (`backend-unit`, etc.) — they legitimately skip on unrelated changes; `CI Status` accounts for that.
+Do **not** add individual lane jobs as required checks: they legitimately skip on unrelated changes and `CI Status` is the aggregate gate. Do **not** require Vercel because ordinary PR branches deliberately do not deploy.
 
-With auto-deploy on `main`, this ruleset *is* the production deploy gate.
+With auto-deploy on `main`, this active ruleset is the repository-side production deploy gate.
 
 ## Deploys, Migrations, Rollback
 
@@ -153,7 +149,7 @@ Everything is additive — no pipeline rewrites:
 | qa-swarm | weekly Mon 02:00 | opens draft PRs with generated tests; consumes `ANTHROPIC_API_KEY` |
 | dependency-audit | weekly Mon 06:00 | new |
 | codeql | weekly Mon 03:26 | new |
-| i13-real-e2e-scheduled | **paused** | fixture connects to Postgres 5432 instead of 5433 — re-enable the cron in the workflow after the app-side fix (`backlogs/DEV_DEVOPS.md`) |
+| i13-real-e2e-scheduled | **paused** | fixture connects to Postgres 5432 instead of 5433 — re-enable the cron only after the app-side fix is completed through current `.c2pro` / GitHub work authority; `backlogs/DEV_DEVOPS.md` is legacy context only |
 
 ## Troubleshooting
 
@@ -166,10 +162,11 @@ Everything is additive — no pipeline rewrites:
 
 ---
 
-Last Updated: 2026-10-01
+Last Updated: 2026-10-03
 
 Changelog:
 
+- 2026-10-03: Reconciled CI gate classification with active `ci.yml`: `backend-lint`, `backend-typecheck` and `backend-integration` are required, and `ADVISORY_JOBS` is empty.
 - 2026-10-01: Added explicit Vercel Git deployment allowlist and `preview/**` convention to stop per-commit preview churn; ordinary PRs remain gated by GitHub CI without consuming Vercel deployment quota. Removed `Vercel` as a branch-protection check because previews are no longer universal.
 - 2026-07-12: Full rewrite for the CI/CD overhaul — consolidated ci.yml + ci-status gate, SHA-pinned actions, CodeQL/dependency-review/dependency-audit/dependabot added, release.yml (tag-driven certification, platform-owned deploys), deploy-production.yml retired, artifact purge, advisory-job policy, extension recipe.
 - 2026-03-22: Added release promotion, rollback, and environment signoff workflow to close the release-governance leadership gap.

@@ -1,7 +1,7 @@
 schema: c2pro-product-control-v1
 schema_version: 7
 repository: AI-Gen-AI/C2Pro
-generated: "2026-09-27"
+generated: "2026-10-03"
 control_status: reconciliation
 
 # Machine source of truth for product programme state. Edit this file first;
@@ -22,7 +22,7 @@ parity:
     - product_semantics.canonical_dimensions
     - PWBS-PROJECT-CONTROLS.priority
     - "product_wbs[*].id + realization_status + work_status (canonical 8-plane set)"
-    - "adr(ADR-018,ADR-024,ADR-025).{realization_status,deployment_status,prod_validation_status}"
+    - "adr(ADR-018,ADR-024,ADR-025,ADR-026,ADR-027,ADR-028).{design_status,realization_status,deployment_status,prod_validation_status}"
     - p0b_vertical_contract.done_definition (sha256-16 digest)
     - p0b_vertical_contract.invariant_ids
     - "qualification_control.lanes[*].{qualification_status,bundle_ref,bundle_sha256,lifecycle_targets}"
@@ -48,7 +48,7 @@ development_execution_authority:
     This product plane records target/state; it does not authorize merges or production mutation.
 
 production_position:
-  reconciled_against_main_sha: 0db53883a8942f7097fe9ce2e0e6c63397948fbb
+  reconciled_against_main_sha: 314fc39b0b4c25c8c0ca99977314ba1bb9083208
   deployed_runtime_sha: UNVERIFIED
   observed_production_evidence:
     - "kuwait2 doc c510de21: enqueue -> worker -> SUCCESS on dedicated Railway Redis (historical P0a evidence)"
@@ -69,7 +69,7 @@ production_position:
     - "P0b L4-5 is release-ready and merged but still not PROD_VALIDATED end-to-end on the current runtime"
     - "P0c What Changed is WIRED on main but deployment/prod-validation of the complete user journey is not proven"
     - "P0d Current State Reporting is WIRED on main but deployment/prod-validation is not proven"
-    - "#706 full production end-user GOAL remains open: #710 is deployed; #712 and #713 are merged/deployed but have unresolved fix-forward acceptance defects; #711 and #714 remain incomplete; #715 has not run"
+    - "#706 full production end-user GOAL remains open: #710/#711/#714 implementations are closed; #758 checkpoint-lineage fencing is closed; #712 and #713 remain open fix-forward acceptance work; #715 harness is merged but the full production qualification has not been accepted; #690 remains an external prerequisite"
     - "ADR-025 now has canonical-WBS authority and several cross-domain links wired on main, but one-logical-root, baseline/change governance, remaining alert/evidence/change linkage and production journey are not fully proven"
     - "Procurement Plan -> BoQ/RFQ -> award -> governed stakeholder communications is not delivered end-to-end"
 
@@ -129,6 +129,51 @@ reconciliation_delta_2026_09_27:
     harden exact-head review enforcement; they are control-plane work and do not substitute for #706 product proof.
     The unresolved Railway staged API patch remains a fail-closed #715 concern. None of these merge/deployment/control
     facts promotes P0b/P0c/P0d or proves product_value_delivered.
+
+reconciliation_delta_2026_10_01:
+  previous_main_sha: 0db53883a8942f7097fe9ce2e0e6c63397948fbb
+  current_main_sha: 33650a28a930d82a7bd65d98b50981145b3fd1d1
+  material_main_advances:
+    - "#781 merged backend support for Clerk v2 organization claim shapes; auth/tenant derivation remains fail-closed while accepting the supported v1/v2 claim forms."
+    - "#711 durable processing/recovery work is closed; later #758 closes the checkpoint-lineage authority gap that independent review found at the LangGraph persistence boundary."
+    - "#714 trusted-state commit and projected-Coherence implementation is merged/closed after #758 fencing was integrated. Pending/rejected candidates remain non-authoritative; approval is bound to exact reviewed state."
+    - "#715 production synthetic acceptance harness implementation is merged on main. The issue remains open because implementation of the harness is not equivalent to an accepted full-journey production qualification."
+    - "#775 closes the Clerk organization-token synchronization races: active-org auth uses the organization-scoped cache-bypassed token and superseded org-token requests cannot overwrite newer auth state."
+    - "#779 bounds automatic Vercel Git deployments to main, hotfix/**, release-candidate/** and preview/**, while GitHub CI remains authoritative for ordinary PRs."
+    - "R17 Sonar/security-hotspot cleanup completed without Product Control promotion; code quality/security evidence is a control, not user-value acceptance."
+  still_open_acceptance:
+    - "#706 full production end-user journey GOAL"
+    - "#715 accepted full production qualification"
+    - "#690 dedicated non-customer production qualification identity/tenant evidence"
+    - "#712 truthful lifecycle fix-forward"
+    - "#713 evidence-locator truthfulness fix-forward"
+  control_conclusion: >
+    Repository realization has advanced substantially, including trusted-state commit semantics,
+    processing/checkpoint authority fencing and the production qualification harness. None of those
+    merge facts self-promotes lifecycle state. Product value remains unvalidated until the dedicated
+    production qualification prerequisites are satisfied and an accepted full end-user journey
+    provides bounded evidence. P0b/P0c/P0d qualification lanes therefore remain conservative.
+
+reconciliation_delta_2026_10_03:
+  previous_main_sha: 33650a28a930d82a7bd65d98b50981145b3fd1d1
+  current_main_sha: 314fc39b0b4c25c8c0ca99977314ba1bb9083208
+  commits_ahead: 38
+  material_main_advances:
+    - "#715 hardening continued through PRs #782-#787: Railway production identity observation, tenant RLS context for the read-only verifier, bounded Clerk production-preflight waits, session-first canonical-origin auth and current sign-out selectors are now merged. These changes strengthen the qualification harness but do not constitute accepted production qualification."
+    - "#790/#789 hardens analysis/processing SSE auth: bearer credentials are forwarded server-side and query-string bearer tokens are rejected/removed from client URLs. This is security/runtime hardening, not a Product-Control promotion."
+    - "#793/#792 preserves the explicit human-review boundary: when graph state says human_approval_required=True, N13 forces HIGH impact so confidence cannot auto-approve that item. High-confidence LOW/MEDIUM items may still follow the non-gated policy path when no explicit human requirement exists."
+  still_open_acceptance:
+    - "#706 full production end-user journey GOAL"
+    - "#715 accepted full production qualification"
+    - "#690 dedicated non-customer production qualification identity/tenant evidence"
+    - "#712 truthful lifecycle fix-forward"
+    - "#713 evidence-locator truthfulness fix-forward"
+    - "#792 remains open pending acceptance/closure even though the #793 runtime fix is merged"
+  control_conclusion: >
+    Main advanced by 38 commits after the 2026-10-01 reconciliation, primarily through production-qualification,
+    authentication/SSE hardening and the explicit-human-review fix. These are material realization improvements
+    but do not prove the full production journey or self-promote any lifecycle lane. Product value remains
+    unvalidated; P0b/P0c/P0d qualification state stays conservative.
 
 north_star:
   full_product: >
@@ -213,7 +258,7 @@ corrected_current_claims:
     truth: "Rejected. They are three different signals sharing the six canonical dimensions."
 
 adr_namespaces:
-  v3_canon: "docs/architecture/decisions/ADR-004,009,013..025 — C2Pro v3.0 spine"
+  v3_canon: "docs/architecture/decisions/ADR-004,009,013..028 — C2Pro v3.0 spine"
   foundational: "docs/architecture/decisions/001..006"
   coherence_era: "docs/architecture/adr/ADR-001..003"
   collisions:
@@ -251,12 +296,15 @@ adr_realization:
   - {adr: "ADR-017-projectgraph", ns: v3_canon, priority: P1, design_status: Accepted, realization_status: SCAFFOLDED, deployment_status: BLOCKED, prod_validation_status: NONE, evidence: "project graph feature-gated", gap: "flag-gated OFF / Tier-2 not qualified"}
   - {adr: "ADR-018-health-engine", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: WIRED, deployment_status: DEPLOYED, prod_validation_status: NOT_VALIDATED, evidence: "HealthVector and GET health route wired", gap: "P0b user-visible production validation still open"}
   - {adr: "ADR-019-alerts-actions", ns: v3_canon, priority: P2, design_status: Accepted, realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE, evidence: "alert/action domain partial", gap: "P1 requires alert visibility/integration only; correlation/action automation remains later"}
-  - {adr: "ADR-020-hitl", ns: v3_canon, priority: P2, design_status: Accepted, realization_status: WIRED, deployment_status: PARTIAL, prod_validation_status: NONE, evidence: "real review UI/approval path plus V3 fenced resume, recovery, exact-row identity and idempotent final-decision audit are wired on main", gap: "latest hardened runtime is not independently deployment/prod-validated and full Project Controls action loop remains later"}
+  - {adr: "ADR-020-hitl", ns: v3_canon, priority: P2, design_status: Accepted, realization_status: WIRED, deployment_status: PARTIAL, prod_validation_status: NONE, evidence: "real review UI/approval path plus V3 fenced resume, recovery, exact-row identity and idempotent final-decision audit are wired on main", gap: "ConfidenceRouter still auto-approves high-confidence LOW/MEDIUM impact items; ADR-020 named consequential-decision automation policy is only partially realized; latest hardened runtime is not independently prod-validated"}
   - {adr: "ADR-021-briefing", ns: v3_canon, priority: P3, design_status: Deferred, realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE, evidence: "briefing projection scaffold", gap: "deferred"}
   - {adr: "ADR-022-contract-clarity", ns: v3_canon, priority: P2, design_status: Accepted, realization_status: WIRED, deployment_status: DEPLOYED, prod_validation_status: NOT_VALIDATED, evidence: "contract clarity findings path", gap: "not user/prod validated"}
   - {adr: "ADR-023-agentic-coherence", ns: v3_canon, priority: P1, design_status: Proposed, realization_status: DESIGNED, deployment_status: NONE, prod_validation_status: NONE, evidence: "ADR + roadmap", gap: "not built"}
   - {adr: "ADR-024-single-doc-activation", ns: v3_canon, priority: P0b, design_status: Accepted, realization_status: WIRED, deployment_status: PARTIAL, prod_validation_status: NONE, evidence: "L4-1..L4-5 implementation is merged/release-ready; production incidents prove the path reached HITL but not the completed Health outcome", gap: "deploy current hardened main and obtain end-to-end production validation"}
   - {adr: "ADR-025-canonical-project-controls-wbs-backbone", ns: v3_canon, priority: P1, design_status: Accepted, realization_status: PARTIAL, deployment_status: NONE, prod_validation_status: NONE, evidence: "wbs_nodes is canonical runtime authority on main; legacy WBS writes are blocked; RACI/BOM/MCP plus schedule/spend consumers are reconciled", gap: "one-logical-root, baseline/change governance, complete budget/schedule/alert/evidence/change linkage and deployment/prod-validation remain open"}
+  - {adr: "ADR-026-trusted-state-commit", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: WIRED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#714 trusted-state commit/projected-Coherence implementation merged on main after #758 lineage fencing", gap: "no independent deployed-runtime or full production-journey validation claim"}
+  - {adr: "ADR-027-processing-authority-checkpoint-lineage", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: WIRED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#711 processing authority plus #758 checkpoint-lineage fencing merged on main", gap: "deployment/production acceptance remains governed by the #706/#715 qualification path"}
+  - {adr: "ADR-028-production-qualification-composite-runtime", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#715/#733 harness, provider-identity verifier and evidence contracts are merged", gap: "#715 run/acceptance and #690 dedicated qualification identity/tenant remain open"}
 
 coherence_runtime_reconciliation:
   status: COMPLETE
@@ -276,11 +324,11 @@ capability_planes:
   - {id: ACT-HEALTH, name: "Activation / Health (single-document)", adrs: [ADR-018, ADR-024, ADR-022]}
   - {id: COHERENCE-XDOC, name: "Relational Coherence / cross-document", adrs: [ADR-009, ADR-017, ADR-023]}
   - {id: TEMPORAL-CHANGE, name: "Temporal / Change-Impact", adrs: [ADR-015, ADR-016]}
-  - {id: ALERTS-ACTIONS-HITL, name: "Alert visibility + later Action/HITL automation", adrs: [ADR-019, ADR-020]}
+  - {id: ALERTS-ACTIONS-HITL, name: "Alert visibility + later Action/HITL automation", adrs: [ADR-019, ADR-020, ADR-026]}
   - {id: PROJECT-CONTROLS, name: "Canonical WBS / Budget / Schedule / Deliverables / Stakeholders", adrs: [ADR-018, ADR-025]}
   - {id: PROCUREMENT, name: "Procurement workflows (Plan/RfQ/BoQ/RACI/comms)", adrs: [ADR-025]}
   - {id: EXEC-REPORTING, name: "Current-state / executive / briefing / portfolio reporting", adrs: [ADR-021]}
-  - {id: OPS-TRUST, name: "Ops / Trust (RLS, PII, resilience, infra)", adrs: [ADR-004]}
+  - {id: OPS-TRUST, name: "Ops / Trust (RLS, PII, resilience, infra)", adrs: [ADR-004, ADR-027, ADR-028]}
 
 product_wbs:
   - id: PWBS-ACT-HEALTH
@@ -511,7 +559,7 @@ risks:
   - "R4: Honest-null erosion or blind averaging in WBS/project roll-ups."
   - "R5: Building Procurement before WBS/budget/schedule/stakeholder linkage is stable, causing rework."
   - "R6: MD/YAML drift; parity guard remains mandatory."
-  - "R7: High-velocity parallel lanes can make the MASTER stale quickly; reconcile against an exact main SHA before each planning/merge milestone."
+  - "R7: High-velocity parallel lanes can make Product Control stale quickly; reconcile against an exact main SHA before each planning/merge milestone."
 
 pr_disposition:
   "571": {action: HOLD_then_amend, reason: "historical product-closure-adjacent framing; retain only as corrected history"}
@@ -522,9 +570,9 @@ pr_disposition:
   "650": {action: MERGED_HITL_V3_IDEMPOTENCY, reason: "final decision audit idempotency + exact-identity reconciliation integrated"}
 
 next_authorized_action:
-  - "In parallel, close #690 through the supported Clerk Production operator path; Line B must not manually create customer-like DB identities or reuse customer/CI tenants."
-  - "Continue only the already-authorized #706 P0 remediation wave in Line A: #710 is DONE/live; #711-#714 must reach their required merged/deployed acceptance before the final production journey. Line B does not duplicate those implementation lanes."
-  - "When #690 and required #711-#714 remediation are READY, implement/execute #715 synthetic production acceptance. Rebind exact Railway API/Worker/Scheduler plus Vercel production identities immediately before the run; no mocks or HITL bypass flags."
-  - "Capture the #683 P0b Health/persistence assertions inside the #715 deployed journey where applicable; a pre-remediation diagnostic run must not be promoted as final #706/P0b production evidence."
-  - "After accepted #715/#683 evidence, Line B reconciles Product Control; then #686 P0c and #687 P0d may qualify on the same clean synthetic tenant/project where their own gates are met."
-  - "Stop after the P0 qualification wave for a fresh reconciliation before any P1/Coherence/Procurement implementation. No direct main/production mutation or lifecycle promotion is authorized by this snapshot."
+  - "Close #690 through the supported Clerk Production operator path; do not reuse customer/CI identities and do not synthesize customer-like mappings outside normal production administration."
+  - "Close the still-open #706 fix-forward workstreams #712 and #713 on exact reviewed heads; #711/#714/#758 are already closed and must not be reopened by this control snapshot."
+  - "After #690 plus the required open #712/#713 acceptance blockers are resolved and the deployed runtime is rebound, execute #715 against the dedicated synthetic tenant. The merged harness is tooling, not acceptance."
+  - "Immediately before #715, independently bind exact Railway API/Worker/Scheduler and Vercel production identities and fail closed on unresolved staged configuration, mocks, auth bypass or fixture mismatch."
+  - "Capture the #683 P0b Health/persistence assertions inside the accepted #715 journey where applicable; then qualify #686 P0c and #687 P0d only where their own evidence contracts pass."
+  - "After the P0 qualification wave, reconcile Product Control explicitly before any lifecycle promotion or new P1/Coherence/Procurement authorization. No documentation/CI/deployment event self-promotes state."

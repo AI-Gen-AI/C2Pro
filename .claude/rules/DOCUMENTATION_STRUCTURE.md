@@ -1,122 +1,55 @@
-# Documentation Structure - MUST FOLLOW
+# C2Pro Documentation Structure — MUST FOLLOW
 
-## ⚠️ CRITICAL RULE - NO EXCEPTIONS ⚠️
+**Authority:** `docs/DOCUMENTATION_AUTHORITY.md`  
+**Reconciled:** 2026-10-01
 
-**NEVER create additional task-specific documentation files.**
+## Core rule
 
-This is MANDATORY to:
-- Avoid unnecessary work
-- Keep context unified
-- Maintain single source of truth
-- Prevent documentation sprawl
+Do not create a second source of truth.
 
----
+C2Pro intentionally uses different authorities for different concerns:
 
-## The Rule
+- **Product programme state:** `validation/product/c2pro-master-product-control-v1.yaml` + guarded human projection.
+- **Development execution:** `.c2pro/control/` + work envelopes.
+- **Architecture decisions:** `docs/architecture/decisions/`.
+- **Current architecture synthesis:** `docs/architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md`.
+- **Operations:** focused runbooks under `docs/runbooks/`.
+- **Historical evidence:** audit/archive material.
 
-**ALL task documentation MUST go in exactly TWO locations:**
+## Where new documentation belongs
 
-1. **`backlogs/BCK_*.md`** - Task specifications, completion status, implementation details
-2. **`blackboard/SESSION_*.md`** - Active session work, scratch notes, temporary analysis
+Create a standalone document only when it has a durable purpose:
 
-**NEVER create files like:**
-- ❌ `TASK-BCK-027_ORCHESTRATION_AUDIT_REPORT.md`
-- ❌ `TASK-BCK-026_ALERT_UNIFICATION_PLAN.md`
-- ❌ `FEATURE_XYZ_IMPLEMENTATION_GUIDE.md`
-- ❌ Any other task-specific standalone files
+- ADR → `docs/architecture/decisions/`
+- current architecture baseline/note → `docs/architecture/`
+- product control/evidence contract → `docs/product/`
+- operational procedure → `docs/runbooks/`
+- dated audit/reconciliation evidence → `docs/audits/`
+- temporary session notes → working/control-plane location; archive when no longer active
 
----
+Do **not** create completion-summary Markdown for every task. PR/issue/CI history is normally sufficient implementation evidence.
 
-## Correct Approach
+## Backlogs and blackboard
 
-### For Task Documentation
-```
-✅ Add to backlogs/BCK_BACKEND.md under the task section
-✅ Include all findings, decisions, and implementation details inline
-✅ Update completion checklists directly in the backlog
-```
+`C2PRO_MASTER_BACKLOG.md`, `backlogs/*.md` and legacy blackboard material are historical/compatibility sources. They are **not** the current product or execution authority.
 
-### For Session Work
-```
-✅ Use blackboard/SESSION_*.md for active work
-✅ Consolidate findings back into backlogs/ when task completes
-✅ Delete or archive session notes after consolidation
-```
+Do not route new canonical status into them merely because older instructions did so.
 
----
+## Architecture changes
 
-## Why This Matters
+A material architecture change must either:
 
-1. **Context Efficiency**: All task info in one place = faster lookups
-2. **No Duplication**: Single source of truth for each task
-3. **Less Noise**: Fewer files = clearer project structure
-4. **Token Savings**: Claude doesn't need to read multiple files for one task
-5. **Maintenance**: Updates happen in one place, not scattered across files
+1. conform to an existing accepted ADR; or
+2. amend/supersede/create an ADR.
 
----
+Never silently rewrite architecture through code plus an implementation summary.
 
-## Examples
+## Status claims
 
-### ❌ WRONG - Multiple Files
-```
-TASK-BCK-027/
-├── ORCHESTRATION_AUDIT_REPORT.md (485 lines)
-├── IMPLEMENTATION_PLAN.md (320 lines)
-└── COMPLETION_SUMMARY.md (150 lines)
+Words such as `complete`, `production ready`, `deployed`, `validated` and `operational` must use the owning control-plane vocabulary and evidence.
 
-backlogs/BCK_BACKEND.md:
-- Brief reference to external files
-```
+Merge/CI/deploy != PROD_VALIDATED.
 
-**Problem**: 955 lines scattered across 3 files + backlog. Context fragmented.
+## Historical preservation
 
-### ✅ CORRECT - Unified Documentation
-```
-backlogs/BCK_BACKEND.md:
-#### TASK-BCK-027: Orchestration System Reconciliation
-
-**Implementation Status**: ✅ Completed (Module Deleted)
-
-**Audit Finding**:
-- core/ai/orchestration/ had ZERO production usage
-- analysis/adapters/graph/ is active N1-N17 pipeline
-- No overlap - different purposes
-- Decision: DELETE unused module instead of consolidating
-
-**Files Deleted**:
-- apps/api/src/core/ai/orchestration/ (4 files)
-- apps/api/tests/unit/core/ai/orchestration/ (3 files)
-
-**Verification**: 85/85 core AI tests passing
-
-**Checklist**:
-- [x] Audit completed
-- [x] Module deleted
-- [x] Tests passing
-```
-
-**Result**: All information in one place, ~150 lines total in backlog.
-
----
-
-## Enforcement
-
-This rule is enforced by:
-1. ✅ Project rules in `.claude/rules/DOCUMENTATION_STRUCTURE.md`
-2. ✅ Manual review before marking tasks complete
-3. ✅ Claude session instructions (this file)
-
-**Violation = Immediate correction required**
-
----
-
-## Related Rules
-
-- `.claude/rules/CRITICAL_BACKLOG_REQUIREMENT.md` - All tasks MUST be in C2PRO_MASTER_BACKLOG.md
-- This file - All task documentation MUST be in backlogs/ or blackboard/ ONLY
-
----
-
-*Last Updated*: 2026-04-06
-*Severity*: **CRITICAL**
-*Violation Impact*: Wasted effort, context fragmentation, maintenance burden
+Prefer reclassification/archival over deletion. Preserve rationale and auditability, but make lifecycle/authority explicit so historical text cannot masquerade as current truth.

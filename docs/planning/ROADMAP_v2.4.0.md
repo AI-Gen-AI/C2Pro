@@ -1,5 +1,10 @@
 ﻿# C2Pro Product Roadmap
 
+> **Lifecycle:** Historical strategic roadmap / supporting context  
+> **Not a live product-status authority.** Current lifecycle state is owned by `validation/product/c2pro-master-product-control-v1.yaml`; current architecture by accepted ADRs and `docs/architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md`.  
+> **Reclassified:** 2026-10-01
+
+
 **Contract Intelligence Platform - Master Development Plan**
 
 **Versión:** 2.4.0

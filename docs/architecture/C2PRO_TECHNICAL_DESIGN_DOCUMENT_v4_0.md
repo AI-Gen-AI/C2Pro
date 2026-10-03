@@ -1,4 +1,9 @@
 
+
+> **Lifecycle:** Supporting historical design — not current architecture authority.  
+> **Current authority:** `docs/architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md` + accepted ADRs in `docs/architecture/decisions/`.  
+> The dated content below is preserved as written for historical traceability; its former authority/status statements are superseded. Reclassified 2026-10-01.
+
 # C2Pro v4.0 — Technical Design Document (TDD)
 
 > **Document Type:** Technical Design Baseline with Governance Addendum  

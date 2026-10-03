@@ -1,49 +1,44 @@
 # C2Pro v4.1 — Platform Technical Design Document
 
-> **Document Type:** Canonical Platform Technical Design
+> **Lifecycle:** Supporting historical design — not the current architecture authority.  
+> Current synthesis: `docs/architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md`; accepted decisions: `docs/architecture/decisions/`. Reclassified 2026-10-01.
+
+
+> **Document Type:** Historical platform technical-design snapshot
 > **Version:** 4.1
 > **Date:** 2026-03-29
-> **Status:** Current
-> **Supersedes:** `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md` as the primary platform-wide technical design
+> **Historical status:** Current as of 2026-03-29; supporting only after 2026-10-01
+> **Historical relationship:** superseded v4.0 in March 2026; now itself superseded as current authority by the 2026-10-01 technical baseline + accepted ADRs
 > **Audience:** Engineering, QA, DevOps, Security, Product, Architecture Review Board
 
 ---
 
 ## 1. Purpose
 
-This document is the platform-wide technical design baseline for C2Pro.
+This document records the platform-wide technical-design baseline as understood on 2026-03-29. It remains useful for historical rationale and implementation context, but it does not define current lifecycle state or override later ADRs.
 
-It replaces the earlier frontend-heavy v4.0 document as the primary technical design reference and aligns architecture guidance with the current repository and delivery state.
+For current interpretation, start with:
 
-This document must be read together with:
-
-- `C2PRO_MASTER_BACKLOG.md`
-- `docs/architecture/decisions/006-post-reorganization-architecture.md`
-- `docs/testing/PHASE4_TDD_IMPLEMENTATION_ROADMAP.md`
-- `docs/testing/C2PRO_TEST_SUITES_INDEX_v1.1.md`
+- `docs/DOCUMENTATION_AUTHORITY.md`
+- `docs/architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md`
+- `docs/architecture/decisions/README.md`
+- `validation/product/c2pro-master-product-control-v1.yaml` when lifecycle status matters
 
 ---
 
 ## 2. Governance and Source-of-Truth Rules
 
-### 2.1 Delivery Governance
+### 2.1 Delivery Governance — historical note
 
-- `C2PRO_MASTER_BACKLOG.md` is the single source of truth for all open work.
-- Any newly discovered task must be added there with a stable ID.
-- Any completed task must be marked complete there when the implementing change lands.
-- Supporting documents may describe scope, evidence, or history, but they do not own task state.
+The March 2026 backlog-governance model described by earlier revisions is superseded. Current execution authority is the single-writer `.c2pro/` control plane; Product Control owns programme lifecycle state.
 
-### 2.2 Technical Governance
+### 2.2 Technical Governance — current interpretation
 
-- This document is the canonical platform-wide technical design.
-- ADR-006 is the canonical repo-structure and post-reorganization architecture baseline.
-- The v4.0 document remains useful as a detailed frontend implementation reference, but it is no longer the primary platform design document.
+Accepted ADRs and the dated current technical baseline take precedence over this document. This file must not be used to override later trust, WBS, temporal, qualification or deployment decisions.
 
-### 2.3 Current Project State
+### 2.3 Historical project-state snapshot
 
-- C2Pro is a monorepo with `apps/api` and `apps/web`.
-- Delivery status is approximately 90% complete.
-- The architecture is mature enough for release-candidate hardening; the remaining work is concentrated in release execution, evidence, and targeted hardening rather than core platform invention.
+The monorepo statement (`apps/api` + `apps/web`) remains structurally useful. Completion percentages and release-readiness language from the March snapshot are historical and must not be treated as current status.
 
 ---
 

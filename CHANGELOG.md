@@ -1,3 +1,25 @@
+## [Documentation / Architecture Reconciliation] - 2026-10-01
+
+### Added
+- Canonical documentation-authority policy (`docs/DOCUMENTATION_AUTHORITY.md`).
+- Current technical architecture baseline aligned with `main`.
+- ADR-026 trusted-state commit boundary.
+- ADR-027 processing authority and checkpoint-lineage fencing.
+- ADR-028 production qualification with composite runtime identity.
+- Repository documentation reconciliation audit.
+
+### Changed
+- Reconciled root/documentation/architecture indexes with the current stack and authority model.
+- Reconciled Product Control against current `main` without promoting any PROD_VALIDATED state.
+- Retired `docs/DECISION_LOG.md` as a second ADR authority.
+- Classified v4.0/v4.1 TDDs, ROADMAP v2.4 and C2PRO_MASTER_BACKLOG as supporting/historical where appropriate.
+- Corrected CI/CD documentation to reflect the active protected-main ruleset and bounded Vercel Git-deployment policy.
+
+### Governance
+- Merge, CI, deployment and documentation changes remain non-promoting controls.
+- #706/#715/#690 remain open at this reconciliation; #712/#713 remain fix-forward acceptance work.
+- Historical documentation is preserved for traceability instead of bulk-deleted.
+
 # Changelog
 
 All notable changes to C2Pro are tracked here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the repo uses Conventional Commits.

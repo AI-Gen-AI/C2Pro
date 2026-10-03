@@ -1,119 +1,105 @@
 # C2Pro Architecture Documentation Index
 
-> **Version:** 1.1.0
-> **Created:** 2026-03-22
-> **Last Updated:** 2026-03-29
-> **Status:** Current
-> **Purpose:** Single entry point for all architecture documentation
+> **Version:** 2.0.0  
+> **Last Updated:** 2026-10-03  
+> **Status:** Canonical navigation  
+> **Baseline:** `main@314fc39b0b4c25c8c0ca99977314ba1bb9083208`
 
-This index provides a consolidated view of all canonical architecture documents for C2Pro.
+## Authority by question
 
----
+Do not use one mixed precedence list for architecture, lifecycle and execution questions.
 
-## Current Governance Baseline
+### Architecture / design
 
-Architecture decisions for C2Pro should be read in this order:
+1. accepted ADRs under `docs/architecture/decisions/`;
+2. [current technical architecture baseline](./architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md);
+3. focused current specifications/runbooks;
+4. older TDDs/plans as supporting history.
 
-1. `C2PRO_MASTER_BACKLOG.md`
-   - Delivery and production-readiness source of truth.
-2. `docs/MASTER_DEVELOPMENT_STATUS.md`
-   - Compatibility pointer only.
-3. `docs/architecture/decisions/006-post-reorganization-architecture.md`
-   - Canonical repo-structure baseline after the February reorganization.
-4. `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md`
-   - Canonical platform-wide technical design.
-5. `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md`
-   - Supporting frontend implementation baseline.
-6. `docs/architecture/FLOW_DIAGRAMS.md` and `docs/architecture/diagrams/c2pro_master_flow_diagram_v2.2.1.md`
-   - System and product flow references.
-7. `docs/testing/PHASE4_TDD_IMPLEMENTATION_ROADMAP.md` and `docs/testing/C2PRO_TEST_SUITES_INDEX_v1.1.md`
-   - TDD execution and test-traceability baseline.
+### Product lifecycle / readiness
 
-Current executive view as of 2026-03-29:
+1. machine Product Control: `validation/product/c2pro-master-product-control-v1.yaml`;
+2. guarded human projection: `docs/product/00-c2pro-master-product-control-v1.md`;
+3. exact-head CI/deployment/qualification evidence referenced by the control plane.
 
-- C2Pro is an API-first, multi-tenant SaaS platform with `apps/api` and `apps/web`.
-- `C2PRO_MASTER_BACKLOG.md` is the canonical task register.
-- Remaining production blockers are concentrated in release evidence, governance, and final security hardening rather than foundational architecture creation.
+### Development execution
 
----
+1. `.c2pro/control/current.yaml`;
+2. `.c2pro/control/work-queue.yaml`;
+3. work envelopes under `.c2pro/work/`;
+4. machine controls under `validation/development/`.
 
-## Current Canonical Documents
+See [Documentation Authority](./DOCUMENTATION_AUTHORITY.md).
 
-### Architecture & Design
+## Current architecture spine
 
-| Document                | Path                                                        | Updated    | Purpose                                    |
-| ----------------------- | ----------------------------------------------------------- | ---------- | ------------------------------------------ |
-| Technical Design v4.1   | `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md` | 2026-03-29 | Canonical platform-wide technical design |
-| Technical Design v4.0   | `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md` | 2026-03-29 | Supporting frontend implementation baseline plus governance notes |
-| Flow Diagrams           | `docs/architecture/FLOW_DIAGRAMS.md`                        | 2026-02-10 | System flows and Mermaid diagrams          |
-| LangGraph Checkpointing | `docs/architecture/LANGGRAPH_CHECKPOINTING.md`              | 2026-03-21 | AI state persistence                       |
-| Architecture README     | `docs/architecture/README.md`                               | -          | Architecture section index                 |
-| ADR-006 Post-Reorg      | `docs/architecture/decisions/006-post-reorganization-architecture.md` | 2026-02-24 | Canonical repo architecture after restructuring |
+| Area | Canonical source | Meaning |
+|---|---|---|
+| Project aggregate | ADR-014 | Project is the primary intelligence boundary |
+| Temporal state | ADR-015 | events/revisions/snapshots |
+| Change impact | ADR-016 | semantic diff/change projection |
+| Graph orchestration | ADR-017 | governed ProjectGraph execution |
+| Project Health | ADR-018 | evidence-backed health/coverage |
+| Alerts/actions | ADR-019 | actionable conditions/lifecycle |
+| HITL | ADR-020 + ADR-026 | review workflow + exact trusted-state commit |
+| Single-document activation | ADR-024 | value from document #1 |
+| Project Controls / WBS | ADR-025 | one project → one canonical hierarchical WBS |
+| Processing recovery | ADR-027 | authority + checkpoint-lineage fencing |
+| Production qualification | ADR-028 | composite runtime identity + non-authoritative evidence |
 
-### Planning & Roadmaps
+## Current implementation baseline
 
-| Document                  | Path                                                    | Updated    | Purpose                   |
-| ------------------------- | ------------------------------------------------------- | ---------- | ------------------------- |
-| Master Roadmap v2.4.0     | `docs/planning/ROADMAP_v2.4.0.md`                       | 2026-01-05 | Strategic product roadmap |
-| Executive Status Report   | `docs/planning/EXECUTIVE_STATUS_REPORT_2026-03-19.md`   | 2026-03-19 | Current project status    |
-| Production Readiness Gate | `docs/planning/PRODUCTION_READINESS_GATE_2026-03-19.md` | 2026-03-19 | Go/no-go criteria         |
-| LangGraph Audit Report    | `docs/planning/LANGGRAPH_AUDIT_REPORT_2026-03-21.md`    | 2026-03-21 | AI orchestration audit    |
-| Coherence Score Plan      | `docs/planning/COHERENCE_SCORE_IMPLEMENTATION_PLAN.md`  | -          | Coherence engine roadmap  |
-| Master Backlog           | `C2PRO_MASTER_BACKLOG.md`                               | 2026-03-29 | Canonical open-task and readiness register |
-| Legacy Status Pointer    | `docs/MASTER_DEVELOPMENT_STATUS.md`                     | 2026-03-29 | Compatibility pointer to the canonical backlog |
-| Planning README           | `docs/planning/README.md`                               | -          | Planning section index    |
+[Technical Architecture Baseline — 2026-10-01](./architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md)
 
-### Testing
+Key current facts:
 
-| Document               | Path                                                | Updated    | Purpose                   |
-| ---------------------- | --------------------------------------------------- | ---------- | ------------------------- |
-| Phase 4 TDD Roadmap    | `docs/testing/PHASE4_TDD_IMPLEMENTATION_ROADMAP.md` | -          | AI Phase 4 execution plan |
-| TDD Backlog v1.0       | `docs/testing/C2PRO_TDD_BACKLOG_v1.0.md`            | 2026-02-17 | Test execution backlog    |
-| Test Suites Index v1.1 | `docs/testing/C2PRO_TEST_SUITES_INDEX_v1.1.md`      | 2026-01-31 | Detailed test specs       |
-| Test Registry          | `docs/testing/C2PRO_TDD_TEST_REGISTRY.md`           | -          | Test execution registry   |
-| Testing README         | `docs/testing/README.md`                            | -          | Testing section index     |
+- Next.js 16.3.6 / React 19.2.7 frontend on Vercel;
+- Clerk organization-scoped authentication;
+- FastAPI 0.141.1 backend;
+- PostgreSQL/Supabase with RLS and pgvector;
+- Redis + Celery worker/scheduler;
+- LangGraph + PostgreSQL checkpoints;
+- one canonical project WBS;
+- trusted-state commit boundary;
+- processing/checkpoint fencing;
+- composite production runtime qualification.
 
----
+## Product lifecycle authority
 
-## Legacy Documents
+Do not use architecture documents to infer PROD validation.
 
-| Document                     | Path                                                                 | Status | Notes                          |
-| ---------------------------- | -------------------------------------------------------------------- | ------ | ------------------------------ |
-| Legacy Flow Diagram          | `context/archive/legacy/DIAGRAMA_FLUJO_PROYECTO.md`                  | Legacy | Superseded by FLOW_DIAGRAMS.md |
-| Mermaid Flow                 | `context/archive/legacy/mearmaid.md`                                 | Legacy | Simplified flow (duplicate)    |
-| Technical Design v3.0        | `context/archive/legacy/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v3_0 (1).md` | Legacy | Superseded by v4.0             |
-| Frontend Master Plan Phase 2 | `context/archive/legacy/C2PRO_FRONTEND_MASTER_PLAN_PHASE2.md`        | Legacy | Superseded by TDD v4.0         |
+- machine: `validation/product/c2pro-master-product-control-v1.yaml`
+- human: `docs/product/00-c2pro-master-product-control-v1.md`
 
----
+At the 2026-10-03 revalidation, #706 remains open and no documentation change here promotes P0b/P0c/P0d.
 
-## Agent Instructions
+## Supporting / historical documents
 
-| Agent         | Path                                           | Purpose                   |
-| ------------- | ---------------------------------------------- | ------------------------- |
-| Planner       | `context/working/agents/agent_planner.md`      | Architecture and planning |
-| QA            | `context/working/agents/agent_qa.md`           | Test design and audit     |
-| Backend TDD   | `context/working/agents/agent_backend_tdd.md`  | Python implementation     |
-| Frontend TDD  | `context/working/agents/agent_frontend_tdd.md` | React implementation      |
-| Security      | `context/working/agents/agent_security.md`     | Security audits           |
-| DevOps        | `context/working/agents/agent_devops.md`       | CI/CD and infra           |
-| Documentation | `context/working/agents/agent_doc.md`          | Doc management            |
-| Product       | `context/working/agents/agent_product.md`      | User stories              |
+| Document | Current role |
+|---|---|
+| `C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md` | supporting March-era platform design |
+| `C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md` | supporting frontend design baseline |
+| `FLOW_DIAGRAMS.md` | supporting flow reference |
+| `LANGGRAPH_CHECKPOINTING.md` | focused checkpointing background; ADR-027 governs current authority fencing |
+| `docs/planning/ROADMAP_v2.4.0.md` | historical strategic roadmap, not live lifecycle state |
+| `C2PRO_MASTER_BACKLOG.md` | cold/historical backlog compatibility, not product truth |
 
----
+## Operational architecture
 
-## Related Indexes
+- [CI/CD](./runbooks/ci-cd-setup.md)
+- [Database migration authority](./runbooks/RUNBOOK_DATABASE_MIGRATION_AUTHORITY_2026-03-19.md)
+- [Auth / Clerk guide](./runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md)
+- [HITL resume monitoring](./runbooks/HITL_RESUME_MONITORING.md)
 
-- [Documentation Index](../README.md) - All docs
-- [Testing Index](../testing/README.md) - Test docs
-- [Audits Index](../audits/README.md) - Audit reports
-- [Specifications Index](../specifications/README.md) - Product specs
-- [Runbooks Index](../runbooks/README.md) - Operations
+## Audit trail
 
----
+- [Documentation reconciliation — 2026-10-01](./audits/DOCUMENTATION_RECONCILIATION_2026-10-01.md)
+- architecture/product audits remain under `docs/audits/` and are evidence/snapshots, not automatically canonical decisions.
 
 ## Changelog
 
-| Version | Date       | Changes                                                                                                                                     | Author       |
-| ------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| 1.1.0   | 2026-03-29 | Added governance baseline, promoted `C2PRO_MASTER_BACKLOG.md` as the canonical task register, introduced the v4.1 platform technical design, and clarified the role of the v4.0 technical design. | CIO review |
-| 1.0.0   | 2026-03-22 | Initial creation. Consolidated architecture documentation, created decision log, deleted experimental duplicates, updated agent references. | SDD Pipeline |
+| Version | Date | Change |
+|---|---|---|
+| 2.0.0 | 2026-10-01 | Rebased authority on Product Control + ADR spine; added current architecture baseline and ADR-026/027/028; downgraded older TDD/roadmap status to supporting/historical. |
+| 1.1.0 | 2026-03-29 | Previous governance/index baseline. |
+| 1.0.0 | 2026-03-22 | Initial consolidated architecture index. |
