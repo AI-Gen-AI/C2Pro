@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
-**Status:** Reconciliation snapshot (read-only) · **Date:** 2026-10-01 · **Schema:** v7  
-**reconciled_against_main_sha:** `33650a28a930d82a7bd65d98b50981145b3fd1d1` · **deployed_runtime_sha:** `UNVERIFIED`  
+**Status:** Reconciliation snapshot (read-only) · **Date:** 2026-10-03 · **Schema:** v7  
+**reconciled_against_main_sha:** `314fc39b0b4c25c8c0ca99977314ba1bb9083208` · **deployed_runtime_sha:** `UNVERIFIED`  
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This document is the human projection of the machine product-control plane. It does not grant execution authority. Direct `main`, merge and production mutation remain governed outside this document.
@@ -10,7 +10,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=33650a28a930d82a7bd65d98b50981145b3fd1d1
+reconciled_against_main_sha=314fc39b0b4c25c8c0ca99977314ba1bb9083208
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=false
@@ -105,7 +105,7 @@ This resolves the earlier ambiguity that could have led the product toward paral
 
 Three facts remain deliberately separate:
 
-- `reconciled_against_main_sha = 33650a28a930d82a7bd65d98b50981145b3fd1d1` — repository baseline used for this reconciliation.
+- `reconciled_against_main_sha = 314fc39b0b4c25c8c0ca99977314ba1bb9083208` — current repository baseline after the 2026-10-03 revalidation.
 - `deployed_runtime_sha = UNVERIFIED` — intentionally retained as a legacy singleton: production is composite. Railway API `ab0a2cfa-2565-4e74-bdc5-26b3066d4bdb`, Worker `7d2fdcb4-7606-4c80-836e-6dfd852e55a4` and Scheduler `5f59ff9f-9a78-4065-93f6-b9a3c8f5e4e3` are SUCCESS at #723 merge commit `0db53883a8942f7097fe9ce2e0e6c63397948fbb`. Vercel production `dpl_2z3ivCtezP7RKZ1b3wmDmAi7PUB5` is READY at #722 merge commit `6e98ec53f814bd29dee4607e375600c4560c7d70`. Backend and frontend SHAs therefore legitimately differ and must be rebound separately at qualification time.
 - Railway also reports one unresolved STAGED API environment patch `7fcd5228-be1b-4be5-8e72-9692c854ddbf`; the available read-only API does not expose its internal delta, so #715 must fail closed unless staged changes are zero or the exact delta is operator-reviewed and bound to the qualification evidence.
 - Fresh API logs report `coherence_analysis=True`; this proves production Coherence is enabled, but does not by itself prove the separate per-tenant ADR-017 ProjectGraph gate.
@@ -135,7 +135,18 @@ Still open for the end-user GOAL:
 
 Therefore `product_value_delivered=false` and P0b/P0c/P0d qualification lanes remain unchanged. No merge, CI, deployment or documentation event in this reconciliation self-promotes lifecycle state.
 
-### 2.2 Qualification Control v1 — evidence is necessary, never self-promoting
+### 2.2 Revalidation on 2026-10-03
+
+After the 2026-10-01 snapshot, `main` advanced by 38 commits to `314fc39b0b4c25c8c0ca99977314ba1bb9083208`.
+
+- **#782-#787 / #715** harden the production-qualification path around Railway identity observation, tenant RLS context, bounded Clerk preflight waits and canonical production authentication. **#715 remains open**; these merges are harness/runtime hardening, not accepted qualification.
+- **#790 / #789** moves SSE bearer handling behind the same-origin server proxy and rejects bearer tokens in query strings.
+- **#793 / #792** ensures an explicit `human_approval_required=True` reaches the router as HIGH impact, so confidence cannot auto-approve a state that already requires human review. The broader LOW/MEDIUM non-gated policy path still exists when no explicit human requirement is set.
+- **#706, #715, #690, #712 and #713 remain open**. #792 is also still open pending acceptance/closure.
+
+No Product-Control lifecycle field is promoted by this revalidation.
+
+### 2.3 Qualification Control v1 — evidence is necessary, never self-promoting
 
 Schema v7 adds a compact Product-Control integration for P0b, P0c and P0d. Detailed runtime/scenario/assertion evidence remains in the non-authoritative Phase-A bundles introduced by #678. Product Control stores only the qualification status, accepted bundle reference/hash and the fixed capability → lifecycle mapping.
 
@@ -166,7 +177,7 @@ Example: all documents may consistently prove a 7-day delay. **Coherence can be 
 
 ## 4. ADR realization — current truth
 
-The 2026-10-01 reconciliation advances **realization** where merged code proves wiring, while deliberately leaving deployment/production validation conservative.
+The 2026-10-03 revalidation preserves **realization** advances where merged code proves wiring, while deliberately leaving deployment/production validation conservative.
 
 | ADR | Design | Realization | Deployment | Prod validation | Current meaning |
 |---|---|---|---|---|---|
@@ -176,7 +187,7 @@ The 2026-10-01 reconciliation advances **realization** where merged code proves 
 | ADR-017 ProjectGraph | Accepted | SCAFFOLDED | BLOCKED | NONE | feature-gated/off for the canonical path. |
 | ADR-018 Health | Accepted | WIRED | DEPLOYED | NOT_VALIDATED | Health backend exists; P0b user-visible production validation remains open. |
 | ADR-019 Alerts/Actions | Accepted | SCAFFOLDED | NONE | NONE | alert/action domain partial; full correlation/action automation remains later. |
-| ADR-020 HITL | Accepted | **WIRED** | PARTIAL | NONE | real review/approval plus V3 fenced resume/recovery and idempotent final-decision audit are wired; current confidence/impact routing can still auto-approve high-confidence LOW/MEDIUM items, so ADR-020's named consequential-decision automation boundary remains only partially realized. |
+| ADR-020 HITL | Accepted | **WIRED** | PARTIAL | NONE | real review/approval plus V3 fenced resume/recovery and idempotent final-decision audit are wired; #793 prevents confidence from bypassing an explicit `human_approval_required=True` boundary, while high-confidence LOW/MEDIUM non-gated items can still auto-approve when no explicit human requirement exists. ADR-020's broader consequential-decision policy remains only partially realized. |
 | ADR-021 Briefing | Deferred | SCAFFOLDED | NONE | NONE | executive briefing/portfolio stays later; P0d Current State is tracked separately as an implemented subtrack. |
 | ADR-022 Contract Clarity | Accepted | WIRED | DEPLOYED | NOT_VALIDATED | findings path exists; not user/prod validated. |
 | ADR-023 Agentic Coherence | Proposed | DESIGNED | NONE | NONE | roadmap/design only. |
