@@ -5,16 +5,29 @@
 > **Status:** Canonical navigation  
 > **Baseline:** `main@314fc39b0b4c25c8c0ca99977314ba1bb9083208`
 
-## Authority order
+## Authority by question
 
-Architecture decisions should be interpreted in this order:
+Do not use one mixed precedence list for architecture, lifecycle and execution questions.
 
-1. machine Product Control for lifecycle/product status;
-2. accepted ADRs under `docs/architecture/decisions/`;
-3. [current technical architecture baseline](./architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md);
-4. machine development-control state;
-5. focused current specs/runbooks;
-6. older TDDs/plans as supporting history.
+### Architecture / design
+
+1. accepted ADRs under `docs/architecture/decisions/`;
+2. [current technical architecture baseline](./architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md);
+3. focused current specifications/runbooks;
+4. older TDDs/plans as supporting history.
+
+### Product lifecycle / readiness
+
+1. machine Product Control: `validation/product/c2pro-master-product-control-v1.yaml`;
+2. guarded human projection: `docs/product/00-c2pro-master-product-control-v1.md`;
+3. exact-head CI/deployment/qualification evidence referenced by the control plane.
+
+### Development execution
+
+1. `.c2pro/control/current.yaml`;
+2. `.c2pro/control/work-queue.yaml`;
+3. work envelopes under `.c2pro/work/`;
+4. machine controls under `validation/development/`.
 
 See [Documentation Authority](./DOCUMENTATION_AUTHORITY.md).
 
