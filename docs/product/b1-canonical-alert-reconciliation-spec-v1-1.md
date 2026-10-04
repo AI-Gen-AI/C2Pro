@@ -464,6 +464,29 @@ For current API semantics:
 - `reject` is explicit false-positive disposition and may remove the invalid finding through canonical recalculation;
 - `resolve` is lifecycle/action state only until trusted evidence changes.
 
+### 14.0 Canonical rescore source
+
+A score-affecting disposition MUST NOT reconstruct Coherence from the durable Alert row.
+
+The current Alert projection intentionally persists review/provenance fields but does not carry the full scoring signal (for example the original finding `impact_score` and `confidence/certainty`). Rebuilding a score from Alert severity alone would silently change the scoring model.
+
+Canonical recalculation therefore follows:
+
+```text
+trusted evidence
+  -> regenerate full FindingSignal set
+  -> compute the same canonical finding identities
+  -> apply durable human disposition by identity
+       acknowledged / accepted / explained => keep finding
+       validated false_positive => exclude finding
+  -> canonical scorer using the full original scoring inputs
+  -> trusted score + trusted subscores
+```
+
+Alerts contribute lifecycle/disposition authority; they do not become a lossy scoring datastore.
+
+The finding identity used by detector/scorer and Alert reconciliation MUST be shared or provably equivalent. A false-positive disposition cannot be applied by title/message/severity matching.
+
 ### 14.1 Trusted score vs projected/provisional score
 
 B1 reuses the already-shipped #714 trusted/projected Coherence contract. It MUST NOT invent a second score-authority model.
