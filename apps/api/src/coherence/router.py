@@ -572,9 +572,14 @@ def _coherence_alert_to_create(
     source_locator = (
         str(getattr(evidence, "source_clause_id", "") or "") if evidence else ""
     )
-    source_clause_id = _uuid_or_none(source_locator)
     clause_by_id = {str(clause.id): clause for clause in clauses}
     source_clause = clause_by_id.get(source_locator)
+    source_clause_id = (
+        _uuid_or_none(source_locator)
+        if source_clause is not None
+        and source_clause.data.get("source") == "persisted_clause"
+        else None
+    )
     source_document_id = (
         str(source_clause.data.get("document_id"))
         if source_clause is not None and source_clause.data.get("document_id")

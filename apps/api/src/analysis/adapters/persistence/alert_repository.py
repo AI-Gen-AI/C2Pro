@@ -104,6 +104,7 @@ class SqlAlchemyAlertRepository(AlertRepository):
             project_id=payload.project_id,
             analysis_id=payload.analysis_id,
             severity=payload.severity,
+            alert_type=payload.alert_type,
             category=payload.category,
             rule_id=payload.rule_id,
             title=payload.title,

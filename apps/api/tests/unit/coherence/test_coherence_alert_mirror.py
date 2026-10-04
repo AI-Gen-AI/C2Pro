@@ -46,7 +46,7 @@ async def test_mirror_reconciles_via_canonical_service_with_evidence_locator() -
         Clause(
             id=str(clause_id),
             text="Milestone B starts thirty days later",
-            data={"document_id": str(document_id)},
+            data={"document_id": str(document_id), "source": "persisted_clause"},
         )
     ]
     session = _FakeSession()
@@ -89,6 +89,56 @@ async def test_mirror_reconciles_via_canonical_service_with_evidence_locator() -
         "claim": "Schedule gap detected",
         "quote": "Milestone B starts thirty days later",
     }
+
+
+@pytest.mark.asyncio
+async def test_uuid_looking_external_locator_is_not_used_as_clause_foreign_key() -> None:
+    project_id = uuid4()
+    tenant_id = uuid4()
+    external_locator = uuid4()
+    document_id = uuid4()
+    alert = SimpleNamespace(
+        severity="high",
+        category="legal",
+        rule_id="DET-LEG-EXTERNAL",
+        message="External clause locator",
+        evidence=SimpleNamespace(
+            source_clause_id=str(external_locator),
+            claim="Caller-provided locator",
+            quote="External text",
+        ),
+    )
+    clauses = [
+        Clause(
+            id=str(external_locator),
+            text="External text",
+            data={"document_id": str(document_id)},
+        )
+    ]
+    session = _FakeSession()
+    service = MagicMock()
+    service.process_violations = AsyncMock(return_value=[])
+
+    with (
+        patch("src.coherence.router.SqlAlchemyAlertRepository"),
+        patch("src.coherence.router.AlertGeneratorService", return_value=service),
+    ):
+        await _mirror_coherence_alerts_to_alerts_table(
+            db=session,  # type: ignore[arg-type]
+            project_id=project_id,
+            tenant_id=tenant_id,
+            alerts=[alert],
+            clauses=clauses,
+        )
+
+    payload = service.process_violations.await_args.kwargs["violations"][0]
+    assert payload.source_clause_id is None
+    assert payload.alert_metadata["detection_evidence"]["source_clause_id"] == str(
+        external_locator
+    )
+    assert payload.alert_metadata["detection_evidence"]["source_document_id"] == str(
+        document_id
+    )
 
 
 @pytest.mark.asyncio
