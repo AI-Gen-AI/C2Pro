@@ -53,14 +53,20 @@ from src.projects.adapters.persistence.models import ProjectORM
 # ===========================================
 
 
-async def _create_alert(client, headers: dict[str, str], project_id) -> dict:
+async def _create_alert(
+    client,
+    headers: dict[str, str],
+    project_id,
+    *,
+    severity: str = "high",
+) -> dict:
     response = await client.post(
         "/api/v1/alerts",
         json={
             "project_id": str(project_id),
             "rule_code": "R1",
             "category": "TIME",
-            "severity": "high",
+            "severity": severity,
             "message": "Contract deadline differs from schedule end date by 15 days",
             "affected_entities": {
                 "contract_end_date": "2026-12-31",
@@ -377,7 +383,7 @@ async def test_005_bulk_approve_multiple_alerts(
 ):
     """
     GIVEN Multiple alerts are pending review
-    WHEN User bulk approves 5 alerts
+    WHEN User bulk approves the maximum bounded batch of 5 medium alerts
     THEN All 5 alerts are approved
     AND All approvals are recorded
     AND Coherence score is updated once (not 5 times)
@@ -394,12 +400,17 @@ async def test_005_bulk_approve_multiple_alerts(
 
     alert_ids = []
     for _ in range(5):
-        created = await _create_alert(client, headers, alert_project["id"])
+        created = await _create_alert(
+            client,
+            headers,
+            alert_project["id"],
+            severity="medium",
+        )
         alert_ids.append(created["id"])
     bulk_data = {
         "alert_ids": alert_ids,
         "decision": "approve",
-        "comment": "Bulk approval of critical alerts",
+        "comment": "Reviewed together as one bounded medium-risk batch",
     }
 
     response = await client.post(
@@ -430,13 +441,11 @@ async def test_006_anti_gaming_mass_approval_detection(
     generate_token,
 ):
     """
-    GIVEN User attempts to approve 50+ alerts in 1 minute
-    WHEN Anti-gaming system detects mass approval pattern
-    THEN Warning is issued
-    AND Audit log records suspicious activity
-    AND Project manager is notified
+    GIVEN User attempts to approve more than the bounded bulk-review limit
+    WHEN Anti-gaming policy evaluates the request
+    THEN The operation fails closed before any alert is mutated
 
-    Validates: Gate 7 - Anti-gaming measures
+    Validates: Gate 7 - bulk approval cannot bypass individual review integrity
     """
     token = generate_token(
         user_id=alert_user.id,
@@ -446,30 +455,102 @@ async def test_006_anti_gaming_mass_approval_detection(
     )
     headers = {"Authorization": f"Bearer {token}"}
 
-    for _ in range(50):
-        await _create_alert(client, headers, alert_project["id"])
     alert_ids = []
-    list_response = await client.get(
-        f"/api/v1/projects/{alert_project['id']}/alerts?status=pending",
-        headers=headers,
-    )
-    assert list_response.status_code == 200
-    alert_ids = [item["id"] for item in list_response.json()["items"][:50]]
-    bulk_data = {
-        "alert_ids": alert_ids,
-        "decision": "approve",
-    }
+    for _ in range(6):
+        created = await _create_alert(
+            client,
+            headers,
+            alert_project["id"],
+            severity="medium",
+        )
+        alert_ids.append(created["id"])
 
     response = await client.post(
         "/api/v1/alerts/bulk-review",
-        json=bulk_data,
+        json={
+            "alert_ids": alert_ids,
+            "decision": "approve",
+            "comment": "Attempted oversized approval batch",
+        },
         headers=headers,
     )
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["processed_count"] == 50
-    assert body["warning"] is not None
+    assert response.status_code == 400
+    assert "maximum" in response.json()["detail"].lower()
+
+    list_response = await client.get(
+        f"/api/v1/projects/{alert_project['id']}/alerts?status=open",
+        headers=headers,
+    )
+    assert list_response.status_code == 200
+    returned = {item["id"]: item["status"] for item in list_response.json()["items"]}
+    assert all(returned.get(alert_id) == "open" for alert_id in alert_ids)
+
+
+@pytest.mark.asyncio
+@pytest.mark.e2e
+@pytest.mark.flow
+async def test_006b_bulk_approval_requires_individual_review_for_high_severity(
+    client,
+    alert_user: User,
+    alert_tenant: Tenant,
+    alert_project,
+    generate_token,
+):
+    token = generate_token(
+        user_id=alert_user.id,
+        tenant_id=alert_tenant.id,
+        email=alert_user.email,
+        role="admin",
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    created = await _create_alert(client, headers, alert_project["id"], severity="high")
+
+    response = await client.post(
+        "/api/v1/alerts/bulk-review",
+        json={
+            "alert_ids": [created["id"]],
+            "decision": "approve",
+            "comment": "Should require individual review",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    assert "individual review" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.e2e
+@pytest.mark.flow
+async def test_006c_bulk_rejection_requires_audit_reason(
+    client,
+    alert_user: User,
+    alert_tenant: Tenant,
+    alert_project,
+    generate_token,
+):
+    token = generate_token(
+        user_id=alert_user.id,
+        tenant_id=alert_tenant.id,
+        email=alert_user.email,
+        role="admin",
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    created = await _create_alert(client, headers, alert_project["id"], severity="medium")
+
+    response = await client.post(
+        "/api/v1/alerts/bulk-review",
+        json={
+            "alert_ids": [created["id"]],
+            "decision": "reject",
+            "comment": "",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    assert "reason" in response.json()["detail"].lower()
 
 
 # ===========================================
@@ -1144,7 +1225,9 @@ async def test_014_alert_state_changes_survive_fresh_session_and_client(
         persisted = await fresh_session.get(Alert, alert_id)
         assert persisted is not None
         assert persisted.status.value == "resolved"
+        assert persisted.approval_status.value == "APPROVED"
         assert persisted.reviewed_by == alert_user.id
+        assert persisted.review_comment == "Confirmed issue"
         assert persisted.resolved_by == alert_user.id
         assert persisted.resolution_notes == "Persisted resolution"
         assert (persisted.alert_metadata or {}).get("root_cause") == "technical_issue"
