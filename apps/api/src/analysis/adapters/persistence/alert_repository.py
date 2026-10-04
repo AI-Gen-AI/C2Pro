@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import String, and_, case, cast, or_, select
+from sqlalchemy import String, and_, case, cast as sa_cast, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -24,7 +24,7 @@ from src.projects.adapters.persistence.models import ProjectORM
 
 def _severity_rank_expression() -> ColumnElement[int]:
     """Stable severity ordering shared by the list cursor and SQL ORDER BY."""
-    severity_text = cast(Alert.severity, String)
+    severity_text = sa_cast(Alert.severity, String)
     return case(
         (severity_text == AlertSeverity.CRITICAL.value, 0),
         (severity_text == AlertSeverity.HIGH.value, 1),
