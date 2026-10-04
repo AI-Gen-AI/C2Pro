@@ -502,6 +502,12 @@ async def test_evaluate_passes_authenticated_tenant_to_evaluation_config(
             low_budget_mode=False,
         )
         mock_db = Mock()
+        mock_db.execute = AsyncMock()
+        mock_db.scalars = AsyncMock(return_value=SimpleNamespace(all=lambda: []))
+        mock_db.scalar = AsyncMock(
+            return_value=SimpleNamespace(tenant_id=tenant_id)
+        )
+        mock_db.flush = AsyncMock()
         mock_db.commit = AsyncMock()
 
         await evaluate_project_coherence(
@@ -592,6 +598,12 @@ async def test_evaluate_fetches_from_rag_with_project_id(
             project_id = uuid4()
             request = CoherenceEvaluateRequest(project_id=project_id)
             mock_db = Mock()
+            mock_db.execute = AsyncMock()
+            mock_db.scalars = AsyncMock(return_value=SimpleNamespace(all=lambda: []))
+            mock_db.scalar = AsyncMock(
+                return_value=SimpleNamespace(tenant_id=sample_current_user.tenant_id)
+            )
+            mock_db.flush = AsyncMock()
             mock_db.commit = AsyncMock()
 
             await evaluate_project_coherence(
