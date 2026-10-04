@@ -1241,6 +1241,19 @@ paths:
           type: string
           format: uuid
           title: Document Id
+      - name: revision_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          description: Read the clauses of this historical revision instead of the
+            document's trusted-current revision. Never changes what is current.
+          title: Revision Id
+        description: Read the clauses of this historical revision instead of the document's
+          trusted-current revision. Never changes what is current.
       responses:
         '200':
           description: Successful Response
@@ -1376,6 +1389,19 @@ paths:
           type: string
           format: uuid
           title: Document Id
+      - name: revision_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          description: Read the entities of this historical revision instead of the
+            document's trusted-current revision. Never changes what is current.
+          title: Revision Id
+        description: Read the entities of this historical revision instead of the
+          document's trusted-current revision. Never changes what is current.
       responses:
         '200':
           description: Successful Response

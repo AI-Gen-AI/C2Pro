@@ -63,13 +63,20 @@ class RagIngestionResult:
 class IRagIngestionService(ABC):
     @abstractmethod
     async def ingest_document_chunks(
-        self, document: Document, parsed_payload: JsonDict, tenant_id: UUID
+        self,
+        document: Document,
+        parsed_payload: JsonDict,
+        tenant_id: UUID,
+        revision_id: UUID | None = None,
     ) -> RagIngestionResult:
         """
         Ingests parsed document content into the RAG system.
         :param document: The domain Document entity.
         :param parsed_payload: The content parsed by the file parser.
         :param tenant_id: The ID of the current tenant.
+        :param revision_id: The pinned revision the content was parsed from (C3a);
+            stamped on every chunk so readers can serve only the trusted-current
+            revision's chunks.
         :returns: What happened, in a form the caller can branch on.
         """
         pass

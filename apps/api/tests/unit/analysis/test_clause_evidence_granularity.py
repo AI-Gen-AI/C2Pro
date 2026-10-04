@@ -156,7 +156,9 @@ def _stub_loader(
 
     calls: list[tuple[UUID, UUID]] = []
 
-    async def loader(tenant_id: UUID, document_id: UUID) -> tuple[PersistedClause, ...]:
+    async def loader(
+        tenant_id: UUID, document_id: UUID, revision_id: UUID | None = None
+    ) -> tuple[PersistedClause, ...]:
         calls.append((tenant_id, document_id))
         if raises is not None:
             raise raises
@@ -703,13 +705,16 @@ class TestArtifactGranularityLineage:
 
 
 # =====================================================================================
-# Revision binding (Lane C / PR-C1): V2 analysis never consumes V1 clause rows
+# Revision binding (Lane C / PR-C1, C3a): V2 analysis never consumes V1 clause rows
 # =====================================================================================
 
 
 def _bound(revision_id: UUID | None) -> PersistedClause:
+    """A row recorded (JSONB) and -- since C3a -- physically bound to ``revision_id``."""
+    from dataclasses import replace
+
     location = {"revision_id": str(revision_id) if revision_id else None}
-    return _persisted(entities={"evidence_location": location})
+    return replace(_persisted(entities={"evidence_location": location}), revision_id=revision_id)
 
 
 def _current(revision_id: UUID, parent_revision_id: UUID | None) -> Any:
@@ -735,11 +740,33 @@ def _stub_store(
     clauses: tuple[PersistedClause, ...],
     current: Any,
 ) -> None:
+    """Stub the RLS session, the open revision and the Documents revision-scoped read.
+
+    The repository's revision scope (C3a) is modelled on its SQL rule: rows bound to
+    the revision, else unbound legacy rows only for a document with a single
+    revision (a revision without a parent, here).
+    """
     from contextlib import asynccontextmanager
 
     import src.analysis.adapters.graph.clause_evidence_loader as loader_module
     import src.core.database as database_module
+    import src.documents.adapters.persistence.sqlalchemy_document_repository as repo_module
     import src.documents.application.read_clause_evidence as read_module
+
+    single_revision = current is None or current.parent_revision_id is None
+
+    class _Repository:
+        def __init__(self, _session: object) -> None:
+            pass
+
+        async def list_clauses_for_document(self, _tenant_id, _document_id):  # noqa: ANN001, ANN202
+            return list(clauses)
+
+        async def list_revision_clauses(self, _tenant_id, _document_id, revision_id):  # noqa: ANN001, ANN202
+            bound = [clause for clause in clauses if clause.revision_id == revision_id]
+            if bound:
+                return bound
+            return [c for c in clauses if c.revision_id is None] if single_revision else []
 
     @asynccontextmanager
     async def fake_session(tenant_id: UUID):  # noqa: ANN202
@@ -752,6 +779,7 @@ def _stub_store(
         return current
 
     monkeypatch.setattr(database_module, "get_session_with_tenant", fake_session)
+    monkeypatch.setattr(repo_module, "SqlAlchemyDocumentRepository", _Repository)
     monkeypatch.setattr(read_module, "read_clause_evidence", fake_read)
     monkeypatch.setattr(loader_module, "load_current_revision", fake_current)
 
@@ -773,12 +801,15 @@ class TestRevisionBoundClauseEvidence:
         from src.analysis.adapters.graph.clause_evidence_loader import (
             load_persisted_clause_evidence,
         )
+        from src.documents.domain.clause_ordering import order_clause_evidence
 
         v1, v2 = uuid4(), uuid4()
         clauses = (_bound(v2), _bound(v2))
         _stub_store(monkeypatch, clauses, _current(v2, v1))
 
-        assert await load_persisted_clause_evidence(TENANT_ID, DOCUMENT_ID) == clauses
+        assert await load_persisted_clause_evidence(TENANT_ID, DOCUMENT_ID) == (
+            order_clause_evidence(clauses)
+        )
 
     @pytest.mark.asyncio
     async def test_v1_clauses_are_stale_once_v2_is_current(

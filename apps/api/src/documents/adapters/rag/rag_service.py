@@ -19,6 +19,10 @@ from src.core.ai.model_router import AITaskType
 from src.core.resilience import with_circuit_breaker
 from src.core.resilience.config import get_circuit_breaker_settings
 from src.documents.application.dtos import RagAnswer, RetrievedChunk
+from src.temporal.adapters.persistence.current_revision_sql import (
+    chunk_in_current_scope,
+    current_chunk_join,
+)
 
 logger = structlog.get_logger()
 
@@ -121,12 +125,19 @@ class RagService:
         # lineage of its own (unlike document_revisions/project_events) --
         # it is a derived search index, not a historical record, so
         # replacing it here weakens no revision/history semantics.
+        #
+        # Lane C / C3a: chunks stamped with a revision replace only that revision's
+        # chunks (and unstamped legacy ones). Other revisions' chunks stay, so the
+        # trusted V1 index survives while a V2 is pending; readers serve only the
+        # trusted-current revision's chunks.
+        stamped = chunk_metadata.get("revision_id")
         await _replace_chunks(
             self.db_session,
             tenant_id=tenant_id,
             document_id=document_id,
             rows=rows,
             commit=self._commit,
+            revision_id=str(stamped) if stamped else None,
         )
         return len(rows)
 
@@ -282,14 +293,22 @@ async def _delete_and_insert_chunks(
     tenant_id: UUID,
     document_id: UUID,
     rows: list[dict[str, Any]],
+    revision_id: str | None = None,
 ) -> int:
-    delete_stmt = text(
-        "DELETE FROM document_chunks WHERE tenant_id = CAST(:tenant_id AS uuid) "
-        "AND document_id = CAST(:document_id AS uuid)"
-    )
-    deleted = await db_session.execute(
-        delete_stmt, {"tenant_id": tenant_id, "document_id": document_id}
-    )
+    if revision_id is None:
+        delete_stmt = text(
+            "DELETE FROM document_chunks WHERE tenant_id = CAST(:tenant_id AS uuid) "
+            "AND document_id = CAST(:document_id AS uuid)"
+        )
+        params: dict[str, Any] = {"tenant_id": tenant_id, "document_id": document_id}
+    else:
+        delete_stmt = text(
+            "DELETE FROM document_chunks WHERE tenant_id = CAST(:tenant_id AS uuid) "
+            "AND document_id = CAST(:document_id AS uuid) "
+            "AND (metadata ->> 'revision_id' IS NULL OR metadata ->> 'revision_id' = :revision_id)"
+        )
+        params = {"tenant_id": tenant_id, "document_id": document_id, "revision_id": revision_id}
+    deleted = await db_session.execute(delete_stmt, params)
 
     # Use raw SQL with CAST syntax instead of :: to avoid asyncpg parser issues
     for row in rows:
@@ -318,6 +337,7 @@ async def _replace_chunks(
     document_id: UUID,
     rows: list[dict[str, Any]],
     commit: bool = True,
+    revision_id: str | None = None,
 ) -> None:
     """Delete this document's existing chunks, then insert the new batch,
     as one transaction. Reprocessing an immutable document must be
@@ -326,7 +346,11 @@ async def _replace_chunks(
     """
     if commit:
         deleted_count = await _delete_and_insert_chunks(
-            db_session, tenant_id=tenant_id, document_id=document_id, rows=rows
+            db_session,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            rows=rows,
+            revision_id=revision_id,
         )
         await db_session.commit()
     else:
@@ -334,7 +358,11 @@ async def _replace_chunks(
         # replacement from poisoning the rest of that transaction.
         async with db_session.begin_nested():
             deleted_count = await _delete_and_insert_chunks(
-                db_session, tenant_id=tenant_id, document_id=document_id, rows=rows
+                db_session,
+                tenant_id=tenant_id,
+                document_id=document_id,
+                rows=rows,
+                revision_id=revision_id,
             )
     logger.info(
         "rag_chunks_replaced",
@@ -355,16 +383,19 @@ async def _retrieve_chunks(
     # TS-UD-RAG-ERR-001: query chunks directly instead of relying on a database
     # match_documents function whose signature can drift across local migrations.
     # Keep tenant_id in the predicate so RAG reads remain tenant-scoped.
+    # Lane C / C3a: only the trusted-current revision's chunks are retrievable.
     stmt = text(
-        """
+        f"""
         SELECT
-            content,
-            metadata,
-            embedding <=> CAST(:embedding AS vector) AS distance
-        FROM document_chunks
-        WHERE tenant_id = CAST(:tenant_id AS uuid)
-          AND project_id = CAST(:project_id AS uuid)
-        ORDER BY embedding <=> CAST(:embedding AS vector)
+            dc.content,
+            dc.metadata,
+            dc.embedding <=> CAST(:embedding AS vector) AS distance
+        FROM document_chunks dc
+        {current_chunk_join("dc")}
+        WHERE dc.tenant_id = CAST(:tenant_id AS uuid)
+          AND dc.project_id = CAST(:project_id AS uuid)
+          AND {chunk_in_current_scope("dc", "cur")}
+        ORDER BY dc.embedding <=> CAST(:embedding AS vector)
         LIMIT CAST(:match_count AS integer)
         """
     )
