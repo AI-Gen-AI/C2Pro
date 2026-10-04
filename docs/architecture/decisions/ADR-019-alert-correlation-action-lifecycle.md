@@ -67,6 +67,8 @@ Versioned fingerprint recomputation is compatibility support, not authority to c
 
 This amendment does not alter ADR-009 scoring semantics. Acknowledge / accepted variance / explained conflict does not improve raw Coherence. Only ADR-009 epistemic changes — false positive, corrected data/extraction, changed trusted evidence, or supersession — may remove/replace the relevant finding and drive recalculation.
 
+B1 also consumes the already-shipped #714 **trusted vs projected Coherence** authority model. The trusted score remains the solid canonical score from trusted evidence. Any hypothetical score resulting from pending score-affecting candidates is provisional/projected, uses the same scorer and `score_version`, is rendered as non-approved, and cannot replace the trusted score or official report value. A pending Alert review that merely acknowledges/confirms an evidence-backed discrepancy does not create a better projection; the discrepancy already belongs in documentary Coherence. Null/unknown remains null and is never converted to 0 or default 100.
+
 ## 2026-09-13 Amendment — Alert category taxonomy and Project Controls attachment (GOVERNING)
 
 **Status:** Accepted product decision, 2026-09-13.
