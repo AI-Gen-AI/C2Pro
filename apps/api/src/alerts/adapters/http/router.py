@@ -19,10 +19,12 @@ from src.alerts.application.dtos import (
     AlertListResponse,
     AlertResponse,
     AlertWorkspaceSettingsPayload,
+    AttachEvidenceRequest,
     BulkOperationResponse,
     BulkResolveRequest,
     BulkReviewRequest,
     CreateAlertRequest,
+    EvidenceResponse,
     ResolveAlertRequest,
     ReviewAlertRequest,
 )
@@ -32,8 +34,15 @@ from src.alerts.application.ports.tenant_repository import ITenantRepository
 from src.alerts.application.use_cases.bulk_resolve_alerts_use_case import (
     BulkResolveAlertsUseCase,
 )
+from src.alerts.application.use_cases.attach_alert_evidence_use_case import (
+    AlertNotFoundError as EvidenceAlertNotFoundError,
+)
+from src.alerts.application.use_cases.attach_alert_evidence_use_case import (
+    AttachAlertEvidenceUseCase,
+)
 from src.alerts.application.use_cases.bulk_review_alerts_use_case import (
     BulkReviewAlertsUseCase,
+    BulkReviewPolicyError,
 )
 from src.alerts.application.use_cases.create_alert_use_case import CreateAlertUseCase
 from src.alerts.application.use_cases.get_alert_workspace_settings_use_case import (
@@ -105,9 +114,15 @@ def get_resolve_alert_use_case(
 
 
 def get_bulk_review_use_case(
-    review_use_case: ReviewAlertUseCase = Depends(get_review_alert_use_case),
+    repository: IAlertRepository = Depends(get_alert_repository),
 ) -> BulkReviewAlertsUseCase:
-    return BulkReviewAlertsUseCase(review_use_case=review_use_case)
+    return BulkReviewAlertsUseCase(repository=repository)
+
+
+def get_attach_evidence_use_case(
+    repository: IAlertRepository = Depends(get_alert_repository),
+) -> AttachAlertEvidenceUseCase:
+    return AttachAlertEvidenceUseCase(repository=repository)
 
 
 def get_bulk_resolve_use_case(
@@ -288,13 +303,16 @@ async def bulk_review_alerts(
     user_id: CurrentUserId,
     use_case: BulkReviewAlertsUseCase = Depends(get_bulk_review_use_case),
 ) -> BulkOperationResponse:
-    return await use_case.execute(
-        alert_ids=request.alert_ids,
-        tenant_id=tenant_id,
-        user_id=user_id,
-        decision=request.decision,
-        comment=request.comment,
-    )
+    try:
+        return await use_case.execute(
+            alert_ids=request.alert_ids,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            decision=request.decision,
+            comment=request.comment,
+        )
+    except BulkReviewPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post(
@@ -341,6 +359,34 @@ async def bulk_resolve_alerts(
         resolution=request.resolution,
         root_cause=request.root_cause,
     )
+
+
+@router.post(
+    "/{alert_id}/evidence",
+    response_model=EvidenceResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Attach reviewer evidence to alert",
+)
+async def attach_alert_evidence(
+    alert_id: UUID,
+    request: AttachEvidenceRequest,
+    tenant_id: CurrentTenantId,
+    user_id: CurrentUserId,
+    use_case: AttachAlertEvidenceUseCase = Depends(get_attach_evidence_use_case),
+) -> EvidenceResponse:
+    try:
+        return await use_case.execute(
+            alert_id=alert_id,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            evidence_type=request.type,
+            content=request.content,
+            source=request.source,
+        )
+    except EvidenceAlertNotFoundError:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get(
