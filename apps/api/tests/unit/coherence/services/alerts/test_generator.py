@@ -736,3 +736,84 @@ class TestLineBStableFindingIdentity:
 
         assert len(result) == 1
         assert repo.create.await_count == 1
+
+
+class TestB1ResidualIdentityContracts:
+    @pytest.mark.asyncio
+    async def test_b1_new_authoritative_observation_revalidates_dismissed_disposition(self) -> None:
+        """B1-03/B1-04: same family on a new evidence basis must not inherit dismissal blindly."""
+        old_revision = uuid4()
+        new_revision = uuid4()
+        existing = _make_mock_alert(
+            status=AlertStatus.DISMISSED,
+            fingerprint="stable-family-fp",
+        )
+        existing.review_comment = "False positive against V1 evidence"
+        existing.alert_metadata = {
+            "fingerprint": "stable-family-fp",
+            "fingerprint_version": FINGERPRINT_VERSION,
+            "history": [{"action": "reviewed", "decision": "reject"}],
+            "detection_evidence": {
+                "revision_id": str(old_revision),
+                "claim": "Old evidence basis",
+            },
+        }
+
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([existing]))
+        repo.create = AsyncMock()
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+
+        incoming = _make_alert_create(rule_id="DET-TIM-GAP")
+        incoming.alert_metadata = {
+            "detection_evidence": {
+                "revision_id": str(new_revision),
+                "claim": "New trusted evidence basis",
+            }
+        }
+
+        svc = AlertGeneratorService(repository=repo)
+        with patch(
+            "src.coherence.services.alerts.generator.AlertGeneratorService._fingerprint",
+            return_value="stable-family-fp",
+        ):
+            result = await svc.process_violations(
+                project_id=uuid4(),
+                tenant_id=uuid4(),
+                violations=[incoming],
+            )
+
+        assert result[0] is existing
+        assert existing.status == AlertStatus.OPEN
+        history = existing.alert_metadata.get("history", [])
+        assert any(item.get("action") == "basis_changed_reopened" for item in history)
+
+    @pytest.mark.asyncio
+    async def test_b1_ambiguous_legacy_family_fails_closed_instead_of_picking_first_row(self) -> None:
+        """B1-04: duplicate legacy ownership must surface an explicit fail-closed conflict."""
+        first = _make_mock_alert(status=AlertStatus.OPEN, fingerprint="legacy-collision")
+        second = _make_mock_alert(status=AlertStatus.ACKNOWLEDGED, fingerprint="legacy-collision")
+        first.rule_id = second.rule_id = "DET-LEG-COLLISION"
+
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([first, second]))
+        repo.create = AsyncMock()
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+
+        incoming = _make_alert_create(rule_id="DET-LEG-COLLISION")
+        svc = AlertGeneratorService(repository=repo)
+
+        with (
+            patch(
+                "src.coherence.services.alerts.generator.AlertGeneratorService._fingerprint",
+                return_value="legacy-collision",
+            ),
+            pytest.raises(Exception, match="LEGACY_IDENTITY_CONFLICT"),
+        ):
+            await svc.process_violations(
+                project_id=uuid4(),
+                tenant_id=uuid4(),
+                violations=[incoming],
+            )
