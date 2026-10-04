@@ -38,6 +38,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AlertResponseAffectedEntities } from "./alertResponseAffectedEntities";
+import type { DetectionEvidenceResponse } from "./detectionEvidenceResponse";
 
 export interface AlertResponse {
   id: string;
@@ -49,6 +50,8 @@ export interface AlertResponse {
   message: string;
   status: string;
   affected_entities?: AlertResponseAffectedEntities;
+  source_clause_id?: string | null;
+  detection_evidence?: DetectionEvidenceResponse | null;
   reviewed_by?: string | null;
   reviewed_at?: string | null;
   root_cause?: string | null;
