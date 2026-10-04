@@ -64,6 +64,8 @@ class CreateAlertRequest(BaseModel):
     severity: Literal["low", "medium", "high", "critical"]
     message: str
     affected_entities: dict[str, Any] = Field(default_factory=dict)
+    source_clause_id: UUID | None = None
+    detection_evidence: DetectionEvidenceResponse | None = None
 
 
 class ReviewAlertRequest(BaseModel):
@@ -102,6 +104,15 @@ class BulkResolveRequest(BaseModel):
     alert_ids: list[str]
     resolution: str
     root_cause: str | None = None
+
+
+class DetectionEvidenceResponse(BaseModel):
+    """Detector-produced provenance; distinct from reviewer-attached evidence."""
+
+    source_clause_id: str | None = None
+    source_document_id: str | None = None
+    claim: str = ""
+    quote: str = ""
 
 
 class AlertResponse(BaseModel):
