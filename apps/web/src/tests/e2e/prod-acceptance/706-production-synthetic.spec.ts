@@ -208,6 +208,124 @@ function matchesProjectApiPath(
   );
 }
 
+const EVIDENCE_RELOAD_MAX_ATTEMPTS = 3;
+const EVIDENCE_RATE_LIMIT_SETTLE_MS = 1_000;
+
+function matchesDocumentDetailApiPath(
+  pathname: string,
+  documentId: string,
+): boolean {
+  const paths = [
+    `/api/documents/${documentId}`,
+    `/api/v1/documents/${documentId}`,
+  ];
+  return paths.some(
+    (expected) => pathname === expected || pathname === `${expected}/`,
+  );
+}
+
+function positiveHeaderSeconds(value: string | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function boundedRateLimitDelayMs(response: Response, header: string): number | null {
+  const seconds = positiveHeaderSeconds(response.headers()[header]);
+  return seconds === null
+    ? null
+    : Math.min(seconds * 1_000 + EVIDENCE_RATE_LIMIT_SETTLE_MS, 61_000);
+}
+
+function assertEvidenceDocumentResponse(response: Response): void {
+  const status = response.status();
+  if (status >= 300 && status < 400) {
+    throw new Error(`PROD_ACCEPTANCE_EVIDENCE_REDIRECT_REJECTED:${status}`);
+  }
+  if (status === 401 || status === 403) {
+    throw new Error(`PROD_ACCEPTANCE_EVIDENCE_AUTH_FAILED:${status}`);
+  }
+  if (status >= 400 && status < 500 && status !== 429) {
+    throw new Error(`PROD_ACCEPTANCE_EVIDENCE_HTTP_${status}`);
+  }
+  if (status !== 200 && status !== 429) {
+    throw new Error(`PROD_ACCEPTANCE_EVIDENCE_HTTP_${status}`);
+  }
+}
+
+async function waitForFreshEvidenceReloadWindow(
+  page: Page,
+  initialDocumentResponse: Response,
+): Promise<void> {
+  assertEvidenceDocumentResponse(initialDocumentResponse);
+  if (initialDocumentResponse.status() !== 200) {
+    throw new Error(
+      `PROD_ACCEPTANCE_EVIDENCE_INITIAL_DOCUMENT_HTTP_${initialDocumentResponse.status()}`,
+    );
+  }
+
+  // Evidence is a fan-out UI. Start its hard-refresh proof in the next
+  // production fixed-window budget when the server exposes that boundary,
+  // rather than racing the same user budget already consumed by processing.
+  const resetMs = boundedRateLimitDelayMs(
+    initialDocumentResponse,
+    "x-ratelimit-reset",
+  );
+  if (resetMs !== null) {
+    await page.waitForTimeout(resetMs);
+  }
+}
+
+async function reloadExactEvidenceAddress(
+  page: Page,
+  projectId: string,
+  documentId: string,
+  clauseId: string,
+): Promise<void> {
+  const targetUrl =
+    `${baseUrl()}/projects/${projectId}/evidence?documentId=${encodeURIComponent(documentId)}&highlightId=${encodeURIComponent(clauseId)}`;
+
+  for (let attempt = 1; attempt <= EVIDENCE_RELOAD_MAX_ATTEMPTS; attempt += 1) {
+    const documentResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "GET" &&
+        matchesDocumentDetailApiPath(responsePath(response), documentId),
+      { timeout: 60_000 },
+    );
+
+    if (attempt === 1) {
+      await page.reload({ waitUntil: "domcontentloaded" });
+    } else {
+      await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+    }
+
+    await page.waitForURL(
+      (url) =>
+        url.pathname === `/projects/${projectId}/evidence` &&
+        url.searchParams.get("documentId") === documentId &&
+        url.searchParams.get("highlightId") === clauseId,
+      { timeout: 30_000 },
+    );
+
+    const response = await documentResponse;
+    assertEvidenceDocumentResponse(response);
+    if (response.status() === 200) return;
+
+    const retryMs = boundedRateLimitDelayMs(response, "retry-after");
+    if (retryMs === null) {
+      throw new Error("PROD_ACCEPTANCE_EVIDENCE_RETRY_AFTER_MISSING");
+    }
+
+    // Stop React Query retries from spending the next fixed window while we
+    // honor the server's Retry-After. The next attempt returns to the exact
+    // same deep link and must still resolve the same clause.
+    await quiesceBrowserPage(page);
+    await page.waitForTimeout(retryMs);
+  }
+
+  throw new Error("PROD_ACCEPTANCE_EVIDENCE_RATE_LIMIT_TIMEOUT");
+}
+
 async function resolveConfiguredProductionBackendOrigin(
   page: Page,
 ): Promise<string> {
@@ -779,6 +897,12 @@ test.describe("Issue #706 production synthetic acceptance", () => {
     const evidenceLink = evidenceLinks.first();
     const clauseId = await evidenceLink.getAttribute("data-clause-id");
     if (!clauseId) throw new Error("PROD_ACCEPTANCE_EVIDENCE_CLAUSE_ID_MISSING");
+    const initialEvidenceDocumentResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "GET" &&
+        matchesDocumentDetailApiPath(responsePath(response), upload.documentId),
+      { timeout: 60_000 },
+    );
     await evidenceLink.click();
     await page.waitForURL(
       (url) =>
@@ -793,6 +917,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
     const sourceClauseEvidence = page.getByTestId("evidence-link-source-clause");
     const exactEvidenceLanding = activeEvidence.or(sourceClauseEvidence).first();
     await expect(exactEvidenceLanding).toBeVisible({ timeout: 30_000 });
+    const initialDocumentResponse = await initialEvidenceDocumentResponse;
 
     if ((await activeEvidence.count()) > 0) {
       await expect(activeEvidence).toContainText(/Page\s+\d+/);
@@ -808,15 +933,15 @@ test.describe("Issue #706 production synthetic acceptance", () => {
       await expect(page.getByTestId("evidence-link-document-fallback")).toHaveCount(0);
     }
 
-    // Hard refresh must preserve the exact evidence address and the same
-    // truthful resolution mode (semantic entity or source clause).
-    await page.reload();
-    await page.waitForURL(
-      (url) =>
-        url.pathname === `/projects/${projectId}/evidence` &&
-        url.searchParams.get("documentId") === upload.documentId &&
-        url.searchParams.get("highlightId") === clauseId,
-      { timeout: 30_000 },
+    // A hard refresh fans out several authenticated UI reads. Preserve the
+    // exact evidence address while respecting the production fixed-window
+    // limiter instead of misclassifying a legitimate 429 as missing evidence.
+    await waitForFreshEvidenceReloadWindow(page, initialDocumentResponse);
+    await reloadExactEvidenceAddress(
+      page,
+      projectId,
+      upload.documentId,
+      clauseId,
     );
     await expect(activeEvidence.or(sourceClauseEvidence).first()).toBeVisible({
       timeout: 30_000,
@@ -825,6 +950,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
       await expect(activeEvidence).toHaveAttribute("data-entity-id", clauseId);
     } else {
       await expect(sourceClauseEvidence).toContainText(/page\s+\d+/i);
+      await expect(page.getByTestId("evidence-link-unavailable")).toHaveCount(0);
       await expect(page.getByTestId("evidence-link-document-fallback")).toHaveCount(0);
     }
 
