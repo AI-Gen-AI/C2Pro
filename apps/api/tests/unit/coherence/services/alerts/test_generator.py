@@ -187,6 +187,53 @@ class TestFingerprint:
         assert svc._fingerprint_existing(existing) == svc._fingerprint(incoming)
 
 
+    def test_parsed_text_locator_does_not_hide_materially_changed_finding(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        first = _make_alert_create(rule_id="AUDIT_INCOMPLETE", category="SCOPE")
+        first.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "parsed_deadbeef",
+                "source_document_id": "doc-fallback",
+                "claim": "Missing dimensions",
+                "quote": "Scope A",
+            }
+        }
+        second = first.model_copy(deep=True)
+        second.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "parsed_deadbeef",
+                "source_document_id": "doc-fallback",
+                "claim": "Different missing dimensions",
+                "quote": "Scope B",
+            }
+        }
+
+        assert svc._fingerprint(first) != svc._fingerprint(second)
+
+    def test_legacy_positional_rag_without_document_id_matches_incoming(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        existing = _make_mock_alert(fingerprint="")
+        existing.rule_id = "DET-LEG-RAG"
+        existing.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "chunk_1_deadbeef",
+                "claim": "Notice period mismatch",
+                "quote": "Notice shall be thirty days",
+            }
+        }
+        incoming = _make_alert_create(rule_id="DET-LEG-RAG", category="LEGAL")
+        incoming.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "chunk_7_deadbeef",
+                "source_document_id": "deadbeef-document",
+                "claim": "Notice period mismatch",
+                "quote": "Notice shall be thirty days",
+            }
+        }
+
+        assert svc._fingerprint_existing(existing) == svc._fingerprint(incoming)
+
+
     def test_stored_legacy_fingerprint_is_recomputed_with_current_identity_scheme(self) -> None:
         clause_id = uuid4()
         svc = AlertGeneratorService(repository=MagicMock())
