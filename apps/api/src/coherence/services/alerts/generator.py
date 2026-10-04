@@ -11,7 +11,7 @@ from src.analysis.ports.alert_repository import AlertRepository
 from src.analysis.ports.types import AlertRecord
 from src.coherence.alert_generator import AlertGenerator
 from src.coherence.rules_engine.context_rules import CoherenceRuleResult
-from src.shared_kernel.enums import AlertSeverity, AlertStatus
+from src.shared_kernel.enums import AlertSeverity, AlertStatus, AlertType
 
 
 class AlertGeneratorService:
@@ -23,13 +23,26 @@ class AlertGeneratorService:
         project_id: UUID,
         violations: list[AlertCreate],
         *,
+        tenant_id: UUID | None = None,
         auto_resolve: bool = True,
     ) -> list[AlertRecord]:
         """
         Persist new alerts, update existing ones, and optionally auto-resolve missing ones.
         """
-        fingerprints = {self._fingerprint(violation) for violation in violations}
-        existing = await self._load_existing(project_id)
+        # Collapse duplicate findings within the same evaluation before touching
+        # persistence.  A repeated detector emission is the same observation, not
+        # a second user-visible alert.
+        unique_violations: list[tuple[str, AlertCreate]] = []
+        seen_fingerprints: set[str] = set()
+        for violation in violations:
+            fingerprint = self._fingerprint(violation)
+            if fingerprint in seen_fingerprints:
+                continue
+            seen_fingerprints.add(fingerprint)
+            unique_violations.append((fingerprint, violation))
+
+        fingerprints = set(seen_fingerprints)
+        existing = await self._load_existing(project_id, tenant_id=tenant_id)
         existing_by_fp = {
             (alert.alert_metadata or {}).get("fingerprint"): alert for alert in existing
         }
@@ -37,8 +50,7 @@ class AlertGeneratorService:
         processed: list[AlertRecord] = []
         now = datetime.now(UTC)
 
-        for violation in violations:
-            fingerprint = self._fingerprint(violation)
+        for fingerprint, violation in unique_violations:
             alert = existing_by_fp.get(fingerprint)
 
             if alert is None:
@@ -46,17 +58,24 @@ class AlertGeneratorService:
                 processed.append(created)
                 continue
 
-            if alert.status == AlertStatus.OPEN:
-                self._update_alert(alert, violation, fingerprint)
-            else:
+            if alert.status == AlertStatus.RESOLVED:
+                # A previously fixed finding detected again is a genuine regression.
                 self._reopen_alert(alert, violation, fingerprint)
+            else:
+                # OPEN findings stay open. ACKNOWLEDGED (accepted/genuine variance)
+                # and DISMISSED (false positive) are human dispositions and must not
+                # be silently rewritten just because the same detector fires again.
+                self._update_alert(alert, violation, fingerprint)
             await self._repository.update(alert)
             processed.append(alert)
 
         if auto_resolve:
             for alert in existing:
                 existing_fingerprint = (alert.alert_metadata or {}).get("fingerprint")
-                if alert.status == AlertStatus.OPEN and existing_fingerprint not in fingerprints:
+                if (
+                    alert.status in {AlertStatus.OPEN, AlertStatus.ACKNOWLEDGED}
+                    and existing_fingerprint not in fingerprints
+                ):
                     alert.status = AlertStatus.RESOLVED
                     alert.resolved_at = now
                     alert.resolution_notes = self._merge_notes(
@@ -87,12 +106,16 @@ class AlertGeneratorService:
             auto_resolve=auto_resolve,
         )
 
-    async def _load_existing(self, project_id: UUID) -> list[AlertRecord]:
+    async def _load_existing(
+        self, project_id: UUID, *, tenant_id: UUID | None = None
+    ) -> list[AlertRecord]:
         items: list[AlertRecord] = []
         cursor = None
         while True:
             page = await self._repository.list_for_project(
                 project_id=project_id,
+                tenant_id=tenant_id,
+                alert_type=AlertType.COHERENCE,
                 cursor=cursor,
                 limit=200,
             )
@@ -120,7 +143,11 @@ class AlertGeneratorService:
         alert.related_clause_ids = violation.related_clause_ids
         alert.affected_entities = violation.affected_entities
         alert.impact_level = violation.impact_level
-        alert.alert_metadata = self._build_metadata(violation, fingerprint)
+        alert.alert_metadata = self._build_metadata(
+            violation,
+            fingerprint,
+            existing_metadata=alert.alert_metadata,
+        )
 
     def _reopen_alert(self, alert: AlertRecord, violation: AlertCreate, fingerprint: str) -> None:
         alert.status = AlertStatus.OPEN
@@ -132,8 +159,17 @@ class AlertGeneratorService:
         )
         self._update_alert(alert, violation, fingerprint)
 
-    def _build_metadata(self, violation: AlertCreate, fingerprint: str) -> dict[str, Any]:
-        metadata = dict(violation.alert_metadata or {})
+    def _build_metadata(
+        self,
+        violation: AlertCreate,
+        fingerprint: str,
+        *,
+        existing_metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        # Detector fields may refresh on every evaluation, but human-managed
+        # history/evidence/disposition metadata must survive the refresh.
+        metadata = dict(existing_metadata or {})
+        metadata.update(dict(violation.alert_metadata or {}))
         metadata["fingerprint"] = fingerprint
         metadata["requires_human_review"] = self._requires_human_review(violation)
         return metadata

@@ -271,7 +271,9 @@ class _StatefulAlertRepo:
         self.create_calls = 0
         self.update_calls = 0
 
-    async def list_for_project(self, project_id, cursor=None, limit=200):  # noqa: ANN001, ARG002
+    async def list_for_project(
+        self, project_id, tenant_id=None, alert_type=None, cursor=None, limit=200
+    ):  # noqa: ANN001, ARG002
         return _make_mock_page(list(self._alerts), has_more=False)
 
     async def create(self, payload):  # noqa: ANN001
