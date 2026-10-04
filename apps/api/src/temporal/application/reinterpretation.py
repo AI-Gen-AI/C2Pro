@@ -62,6 +62,9 @@ async def reinterpret_change_event(
     target_hash = provenance.get("target_blob_hash")
     if not isinstance(source_hash, str) or not isinstance(target_hash, str):
         return None
+    # The clause pairings are the original matcher's; L2 only re-reads them. An
+    # older matcher's pairings must never be relabelled as the current matcher's.
+    matcher_version = provenance.get("diff_engine_version")
     return build_change_projection_event(
         changeset=enriched,
         document_id=UUID(document_id),
@@ -73,6 +76,7 @@ async def reinterpret_change_event(
         change_cause=ChangeCause.NEWLY_DISCOVERED,
         event_type="revision.reinterpreted",
         provenance_extra={"reinterpretation_of_event_id": str(original_event.event_id)},
+        diff_engine_version=matcher_version if isinstance(matcher_version, str) else "unknown",
     )
 
 

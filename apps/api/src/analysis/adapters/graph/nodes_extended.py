@@ -36,7 +36,9 @@ from src.analysis.application.clause_evidence import (
     REASON_MISSING_IDENTITY,
     REASON_NO_PERSISTED_CLAUSES,
     REASON_NON_CONTRACT,
+    REASON_STALE_REVISION_CLAUSES,
     ClauseEvidence,
+    StaleClauseEvidenceError,
     granular_evidence,
     whole_document_clause_id,
     whole_document_evidence,
@@ -638,6 +640,20 @@ async def _resolve_clause_evidence(state: ProjectState) -> ClauseEvidence:
     try:
         persisted = await load_persisted_clause_evidence(
             UUID(str(tenant_id)), UUID(str(raw_document_id))
+        )
+    except StaleClauseEvidenceError:
+        # The persisted rows describe an earlier revision: score the current
+        # revision's own text at document granularity instead of passing the old
+        # clauses off as this revision's clause evidence.
+        logger.warning(
+            "node_coherence_scorer_clause_evidence_stale_revision",
+            document_id=document_id,
+        )
+        return _legacy_whole_document_evidence(
+            state,
+            doc_type=doc_type,
+            document_id=document_id,
+            degradation_reason=REASON_STALE_REVISION_CLAUSES,
         )
     except Exception as exc:  # noqa: BLE001 - a clause-store outage degrades, never fails N8.
         logger.warning(
