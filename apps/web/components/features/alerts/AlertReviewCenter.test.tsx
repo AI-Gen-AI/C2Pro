@@ -4,7 +4,7 @@
  */
 import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@/src/tests/test-utils";
+import { fireEvent, render, screen, waitFor } from "@/src/tests/test-utils";
 import { AlertReviewCenter } from "@/components/features/alerts/AlertReviewCenter";
 
 vi.setConfig({ testTimeout: 10_000, hookTimeout: 10_000 });
@@ -327,6 +327,91 @@ describe("S3-04 RED - AlertReviewCenter", () => {
     expect(screen.queryByText(/critical ld cap conflict/i)).not.toBeInTheDocument();
     expect(screen.getByText(/high budget exposure/i)).toBeInTheDocument();
     expect(screen.getByText(/low notice wording/i)).toBeInTheDocument();
+  });
+
+
+  it("[B1-PERSIST-01] delegates canonical mutations and hides demo-only destructive controls", async () => {
+    const onApprove = vi.fn().mockResolvedValue(undefined);
+    const onReject = vi.fn().mockResolvedValue(undefined);
+    const onResolve = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <AlertReviewCenter
+        projectId="proj-real-001"
+        alerts={[
+          {
+            id: "alert-persist",
+            title: "Schedule mismatch",
+            severity: "high",
+            status: "pending",
+          },
+        ]}
+        onApprove={onApprove}
+        onReject={onReject}
+        onResolve={onResolve}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /new alert/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /edit alert-persist/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /delete alert-persist/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /approve alert-persist/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /i confirm approval/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm approve/i }));
+
+    await waitFor(() => expect(onApprove).toHaveBeenCalledWith("alert-persist"));
+  });
+
+  it("[B1-PERSIST-02] sends rejection reason and resolution payload to canonical handlers", async () => {
+    const onApprove = vi.fn().mockResolvedValue(undefined);
+    const onReject = vi.fn().mockResolvedValue(undefined);
+    const onResolve = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <AlertReviewCenter
+        projectId="proj-real-001"
+        alerts={[
+          {
+            id: "alert-review",
+            title: "Insurance conflict",
+            severity: "high",
+            status: "pending",
+          },
+        ]}
+        onApprove={onApprove}
+        onReject={onReject}
+        onResolve={onResolve}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /reject alert-review/i }));
+    fireEvent.change(screen.getByLabelText(/rejection reason/i), {
+      target: { value: "False positive after source review" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /confirm reject/i }));
+    await waitFor(() =>
+      expect(onReject).toHaveBeenCalledWith(
+        "alert-review",
+        "False positive after source review",
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /resolve alert-review/i }));
+    fireEvent.change(screen.getByLabelText(/resolution notes/i), {
+      target: { value: "Contract wording corrected and source evidence updated." },
+    });
+    fireEvent.change(screen.getByLabelText(/root cause/i), {
+      target: { value: "scope_change" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /confirm resolve/i }));
+    await waitFor(() =>
+      expect(onResolve).toHaveBeenCalledWith(
+        "alert-review",
+        "Contract wording corrected and source evidence updated.",
+        "scope_change",
+      ),
+    );
   });
 
   it("[TS-UD-COH-V1-09] copies a procurement-ready alert message", async () => {
