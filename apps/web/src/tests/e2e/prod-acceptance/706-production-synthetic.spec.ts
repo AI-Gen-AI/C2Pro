@@ -64,10 +64,12 @@ interface HealthVector {
 
 type ObservedApiAuthContext = {
   origin: string;
-  headers: {
-    Authorization: string;
-    "X-Tenant-ID": string;
-  };
+  tenantId: string;
+};
+
+type RefreshedApiAuthHeaders = {
+  Authorization: string;
+  "X-Tenant-ID": string;
 };
 
 let observedApiAuthContext: ObservedApiAuthContext | null = null;
@@ -94,6 +96,98 @@ function requireHitl(): boolean {
 
 async function quiesceBrowserPage(page: Page): Promise<void> {
   await page.goto("about:blank");
+}
+
+async function createPollingAuthPage(page: Page): Promise<Page> {
+  const frontendOrigin = requireProductionOrigin(page.url());
+  const expectedOrganizationId =
+    process.env.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID;
+  if (!expectedOrganizationId) {
+    throw new Error(
+      "PROD_ACCEPTANCE_MISSING_ENV:PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID",
+    );
+  }
+
+  const authPage = await page.context().newPage();
+  await authPage.route("**/*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.origin === frontendOrigin && url.pathname.startsWith("/api/")) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+
+  await authPage.goto(`${frontendOrigin}/projects`, {
+    waitUntil: "domcontentloaded",
+  });
+  requireProductionOrigin(authPage.url());
+
+  try {
+    await authPage.waitForFunction(
+      (expectedOrgId) =>
+        window.Clerk?.session?.status === "active" &&
+        window.Clerk?.organization?.id === expectedOrgId,
+      expectedOrganizationId,
+      { timeout: 60_000 },
+    );
+  } catch {
+    throw new Error("PROD_ACCEPTANCE_POLL_AUTH_SESSION_NOT_READY");
+  }
+
+  return authPage;
+}
+
+async function refreshedApiAuthHeaders(
+  authPage: Page,
+): Promise<RefreshedApiAuthHeaders> {
+  if (!observedApiAuthContext) {
+    throw new Error("PROD_ACCEPTANCE_API_AUTH_CONTEXT_MISSING");
+  }
+
+  const expectedOrganizationId =
+    process.env.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID;
+  if (!expectedOrganizationId) {
+    throw new Error(
+      "PROD_ACCEPTANCE_MISSING_ENV:PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID",
+    );
+  }
+
+  const result = await authPage.evaluate(
+    async (expectedOrgId) => {
+      const session = window.Clerk?.session;
+      if (session?.status !== "active") {
+        return { state: "SESSION_INACTIVE", token: null };
+      }
+      if (window.Clerk?.organization?.id !== expectedOrgId) {
+        return { state: "WRONG_ORGANIZATION", token: null };
+      }
+      try {
+        const token = await session.getToken({
+          organizationId: expectedOrgId,
+          skipCache: true,
+        });
+        return {
+          state: token ? "OK" : "TOKEN_NULL",
+          token,
+        };
+      } catch {
+        return { state: "TOKEN_ERROR", token: null };
+      }
+    },
+    expectedOrganizationId,
+  );
+
+  if (result.state !== "OK" || !result.token) {
+    throw new Error(
+      `PROD_ACCEPTANCE_POLL_AUTH_REFRESH_FAILED:${result.state}`,
+    );
+  }
+
+  return {
+    Authorization: `Bearer ${result.token}`,
+    "X-Tenant-ID": observedApiAuthContext.tenantId,
+  };
 }
 
 function responsePath(response: Response): string {
@@ -188,15 +282,13 @@ function captureObservedApiAuthContext(
   }
   observedApiAuthContext = {
     origin: configuredBackendOrigin,
-    headers: {
-      Authorization: authorization,
-      "X-Tenant-ID": tenantId,
-    },
+    tenantId,
   };
 }
 
 async function loadDocument(
   page: Page,
+  authPage: Page,
   projectId: string,
   documentId: string,
 ): Promise<{
@@ -208,6 +300,7 @@ async function loadDocument(
     throw new Error("PROD_ACCEPTANCE_DOCUMENT_AUTH_CONTEXT_MISSING");
   }
 
+  const headers = await refreshedApiAuthHeaders(authPage);
   let response: APIResponse;
   try {
     response = await page.request.get(
@@ -215,7 +308,7 @@ async function loadDocument(
       {
         failOnStatusCode: false,
         maxRedirects: 0,
-        headers: observedApiAuthContext.headers,
+        headers,
         timeout: 60_000,
       },
     );
@@ -280,6 +373,7 @@ const HEALTH_POLL_MAX_REQUESTS = 6;
 
 async function pollDocumentUntilTerminal(
   page: Page,
+  authPage: Page,
   projectId: string,
   documentId: string,
 ): Promise<DocumentRecord> {
@@ -288,7 +382,12 @@ async function pollDocumentUntilTerminal(
   let lastHttpStatus = 0;
 
   while (Date.now() < deadline) {
-    const observation = await loadDocument(page, projectId, documentId);
+    const observation = await loadDocument(
+      page,
+      authPage,
+      projectId,
+      documentId,
+    );
     lastHttpStatus = observation.status;
     if (observation.record) {
       latest = observation.record;
@@ -320,18 +419,25 @@ async function pollDocumentUntilTerminal(
 
 async function waitForDocumentAttentionOrCompletion(
   page: Page,
+  authPage: Page,
   projectId: string,
   documentId: string,
 ): Promise<DocumentRecord> {
-  return pollDocumentUntilTerminal(page, projectId, documentId);
+  return pollDocumentUntilTerminal(page, authPage, projectId, documentId);
 }
 
 async function waitForAnalyzed(
   page: Page,
+  authPage: Page,
   projectId: string,
   documentId: string,
 ): Promise<DocumentRecord> {
-  const latest = await pollDocumentUntilTerminal(page, projectId, documentId);
+  const latest = await pollDocumentUntilTerminal(
+    page,
+    authPage,
+    projectId,
+    documentId,
+  );
   const lifecycle = String(latest.lifecycle_status ?? "").toLowerCase();
   if (lifecycle === "analyzed") return latest;
   if (DOCUMENT_FAILURE_STATES.has(lifecycle)) {
@@ -344,6 +450,7 @@ async function waitForAnalyzed(
 
 async function loadHealth(
   page: Page,
+  authPage: Page,
   projectId: string,
 ): Promise<{
   status: number;
@@ -354,6 +461,7 @@ async function loadHealth(
     throw new Error("PROD_ACCEPTANCE_HEALTH_AUTH_CONTEXT_MISSING");
   }
 
+  const headers = await refreshedApiAuthHeaders(authPage);
   let response: APIResponse;
   try {
     response = await page.request.get(
@@ -361,7 +469,7 @@ async function loadHealth(
       {
         failOnStatusCode: false,
         maxRedirects: 0,
-        headers: observedApiAuthContext.headers,
+        headers,
         timeout: 60_000,
       },
     );
@@ -414,13 +522,14 @@ async function loadHealth(
 
 async function waitForHealth(
   page: Page,
+  authPage: Page,
   projectId: string,
 ): Promise<HealthVector> {
   let lastStatus = 0;
   let lastVector: HealthVector | null = null;
 
   for (let attempt = 1; attempt <= HEALTH_POLL_MAX_REQUESTS; attempt += 1) {
-    const observation = await loadHealth(page, projectId);
+    const observation = await loadHealth(page, authPage, projectId);
     lastStatus = observation.status;
     if (observation.vector) {
       lastVector = observation.vector;
@@ -551,6 +660,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
     const projectName = buildSyntheticProjectName();
     const projectId = await createProject(page, projectName);
     const upload = await uploadFixture(page, projectId);
+    const pollingAuthPage = await createPollingAuthPage(page);
     await quiesceBrowserPage(page);
 
     writeRunEvidence({
@@ -563,6 +673,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
 
     let terminal = await waitForDocumentAttentionOrCompletion(
       page,
+      pollingAuthPage,
       projectId,
       upload.documentId,
     );
@@ -583,7 +694,12 @@ test.describe("Issue #706 production synthetic acceptance", () => {
       );
       hitlExercised = true;
       await quiesceBrowserPage(page);
-      terminal = await waitForAnalyzed(page, projectId, upload.documentId);
+      terminal = await waitForAnalyzed(
+        page,
+        pollingAuthPage,
+        projectId,
+        upload.documentId,
+      );
     } else if (requireHitl()) {
       throw new Error(
         `PROD_ACCEPTANCE_HITL_REQUIRED_NOT_REACHED:${terminal.lifecycle_status ?? "null"}`,
@@ -592,7 +708,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
 
     expect(terminal.lifecycle_status).toBe("analyzed");
 
-    const health = await waitForHealth(page, projectId);
+    const health = await waitForHealth(page, pollingAuthPage, projectId);
     const refreshedHealth = page.waitForResponse(
       (response) =>
         response.request().method() === "GET" &&
@@ -683,9 +799,10 @@ test.describe("Issue #706 production synthetic acceptance", () => {
     await expect(activeEvidence).toHaveAttribute("data-entity-id", clauseId);
 
     // Real UI sign-out and password sign-in again: no storageState restore.
+    await pollingAuthPage.close();
     await signOutThroughUi(page);
     await signInSyntheticProductionUser(page);
-    const healthAfterRelogin = await waitForHealth(page, projectId);
+    const healthAfterRelogin = await waitForHealth(page, page, projectId);
     expect(
       healthAfterRelogin.single_document_coverage?.assessments?.map(
         (item) => item.category,
