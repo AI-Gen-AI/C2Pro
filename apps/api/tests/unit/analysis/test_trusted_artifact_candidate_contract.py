@@ -1,4 +1,6 @@
 """#714 trusted-state candidate persistence contract — RED first."""
+from sqlalchemy import CheckConstraint
+
 from src.analysis.adapters.persistence.models import DocumentArtifactORM
 
 
@@ -14,7 +16,7 @@ def test_document_artifact_trust_state_constraint_supports_required_states() -> 
     checks = {
         constraint.name: str(constraint.sqltext)
         for constraint in DocumentArtifactORM.__table__.constraints
-        if getattr(constraint, "name", None)
+        if isinstance(constraint, CheckConstraint) and getattr(constraint, "name", None)
     }
 
     trust_check = checks.get("ck_document_artifacts_trust_state", "")
