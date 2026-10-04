@@ -19,9 +19,9 @@ class _Session:
         self.rollbacks = 0
         self.executed: list[str] = []
 
-    async def execute(self, statement):
+    async def execute(self, statement, params=None):
         self.executed.append(str(statement))
-        return SimpleNamespace(all=lambda: [])
+        return SimpleNamespace(all=lambda: [], first=lambda: None)
 
     async def commit(self) -> None:
         self.commits += 1
@@ -171,3 +171,89 @@ async def test_enqueue_daily_project_snapshots_async_enqueues_active_projects(
             "source_event_id": None,
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_source_event_snapshot_takes_transaction_lock_before_writer(monkeypatch) -> None:
+    """Concurrent deliveries share one DB transaction-level event lock."""
+    from src.core.tasks import snapshot_tasks
+
+    session = _Session()
+    source_event_id = uuid4()
+    observed: dict[str, object] = {}
+
+    @asynccontextmanager
+    async def fake_raw_session():
+        yield session
+
+    class FakeWriter:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        async def write_snapshot(self, **kwargs):
+            observed["lock_seen_before_writer"] = any(
+                "pg_advisory_xact_lock" in statement for statement in session.executed
+            )
+            return SimpleNamespace(snapshot_id=uuid4(), **kwargs)
+
+    monkeypatch.setattr(snapshot_tasks, "init_db", lambda: None)
+    monkeypatch.setattr(snapshot_tasks, "get_raw_session", fake_raw_session)
+    monkeypatch.setattr(snapshot_tasks, "SnapshotWriter", FakeWriter)
+
+    result = await snapshot_tasks._write_project_snapshot_async(
+        project_id=uuid4(),
+        tenant_id=TenantId(uuid4()),
+        trigger=SnapshotTrigger.GRAPH_COMPLETED.value,
+        source_event_id=source_event_id,
+    )
+
+    assert result["status"] == "ok"
+    assert observed["lock_seen_before_writer"] is True
+    assert sum("pg_advisory_xact_lock" in statement for statement in session.executed) == 1
+    assert session.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_stale_hitl_source_event_is_not_written(monkeypatch) -> None:
+    """A delayed HITL task cannot project a superseded processing generation."""
+    from src.core.tasks import snapshot_tasks
+
+    session = _Session()
+    writer_called = False
+
+    @asynccontextmanager
+    async def fake_raw_session():
+        yield session
+
+    async def stale_lineage(*_args, **_kwargs) -> bool:
+        return False
+
+    class FakeWriter:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        async def write_snapshot(self, **_kwargs):
+            nonlocal writer_called
+            writer_called = True
+            return SimpleNamespace(snapshot_id=uuid4())
+
+    monkeypatch.setattr(snapshot_tasks, "init_db", lambda: None)
+    monkeypatch.setattr(snapshot_tasks, "get_raw_session", fake_raw_session)
+    monkeypatch.setattr(snapshot_tasks, "SnapshotWriter", FakeWriter)
+    monkeypatch.setattr(
+        snapshot_tasks,
+        "_source_event_is_current_hitl_lineage",
+        stale_lineage,
+    )
+
+    result = await snapshot_tasks._write_project_snapshot_async(
+        project_id=uuid4(),
+        tenant_id=TenantId(uuid4()),
+        trigger=SnapshotTrigger.GRAPH_COMPLETED.value,
+        source_event_id=uuid4(),
+    )
+
+    assert result == {"status": "skipped_stale_hitl_lineage", "snapshot_id": ""}
+    assert writer_called is False
+    assert session.commits == 1
+    assert session.rollbacks == 0

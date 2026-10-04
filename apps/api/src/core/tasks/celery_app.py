@@ -96,6 +96,13 @@ celery_app.conf.update(
             "task": "hitl_resume.reconcile",
             "schedule": 60.0,
         },
+        # #795: trusted HITL finalization writes a durable GRAPH_COMPLETED
+        # Health projection obligation. This bounded sweep recovers a lost
+        # post-commit Celery dispatch without replaying the graph or decision.
+        "hitl-health-projection-reconcile": {
+            "task": "hitl_resume.reconcile_health_projection",
+            "schedule": 60.0,
+        },
         "document-processing-reconcile": {
             "task": "documents.reconcile_stale_processing",
             "schedule": 60.0,
