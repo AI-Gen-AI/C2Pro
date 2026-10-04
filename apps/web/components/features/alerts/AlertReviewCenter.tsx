@@ -4,6 +4,7 @@
  */
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type AlertSeverity = "critical" | "high" | "medium" | "low";
@@ -15,6 +16,10 @@ export interface ReviewAlert {
   severity: AlertSeverity;
   status: AlertStatus;
   clauseId?: string;
+  addressableClauseId?: string;
+  sourceDocumentId?: string;
+  evidenceClaim?: string;
+  evidenceQuote?: string;
   assignee?: string;
   rejectionReason?: string;
   resolutionNotes?: string;
@@ -286,6 +291,8 @@ export function AlertReviewCenter({
       `Severity: ${alert.severity.toUpperCase()}`,
       `Status: ${alert.status}`,
       `Clause: ${alert.clauseId ?? "—"}`,
+      `Evidence claim: ${alert.evidenceClaim ?? "—"}`,
+      `Evidence quote: ${alert.evidenceQuote ?? "—"}`,
       `Owner: ${alert.assignee ?? "—"}`,
       "Please review the source evidence and confirm the vendor response or corrective action.",
     ].join("\n");
@@ -335,6 +342,7 @@ export function AlertReviewCenter({
             <th>Severity</th>
             <th>Status</th>
             <th>Clause</th>
+            <th>Evidence</th>
             <th>Assignee</th>
             <th>Actions</th>
           </tr>
@@ -345,7 +353,43 @@ export function AlertReviewCenter({
               <td>{alert.title}</td>
               <td>{alert.severity}</td>
               <td>{alert.status}</td>
-              <td>{alert.clauseId ?? "—"}</td>
+              <td>
+                {alert.clauseId ? (
+                  alert.addressableClauseId && alert.sourceDocumentId ? (
+                    <Link
+                      href={
+                        "/projects/" +
+                        encodeURIComponent(projectId) +
+                        "/evidence?documentId=" +
+                        encodeURIComponent(alert.sourceDocumentId) +
+                        "&highlightId=" +
+                        encodeURIComponent(alert.addressableClauseId)
+                      }
+                      aria-label={"View evidence for " + alert.addressableClauseId}
+                    >
+                      {alert.clauseId}
+                    </Link>
+                  ) : (
+                    alert.clauseId
+                  )
+                ) : (
+                  "—"
+                )}
+              </td>
+              <td>
+                {alert.evidenceClaim || alert.evidenceQuote ? (
+                  <div className="space-y-1">
+                    {alert.evidenceClaim ? <div>{alert.evidenceClaim}</div> : null}
+                    {alert.evidenceQuote ? (
+                      <q className="text-sm text-muted-foreground">
+                        {alert.evidenceQuote}
+                      </q>
+                    ) : null}
+                  </div>
+                ) : (
+                  "—"
+                )}
+              </td>
               <td>{alert.assignee ?? "—"}</td>
               <td>
                 <button
