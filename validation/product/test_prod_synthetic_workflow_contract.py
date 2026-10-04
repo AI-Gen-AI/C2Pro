@@ -666,3 +666,57 @@ def test_configured_backend_origin_requires_https_absolute_url() -> None:
     assert "cause:" not in helper
     assert 'parsed.protocol !== "https:"' in helper
     assert "PROD_ACCEPTANCE_BACKEND_ORIGIN_INVALID" in helper
+
+
+def test_evidence_hard_refresh_honors_production_rate_limit_without_weakening_addressability() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "EVIDENCE_RELOAD_MAX_ATTEMPTS = 3" in spec
+    assert "async function waitForFreshEvidenceReloadWindow(" in spec
+    assert "async function reloadExactEvidenceAddress(" in spec
+    assert '"x-ratelimit-reset"' in spec
+    assert '"retry-after"' in spec
+    assert "PROD_ACCEPTANCE_EVIDENCE_RATE_LIMIT_TIMEOUT" in spec
+    assert "PROD_ACCEPTANCE_EVIDENCE_RETRY_AFTER_MISSING" in spec
+    assert "PROD_ACCEPTANCE_EVIDENCE_AUTH_FAILED" in spec
+    assert "PROD_ACCEPTANCE_EVIDENCE_REDIRECT_REJECTED" in spec
+
+    helper_start = spec.index("async function reloadExactEvidenceAddress(")
+    helper_end = spec.index(
+        "async function resolveConfiguredProductionBackendOrigin(",
+        helper_start,
+    )
+    helper = spec[helper_start:helper_end]
+    assert 'await page.reload({ waitUntil: "domcontentloaded" });' in helper
+    assert "await quiesceBrowserPage(page);" in helper
+    assert "matchesDocumentDetailApiPath(responsePath(response), documentId)" in helper
+    assert "response.status() === 200" in helper
+    assert "document-fallback" not in helper
+
+    journey = spec[
+        spec.index('test("real user completes the canonical production journey"') :
+    ]
+    initial_response = journey.index("const initialEvidenceDocumentResponse = page.waitForResponse(")
+    initial_exact = journey.index(
+        "await expect(exactEvidenceLanding).toBeVisible({ timeout: 30_000 });"
+    )
+    fresh_window = journey.index(
+        "await waitForFreshEvidenceReloadWindow(page, initialDocumentResponse);"
+    )
+    reload_exact = journey.index("await reloadExactEvidenceAddress(")
+    assert initial_response < initial_exact < fresh_window < reload_exact
+
+    # The rate-limit recovery must not weaken the truthfulness contract:
+    # after the refreshed address resolves, document fallback remains forbidden.
+    after_reload = journey[reload_exact:]
+    assert 'page.getByTestId("evidence-link-document-fallback")' in after_reload
+    assert ".toHaveCount(0)" in after_reload
