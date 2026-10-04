@@ -65,7 +65,14 @@ class AlertGeneratorService:
                 metadata["fingerprint"] = stored_fingerprint
                 metadata["fingerprint_version"] = FINGERPRINT_VERSION
                 existing_alert.alert_metadata = metadata
-            existing_by_fp.setdefault(stored_fingerprint, existing_alert)
+
+            previous = existing_by_fp.get(stored_fingerprint)
+            if previous is not None and previous is not existing_alert:
+                raise RuntimeError(
+                    "LEGACY_IDENTITY_CONFLICT:"
+                    f"{project_id}:{stored_fingerprint}"
+                )
+            existing_by_fp[stored_fingerprint] = existing_alert
 
         processed: list[AlertRecord] = []
         now = datetime.now(UTC)
@@ -78,13 +85,18 @@ class AlertGeneratorService:
                 processed.append(created)
                 continue
 
-            if current_alert.status == AlertStatus.RESOLVED:
+            basis_changed = self._review_basis_changed(current_alert, violation)
+            if (
+                current_alert.status in {AlertStatus.ACKNOWLEDGED, AlertStatus.DISMISSED}
+                and basis_changed
+            ):
+                self._reopen_for_basis_change(current_alert, violation, fingerprint)
+            elif current_alert.status == AlertStatus.RESOLVED:
                 # A previously fixed finding detected again is a genuine regression.
                 self._reopen_alert(current_alert, violation, fingerprint)
             else:
-                # OPEN findings stay open. ACKNOWLEDGED (accepted/genuine variance)
-                # and DISMISSED (false positive) are human dispositions and must not
-                # be silently rewritten just because the same detector fires again.
+                # OPEN findings stay open. ACKNOWLEDGED/DISMISSED remain stable only
+                # while the exact reviewed evidence basis remains the same.
                 self._update_alert(current_alert, violation, fingerprint)
             await self._repository.update(current_alert)
             processed.append(current_alert)
@@ -180,6 +192,94 @@ class AlertGeneratorService:
         )
         self._update_alert(alert, violation, fingerprint)
 
+    def _reopen_for_basis_change(
+        self,
+        alert: AlertRecord,
+        violation: AlertCreate,
+        fingerprint: str,
+    ) -> None:
+        """Revalidate a basis-sensitive human disposition on new trusted evidence."""
+        existing_metadata = dict(alert.alert_metadata or {})
+        from_key = (
+            existing_metadata.get("disposition_basis_key")
+            or existing_metadata.get("current_observation_key")
+            or self._observation_key(existing_metadata)
+        )
+        incoming_metadata = dict(violation.alert_metadata or {})
+        to_key = self._observation_key(incoming_metadata)
+
+        history_raw = existing_metadata.get("history", [])
+        history = list(history_raw) if isinstance(history_raw, list) else []
+        already_recorded = any(
+            isinstance(item, dict)
+            and item.get("action") == "basis_changed_reopened"
+            and item.get("to_observation_key") == to_key
+            for item in history
+        )
+        if not already_recorded:
+            history.append(
+                {
+                    "action": "basis_changed_reopened",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "from_observation_key": from_key,
+                    "to_observation_key": to_key,
+                }
+            )
+        existing_metadata["history"] = history
+        alert.alert_metadata = existing_metadata
+        alert.status = AlertStatus.OPEN
+        alert.resolved_at = None
+        alert.resolved_by = None
+
+        current_approval = getattr(alert, "approval_status", None)
+        if current_approval is not None:
+            try:
+                setattr(alert, "approval_status", type(current_approval)("pending"))
+            except (TypeError, ValueError):
+                setattr(alert, "approval_status", "pending")
+
+        self._update_alert(alert, violation, fingerprint)
+
+    def _review_basis_changed(
+        self,
+        alert: AlertRecord,
+        violation: AlertCreate,
+    ) -> bool:
+        existing_metadata = dict(alert.alert_metadata or {})
+        reviewed_basis = (
+            existing_metadata.get("disposition_basis_key")
+            or existing_metadata.get("current_observation_key")
+            or self._observation_key(existing_metadata)
+        )
+        incoming_basis = self._observation_key(dict(violation.alert_metadata or {}))
+        return bool(
+            isinstance(reviewed_basis, str)
+            and reviewed_basis
+            and incoming_basis is not None
+            and incoming_basis != reviewed_basis
+        )
+
+    @staticmethod
+    def _observation_key(metadata: dict[str, Any]) -> str | None:
+        detector = metadata.get("detection_evidence")
+        if not isinstance(detector, dict):
+            return None
+
+        basis_fields = (
+            "revision_id",
+            "artifact_id",
+            "content_sha256",
+            "source_document_id",
+        )
+        parts = [
+            f"{field}={detector[field]}"
+            for field in basis_fields
+            if detector.get(field) not in (None, "")
+        ]
+        if not parts:
+            return None
+        return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+
     def _build_metadata(
         self,
         violation: AlertCreate,
@@ -201,6 +301,9 @@ class AlertGeneratorService:
         metadata["fingerprint"] = fingerprint
         metadata["fingerprint_version"] = FINGERPRINT_VERSION
         metadata["requires_human_review"] = self._requires_human_review(violation)
+        observation_key = self._observation_key(metadata)
+        if observation_key is not None:
+            metadata["current_observation_key"] = observation_key
         return metadata
 
     @staticmethod
