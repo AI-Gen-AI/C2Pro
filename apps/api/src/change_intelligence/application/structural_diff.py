@@ -123,13 +123,13 @@ _AMBIGUOUS = (
 )
 
 
-def _unpaired_fields(ambiguous: bool) -> dict[str, Any]:
+def _unpaired_fields(ambiguous: bool, reason: str | None = None) -> dict[str, Any]:
     if ambiguous:
         return {
             "match_confidence": 0.0,
             "needs_review": True,
             "match_basis": "ambiguous",
-            "match_rationale": _AMBIGUOUS,
+            "match_rationale": reason or _AMBIGUOUS,
         }
     return {
         "match_confidence": 1.0,
@@ -139,7 +139,9 @@ def _unpaired_fields(ambiguous: bool) -> dict[str, Any]:
     }
 
 
-def _added_change(*, clause: Clause, to_revision_id: UUID, ambiguous: bool) -> SemanticChange:
+def _added_change(
+    *, clause: Clause, to_revision_id: UUID, ambiguous: bool, reason: str | None = None
+) -> SemanticChange:
     anchor = display_anchor(clause)
     return SemanticChange(
         object_type="clause",
@@ -148,14 +150,16 @@ def _added_change(*, clause: Clause, to_revision_id: UUID, ambiguous: bool) -> S
         before=None,
         after=_clause_snapshot(clause),
         semantic_summary=f"clause {anchor} added",
-        **_unpaired_fields(ambiguous),
+        **_unpaired_fields(ambiguous, reason),
         evidence_refs=[
             _evidence_for_clause(clause=clause, revision_id=to_revision_id, side="after")
         ],
     )
 
 
-def _removed_change(*, clause: Clause, from_revision_id: UUID, ambiguous: bool) -> SemanticChange:
+def _removed_change(
+    *, clause: Clause, from_revision_id: UUID, ambiguous: bool, reason: str | None = None
+) -> SemanticChange:
     anchor = display_anchor(clause)
     return SemanticChange(
         object_type="clause",
@@ -164,7 +168,7 @@ def _removed_change(*, clause: Clause, from_revision_id: UUID, ambiguous: bool) 
         before=_clause_snapshot(clause),
         after=None,
         semantic_summary=f"clause {anchor} removed",
-        **_unpaired_fields(ambiguous),
+        **_unpaired_fields(ambiguous, reason),
         evidence_refs=[
             _evidence_for_clause(
                 clause=clause,
@@ -207,6 +211,7 @@ def diff_contract_revisions(
             clause=clause,
             from_revision_id=from_revision_id,
             ambiguous=id(clause) in ambiguous_old,
+            reason=resolution.unresolved_reason,
         )
         for clause in resolution.unmatched_old
     )
@@ -215,6 +220,7 @@ def diff_contract_revisions(
             clause=clause,
             to_revision_id=to_revision_id,
             ambiguous=id(clause) in ambiguous_new,
+            reason=resolution.unresolved_reason,
         )
         for clause in resolution.unmatched_new
     )

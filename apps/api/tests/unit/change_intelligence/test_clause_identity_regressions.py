@@ -433,3 +433,227 @@ def test_h_repeated_diff_is_deterministic(new_texts: list[str]) -> None:
 
     assert _fingerprint(first) == _fingerprint(second)
     assert sorted(map(str, _fingerprint(first))) == sorted(map(str, _fingerprint(reversed_input)))
+
+
+# --- Review hardening (PR #819) -----------------------------------------------
+
+PROGRESS = "2. The Contractor shall submit the monthly progress report to the Engineer."
+SAFETY = "2. The Contractor shall submit the monthly safety report to the Engineer."
+PROGRESS_SHIFTED = "3. The Contractor shall submit the monthly progress report to the Engineer for prompt approval."
+SCOPE_A = "1. Scope of the works is defined in Annex A of this contract."
+
+
+def test_reused_number_with_a_competing_candidate_is_never_deterministic() -> None:
+    """Codex P1: the shifted, lightly edited clause competes with the inserted one."""
+    old = _positional([SCOPE_A, PROGRESS], R1)
+    new = _positional([SCOPE_A, SAFETY, PROGRESS_SHIFTED], R2)
+
+    changeset = _diff(old, new)
+
+    assert changeset.changes
+    for change in changeset.changes:
+        assert change.needs_review is True
+        assert change.match_basis != "source_identifier"
+    assert (PROGRESS, SAFETY) not in [(_text(c.before), _text(c.after)) for c in changeset.changes]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "1.5 million EUR shall be paid to the Contractor on signature.",
+        "1.000.000 EUR is the total contract price for the works.",
+        "12.5 % of every payment is retained until final acceptance.",
+        "Clause 14.1 shall not apply to variations instructed by the Engineer.",
+        "2) the contractor shall comply with the site safety rules at all times.",
+        "3. the works include demolition of the existing structures on site.",
+        "04.10.2026 is the commencement date of the works under this contract.",
+        "Page 3 of 10",
+    ],
+)
+def test_incidental_numbers_are_not_source_identifiers(text: str) -> None:
+    from src.change_intelligence.application.anchor_resolver import split_source_label
+
+    label, _ = split_source_label(text)
+
+    assert label is None
+
+
+@pytest.mark.parametrize(
+    ("text", "label"),
+    [
+        ("4.2 Payment terms apply to every interim certificate.", "4.2"),
+        ("Clause 14.1 Payment of the contract price.", "clause 14.1"),
+        ("CLÁUSULA 4.2.- Plazo de ejecución de las obras.", "clausula 4.2"),
+        ("Annex III.2 Technical scope of the works.", "annex iii.2"),
+        ("2. Price. The contract price is fixed.", "2"),
+    ],
+)
+def test_genuine_headings_remain_source_identifiers(text: str, label: str) -> None:
+    from src.change_intelligence.application.anchor_resolver import split_source_label
+
+    assert split_source_label(text)[0] == label
+
+
+def test_a_number_repeated_inside_one_revision_is_not_an_identifier() -> None:
+    old = _positional(
+        [
+            "1. The Contractor shall provide the following documents to the Engineer.",
+            "1. The Employer shall provide access to the site within seven days.",
+        ],
+        R1,
+    )
+    new = _positional(
+        [
+            "1. The Contractor shall provide the following documents to the Engineer promptly.",
+            "1. The Employer shall provide access to the site within ten days.",
+        ],
+        R2,
+    )
+
+    changeset = _diff(old, new)
+
+    assert all(change.match_basis != "source_identifier" for change in changeset.changes)
+    assert all(change.needs_review for change in changeset.changes)
+
+
+def test_duplicated_text_under_new_numbers_is_not_a_deterministic_renumbering() -> None:
+    old = _positional(["5. Reserved.", "6. Reserved.", "7. Termination for convenience is excluded."], R1)
+    new = _positional(["6. Reserved.", "7. Reserved.", "8. Termination for convenience is excluded."], R2)
+
+    changeset = _diff(old, new)
+
+    for change in changeset.changes:
+        if _text(change.before).endswith("Reserved.") or _text(change.after).endswith("Reserved."):
+            assert change.needs_review is True
+
+
+@pytest.mark.parametrize(
+    ("old_text", "new_text", "allowed"),
+    [
+        # 1. same content, new identifier -> deterministic renumbering
+        ("5.2 Penalty cap is ten percent of the contract value.", "6.1 Penalty cap is ten percent of the contract value.", {"renumbered"}),
+        # 2. small edit + new identifier -> never a harmless renumbering
+        ("5.2 Penalty cap is ten percent of the contract value.", "6.1 Penalty cap is eleven percent of the contract value.", {"modified"}),
+        # 3. material edit + new identifier -> no identity claimed
+        ("5.2 Penalty cap is ten percent of the contract value.", "6.1 Insurance must cover all construction risks for the works.", {"added", "removed"}),
+    ],
+)
+def test_renumbering_never_hides_an_edit(old_text: str, new_text: str, allowed: set[str]) -> None:
+    changeset = _diff(_positional([old_text], R1), _positional([new_text], R2))
+
+    assert {change.change_type for change in changeset.changes} == allowed
+    for change in changeset.changes:
+        if change.change_type == "renumbered":
+            from src.change_intelligence.application.anchor_resolver import split_source_label
+
+            assert split_source_label(_text(change.before))[1] == split_source_label(_text(change.after))[1]
+        if change.change_type == "modified":
+            assert change.needs_review is True
+
+
+LONG_PROGRAMME = (
+    "The Contractor shall submit to the Engineer, within twenty-eight days after the Commencement Date, "
+    "a detailed time programme showing the order in which the Contractor proposes to carry out the Works, "
+    "including each stage of design, procurement, manufacture, delivery, construction, erection and testing, "
+    "and shall submit a revised programme whenever the previous programme is inconsistent with actual progress."
+)
+
+
+def test_a_small_edit_to_a_long_clause_is_paired_in_both_directions() -> None:
+    other = "The Employer shall give the Contractor right of access to all parts of the Site."
+    edited = LONG_PROGRAMME.replace("twenty-eight", "fourteen")
+    old, new = _positional([other, LONG_PROGRAMME], R1), _positional([other, edited], R2)
+
+    forward, backward = _diff(old, new), _diff(new, old)
+
+    for changeset in (forward, backward):
+        assert [change.change_type for change in changeset.changes] == ["modified"]
+        assert changeset.changes[0].match_basis == "similarity_candidate"
+    assert forward.changes[0].match_confidence == backward.changes[0].match_confidence
+
+
+def _inverse(changeset: ChangeSet) -> list[tuple[str, str, str, bool, str | None]]:
+    flip = {"added": "removed", "removed": "added"}
+    return sorted(
+        (flip.get(c.change_type, c.change_type), _text(c.after), _text(c.before), c.needs_review, c.match_basis)
+        for c in changeset.changes
+    )
+
+
+def _plain(changeset: ChangeSet) -> list[tuple[str, str, str, bool, str | None]]:
+    return sorted(
+        (c.change_type, _text(c.before), _text(c.after), c.needs_review, c.match_basis)
+        for c in changeset.changes
+    )
+
+
+@pytest.mark.parametrize(
+    ("old_texts", "new_texts"),
+    [
+        ([SCOPE, PRICE, PENALTIES, TERMINATION], [SCOPE, INSURANCE, _renumber(PRICE, "2", "3"), _renumber(PENALTIES, "3", "4"), _renumber(TERMINATION, "4", "5")]),
+        ([SCOPE, PRICE, PENALTIES], [SCOPE, PRICE, PENALTIES.replace("0.5%", "1.0%")]),
+        ([SCOPE_A, PROGRESS], [SCOPE_A, SAFETY, PROGRESS_SHIFTED]),
+        ([SCOPE, PRICE], [SCOPE, INSURANCE]),
+        (["5. Reserved.", "6. Reserved.", "7. Termination for convenience is excluded."], ["6. Reserved.", "7. Reserved.", "8. Termination for convenience is excluded."]),
+        ([LONG_PROGRAMME, SCOPE], [SCOPE, LONG_PROGRAMME.replace("detailed", "revised detailed")]),
+    ],
+)
+def test_reverse_diff_is_the_inverse_and_calls_do_not_share_state(old_texts: list[str], new_texts: list[str]) -> None:
+    old, new = _positional(old_texts, R1), _positional(new_texts, R2)
+
+    forward = _diff(old, new)
+    backward = diff_contract_revisions(
+        project_id=PROJECT, tenant_id=TENANT, from_revision_id=R2, to_revision_id=R1,
+        old_clauses=new, new_clauses=old,
+    )
+    again = _diff(old, new)
+
+    assert _inverse(forward) == _plain(backward)
+    assert _plain(forward) == _plain(again)
+
+
+def test_every_change_type_carries_revision_bound_evidence() -> None:
+    old = _positional(
+        [SCOPE, PRICE, PENALTIES, "9. Legacy reporting obligations apply to the Contractor monthly.",
+         "The Contractor shall submit the monthly progress report to the Engineer.",
+         "The Contractor shall submit the monthly safety report to the Engineer."],
+        R1,
+    )
+    new = _positional(
+        [_renumber(SCOPE, "1", "0"), PRICE.replace("1,000,000", "1,100,000"),
+         "12. New sustainability reporting obligations apply to the Contractor.",
+         "The Contractor shall submit the monthly quality report to the Engineer.",
+         PENALTIES.replace("0.5% of the contract price per day", "0.6% of the contract price per day")],
+        R2,
+    )
+
+    changeset = _diff(old, new)
+
+    assert {"added", "removed", "modified"} <= {change.change_type for change in changeset.changes}
+    _assert_revision_bound_evidence(changeset, old, new)
+    for change in changeset.changes:
+        sides = {ref.ref_id.rsplit(":", 1)[-1] for ref in change.evidence_refs}
+        expected = {side for side, snapshot in (("before", change.before), ("after", change.after)) if snapshot}
+        assert sides == expected
+
+
+def test_comparison_budget_fails_closed_instead_of_guessing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Too many mutually similar unpaired clauses: review everything, assert nothing."""
+    import src.change_intelligence.application.anchor_resolver as resolver
+
+    monkeypatch.setattr(resolver, "_MAX_FULL_COMPARISONS", 3)
+    old = _positional(
+        [f"{n}. The Contractor shall submit the monthly report number {n} to the Engineer." for n in range(1, 5)], R1
+    )
+    new = _positional(
+        [f"{n}. The Contractor shall submit the weekly report number {n} to the Engineer." for n in range(1, 5)], R2
+    )
+
+    changeset = _diff(old, new)
+
+    assert changeset.changes
+    assert _of(changeset, "modified") == []
+    for change in changeset.changes:
+        assert change.needs_review is True
+        assert change.match_basis == "ambiguous"
+        assert "comparison budget" in (change.match_rationale or "")
