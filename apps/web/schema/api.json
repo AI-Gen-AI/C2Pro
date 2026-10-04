@@ -7415,6 +7415,10 @@
             "type": "string",
             "title": "Event Type"
           },
+          "basis": {
+            "$ref": "#/components/schemas/EpistemicBasis",
+            "default": "observed"
+          },
           "state": {
             "type": "string",
             "title": "State"
@@ -7440,6 +7444,33 @@
               }
             ],
             "title": "Confidence"
+          },
+          "matcher_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matcher Status"
+          },
+          "legacy_matcher": {
+            "type": "boolean",
+            "title": "Legacy Matcher",
+            "default": false
+          },
+          "qualification_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification Reason"
           },
           "document_id": {
             "anyOf": [
@@ -7477,12 +7508,53 @@
             },
             "type": "array",
             "title": "Evidence Refs"
+          },
+          "impacts": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeImpact"
+            },
+            "type": "array",
+            "title": "Impacts"
+          },
+          "projection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevisionProjection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "required": ["event_id", "occurred_at", "event_type", "state"],
         "title": "ChangeDetailResponse",
         "description": "Evidence-grounded revision detail with L1/L2 before and after snapshots."
+      },
+      "ChangeImpact": {
+        "properties": {
+          "change_index": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Change Index"
+          },
+          "change_type": {
+            "type": "string",
+            "title": "Change Type"
+          },
+          "source": {
+            "$ref": "#/components/schemas/TemporalEntityRef"
+          },
+          "assessment": {
+            "$ref": "#/components/schemas/ImpactAssessment"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["change_index", "change_type", "source", "assessment"],
+        "title": "ChangeImpact",
+        "description": "The impact of one change within a stored change event."
       },
       "Clause": {
         "properties": {
@@ -8670,7 +8742,14 @@
             "title": "Text"
           },
           "page": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Page"
           },
           "confidence": {
@@ -8684,7 +8763,7 @@
           }
         },
         "type": "object",
-        "required": ["id", "type", "text", "page", "confidence"],
+        "required": ["id", "type", "text", "confidence"],
         "title": "DocumentEntityResponse",
         "description": "Entity extracted or derived from a persisted document."
       },
@@ -9630,6 +9709,11 @@
         "required": ["overall_score"],
         "title": "EnrichedCoherenceResult",
         "description": "Extended coherence result with diagnostic fields for v0.3 scoring.\n\nCoherenceResult remains the public API shape; this adds internal diagnostics\nfor debugging, dashboards, and score curve validation."
+      },
+      "EpistemicBasis": {
+        "type": "string",
+        "enum": ["observed", "derived", "projected", "trusted"],
+        "title": "EpistemicBasis"
       },
       "Evidence": {
         "properties": {
@@ -10788,10 +10872,174 @@
         "required": ["status", "source_domain", "evidence_tier"],
         "title": "HitlSection"
       },
+      "ImpactAssessment": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/ImpactStatus"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/EpistemicBasis",
+            "default": "derived"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status"],
+        "title": "ImpactAssessment"
+      },
+      "ImpactItem": {
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/ImpactTarget"
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/ImpactRelationship"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["CONFIRMED", "CANDIDATE"],
+            "title": "Status"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["target", "relationship", "status"],
+        "title": "ImpactItem"
+      },
       "ImpactLevel": {
         "type": "string",
         "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
         "title": "ImpactLevel"
+      },
+      "ImpactRelationship": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["direct", "indirect"],
+            "title": "Kind"
+          },
+          "via": {
+            "type": "string",
+            "title": "Via"
+          },
+          "link_confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Confidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["kind", "via"],
+        "title": "ImpactRelationship"
+      },
+      "ImpactStatus": {
+        "type": "string",
+        "enum": ["CONFIRMED", "CANDIDATE", "UNKNOWN"],
+        "title": "ImpactStatus"
+      },
+      "ImpactTarget": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "potentially_stale": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Potentially Stale"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["entity_type", "entity_id"],
+        "title": "ImpactTarget",
+        "description": "A persisted project entity that depends on the changed source entity."
       },
       "InterestLevel": {
         "type": "string",
@@ -12095,6 +12343,28 @@
         "title": "ProjectWBSResponse",
         "description": "Authoritative WBS contract: root items with nested children (procurement WBS store)."
       },
+      "ProjectionCandidate": {
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Artifact Id"
+          },
+          "artifact_version": {
+            "type": "integer",
+            "title": "Artifact Version"
+          },
+          "artifact_hash": {
+            "type": "string",
+            "title": "Artifact Hash"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["artifact_id", "artifact_version", "artifact_hash"],
+        "title": "ProjectionCandidate",
+        "description": "The exact #714 candidate envelope the projection substituted."
+      },
       "QueryResult": {
         "properties": {
           "data": {
@@ -12806,6 +13076,119 @@
           "CLOSED"
         ],
         "title": "ReviewStatus"
+      },
+      "RevisionProjection": {
+        "properties": {
+          "basis": {
+            "$ref": "#/components/schemas/EpistemicBasis",
+            "default": "projected"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["none", "provisional", "unavailable"],
+            "title": "Status"
+          },
+          "source_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Revision Id"
+          },
+          "trusted_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trusted Score"
+          },
+          "projected_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projected Score"
+          },
+          "projected_delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projected Delta"
+          },
+          "score_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Version"
+          },
+          "candidate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProjectionCandidate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "qualification": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "provisional",
+                  "provisional_unverified_temporal_identity"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "source_revision_id"],
+        "title": "RevisionProjection"
       },
       "RouteForReviewRequest": {
         "properties": {
@@ -13639,6 +14022,74 @@
         "required": ["api_status", "database_status", "timestamp"],
         "title": "SystemStatusResponse"
       },
+      "TemporalEntityRef": {
+        "properties": {
+          "artifact_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Type"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Revision Id"
+          },
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "clause",
+              "milestone",
+              "budget_item",
+              "rfi",
+              "change_order",
+              "risk",
+              "wbs_activity",
+              "citation"
+            ],
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceRef"
+            },
+            "type": "array",
+            "title": "Evidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "artifact_type",
+          "document_id",
+          "revision_id",
+          "entity_type",
+          "entity_id"
+        ],
+        "title": "TemporalEntityRef",
+        "description": "One entity as it existed in one artifact revision."
+      },
       "TenantResponse": {
         "properties": {
           "id": {
@@ -13750,6 +14201,10 @@
             "type": "string",
             "title": "Event Type"
           },
+          "basis": {
+            "$ref": "#/components/schemas/EpistemicBasis",
+            "default": "observed"
+          },
           "state": {
             "type": "string",
             "title": "State"
@@ -13775,6 +14230,33 @@
               }
             ],
             "title": "Confidence"
+          },
+          "matcher_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matcher Status"
+          },
+          "legacy_matcher": {
+            "type": "boolean",
+            "title": "Legacy Matcher",
+            "default": false
+          },
+          "qualification_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification Reason"
           },
           "document_id": {
             "anyOf": [

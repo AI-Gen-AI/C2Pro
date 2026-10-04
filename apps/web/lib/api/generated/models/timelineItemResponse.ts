@@ -37,6 +37,7 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { EpistemicBasis } from "./epistemicBasis";
 import type { TimelineItemResponseProvenance } from "./timelineItemResponseProvenance";
 
 /**
@@ -46,9 +47,13 @@ export interface TimelineItemResponse {
   event_id: string;
   occurred_at: string;
   event_type: string;
+  basis?: EpistemicBasis;
   state: string;
   change_cause?: string | null;
   confidence?: number | null;
+  matcher_status?: string | null;
+  legacy_matcher?: boolean;
+  qualification_reason?: string | null;
   document_id?: string | null;
   provenance?: TimelineItemResponseProvenance;
   /** @nullable */
