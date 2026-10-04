@@ -303,6 +303,27 @@ project_controls_model:
     - "Procurement packages -> WBS linkage without creating another WBS"
     - "Alerts/Evidence/Changes -> WBS node linkage and user drill-down"
     - "production user journey proving the complete cross-domain Project Controls backbone"
+  approved_evolutions:
+    - id: ADR025-RISK-REGISTER
+      issue: "#836"
+      status: APPROVED_DIRECTION_NON_BLOCKING
+      name: "Canonical Risk Register / governed Risk Assessment"
+      decision: >
+        Evolve existing N4/RiskItem risk extraction into an ADR-025 Project Controls capability,
+        not a separate product plane and not an autonomous risk-truth agent.
+      canonical_scope: >
+        Risk Register attaches to the one canonical project/WBS backbone and governs likelihood,
+        impact, exposure/rating, inherent/residual risk, treatment/mitigation, owner, due date and
+        Evidence/Alert/Change lineage. Unknown remains Unknown/null.
+      semantic_guards:
+        - "Risk probability/likelihood != Coherence certainty/confidence"
+        - "Risk impact/exposure != Coherence materiality or score"
+        - "High risk exposure does not automatically rewrite Coherence"
+        - "Alerts are attention/action signals; they are not the Risk Register"
+        - "AI may extract/propose risk candidates; canonical risk rating remains governed/testable"
+        - "No parallel risk WBS or independent project hierarchy"
+      sequencing: "NON_BLOCKING for B1/C3b; design/implementation follows accepted Project Controls sequencing"
+      lifecycle_effect: "direction accepted only; no realization/deployment/prod-validation promotion"
   downstream_dependency: >
     Procurement Plan, BoQ/RFQ, stakeholder communications and richer automation are downstream
     of this backbone. They must consume the canonical WBS rather than introduce a parallel structure.
