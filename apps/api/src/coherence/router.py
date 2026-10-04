@@ -36,6 +36,10 @@ from src.core.middleware.feature_flags import require_feature
 from src.core.security import security_scheme
 from src.documents.adapters.persistence.models import ClauseORM, DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
+from src.temporal.adapters.persistence.current_revision_sql import (
+    clause_in_current_scope,
+    current_revision_lateral,
+)
 
 # Import v0.3 graph evaluation
 from .budget_clause_builder import build_budget_clauses
@@ -636,34 +640,62 @@ async def _verified_persisted_clause_documents(
     tenant_id: UUID,
     alerts: Sequence[Any],
 ) -> dict[UUID, UUID]:
-    candidates = {
-        candidate
-        for alert in alerts
-        if (evidence := getattr(alert, "evidence", None)) is not None
-        if (
-            candidate := _uuid_or_none(
-                getattr(evidence, "source_clause_id", None)
+    """Return only clause/document pairs inside C3a trusted-current truth.
+
+    Clause UUID shape and project membership are insufficient once historical
+    revisions remain queryable. Reuse C3a's canonical current-revision SQL
+    predicate rather than re-deriving temporal authority in Line B.
+    """
+    candidates = sorted(
+        {
+            candidate
+            for alert in alerts
+            if (evidence := getattr(alert, "evidence", None)) is not None
+            if (
+                candidate := _uuid_or_none(
+                    getattr(evidence, "source_clause_id", None)
+                )
             )
-        )
-        is not None
-    }
+            is not None
+        },
+        key=str,
+    )
     if not candidates:
         return {}
 
-    result = await db.scalars(
-        select(ClauseORM)
-        .join(DocumentORM, DocumentORM.id == ClauseORM.document_id)
-        .where(
-            ClauseORM.id.in_(candidates),
-            ClauseORM.tenant_id == tenant_id,
-            DocumentORM.tenant_id == tenant_id,
-            DocumentORM.project_id == project_id,
-        )
-    )
-    return {
-        clause.id: clause.document_id
-        for clause in result.all()
+    candidate_params = {
+        f"candidate_{index}": str(candidate)
+        for index, candidate in enumerate(candidates)
     }
+    candidate_sql = ", ".join(
+        f"CAST(:candidate_{index} AS uuid)"
+        for index in range(len(candidates))
+    )
+    statement = text(
+        f"""
+        SELECT c.id, c.document_id
+        FROM clauses c
+        JOIN documents d ON d.id = c.document_id
+        CROSS JOIN LATERAL
+            {current_revision_lateral("c.document_id", "c.tenant_id")} AS cur
+        WHERE c.id IN ({candidate_sql})
+          AND c.tenant_id = CAST(:tenant_id AS uuid)
+          AND d.tenant_id = CAST(:tenant_id AS uuid)
+          AND d.project_id = CAST(:project_id AS uuid)
+          AND {clause_in_current_scope("c", "cur")}
+        """
+    )
+    rows = (
+        await db.execute(
+            statement,
+            {
+                **candidate_params,
+                "tenant_id": str(tenant_id),
+                "project_id": str(project_id),
+            },
+        )
+    ).all()
+    return {row.id: row.document_id for row in rows}
 
 
 async def _mirror_coherence_alerts_to_alerts_table(
