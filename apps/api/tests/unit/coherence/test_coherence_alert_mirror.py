@@ -196,6 +196,66 @@ async def test_verified_clause_uses_database_document_not_request_metadata() -> 
 
 
 @pytest.mark.asyncio
+async def test_composite_clause_locator_verifies_every_current_clause() -> None:
+    project_id = uuid4()
+    tenant_id = uuid4()
+    clause_a = uuid4()
+    clause_b = uuid4()
+    document_a = uuid4()
+    document_b = uuid4()
+    alert = SimpleNamespace(
+        severity="high",
+        category="legal",
+        rule_id="CROSS-LEGAL-CONFLICT",
+        message="Cross-clause conflict",
+        evidence=SimpleNamespace(
+            source_clause_id=f"{clause_a}|{clause_b}",
+            claim="Clauses conflict",
+            quote="A conflicts with B",
+        ),
+    )
+    clauses = [
+        Clause(
+            id=str(clause_a),
+            text="Clause A",
+            data={"document_id": str(document_a), "source": "persisted_clause"},
+        ),
+        Clause(
+            id=str(clause_b),
+            text="Clause B",
+            data={"document_id": str(document_b), "source": "persisted_clause"},
+        ),
+    ]
+    session = _FakeSession(
+        persisted_clause_documents={clause_a: document_a, clause_b: document_b}
+    )
+    service = MagicMock()
+    service.process_violations = AsyncMock(return_value=[])
+
+    with (
+        patch("src.coherence.router.SqlAlchemyAlertRepository"),
+        patch("src.coherence.router.AlertGeneratorService", return_value=service),
+    ):
+        await _mirror_coherence_alerts_to_alerts_table(
+            db=session,  # type: ignore[arg-type]
+            project_id=project_id,
+            tenant_id=tenant_id,
+            alerts=[alert],
+            clauses=clauses,
+        )
+
+    payload = service.process_violations.await_args.kwargs["violations"][0]
+    assert payload.source_clause_id == clause_a
+    assert payload.related_clause_ids == [clause_b]
+    assert payload.affected_entities == {
+        "documents": [str(document_a), str(document_b)]
+    }
+    assert payload.alert_metadata["detection_evidence"]["source_document_id"] == str(
+        document_a
+    )
+
+
+@pytest.mark.asyncio
 async def test_historical_revision_clause_is_not_promoted_to_current_evidence() -> None:
     project_id = uuid4()
     tenant_id = uuid4()
