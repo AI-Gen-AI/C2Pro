@@ -29,6 +29,9 @@ type Item = {
   confidence: number | null;
   document_id: string | null;
   provenance: { target_revision_id?: string; diff_engine_version?: string };
+  matcher_status?: "current" | "legacy" | "unsupported" | null;
+  legacy_matcher?: boolean;
+  qualification_reason?: string | null;
 };
 
 function item(overrides: Partial<Item>): Item {
@@ -114,5 +117,45 @@ describe("ProjectChangesPage — honest revision states", () => {
 
     expect(await screen.findByText(/could not load this project.s change history/i)).toBeInTheDocument();
     expect(screen.queryByText("No history yet")).not.toBeInTheDocument();
+  });
+
+  it("labels a legacy-matcher comparison as needing review with its reason", async () => {
+    timeline([
+      item({
+        event_id: "evt-legacy",
+        state: "needs_review",
+        confidence: null,
+        change_cause: null,
+        matcher_status: "legacy",
+        legacy_matcher: true,
+        qualification_reason: "Compared by an older matcher (p0c-structural-l1-v1).",
+      }),
+    ]);
+
+    render(<ProjectChangesPage />);
+
+    const card = await cardFor("change-item-evt-legacy");
+    expect(card.getByText("Older matcher")).toBeInTheDocument();
+    expect(card.getByText(/compared by an older matcher/i)).toBeInTheDocument();
+    expect(card.getByText("Change needs review")).toBeInTheDocument();
+  });
+
+  it("labels an unregistered matcher as unverified, never as legacy", async () => {
+    timeline([
+      item({
+        event_id: "evt-unsupported",
+        state: "needs_review",
+        confidence: null,
+        matcher_status: "unsupported",
+        legacy_matcher: false,
+        qualification_reason: "Compared by an unregistered engine (x-v9).",
+      }),
+    ]);
+
+    render(<ProjectChangesPage />);
+
+    const card = await cardFor("change-item-evt-unsupported");
+    expect(card.getByText("Unverified matcher")).toBeInTheDocument();
+    expect(card.queryByText("Older matcher")).not.toBeInTheDocument();
   });
 });
