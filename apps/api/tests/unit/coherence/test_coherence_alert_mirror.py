@@ -256,6 +256,65 @@ async def test_composite_clause_locator_verifies_every_current_clause() -> None:
 
 
 @pytest.mark.asyncio
+async def test_partially_verified_composite_locator_fails_closed() -> None:
+    project_id = uuid4()
+    tenant_id = uuid4()
+    current_clause = uuid4()
+    unverified_clause = uuid4()
+    current_document = uuid4()
+    alert = SimpleNamespace(
+        severity="high",
+        category="legal",
+        rule_id="CROSS-LEGAL-CONFLICT",
+        message="Composite provenance must be all-or-nothing",
+        evidence=SimpleNamespace(
+            source_clause_id=f"{current_clause}|{unverified_clause}",
+            claim="Clauses conflict",
+            quote="A conflicts with B",
+        ),
+    )
+    clauses = [
+        Clause(
+            id=str(current_clause),
+            text="Current clause",
+            data={"document_id": str(current_document), "source": "persisted_clause"},
+        ),
+        Clause(
+            id=str(unverified_clause),
+            text="Unverified clause",
+            data={"document_id": str(uuid4()), "source": "persisted_clause"},
+        ),
+    ]
+    session = _FakeSession(
+        persisted_clause_documents={current_clause: current_document}
+    )
+    service = MagicMock()
+    service.process_violations = AsyncMock(return_value=[])
+
+    with (
+        patch("src.coherence.router.SqlAlchemyAlertRepository"),
+        patch("src.coherence.router.AlertGeneratorService", return_value=service),
+    ):
+        await _mirror_coherence_alerts_to_alerts_table(
+            db=session,  # type: ignore[arg-type]
+            project_id=project_id,
+            tenant_id=tenant_id,
+            alerts=[alert],
+            clauses=clauses,
+        )
+
+    payload = service.process_violations.await_args.kwargs["violations"][0]
+    assert payload.source_clause_id is None
+    assert payload.related_clause_ids is None
+    assert payload.affected_entities == {}
+    assert payload.alert_metadata["detection_evidence"] == {
+        "source_clause_id": f"{current_clause}|{unverified_clause}",
+        "source_document_id": None,
+        "claim": "Clauses conflict",
+        "quote": "A conflicts with B",
+    }
+
+@pytest.mark.asyncio
 async def test_historical_revision_clause_is_not_promoted_to_current_evidence() -> None:
     project_id = uuid4()
     tenant_id = uuid4()
