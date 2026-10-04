@@ -783,20 +783,50 @@ test.describe("Issue #706 production synthetic acceptance", () => {
     await page.waitForURL(
       (url) =>
         url.pathname === `/projects/${projectId}/evidence` &&
+        url.searchParams.get("documentId") === upload.documentId &&
         url.searchParams.get("highlightId") === clauseId,
       { timeout: 30_000 },
     );
     const activeEvidence = page.locator(
       '[data-testid="evidence-entity-card"][data-active="true"]',
     );
-    await expect(activeEvidence).toBeVisible({ timeout: 30_000 });
-    await expect(activeEvidence).toContainText(/Page\s+\d+/);
-    await expect(activeEvidence).not.toContainText(/Exact location unavailable/i);
+    const sourceClauseEvidence = page.getByTestId("evidence-link-source-clause");
+    const exactEvidenceLanding = activeEvidence.or(sourceClauseEvidence).first();
+    await expect(exactEvidenceLanding).toBeVisible({ timeout: 30_000 });
 
-    // Hard refresh must preserve the exact evidence address.
+    if ((await activeEvidence.count()) > 0) {
+      await expect(activeEvidence).toContainText(/Page\s+\d+/);
+      await expect(activeEvidence).not.toContainText(/Exact location unavailable/i);
+      await expect(activeEvidence).toHaveAttribute("data-entity-id", clauseId);
+    } else {
+      // Health evidence IDs are authoritative clause IDs. When no semantic
+      // sidebar entity represents that clause, Evidence intentionally resolves
+      // the source clause itself instead of fabricating an entity card.
+      await expect(sourceClauseEvidence).toContainText(/showing source clause/i);
+      await expect(sourceClauseEvidence).toContainText(/page\s+\d+/i);
+      await expect(page.getByTestId("evidence-link-unavailable")).toHaveCount(0);
+      await expect(page.getByTestId("evidence-link-document-fallback")).toHaveCount(0);
+    }
+
+    // Hard refresh must preserve the exact evidence address and the same
+    // truthful resolution mode (semantic entity or source clause).
     await page.reload();
-    await expect(activeEvidence).toBeVisible({ timeout: 30_000 });
-    await expect(activeEvidence).toHaveAttribute("data-entity-id", clauseId);
+    await page.waitForURL(
+      (url) =>
+        url.pathname === `/projects/${projectId}/evidence` &&
+        url.searchParams.get("documentId") === upload.documentId &&
+        url.searchParams.get("highlightId") === clauseId,
+      { timeout: 30_000 },
+    );
+    await expect(activeEvidence.or(sourceClauseEvidence).first()).toBeVisible({
+      timeout: 30_000,
+    });
+    if ((await activeEvidence.count()) > 0) {
+      await expect(activeEvidence).toHaveAttribute("data-entity-id", clauseId);
+    } else {
+      await expect(sourceClauseEvidence).toContainText(/page\s+\d+/i);
+      await expect(page.getByTestId("evidence-link-document-fallback")).toHaveCount(0);
+    }
 
     // Real UI sign-out and password sign-in again: no storageState restore.
     await pollingAuthPage.close();
