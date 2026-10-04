@@ -15,7 +15,8 @@ from src.change_intelligence.domain.contracts import ChangeSet
 from src.temporal.domain.document_revision import DocumentRevision
 from src.temporal.domain.project_event import ProjectEvent
 
-CHANGE_PROJECTION_ENGINE_VERSION = "p0c-structural-l1-v1"
+# v2: fail-closed clause identity; positional codes never pair clauses (PR-C1).
+CHANGE_PROJECTION_ENGINE_VERSION = "p0c-structural-l1-v2"
 
 
 class ChangeCause(StrEnum):
@@ -36,8 +37,12 @@ def _state_for(changeset: ChangeSet) -> str:
 
 
 def _confidence_for(changeset: ChangeSet) -> float | None:
+    # An L2 classification cannot be more certain than the pairing it classifies,
+    # so semantic confidence never masks a weak or inferred anchor match.
     values = [
-        change.confidence if change.confidence is not None else change.match_confidence
+        min(change.match_confidence, change.confidence)
+        if change.confidence is not None
+        else change.match_confidence
         for change in changeset.changes
     ]
     return min(values) if values else None

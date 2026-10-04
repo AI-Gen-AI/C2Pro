@@ -1,6 +1,10 @@
 """ADR-016 L1 structural contract diff.
 
-TS-UT-CI-DIFF-001
+TS-UT-CI-DIFF-001 / TS-UT-CI-IDENT-001
+
+Every emitted change records how its pairing was established (``match_basis``)
+and why (``match_rationale``). Similarity-proposed and ambiguous outcomes are
+always ``needs_review``; positional clause codes never pair clauses.
 """
 
 from __future__ import annotations
@@ -13,19 +17,17 @@ from uuid import UUID, uuid4
 
 from src.change_intelligence.application.anchor_resolver import (
     AnchorMatch,
+    display_anchor,
     resolve_clause_anchors,
+    split_source_label,
 )
-from src.change_intelligence.domain.contracts import ChangeSet, SemanticChange
+from src.change_intelligence.domain.contracts import ChangeSet, ChangeType, SemanticChange
 from src.documents.domain.models import Clause
 from src.evidence.domain.runtime_trust import EvidenceRef, EvidenceTier
 
 
 def _utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
-
-
-def _normalize_text(text: str | None) -> str:
-    return " ".join((text or "").split())
 
 
 def _jsonable(value: Any) -> Any:
@@ -53,6 +55,9 @@ def _evidence_for_clause(
     side: str,
 ) -> EvidenceRef:
     locator = f"clause_code={clause.clause_code}"
+    label, _ = split_source_label(clause.full_text)
+    if label is not None:
+        locator = f"{locator};source_label={label}"
     if clause.text_start_offset is not None and clause.text_end_offset is not None:
         locator = f"{locator};chars={clause.text_start_offset}-{clause.text_end_offset}"
     return EvidenceRef(
@@ -63,21 +68,36 @@ def _evidence_for_clause(
     )
 
 
-def _modified_change(
+def _paired_change(
     *,
     match: AnchorMatch,
     from_revision_id: UUID,
     to_revision_id: UUID,
-) -> SemanticChange:
+) -> SemanticChange | None:
+    old_label, old_body = split_source_label(match.old.full_text)
+    new_label, new_body = split_source_label(match.new.full_text)
+    if old_body == new_body:
+        if old_label == new_label:
+            return None
+        change_type: ChangeType = "renumbered"
+        summary = (
+            f"clause renumbered from {old_label or 'unnumbered'} to "
+            f"{new_label or 'unnumbered'}; text unchanged"
+        )
+    else:
+        change_type = "modified"
+        summary = f"clause {match.anchor} text modified"
     return SemanticChange(
         object_type="clause",
-        change_type="modified",
+        change_type=change_type,
         anchor=match.anchor,
         before=_clause_snapshot(match.old),
         after=_clause_snapshot(match.new),
-        semantic_summary=f"clause {match.anchor} text modified",
+        semantic_summary=summary,
         match_confidence=match.match_confidence,
         needs_review=match.needs_review,
+        match_basis=match.basis,
+        match_rationale=match.rationale,
         evidence_refs=[
             _evidence_for_clause(
                 clause=match.old,
@@ -93,30 +113,58 @@ def _modified_change(
     )
 
 
-def _added_change(*, clause: Clause, to_revision_id: UUID) -> SemanticChange:
+_NO_COUNTERPART = (
+    "no counterpart with identical text, a stable source identifier or similar text "
+    "exists in the other revision"
+)
+_AMBIGUOUS = (
+    "more than one similar counterpart exists across the revisions, so identity is "
+    "ambiguous; no pairing is asserted and the change requires review"
+)
+
+
+def _unpaired_fields(ambiguous: bool) -> dict[str, Any]:
+    if ambiguous:
+        return {
+            "match_confidence": 0.0,
+            "needs_review": True,
+            "match_basis": "ambiguous",
+            "match_rationale": _AMBIGUOUS,
+        }
+    return {
+        "match_confidence": 1.0,
+        "needs_review": False,
+        "match_basis": "no_counterpart",
+        "match_rationale": _NO_COUNTERPART,
+    }
+
+
+def _added_change(*, clause: Clause, to_revision_id: UUID, ambiguous: bool) -> SemanticChange:
+    anchor = display_anchor(clause)
     return SemanticChange(
         object_type="clause",
         change_type="added",
-        anchor=clause.clause_code,
+        anchor=anchor,
         before=None,
         after=_clause_snapshot(clause),
-        semantic_summary=f"clause {clause.clause_code} added",
-        match_confidence=1.0,
+        semantic_summary=f"clause {anchor} added",
+        **_unpaired_fields(ambiguous),
         evidence_refs=[
             _evidence_for_clause(clause=clause, revision_id=to_revision_id, side="after")
         ],
     )
 
 
-def _removed_change(*, clause: Clause, from_revision_id: UUID) -> SemanticChange:
+def _removed_change(*, clause: Clause, from_revision_id: UUID, ambiguous: bool) -> SemanticChange:
+    anchor = display_anchor(clause)
     return SemanticChange(
         object_type="clause",
         change_type="removed",
-        anchor=clause.clause_code,
+        anchor=anchor,
         before=_clause_snapshot(clause),
         after=None,
-        semantic_summary=f"clause {clause.clause_code} removed",
-        match_confidence=1.0,
+        semantic_summary=f"clause {anchor} removed",
+        **_unpaired_fields(ambiguous),
         evidence_refs=[
             _evidence_for_clause(
                 clause=clause,
@@ -144,22 +192,30 @@ def diff_contract_revisions(
     )
     changes: list[SemanticChange] = []
     for match in resolution.matched:
-        if _normalize_text(match.old.full_text) == _normalize_text(match.new.full_text):
-            continue
-        changes.append(
-            _modified_change(
-                match=match,
-                from_revision_id=from_revision_id,
-                to_revision_id=to_revision_id,
-            )
+        change = _paired_change(
+            match=match,
+            from_revision_id=from_revision_id,
+            to_revision_id=to_revision_id,
         )
+        if change is not None:
+            changes.append(change)
 
+    ambiguous_old = {id(clause) for clause in resolution.ambiguous_old}
+    ambiguous_new = {id(clause) for clause in resolution.ambiguous_new}
     changes.extend(
-        _removed_change(clause=clause, from_revision_id=from_revision_id)
+        _removed_change(
+            clause=clause,
+            from_revision_id=from_revision_id,
+            ambiguous=id(clause) in ambiguous_old,
+        )
         for clause in resolution.unmatched_old
     )
     changes.extend(
-        _added_change(clause=clause, to_revision_id=to_revision_id)
+        _added_change(
+            clause=clause,
+            to_revision_id=to_revision_id,
+            ambiguous=id(clause) in ambiguous_new,
+        )
         for clause in resolution.unmatched_new
     )
 

@@ -115,6 +115,7 @@ def test_changeset_is_frozen_and_summarizes_l1_counts() -> None:
         "added": 1,
         "removed": 0,
         "modified": 1,
+        "renumbered": 0,
         "needs_review": 1,
     }
     with pytest.raises(ValidationError):
