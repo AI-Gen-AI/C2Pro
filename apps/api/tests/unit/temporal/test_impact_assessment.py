@@ -331,3 +331,77 @@ def test_unknown_assessment_cannot_carry_items_or_confidence() -> None:
             confidence=0.5,
             reason="x",
         )
+
+
+# --- PR #823 adversarial review ------------------------------------------------
+
+
+async def test_direct_reference_of_unknown_strength_is_only_a_candidate() -> None:
+    """A persisted reference without established strength (e.g. a rule's
+    aggregated ``related_clause_ids``) proposes, never confirms, an impact."""
+    related = ResolvedLink(
+        target=_alert(),
+        relationship=ImpactRelationship(
+            kind="direct", via="alerts.related_clause_ids", link_confidence=None
+        ),
+    )
+
+    (impact,) = await _assess(_event([_change()]), _Resolver([related]))
+
+    (item,) = impact.assessment.items
+    assert item.status is ImpactStatus.CANDIDATE
+    assert item.confidence is None
+    assert impact.assessment.status is ImpactStatus.CANDIDATE
+
+
+async def test_unknown_identity_confidence_cannot_confirm() -> None:
+    """A deterministic pairing with no recorded match confidence is not proven enough to confirm."""
+    change = _change(match_confidence=None)
+
+    (impact,) = await _assess(_event([change]), _Resolver([_direct(_alert())]))
+
+    assert impact.assessment.status is ImpactStatus.CANDIDATE
+    assert impact.assessment.confidence is None
+
+
+async def test_confirmed_assessment_confidence_rests_on_its_confirmed_items() -> None:
+    """A weaker candidate link beside a confirmed one neither confirms nor erases the confirmation."""
+    related = ResolvedLink(
+        target=_alert(),
+        relationship=ImpactRelationship(
+            kind="direct", via="alerts.related_clause_ids", link_confidence=None
+        ),
+    )
+
+    (impact,) = await _assess(_event([_change()]), _Resolver([_direct(_alert()), related]))
+
+    assert impact.assessment.status is ImpactStatus.CONFIRMED
+    assert impact.assessment.confidence == 1.0
+    assert [item.status for item in impact.assessment.items] == [
+        ImpactStatus.CONFIRMED,
+        ImpactStatus.CANDIDATE,
+    ]
+
+
+def test_confirmed_or_candidate_assessment_requires_an_impacted_entity() -> None:
+    with pytest.raises(ValueError):
+        ImpactAssessment(status=ImpactStatus.CANDIDATE, items=[], confidence=None, reason=None)
+
+
+async def test_event_without_revision_provenance_yields_no_impact_claims() -> None:
+    event = _event([_change()])
+    event = event.model_copy(update={"payload": {**event.payload, "provenance": {}}})
+
+    assert await _assess(event, _Resolver([_direct(_alert())])) == []
+
+
+async def test_malformed_change_entries_are_skipped_not_guessed() -> None:
+    event = _event([_change()])
+    changes = ["not-a-change", {"change_type": "modified"}, _change()]
+    event = event.model_copy(
+        update={"payload": {**event.payload, "changeset": {"changes": changes}}}
+    )
+
+    impacts = await _assess(event, _Resolver([]))
+
+    assert [impact.change_index for impact in impacts] == [2]

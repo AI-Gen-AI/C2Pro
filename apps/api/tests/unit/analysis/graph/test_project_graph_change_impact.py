@@ -399,6 +399,10 @@ async def test_change_impact_genuine_new_and_deleted_objects_emit_added_removed(
         ("added", "B-NEW"),
         ("removed", "B-OLD"),
     ]
+    # PR #823: absence of a generated label is no more proof than its presence --
+    # a relabelled item would read as added + removed. Both are review candidates.
+    assert all(change.match_basis == "generated_anchor" for change in report.changes)
+    assert all(change.needs_review is True for change in report.changes)
 
 
 @pytest.mark.asyncio

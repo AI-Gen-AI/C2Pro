@@ -12,6 +12,8 @@ belongs to the earlier revision.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from io import BytesIO
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -35,6 +37,7 @@ from src.procurement.adapters.persistence.models import BOMItemORM
 from src.shared_kernel.enums import AlertSeverity, AlertStatus, AlertType
 from src.stakeholders.adapters.persistence.models import StakeholderORM, StakeholderWBSRaciORM
 from src.stakeholders.domain.models import RACIRole
+from src.temporal.adapters import temporal_review_gate
 from src.temporal.adapters.persistence.clause_impact_resolver import SqlAlchemyClauseImpactResolver
 from src.temporal.adapters.persistence.document_revision_repository import (
     SqlAlchemyDocumentRevisionRepository,
@@ -178,7 +181,9 @@ def _wbs(tenant_id: UUID, project_id: UUID, code: str, lft: int, **links: object
     )
 
 
-async def test_clause_impact_follows_only_persisted_links(db: AsyncSession, tmp_path: Path) -> None:
+async def test_clause_impact_follows_only_persisted_links(
+    db: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     storage = LocalFileStorageService(base_dir=tmp_path)
     tenant_a, user_a, project_a = await _tenant_with_project(db)
     tenant_b, _user_b, _project_b = await _tenant_with_project(db)
@@ -254,17 +259,62 @@ async def test_clause_impact_follows_only_persisted_links(db: AsyncSession, tmp_
         quantity=10,
         contract_clause_id=v1_clause.id,
     )
+    # Same tenant, ANOTHER project, rows pointing at the same clause id: never reported.
+    other_project = uuid4()
+    await db.execute(
+        text(
+            "INSERT INTO projects (id, tenant_id, name, code, project_type, status, currency, "
+            "created_at, updated_at) VALUES (:id, :tid, 'other', :code, 'construction', 'active', "
+            "'EUR', now(), now())"
+        ),
+        {"id": other_project, "tid": tenant_a, "code": f"P-{other_project.hex[:8]}"},
+    )
+    foreign_alert = _alert(
+        tenant_a,
+        other_project,
+        "Other project alert",
+        AlertStatus.OPEN,
+        source_clause_id=v1_clause.id,
+    )
+    foreign_stakeholder = StakeholderORM(
+        id=uuid4(),
+        tenant_id=tenant_a,
+        project_id=other_project,
+        name="Other",
+        source_clause_id=v1_clause.id,
+    )
+    foreign_wbs = _wbs(tenant_a, other_project, "9.1", 1, source_clause_id=v1_clause.id)
+    foreign_raci_wbs = _wbs(tenant_a, other_project, "9.2", 3)
+    foreign_bom = BOMItemORM(
+        id=uuid4(),
+        project_id=other_project,
+        item_name="Other",
+        quantity=1,
+        contract_clause_id=v1_clause.id,
+    )
     db.add_all([live, resolved, unrelated, direct_wbs, raci_wbs, bom])
+    db.add_all([foreign_alert, foreign_stakeholder, foreign_wbs, foreign_raci_wbs, foreign_bom])
     await db.flush()
-    db.add(
-        StakeholderWBSRaciORM(
-            id=uuid4(),
-            tenant_id=tenant_a,
-            project_id=project_a,
-            stakeholder_id=stakeholder_id,
-            wbs_item_id=raci_wbs.id,
-            raci_role=RACIRole.ACCOUNTABLE,
-        )
+    db.add_all(
+        [
+            StakeholderWBSRaciORM(
+                id=uuid4(),
+                tenant_id=tenant_a,
+                project_id=project_a,
+                stakeholder_id=stakeholder_id,
+                wbs_item_id=raci_wbs.id,
+                raci_role=RACIRole.ACCOUNTABLE,
+            ),
+            # A miswired cross-project RACI row is not a path either.
+            StakeholderWBSRaciORM(
+                id=uuid4(),
+                tenant_id=tenant_a,
+                project_id=other_project,
+                stakeholder_id=stakeholder_id,
+                wbs_item_id=foreign_raci_wbs.id,
+                raci_role=RACIRole.INFORMED,
+            ),
+        ]
     )
     await db.commit()
 
@@ -292,6 +342,8 @@ async def test_clause_impact_follows_only_persisted_links(db: AsyncSession, tmp_
     assert by_target[("alert", resolved.id)].target.potentially_stale is False
     assert by_target[("alert", live.id)].relationship.via == "alerts.source_clause_id"
     assert by_target[("alert", resolved.id)].relationship.via == "alerts.related_clause_ids"
+    # An aggregated "related" citation has no established strength: it can only propose.
+    assert by_target[("alert", resolved.id)].relationship.link_confidence is None
     hop = by_target[("wbs_node", raci_wbs.id)].relationship
     assert hop.kind == "indirect" and hop.link_confidence is None
 
@@ -336,6 +388,7 @@ async def test_clause_impact_follows_only_persisted_links(db: AsyncSession, tmp_
         tenant_id=tenant_a,
         document_id=document.id,
         revision_id=revision_1.revision_id,
+        artifact_type="contract",
     )
     assert (baseline.required, baseline.reason) == (False, "baseline_revision")
     own_events = await events.list_for_revision(
@@ -353,6 +406,7 @@ async def test_clause_impact_follows_only_persisted_links(db: AsyncSession, tmp_
         tenant_id=tenant_a,
         document_id=document.id,
         revision_id=revision_2.revision_id,
+        artifact_type="contract",
     )
     assert decision.required is (qualification.effective_state != "ready")
     foreign_doc = await revision_requires_temporal_review(
@@ -361,5 +415,80 @@ async def test_clause_impact_follows_only_persisted_links(db: AsyncSession, tmp_
         tenant_id=tenant_a,
         document_id=uuid4(),
         revision_id=revision_2.revision_id,
+        artifact_type="contract",
     )
     assert (foreign_doc.required, foreign_doc.reason) == (True, "revision_document_mismatch")
+
+    # Through the real N12 gate adapter (its own document-type lookup): a contract
+    # revision with a parent but no temporal events is MISSING its assessment.
+    @asynccontextmanager
+    async def _tenant_session(_tenant: UUID) -> AsyncIterator[AsyncSession]:
+        yield db
+
+    monkeypatch.setattr(temporal_review_gate, "get_session_with_tenant", _tenant_session)
+    gated = await temporal_review_gate.revision_requires_temporal_review(
+        tenant_id=str(tenant_a),
+        document_id=str(document.id),
+        revision_id=str(revision_2.revision_id),
+    )
+    assert gated == decision
+    await ReuploadDocumentUseCase(
+        document_repository=doc_repo,
+        revision_repository=rev_repo,
+        storage_service=storage,
+        event_repository=events,
+    ).execute(
+        tenant_id=tenant_a,
+        document_id=document.id,
+        file_content=b"%PDF penalty 3% per week",
+        user_id=user_a,
+    )
+    revision_3 = (await rev_repo.list_lineage(document.id, tenant_a))[-1]
+    unanalysed = await temporal_review_gate.revision_requires_temporal_review(
+        tenant_id=str(tenant_a),
+        document_id=str(document.id),
+        revision_id=str(revision_3.revision_id),
+    )
+    assert (unanalysed.required, unanalysed.reason) == (True, "temporal_comparison_missing")
+
+    # Refusals: never a claim from an id that is not this document's persisted clause.
+    resolver = SqlAlchemyClauseImpactResolver(db, tenant_id=tenant_a)
+    for bogus, reason in (
+        (source.model_copy(update={"entity_id": "AUTO-003"}), "not a persisted id"),
+        (source.model_copy(update={"document_id": uuid4()}), "another document"),
+        (source.model_copy(update={"revision_id": uuid4()}), "not a revision of this document"),
+        (source.model_copy(update={"entity_id": str(uuid4())}), "no longer persisted"),
+    ):
+        refused = await resolver.resolve(bogus)
+        assert refused.source_verified is False and refused.links == []
+        assert reason in str(refused.reason)
+
+    # The What Changed detail through the real router dependencies and database.
+    from types import SimpleNamespace
+
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from src.core.auth.dependencies import get_current_user
+    from src.temporal.adapters.http import router as temporal_router
+
+    monkeypatch.setattr(temporal_router, "get_session_with_tenant", _tenant_session)
+    app = FastAPI()
+    app.include_router(temporal_router.router, prefix="/api/v1")
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        tenant_id=tenant_a, id=user_a
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            f"/api/v1/projects/{project_a}/documents/{document.id}/changes/{revision_2.revision_id}"
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["basis"] == "observed"
+    sourced_impacts = [i for i in body["impacts"] if i["source"]["entity_id"] == str(v1_clause.id)]
+    assert sourced_impacts and sourced_impacts[0]["source"]["artifact_type"] == "contract"
+    targets = {item["target"]["entity_id"] for item in sourced_impacts[0]["assessment"]["items"]}
+    assert str(foreign_alert.id) not in targets
+    # No #714 candidate is bound to this revision: the projection says so, nothing is invented.
+    assert body["projection"]["status"] == "none"
+    assert body["projection"]["projected_score"] is None

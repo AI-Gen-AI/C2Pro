@@ -253,3 +253,76 @@ async def test_change_detail_of_legacy_event_is_review_required() -> None:
     assert body["state"] == "needs_review"
     assert body["legacy_matcher"] is True
     assert body["confidence"] is None
+
+
+# --- PR #823: fail-safe dependencies -----------------------------------------------
+
+
+class _NestedSession:
+    """Just enough AsyncSession for savepoint-wrapped reads."""
+
+    def begin_nested(self):  # noqa: ANN201
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def _savepoint():  # noqa: ANN202
+            yield None
+
+        return _savepoint()
+
+
+@pytest.mark.asyncio
+async def test_resolver_failure_is_unknown_impact_never_a_partial_claim() -> None:
+    from src.temporal.adapters.http.router import _FailClosedResolver
+
+    class _Boom:
+        entity_type = "clause"
+
+        async def resolve(self, source):  # noqa: ANN001, ANN202
+            raise RuntimeError("db down")
+
+    source = TemporalEntityRef(
+        artifact_type="contract", document_id=uuid4(), revision_id=uuid4(),
+        entity_type="clause", entity_id=str(uuid4()), evidence=[],
+    )
+    result = await _FailClosedResolver(_Boom(), _NestedSession()).resolve(source)  # type: ignore[arg-type]
+
+    assert result.source_verified is False
+    assert result.links == []
+    assert result.reason == "impact lookup unavailable"
+
+
+@pytest.mark.asyncio
+async def test_projection_read_failure_is_unavailable_not_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    from contextlib import asynccontextmanager
+
+    import src.analysis.adapters.persistence.document_artifact_repository as artifacts
+    from src.temporal.adapters.http import router as temporal_router
+    from src.temporal.application.change_qualification import qualify_event
+
+    @asynccontextmanager
+    async def _session(_tenant):  # noqa: ANN001, ANN202
+        yield _NestedSession()
+
+    class _BrokenRepo:
+        def __init__(self, _session) -> None:  # noqa: ANN001
+            pass
+
+        async def list_pending_candidates(self, **_):  # noqa: ANN003, ANN202
+            raise RuntimeError("artifact store down")
+
+    monkeypatch.setattr(temporal_router, "get_session_with_tenant", _session)
+    monkeypatch.setattr(artifacts, "SqlAlchemyDocumentArtifactRepository", _BrokenRepo)
+    tenant_id, project_id, document_id, revision_id = uuid4(), uuid4(), uuid4(), uuid4()
+    qualification = qualify_event(_event(project_id, tenant_id, document_id, revision_id))
+
+    projector_gen = temporal_router.get_revision_projector(SimpleNamespace(tenant_id=tenant_id))
+    project = await projector_gen.__anext__()
+    projection = await project(
+        project_id=project_id, document_id=document_id, revision_id=revision_id, qualification=qualification
+    )
+    await projector_gen.aclose()
+
+    assert projection.status == "unavailable"
+    assert projection.reason == "projection_read_failed"
+    assert projection.projected_score is None

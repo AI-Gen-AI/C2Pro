@@ -173,3 +173,30 @@ def test_non_change_events_are_not_matcher_qualified() -> None:
     assert qualification.matcher_status is None
     assert qualification.legacy_matcher is False
     assert qualification.effective_state == "needs_review"
+
+
+# --- PR #823 adversarial review ------------------------------------------------
+
+
+def test_engine_version_parsing_is_strict() -> None:
+    """Only the exact registered spelling is current; look-alikes are unverified."""
+    for value in (
+        "p0c-structural-l1-v02",
+        "p0c-structural-l1-v2\n",
+        " p0c-structural-l1-v2",
+        "P0C-STRUCTURAL-L1-V2",
+    ):
+        assert classify_engine_version(value).status is MatcherStatus.UNSUPPORTED, value
+
+
+def test_current_engine_with_a_review_required_change_is_not_ready() -> None:
+    """A stored "ready" never hides a change that itself needs review."""
+    event = _event(
+        "p0c-structural-l1-v2",
+        [_change(), _change(needs_review=True, match_basis="similarity_candidate")],
+    )
+
+    qualification = qualify_event(event)
+
+    assert qualification.identity_verified is True
+    assert qualification.effective_state == "needs_review"

@@ -80,11 +80,13 @@ def qualify_event(event: ProjectEvent) -> ChangeQualification:
     status = classification.status
 
     if status is MatcherStatus.CURRENT and _has_match_provenance(event):
+        # A stored "ready" never hides a change that itself needs review.
+        review_required = any(change.get("needs_review") is True for change in _changes(event))
         return ChangeQualification(
             matcher_status=status,
             legacy_matcher=False,
             identity_verified=True,
-            effective_state=_stored_state(event),
+            effective_state="needs_review" if review_required else _stored_state(event),
             effective_confidence=event.confidence,
             effective_change_cause=_cause(event),
             reason=None,

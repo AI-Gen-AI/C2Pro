@@ -9,7 +9,8 @@ and generated labels never establish a relationship.
 Classification:
 
 * CONFIRMED -- the change's identity is verified and deterministic (current
-  matcher, no review needed) AND the relationship is a direct persisted link;
+  matcher, no review needed) AND the relationship is a direct persisted link
+  AND both the identity and the link have a known confidence;
 * CANDIDATE -- the change needs review or its matcher is unverified, or the
   relationship is an indirect hop;
 * UNKNOWN   -- no resolver for the entity type, the source entity was never
@@ -150,25 +151,33 @@ def _assess(
     deterministic = _deterministic(change, qualification)
     items: list[ImpactItem] = []
     for link in result.links:
-        direct = link.relationship.kind == "direct"
+        confidence = compose_confidence(identity, link.relationship.link_confidence)
+        # Unknown strength anywhere (identity or link) can propose, never confirm.
+        confirmed = link.relationship.kind == "direct" and deterministic and confidence is not None
         status: Literal[ImpactStatus.CONFIRMED, ImpactStatus.CANDIDATE] = (
-            ImpactStatus.CONFIRMED if direct and deterministic else ImpactStatus.CANDIDATE
+            ImpactStatus.CONFIRMED if confirmed else ImpactStatus.CANDIDATE
         )
         items.append(
             ImpactItem(
                 target=link.target,
                 relationship=link.relationship,
                 status=status,
-                confidence=compose_confidence(identity, link.relationship.link_confidence),
+                confidence=confidence,
             )
+        )
+    confirmed_items = [item for item in items if item.status is ImpactStatus.CONFIRMED]
+    if confirmed_items:
+        # The confirmation rests on its confirmed items only; candidates beside it
+        # neither strengthen nor erase it.
+        return ImpactAssessment(
+            status=ImpactStatus.CONFIRMED,
+            items=items,
+            confidence=compose_confidence(*(item.confidence for item in confirmed_items)),
+            reason=None,
         )
     direct_links = [link for link in result.links if link.relationship.kind == "direct"]
     return ImpactAssessment(
-        status=(
-            ImpactStatus.CONFIRMED
-            if any(item.status is ImpactStatus.CONFIRMED for item in items)
-            else ImpactStatus.CANDIDATE
-        ),
+        status=ImpactStatus.CANDIDATE,
         items=items,
         confidence=(
             compose_confidence(

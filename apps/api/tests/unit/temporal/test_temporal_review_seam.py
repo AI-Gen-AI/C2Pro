@@ -184,12 +184,28 @@ def test_unknown_or_foreign_revision_fails_closed() -> None:
 
 
 def test_revision_without_temporal_assessment_is_not_claimed() -> None:
+    """An artifact type no engine compares: nothing temporal is asserted."""
     revision = _revision(parent=uuid4())
 
-    decision = decide_temporal_review(revision=revision, document_id=DOCUMENT, events=[])
+    decision = decide_temporal_review(
+        revision=revision, document_id=DOCUMENT, events=[], artifact_type="schedule"
+    )
 
     assert decision.required is False
     assert decision.reason == "no_temporal_assessment"
+
+
+@pytest.mark.parametrize("artifact_type", ["contract", None])
+def test_missing_assessment_where_one_is_expected_fails_closed(artifact_type: str | None) -> None:
+    """A compared (or unknown) artifact type with a parent but no temporal events is missing, not absent."""
+    revision = _revision(parent=uuid4())
+
+    decision = decide_temporal_review(
+        revision=revision, document_id=DOCUMENT, events=[], artifact_type=artifact_type
+    )
+
+    assert decision.required is True
+    assert decision.reason == "temporal_comparison_missing"
 
 
 # --- 31: revision/artifact scoped, no clause fields -----------------------------
@@ -312,3 +328,20 @@ def test_analysis_initial_state_carries_the_pinned_revision() -> None:
     from src.analysis.adapters.graph.schema import ProjectState
 
     assert "document_revision_id" in ProjectState.__annotations__
+
+
+async def test_pinned_revision_without_tenant_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A run pinned to a revision but with no tenant cannot be checked: it must not pass."""
+    import src.temporal.adapters.temporal_review_gate as gate
+    from src.analysis.adapters.graph.nodes import critique_node
+
+    async def _never(**_: str) -> TemporalReviewDecision:
+        raise AssertionError("no tenant-less lookup")
+
+    monkeypatch.setenv("C2PRO_AI_MOCK", "1")
+    monkeypatch.setattr(gate, "revision_requires_temporal_review", _never)
+
+    state = await critique_node(_graph_state(tenant_id=None, document_revision_id=str(uuid4())))
+
+    assert state["human_approval_required"] is True
+    assert state["temporal_review_reason"] == "temporal_review_lookup_failed"

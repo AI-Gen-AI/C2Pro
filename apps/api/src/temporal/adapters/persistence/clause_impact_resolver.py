@@ -5,11 +5,15 @@ similarity, never generated labels. The source clause must provably be the
 earlier revision's own clause (same document, bound to that revision, or
 unbound in a revision with no parent) before any relationship is reported.
 
-Direct links:   alerts.source_clause_id, alerts.related_clause_ids,
-                stakeholders.source_clause_id, wbs_nodes.source_clause_id,
-                procurement_bom_items.contract_clause_id.
+Direct links:   alerts.source_clause_id, stakeholders.source_clause_id,
+                wbs_nodes.source_clause_id, procurement_bom_items.contract_clause_id.
+Direct, unknown strength: alerts.related_clause_ids -- an aggregated list of
+                "related" clauses a rule cited, so it proposes (CANDIDATE) only.
 Indirect (one hop): stakeholders.source_clause_id -> stakeholder_wbs_raci -> wbs_nodes.
 The RACI hop is generated, so its link confidence is unknown.
+
+Every target must belong to the verified clause's tenant AND project; a
+reference from another project is never reported.
 
 The legacy ``procurement_wbs_items`` mapping is not read (ADR-025).
 """
@@ -43,8 +47,8 @@ def _status(value: object) -> str | None:
     return str(getattr(value, "value", value))
 
 
-def _direct(via: str) -> ImpactRelationship:
-    return ImpactRelationship(kind="direct", via=via, link_confidence=1.0)
+def _direct(via: str, *, established: bool = True) -> ImpactRelationship:
+    return ImpactRelationship(kind="direct", via=via, link_confidence=1.0 if established else None)
 
 
 class SqlAlchemyClauseImpactResolver:
@@ -87,13 +91,14 @@ class SqlAlchemyClauseImpactResolver:
             return clause, None
         return None, "the persisted clause cannot be proven to belong to the source revision"
 
-    async def _alert_links(self, clause_id: UUID) -> list[ResolvedLink]:
+    async def _alert_links(self, clause_id: UUID, project_id: UUID) -> list[ResolvedLink]:
         rows = (
             (
                 await self._session.execute(
                     select(Alert)
                     .where(
                         Alert.tenant_id == self._tenant_id,
+                        Alert.project_id == project_id,
                         or_(
                             Alert.source_clause_id == clause_id,
                             literal(clause_id) == any_(Alert.related_clause_ids),
@@ -114,10 +119,10 @@ class SqlAlchemyClauseImpactResolver:
                     status=_status(alert.status),
                     potentially_stale=alert.status in _LIVE_ALERT_STATUSES,
                 ),
-                relationship=_direct(
-                    "alerts.source_clause_id"
+                relationship=(
+                    _direct("alerts.source_clause_id")
                     if alert.source_clause_id == clause_id
-                    else "alerts.related_clause_ids"
+                    else _direct("alerts.related_clause_ids", established=False)
                 ),
             )
             for alert in rows
@@ -128,7 +133,8 @@ class SqlAlchemyClauseImpactResolver:
         if clause is None:
             return ResolverResult(links=[], source_verified=False, reason=reason)
         clause_id = clause.id
-        links = await self._alert_links(clause_id)
+        project_id = clause.project_id
+        links = await self._alert_links(clause_id, project_id)
 
         stakeholders = (
             (
@@ -136,6 +142,7 @@ class SqlAlchemyClauseImpactResolver:
                     select(StakeholderORM)
                     .where(
                         StakeholderORM.tenant_id == self._tenant_id,
+                        StakeholderORM.project_id == project_id,
                         StakeholderORM.source_clause_id == clause_id,
                     )
                     .order_by(StakeholderORM.id.asc())
@@ -160,6 +167,7 @@ class SqlAlchemyClauseImpactResolver:
                     select(WBSNodeORM)
                     .where(
                         WBSNodeORM.tenant_id == self._tenant_id,
+                        WBSNodeORM.project_id == project_id,
                         WBSNodeORM.source_clause_id == clause_id,
                     )
                     .order_by(WBSNodeORM.code.asc(), WBSNodeORM.id.asc())
@@ -187,7 +195,7 @@ class SqlAlchemyClauseImpactResolver:
                 await self._session.execute(
                     select(BOMItemORM)
                     .where(
-                        BOMItemORM.project_id == clause.project_id,
+                        BOMItemORM.project_id == project_id,
                         BOMItemORM.contract_clause_id == clause_id,
                     )
                     .order_by(BOMItemORM.id.asc())
@@ -217,8 +225,10 @@ class SqlAlchemyClauseImpactResolver:
                         )
                         .where(
                             StakeholderWBSRaciORM.tenant_id == self._tenant_id,
+                            StakeholderWBSRaciORM.project_id == project_id,
                             StakeholderWBSRaciORM.stakeholder_id.in_(stakeholder_ids),
                             WBSNodeORM.tenant_id == self._tenant_id,
+                            WBSNodeORM.project_id == project_id,
                         )
                         .distinct()
                         .order_by(WBSNodeORM.code.asc(), WBSNodeORM.id.asc())

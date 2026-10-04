@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from sqlalchemy import select
+
 from src.core.database import get_session_with_tenant
+from src.documents.adapters.persistence.models import DocumentORM
 from src.temporal.adapters.persistence.document_revision_repository import (
     SqlAlchemyDocumentRevisionRepository,
 )
@@ -32,12 +35,25 @@ async def revision_requires_temporal_review(
         UUID(str(revision_id)),
     )
     async with get_session_with_tenant(tenant) as session:
+        document_type = (
+            await session.execute(
+                select(DocumentORM.document_type).where(
+                    DocumentORM.id == document, DocumentORM.tenant_id == tenant
+                )
+            )
+        ).scalar_one_or_none()
         return await temporal_review.revision_requires_temporal_review(
             revisions=SqlAlchemyDocumentRevisionRepository(session),
             events=SqlAlchemyProjectEventRepository(session),
             tenant_id=tenant,
             document_id=document,
             revision_id=revision,
+            # Unknown document -> None -> a missing assessment fails closed.
+            artifact_type=(
+                str(getattr(document_type, "value", document_type))
+                if document_type is not None
+                else None
+            ),
         )
 
 

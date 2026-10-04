@@ -27,7 +27,12 @@ class MatcherStatus(StrEnum):
 # family -> current version. p0c-structural-l1: contract clause matcher (ADR-016 L1).
 REGISTERED_ENGINE_FAMILIES: Mapping[str, int] = MappingProxyType({"p0c-structural-l1": 2})
 
-_VERSIONED = re.compile(r"^(?P<family>[a-z0-9][a-z0-9.\-]*?)-v(?P<version>\d+)$")
+# artifact type -> the engine family that compares its revisions. A revision of
+# one of these types is expected to carry a temporal assessment.
+COMPARED_ARTIFACT_TYPES: Mapping[str, str] = MappingProxyType({"contract": "p0c-structural-l1"})
+
+# Exact spelling only: no leading zeros, no surrounding whitespace or newline.
+_VERSIONED = re.compile(r"(?P<family>[a-z0-9][a-z0-9.\-]*?)-v(?P<version>0|[1-9]\d*)")
 
 
 @dataclass(frozen=True)
@@ -40,7 +45,7 @@ class EngineClassification:
 
 def classify_engine_version(value: object) -> EngineClassification:
     engine = value if isinstance(value, str) and value else None
-    match = _VERSIONED.match(engine) if engine else None
+    match = _VERSIONED.fullmatch(engine) if engine else None
     if match is None:
         return EngineClassification(MatcherStatus.UNSUPPORTED, engine, None, None)
     family, version = match.group("family"), int(match.group("version"))
@@ -52,6 +57,7 @@ def classify_engine_version(value: object) -> EngineClassification:
 
 
 __all__ = [
+    "COMPARED_ARTIFACT_TYPES",
     "REGISTERED_ENGINE_FAMILIES",
     "EngineClassification",
     "MatcherStatus",
