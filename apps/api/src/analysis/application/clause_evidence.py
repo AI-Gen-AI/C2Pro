@@ -45,6 +45,13 @@ REASON_NO_PERSISTED_CLAUSES = "contract_has_no_persisted_clauses"
 REASON_CLAUSE_READ_FAILED = "persisted_clause_read_failed"
 REASON_MISSING_IDENTITY = "missing_tenant_or_document_id"
 REASON_NON_CONTRACT = "document_type_is_not_segmented"
+# The persisted clause rows were extracted from an earlier revision than the one being
+# analysed. They are not the current revision's clauses and are never scored as such.
+REASON_STALE_REVISION_CLAUSES = "persisted_clauses_not_bound_to_current_revision"
+
+
+class StaleClauseEvidenceError(Exception):
+    """Persisted clauses do not belong to the document's current revision."""
 
 
 @dataclass(frozen=True)
@@ -144,8 +151,10 @@ __all__ = [
     "REASON_MISSING_IDENTITY",
     "REASON_NON_CONTRACT",
     "REASON_NO_PERSISTED_CLAUSES",
+    "REASON_STALE_REVISION_CLAUSES",
     "ClauseEvidence",
     "EvidenceGranularity",
+    "StaleClauseEvidenceError",
     "granular_evidence",
     "to_coherence_clauses",
     "whole_document_clause_id",

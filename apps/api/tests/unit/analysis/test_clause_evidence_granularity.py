@@ -341,6 +341,7 @@ class TestDocumentsReadPort:
         """The composition root opens an RLS-scoped session and delegates to the port."""
         from contextlib import asynccontextmanager
 
+        import src.analysis.adapters.graph.clause_evidence_loader as loader_module
         import src.core.database as database_module
         import src.documents.application.read_clause_evidence as read_module
         from src.analysis.adapters.graph.clause_evidence_loader import (
@@ -360,8 +361,12 @@ class TestDocumentsReadPort:
             read_calls.append((tenant_id, document_id))
             return (_persisted(code="AUTO-001"),)
 
+        async def no_revision(session, tenant_id, document_id):  # noqa: ANN001, ANN202
+            return None
+
         monkeypatch.setattr(database_module, "get_session_with_tenant", fake_session)
         monkeypatch.setattr(read_module, "read_clause_evidence", fake_read)
+        monkeypatch.setattr(loader_module, "load_current_revision", no_revision)
 
         result = await load_persisted_clause_evidence(TENANT_ID, DOCUMENT_ID)
 
@@ -695,3 +700,168 @@ class TestArtifactGranularityLineage:
 
         assert decoded is not None
         assert decoded.evidence_granularity == "document"
+
+
+# =====================================================================================
+# Revision binding (Lane C / PR-C1): V2 analysis never consumes V1 clause rows
+# =====================================================================================
+
+
+def _bound(revision_id: UUID | None) -> PersistedClause:
+    location = {"revision_id": str(revision_id) if revision_id else None}
+    return _persisted(entities={"evidence_location": location})
+
+
+def _current(revision_id: UUID, parent_revision_id: UUID | None) -> Any:
+    from src.temporal.domain.document_revision import DocumentRevision
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    return DocumentRevision(
+        revision_id=revision_id,
+        document_id=DOCUMENT_ID,
+        project_id=PROJECT_ID,
+        tenant_id=TENANT_ID,
+        rev_no=1 if parent_revision_id is None else 2,
+        parent_revision_id=parent_revision_id,
+        blob_hash="b" * 64,
+        blob_key="revisions/b",
+        valid_from=now,
+        created_at=now,
+    )
+
+
+def _stub_store(
+    monkeypatch: pytest.MonkeyPatch,
+    clauses: tuple[PersistedClause, ...],
+    current: Any,
+) -> None:
+    from contextlib import asynccontextmanager
+
+    import src.analysis.adapters.graph.clause_evidence_loader as loader_module
+    import src.core.database as database_module
+    import src.documents.application.read_clause_evidence as read_module
+
+    @asynccontextmanager
+    async def fake_session(tenant_id: UUID):  # noqa: ANN202
+        yield object()
+
+    async def fake_read(reader, tenant_id, document_id):  # noqa: ANN001, ANN202
+        return clauses
+
+    async def fake_current(session, tenant_id, document_id):  # noqa: ANN001, ANN202
+        return current
+
+    monkeypatch.setattr(database_module, "get_session_with_tenant", fake_session)
+    monkeypatch.setattr(read_module, "read_clause_evidence", fake_read)
+    monkeypatch.setattr(loader_module, "load_current_revision", fake_current)
+
+
+class TestRevisionBoundClauseEvidence:
+    def test_binding_is_read_from_the_recorded_evidence_location(self) -> None:
+        from src.documents.domain.clause_revision_binding import clause_revision_id
+
+        revision_id = uuid4()
+
+        assert clause_revision_id(_bound(revision_id)) == revision_id
+        assert clause_revision_id(_bound(None)) is None
+        assert clause_revision_id(_persisted(entities={"evidence_location": {"revision_id": "x"}})) is None
+
+    @pytest.mark.asyncio
+    async def test_clauses_bound_to_the_current_revision_are_returned(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.analysis.adapters.graph.clause_evidence_loader import (
+            load_persisted_clause_evidence,
+        )
+
+        v1, v2 = uuid4(), uuid4()
+        clauses = (_bound(v2), _bound(v2))
+        _stub_store(monkeypatch, clauses, _current(v2, v1))
+
+        assert await load_persisted_clause_evidence(TENANT_ID, DOCUMENT_ID) == clauses
+
+    @pytest.mark.asyncio
+    async def test_v1_clauses_are_stale_once_v2_is_current(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.analysis.adapters.graph.clause_evidence_loader import (
+            load_persisted_clause_evidence,
+        )
+        from src.analysis.application.clause_evidence import StaleClauseEvidenceError
+
+        v1, v2 = uuid4(), uuid4()
+        _stub_store(monkeypatch, (_bound(v1), _bound(v1)), _current(v2, v1))
+
+        with pytest.raises(StaleClauseEvidenceError):
+            await load_persisted_clause_evidence(TENANT_ID, DOCUMENT_ID)
+
+    @pytest.mark.asyncio
+    async def test_unbound_clauses_after_a_reupload_are_stale(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.analysis.adapters.graph.clause_evidence_loader import (
+            load_persisted_clause_evidence,
+        )
+        from src.analysis.application.clause_evidence import StaleClauseEvidenceError
+
+        # A pre-lineage upload: rows carry no revision, and a revision now supersedes it.
+        _stub_store(monkeypatch, (_bound(None),), _current(uuid4(), uuid4()))
+
+        with pytest.raises(StaleClauseEvidenceError):
+            await load_persisted_clause_evidence(TENANT_ID, DOCUMENT_ID)
+
+    @pytest.mark.asyncio
+    async def test_unbound_clauses_of_a_single_revision_document_are_accepted(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.analysis.adapters.graph.clause_evidence_loader import (
+            load_persisted_clause_evidence,
+        )
+
+        clauses = (_bound(None),)
+        _stub_store(monkeypatch, clauses, _current(uuid4(), None))
+
+        assert await load_persisted_clause_evidence(TENANT_ID, DOCUMENT_ID) == clauses
+
+    @pytest.mark.asyncio
+    async def test_document_without_revision_lineage_keeps_its_clauses(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.analysis.adapters.graph.clause_evidence_loader import (
+            load_persisted_clause_evidence,
+        )
+
+        clauses = (_bound(uuid4()),)
+        _stub_store(monkeypatch, clauses, None)
+
+        assert await load_persisted_clause_evidence(TENANT_ID, DOCUMENT_ID) == clauses
+
+    @pytest.mark.asyncio
+    async def test_n8_scores_v2_text_not_v1_clauses_when_clauses_are_stale(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.analysis.adapters.graph.nodes_extended import coherence_scorer_node
+        from src.analysis.application.clause_evidence import (
+            REASON_STALE_REVISION_CLAUSES,
+            StaleClauseEvidenceError,
+        )
+
+        seen: list[list[CoherenceClause]] = []
+
+        async def recording(clauses, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202
+            seen.append(list(clauses))
+            return await _fake_coherence_result(clauses)
+
+        _stub_loader(monkeypatch, raises=StaleClauseEvidenceError("v1 clauses"))
+        monkeypatch.setattr("src.coherence.graph.graph.evaluate_coherence_async", recording)
+        v2_text = SIX_CATEGORY_CLAUSE_TEXTS["SCHEDULE"]
+
+        update = await coherence_scorer_node(_state(document_text=v2_text))
+        decoded = decode_single_document_assessment(update["single_document_assessment"])
+
+        assert decoded is not None
+        assert decoded.evidence_granularity == "document"
+        assert decoded.degradation_reason == REASON_STALE_REVISION_CLAUSES
+        assert [clause.id for clause in seen[0]] == [f"contract-{DOCUMENT_ID}"]
+        assert seen[0][0].text == v2_text
+        assert update["coherence_reason"] != "node_failed"
