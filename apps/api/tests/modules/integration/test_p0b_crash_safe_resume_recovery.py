@@ -554,6 +554,7 @@ async def test_cp3b_crash_after_completion_marker_finalizes_without_replaying_gr
 
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
+    tenant_id = tenant.id
     arranged = await _arrange(db, tenant, saver, register)
     app = arranged.app
     N17_RUNS.clear()
@@ -568,7 +569,7 @@ async def test_cp3b_crash_after_completion_marker_finalizes_without_replaying_gr
         ).execute(review_id=arranged.review_item_id, request=_approve())
 
     assert len(N17_RUNS) == 1
-    op = await _operation_row(independent_sessions, tenant.id, arranged.review_row_id)
+    op = await _operation_row(independent_sessions, tenant_id, arranged.review_row_id)
     assert op.phase == Phase.GRAPH_COMPLETED.value
     assert op.analysis_id is not None, "durable completion identity recorded"
 
@@ -612,7 +613,7 @@ async def test_cp3b_crash_after_completion_marker_finalizes_without_replaying_gr
     assert graph_completed_enqueues == [
         {
             "project_id": arranged.project_id,
-            "tenant_id": tenant.id,
+            "tenant_id": tenant_id,
             "trigger": SnapshotTrigger.GRAPH_COMPLETED,
             "source_event_id": completed_events[0].event_id,
         }
@@ -625,7 +626,7 @@ async def test_cp3b_crash_after_completion_marker_finalizes_without_replaying_gr
         ReviewStatus.APPROVED.value
     )
     assert (await _reload(db, DocumentORM, arranged.document_id)).upload_status == "analyzed"
-    op = await _operation_row(independent_sessions, tenant.id, arranged.review_row_id)
+    op = await _operation_row(independent_sessions, tenant_id, arranged.review_row_id)
     assert op.phase == Phase.FINALIZED_APPROVED.value
 
 
