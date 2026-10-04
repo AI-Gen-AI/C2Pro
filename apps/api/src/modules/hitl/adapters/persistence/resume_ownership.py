@@ -969,6 +969,7 @@ _FINALIZE_DOCUMENT_REJECT_SQL = text(
 )
 
 GRAPH_COMPLETED_HEALTH_PROJECTION_KEY = "graph_completed_health_projection"
+GRAPH_COMPLETED_HEALTH_PROJECTION_RETRY_SECONDS = 300
 
 _FINALIZE_OPERATION_SQL = text(
     """
@@ -989,8 +990,21 @@ _FINALIZE_OPERATION_SQL = text(
                                       AND e.event_type = 'graph.completed'
                                     LIMIT 1
                                ),
-                               'state', 'pending',
-                               'attempts', 0
+                               -- The post-commit fast path below is attempt #1.
+                               -- Persist it as in-flight in the SAME trusted
+                               -- transaction so the 60s Beat sweep cannot race a
+                               -- slow broker/worker delivery. A crashed/lost fast
+                               -- path becomes retryable only after this lease.
+                               'state', 'in_flight',
+                               'attempts', 1,
+                               'retry_after',
+                                   clock_timestamp()
+                                   + make_interval(
+                                         secs => cast(
+                                             :health_projection_retry_seconds
+                                             as double precision
+                                         )
+                                     )
                            )
                        )
                ELSE coalesce(operation_metadata, '{}'::jsonb)
@@ -1176,6 +1190,8 @@ async def finalize_v3(
                         if approved
                         else Phase.FINALIZED_REJECTED.value
                     ),
+                    "health_projection_retry_seconds":
+                        GRAPH_COMPLETED_HEALTH_PROJECTION_RETRY_SECONDS,
                 },
             )
         ).first()

@@ -585,16 +585,39 @@ async def test_full_hitl_lifecycle_resume_to_n17_to_analyzed_and_health_readable
                 },
             )
         ).scalar_one()
-    assert projection == {
-        "event_id": str(events[0].event_id),
-        "state": "pending",
-        "attempts": 0,
-    }
+    assert projection["event_id"] == str(events[0].event_id)
+    assert projection["state"] == "in_flight"
+    assert projection["attempts"] == 1
+    assert projection["retry_after"] is not None
 
-    # Simulate a lost post-commit broker dispatch: no snapshot exists because
-    # the fast path was captured above instead of actually queued. The bounded
-    # Beat reconciler must redispatch the SAME event, without replaying HITL.
     from src.core.tasks import hitl_resume_reconciler
+
+    # P2 regression: the 60s Beat sweep must NOT overlap the post-finalize
+    # fast-path delivery while its retry lease is live.
+    snapshot_enqueues.clear()
+    reconcile = await hitl_resume_reconciler._reconcile_graph_completed_health_projections()
+    assert reconcile["enqueued"] == 0
+    assert snapshot_enqueues == []
+
+    # Simulate a lost post-commit broker dispatch by expiring the in-flight
+    # lease. The bounded reconciler may now redispatch the SAME event once,
+    # without replaying HITL or changing authority.
+    async with get_session_with_tenant(document.tenant_id) as verify_session:
+        await verify_session.execute(
+            text(
+                "UPDATE resume_operations "
+                "SET operation_metadata = jsonb_set("
+                "operation_metadata, "
+                "'{graph_completed_health_projection,retry_after}', "
+                "to_jsonb((clock_timestamp() - interval '1 second')::text), true"
+                ") "
+                "WHERE review_row_id = :review_row_id AND tenant_id = :tenant_id"
+            ),
+            {
+                "review_row_id": review_orm.id,
+                "tenant_id": document.tenant_id,
+            },
+        )
 
     snapshot_enqueues.clear()
     reconcile = await hitl_resume_reconciler._reconcile_graph_completed_health_projections()
@@ -623,8 +646,46 @@ async def test_full_hitl_lifecycle_resume_to_n17_to_analyzed_and_health_readable
                 },
             )
         ).scalar_one()
-    assert projection["state"] == "pending"
-    assert projection["attempts"] == 1
+    assert projection["state"] == "in_flight"
+    assert projection["attempts"] == 2
+    assert projection["retry_after"] is not None
+
+    # The renewed in-flight lease suppresses another 60s Beat overlap.
+    snapshot_enqueues.clear()
+    reconcile = await hitl_resume_reconciler._reconcile_graph_completed_health_projections()
+    assert reconcile["enqueued"] == 0
+    assert snapshot_enqueues == []
+
+    # P1 regression: exhausted work without an exact snapshot must NOT consume
+    # the bounded batch forever. It disappears from the candidate set; if a
+    # delayed delivery later materializes the exact snapshot it becomes
+    # eligible again only for acknowledgement as projected.
+    async with get_session_with_tenant(document.tenant_id) as verify_session:
+        await verify_session.execute(
+            text(
+                "UPDATE resume_operations "
+                "SET operation_metadata = jsonb_set("
+                "jsonb_set(operation_metadata, "
+                "'{graph_completed_health_projection,state}', "
+                "to_jsonb('exhausted'::text), true), "
+                "'{graph_completed_health_projection,attempts}', "
+                "to_jsonb(cast(:attempts as integer)), true"
+                ") "
+                "WHERE review_row_id = :review_row_id AND tenant_id = :tenant_id"
+            ),
+            {
+                "attempts": hitl_resume_reconciler.MAX_HEALTH_PROJECTION_ENQUEUES,
+                "review_row_id": review_orm.id,
+                "tenant_id": document.tenant_id,
+            },
+        )
+
+    snapshot_enqueues.clear()
+    reconcile = await hitl_resume_reconciler._reconcile_graph_completed_health_projections(
+        batch_size=1
+    )
+    assert reconcile["scanned"] == 0
+    assert snapshot_enqueues == []
 
     # Once the exact source-event snapshot exists, reconciliation must stop
     # dispatching and durably acknowledge the obligation as projected.
@@ -675,6 +736,16 @@ async def test_full_hitl_lifecycle_resume_to_n17_to_analyzed_and_health_readable
             )
         ).scalar_one()
     assert state == "projected"
+
+    # P1 regression: an already projected obligation must leave the bounded
+    # reconciliation candidate set. Otherwise enough completed rows can occupy
+    # LIMIT(:batch_size) forever and starve pending or expired work.
+    snapshot_enqueues.clear()
+    reconcile = await hitl_resume_reconciler._reconcile_graph_completed_health_projections(
+        batch_size=1
+    )
+    assert reconcile["scanned"] == 0
+    assert snapshot_enqueues == []
 
     # 9. Document becomes ANALYZED (the gap this hotfix closes: N17 alone
     # never touched Document.upload_status -- ResumeWorkflowUseCase must).

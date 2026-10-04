@@ -83,50 +83,75 @@ _CLAIMABLE_SQL = text(
 
 HEALTH_PROJECTION_BATCH_SIZE = 20
 MAX_HEALTH_PROJECTION_ENQUEUES = 12
+HEALTH_PROJECTION_RETRY_SECONDS = 300
 
 _PENDING_HEALTH_PROJECTIONS_SQL = text(
     """
-    SELECT o.id, o.tenant_id, o.project_id, e.event_id,
-           coalesce(
-               (o.operation_metadata
-                 -> 'graph_completed_health_projection'
-                 ->> 'attempts')::integer,
-               0
-           ) AS attempts,
-           coalesce(
-               o.operation_metadata
-                 -> 'graph_completed_health_projection'
-                 ->> 'state',
-               'pending'
-           ) AS projection_state,
-           EXISTS (
-               SELECT 1
-                 FROM project_snapshots s
-                WHERE s.tenant_id = o.tenant_id
-                  AND s.project_id = o.project_id
-                  AND s.source_event_id = e.event_id
-                  AND s.trigger = 'graph_completed'
-           ) AS snapshot_exists
-      FROM resume_operations o
-      JOIN project_events e
-        ON e.event_id = cast(
-               o.operation_metadata
-                 -> 'graph_completed_health_projection'
-                 ->> 'event_id'
-               AS uuid
-           )
-       AND e.resume_operation_id = o.id
-       AND e.tenant_id = o.tenant_id
-       AND e.project_id = o.project_id
-       AND e.event_type = 'graph.completed'
-     WHERE o.phase = 'FINALIZED_APPROVED'
-       AND coalesce(
-               o.operation_metadata
-                 -> 'graph_completed_health_projection'
-                 ->> 'state',
-               ''
-           ) IN ('pending', 'exhausted')
-     ORDER BY o.updated_at
+    WITH candidates AS (
+        SELECT o.id, o.tenant_id, o.project_id, o.updated_at, e.event_id,
+               coalesce(
+                   (o.operation_metadata
+                     -> 'graph_completed_health_projection'
+                     ->> 'attempts')::integer,
+                   0
+               ) AS attempts,
+               coalesce(
+                   o.operation_metadata
+                     -> 'graph_completed_health_projection'
+                     ->> 'state',
+                   'pending'
+               ) AS projection_state,
+               nullif(
+                   o.operation_metadata
+                     -> 'graph_completed_health_projection'
+                     ->> 'retry_after',
+                   ''
+               )::timestamptz AS retry_after,
+               EXISTS (
+                   SELECT 1
+                     FROM project_snapshots s
+                    WHERE s.tenant_id = o.tenant_id
+                      AND s.project_id = o.project_id
+                      AND s.source_event_id = e.event_id
+                      AND s.trigger = 'graph_completed'
+               ) AS snapshot_exists
+          FROM resume_operations o
+          JOIN project_events e
+            ON e.event_id = cast(
+                   o.operation_metadata
+                     -> 'graph_completed_health_projection'
+                     ->> 'event_id'
+                   AS uuid
+               )
+           AND e.resume_operation_id = o.id
+           AND e.tenant_id = o.tenant_id
+           AND e.project_id = o.project_id
+           AND e.event_type = 'graph.completed'
+         WHERE o.phase = 'FINALIZED_APPROVED'
+    )
+    SELECT id, tenant_id, project_id, event_id, attempts,
+           projection_state, retry_after, snapshot_exists
+      FROM candidates
+     WHERE (
+               snapshot_exists
+           AND projection_state <> 'projected'
+        )
+        OR (
+               projection_state = 'pending'
+           AND attempts < cast(:max_attempts as integer)
+        )
+        OR (
+               projection_state = 'in_flight'
+           AND retry_after IS NOT NULL
+           AND retry_after <= clock_timestamp()
+        )
+     ORDER BY
+         CASE
+             WHEN snapshot_exists THEN 0
+             WHEN projection_state = 'pending' THEN 1
+             ELSE 2
+         END,
+         updated_at
      LIMIT :limit
     """
 )
@@ -153,6 +178,44 @@ _MARK_HEALTH_PROJECTION_PROJECTED_SQL = text(
     """
 )
 
+_MARK_HEALTH_PROJECTION_EXHAUSTED_SQL = text(
+    """
+    UPDATE resume_operations
+       SET operation_metadata =
+               coalesce(operation_metadata, '{}'::jsonb)
+               || jsonb_build_object(
+                      'graph_completed_health_projection',
+                      coalesce(
+                          operation_metadata -> 'graph_completed_health_projection',
+                          '{}'::jsonb
+                      ) || jsonb_build_object('state', 'exhausted')
+                  ),
+           updated_at = clock_timestamp()
+     WHERE id = cast(:operation_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
+       AND phase = 'FINALIZED_APPROVED'
+       AND operation_metadata
+             -> 'graph_completed_health_projection'
+             ->> 'event_id' = cast(:event_id as text)
+       AND operation_metadata
+             -> 'graph_completed_health_projection'
+             ->> 'state' = 'in_flight'
+       AND coalesce(
+               (operation_metadata
+                 -> 'graph_completed_health_projection'
+                 ->> 'attempts')::integer,
+               0
+           ) >= cast(:max_attempts as integer)
+       AND nullif(
+               operation_metadata
+                 -> 'graph_completed_health_projection'
+                 ->> 'retry_after',
+               ''
+           )::timestamptz <= clock_timestamp()
+    RETURNING id
+    """
+)
+
 _CLAIM_HEALTH_PROJECTION_RETRY_SQL = text(
     """
     UPDATE resume_operations
@@ -165,12 +228,14 @@ _CLAIM_HEALTH_PROJECTION_RETRY_SQL = text(
                           '{}'::jsonb
                       ) || jsonb_build_object(
                           'attempts', cast(:next_attempt as integer),
-                          'state', CASE
-                              WHEN cast(:next_attempt as integer)
-                                   >= cast(:max_attempts as integer)
-                              THEN 'exhausted'
-                              ELSE 'pending'
-                          END
+                          'state', 'in_flight',
+                          'retry_after',
+                              clock_timestamp()
+                              + make_interval(
+                                    secs => cast(
+                                        :retry_delay_seconds as double precision
+                                    )
+                                )
                       )
                   ),
            updated_at = clock_timestamp()
@@ -180,19 +245,37 @@ _CLAIM_HEALTH_PROJECTION_RETRY_SQL = text(
        AND operation_metadata
              -> 'graph_completed_health_projection'
              ->> 'event_id' = cast(:event_id as text)
-       AND operation_metadata
-             -> 'graph_completed_health_projection'
-             ->> 'state' = 'pending'
        AND coalesce(
                (operation_metadata
                  -> 'graph_completed_health_projection'
                  ->> 'attempts')::integer,
                0
            ) = cast(:expected_attempt as integer)
+       AND coalesce(
+               (operation_metadata
+                 -> 'graph_completed_health_projection'
+                 ->> 'attempts')::integer,
+               0
+           ) < cast(:max_attempts as integer)
+       AND (
+            operation_metadata
+              -> 'graph_completed_health_projection'
+              ->> 'state' = 'pending'
+            OR (
+                operation_metadata
+                  -> 'graph_completed_health_projection'
+                  ->> 'state' = 'in_flight'
+                AND nullif(
+                        operation_metadata
+                          -> 'graph_completed_health_projection'
+                          ->> 'retry_after',
+                        ''
+                    )::timestamptz <= clock_timestamp()
+            )
+       )
     RETURNING id
     """
 )
-
 
 async def _reconcile_graph_completed_health_projections(
     batch_size: int = HEALTH_PROJECTION_BATCH_SIZE,
@@ -216,7 +299,10 @@ async def _reconcile_graph_completed_health_projections(
         rows = (
             await session.execute(
                 _PENDING_HEALTH_PROJECTIONS_SQL,
-                {"limit": batch_size},
+                {
+                    "limit": batch_size,
+                    "max_attempts": MAX_HEALTH_PROJECTION_ENQUEUES,
+                },
             )
         ).all()
 
@@ -241,8 +327,21 @@ async def _reconcile_graph_completed_health_projections(
             continue
 
         attempts = int(row.attempts)
-        if row.projection_state == "exhausted" or attempts >= MAX_HEALTH_PROJECTION_ENQUEUES:
-            counts["exhausted"] += 1
+        if attempts >= MAX_HEALTH_PROJECTION_ENQUEUES:
+            async with session_factory(tenant_id) as session:
+                exhausted = (
+                    await session.execute(
+                        _MARK_HEALTH_PROJECTION_EXHAUSTED_SQL,
+                        {
+                            "operation_id": str(row.id),
+                            "tenant_id": str(tenant_id),
+                            "event_id": str(event_id),
+                            "max_attempts": MAX_HEALTH_PROJECTION_ENQUEUES,
+                        },
+                    )
+                ).first()
+            if exhausted is not None:
+                counts["exhausted"] += 1
             continue
 
         next_attempt = attempts + 1
@@ -257,6 +356,7 @@ async def _reconcile_graph_completed_health_projections(
                         "expected_attempt": attempts,
                         "next_attempt": next_attempt,
                         "max_attempts": MAX_HEALTH_PROJECTION_ENQUEUES,
+                        "retry_delay_seconds": HEALTH_PROJECTION_RETRY_SECONDS,
                     },
                 )
             ).first()
