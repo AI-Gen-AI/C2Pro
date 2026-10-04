@@ -16,6 +16,24 @@ class AlertMapper:
     """Maps Alert domain entities to AlertResponse DTOs."""
 
     @staticmethod
+    def _detection_evidence(metadata: dict[str, object]) -> dict[str, object] | None:
+        """Return detector provenance without conflating reviewer evidence lists."""
+        evidence = metadata.get("detection_evidence")
+        if isinstance(evidence, dict):
+            return evidence
+
+        # Compatibility with historical detector payloads. Reviewer evidence is
+        # stored as a list, so only dict-shaped legacy values can be detector
+        # provenance.
+        legacy = metadata.get("evidence")
+        if isinstance(legacy, dict):
+            return legacy
+        legacy_coherence = metadata.get("coherence_evidence")
+        if isinstance(legacy_coherence, dict):
+            return legacy_coherence
+        return None
+
+    @staticmethod
     def to_response(alert: Alert, tenant_id: UUID) -> AlertResponse:
         """
         Convert domain Alert to AlertResponse DTO.
@@ -44,6 +62,8 @@ class AlertMapper:
                 if hasattr(alert.status, "value")
                 else str(alert.status),
                 "affected_entities": Alert.normalize_affected_entities(alert.affected_entities),
+                "source_clause_id": alert.source_clause_id,
+                "detection_evidence": AlertMapper._detection_evidence(metadata),
                 "reviewed_by": alert.reviewed_by,
                 "reviewed_at": alert.reviewed_at,
                 "root_cause": metadata.get("root_cause"),
