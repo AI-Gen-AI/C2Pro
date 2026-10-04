@@ -31,14 +31,14 @@ from src.alerts.application.dtos import (
 from src.alerts.application.mappers import AlertMapper
 from src.alerts.application.ports.alert_repository import IAlertRepository
 from src.alerts.application.ports.tenant_repository import ITenantRepository
-from src.alerts.application.use_cases.bulk_resolve_alerts_use_case import (
-    BulkResolveAlertsUseCase,
-)
 from src.alerts.application.use_cases.attach_alert_evidence_use_case import (
     AlertNotFoundError as EvidenceAlertNotFoundError,
 )
 from src.alerts.application.use_cases.attach_alert_evidence_use_case import (
     AttachAlertEvidenceUseCase,
+)
+from src.alerts.application.use_cases.bulk_resolve_alerts_use_case import (
+    BulkResolveAlertsUseCase,
 )
 from src.alerts.application.use_cases.bulk_review_alerts_use_case import (
     BulkReviewAlertsUseCase,
