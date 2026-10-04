@@ -32,6 +32,56 @@ lock, and no database connection is held while LangGraph runs -- the graph
 opens its own sessions, and holding one across it deadlocks (the request
 cannot commit until the graph returns; the graph cannot proceed until the
 request commits).
+
+Lock order (#758)
+-----------------
+Row locks across the tables that a resume and a document generation both
+touch are taken in ONE canonical order, and every transaction takes a PREFIX
+or a SUBSET of it::
+
+    documents
+      -> system_recovery.document_work_index
+      -> document_processing_operations
+      -> resume_operations
+      -> review_items
+      -> projects, then append-only tables
+         (analyses, alerts, wbs_nodes, project_events,
+          resume_operation_attempts, document_revisions)
+
+``document_processing_operations`` and ``resume_operations`` are never held
+at the same time, so their relative position is a convention rather than a
+constraint. The orders actually taken are::
+
+    reupload / reprocess   documents -> dpo -> review_items
+    analysis terminal      documents -> dpo
+    lineage claim/rebind   documents -> dpo -> review_items
+    acquire / recovery     resume_operations -> review_items
+    verify_in_transaction  resume_operations -> review_items
+    N17                    resume_operations -> review_items -> projects
+    graph-completed        resume_operations -> review_items
+    finalize (both ways)   documents -> resume_operations -> review_items
+
+Finalization needed fixing first. It is the only resume transaction that
+writes ``documents``, and it used to do so LAST, which formed a real cycle
+with the generation transition: the reupload held the document and waited on
+the review, while the approval held the review and waited on the document.
+Reversing the GENERATION side instead was not an option -- taking the review
+before the document there would invert against the lineage claim, which
+necessarily holds the #711 authority row before it touches the review.
+
+The document row is now locked EXPLICITLY on BOTH sides, rather than left to
+the order statements happen to be emitted in. "Reupload/reprocess already
+starts from the document" turned out to be true only of reupload: the
+repository's ``update_status`` / ``update_metadata`` merely STAGE an ORM
+mutation, so a reprocess reached the authority row and the review with its
+``UPDATE documents`` still unflushed. Measured with ``FOR UPDATE NOWAIT``
+from a second connection, that transition held the authority row and the
+review while the document row was still free -- the inverted order, and
+invisible in the call sequence. ``processing_authority`` therefore takes the
+document row itself (see ``_lock_document`` there).
+
+Anything added here that writes ``documents`` or ``projects`` from inside a
+resume transaction must take those rows before ``resume_operations``.
 """
 
 from __future__ import annotations

@@ -138,6 +138,16 @@ class AcquireResult:
 
 _SET_TENANT_SQL = text("SELECT set_config('app.current_tenant', :tenant, true)")
 
+#: #758: the first row every authority transaction takes. See _lock_document.
+_LOCK_DOCUMENT_SQL = text(
+    """
+    SELECT id FROM documents
+     WHERE id = CAST(:document_id AS uuid)
+       AND tenant_id = CAST(:tenant_id AS uuid)
+     FOR UPDATE
+    """
+)
+
 _LOCK_SQL = text(
     """
     SELECT document_id, tenant_id, revision_id, generation, stage, phase,
@@ -281,7 +291,9 @@ async def _set_tenant(session: Any, tenant_id: UUID) -> None:
     await session.execute(_SET_TENANT_SQL, {"tenant": str(tenant_id)})
 
 
-async def _touch_index(session: Any, *, tenant_id: UUID, document_id: UUID) -> None:
+async def _touch_index(
+    session: Any, *, tenant_id: UUID, document_id: UUID, lock_document: bool = True
+) -> None:
     """Refresh the discovery hint, taking its row lock FIRST.
 
     Lock order for every writer is documents -> discovery index -> authority
@@ -289,13 +301,48 @@ async def _touch_index(session: Any, *, tenant_id: UUID, document_id: UUID) -> N
     recovery sweep locks documents + index, then the authority row). Taking
     the index before the authority row here keeps that order, so heartbeats,
     acquires and the sweep cannot deadlock.
+
+    #758: ``lock_document`` takes the document row before the index, for the
+    callers that go on to take the authority row. The sweep locks documents
+    and the index in ONE statement, so an acquire that took the index first
+    and the document second could invert against it. The heartbeat passes
+    False deliberately: it takes no authority row lock, and making a
+    keep-alive queue behind a long document transaction would let a healthy
+    worker's lease lapse and invite a pointless takeover.
     """
     await _set_tenant(session, tenant_id)
+    if lock_document:
+        await _lock_document(session, tenant_id=tenant_id, document_id=document_id)
     await session.execute(_INDEX_HEARTBEAT_SQL, {"document_id": str(document_id)})
+
+
+async def _lock_document(session: Any, *, tenant_id: UUID, document_id: UUID) -> None:
+    """Take the document row BEFORE the authority row (#758 lock order).
+
+    The order documents -> discovery index -> authority row was always the
+    intent (see :func:`_touch_index`), but it relied on the caller having
+    already written the document. It had not always: the repository's
+    ``update_status`` / ``update_metadata`` only STAGE an ORM mutation, so the
+    ``UPDATE documents`` could be emitted at flush time -- after this
+    transaction had taken the authority row. Measured against real
+    PostgreSQL, a reprocess held the authority row and the review while the
+    document row was still free, which inverts against every transaction that
+    starts from the document (a reupload, and HITL finalization since it was
+    put on the canonical order).
+
+    Locking it explicitly makes the order structural instead of a consequence
+    of SQLAlchemy flush timing. A row that is absent or belongs to another
+    tenant locks nothing, which keeps every existing refusal path intact.
+    """
+    await session.execute(
+        _LOCK_DOCUMENT_SQL,
+        {"document_id": str(document_id), "tenant_id": str(tenant_id)},
+    )
 
 
 async def _lock(session: Any, *, tenant_id: UUID, document_id: UUID) -> Any:
     await _set_tenant(session, tenant_id)
+    await _lock_document(session, tenant_id=tenant_id, document_id=document_id)
     return (
         await session.execute(
             _LOCK_SQL, {"document_id": str(document_id), "tenant_id": str(tenant_id)}
@@ -328,6 +375,11 @@ async def begin_generation(
     from src.core import resume_lineage
 
     await _set_tenant(session, tenant_id)
+    # #758 lock order: documents FIRST, then the authority row, then the
+    # reviews. The reprocess route stages its document status change through
+    # the ORM, so without this the UPDATE landed at flush time -- after the
+    # authority row -- and the whole transition ran in the inverted order.
+    await _lock_document(session, tenant_id=tenant_id, document_id=document_id)
     row = (
         await session.execute(
             _BEGIN_GENERATION_SQL,
@@ -536,8 +588,16 @@ async def heartbeat(session: Any, authority: ProcessingAuthority) -> bool:
     False = authority lost; the caller MUST roll back, so a superseded but
     live worker can never keep the recovery discovery hint fresh either.
     """
+    # #758: deliberately WITHOUT the document lock. A heartbeat takes no
+    # authority row lock, so it is outside the canonical order; making a
+    # keep-alive queue behind a long document transaction (a reupload, say)
+    # would let a healthy worker's lease lapse and invite a takeover it did
+    # not deserve.
     await _touch_index(
-        session, tenant_id=authority.tenant_id, document_id=authority.document_id
+        session,
+        tenant_id=authority.tenant_id,
+        document_id=authority.document_id,
+        lock_document=False,
     )
     renewed = (
         await session.execute(
