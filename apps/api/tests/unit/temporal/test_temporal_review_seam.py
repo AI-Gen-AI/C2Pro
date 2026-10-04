@@ -21,6 +21,7 @@ from src.temporal.application.temporal_review import (
 )
 from src.temporal.domain.document_revision import DocumentRevision
 from src.temporal.domain.project_event import ProjectEvent
+from src.temporal.ports.revision_trust_reader import RevisionTrustEvidence
 
 DOCUMENT = uuid4()
 
@@ -106,12 +107,22 @@ def test_needs_review_revision_requires_temporal_review() -> None:
 
 
 def test_clean_deterministic_revision_does_not_require_review() -> None:
-    revision = _revision(parent=uuid4())
+    parent = _revision(parent=None)
+    revision = _revision(parent=parent.revision_id).model_copy(
+        update={"tenant_id": parent.tenant_id, "project_id": parent.project_id}
+    )
 
     decision = decide_temporal_review(
         revision=revision,
         document_id=DOCUMENT,
         events=[_analyzed(revision), _changed(revision, state="ready")],
+        artifact_type="contract",
+        # Its lineage is anchored: the parent is an explicitly TRUSTED revision (#714).
+        lineage=[parent, revision],
+        trust=RevisionTrustEvidence(
+            states_by_revision={parent.revision_id: frozenset({"trusted"})},
+            unbound_trusted=False,
+        ),
     )
 
     assert decision == TemporalReviewDecision(required=False, reason="temporal_identity_resolved")

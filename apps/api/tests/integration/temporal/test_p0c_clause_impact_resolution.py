@@ -45,6 +45,7 @@ from src.temporal.adapters.persistence.document_revision_repository import (
 from src.temporal.adapters.persistence.project_event_repository import (
     SqlAlchemyProjectEventRepository,
 )
+from src.temporal.adapters.persistence.revision_trust_reader import SqlAlchemyRevisionTrustReader
 from src.temporal.application.change_qualification import qualify_event
 from src.temporal.application.impact_assessment import assess_change_impacts
 from src.temporal.application.revision_change_orchestrator import build_revision_analysis_events
@@ -385,6 +386,7 @@ async def test_clause_impact_follows_only_persisted_links(
     baseline = await revision_requires_temporal_review(
         revisions=rev_repo,
         events=events,
+        trust=SqlAlchemyRevisionTrustReader(db),
         tenant_id=tenant_a,
         document_id=document.id,
         revision_id=revision_1.revision_id,
@@ -403,15 +405,23 @@ async def test_clause_impact_follows_only_persisted_links(
     decision = await revision_requires_temporal_review(
         revisions=rev_repo,
         events=events,
+        trust=SqlAlchemyRevisionTrustReader(db),
         tenant_id=tenant_a,
         document_id=document.id,
         revision_id=revision_2.revision_id,
         artifact_type="contract",
     )
-    assert decision.required is (qualification.effective_state != "ready")
+    # V1 was never TRUSTED here, so V2's lineage is not anchored whatever its own diff says.
+    assert decision.required is True
+    assert decision.reason == (
+        "untrusted_ancestor_lineage"
+        if qualification.effective_state == "ready"
+        else "temporal_changes_need_review"
+    )
     foreign_doc = await revision_requires_temporal_review(
         revisions=rev_repo,
         events=events,
+        trust=SqlAlchemyRevisionTrustReader(db),
         tenant_id=tenant_a,
         document_id=uuid4(),
         revision_id=revision_2.revision_id,

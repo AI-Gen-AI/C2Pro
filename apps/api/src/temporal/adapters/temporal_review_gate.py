@@ -19,6 +19,9 @@ from src.temporal.adapters.persistence.document_revision_repository import (
 from src.temporal.adapters.persistence.project_event_repository import (
     SqlAlchemyProjectEventRepository,
 )
+from src.temporal.adapters.persistence.revision_trust_reader import (
+    SqlAlchemyRevisionTrustReader,
+)
 from src.temporal.application import temporal_review
 from src.temporal.application.temporal_review import TemporalReviewDecision
 
@@ -45,6 +48,7 @@ async def revision_requires_temporal_review(
         return await temporal_review.revision_requires_temporal_review(
             revisions=SqlAlchemyDocumentRevisionRepository(session),
             events=SqlAlchemyProjectEventRepository(session),
+            trust=SqlAlchemyRevisionTrustReader(session),
             tenant_id=tenant,
             document_id=document,
             revision_id=revision,

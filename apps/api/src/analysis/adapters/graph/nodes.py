@@ -424,12 +424,13 @@ async def _apply_temporal_review_gate(state: ProjectState) -> None:
             document_id=state["document_id"],
             revision_id=revision_id,
         )
-        required, reason = decision.required, decision.reason
+        required, reason, detail = decision.required, decision.reason, decision.detail
     except Exception as exc:  # noqa: BLE001 - fail closed on any lookup failure
         logger.warning("temporal_review_lookup_failed", revision_id=revision_id, error=str(exc))
-        required, reason = True, "temporal_review_lookup_failed"
+        required, reason, detail = True, "temporal_review_lookup_failed", None
     state["temporal_review_reason"] = reason
     if required:
+        logger.info("temporal_review_required", revision_id=revision_id, reason=reason, detail=detail)
         state["human_approval_required"] = True
 
 
