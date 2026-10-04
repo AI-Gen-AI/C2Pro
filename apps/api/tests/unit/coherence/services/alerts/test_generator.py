@@ -131,6 +131,62 @@ class TestFingerprint:
         assert svc._fingerprint_existing(existing) == svc._fingerprint(incoming)
 
 
+    def test_positional_rag_locator_does_not_own_finding_identity(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        first = _make_alert_create(
+            rule_id="DET-LEG-RAG",
+            category="LEGAL",
+            affected_entities={"documents": ["doc-123"]},
+        )
+        first.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "chunk_0_deadbeef",
+                "source_document_id": "doc-123",
+                "claim": "Notice period mismatch",
+                "quote": "Notice shall be thirty days",
+            }
+        }
+        second = first.model_copy(deep=True)
+        second.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "chunk_9_deadbeef",
+                "source_document_id": "doc-123",
+                "claim": "Notice period mismatch",
+                "quote": "Notice shall be thirty days",
+            }
+        }
+
+        assert svc._fingerprint(first) == svc._fingerprint(second)
+
+    def test_existing_positional_rag_locator_matches_renumbered_incoming_finding(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        existing = _make_mock_alert(fingerprint="")
+        existing.rule_id = "DET-LEG-RAG"
+        existing.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "chunk_1_deadbeef",
+                "source_document_id": "doc-123",
+                "claim": "Notice period mismatch",
+                "quote": "Notice shall be thirty days",
+            }
+        }
+        incoming = _make_alert_create(
+            rule_id="DET-LEG-RAG",
+            category="LEGAL",
+            affected_entities={"documents": ["doc-123"]},
+        )
+        incoming.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "chunk_7_deadbeef",
+                "source_document_id": "doc-123",
+                "claim": "Notice period mismatch",
+                "quote": "Notice shall be thirty days",
+            }
+        }
+
+        assert svc._fingerprint_existing(existing) == svc._fingerprint(incoming)
+
+
     def test_stored_legacy_fingerprint_is_recomputed_with_current_identity_scheme(self) -> None:
         clause_id = uuid4()
         svc = AlertGeneratorService(repository=MagicMock())
@@ -295,6 +351,33 @@ class TestProcessViolations:
             if call[0][0] is existing
         ]
         assert len(resolved_calls) >= 1
+
+    @pytest.mark.asyncio
+    async def test_acknowledged_finding_survives_temporary_detector_miss(self) -> None:
+        existing = _make_mock_alert(
+            status=AlertStatus.ACKNOWLEDGED,
+            fingerprint="accepted-fp",
+        )
+        reviewer = uuid4()
+        existing.reviewed_by = reviewer
+        existing.review_comment = "Accepted contractual variance"
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([existing]))
+        repo.create = AsyncMock()
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+
+        svc = AlertGeneratorService(repository=repo)
+        await svc.process_violations(
+            project_id=uuid4(),
+            violations=[],
+            auto_resolve=True,
+        )
+
+        assert existing.status == AlertStatus.ACKNOWLEDGED
+        assert existing.reviewed_by == reviewer
+        assert existing.review_comment == "Accepted contractual variance"
+        repo.update.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_no_auto_resolve_when_disabled(self) -> None:
