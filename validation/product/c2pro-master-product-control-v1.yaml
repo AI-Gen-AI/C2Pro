@@ -1,7 +1,7 @@
 schema: c2pro-product-control-v1
-schema_version: 7
+schema_version: 8
 repository: AI-Gen-AI/C2Pro
-generated: "2026-10-03"
+generated: "2026-10-04"
 control_status: reconciliation
 
 # Machine source of truth for product programme state. Edit this file first;
@@ -48,7 +48,7 @@ development_execution_authority:
     This product plane records target/state; it does not authorize merges or production mutation.
 
 production_position:
-  reconciled_against_main_sha: 9893cd42049c3cd2bbf9e8d891df0725b35ef082
+  reconciled_against_main_sha: e331dc4a027b9dcdb3985bb7b3961b9293ba06b7
   deployed_runtime_sha: UNVERIFIED
   observed_production_evidence:
     - "kuwait2 doc c510de21: enqueue -> worker -> SUCCESS on dedicated Railway Redis (historical P0a evidence)"
@@ -63,13 +63,15 @@ production_position:
     - "The legacy singleton deployed_runtime_sha remains UNVERIFIED because backend/frontend SHAs legitimately differ; merged #678 carries non-authoritative composite runtime evidence and merged #700/#681 provides the Product-Control promotion guard without self-promotion"
     - "Current #715 dispatch binding to re-verify: Railway backend commit 314fc39b0b4c25c8c0ca99977314ba1bb9083208 with API 37d1fe0b-4223-4654-806a-23b6d2b73264, Worker 7ee88c11-596a-4188-b378-14502659b806 and Scheduler 96d11273-0af9-4691-b013-42296a247906 previously observed SUCCESS; Vercel production commit 12b7f09edc0e1cf864906268ddc5b8e75d3f8a4c with deployment dpl_FgMfbquSUcyBgPVw2SdetDe7UZQ1 previously observed READY. These are bounded dispatch inputs, not assumed truth; A1 must independently verify them."
     - "Production HITL incidents proved the real P0b journey reached human review; subsequent #633/#638/#641/#646/#650 hardening is merged on main, without implying P0b PROD_VALIDATED"
+    - "P0b A1 run #55 / 37195954713 passed exact provider/runtime/auth/tenant identity preflight on main 84842677..."
+    - "P0b A2 run #56 / 37196092728 passed the full production browser journey, durable verifier and evidence validator on Railway backend 5491e36c... + Vercel frontend 84842677...; artifact 11301371769 digest sha256:a342545d..."
+    - "Run #56 durable uniqueness proof: 1 document, 1 revision, 1 APPROVED review, 1 hitl.correction, 1 FINALIZED_APPROVED resume operation, 1 graph.completed and 1 graph_completed Health snapshot with 6 assessments."
+    - "Run #56 exposed a non-blocking OPS residual: best-effort ai_usage_logs telemetry inserts fail because production schema lacks model_name; LLM analysis and the qualified product journey completed successfully. Track separately; do not erase from operational evidence."
   reliability_operability_baseline: CLOSED
-  product_value_delivered: false
+  product_value_delivered: true
   NOT_delivered_to_user:
-    - "P0b L4-5 is release-ready and merged but still not PROD_VALIDATED end-to-end on the current runtime"
     - "P0c What Changed is WIRED on main but deployment/prod-validation of the complete user journey is not proven"
     - "P0d Current State Reporting is WIRED on main but deployment/prod-validation is not proven"
-    - "#706 full production end-user GOAL remains open: #710/#711/#714 implementations are closed; #758 checkpoint-lineage fencing is closed; #712 and #713 remain open acceptance/fix-forward authorities; #715 harness is merged but the full production qualification has not been accepted; #690 prerequisite is closed from production run #30 evidence; #792 remains open until the next full production journey proves explicit HITL"
     - "ADR-025 now has canonical-WBS authority and several cross-domain links wired on main, but one-logical-root, baseline/change governance, remaining alert/evidence/change linkage and production journey are not fully proven"
     - "Procurement Plan -> BoQ/RFQ -> award -> governed stakeholder communications is not delivered end-to-end"
 
@@ -84,9 +86,9 @@ qualification_control:
     lifecycle state; Product Control changes remain an explicit reviewed action.
   lanes:
     P0b:
-      qualification_status: REQUIRED
-      bundle_ref: null
-      bundle_sha256: null
+      qualification_status: PASS
+      bundle_ref: evidence/product-qualification/p0b-prod-gh-37196092728-1.yaml
+      bundle_sha256: d6031d454ac40f30a84a1b9c30f4f5d97ef285d7eb9e8d047a0af97148f6281b
       lifecycle_targets:
         - {kind: adr, id: ADR-024, field: prod_validation_status, promote_to: PROD_VALIDATED}
         - {kind: p0b_slice, id: P0b-L4-5, field: slice_status, promote_to: DONE}
@@ -203,6 +205,48 @@ reconciliation_delta_2026_10_03_post_780:
     composite production binding. A2 is the acceptance vehicle for #792 and exercises the landed #712/#713
     truthfulness fixes. No CI, merge, deployment or successful preflight self-promotes P0b/P0c/P0d.
 
+reconciliation_delta_2026_10_04_p0b:
+  previous_main_sha: 9893cd42049c3cd2bbf9e8d891df0725b35ef082
+  current_main_sha: e331dc4a027b9dcdb3985bb7b3961b9293ba06b7
+  authoritative_runs:
+    A1: {run_number: 55, run_id: 37195954713, conclusion: PASS}
+    A2: {run_number: 56, run_id: 37196092728, conclusion: PASS}
+  runtime_binding:
+    backend: {provider: railway, commit_sha: 5491e36c8f71113540c65ddd9fa7fc5e45a01f27, deployment_id: f976eb47-c2aa-4b02-a0c6-25e555d4405b, terminal_state: SUCCESS}
+    frontend: {provider: vercel, commit_sha: 84842677adb7046ea24b0e92fc5aaa3ee20565b0, deployment_id: dpl_3Lv1u6UtwWUQvVrhdckiqfZc4SHg, terminal_state: READY}
+  qualification_bundle:
+    ref: evidence/product-qualification/p0b-prod-gh-37196092728-1.yaml
+    sha256: d6031d454ac40f30a84a1b9c30f4f5d97ef285d7eb9e8d047a0af97148f6281b
+    artifact_id: 11301371769
+    artifact_digest: sha256:a342545d7e5eeca6d27c784ed2cdb848a7723269e28194c2b24442d1646c1828
+    validator_verdict: PASS
+  lifecycle_promotion:
+    qualification_P0b: PASS
+    ADR_024_prod_validation_status: PROD_VALIDATED
+    P0b_L4_5_slice_status: DONE
+    ADR_018_auto_promoted: false
+  durable_truth:
+    documents: 1
+    revisions: 1
+    reviews: 1
+    approved_reviews: 1
+    hitl_corrections: 1
+    graph_completed_events: 1
+    finalized_approved_resume_operations: 1
+    graph_completed_snapshots: 1
+    health_assessments: 6
+  operational_residuals:
+    - "ai_usage_logs telemetry is best-effort and failed during the run because production schema lacks model_name; product analysis/HITL/Health remained successful."
+    - "Railway log-rate saturation dropped some log messages during the high-volume run; track observability volume separately."
+  control_conclusion: >
+    The bounded P0b single-document Health wedge is now production-validated from a real end-user
+    journey and a hash-bound PASS bundle. This promotes only the fixed P0b lifecycle targets and
+    product_value_delivered for the current wedge; it does not validate P0c/P0d, global Coherence
+    cutover, Project Controls or the full North Star. Repository main later advanced through
+    #824 (persisted alert review) and #823 (Lane C temporal impact/trust seam); those later merges
+    are implementation state only and do not alter the accepted P0b runtime binding or inherit
+    production-validation authority from run #56.
+
 north_star:
   full_product: >
     C2Pro is continuous, evidence-backed project and procurement intelligence for
@@ -277,9 +321,9 @@ status_vocabulary:
 
 corrected_current_claims:
   - claim: "Phase 1 COMPLETE / product functional for end users"
-    truth: "P0a reliability/operability baseline is CLOSED; product value is not yet PROD_VALIDATED."
+    truth: "P0a reliability/operability baseline is CLOSED; the bounded P0b single-document Health wedge is PROD_VALIDATED, while broader product value still requires independent P0c/P0d/P1 qualification."
   - claim: "No open code work required for end users"
-    truth: "P0b/P0c/P0d user-visible production validation remains open; P0c and P0d are already WIRED_ON_MAIN_NOT_PROD_VALIDATED. Project Controls, Procurement and later workflows remain open."
+    truth: "P0b is PROD_VALIDATED/CLOSED for its bounded wedge; P0c and P0d remain WIRED_ON_MAIN_NOT_PROD_VALIDATED. Project Controls, Procurement and later workflows remain open."
   - claim: "Project Controls can be represented as multiple discipline WBSs"
     truth: "Rejected. One project has one canonical hierarchical WBS; disciplines are branches/levels."
   - claim: "Coherence Score, Health and Alerts are interchangeable project-health concepts"
@@ -322,17 +366,17 @@ adr_realization:
   - {adr: "ADR-015-temporal", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: WIRED, deployment_status: PARTIAL, prod_validation_status: NONE, evidence: "revision/event/snapshot structures plus revision-bound worker events, timeline/change-detail HTTP and UI are wired on main", gap: "current merged temporal journey is not production-validated"}
   - {adr: "ADR-016-change-impact", ns: v3_canon, priority: P1, design_status: Accepted, realization_status: WIRED, deployment_status: NONE, prod_validation_status: NONE, evidence: "semantic diff, change projection/orchestration, revision timeline/detail API and What Changed UI are on main", gap: "deployment and production validation remain open"}
   - {adr: "ADR-017-projectgraph", ns: v3_canon, priority: P1, design_status: Accepted, realization_status: SCAFFOLDED, deployment_status: BLOCKED, prod_validation_status: NONE, evidence: "project graph feature-gated", gap: "flag-gated OFF / Tier-2 not qualified"}
-  - {adr: "ADR-018-health-engine", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: WIRED, deployment_status: DEPLOYED, prod_validation_status: NOT_VALIDATED, evidence: "HealthVector and GET health route wired", gap: "P0b user-visible production validation still open"}
+  - {adr: "ADR-018-health-engine", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: WIRED, deployment_status: DEPLOYED, prod_validation_status: NOT_VALIDATED, evidence: "HealthVector and GET health route wired; bounded P0b single-document path passed production run #56", gap: "broader ADR-018 Health-engine production validation exceeds the fixed P0b qualification target and remains independently open"}
   - {adr: "ADR-019-alerts-actions", ns: v3_canon, priority: P2, design_status: Accepted, realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE, evidence: "alert/action domain partial", gap: "P1 requires alert visibility/integration only; correlation/action automation remains later"}
   - {adr: "ADR-020-hitl", ns: v3_canon, priority: P2, design_status: Accepted, realization_status: WIRED, deployment_status: PARTIAL, prod_validation_status: NONE, evidence: "real review UI/approval path plus V3 fenced resume, recovery, exact-row identity and idempotent final-decision audit are wired on main", gap: "ConfidenceRouter still auto-approves high-confidence LOW/MEDIUM impact items; ADR-020 named consequential-decision automation policy is only partially realized; latest hardened runtime is not independently prod-validated"}
   - {adr: "ADR-021-briefing", ns: v3_canon, priority: P3, design_status: Deferred, realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE, evidence: "briefing projection scaffold", gap: "deferred"}
   - {adr: "ADR-022-contract-clarity", ns: v3_canon, priority: P2, design_status: Accepted, realization_status: WIRED, deployment_status: DEPLOYED, prod_validation_status: NOT_VALIDATED, evidence: "contract clarity findings path", gap: "not user/prod validated"}
   - {adr: "ADR-023-agentic-coherence", ns: v3_canon, priority: P1, design_status: Proposed, realization_status: DESIGNED, deployment_status: NONE, prod_validation_status: NONE, evidence: "ADR + roadmap", gap: "not built"}
-  - {adr: "ADR-024-single-doc-activation", ns: v3_canon, priority: P0b, design_status: Accepted, realization_status: WIRED, deployment_status: PARTIAL, prod_validation_status: NONE, evidence: "L4-1..L4-5 implementation is merged/release-ready; production incidents prove the path reached HITL but not the completed Health outcome", gap: "deploy current hardened main and obtain end-to-end production validation"}
+  - {adr: "ADR-024-single-doc-activation", ns: v3_canon, priority: P0b, design_status: Accepted, realization_status: WIRED, deployment_status: PARTIAL, prod_validation_status: PROD_VALIDATED, evidence: "Production run #56 / 37196092728 completed the bounded one-document Health journey with validated evidence bundle d6031d45...", gap: none}
   - {adr: "ADR-025-canonical-project-controls-wbs-backbone", ns: v3_canon, priority: P1, design_status: Accepted, realization_status: PARTIAL, deployment_status: NONE, prod_validation_status: NONE, evidence: "wbs_nodes is canonical runtime authority on main; legacy WBS writes are blocked; RACI/BOM/MCP plus schedule/spend consumers are reconciled", gap: "one-logical-root, baseline/change governance, complete budget/schedule/alert/evidence/change linkage and deployment/prod-validation remain open"}
   - {adr: "ADR-026-trusted-state-commit", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: WIRED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#714 trusted-state commit/projected-Coherence implementation merged on main after #758 lineage fencing", gap: "no independent deployed-runtime or full production-journey validation claim"}
-  - {adr: "ADR-027-processing-authority-checkpoint-lineage", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: WIRED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#711 processing authority plus #758 checkpoint-lineage fencing merged on main", gap: "deployment/production acceptance remains governed by the #706/#715 qualification path"}
-  - {adr: "ADR-028-production-qualification-composite-runtime", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#715/#733 harness, provider-identity verifier and evidence contracts are merged; #690 prerequisite closed from production run #30 identity/tenant evidence", gap: "#715 full-journey acceptance remains open; #792 acceptance is bound to that journey"}
+  - {adr: "ADR-027-processing-authority-checkpoint-lineage", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: WIRED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#711 processing authority plus #758 checkpoint-lineage fencing merged on main; P0b run #56 exercised the governed path successfully", gap: "ADR-027 is not a fixed P0b lifecycle target; its broader independent deployment/prod-validation state remains unchanged"}
+  - {adr: "ADR-028-production-qualification-composite-runtime", ns: v3_canon, priority: P0, design_status: Accepted, realization_status: SCAFFOLDED, deployment_status: NONE, prod_validation_status: NONE, evidence: "#715/#733 qualification mechanism plus provider-identity/evidence contracts were exercised successfully by A1 #55 and A2 #56; #715/#792 are closed", gap: "ADR-028 is not a fixed P0b lifecycle promotion target; no self-promotion is inferred from successful use of the mechanism"}
 
 coherence_runtime_reconciliation:
   status: COMPLETE
@@ -475,7 +519,7 @@ product_wbs:
 
 p0b_vertical_contract:
   invariant_ids: [INV-1, INV-UX, INV-COH]
-  next_slice: P0b-L4-5
+  next_slice: null
   done_definition: >
     Production evidence: upload ONE document -> six-category decomposition -> per-category
     {state, findings, missing_data} -> actionable gap alerts -> Health Vector -> persisted + read
@@ -491,7 +535,7 @@ p0b_vertical_contract:
     - {id: P0b-L4-2, name: "wire intake -> classification -> coverage", scope: "real clauses -> category assessments + missing_data", exit_gate: "real document coverage integration green", slice_status: DONE}
     - {id: P0b-L4-3, name: "persist assessment into Health Vector", scope: "versioned assessment + lineage + snapshot", exit_gate: "round-trip/replay/honest-null green", slice_status: DONE}
     - {id: P0b-L4-4, name: "read API", scope: "authenticated GET health contract", exit_gate: "#581 acceptance incl. tenant isolation", slice_status: DONE}
-    - {id: P0b-L4-5, name: "user-visible UI/report", scope: "six categories + findings + gaps + granularity + honest null; release-ready implementation merged via #630", exit_gate: "PROD upload -> user-visible truthful Health journey", slice_status: PARTIAL}
+    - {id: P0b-L4-5, name: "user-visible UI/report", scope: "six categories + findings + gaps + granularity + honest null; release-ready implementation merged via #630", exit_gate: "PROD upload -> user-visible truthful Health journey", slice_status: DONE}
   residuals:
     - id: P0b-R1-EVIDENCE-GRANULARITY
       name: "per-clause evidence granularity"
@@ -522,7 +566,7 @@ implementation_lanes:
 
 phase_roadmap:
   - {phase: "P0a", name: "Reliability & Operability Baseline", status: CLOSED, evidence: "baseline closed; residual ops work remains separately tracked"}
-  - {phase: "P0b", name: "Single-document Health activation", status: "ACTIVE / PROD_VALIDATION_PENDING", plane: ACT-HEALTH, adrs: [ADR-024, ADR-018, ADR-022], notes: "L4-1..L4-5 implementation is merged/release-ready; L4-5 remains PARTIAL until the production done-definition evidence exists."}
+  - {phase: "P0b", name: "Single-document Health activation", status: "PROD_VALIDATED / CLOSED", plane: ACT-HEALTH, adrs: [ADR-024, ADR-018, ADR-022], notes: "Run #56 / 37196092728 validates the bounded P0b done definition; ADR-024 is PROD_VALIDATED and P0b-L4-5 is DONE. Broader ADR-018 remains independently governed."}
   - {phase: "P0c", name: "What Changed / Temporal Change", status: "WIRED_ON_MAIN / NOT_PROD_VALIDATED", planes: [TEMPORAL-CHANGE], adrs: [ADR-015, ADR-016], notes: "revision-bound events, change projection, timeline/detail API and What Changed UI are merged on main."}
   - {phase: "P0d", name: "Current State Reporting", status: "WIRED_ON_MAIN / NOT_PROD_VALIDATED", planes: [EXEC-REPORTING], adrs: [ADR-021], notes: "Current State domain/API/UI/export are merged on main; executive/portfolio extension remains deferred."}
   - {phase: "P1", name: "Project Controls Backbone + Coherence + alert visibility", status: "ACTIVE / PARTIAL", planes: [PROJECT-CONTROLS, COHERENCE-XDOC], adrs: [ADR-025, ADR-018, ADR-009, ADR-017, ADR-023], notes: "canonical WBS authority and several RACI/BOM/schedule/spend integrations are on main; complete one-root/baseline/linkage/drill-down plus Coherence cutover remain open; full Action/HITL remains P2."}
@@ -569,9 +613,9 @@ legacy_coverage:
     - {legacy: "Dependabot / mypy / Sonar residuals", maps_to: "DEV/OPS", disposition: "development hygiene"}
 
 master_defects:
-  - "D1: Product value is not yet production-validated; P0b L4-5 is merged/release-ready but remains PARTIAL until production evidence closes the done definition."
+  - "D1: RESOLVED for the current wedge — P0b L4-5 is PROD_VALIDATED/DONE from run #56; P0c/P0d and the broader North Star remain separate qualification work."
   - "D2: ADR-018 Health is WIRED/DEPLOYED but NOT PROD_VALIDATED."
-  - "D3: ADR-024 activation is WIRED with PARTIAL production-path evidence; the current hardened main runtime is not independently PROD_VALIDATED."
+  - "D3: RESOLVED — ADR-024 single-document activation is PROD_VALIDATED by the accepted run #56 evidence bundle."
   - "D4: Global authoritative Coherence v2 cutover is not demonstrated; P0c/P0d are wired on main but not production-validated."
   - "D5: Temporal/change and Current State runtime qualification remain product/deployment dependencies."
   - "D6: Legacy backlog completion claims remain historical/cold reference, not product truth."
@@ -598,9 +642,9 @@ pr_disposition:
   "650": {action: MERGED_HITL_V3_IDEMPOTENCY, reason: "final decision audit idempotency + exact-identity reconciliation integrated"}
 
 next_authorized_action:
-  - "#690 is CLOSED from bounded production run #30 identity/tenant evidence. Do not reopen or replace that prerequisite unless new contradictory production evidence appears."
-  - "Treat #712 and #713 as still-open acceptance/fix-forward authorities whose landed code must now be exercised through the canonical #715 production journey; do not block A1 merely because the issues are administratively open."
-  - "Execute #715 in two bounded Line-A steps on the current production composite binding: A1 identity-preflight first; only after A1 PASS, A2 full production journey with require_hitl=true. The merged harness is tooling, not acceptance."
-  - "For #715 use the current provider-bound composite runtime recorded in the issue dispatch package and let the workflow independently re-verify Railway API/Worker/Scheduler, Vercel production identity, zero staged changes, fixture digest, auth/RLS and recovery evidence before mutation."
-  - "On A2 PASS, close #792 only if the journey proves REVIEW_REQUIRED -> one explicit UI decision -> ANALYZED on the same governed lineage with one durable correction/decision and no duplicate trusted effects. Capture #712/#713 and #683 assertions inside the same bounded evidence bundle where applicable; then return the bundle to Line B for explicit P0b reconciliation before any P0c/P0d qualification."
-  - "After the P0 qualification wave, reconcile Product Control explicitly before any lifecycle promotion or new P1/Coherence/Procurement authorization. No documentation/CI/deployment event self-promotes state."
+  - "P0b is accepted from run #56 / 37196092728. Do not rerun or demote it without contradictory production evidence; the accepted bundle is evidence/product-qualification/p0b-prod-gh-37196092728-1.yaml."
+  - "#715 and #792 are CLOSED from the canonical production proof. #712 and #713 remain separate acceptance/fix-forward authorities for lifecycle/evidence cases not exhaustively covered by the bounded P0b scenario."
+  - "Proceed with the remaining P0 qualification wave: P0c temporal/change and P0d current-state reporting require their own exact-runtime production evidence before lifecycle promotion."
+  - "Line B may build the Alerts + Coherence Product Acceptance Matrix in parallel, but must not create a second temporal engine or second Coherence authority; Line C produces temporal facts and Line B consumes them."
+  - "Do not authorize new P1 Coherence/Project-Controls runtime promotion merely because P0b passed; integrate/qualify remaining P0 work or make an explicit dependency decision first."
+  - "Track the run #56 ai_usage_logs model_name schema drift and Railway log-rate saturation as OPS/observability residuals; they did not invalidate the product journey but must not be silently forgotten."

@@ -1,8 +1,8 @@
 # C2Pro Technical Architecture Baseline — 2026-10-01
 
-**Status:** Canonical current-state architecture baseline · revalidated 2026-10-03  
+**Status:** Canonical current-state architecture baseline · revalidated 2026-10-04
 **Original baseline main SHA:** `33650a28a930d82a7bd65d98b50981145b3fd1d1`  
-**Revalidated against main SHA:** `314fc39b0b4c25c8c0ca99977314ba1bb9083208`  
+**Revalidated against main SHA:** `e331dc4a027b9dcdb3985bb7b3961b9293ba06b7`
 **Scope:** implemented architecture and active product-control boundaries, not a product-release claim
 
 > This document describes the architecture that exists or is explicitly governed on the revalidated baseline above. It does **not** imply that the complete end-user journey is production validated. Product lifecycle truth remains in `validation/product/c2pro-master-product-control-v1.yaml`.
@@ -226,14 +226,14 @@ Code/CI proves realization evidence; it does not silently rewrite an ADR. If imp
 
 ## 12. Current non-claims
 
-As of the 2026-10-03 revalidation:
+As of the 2026-10-04 revalidation:
 
-- `#706` remains open: the full production end-user journey is not yet declared operational.
-- `#715` remains open: the production synthetic harness exists, but a successful full-journey qualification has not been accepted.
-- `#690` is closed: bounded production run #30 proved the dedicated production qualification identity/tenant prerequisite; this closure does **not** promote P0b/P0c/P0d.
-- `#712` and `#713` remain open fix-forward workstreams.
-- `#792` remains open pending acceptance/closure even though #793 merged the explicit-human-review runtime fix.
-- No documentation change in this reconciliation promotes P0b/P0c/P0d to `PROD_VALIDATED`.
+- The bounded **P0b single-document Health** wedge is production-qualified by A1 #55 and A2 #56 on the exact composite runtime recorded in Product Control; this does **not** validate the complete North Star.
+- `#715` and `#792` are closed from that production proof. `#706` has moved from journey execution to Product-Control reconciliation/closure.
+- `#690` remains closed from its earlier dedicated identity/tenant prerequisite proof.
+- `#712` and `#713` remain separate fix-forward/acceptance authorities for lifecycle/evidence cases not exhausted by the bounded P0b run.
+- P0c temporal/change and P0d Current State remain **not production-validated**; later Line-C merges are implementation evidence only until their own qualification.
+- Broader ADR-018 Health, global authoritative Coherence, Project Controls, Procurement and later workflows are **not** promoted by the P0b acceptance.
 
 ## 13. Related decisions
 

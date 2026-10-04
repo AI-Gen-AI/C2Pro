@@ -23,31 +23,29 @@ Product Control distinguishes design, realization, deployment and production val
 
 Completed work belongs in Git/PR/CI/evidence history, not as permanently duplicated hot-state prose.
 
-## Current reconciliation hinge — 2026-10-03
+## Current reconciliation hinge — 2026-10-04
 
-Current repository baseline: `main@9893cd42049c3cd2bbf9e8d891df0725b35ef082`.
+Current repository baseline: `main@e331dc4a027b9dcdb3985bb7b3961b9293ba06b7`.
 
 Material programme facts:
 
-- #780 documentation/architecture reconciliation is merged; Line B's reconciliation branch is closed.
-- #711 durable processing authority, #758 checkpoint-lineage fencing and #714 trusted-state/projected-Coherence implementation remain closed.
-- #690 dedicated production qualification identity/tenant prerequisite is **closed** from bounded production synthetic run #30 evidence.
-- #715 production synthetic acceptance harness is merged, but #715 remains open because the full production qualification has not been accepted.
-- Run #30 failed later at the explicit-HITL seam; #793 is merged/deployed as the runtime fix and #792 remains open until a fresh #715 full production journey proves the boundary in production.
-- #712 truthful lifecycle and #713 evidence-locator truthfulness remain open acceptance/fix-forward authorities; their landed code must be exercised through the canonical journey.
-- #706 remains the operational product GOAL.
-- #798 is documentation-only; #799/#800 are CI efficiency/hygiene changes and do not alter end-user runtime semantics.
+- **P0b single-document Health is production-qualified.** A1 run #55 (`37195954713`) and A2 run #56 (`37196092728`) are PASS on the exact composite production binding.
+- The accepted evidence bundle is `evidence/product-qualification/p0b-prod-gh-37196092728-1.yaml`; Product Control promotes P0b to `PASS`, ADR-024 to `PROD_VALIDATED`, and P0b-L4-5 to `DONE` atomically.
+- #715 and #792 are closed from the production proof. #706 remains the parent operational authority until this reconciliation is merged/accepted.
+- #712 lifecycle truthfulness and #713 evidence-locator truthfulness remain separate fix-forward/acceptance authorities; the bounded P0b proof does not pretend to exhaust every rejection/unavailable-locator case.
+- `product_value_delivered=true` refers to the current P0b wedge only, not the complete North Star.
+- P0c and P0d remain `REQUIRED` and must earn their own exact-runtime production evidence.
+- OPS residuals from run #56 remain explicit: best-effort AI-usage telemetry schema drift (`ai_usage_logs.model_name`) and Railway log-rate saturation.
+- #824 (persisted alert review) and #823 (Lane C temporal impact/trust seam) are merged after the P0b qualification run; neither inherits PROD_VALIDATED status from P0b.
 
-### Next Line A work package
+### Next Line B work package
 
-The next bounded execution is owned by **Line A** under #715:
+Line B now owns two distinct activities without duplicating Line C:
 
-1. **A1 — identity-preflight:** non-mutating provider/runtime/auth/tenant verification on the current composite production binding.
-2. **A2 — full production journey:** only after A1 PASS, run the real user path with `require_hitl=true` through REVIEW_REQUIRED → one explicit UI decision → ANALYZED → HEALTH → refresh/relogin → read-only durable verification.
-3. On first failure, stop and remediate only that seam. Do not weaken auth/RLS/HITL or manually repair production state.
-4. On A2 PASS, return the bounded evidence bundle to Line B for explicit P0b Product-Control reconciliation. No run auto-promotes lifecycle state.
-
-These facts do **not** promote P0b/P0c/P0d to `PROD_VALIDATED`.
+1. **Finish P0b Product-Control reconciliation** and close #706 only after the atomic control transition is merged.
+2. **Build the Alerts + Coherence Product Acceptance Matrix** in parallel: known fixture → expected alerts/evidence → expected score → alert review/trusted state → coherent score transition.
+3. Line C remains the authority for temporal/version/change facts. Line B consumes those facts; it must not create a second temporal engine or a second Coherence authority.
+4. New P1 runtime promotion remains gated by explicit programme authority; P0b PASS alone does not implicitly authorize global Coherence cutover.
 
 ## Architecture pointers
 

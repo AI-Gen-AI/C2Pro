@@ -202,9 +202,22 @@ def validate_enums(doc: dict) -> list[str]:
                 f"p0b.slice[{sid}]: legacy free-form 'status' present; use validated 'slice_status'"
             )
 
-    next_slice = _s(p0b.get("next_slice", ""))
-    if not next_slice:
-        problems.append("p0b_vertical_contract: missing 'next_slice' (the current next authorized product action)")
+    has_next_slice = "next_slice" in p0b
+    next_raw = p0b.get("next_slice")
+    next_slice = _s(next_raw) if next_raw is not None else ""
+    unfinished_slices = [
+        sl for sl in (p0b.get("slices") or []) if _s(sl.get("slice_status")) != "DONE"
+    ]
+    if not has_next_slice:
+        problems.append(
+            "p0b_vertical_contract: missing 'next_slice' field "
+            "(use null only when every P0b slice is DONE)"
+        )
+    elif not next_slice:
+        if unfinished_slices:
+            problems.append(
+                "p0b_vertical_contract: 'next_slice' may be null only when every P0b slice is DONE"
+            )
     elif next_slice not in slice_ids:
         problems.append(f"p0b_vertical_contract: 'next_slice'='{next_slice}' is not a known P0b slice id")
     else:
@@ -244,6 +257,101 @@ def validate_enums(doc: dict) -> list[str]:
                 "qualification_status",
                 row.get("qualification_status"),
                 qualification,
+            )
+    return problems
+
+
+def _validate_p0b_reconciliation_binding(
+    doc: dict,
+    lane_row: dict,
+    bundle_doc: dict,
+) -> list[str]:
+    """Bind the explicit P0b reconciliation record to the accepted Phase-A bundle.
+
+    The lane's hash proves which bundle was accepted. This second binding prevents
+    a later edit from claiming a different production runtime in Product Control
+    while retaining the same accepted bundle.
+    """
+    problems: list[str] = []
+    delta = doc.get("reconciliation_delta_2026_10_04_p0b")
+    where = "reconciliation_delta_2026_10_04_p0b"
+    if not isinstance(delta, dict):
+        return [f"{where}: required for accepted P0b qualification"]
+
+    current_main = delta.get("current_main_sha")
+    reconciled = (doc.get("production_position") or {}).get("reconciled_against_main_sha")
+    if current_main != reconciled:
+        problems.append(
+            f"{where}.current_main_sha must equal production_position.reconciled_against_main_sha"
+        )
+
+    accepted = delta.get("qualification_bundle")
+    if not isinstance(accepted, dict):
+        problems.append(f"{where}.qualification_bundle must be a mapping")
+    else:
+        if accepted.get("ref") != lane_row.get("bundle_ref"):
+            problems.append(f"{where}.qualification_bundle.ref must match qualification[P0b].bundle_ref")
+        if accepted.get("sha256") != lane_row.get("bundle_sha256"):
+            problems.append(
+                f"{where}.qualification_bundle.sha256 must match qualification[P0b].bundle_sha256"
+            )
+        if accepted.get("validator_verdict") != bundle_doc.get("validator_verdict"):
+            problems.append(
+                f"{where}.qualification_bundle.validator_verdict must match accepted bundle"
+            )
+
+    runtime = delta.get("runtime_binding")
+    if not isinstance(runtime, dict):
+        return problems + [f"{where}.runtime_binding must be a mapping"]
+
+    bundle_runtime = bundle_doc.get("runtime_bindings")
+    evidence_refs = bundle_doc.get("evidence_refs")
+    if not isinstance(bundle_runtime, list) or not isinstance(evidence_refs, list):
+        return problems
+
+    by_plane = {
+        row.get("plane"): row
+        for row in bundle_runtime
+        if isinstance(row, dict) and isinstance(row.get("plane"), str)
+    }
+    refs = {
+        row.get("id"): row
+        for row in evidence_refs
+        if isinstance(row, dict) and isinstance(row.get("id"), str)
+    }
+
+    for delta_key, plane in (("backend", "backend"), ("frontend", "frontend")):
+        claimed = runtime.get(delta_key)
+        proven = by_plane.get(plane)
+        if not isinstance(claimed, dict):
+            problems.append(f"{where}.runtime_binding.{delta_key} must be a mapping")
+            continue
+        if not isinstance(proven, dict):
+            problems.append(f"{where}: accepted bundle has no {plane} runtime binding")
+            continue
+        for field in ("provider", "commit_sha", "terminal_state"):
+            if claimed.get(field) != proven.get(field):
+                problems.append(
+                    f"{where}.runtime_binding.{delta_key}.{field} must match accepted bundle"
+                )
+
+        evidence_id = proven.get("deployment_evidence_ref")
+        evidence = refs.get(evidence_id)
+        if not isinstance(evidence, dict):
+            problems.append(
+                f"{where}: accepted bundle deployment evidence {evidence_id!r} is missing"
+            )
+            continue
+        ref = evidence.get("ref")
+        expected_prefix = f"{proven.get('provider')}:"
+        if not isinstance(ref, str) or not ref.startswith(expected_prefix):
+            problems.append(
+                f"{where}: accepted {plane} deployment evidence has invalid provider locator"
+            )
+            continue
+        if claimed.get("deployment_id") != ref[len(expected_prefix):]:
+            problems.append(
+                f"{where}.runtime_binding.{delta_key}.deployment_id must match accepted bundle evidence"
             )
     return problems
 
@@ -436,8 +544,8 @@ def validate_qualification_control(
                                     f"{where}: bundle capability_id={bundle_doc.get('capability_id')!r} "
                                     f"does not match {lane}"
                                 )
-                            expected_verdict = "PASS" if status == "PASS" else "FAIL"
-                            if status in {"PASS", "FAIL"} and bundle_doc.get("validator_verdict") != expected_verdict:
+                            expected_verdict = "PASS" if status_value == "PASS" else "FAIL"
+                            if status_value in {"PASS", "FAIL"} and bundle_doc.get("validator_verdict") != expected_verdict:
                                 problems.append(
                                     f"{where}: {status_value} requires Phase-A validator_verdict={expected_verdict}"
                                 )
@@ -448,6 +556,14 @@ def validate_qualification_control(
                                     or bundle_doc.get("validator_verdict") == expected_verdict
                                 )
                             )
+                            if (
+                                lane == "P0b"
+                                and status_value == "PASS"
+                                and isinstance(bundle_doc.get("runtime_bindings"), list)
+                            ):
+                                problems.extend(
+                                    _validate_p0b_reconciliation_binding(doc, row, bundle_doc)
+                                )
 
         promoted = []
         for target in targets:
@@ -527,7 +643,7 @@ def extract_canonical(doc: dict) -> dict[str, str]:
         "adr.ADR-028.prod_validation": _s(a028["prod_validation_status"]),
         "p0b.done_digest": hashlib.sha256(_norm(p0b["done_definition"]).encode()).hexdigest()[:16],
         "p0b.invariant_ids": ",".join(_s(x) for x in p0b["invariant_ids"]),
-        "p0b.next_slice": _s(p0b["next_slice"]),
+        "p0b.next_slice": _s(p0b.get("next_slice")) if p0b.get("next_slice") is not None else "NONE",
     }
     exec_current = _wbs_row(doc, "PWBS-EXEC-REPORTING")["subtracks"]["current_state"]
     canon["wbs.PWBS-EXEC-REPORTING.current_state.realization"] = _s(

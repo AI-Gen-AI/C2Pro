@@ -1,0 +1,107 @@
+schema: c2pro-product-qualification-evidence-v1
+schema_version: 1
+lifecycle_authority: false
+repository: AI-Gen-AI/C2Pro
+control_ref: validation/product/c2pro-master-product-control-v1.yaml
+control_commit_sha: 84842677adb7046ea24b0e92fc5aaa3ee20565b0
+control_baseline_sha: 9893cd42049c3cd2bbf9e8d891df0725b35ef082
+capability_id: P0b
+target_state: PROD_VALIDATED
+environment: production
+runtime_bindings:
+- plane: backend
+  provider: railway
+  commit_sha: 5491e36c8f71113540c65ddd9fa7fc5e45a01f27
+  terminal_state: SUCCESS
+  deployment_evidence_ref: deploy-backend
+- plane: frontend
+  provider: vercel
+  commit_sha: 84842677adb7046ea24b0e92fc5aaa3ee20565b0
+  terminal_state: READY
+  deployment_evidence_ref: deploy-frontend
+observed_at: '2026-10-04T10:44:17Z'
+scenario:
+  id: single_document_health
+  identifiers:
+    project_id: e7c6031f-cd9e-4642-a5ea-35a0207ceaeb
+    document_id: 9769cb1f-cef7-4832-a1aa-de916448bb43
+    source_revision_id: f99dbed8-ef37-45aa-af41-e6c7c3fbd88f
+assertions:
+- id: six_categories_present_or_honest_unknown
+  status: PASS
+  evidence_refs:
+  - browser-run
+  - db-verifier
+  - persisted-source-revision
+- id: findings_traceable_to_evidence
+  status: PASS
+  evidence_refs:
+  - browser-run
+  - persisted-source-revision
+- id: missing_data_preserved
+  status: PASS
+  evidence_refs:
+  - browser-run
+  - db-verifier
+- id: actionable_gap_alerts_visible
+  status: PASS
+  evidence_refs:
+  - browser-run
+- id: health_api_ui_semantic_parity
+  status: PASS
+  evidence_refs:
+  - browser-run
+  - db-verifier
+- id: unknown_never_zero_or_green
+  status: PASS
+  evidence_refs:
+  - browser-run
+- id: coherence_headline_null_under_two_reconcilable_documents
+  status: PASS
+  evidence_refs:
+  - browser-run
+  - db-verifier
+- id: hitl_retry_recovery_does_not_strand_document
+  status: PASS
+  evidence_refs:
+  - browser-run
+  - db-verifier
+  - recovery-proof
+  - hitl-review
+evidence_refs:
+- id: deploy-backend
+  kind: deployment
+  ref: railway:f976eb47-c2aa-4b02-a0c6-25e555d4405b
+  immutable: true
+  sha256: null
+- id: deploy-frontend
+  kind: deployment
+  ref: vercel:dpl_3Lv1u6UtwWUQvVrhdckiqfZc4SHg
+  immutable: true
+  sha256: null
+- id: persisted-source-revision
+  kind: persisted_entity
+  ref: postgres:document_revision:f99dbed8-ef37-45aa-af41-e6c7c3fbd88f
+  immutable: true
+  sha256: null
+- id: browser-run
+  kind: ui_report
+  ref: artifact:playwright/.prod-acceptance/run.json
+  immutable: false
+  sha256: 4511dae719adebe181f708dc90a1d5d855400fb07779df713e837478038ef9dc
+- id: db-verifier
+  kind: test_report
+  ref: artifact:prod-acceptance/verifier.json
+  immutable: false
+  sha256: 2f8cf09186412c991a6fa5b352d4537b0d5371dfbbfde2f07b09fe2d759dc6e3
+- id: recovery-proof
+  kind: test_report
+  ref: https://github.com/AI-Gen-AI/C2Pro/actions/runs/36822225934/artifacts/11144007998
+  immutable: true
+  sha256: null
+- id: hitl-review
+  kind: review
+  ref: artifact:playwright/.prod-acceptance/run.json#review:9769cb1f-cef7-4832-a1aa-de916448bb43
+  immutable: false
+  sha256: 4511dae719adebe181f708dc90a1d5d855400fb07779df713e837478038ef9dc
+validator_verdict: PASS
