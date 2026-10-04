@@ -735,10 +735,15 @@ async def _run_analysis_graph_best_effort(
     #
     # Injected into initial_state too, since human_interrupt_node reads
     # thread_id from state, not from the run() kwarg alone.
+    authority = processing_authority.current_authority()
     thread_id = checkpoint_lineage.analysis_thread_id(
         document_id=document_id,
-        authority=processing_authority.current_authority(),
+        authority=authority,
     )
+    # Lane C PR-C2: the revision this run analyses is the one the #711
+    # authority pinned -- never "the latest upload". It binds the #714 artifact
+    # to its revision and lets N12 consult the temporal-review seam.
+    pinned_revision = getattr(authority, "revision_id", None) if authority is not None else None
     initial_state: dict[str, Any] = {
         "document_text": parsed_text,
         "project_id": str(document.project_id),
@@ -756,6 +761,7 @@ async def _run_analysis_graph_best_effort(
         "retry_count": 0,
         "human_approval_required": False,
         "analysis_id": None,
+        "document_revision_id": str(pinned_revision) if pinned_revision else None,
         "force_full_pipeline": True,
     }
     # #758: take the existing review's lineage over the moment this attempt

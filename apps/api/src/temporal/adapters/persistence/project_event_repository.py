@@ -182,3 +182,15 @@ class SqlAlchemyProjectEventRepository(IProjectEventRepository):
         result = await self._session.execute(stmt)
         orm = result.scalars().first()
         return self._to_domain(orm) if orm is not None else None
+
+    async def list_for_revision(self, *, tenant_id: UUID, revision_id: UUID) -> list[ProjectEvent]:
+        stmt = (
+            select(ProjectEventORM)
+            .where(
+                ProjectEventORM.tenant_id == tenant_id,
+                ProjectEventORM.source_revision_id == revision_id,
+            )
+            .order_by(ProjectEventORM.occurred_at.asc(), ProjectEventORM.event_id.asc())
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_domain(orm) for orm in result.scalars().all()]

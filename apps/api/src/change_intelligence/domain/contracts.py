@@ -51,6 +51,9 @@ MatchBasis = Literal[
     "ambiguous",
     # no counterpart by any rule
     "no_counterpart",
+    # paired only by an extractor-generated label (risk source/title, WBS or
+    # cost code); a candidate for review, never identity
+    "generated_anchor",
 ]
 
 

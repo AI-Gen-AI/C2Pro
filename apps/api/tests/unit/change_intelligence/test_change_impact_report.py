@@ -197,3 +197,45 @@ async def test_report_never_fabricates_conflicts_or_impact(monkeypatch: Any) -> 
         "cross-document impact/conflicts pending ADR-017",
         "numeric impact estimate pending ADR-017",
     ]
+
+
+async def _report_with_l2(monkeypatch: Any, changes: list[SemanticChange], l2: list[float | None]) -> Any:
+    from src.change_intelligence.application import change_impact_report as report_module
+
+    async def _enabled(_tenant_id: object) -> bool:
+        return True
+
+    async def _enrich(changeset: ChangeSet, tenant_id: object, *, llm: object | None = None) -> ChangeSet:
+        enriched = [
+            change.model_copy(update={"confidence": value})
+            for change, value in zip(changeset.changes, l2, strict=True)
+        ]
+        return changeset.model_copy(update={"changes": enriched})
+
+    monkeypatch.setattr(report_module, "is_change_impact_enabled", _enabled)
+    monkeypatch.setattr(report_module, "enrich_modified_changes", _enrich)
+    changeset = _changeset(changes)
+    return await report_module.build_change_impact_report(changeset, changeset.tenant_id)
+
+
+async def test_overall_confidence_is_the_weakest_change_not_the_mean(monkeypatch: Any) -> None:
+    report = await _report_with_l2(
+        monkeypatch, [_change("modified", "1.1"), _change("modified", "5.2")], [0.9, 0.5]
+    )
+
+    assert report.overall_confidence == 0.5
+
+
+async def test_l2_confidence_cannot_exceed_an_inferred_match(monkeypatch: Any) -> None:
+    report = await _report_with_l2(monkeypatch, [_change("modified", "5.2", needs_review=True)], [0.99])
+
+    assert report.overall_confidence == 0.82
+
+
+async def test_generated_anchor_pairing_makes_report_confidence_unknown(monkeypatch: Any) -> None:
+    generated = _change("modified", "R-1").model_copy(update={"match_basis": "generated_anchor"})
+
+    report = await _report_with_l2(monkeypatch, [generated], [0.95])
+
+    assert report.overall_confidence is None
+    assert report.hitl_routing == "needs_review"

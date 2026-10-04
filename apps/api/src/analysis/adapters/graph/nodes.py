@@ -404,6 +404,35 @@ async def budget_parser_node(state: ProjectState) -> ProjectState:
 # ── N12 — Critique ──────────────────────────────────────────────────────────
 
 
+async def _apply_temporal_review_gate(state: ProjectState) -> None:
+    """PR-C2 trust seam: a pinned revision whose temporal identity is unresolved
+    must take the canonical approval path. Only ever raises the flag; a lookup
+    failure fails closed.
+    """
+    revision_id = state.get("document_revision_id")
+    if not revision_id:
+        return
+    tenant_id = state.get("tenant_id")
+    # Resolved through the module so the seam stays a single replaceable authority.
+    from src.temporal.adapters import temporal_review_gate
+
+    try:
+        if not tenant_id:
+            raise ValueError("a pinned revision without a tenant cannot be checked")
+        decision = await temporal_review_gate.revision_requires_temporal_review(
+            tenant_id=tenant_id,
+            document_id=state["document_id"],
+            revision_id=revision_id,
+        )
+        required, reason = decision.required, decision.reason
+    except Exception as exc:  # noqa: BLE001 - fail closed on any lookup failure
+        logger.warning("temporal_review_lookup_failed", revision_id=revision_id, error=str(exc))
+        required, reason = True, "temporal_review_lookup_failed"
+    state["temporal_review_reason"] = reason
+    if required:
+        state["human_approval_required"] = True
+
+
 async def critique_node(state: ProjectState) -> ProjectState:
     """N12 — Delegates critique + evaluation to CritiqueExtractionUseCase."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
@@ -411,6 +440,7 @@ async def critique_node(state: ProjectState) -> ProjectState:
         state["retry_count"] = 0
         state["critique_notes"] = "Mock critique: Extraction quality is good."
         state["human_approval_required"] = False
+        await _apply_temporal_review_gate(state)
         state["node_results"] = [
             *state.get("node_results", []),
             _ok_node_result(
@@ -449,6 +479,7 @@ async def critique_node(state: ProjectState) -> ProjectState:
     state["retry_count"] = result.retry_count
     state["critique_notes"] = result.critique_notes
     state["human_approval_required"] = result.human_approval_required
+    await _apply_temporal_review_gate(state)
     state["node_results"] = [
         *state.get("node_results", []),
         _ok_node_result(
@@ -457,7 +488,7 @@ async def critique_node(state: ProjectState) -> ProjectState:
                 "status": result.status,
                 "confidence": result.confidence,
                 "retry_count": result.retry_count,
-                "human_approval_required": result.human_approval_required,
+                "human_approval_required": state["human_approval_required"],
             },
             confidence=result.confidence,
         ),

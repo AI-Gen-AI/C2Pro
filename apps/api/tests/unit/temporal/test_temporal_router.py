@@ -11,7 +11,16 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from src.core.auth.dependencies import get_current_user
-from src.temporal.adapters.http.router import get_event_repository, get_project_repository, router
+from src.temporal.adapters.http.router import (
+    get_event_repository,
+    get_impact_assessor,
+    get_project_repository,
+    get_revision_projector,
+    router,
+)
+from src.temporal.application.revision_projection import RevisionProjection
+from src.temporal.domain.entity_ref import TemporalEntityRef
+from src.temporal.domain.impact import ChangeImpact, ImpactAssessment, ImpactStatus
 from src.temporal.domain.project_event import ProjectEvent
 
 
@@ -50,7 +59,7 @@ class _Projects:
         return self.owned
 
 
-def _event(project_id, tenant_id, document_id, revision_id) -> ProjectEvent:  # noqa: ANN001
+def _event(project_id, tenant_id, document_id, revision_id, *, engine="p0c-structural-l1-v2", basis="exact_content") -> ProjectEvent:  # noqa: ANN001
     now = datetime.now(UTC).replace(tzinfo=None)
     return ProjectEvent(
         event_id=uuid4(),
@@ -61,16 +70,17 @@ def _event(project_id, tenant_id, document_id, revision_id) -> ProjectEvent:  # 
             "state": "ready",
             "change_cause": "BUSINESS_STATE_CHANGED",
             "document_id": str(document_id),
-            "changeset": {"changes": [{"before": {"full_text": "A"}, "after": {"full_text": "B"}}]},
-            "provenance": {"target_revision_id": str(revision_id)},
+            "changeset": {"changes": [{"before": {"full_text": "A"}, "after": {"full_text": "B"}, "match_basis": basis}]},
+            "provenance": {"target_revision_id": str(revision_id), "diff_engine_version": engine},
             "l3_impact": None,
         },
+        confidence=1.0,
         occurred_at=now,
         created_at=now,
     )
 
 
-def _app(events: list[ProjectEvent], tenant_id, *, owned: bool = True) -> FastAPI:  # noqa: ANN001
+def _app(events: list[ProjectEvent], tenant_id, *, owned: bool = True, impacts=None, projection=None) -> FastAPI:  # noqa: ANN001
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
 
@@ -86,6 +96,21 @@ def _app(events: list[ProjectEvent], tenant_id, *, owned: bool = True) -> FastAP
     app.dependency_overrides[get_current_user] = _user
     app.dependency_overrides[get_event_repository] = _events
     app.dependency_overrides[get_project_repository] = _projects
+
+    async def _assessor():  # noqa: ANN202
+        async def assess(event, qualification):  # noqa: ANN001, ANN202
+            return list(impacts or [])
+
+        return assess
+
+    async def _projector():  # noqa: ANN202
+        async def project(*, project_id, document_id, revision_id, qualification):  # noqa: ANN001, ANN202
+            return projection or RevisionProjection.none(revision_id, "no pending candidate for this revision")
+
+        return project
+
+    app.dependency_overrides[get_impact_assessor] = _assessor
+    app.dependency_overrides[get_revision_projector] = _projector
     return app
 
 
@@ -143,3 +168,88 @@ def test_timeline_paths_are_present_in_openapi() -> None:
     paths = app.openapi()["paths"]
     assert "/api/v1/projects/{project_id}/timeline" in paths
     assert "/api/v1/projects/{project_id}/documents/{document_id}/changes/{revision_id}" in paths
+
+
+@pytest.mark.asyncio
+async def test_timeline_downgrades_a_legacy_matcher_event_without_mutating_it() -> None:
+    """PR-C2: v1 matcher output is never presented as settled current intelligence."""
+    tenant_id, project_id, document_id, revision_id = uuid4(), uuid4(), uuid4(), uuid4()
+    legacy = _event(project_id, tenant_id, document_id, revision_id, engine="p0c-structural-l1-v1", basis=None)
+    stored = legacy.model_dump(mode="json")
+    app = _app([legacy], tenant_id)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/api/v1/projects/{project_id}/timeline")
+
+    item = response.json()["items"][0]
+    assert item["state"] == "needs_review"
+    assert item["legacy_matcher"] is True
+    assert item["matcher_status"] == "legacy"
+    assert item["confidence"] is None
+    assert item["change_cause"] is None
+    assert "p0c-structural-l1-v1" in item["qualification_reason"]
+    assert item["provenance"]["diff_engine_version"] == "p0c-structural-l1-v1"
+    assert legacy.model_dump(mode="json") == stored
+
+
+@pytest.mark.asyncio
+async def test_timeline_current_matcher_event_is_unaffected() -> None:
+    tenant_id, project_id, document_id, revision_id = uuid4(), uuid4(), uuid4(), uuid4()
+    app = _app([_event(project_id, tenant_id, document_id, revision_id)], tenant_id)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/api/v1/projects/{project_id}/timeline")
+
+    item = response.json()["items"][0]
+    assert item["state"] == "ready"
+    assert item["legacy_matcher"] is False
+    assert item["matcher_status"] == "current"
+    assert item["confidence"] == 1.0
+    assert item["qualification_reason"] is None
+
+
+@pytest.mark.asyncio
+async def test_change_detail_exposes_impact_and_projection_separately() -> None:
+    tenant_id, project_id, document_id, revision_id = uuid4(), uuid4(), uuid4(), uuid4()
+    impact = ChangeImpact(
+        change_index=0,
+        change_type="modified",
+        source=TemporalEntityRef(
+            artifact_type="contract", document_id=document_id, revision_id=uuid4(),
+            entity_type="clause", entity_id=str(uuid4()), evidence=[],
+        ),
+        assessment=ImpactAssessment(status=ImpactStatus.UNKNOWN, items=[], confidence=None, reason="no persisted relationship"),
+    )
+    app = _app([_event(project_id, tenant_id, document_id, revision_id)], tenant_id, impacts=[impact])
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            f"/api/v1/projects/{project_id}/documents/{document_id}/changes/{revision_id}"
+        )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["basis"] == "observed"
+    assert body["impacts"][0]["assessment"]["status"] == "UNKNOWN"
+    assert body["impacts"][0]["assessment"]["items"] == []
+    assert body["impacts"][0]["source"]["entity_type"] == "clause"
+    assert body["projection"]["status"] == "none"
+    assert body["projection"]["basis"] == "projected"
+    assert body["projection"]["projected_score"] is None
+
+
+@pytest.mark.asyncio
+async def test_change_detail_of_legacy_event_is_review_required() -> None:
+    tenant_id, project_id, document_id, revision_id = uuid4(), uuid4(), uuid4(), uuid4()
+    legacy = _event(project_id, tenant_id, document_id, revision_id, engine="p0c-structural-l1-v1", basis=None)
+    app = _app([legacy], tenant_id)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            f"/api/v1/projects/{project_id}/documents/{document_id}/changes/{revision_id}"
+        )
+
+    body = response.json()
+    assert body["state"] == "needs_review"
+    assert body["legacy_matcher"] is True
+    assert body["confidence"] is None
