@@ -10,10 +10,10 @@
 
 **Status:** Accepted product/architecture decision, 2026-10-04.
 **Implementation specification:** `docs/product/b1-canonical-alert-reconciliation-spec-v1-1.md`
-**B1 v1.1 baseline:** `e60090bb4466714b5cd8f915a9c8fa350995e0fb` (#828 + #829 merged on top of C3a).
-**Related:** ADR-009 governing HITL/scoring amendment, ADR-020, ADR-026, ADR-027, #829 (merged evidence addressability), #831 (C3b).
+**B1 v1.1 baseline:** `4e3928b3f91ded93163b617214ddde48149b2039` (#828 + #829 + #834 merged on top of C3a).
+**Related:** ADR-009 governing HITL/scoring amendment, ADR-020, ADR-026, ADR-027, #829 (merged evidence addressability), #834 (merged reviewer integrity/durability), #831 (C3b).
 
-**Implementation state at this amendment.** PR #828 has already landed stable same-path Coherence Alert reconciliation: versioned legacy fingerprint recomputation, trusted-current provenance checks, duplicate collapse, preservation of ACKNOWLEDGED/DISMISSED human state, RESOLVED re-open behavior, OPEN-only auto-resolution, tenant/type scoping, and transaction-scoped project advisory locking. PR #829 has additionally landed detector-provenance exposure in the Alerts API/Review Center and verified-only Evidence Viewer deep-links. This amendment must not cause those capabilities to be reimplemented. It governs the remaining atomicity, cross-revision evidence-basis semantics, full HITL durability, disposition-to-score integration and the C3b boundary.
+**Implementation state at this amendment.** PR #828 has landed stable same-path Coherence Alert reconciliation: versioned legacy fingerprint recomputation, trusted-current provenance checks, duplicate collapse, preservation of ACKNOWLEDGED/DISMISSED human state, RESOLVED re-open behavior, OPEN-only auto-resolution, tenant/type scoping, and transaction-scoped project advisory locking. PR #829 has landed detector-provenance exposure in the Alerts API/Review Center and verified-only Evidence Viewer deep-links. PR #834 has landed complete review-state persistence, reviewer-attached evidence, fresh-session durability checks and fail-closed bulk-review integrity. This amendment must not cause those capabilities to be reimplemented. It governs the remaining atomicity, cross-revision evidence-basis semantics, legacy ambiguity, disposition-to-score integration and the C3b boundary.
 
 ### One canonical reconciliation boundary
 
@@ -66,6 +66,8 @@ Versioned fingerprint recomputation is compatibility support, not authority to c
 ### Scoring is not user approval
 
 This amendment does not alter ADR-009 scoring semantics. Acknowledge / accepted variance / explained conflict does not improve raw Coherence. Only ADR-009 epistemic changes — false positive, corrected data/extraction, changed trusted evidence, or supersession — may remove/replace the relevant finding and drive recalculation.
+
+B1 also consumes the already-shipped #714 **trusted vs projected Coherence** authority model. The trusted score remains the solid canonical score from trusted evidence. Any hypothetical score resulting from pending score-affecting candidates is provisional/projected, uses the same scorer and `score_version`, is rendered as non-approved, and cannot replace the trusted score or official report value. A pending Alert review that merely acknowledges/confirms an evidence-backed discrepancy does not create a better projection; the discrepancy already belongs in documentary Coherence. Null/unknown remains null and is never converted to 0 or default 100.
 
 ## 2026-09-13 Amendment — Alert category taxonomy and Project Controls attachment (GOVERNING)
 
@@ -180,5 +182,7 @@ ADR-016, ADR-018, ADR-025.
 
 ## Implementation note
 **Month 6**, gated behind the Month-3 pilot signal. Launches scoped to the Contract-Manager persona alongside ADR-020.
+
+[executed on device: vmi3226522 (f25c3740-ed77-4837-8d92-d0f9660f9596)]
 
 [executed on device: vmi3226522 (f25c3740-ed77-4837-8d92-d0f9660f9596)]
