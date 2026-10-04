@@ -25,24 +25,52 @@ class _FakeScalarResult:
         return list(self._items)
 
 
+class _FakeExecuteResult(_FakeScalarResult):
+    pass
+
+
 class _FakeSession:
     def __init__(
         self,
         persisted_clause_documents: dict[object, object] | None = None,
+        *,
+        trusted_current_clause_ids: set[object] | None = None,
     ) -> None:
         self.executed: list[tuple[object, object | None]] = []
+        self.current_scope_statements: list[str] = []
         self.persisted_clause_documents = persisted_clause_documents or {}
+        self.trusted_current_clause_ids = (
+            set(self.persisted_clause_documents)
+            if trusted_current_clause_ids is None
+            else trusted_current_clause_ids
+        )
 
-    async def execute(self, statement: object, params: object | None = None) -> None:
+    async def execute(
+        self, statement: object, params: object | None = None
+    ) -> _FakeExecuteResult:
+        if isinstance(params, dict) and "project_id" in params and any(
+            str(key).startswith("candidate_") for key in params
+        ):
+            self.current_scope_statements.append(str(statement))
+            candidates = {
+                value
+                for key, value in params.items()
+                if str(key).startswith("candidate_")
+            }
+            return _FakeExecuteResult(
+                [
+                    SimpleNamespace(id=clause_id, document_id=document_id)
+                    for clause_id, document_id in self.persisted_clause_documents.items()
+                    if str(clause_id) in candidates
+                    and clause_id in self.trusted_current_clause_ids
+                ]
+            )
+
         self.executed.append((statement, params))
+        return _FakeExecuteResult([])
 
     async def scalars(self, statement: object) -> _FakeScalarResult:
-        return _FakeScalarResult(
-            [
-                SimpleNamespace(id=clause_id, document_id=document_id)
-                for clause_id, document_id in self.persisted_clause_documents.items()
-            ]
-        )
+        return _FakeScalarResult([])
 
 
 @pytest.mark.asyncio
@@ -165,6 +193,63 @@ async def test_verified_clause_uses_database_document_not_request_metadata() -> 
     assert payload.alert_metadata["detection_evidence"]["source_document_id"] == str(
         canonical_document_id
     )
+
+
+@pytest.mark.asyncio
+async def test_historical_revision_clause_is_not_promoted_to_current_evidence() -> None:
+    project_id = uuid4()
+    tenant_id = uuid4()
+    stale_clause_id = uuid4()
+    document_id = uuid4()
+    alert = SimpleNamespace(
+        severity="high",
+        category="legal",
+        rule_id="DET-LEG-STALE",
+        message="Historical clause must fail closed",
+        evidence=SimpleNamespace(
+            source_clause_id=str(stale_clause_id),
+            claim="Old revision clause",
+            quote="Superseded text",
+        ),
+    )
+    clauses = [
+        Clause(
+            id=str(stale_clause_id),
+            text="Superseded text",
+            data={
+                "document_id": str(document_id),
+                "source": "persisted_clause",
+            },
+        )
+    ]
+    session = _FakeSession(
+        persisted_clause_documents={stale_clause_id: document_id},
+        trusted_current_clause_ids=set(),
+    )
+    service = MagicMock()
+    service.process_violations = AsyncMock(return_value=[])
+
+    with (
+        patch("src.coherence.router.SqlAlchemyAlertRepository"),
+        patch("src.coherence.router.AlertGeneratorService", return_value=service),
+    ):
+        await _mirror_coherence_alerts_to_alerts_table(
+            db=session,  # type: ignore[arg-type]
+            project_id=project_id,
+            tenant_id=tenant_id,
+            alerts=[alert],
+            clauses=clauses,
+        )
+
+    payload = service.process_violations.await_args.kwargs["violations"][0]
+    assert payload.source_clause_id is None
+    assert payload.alert_metadata["detection_evidence"]["source_clause_id"] == str(
+        stale_clause_id
+    )
+    assert session.current_scope_statements
+    statement = session.current_scope_statements[0]
+    assert "document_artifacts" in statement
+    assert "revision_id" in statement
 
 
 @pytest.mark.asyncio
