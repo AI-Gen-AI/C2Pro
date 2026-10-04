@@ -461,6 +461,23 @@ For current API semantics:
 - `reject` is explicit false-positive disposition and may remove the invalid finding through canonical recalculation;
 - `resolve` is lifecycle/action state only until trusted evidence changes.
 
+### 14.1 Trusted score vs projected/provisional score
+
+B1 reuses the already-shipped #714 trusted/projected Coherence contract. It MUST NOT invent a second score-authority model.
+
+- **trusted_score** is the solid canonical project score from the currently trusted/approved evidence state and validated score-affecting dispositions only.
+- **projected_score** is a non-canonical scenario, rendered visually provisional/translucent, answering what the same canonical engine/version would produce if the exact pending score-affecting candidates were accepted.
+- `projected_score` NEVER replaces `trusted_score`, NEVER becomes the official export/report score, and is NEVER copied into canonical state on approval; approval triggers recomputation from the newly trusted state.
+- pending candidate evidence, a pending correction, or a pending score-affecting disposition cannot mutate `trusted_score`.
+- a detected finding on already trusted evidence **does affect the documentary trusted/raw score immediately**; merely leaving an Alert unreviewed MUST NOT hide an evidence-backed discrepancy.
+- reviewing a genuine discrepancy as acknowledged / accepted variance / explained conflict does not create a better projected score because ADR-009 says its documentary impact is unchanged.
+- only a pending action that is permitted to change the scoring set under ADR-009 — validated false-positive, corrected data/extraction, changed trusted evidence, or supersession — may yield a different provisional score.
+- when both trusted and projected exist, both MUST use the same canonical scorer and identical `score_version`. Version mismatch => projection unavailable, never arithmetic conversion.
+- when no trusted score exists yet, `trusted_score=null`; a projected score may exist but remains explicitly provisional.
+- the UI MUST label projected score as non-approved and show the pending-review cause/count sufficient to explain why it is provisional.
+
+This preserves the existing #714 product semantics while extending B1 lifecycle decisions into the same authority model.
+
 ## 15. Honest-null propagation
 
 B1 preserves ADR-009:
@@ -471,7 +488,25 @@ B1 preserves ADR-009:
 - partial supported-subset score is allowed only under existing ADR-009 active-weight/status rules;
 - UI must show partial/insufficient-evidence status honestly.
 
-B1 does not redefine the canonical scorer.
+### 15.1 Numeric score guardrails — 0/100
+
+B1 does not recalibrate score bands, but acceptance MUST preserve these invariants across every score version it surfaces:
+
+1. lack of evidence, insufficient active weight, processing error, pending documents, or unavailable projection can NEVER fabricate `0`;
+2. a critical finding can NEVER mechanically force category or global score to `0`;
+3. `100` can NEVER be a fallback for missing/unassessed evidence;
+4. a score of `100` is only admissible when the active scoring version genuinely computes a fully assessed clean state with no score-impacting finding; it is not a default;
+5. a projected score MUST be recomputed by the same scoring engine/version as its trusted baseline, not by adding/subtracting alert penalties;
+6. score history records score value, score version, authority state (trusted vs projected), and the evidence/disposition basis that caused a legitimate change.
+
+Current numeric truth is deliberately not hidden:
+
+- the canonical per-category scorer currently uses interim severity bands: **LOW 80–95**, **MEDIUM 65–80**, **HIGH 45–65**, **CRITICAL 25–45**;
+- the canonical global envelope currently caps an open worst finding at **LOW 100 / MEDIUM 95 / HIGH 90 / CRITICAL 85**;
+- these are interim calibrated guardrails, not immutable business thresholds;
+- the legacy/live v1 path still contains older global caps and a separate scoring curve. B1 MUST NOT mix those values with a projection from another `score_version`; ADR-009 §F owns scorer convergence/cutover.
+
+B1 does not redefine or recalibrate the canonical scorer.
 
 ## 16. Review UX contract
 
@@ -510,6 +545,7 @@ Merged #828 is implementation evidence toward B1-01/B1-02/B1-03/B1-05. Merged #8
 | **B1-10-SEMANTIC-ALERT** | Category is canonical dimension; trigger orthogonal; detection fields may refresh without identity churn; presentation text is not identity. |
 | **B1-11-DURABLE-ROUNDTRIP** | POST mutation -> commit -> new DB session/transaction -> API GET -> browser refresh/relogin all agree; no identity-map/React-memory false PASS. |
 | **B1-12-PROD-ACCEPTANCE** | Exact composite runtime/SHA, synthetic project, UI evidence, durable verifier, reevaluation/retry/concurrency proof and independent evidence validator all PASS before lifecycle promotion. |
+| **B1-13-SCORE-AUTHORITY** | Trusted score remains canonical/solid; projected score is visibly provisional, same-engine/same-version only, cannot mutate official reports, pending non-score-changing Alert review does not fabricate a different score, and null/unknown never becomes 0 or default 100. |
 
 Every applicable test asserts tenant/project/revision isolation.
 
@@ -570,7 +606,7 @@ B1.3  Atomic Coherence <-> Alert persistence + governed disposition-to-score eli
 B1.4  Preserve #829 provenance/deep-link behavior and complete category/trigger/expected-observed UX
 B1.5  C3b/#831 shared-reconciler boundary
 B1.6  Exact-head independent/adversarial review + required CI
-B1.7  Production qualification against B1-01 through B1-12
+B1.7  Production qualification against B1-01 through B1-13
 ```
 
 Implementation follows RED -> GREEN -> REFACTOR for each bounded slice.
