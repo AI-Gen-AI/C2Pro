@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any
@@ -14,6 +15,10 @@ from src.coherence.rules_engine.context_rules import CoherenceRuleResult
 from src.shared_kernel.enums import AlertSeverity, AlertStatus, AlertType
 
 FINGERPRINT_VERSION = 2
+
+_POSITIONAL_RAG_LOCATOR = re.compile(r"^chunk_\d+_[0-9a-fA-F]{8}$")
+
+
 
 
 class AlertGeneratorService:
@@ -87,7 +92,7 @@ class AlertGeneratorService:
             for existing_alert in existing:
                 prior_fingerprint = (existing_alert.alert_metadata or {}).get("fingerprint")
                 if (
-                    existing_alert.status in {AlertStatus.OPEN, AlertStatus.ACKNOWLEDGED}
+                    existing_alert.status == AlertStatus.OPEN
                     and prior_fingerprint not in fingerprints
                 ):
                     existing_alert.status = AlertStatus.RESOLVED
@@ -216,19 +221,30 @@ class AlertGeneratorService:
         rule_id = getattr(alert, "rule_id", None)
         if not rule_id:
             return None
+        detector = metadata.get("detection_evidence")
+        if not isinstance(detector, dict):
+            legacy = metadata.get("evidence")
+            detector = legacy if isinstance(legacy, dict) else {}
+
         source_clause_id = getattr(alert, "source_clause_id", None)
-        if source_clause_id is None:
-            detector = metadata.get("detection_evidence")
-            if not isinstance(detector, dict):
-                legacy = metadata.get("evidence")
-                detector = legacy if isinstance(legacy, dict) else {}
-            source_clause_id = detector.get("source_clause_id")
+        raw_source_locator = (
+            detector.get("source_clause_id") if source_clause_id is None else None
+        )
+        if source_clause_id is None and raw_source_locator:
+            source_clause_id = raw_source_locator
 
         related = getattr(alert, "related_clause_ids", None) or []
-        anchors = [str(value) for value in [source_clause_id, *related] if value]
+        anchors = [
+            str(value)
+            for value in [source_clause_id, *related]
+            if value and not self._is_positional_rag_locator(value)
+        ]
         if anchors:
             base = f"{rule_id}|anchors|" + "|".join(sorted(set(anchors)))
             return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+        if raw_source_locator and self._is_positional_rag_locator(raw_source_locator):
+            return self._rag_fallback_fingerprint(rule_id, detector)
 
         entities = self._flatten_entities(getattr(alert, "affected_entities", {}) or {})
         if entities:
@@ -263,7 +279,7 @@ class AlertGeneratorService:
         if violation.source_clause_id:
             anchors.append(str(violation.source_clause_id))
         raw_source_locator = detector.get("source_clause_id")
-        if raw_source_locator:
+        if raw_source_locator and not self._is_positional_rag_locator(raw_source_locator):
             anchors.append(str(raw_source_locator))
         if violation.related_clause_ids:
             anchors.extend(str(clause_id) for clause_id in violation.related_clause_ids)
@@ -273,6 +289,9 @@ class AlertGeneratorService:
             # identity whenever they exist.
             base = f"{rule_id}|anchors|" + "|".join(sorted(set(anchors)))
             return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+        if raw_source_locator and self._is_positional_rag_locator(raw_source_locator):
+            return self._rag_fallback_fingerprint(rule_id, detector)
 
         entities = sorted(set(self._flatten_entities(violation.affected_entities)))
         if entities:
@@ -284,6 +303,30 @@ class AlertGeneratorService:
         claim = self._normalized_identity_text(detector.get("claim"))
         quote = self._normalized_identity_text(detector.get("quote"))
         base = f"{rule_id}|fallback|{violation.category or ''}|{claim}|{quote}"
+        return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _is_positional_rag_locator(value: object) -> bool:
+        """True for the legacy query-order-derived RAG locator."""
+
+        return bool(_POSITIONAL_RAG_LOCATOR.fullmatch(str(value or "")))
+
+    def _rag_fallback_fingerprint(
+        self, rule_id: str, detector: dict[str, Any]
+    ) -> str:
+        """Stable fallback when RAG has no durable chunk identity.
+
+        Query position is deliberately excluded: re-ingestion can reorder chunks.
+        Documentary identity comes from the durable document plus normalized
+        evidence content until the RAG index exposes a revision-stable chunk key.
+        """
+
+        document_id = self._normalized_identity_text(
+            detector.get("source_document_id")
+        )
+        claim = self._normalized_identity_text(detector.get("claim"))
+        quote = self._normalized_identity_text(detector.get("quote"))
+        base = f"{rule_id}|rag|{document_id}|{claim}|{quote}"
         return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
     def _flatten_entities(self, payload: dict[str, Any]) -> list[str]:
