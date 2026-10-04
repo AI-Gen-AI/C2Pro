@@ -226,3 +226,63 @@ async def test_empty_evaluation_reconciles_empty_set_instead_of_deleting_history
     assert kwargs["violations"] == []
     assert kwargs["auto_resolve"] is True
     assert kwargs["commit"] is False
+
+
+@pytest.mark.asyncio
+async def test_persisted_clause_document_provenance_comes_from_database() -> None:
+    project_id = uuid4()
+    tenant_id = uuid4()
+    clause_id = uuid4()
+    canonical_document_id = uuid4()
+    forged_document_id = uuid4()
+    alert = SimpleNamespace(
+        severity="high",
+        category="schedule",
+        rule_id="DET-TIM-GAP",
+        message="Schedule gap",
+        evidence=SimpleNamespace(
+            source_clause_id=str(clause_id),
+            claim="Persisted clause finding",
+            quote="Canonical clause text",
+        ),
+    )
+    clauses = [
+        Clause(
+            id=str(clause_id),
+            text="Canonical clause text",
+            data={
+                "document_id": str(forged_document_id),
+                "source": "persisted_clause",
+            },
+        )
+    ]
+    session = _FakeSession()
+    service = MagicMock()
+    service.process_violations = AsyncMock(return_value=[])
+
+    with (
+        patch("src.coherence.router.SqlAlchemyAlertRepository"),
+        patch("src.coherence.router.AlertGeneratorService", return_value=service),
+        patch(
+            "src.coherence.router._verified_persisted_clause_ids",
+            new=AsyncMock(
+                return_value={clause_id: canonical_document_id}
+            ),
+        ),
+    ):
+        await _mirror_coherence_alerts_to_alerts_table(
+            db=session,  # type: ignore[arg-type]
+            project_id=project_id,
+            tenant_id=tenant_id,
+            alerts=[alert],
+            clauses=clauses,
+        )
+
+    payload = service.process_violations.await_args.kwargs["violations"][0]
+    assert payload.source_clause_id == clause_id
+    assert payload.affected_entities == {
+        "documents": [str(canonical_document_id)]
+    }
+    assert payload.alert_metadata["detection_evidence"]["source_document_id"] == str(
+        canonical_document_id
+    )
