@@ -14,9 +14,10 @@ from src.coherence.alert_generator import AlertGenerator
 from src.coherence.rules_engine.context_rules import CoherenceRuleResult
 from src.shared_kernel.enums import AlertSeverity, AlertStatus, AlertType
 
-FINGERPRINT_VERSION = 2
+FINGERPRINT_VERSION = 3
 
-_POSITIONAL_RAG_LOCATOR = re.compile(r"^chunk_\d+_[0-9a-fA-F]{8}$")
+_POSITIONAL_RAG_LOCATOR = re.compile(r"^chunk_\d+_([0-9a-fA-F]{8})$")
+_PARSED_TEXT_LOCATOR = re.compile(r"^parsed_([0-9a-fA-F]{8})$")
 
 
 
@@ -237,14 +238,14 @@ class AlertGeneratorService:
         anchors = [
             str(value)
             for value in [source_clause_id, *related]
-            if value and not self._is_positional_rag_locator(value)
+            if value and not self._is_revision_unstable_locator(value)
         ]
         if anchors:
             base = f"{rule_id}|anchors|" + "|".join(sorted(set(anchors)))
             return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
-        if raw_source_locator and self._is_positional_rag_locator(raw_source_locator):
-            return self._rag_fallback_fingerprint(rule_id, detector)
+        if raw_source_locator and self._is_revision_unstable_locator(raw_source_locator):
+            return self._synthetic_fallback_fingerprint(rule_id, detector)
 
         entities = self._flatten_entities(getattr(alert, "affected_entities", {}) or {})
         if entities:
@@ -279,7 +280,7 @@ class AlertGeneratorService:
         if violation.source_clause_id:
             anchors.append(str(violation.source_clause_id))
         raw_source_locator = detector.get("source_clause_id")
-        if raw_source_locator and not self._is_positional_rag_locator(raw_source_locator):
+        if raw_source_locator and not self._is_revision_unstable_locator(raw_source_locator):
             anchors.append(str(raw_source_locator))
         if violation.related_clause_ids:
             anchors.extend(str(clause_id) for clause_id in violation.related_clause_ids)
@@ -290,8 +291,8 @@ class AlertGeneratorService:
             base = f"{rule_id}|anchors|" + "|".join(sorted(set(anchors)))
             return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
-        if raw_source_locator and self._is_positional_rag_locator(raw_source_locator):
-            return self._rag_fallback_fingerprint(rule_id, detector)
+        if raw_source_locator and self._is_revision_unstable_locator(raw_source_locator):
+            return self._synthetic_fallback_fingerprint(rule_id, detector)
 
         entities = sorted(set(self._flatten_entities(violation.affected_entities)))
         if entities:
@@ -306,27 +307,48 @@ class AlertGeneratorService:
         return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
     @staticmethod
-    def _is_positional_rag_locator(value: object) -> bool:
-        """True for the legacy query-order-derived RAG locator."""
+    def _is_revision_unstable_locator(value: object) -> bool:
+        """True for synthetic locators that are not bound to one durable revision."""
 
-        return bool(_POSITIONAL_RAG_LOCATOR.fullmatch(str(value or "")))
+        text = str(value or "")
+        return bool(
+            _POSITIONAL_RAG_LOCATOR.fullmatch(text)
+            or _PARSED_TEXT_LOCATOR.fullmatch(text)
+        )
 
-    def _rag_fallback_fingerprint(
+    @staticmethod
+    def _synthetic_locator_document_token(value: object) -> str:
+        """Recover the stable document token embedded in legacy synthetic locators."""
+
+        text = str(value or "")
+        for pattern in (_POSITIONAL_RAG_LOCATOR, _PARSED_TEXT_LOCATOR):
+            match = pattern.fullmatch(text)
+            if match:
+                return match.group(1).lower()
+        return ""
+
+    def _synthetic_fallback_fingerprint(
         self, rule_id: str, detector: dict[str, Any]
     ) -> str:
-        """Stable fallback when RAG has no durable chunk identity.
+        """Identity fallback for revision-unstable parsed/RAG locators.
 
-        Query position is deliberately excluded: re-ingestion can reorder chunks.
-        Documentary identity comes from the durable document plus normalized
-        evidence content until the RAG index exposes a revision-stable chunk key.
+        Query position is excluded. The embedded document token keeps legacy
+        rows compatible even when they predate source_document_id. Claim/quote
+        remain part of identity so a later document revision cannot inherit an
+        old human disposition merely because it reused the same synthetic locator.
         """
 
-        document_id = self._normalized_identity_text(
-            detector.get("source_document_id")
+        document_token = self._synthetic_locator_document_token(
+            detector.get("source_clause_id")
         )
+        if not document_token:
+            document_id = self._normalized_identity_text(
+                detector.get("source_document_id")
+            )
+            document_token = document_id[:8].lower()
         claim = self._normalized_identity_text(detector.get("claim"))
         quote = self._normalized_identity_text(detector.get("quote"))
-        base = f"{rule_id}|rag|{document_id}|{claim}|{quote}"
+        base = f"{rule_id}|synthetic|{document_token}|{claim}|{quote}"
         return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
     def _flatten_entities(self, payload: dict[str, Any]) -> list[str]:
