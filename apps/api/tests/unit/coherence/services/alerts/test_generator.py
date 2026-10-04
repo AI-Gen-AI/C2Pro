@@ -234,6 +234,40 @@ class TestFingerprint:
         assert svc._fingerprint_existing(existing) == svc._fingerprint(incoming)
 
 
+    def test_verified_composite_locator_matches_persisted_identity(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        clause_a = uuid4()
+        clause_b = uuid4()
+        composite = f"{clause_a}|{clause_b}"
+        incoming = _make_alert_create(
+            rule_id="CROSS-LEGAL-CONFLICT",
+            category="LEGAL",
+            source_clause_id=clause_a,
+        )
+        incoming.related_clause_ids = [clause_b]
+        incoming.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": composite,
+                "claim": "Clauses conflict",
+                "quote": "A conflicts with B",
+            }
+        }
+
+        existing = _make_mock_alert(fingerprint="")
+        existing.rule_id = "CROSS-LEGAL-CONFLICT"
+        existing.category = "LEGAL"
+        existing.source_clause_id = clause_a
+        existing.related_clause_ids = [clause_b]
+        existing.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": composite,
+                "claim": "Clauses conflict",
+                "quote": "A conflicts with B",
+            }
+        }
+
+        assert svc._fingerprint(incoming) == svc._fingerprint_existing(existing)
+
     def test_stored_legacy_fingerprint_is_recomputed_with_current_identity_scheme(self) -> None:
         clause_id = uuid4()
         svc = AlertGeneratorService(repository=MagicMock())
