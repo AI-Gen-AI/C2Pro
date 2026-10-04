@@ -392,3 +392,119 @@ class TestProcessRuleResults:
         result = await svc.process_rule_results(project_id=uuid4(), rule_results=[rule_result])
         assert result == []
         repo.create.assert_not_awaited()
+
+
+class TestLineBStableFindingIdentity:
+    @pytest.mark.asyncio
+    async def test_reanalysis_scopes_existing_lookup_to_tenant_and_coherence_type(self) -> None:
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([]))
+        repo.create = AsyncMock(return_value=_make_mock_alert())
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+        svc = AlertGeneratorService(repository=repo)
+        project_id = uuid4()
+        tenant_id = uuid4()
+
+        await svc.process_violations(
+            project_id=project_id,
+            tenant_id=tenant_id,
+            violations=[_make_alert_create(rule_id="DET-SCP-DELIVERABLES")],
+        )
+
+        repo.list_for_project.assert_awaited_once_with(
+            project_id=project_id,
+            tenant_id=tenant_id,
+            alert_type=AlertType.COHERENCE,
+            cursor=None,
+            limit=200,
+        )
+
+    @pytest.mark.asyncio
+    async def test_same_acknowledged_finding_preserves_human_disposition_and_metadata(self) -> None:
+        reviewer = uuid4()
+        existing = _make_mock_alert(status=AlertStatus.ACKNOWLEDGED, fingerprint="stable-fp")
+        existing.reviewed_by = reviewer
+        existing.review_comment = "Accepted contractual variance"
+        existing.alert_metadata = {
+            "fingerprint": "stable-fp",
+            "history": [{"action": "reviewed", "decision": "approve"}],
+            "evidence": [{"type": "note", "content": "Reviewer evidence"}],
+            "detection_evidence": {"claim": "old claim", "quote": "old quote"},
+        }
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([existing]))
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+        svc = AlertGeneratorService(repository=repo)
+        incoming = _make_alert_create(rule_id="DET-SCP-DELIVERABLES")
+        incoming.alert_metadata = {
+            "detection_evidence": {"claim": "fresh claim", "quote": "fresh quote"}
+        }
+
+        with patch(
+            "src.coherence.services.alerts.generator.AlertGeneratorService._fingerprint",
+            return_value="stable-fp",
+        ):
+            result = await svc.process_violations(
+                project_id=uuid4(), tenant_id=uuid4(), violations=[incoming]
+            )
+
+        same = result[0]
+        assert same is existing
+        assert same.status == AlertStatus.ACKNOWLEDGED
+        assert same.reviewed_by == reviewer
+        assert same.review_comment == "Accepted contractual variance"
+        assert same.alert_metadata["history"] == [
+            {"action": "reviewed", "decision": "approve"}
+        ]
+        assert same.alert_metadata["evidence"] == [
+            {"type": "note", "content": "Reviewer evidence"}
+        ]
+        assert same.alert_metadata["detection_evidence"]["claim"] == "fresh claim"
+
+    @pytest.mark.asyncio
+    async def test_same_dismissed_false_positive_does_not_reopen(self) -> None:
+        existing = _make_mock_alert(status=AlertStatus.DISMISSED, fingerprint="false-positive-fp")
+        existing.review_comment = "False positive confirmed"
+        existing.resolution_notes = "False positive confirmed"
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([existing]))
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+        svc = AlertGeneratorService(repository=repo)
+        incoming = _make_alert_create(rule_id="DET-SCP-DELIVERABLES")
+
+        with patch(
+            "src.coherence.services.alerts.generator.AlertGeneratorService._fingerprint",
+            return_value="false-positive-fp",
+        ):
+            result = await svc.process_violations(
+                project_id=uuid4(), tenant_id=uuid4(), violations=[incoming]
+            )
+
+        assert result[0] is existing
+        assert existing.status == AlertStatus.DISMISSED
+        assert existing.review_comment == "False positive confirmed"
+        assert existing.resolution_notes == "False positive confirmed"
+
+    @pytest.mark.asyncio
+    async def test_duplicate_findings_in_one_evaluation_create_one_alert(self) -> None:
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([]))
+        repo.create = AsyncMock(side_effect=lambda payload: _make_mock_alert())
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+        svc = AlertGeneratorService(repository=repo)
+        same = _make_alert_create(rule_id="DET-SCP-DELIVERABLES")
+
+        with patch(
+            "src.coherence.services.alerts.generator.AlertGeneratorService._fingerprint",
+            return_value="same-fp",
+        ):
+            result = await svc.process_violations(
+                project_id=uuid4(), tenant_id=uuid4(), violations=[same, same]
+            )
+
+        assert len(result) == 1
+        assert repo.create.await_count == 1
