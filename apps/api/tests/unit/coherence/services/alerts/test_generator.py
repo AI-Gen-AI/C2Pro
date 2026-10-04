@@ -95,6 +95,36 @@ class TestFingerprint:
         assert len(fp) == 64  # SHA-256 hex
 
 
+    def test_legacy_text_locator_matches_new_detection_evidence_identity(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        existing = _make_mock_alert(fingerprint="")
+        existing.rule_id = "AUDIT_INCOMPLETE"
+        existing.category = "SCOPE"
+        existing.alert_metadata = {
+            "evidence": {
+                "source_clause_id": "parsed_deadbeef",
+                "claim": "Missing dimensions",
+                "quote": "",
+            }
+        }
+
+        incoming = _make_alert_create(
+            rule_id="AUDIT_INCOMPLETE",
+            category="SCOPE",
+            affected_entities={"documents": ["doc-fallback"]},
+        )
+        incoming.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "parsed_deadbeef",
+                "source_document_id": "doc-fallback",
+                "claim": "Missing dimensions",
+                "quote": "",
+            }
+        }
+
+        assert svc._fingerprint_existing(existing) == svc._fingerprint(incoming)
+
+
 class TestFlattenEntities:
     def test_flattens_dict_values(self) -> None:
         svc = AlertGeneratorService(repository=MagicMock())

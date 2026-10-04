@@ -241,9 +241,17 @@ class AlertGeneratorService:
 
     def _fingerprint(self, violation: AlertCreate) -> str:
         rule_id = violation.rule_id or "unknown_rule"
+        metadata = dict(violation.alert_metadata or {})
+        detector = metadata.get("detection_evidence")
+        if not isinstance(detector, dict):
+            detector = {}
+
         anchors: list[str] = []
         if violation.source_clause_id:
             anchors.append(str(violation.source_clause_id))
+        raw_source_locator = detector.get("source_clause_id")
+        if raw_source_locator:
+            anchors.append(str(raw_source_locator))
         if violation.related_clause_ids:
             anchors.extend(str(clause_id) for clause_id in violation.related_clause_ids)
         if anchors:
@@ -260,10 +268,6 @@ class AlertGeneratorService:
 
         # Unanchored findings have no stronger locator. Fall back to detector
         # evidence rather than presentation message/title.
-        metadata = dict(violation.alert_metadata or {})
-        detector = metadata.get("detection_evidence")
-        if not isinstance(detector, dict):
-            detector = {}
         claim = self._normalized_identity_text(detector.get("claim"))
         quote = self._normalized_identity_text(detector.get("quote"))
         base = f"{rule_id}|fallback|{violation.category or ''}|{claim}|{quote}"
