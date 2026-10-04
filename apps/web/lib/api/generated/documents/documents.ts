@@ -64,6 +64,8 @@ import type {
   DocumentRelationshipExplanationResponse,
   DocumentResponse,
   DocumentUploadResponse,
+  GetDocumentEndpointApiV1DocumentsDocumentIdGetParams,
+  GetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetParams,
   HTTPValidationError,
   ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams,
   RagAnswerResponse,
@@ -625,19 +627,25 @@ export const useReuploadDocumentFileApiV1DocumentsDocumentIdFilePatch = <
  */
 export const getDocumentEndpointApiV1DocumentsDocumentIdGet = (
   documentId: string,
+  params?: GetDocumentEndpointApiV1DocumentsDocumentIdGetParams,
   signal?: AbortSignal,
 ) => {
   return orvalApiClient<DocumentDetailResponse>({
     url: `/api/v1/documents/${documentId}`,
     method: "GET",
+    params,
     signal,
   });
 };
 
 export const getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryKey = (
   documentId: string,
+  params?: GetDocumentEndpointApiV1DocumentsDocumentIdGetParams,
 ) => {
-  return [`/api/v1/documents/${documentId}`] as const;
+  return [
+    `/api/v1/documents/${documentId}`,
+    ...(params ? [params] : []),
+  ] as const;
 };
 
 export const getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryOptions = <
@@ -647,6 +655,7 @@ export const getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryOptions = <
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params?: GetDocumentEndpointApiV1DocumentsDocumentIdGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -663,12 +672,15 @@ export const getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryOptions = <
 
   const queryKey =
     queryOptions?.queryKey ??
-    getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryKey(documentId);
+    getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryKey(
+      documentId,
+      params,
+    );
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>
   > = ({ signal }) =>
-    getDocumentEndpointApiV1DocumentsDocumentIdGet(documentId, signal);
+    getDocumentEndpointApiV1DocumentsDocumentIdGet(documentId, params, signal);
 
   return {
     queryKey,
@@ -696,6 +708,7 @@ export function useGetDocumentEndpointApiV1DocumentsDocumentIdGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params: undefined | GetDocumentEndpointApiV1DocumentsDocumentIdGetParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -730,6 +743,7 @@ export function useGetDocumentEndpointApiV1DocumentsDocumentIdGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params?: GetDocumentEndpointApiV1DocumentsDocumentIdGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -764,6 +778,7 @@ export function useGetDocumentEndpointApiV1DocumentsDocumentIdGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params?: GetDocumentEndpointApiV1DocumentsDocumentIdGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -790,6 +805,7 @@ export function useGetDocumentEndpointApiV1DocumentsDocumentIdGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params?: GetDocumentEndpointApiV1DocumentsDocumentIdGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -808,6 +824,7 @@ export function useGetDocumentEndpointApiV1DocumentsDocumentIdGet<
   const queryOptions =
     getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryOptions(
       documentId,
+      params,
       options,
     );
 
@@ -1412,18 +1429,26 @@ export function useGetDocumentRelationshipExplanationEndpointApiV1DocumentsDocum
  */
 export const getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet = (
   documentId: string,
+  params?: GetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetParams,
   signal?: AbortSignal,
 ) => {
   return orvalApiClient<DocumentEntityResponse[]>({
     url: `/api/v1/documents/${documentId}/entities`,
     method: "GET",
+    params,
     signal,
   });
 };
 
 export const getGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetQueryKey =
-  (documentId: string) => {
-    return [`/api/v1/documents/${documentId}/entities`] as const;
+  (
+    documentId: string,
+    params?: GetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetParams,
+  ) => {
+    return [
+      `/api/v1/documents/${documentId}/entities`,
+      ...(params ? [params] : []),
+    ] as const;
   };
 
 export const getGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetQueryOptions =
@@ -1436,6 +1461,7 @@ export const getGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetQu
     TError = void | HTTPValidationError,
   >(
     documentId: string,
+    params?: GetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetParams,
     options?: {
       query?: Partial<
         UseQueryOptions<
@@ -1456,6 +1482,7 @@ export const getGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetQu
       queryOptions?.queryKey ??
       getGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetQueryKey(
         documentId,
+        params,
       );
 
     const queryFn: QueryFunction<
@@ -1467,6 +1494,7 @@ export const getGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetQu
     > = ({ signal }) =>
       getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet(
         documentId,
+        params,
         signal,
       );
 
@@ -1506,6 +1534,9 @@ export function useGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGe
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params:
+    | undefined
+    | GetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -1548,6 +1579,7 @@ export function useGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGe
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params?: GetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -1590,6 +1622,7 @@ export function useGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGe
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params?: GetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -1620,6 +1653,7 @@ export function useGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGe
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params?: GetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -1640,6 +1674,7 @@ export function useGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGe
   const queryOptions =
     getGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetQueryOptions(
       documentId,
+      params,
       options,
     );
 

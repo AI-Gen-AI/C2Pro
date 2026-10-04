@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.analysis.adapters.persistence.models import Alert
 from src.core.json_types import JsonDict
 from src.documents.adapters.persistence.models import ClauseORM, DocumentORM
+from src.documents.domain.clause_ordering import order_clause_evidence
 from src.documents.domain.models import (
     Clause,
     Document,
@@ -25,6 +26,56 @@ from src.documents.domain.models import (
     DocumentStatus,
 )
 from src.documents.ports.document_repository import IDocumentRepository
+from src.temporal.adapters.persistence.current_revision_sql import (
+    clause_in_current_scope,
+    current_revision_lateral,
+)
+
+# Lane C / C3a: the clause ids of a document's CURRENT revision (the shared
+# trusted-current rule) and of an explicitly requested historical revision.
+_CURRENT_CLAUSE_IDS_SQL = text(
+    f"""
+    SELECT c.id
+    FROM public.clauses c
+    CROSS JOIN LATERAL {current_revision_lateral("c.document_id", "c.tenant_id")} AS cur
+    WHERE c.document_id = CAST(:document_id AS uuid)
+      AND c.tenant_id = CAST(:tenant_id AS uuid)
+      AND {clause_in_current_scope("c", "cur")}
+    """
+)
+
+# A historical revision's own rows; legacy unbound rows only stand in when that
+# revision is the document's single revision and has no bound rows of its own.
+_REVISION_CLAUSE_IDS_SQL = text(
+    """
+    SELECT c.id
+    FROM public.clauses c
+    WHERE c.document_id = CAST(:document_id AS uuid)
+      AND c.tenant_id = CAST(:tenant_id AS uuid)
+      AND (
+        c.revision_id = CAST(:revision_id AS uuid)
+        OR (
+          c.revision_id IS NULL
+          AND EXISTS (
+            SELECT 1 FROM public.document_revisions r
+            WHERE r.revision_id = CAST(:revision_id AS uuid)
+              AND r.document_id = c.document_id
+              AND r.tenant_id = c.tenant_id
+          )
+          AND (
+            SELECT count(*) FROM public.document_revisions r
+            WHERE r.document_id = c.document_id AND r.tenant_id = c.tenant_id
+          ) = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM public.clauses bound
+            WHERE bound.document_id = c.document_id
+              AND bound.tenant_id = c.tenant_id
+              AND bound.revision_id = CAST(:revision_id AS uuid)
+          )
+        )
+      )
+    """
+)
 
 
 class SqlAlchemyDocumentRepository(IDocumentRepository):
@@ -137,7 +188,8 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
             extraction_confidence=orm_clause.extraction_confidence,
             extraction_model=orm_clause.extraction_model,
             manually_verified=orm_clause.manually_verified,
-            verified_at=orm_clause.verified_at
+            verified_at=orm_clause.verified_at,
+            revision_id=orm_clause.revision_id,
         )
         return domain_clause
 
@@ -183,7 +235,8 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
             extraction_confidence=domain_clause.extraction_confidence,
             extraction_model=domain_clause.extraction_model,
             manually_verified=domain_clause.manually_verified,
-            verified_at=domain_clause.verified_at
+            verified_at=domain_clause.verified_at,
+            revision_id=domain_clause.revision_id,
         )
         return orm_clause
 
@@ -237,7 +290,9 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         self,
         tenant_id: UUID,
         document_id: UUID,
+        revision_id: UUID | None = None,
     ) -> Document | None:
+        """The document with ONE clause set: the current revision's, or ``revision_id``'s."""
         stmt = select(DocumentORM).where(
             DocumentORM.id == document_id,
             DocumentORM.tenant_id == tenant_id
@@ -247,9 +302,10 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         if orm_document is None:
             return None
         domain_document = self._to_domain_document(orm_document)
-        domain_document.clauses = await self.list_clauses_for_document(
-            tenant_id,
-            document_id,
+        domain_document.clauses = (
+            await self.list_current_clauses(tenant_id, document_id)
+            if revision_id is None
+            else await self.list_revision_clauses(tenant_id, document_id, revision_id)
         )
         return domain_document
 
@@ -268,7 +324,9 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         if document_row is None:
             return None
 
-        document_orm, clause_count = document_row
+        document_orm, _all_revision_clause_rows = document_row
+        # The evidence count describes the current revision, never V1+V2 together.
+        clause_count = len(await self._clause_ids(_CURRENT_CLAUSE_IDS_SQL, tenant_id, document_id))
         alerts = await self._list_document_evidence_alerts(tenant_id, document_id)
         return DocumentHistorySnapshot(
             document=self._to_domain_document(document_orm),
@@ -497,28 +555,82 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         return [self._to_domain_clause(orm) for orm in result.scalars().all()]
 
     async def get_clause_by_document_and_code(
-        self, tenant_id: UUID, document_id: UUID, clause_code: str
+        self,
+        tenant_id: UUID,
+        document_id: UUID,
+        clause_code: str,
+        revision_id: UUID | None = None,
     ) -> Clause | None:
-        stmt = select(ClauseORM).where(
-            ClauseORM.document_id == document_id,
-            ClauseORM.clause_code == clause_code,
-            ClauseORM.tenant_id == tenant_id
+        """The clause with ``clause_code`` in the current (or the given) revision.
+
+        A code repeats across revisions, so the lookup is scoped to one clause set;
+        within it the canonical order makes the answer deterministic.
+        """
+        clauses = (
+            await self.list_current_clauses(tenant_id, document_id)
+            if revision_id is None
+            else await self.list_revision_clauses(tenant_id, document_id, revision_id)
         )
-        result = await self.session.execute(stmt)
-        orm_clause = result.scalar_one_or_none()
-        return self._to_domain_clause(orm_clause) if orm_clause else None
+        return next((clause for clause in clauses if clause.clause_code == clause_code), None)
 
     async def list_clauses_for_document(
         self,
         tenant_id: UUID,
         document_id: UUID,
     ) -> list[Clause]:
+        """Every clause row of the document, across ALL revisions (audit / history).
+
+        Not a current-truth reader: use ``list_current_clauses`` for that.
+        """
         stmt = select(ClauseORM).where(
             ClauseORM.document_id == document_id,
             ClauseORM.tenant_id == tenant_id
         )
         result = await self.session.execute(stmt)
         return [self._to_domain_clause(orm) for orm in result.scalars().all()]
+
+    async def list_current_clauses(self, tenant_id: UUID, document_id: UUID) -> list[Clause]:
+        """The current revision's clauses (trusted-current rule); [] when unresolved."""
+        return await self._clauses_by_ids(
+            tenant_id, await self._clause_ids(_CURRENT_CLAUSE_IDS_SQL, tenant_id, document_id)
+        )
+
+    async def list_revision_clauses(
+        self, tenant_id: UUID, document_id: UUID, revision_id: UUID
+    ) -> list[Clause]:
+        """An explicitly requested revision's clauses (historical read; current is untouched)."""
+        ids = await self._clause_ids(
+            _REVISION_CLAUSE_IDS_SQL, tenant_id, document_id, revision_id=str(revision_id)
+        )
+        return await self._clauses_by_ids(tenant_id, ids)
+
+    async def list_clauses_bound_to_revision(
+        self, tenant_id: UUID, document_id: UUID, revision_id: UUID
+    ) -> list[Clause]:
+        """Only rows physically bound to ``revision_id`` (the persistence idempotency key)."""
+        stmt = select(ClauseORM).where(
+            ClauseORM.document_id == document_id,
+            ClauseORM.tenant_id == tenant_id,
+            ClauseORM.revision_id == revision_id,
+        )
+        result = await self.session.execute(stmt)
+        return list(
+            order_clause_evidence(self._to_domain_clause(orm) for orm in result.scalars().all())
+        )
+
+    async def _clause_ids(
+        self, statement: Any, tenant_id: UUID, document_id: UUID, **params: str
+    ) -> list[UUID]:
+        result = await self.session.execute(
+            statement,
+            {"tenant_id": str(tenant_id), "document_id": str(document_id), **params},
+        )
+        return [row[0] for row in result.all()]
+
+    async def _clauses_by_ids(self, tenant_id: UUID, clause_ids: list[UUID]) -> list[Clause]:
+        if not clause_ids:
+            return []
+        return list(order_clause_evidence(await self.get_clauses_by_ids(tenant_id, clause_ids)))
 
     async def begin_processing_generation(
         self,

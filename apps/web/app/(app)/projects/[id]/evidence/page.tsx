@@ -155,6 +155,7 @@ export default function EvidencePage() {
     isLoading: documentDetailLoading,
   } = useGetDocumentEndpointApiV1DocumentsDocumentIdGet(
     selectedDocumentId ?? "",
+    undefined,
     { query: { enabled: shouldResolveSourceEvidence } },
   );
   const [alertsState, setAlertsState] = useState(alerts);

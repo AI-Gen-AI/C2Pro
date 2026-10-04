@@ -18,6 +18,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -181,6 +182,9 @@ class ClauseORM(Base): # Renamed to ClauseORM to distinguish from domain entity
         nullable=False,
         index=True,
     )
+    # Lane C / C3a: the immutable revision this clause was extracted from. NULL only
+    # for legacy rows whose revision could not be proven (never fabricated).
+    revision_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
 
     # Identification
     clause_code: Mapped[str] = mapped_column(
@@ -243,6 +247,17 @@ class ClauseORM(Base): # Renamed to ClauseORM to distinguish from domain entity
         Index("ix_clauses_type", "clause_type"),
         Index("ix_clauses_code", "clause_code"),
         Index("ix_clauses_verified", "manually_verified", "verified_at"),
+        Index("ix_clauses_tenant_document_revision", "tenant_id", "document_id", "revision_id"),
+        # A clause can only be bound to a revision of its own document in its own tenant.
+        ForeignKeyConstraint(
+            ["revision_id", "document_id", "tenant_id"],
+            [
+                "document_revisions.revision_id",
+                "document_revisions.document_id",
+                "document_revisions.tenant_id",
+            ],
+            name="fk_clauses_revision_identity",
+        ),
         {"info": {"rls_policy": "tenant_isolation"}},
     )
 

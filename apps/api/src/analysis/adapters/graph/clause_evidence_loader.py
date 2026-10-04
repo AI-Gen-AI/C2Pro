@@ -7,9 +7,12 @@ receives Documents *domain* clauses; ``ClauseORM`` never crosses the boundary.
 Mirrors the existing N10 pattern (``build_project_knowledge_graph(session)``) — an
 analysis-side factory over another context's adapter — rather than inventing a new one.
 
-Persisted clause rows are written once per document, so after a re-upload they may still
-be the previous revision's clauses. They are returned only when they are bound to the
-document's current revision; otherwise ``StaleClauseEvidenceError`` is raised.
+Lane C / C3a: every revision persists its own clause rows, physically bound to it. A run
+reads exactly the revision its #711 processing authority pinned (``revision_id``) -- never
+"the latest" one. Legacy unbound rows stand in only for a document's single revision;
+when the pinned revision has no clause set of its own, ``StaleClauseEvidenceError`` is
+raised so N8 degrades to whole-document evidence instead of scoring another revision's
+clauses.
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from typing import Any
 from uuid import UUID
 
 from src.analysis.application.clause_evidence import StaleClauseEvidenceError
-from src.documents.domain.clause_revision_binding import clauses_bound_to_revision
+from src.documents.domain.clause_ordering import order_clause_evidence
 from src.documents.domain.models import Clause
 from src.temporal.domain.document_revision import DocumentRevision
 
@@ -39,8 +42,13 @@ async def load_current_revision(
 async def load_persisted_clause_evidence(
     tenant_id: UUID,
     document_id: UUID,
+    revision_id: UUID | None = None,
 ) -> tuple[Clause, ...]:
-    """Read the current revision's persisted clauses, RLS-scoped, in deterministic order."""
+    """Read the pinned revision's persisted clauses, RLS-scoped, in deterministic order.
+
+    ``revision_id`` is the revision the processing authority pinned. Without one (a
+    run with no pinned revision), the document's open revision is used.
+    """
     from src.core.database import get_session_with_tenant
     from src.documents.adapters.persistence.sqlalchemy_document_repository import (
         SqlAlchemyDocumentRepository,
@@ -48,22 +56,22 @@ async def load_persisted_clause_evidence(
     from src.documents.application.read_clause_evidence import read_clause_evidence
 
     async with get_session_with_tenant(tenant_id) as session:
-        clauses = await read_clause_evidence(
-            SqlAlchemyDocumentRepository(session), tenant_id, document_id
-        )
-        if not clauses:
-            return clauses
-        current = await load_current_revision(session, tenant_id, document_id)
-        if current is not None and not clauses_bound_to_revision(
-            clauses,
-            revision_id=current.revision_id,
-            parent_revision_id=current.parent_revision_id,
-        ):
+        repository = SqlAlchemyDocumentRepository(session)
+        if revision_id is None:
+            current = await load_current_revision(session, tenant_id, document_id)
+            revision_id = current.revision_id if current is not None else None
+        if revision_id is None:
+            # A pre-lineage document has exactly one (unbound) clause set.
+            return await read_clause_evidence(repository, tenant_id, document_id)
+        pinned = await repository.list_revision_clauses(tenant_id, document_id, revision_id)
+        if pinned:
+            return order_clause_evidence(pinned)
+        if await repository.list_clauses_for_document(tenant_id, document_id):
             raise StaleClauseEvidenceError(
-                f"persisted clauses of document {document_id} are not bound to its "
-                f"current revision {current.revision_id}"
+                f"document {document_id} has no clauses persisted for its pinned "
+                f"revision {revision_id}"
             )
-        return clauses
+        return ()
 
 
 __all__ = ["load_current_revision", "load_persisted_clause_evidence"]

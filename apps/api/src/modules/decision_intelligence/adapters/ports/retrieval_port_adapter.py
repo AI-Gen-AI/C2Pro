@@ -23,6 +23,11 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.temporal.adapters.persistence.current_revision_sql import (
+    chunk_in_current_scope,
+    current_chunk_join,
+)
+
 logger = structlog.get_logger()
 
 _TOP_K = 5
@@ -86,10 +91,13 @@ class RetrievalPortAdapter:
         session: AsyncSession,
         vector_literal: str,
     ) -> list[Any]:
+        # Lane C / C3a: only each document's trusted-current revision is evidence.
         stmt = text(
-            """
-            SELECT content, embedding <-> CAST(:embedding AS vector) AS distance
-            FROM document_chunks
+            f"""
+            SELECT dc.content, dc.embedding <-> CAST(:embedding AS vector) AS distance
+            FROM document_chunks dc
+            {current_chunk_join("dc")}
+            WHERE {chunk_in_current_scope("dc", "cur")}
             ORDER BY distance ASC
             LIMIT :top_k
             """

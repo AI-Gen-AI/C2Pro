@@ -10,6 +10,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.coherence.models import Clause
+from src.temporal.adapters.persistence.current_revision_sql import (
+    clause_in_current_scope,
+    current_revision_lateral,
+)
 
 
 def _as_float(value: Any) -> float | None:
@@ -18,6 +22,32 @@ def _as_float(value: Any) -> float | None:
     if isinstance(value, Decimal | int | float):
         return float(value)
     return None
+
+
+# Lane C / C3a: the contract total comes only from each contract's trusted-current
+# revision -- a PROPOSED or REJECTED V2 can never move it, and V1+V2 never mix.
+_CONTRACT_TOTAL_SQL = text(f"""
+    SELECT (c.extracted_entities->>'total_amount')::numeric AS amt
+    FROM clauses c
+    JOIN documents d ON c.document_id = d.id
+    JOIN projects p ON d.project_id = p.id
+    CROSS JOIN LATERAL {current_revision_lateral("c.document_id", "c.tenant_id")} AS cur
+    WHERE d.project_id = CAST(:project_id AS uuid)
+      AND p.tenant_id = CAST(:tenant_id AS uuid)
+      AND d.document_type::text = 'contract'
+      AND c.extracted_entities ? 'total_amount'
+      AND {clause_in_current_scope("c", "cur")}
+    ORDER BY amt DESC
+    LIMIT 1
+""")
+
+
+async def load_contract_total(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> float | None:
+    """The largest stated contract total among the project's current contract clauses."""
+    result = await db.execute(
+        _CONTRACT_TOTAL_SQL, {"project_id": str(project_id), "tenant_id": str(tenant_id)}
+    )
+    return _as_float(result.scalar_one_or_none())
 
 
 async def build_budget_clauses(
@@ -70,23 +100,7 @@ async def build_budget_clauses(
         )
         reconciliation_items.append({"amount": total_price, "name": item_name})
 
-    contract_stmt = text("""
-        SELECT (c.extracted_entities->>'total_amount')::numeric AS amt
-        FROM clauses c
-        JOIN documents d ON c.document_id = d.id
-        JOIN projects p ON d.project_id = p.id
-        WHERE d.project_id = CAST(:project_id AS uuid)
-          AND p.tenant_id = CAST(:tenant_id AS uuid)
-          AND d.document_type::text = 'contract'
-          AND c.extracted_entities ? 'total_amount'
-        ORDER BY amt DESC
-        LIMIT 1
-    """)
-    contract_result = await db.execute(
-        contract_stmt,
-        {"project_id": str(project_id), "tenant_id": str(tenant_id)},
-    )
-    contract_total = _as_float(contract_result.scalar_one_or_none())
+    contract_total = await load_contract_total(db, project_id, tenant_id)
     stated_total_stmt = text("""
         SELECT (d.document_metadata->>'stated_total')::numeric AS amt
         FROM documents d

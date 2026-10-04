@@ -33,6 +33,13 @@ from src.core.middleware.feature_flags import require_feature
 from src.core.security import security_scheme
 from src.documents.adapters.persistence.models import DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
+from src.temporal.adapters.persistence.current_revision_sql import (
+    chunk_in_current_scope,
+    clause_in_current_scope,
+    current_chunk_join,
+    current_revision_lateral,
+    parsed_text_in_current_scope,
+)
 
 # Import v0.3 graph evaluation
 from .budget_clause_builder import build_budget_clauses
@@ -236,6 +243,17 @@ _CATEGORY_KEYWORDS: dict[str, list[str]] = {
 _CLAUSES_PER_CATEGORY = 10
 
 
+# Lane C / C3a: every clause-like source of /coherence/evaluate reads only the
+# trusted-current revision of each document (one shared rule, fail closed).
+_CURRENT_CLAUSE_JOIN = (
+    f"CROSS JOIN LATERAL {current_revision_lateral('c.document_id', 'c.tenant_id')} AS cur"
+)
+_CLAUSE_IN_CURRENT_SCOPE = clause_in_current_scope("c", "cur")
+_CURRENT_DOCUMENT_JOIN = (
+    f"CROSS JOIN LATERAL {current_revision_lateral('d.id', 'd.tenant_id')} AS cur"
+)
+
+
 def _build_clause(row: Sequence[object]) -> Clause | None:
     clause_id = str(row[0])
     text_value = str(row[1]) if row[1] else ""
@@ -362,13 +380,15 @@ async def _get_persisted_clause_candidates(
 ) -> list[Clause]:
     """Load persisted document clauses using category-targeted queries."""
     seen_ids: set[str] = set()
-    base_query = """
+    base_query = f"""
         SELECT c.id, c.full_text, c.extracted_entities, d.id, d.document_type::text
         FROM clauses c
         JOIN documents d ON c.document_id = d.id
         JOIN projects p ON d.project_id = p.id
+        {_CURRENT_CLAUSE_JOIN}
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
+          AND {_CLAUSE_IN_CURRENT_SCOPE}
           AND LOWER(c.full_text) LIKE ANY(CAST(:keyword_patterns AS text[]))
         ORDER BY c.created_at ASC
         LIMIT :limit
@@ -418,13 +438,15 @@ async def _load_fallback_clause_candidates(
     remaining: int,
     seen_ids: set[str],
 ) -> list[Clause]:
-    fallback_stmt = text("""
+    fallback_stmt = text(f"""
         SELECT c.id, c.full_text, c.extracted_entities, d.id, d.document_type::text
         FROM clauses c
         JOIN documents d ON c.document_id = d.id
         JOIN projects p ON d.project_id = p.id
+        {_CURRENT_CLAUSE_JOIN}
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
+          AND {_CLAUSE_IN_CURRENT_SCOPE}
         ORDER BY c.created_at ASC
         LIMIT :limit
     """)
@@ -450,12 +472,14 @@ async def _get_rag_chunk_clauses(
     max_chunks: int,
 ) -> list[Clause]:
     """Load RAG chunk fallback clauses."""
-    stmt = text("""
+    stmt = text(f"""
         SELECT dc.content, dc.metadata, dc.document_id
         FROM document_chunks dc
         JOIN projects p ON dc.project_id = p.id
+        {current_chunk_join("dc")}
         WHERE dc.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
+          AND {chunk_in_current_scope("dc", "cur")}
         ORDER BY dc.created_at DESC
         LIMIT :limit
     """)
@@ -492,12 +516,14 @@ async def _get_parsed_text_fallback_clauses(
     tenant_id: UUID,
 ) -> list[Clause]:
     """Load parsed document text fallback clauses."""
-    fallback_stmt = text("""
+    fallback_stmt = text(f"""
         SELECT d.id, d.document_type::text, d.document_metadata
         FROM documents d
         JOIN projects p ON d.project_id = p.id
+        {_CURRENT_DOCUMENT_JOIN}
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
+          AND {parsed_text_in_current_scope("d", "cur")}
           AND d.upload_status IN ('parsed', 'parsed_pending_analysis', 'analyzed')
         ORDER BY d.created_at DESC
     """)
