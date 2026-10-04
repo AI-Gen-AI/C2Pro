@@ -478,6 +478,9 @@ B1 reuses the already-shipped #714 trusted/projected Coherence contract. It MUST
 - when both trusted and projected exist, both MUST use the same canonical scorer and identical `score_version`. Version mismatch => projection unavailable, never arithmetic conversion.
 - when no trusted score exists yet, `trusted_score=null`; a projected score may exist but remains explicitly provisional.
 - the UI MUST label projected score as non-approved and show the pending-review cause/count sufficient to explain why it is provisional.
+- the six canonical subscores remain first-class: `sub_scores` are the trusted category scores; a projection MUST additionally expose `projection_baseline_sub_scores` and `projected_sub_scores` for the same six dimensions.
+- projected subscores follow exactly the same engine/version and honest-null rules as the projected global score; a missing/unsupported dimension remains `null`, never 0.
+- approval NEVER copies a projected subscore into trusted state; the newly trusted artifact set is recomputed and its category scores become the new trusted `sub_scores`.
 
 This preserves the existing #714 product semantics while extending B1 lifecycle decisions into the same authority model.
 
