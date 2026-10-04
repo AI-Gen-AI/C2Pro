@@ -609,14 +609,19 @@ def _coherence_alert_to_create(
     )
     clause_by_id = {str(clause.id): clause for clause in clauses}
     source_locators = _split_clause_locators(source_locator)
-    verified_clause_ids: list[UUID] = []
-    for locator in source_locators:
-        candidate_clause_id = _uuid_or_none(locator)
-        if (
-            candidate_clause_id is not None
-            and candidate_clause_id in persisted_clause_documents
-        ):
-            verified_clause_ids.append(candidate_clause_id)
+    candidate_clause_ids = [_uuid_or_none(locator) for locator in source_locators]
+    # Composite documentary provenance is all-or-nothing. Promoting only the
+    # current subset would lend partial authority to a finding that still
+    # depends on stale/external evidence.
+    all_locators_verified = bool(source_locators) and all(
+        candidate is not None and candidate in persisted_clause_documents
+        for candidate in candidate_clause_ids
+    )
+    verified_clause_ids = (
+        [candidate for candidate in candidate_clause_ids if candidate is not None]
+        if all_locators_verified
+        else []
+    )
 
     source_clause_id = verified_clause_ids[0] if verified_clause_ids else None
     related_clause_ids = verified_clause_ids[1:] or None
