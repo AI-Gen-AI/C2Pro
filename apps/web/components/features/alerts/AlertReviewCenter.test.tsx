@@ -444,3 +444,62 @@ describe("S3-04 RED - AlertReviewCenter", () => {
     expect(await screen.findByText(/copied/i)).toBeInTheDocument();
   });
 });
+
+describe("Line B evidence provenance", () => {
+  it("deep-links only a database-verified clause/document pair", () => {
+    render(
+      <AlertReviewCenter
+        projectId="proj-42"
+        alerts={[
+          {
+            id: "a-evidence",
+            title: "Schedule gap",
+            severity: "medium",
+            status: "pending",
+            clauseId: "11111111-1111-4111-8111-111111111111",
+            addressableClauseId: "11111111-1111-4111-8111-111111111111",
+            sourceDocumentId: "22222222-2222-4222-8222-222222222222",
+            evidenceClaim: "Milestone gap detected",
+            evidenceQuote: "Milestone B starts thirty days later",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Milestone gap detected")).toBeInTheDocument();
+    expect(screen.getByText(/Milestone B starts thirty days later/)).toBeInTheDocument();
+    const link = screen.getByRole("link", {
+      name: /view evidence for 11111111-1111-4111-8111-111111111111/i,
+    });
+    expect(link).toHaveAttribute(
+      "href",
+      "/projects/proj-42/evidence?documentId=22222222-2222-4222-8222-222222222222&highlightId=11111111-1111-4111-8111-111111111111",
+    );
+  });
+
+  it("shows an external detector locator without fabricating a deep-link", () => {
+    render(
+      <AlertReviewCenter
+        projectId="proj-42"
+        alerts={[
+          {
+            id: "a-unresolved",
+            title: "Fallback finding",
+            severity: "low",
+            status: "pending",
+            clauseId: "parsed_deadbeef",
+            sourceDocumentId: "22222222-2222-4222-8222-222222222222",
+            evidenceClaim: "Parsed evidence only",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("parsed_deadbeef")).toBeInTheDocument();
+    expect(screen.getByText("Parsed evidence only")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /view evidence/i }),
+    ).not.toBeInTheDocument();
+  });
+});
+
