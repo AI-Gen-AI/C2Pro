@@ -280,10 +280,18 @@ class AlertGeneratorService:
         if violation.source_clause_id:
             anchors.append(str(violation.source_clause_id))
         raw_source_locator = detector.get("source_clause_id")
-        if raw_source_locator and not self._is_revision_unstable_locator(raw_source_locator):
-            anchors.append(str(raw_source_locator))
         if violation.related_clause_ids:
             anchors.extend(str(clause_id) for clause_id in violation.related_clause_ids)
+        # Once detector provenance has been verified into canonical clause IDs,
+        # those DB identities own the fingerprint. Do not also hash the raw
+        # composite locator (A|B), otherwise the incoming and persisted forms
+        # would have different identities on the next evaluation.
+        if (
+            raw_source_locator
+            and not anchors
+            and not self._is_revision_unstable_locator(raw_source_locator)
+        ):
+            anchors.append(str(raw_source_locator))
         if anchors:
             # Rendered claim/quote/severity/category may evolve while the same
             # revision-bound documentary finding remains. Stable locators own
