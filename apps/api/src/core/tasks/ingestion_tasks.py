@@ -682,17 +682,39 @@ async def get_document_rag_chunk_count(
     session: Any,
     tenant_id: TenantId,
     document_id: UUID,
+    revision_id: UUID | None = None,
 ) -> int:
-    """TS-UD-OPS-DOCFLOW-B-001: count committed tenant-scoped RAG chunks."""
-    statement = text(
-        """
+    """TS-UD-OPS-DOCFLOW-B-001: count committed tenant-scoped RAG chunks.
+
+    Lane C / C3a: with a ``revision_id`` only that revision's (stamped) chunks
+    count. Other revisions' chunks are retained (a trusted V1 index survives a
+    pending V2), so they must never make a V2 whose embedding failed look ready.
+    """
+    query = """
         SELECT COUNT(*)
         FROM document_chunks
         WHERE tenant_id = CAST(:tenant_id AS uuid)
           AND document_id = CAST(:document_id AS uuid)
         """
-    )
     params = {"tenant_id": str(tenant_id), "document_id": str(document_id)}
+    if revision_id is not None:
+        # Unstamped (pre-C3a) chunks can only be this revision's when the document
+        # has a single revision -- the same rule the RAG readers apply.
+        query += """
+          AND (
+            metadata ->> 'revision_id' = :revision_id
+            OR (
+              metadata ->> 'revision_id' IS NULL
+              AND (
+                SELECT count(*) FROM document_revisions r
+                WHERE r.document_id = document_chunks.document_id
+                  AND r.tenant_id = document_chunks.tenant_id
+              ) <= 1
+            )
+          )
+        """
+        params["revision_id"] = str(revision_id)
+    statement = text(query)
 
     result = await session.execute(statement, params)
     return int(result.scalar_one())
@@ -1050,6 +1072,7 @@ async def _analyze_owned(
         session=session,
         tenant_id=tenant_id,
         document_id=document_id,
+        revision_id=grant.revision_id,
     )
 
     # The N1-N17 text-analysis graph only applies to free-text documents that
@@ -1406,7 +1429,15 @@ async def _process(
             tenant_id=tenant_id,
             document_id=document_id,
             stage=ProcessingStage.INGESTION,
-            revision_id=revision_id,
+            # Lane C / C3a: a legacy message without revision_id still ingests one
+            # concrete revision (the current one, resolved above); the authority is
+            # acquired FOR it, so the analysis that follows is pinned to it. A
+            # conflicting binding is refused by acquire (fail closed).
+            revision_id=(
+                revision_id
+                if revision_id is not None or source_revision is None
+                else source_revision.revision_id
+            ),
             generation=generation,
             authority=authority,
         )

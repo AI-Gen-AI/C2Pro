@@ -684,3 +684,41 @@ async def test_rag_chunks_of_a_proposed_revision_are_excluded(
     )
     await db.commit()
     assert await _get_rag_chunk_clauses(db, world.project, world.tenant, 50) == []
+
+
+async def test_rag_readiness_never_borrows_another_revisions_chunks(
+    db: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A V2 whose embedding failed is not RAG-ready because V1's chunks were retained."""
+    from src.core.tasks.ingestion_tasks import get_document_rag_chunk_count
+    from src.documents.adapters.rag import rag_service
+
+    async def _embed(texts: list[str]) -> list[list[float]]:
+        return [[0.001] * rag_service.EMBEDDING_DIMENSION for _ in texts]
+
+    monkeypatch.setattr(rag_service, "_embed_texts", _embed)
+    world = await _World(db, tmp_path).setup()
+    document = await world.upload()
+    [v1] = await world.lineage(document)
+
+    async def count(revision: DocumentRevision) -> int:
+        return await get_document_rag_chunk_count(
+            session=db, tenant_id=world.tenant, document_id=document.id,
+            revision_id=revision.revision_id,
+        )
+
+    # Pre-C3a (unstamped) chunks of a single-revision document are that revision's.
+    await rag_service.RagService(db).ingest_document(
+        tenant_id=world.tenant, document_id=document.id, project_id=world.project,
+        text_content="legacy chunk", metadata={"document_type": "contract"},
+    )
+    assert await count(v1) == 1
+
+    await rag_service.RagService(db).ingest_document(
+        tenant_id=world.tenant, document_id=document.id, project_id=world.project,
+        text_content="V1 chunk", metadata={"document_type": "contract", "revision_id": str(v1.revision_id)},
+    )
+    v2 = await world.reupload(document)
+    # V2's embedding "failed": nothing stamped V2 exists, V1's chunks are retained.
+    assert await count(v1) == 1
+    assert await count(v2) == 0
