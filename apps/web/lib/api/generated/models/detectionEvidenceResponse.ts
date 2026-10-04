@@ -38,6 +38,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Detector-produced provenance; distinct from reviewer-attached evidence.
+ */
 export interface DetectionEvidenceResponse {
   source_clause_id?: string | null;
   source_document_id?: string | null;
