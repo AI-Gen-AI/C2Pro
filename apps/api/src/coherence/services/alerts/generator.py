@@ -45,52 +45,52 @@ class AlertGeneratorService:
         fingerprints = set(seen_fingerprints)
         existing = await self._load_existing(project_id, tenant_id=tenant_id)
         existing_by_fp: dict[str, AlertRecord] = {}
-        for alert in existing:
-            fingerprint = self._fingerprint_existing(alert)
-            if fingerprint is None:
+        for existing_alert in existing:
+            stored_fingerprint = self._fingerprint_existing(existing_alert)
+            if stored_fingerprint is None:
                 continue
-            metadata = dict(alert.alert_metadata or {})
-            if metadata.get("fingerprint") != fingerprint:
-                metadata["fingerprint"] = fingerprint
-                alert.alert_metadata = metadata
-            existing_by_fp.setdefault(fingerprint, alert)
+            metadata = dict(existing_alert.alert_metadata or {})
+            if metadata.get("fingerprint") != stored_fingerprint:
+                metadata["fingerprint"] = stored_fingerprint
+                existing_alert.alert_metadata = metadata
+            existing_by_fp.setdefault(stored_fingerprint, existing_alert)
 
         processed: list[AlertRecord] = []
         now = datetime.now(UTC)
 
         for fingerprint, violation in unique_violations:
-            alert = existing_by_fp.get(fingerprint)
+            current_alert = existing_by_fp.get(fingerprint)
 
-            if alert is None:
+            if current_alert is None:
                 created = await self._create_alert(project_id, violation, fingerprint)
                 processed.append(created)
                 continue
 
-            if alert.status == AlertStatus.RESOLVED:
+            if current_alert.status == AlertStatus.RESOLVED:
                 # A previously fixed finding detected again is a genuine regression.
-                self._reopen_alert(alert, violation, fingerprint)
+                self._reopen_alert(current_alert, violation, fingerprint)
             else:
                 # OPEN findings stay open. ACKNOWLEDGED (accepted/genuine variance)
                 # and DISMISSED (false positive) are human dispositions and must not
                 # be silently rewritten just because the same detector fires again.
-                self._update_alert(alert, violation, fingerprint)
-            await self._repository.update(alert)
-            processed.append(alert)
+                self._update_alert(current_alert, violation, fingerprint)
+            await self._repository.update(current_alert)
+            processed.append(current_alert)
 
         if auto_resolve:
-            for alert in existing:
-                existing_fingerprint = (alert.alert_metadata or {}).get("fingerprint")
+            for existing_alert in existing:
+                prior_fingerprint = (existing_alert.alert_metadata or {}).get("fingerprint")
                 if (
-                    alert.status in {AlertStatus.OPEN, AlertStatus.ACKNOWLEDGED}
-                    and existing_fingerprint not in fingerprints
+                    existing_alert.status in {AlertStatus.OPEN, AlertStatus.ACKNOWLEDGED}
+                    and prior_fingerprint not in fingerprints
                 ):
-                    alert.status = AlertStatus.RESOLVED
-                    alert.resolved_at = now
-                    alert.resolution_notes = self._merge_notes(
-                        alert.resolution_notes,
+                    existing_alert.status = AlertStatus.RESOLVED
+                    existing_alert.resolved_at = now
+                    existing_alert.resolution_notes = self._merge_notes(
+                        existing_alert.resolution_notes,
                         "Auto-resolved: violation not detected in latest analysis.",
                     )
-                    await self._repository.update(alert)
+                    await self._repository.update(existing_alert)
 
         if commit:
             await self._repository.commit()

@@ -608,7 +608,10 @@ def _coherence_alert_to_create(
         title=message[:255],
         description=message,
         source_clause_id=source_clause_id,
+        related_clause_ids=None,
         affected_entities=affected_entities,
+        recommendation=None,
+        impact_level=None,
         alert_metadata={
             "source": "coherence_evaluate",
             "detection_evidence": detection_evidence,
