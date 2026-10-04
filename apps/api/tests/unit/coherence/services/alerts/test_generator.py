@@ -817,3 +817,108 @@ class TestB1ResidualIdentityContracts:
                 tenant_id=uuid4(),
                 violations=[incoming],
             )
+
+
+class TestB1RealCrossRevisionIdentity:
+    def test_same_semantic_finding_across_clause_revisions_keeps_family_but_changes_observation(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        document_id = uuid4()
+        v1_clause = uuid4()
+        v2_clause = uuid4()
+
+        def candidate(clause_id):
+            alert = _make_alert_create(
+                rule_id="DET-TIM-COD-MISMATCH",
+                category="TIME",
+                source_clause_id=clause_id,
+                affected_entities={"documents": [str(document_id)]},
+            )
+            alert.alert_metadata = {
+                "detection_evidence": {
+                    "source_clause_id": str(clause_id),
+                    "source_document_id": str(document_id),
+                    "claim": "Contract COD conflicts with approved schedule COD",
+                    "quote": "The contractual completion date conflicts with the approved schedule.",
+                }
+            }
+            return alert
+
+        v1 = candidate(v1_clause)
+        v2 = candidate(v2_clause)
+
+        assert svc._fingerprint(v1) == svc._fingerprint(v2), (
+            "revision-bound clause UUID must be observation provenance, not semantic family identity"
+        )
+        assert svc._observation_key(v1.alert_metadata) != svc._observation_key(v2.alert_metadata)
+
+    @pytest.mark.asyncio
+    async def test_dismissed_v1_family_reopens_on_real_v2_clause_without_creating_new_alert(self) -> None:
+        document_id = uuid4()
+        v1_clause = uuid4()
+        v2_clause = uuid4()
+        svc_for_identity = AlertGeneratorService(repository=MagicMock())
+
+        v1 = _make_alert_create(
+            rule_id="DET-TIM-COD-MISMATCH",
+            category="TIME",
+            source_clause_id=v1_clause,
+            affected_entities={"documents": [str(document_id)]},
+        )
+        v1.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": str(v1_clause),
+                "source_document_id": str(document_id),
+                "claim": "Contract COD conflicts with approved schedule COD",
+                "quote": "The contractual completion date conflicts with the approved schedule.",
+            }
+        }
+        old_family = svc_for_identity._fingerprint(v1)
+        existing = _make_mock_alert(
+            status=AlertStatus.DISMISSED,
+            fingerprint=old_family,
+        )
+        existing.rule_id = "DET-TIM-COD-MISMATCH"
+        existing.category = "TIME"
+        existing.source_clause_id = v1_clause
+        existing.affected_entities = {"documents": [str(document_id)]}
+        existing.alert_metadata = {
+            "fingerprint": old_family,
+            "fingerprint_version": FINGERPRINT_VERSION,
+            "history": [{"action": "reviewed", "decision": "reject"}],
+            "detection_evidence": dict(v1.alert_metadata["detection_evidence"]),
+            "current_observation_key": svc_for_identity._observation_key(v1.alert_metadata),
+        }
+
+        incoming = _make_alert_create(
+            rule_id="DET-TIM-COD-MISMATCH",
+            category="TIME",
+            source_clause_id=v2_clause,
+            affected_entities={"documents": [str(document_id)]},
+        )
+        incoming.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": str(v2_clause),
+                "source_document_id": str(document_id),
+                "claim": "Contract COD conflicts with approved schedule COD",
+                "quote": "The contractual completion date conflicts with the approved schedule.",
+            }
+        }
+
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([existing]))
+        repo.create = AsyncMock()
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+        svc = AlertGeneratorService(repository=repo)
+
+        result = await svc.process_violations(
+            project_id=uuid4(),
+            tenant_id=uuid4(),
+            violations=[incoming],
+        )
+
+        assert result == [existing]
+        assert existing.status == AlertStatus.OPEN
+        repo.create.assert_not_awaited()
+        history = existing.alert_metadata.get("history", [])
+        assert any(item.get("action") == "basis_changed_reopened" for item in history)
