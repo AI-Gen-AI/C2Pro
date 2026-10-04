@@ -104,6 +104,15 @@ class BulkResolveRequest(BaseModel):
     root_cause: str | None = None
 
 
+class DetectionEvidenceResponse(BaseModel):
+    """Detector-produced provenance; distinct from reviewer-attached evidence."""
+
+    source_clause_id: str | None = None
+    source_document_id: str | None = None
+    claim: str = ""
+    quote: str = ""
+
+
 class AlertResponse(BaseModel):
     id: UUID
     project_id: UUID
@@ -114,6 +123,8 @@ class AlertResponse(BaseModel):
     message: str
     status: str
     affected_entities: dict[str, Any] = Field(default_factory=dict)
+    source_clause_id: UUID | None = None
+    detection_evidence: DetectionEvidenceResponse | None = None
     reviewed_by: UUID | None = None
     reviewed_at: datetime | None = None
     root_cause: str | None = None
