@@ -13,6 +13,8 @@ from src.coherence.alert_generator import AlertGenerator
 from src.coherence.rules_engine.context_rules import CoherenceRuleResult
 from src.shared_kernel.enums import AlertSeverity, AlertStatus, AlertType
 
+FINGERPRINT_VERSION = 2
+
 
 class AlertGeneratorService:
     def __init__(self, repository: AlertRepository) -> None:
@@ -50,8 +52,12 @@ class AlertGeneratorService:
             if stored_fingerprint is None:
                 continue
             metadata = dict(existing_alert.alert_metadata or {})
-            if metadata.get("fingerprint") != stored_fingerprint:
+            if (
+                metadata.get("fingerprint") != stored_fingerprint
+                or metadata.get("fingerprint_version") != FINGERPRINT_VERSION
+            ):
                 metadata["fingerprint"] = stored_fingerprint
+                metadata["fingerprint_version"] = FINGERPRINT_VERSION
                 existing_alert.alert_metadata = metadata
             existing_by_fp.setdefault(stored_fingerprint, existing_alert)
 
@@ -187,6 +193,7 @@ class AlertGeneratorService:
 
         metadata.update(dict(violation.alert_metadata or {}))
         metadata["fingerprint"] = fingerprint
+        metadata["fingerprint_version"] = FINGERPRINT_VERSION
         metadata["requires_human_review"] = self._requires_human_review(violation)
         return metadata
 
@@ -197,9 +204,15 @@ class AlertGeneratorService:
     def _fingerprint_existing(self, alert: AlertRecord) -> str | None:
         metadata = dict(alert.alert_metadata or {})
         fingerprint = metadata.get("fingerprint")
-        if isinstance(fingerprint, str) and fingerprint:
+        if (
+            metadata.get("fingerprint_version") == FINGERPRINT_VERSION
+            and isinstance(fingerprint, str)
+            and fingerprint
+        ):
             return fingerprint
 
+        # Unversioned/older fingerprints are derived state from a previous
+        # identity scheme. Recompute them so legacy rows reconcile in place.
         rule_id = getattr(alert, "rule_id", None)
         if not rule_id:
             return None

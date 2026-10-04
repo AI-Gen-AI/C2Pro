@@ -12,7 +12,10 @@ import pytest
 from src.analysis.application.dtos import AlertCreate
 from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType
 from src.coherence.rules_engine.context_rules import CoherenceRuleResult
-from src.coherence.services.alerts.generator import AlertGeneratorService
+from src.coherence.services.alerts.generator import (
+    FINGERPRINT_VERSION,
+    AlertGeneratorService,
+)
 
 
 def _make_alert_create(
@@ -47,7 +50,10 @@ def _make_mock_alert(
     alert.id = alert_id or uuid4()
     alert.status = status
     alert.severity = severity
-    alert.alert_metadata = {"fingerprint": fingerprint}
+    alert.alert_metadata = {
+        "fingerprint": fingerprint,
+        "fingerprint_version": FINGERPRINT_VERSION,
+    }
     alert.project_id = uuid4()
     alert.category = None
     alert.rule_id = None
@@ -123,6 +129,31 @@ class TestFingerprint:
         }
 
         assert svc._fingerprint_existing(existing) == svc._fingerprint(incoming)
+
+
+    def test_stored_legacy_fingerprint_is_recomputed_with_current_identity_scheme(self) -> None:
+        clause_id = uuid4()
+        svc = AlertGeneratorService(repository=MagicMock())
+        existing = _make_mock_alert(fingerprint="legacy-v1-digest")
+        existing.alert_metadata = {
+            "fingerprint": "legacy-v1-digest",
+            "fingerprint_version": 1,
+        }
+        existing.rule_id = "DET-SCP-DELIVERABLES"
+        existing.category = "SCOPE"
+        existing.source_clause_id = clause_id
+        existing.affected_entities = {"documents": ["doc-1"]}
+
+        incoming = _make_alert_create(
+            rule_id="DET-SCP-DELIVERABLES",
+            category="SCOPE",
+            source_clause_id=clause_id,
+            affected_entities={"documents": ["doc-1"]},
+        )
+
+        current = svc._fingerprint(incoming)
+        assert current != "legacy-v1-digest"
+        assert svc._fingerprint_existing(existing) == current
 
 
 class TestFlattenEntities:
@@ -460,6 +491,7 @@ class TestLineBStableFindingIdentity:
         existing.review_comment = "Accepted contractual variance"
         existing.alert_metadata = {
             "fingerprint": "stable-fp",
+            "fingerprint_version": FINGERPRINT_VERSION,
             "history": [{"action": "reviewed", "decision": "approve"}],
             "evidence": [{"type": "note", "content": "Reviewer evidence"}],
             "detection_evidence": {"claim": "old claim", "quote": "old quote"},

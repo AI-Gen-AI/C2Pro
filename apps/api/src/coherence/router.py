@@ -34,7 +34,7 @@ from src.core.database import get_session
 from src.core.feature_flags.tenant_flags_service import TenantFlagsService
 from src.core.middleware.feature_flags import require_feature
 from src.core.security import security_scheme
-from src.documents.adapters.persistence.models import DocumentORM
+from src.documents.adapters.persistence.models import ClauseORM, DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
 
 # Import v0.3 graph evaluation
@@ -567,6 +567,7 @@ def _coherence_alert_to_create(
     project_id: UUID,
     alert: Any,
     clauses: Sequence[Clause],
+    persisted_clause_ids: set[UUID],
 ) -> AlertCreate:
     evidence = getattr(alert, "evidence", None)
     source_locator = (
@@ -574,10 +575,10 @@ def _coherence_alert_to_create(
     )
     clause_by_id = {str(clause.id): clause for clause in clauses}
     source_clause = clause_by_id.get(source_locator)
+    candidate_clause_id = _uuid_or_none(source_locator)
     source_clause_id = (
-        _uuid_or_none(source_locator)
-        if source_clause is not None
-        and source_clause.data.get("source") == "persisted_clause"
+        candidate_clause_id
+        if candidate_clause_id in persisted_clause_ids
         else None
     )
     source_document_id = (
@@ -624,6 +625,40 @@ def _coherence_alert_to_create(
     )
 
 
+async def _verified_persisted_clause_ids(
+    *,
+    db: AsyncSession,
+    project_id: UUID,
+    tenant_id: UUID,
+    alerts: Sequence[Any],
+) -> set[UUID]:
+    candidates = {
+        candidate
+        for alert in alerts
+        if (evidence := getattr(alert, "evidence", None)) is not None
+        if (
+            candidate := _uuid_or_none(
+                getattr(evidence, "source_clause_id", None)
+            )
+        )
+        is not None
+    }
+    if not candidates:
+        return set()
+
+    result = await db.scalars(
+        select(ClauseORM.id)
+        .join(DocumentORM, DocumentORM.id == ClauseORM.document_id)
+        .where(
+            ClauseORM.id.in_(candidates),
+            ClauseORM.tenant_id == tenant_id,
+            DocumentORM.tenant_id == tenant_id,
+            DocumentORM.project_id == project_id,
+        )
+    )
+    return set(result.all())
+
+
 async def _mirror_coherence_alerts_to_alerts_table(
     *,
     db: AsyncSession,
@@ -647,11 +682,18 @@ async def _mirror_coherence_alerts_to_alerts_table(
         text("SELECT pg_advisory_xact_lock(hashtext(:mirror_key))"),
         {"mirror_key": f"coherence-alerts:{tenant_id}:{project_id}"},
     )
+    persisted_clause_ids = await _verified_persisted_clause_ids(
+        db=db,
+        project_id=project_id,
+        tenant_id=tenant_id,
+        alerts=alerts,
+    )
     payloads = [
         _coherence_alert_to_create(
             project_id=project_id,
             alert=alert,
             clauses=clauses,
+            persisted_clause_ids=persisted_clause_ids,
         )
         for alert in alerts
     ]

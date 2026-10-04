@@ -17,12 +17,24 @@ from src.coherence.models import Clause
 from src.coherence.router import _mirror_coherence_alerts_to_alerts_table
 
 
+class _FakeScalarResult:
+    def __init__(self, items: list[object]) -> None:
+        self._items = items
+
+    def all(self) -> list[object]:
+        return list(self._items)
+
+
 class _FakeSession:
-    def __init__(self) -> None:
+    def __init__(self, persisted_clause_ids: set[object] | None = None) -> None:
         self.executed: list[tuple[object, object | None]] = []
+        self.persisted_clause_ids = persisted_clause_ids or set()
 
     async def execute(self, statement: object, params: object | None = None) -> None:
         self.executed.append((statement, params))
+
+    async def scalars(self, statement: object) -> _FakeScalarResult:
+        return _FakeScalarResult(list(self.persisted_clause_ids))
 
 
 @pytest.mark.asyncio
@@ -49,7 +61,7 @@ async def test_mirror_reconciles_via_canonical_service_with_evidence_locator() -
             data={"document_id": str(document_id), "source": "persisted_clause"},
         )
     ]
-    session = _FakeSession()
+    session = _FakeSession(persisted_clause_ids={clause_id})
     service = MagicMock()
     service.process_violations = AsyncMock(return_value=[])
 
@@ -112,7 +124,10 @@ async def test_uuid_looking_external_locator_is_not_used_as_clause_foreign_key()
         Clause(
             id=str(external_locator),
             text="External text",
-            data={"document_id": str(document_id)},
+            data={
+                "document_id": str(document_id),
+                "source": "persisted_clause",
+            },
         )
     ]
     session = _FakeSession()

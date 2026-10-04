@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import cast
 from uuid import UUID
 
@@ -11,7 +12,12 @@ from src.analysis.application.dtos import AlertCreate
 from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType
 from src.analysis.ports.alert_repository import AlertRepository
 from src.analysis.ports.types import AlertRecord
-from src.core.pagination import Page, paginate
+from src.core.pagination import (
+    InvalidCursorException,
+    Page,
+    decode_cursor,
+    encode_cursor,
+)
 from src.projects.adapters.persistence.models import ProjectORM
 
 
@@ -45,18 +51,32 @@ class SqlAlchemyAlertRepository(AlertRepository):
         if alert_type:
             query = query.where(Alert.alert_type == alert_type)
 
-        query = query.order_by(Alert.severity.desc(), Alert.created_at.desc())
+        if cursor:
+            try:
+                cursor_created_at = datetime.fromisoformat(decode_cursor(cursor))
+            except ValueError as exc:
+                raise InvalidCursorException("Invalid alert cursor") from exc
+            query = query.where(Alert.created_at < cursor_created_at)
 
-        return cast(
-            Page[AlertRecord],
-            await paginate(
-                query=query,
-                model=Alert,
-                cursor=cursor,
-                limit=limit,
-                order_by="created_at",
-                order_direction="desc",
-            ),
+        query = query.order_by(Alert.severity.desc(), Alert.created_at.desc()).limit(
+            limit + 1
+        )
+        result = await self.session.scalars(query)
+        items = list(result.all())
+
+        has_more = len(items) > limit
+        items = items[:limit]
+        next_cursor = (
+            encode_cursor(items[-1].created_at.isoformat())
+            if has_more and items
+            else None
+        )
+        # Avoid materializing Page[AlertRecord] at runtime: AlertRecord is a
+        # Protocol used for static typing, not a Pydantic schema.
+        return Page(
+            items=cast(list[AlertRecord], items),
+            next_cursor=next_cursor,
+            has_more=has_more,
         )
 
     async def get_stats(self, project_id: UUID, tenant_id: UUID | None = None) -> dict[str, int]:
