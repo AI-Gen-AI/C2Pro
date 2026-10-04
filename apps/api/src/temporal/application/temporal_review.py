@@ -26,6 +26,9 @@ never-trusted revision in between, an unbound (legacy) artifact standing in for
 a baseline, a broken or cyclic chain, or a chain deeper than
 ``MAX_LINEAGE_DEPTH`` all fail closed as ``untrusted_ancestor_lineage``; the
 specific cause is carried in ``detail``. The first revision has no lineage.
+A revision that is itself already TRUSTED (re-analysed) anchors at itself, but
+only after its own new comparison is clean: earlier trust never masks a new
+unresolved comparison.
 """
 
 from __future__ import annotations
@@ -107,6 +110,11 @@ def _lineage_decision(
     """None when the parent chain is anchored in an explicitly TRUSTED revision."""
     if lineage is None or trust is None:
         return _untrusted("trusted_baseline_not_resolvable")
+    # An explicit #714 approval of THIS revision already made it a trusted baseline:
+    # history behind it is not re-litigated. Reached only after its own (new)
+    # comparison passed, so earlier trust never masks a new unresolved comparison.
+    if TrustState.TRUSTED.value in trust.states_by_revision.get(revision.revision_id, frozenset()):
+        return None
     # Only this document's own revisions in this tenant can form its lineage.
     by_id = {
         node.revision_id: node

@@ -331,3 +331,21 @@ async def test_legacy_unbound_trusted_artifact_is_never_guessed_as_baseline(
         tenant_id=str(tenant), document_id=str(document.id), revision_id=str(v1.revision_id)
     )
     assert (baseline.required, baseline.reason) == (False, "baseline_revision")
+
+    # T1 (real #714): V2 is reviewed and approved through the canonical commit. Its
+    # clean re-analysis anchors on V2 itself; the untrusted history behind it is not
+    # re-litigated.
+    artifacts = SqlAlchemyDocumentArtifactRepository(db)
+    await artifacts.save(
+        _artifact(document.id, v2.revision_id, "v2-reviewed"),
+        project_id=project,
+        tenant_id=tenant,
+        trust_state=TrustState.PROPOSED,
+    )
+    await db.commit()
+    await artifacts.commit_candidate(await _latest_binding(db, document.id), tenant_id=tenant)
+    await db.commit()
+    reanalysed = await temporal_review_gate.revision_requires_temporal_review(
+        tenant_id=str(tenant), document_id=str(document.id), revision_id=str(v2.revision_id)
+    )
+    assert (reanalysed.required, reanalysed.reason) == (False, "temporal_identity_resolved")

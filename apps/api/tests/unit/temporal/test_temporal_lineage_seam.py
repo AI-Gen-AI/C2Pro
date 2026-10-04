@@ -342,3 +342,106 @@ def test_reevaluation_returns_the_same_decision() -> None:
     lineage, trust = [v1, v2, v3], _trust({v1: {"trusted"}, v2: {"proposed"}})
 
     assert _decide(v3, lineage, trust) == _decide(v3, list(reversed(lineage)), trust)
+
+
+# --- T1-T8: an explicitly TRUSTED current revision is its own baseline ----------------
+
+
+def _with_change(revision: DocumentRevision, **overrides: Any) -> list[ProjectEvent]:
+    """The revision's own comparison, with the change/provenance altered."""
+    events = _clean_comparison(revision)
+    payload = dict(events[1].payload)
+    change = {**payload["changeset"]["changes"][0], **overrides.pop("change", {})}
+    payload["changeset"] = {"changes": [change]}
+    payload.update(overrides)
+    events[1] = events[1].model_copy(update={"payload": payload})
+    return events
+
+
+@pytest.mark.parametrize("v1_states", [{"rejected"}, {"proposed"}])  # T1, T2
+def test_trusted_current_revision_anchors_itself_on_clean_reanalysis(v1_states: set[str]) -> None:
+    v1, v2 = _chain(2)
+
+    decision = _decide(v2, [v1, v2], _trust({v1: v1_states, v2: {"trusted"}}))
+
+    assert decision == TemporalReviewDecision(required=False, reason="temporal_identity_resolved")
+
+
+def test_previous_trust_never_masks_a_new_review_required_comparison() -> None:  # T3
+    v1, v2 = _chain(2)
+    events = _with_change(
+        v2,
+        state="needs_review",
+        change={"needs_review": True, "match_basis": "similarity_candidate"},
+    )
+
+    decision = decide_temporal_review(
+        revision=v2,
+        document_id=DOCUMENT,
+        events=events,
+        artifact_type="contract",
+        lineage=[v1, v2],
+        trust=_trust({v1: {"trusted"}, v2: {"trusted"}}),
+    )
+
+    assert decision.required is True
+    assert decision.reason == "temporal_changes_need_review"
+
+
+@pytest.mark.parametrize("engine", ["p0c-structural-l1-v1", "schedule-cpm-v1"])  # T4
+def test_previous_trust_never_masks_a_legacy_or_unsupported_matcher(engine: str) -> None:
+    v1, v2 = _chain(2)
+    events = _with_change(v2, provenance={"diff_engine_version": engine})
+
+    decision = decide_temporal_review(
+        revision=v2,
+        document_id=DOCUMENT,
+        events=events,
+        artifact_type="contract",
+        lineage=[v1, v2],
+        trust=_trust({v1: {"trusted"}, v2: {"trusted"}}),
+    )
+
+    assert decision.required is True
+    assert decision.reason == "temporal_identity_unverified"
+
+
+def test_untrusted_current_revision_still_walks_its_lineage() -> None:  # T5
+    v1, v2, v3 = _chain(3)
+
+    decision = _decide(
+        v3, [v1, v2, v3], _trust({v1: {"trusted"}, v2: {"rejected"}, v3: {"proposed"}})
+    )
+
+    assert decision.required is True
+    assert decision.reason == "untrusted_ancestor_lineage"
+
+
+def test_child_anchors_on_a_trusted_revision_behind_a_rejected_one() -> None:  # T6
+    v1, v2, v3 = _chain(3)
+
+    decision = _decide(v3, [v1, v2, v3], _trust({v1: {"rejected"}, v2: {"trusted"}}))
+
+    assert decision.required is False
+
+
+@pytest.mark.parametrize(
+    "states", [{"proposed"}, {"rejected"}, {"superseded"}, {"proposed", "rejected", "superseded"}]
+)
+def test_only_trusted_counts_as_the_current_baseline(states: set[str]) -> None:  # T7
+    v1, v2 = _chain(2)
+
+    decision = _decide(v2, [v1, v2], _trust({v1: {"rejected"}, v2: states}))
+
+    assert decision.required is True
+    assert decision.reason == "untrusted_ancestor_lineage"
+
+
+def test_trust_bound_to_another_revision_does_not_anchor_the_current_one() -> None:  # T8
+    v1, v2 = _chain(2)
+    elsewhere = _rev(1, None, document_id=uuid4())
+
+    decision = _decide(v2, [v1, v2], _trust({v1: {"rejected"}, elsewhere: {"trusted"}}))
+
+    assert decision.required is True
+    assert decision.reason == "untrusted_ancestor_lineage"
