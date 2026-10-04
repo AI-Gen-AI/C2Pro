@@ -373,3 +373,9 @@ class DocumentProcessingOperationORM(Base):
         ),
         {"info": {"rls_policy": "tenant_isolation"}},
     )
+
+
+# Lane C / C3a: ClauseORM's composite revision FK targets ``document_revisions``.
+# Register that table wherever the clause model is mapped, so mapper configuration
+# never depends on some other module having imported the temporal models first.
+from src.temporal.adapters.persistence import models as _temporal_models  # noqa: E402, F401
