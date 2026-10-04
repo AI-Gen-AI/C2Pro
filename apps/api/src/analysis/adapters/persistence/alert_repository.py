@@ -4,8 +4,9 @@ from datetime import datetime
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import String, and_, case, cast, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from src.analysis.adapters.persistence.models import Alert
 from src.analysis.application.dtos import AlertCreate
@@ -19,6 +20,47 @@ from src.core.pagination import (
     encode_cursor,
 )
 from src.projects.adapters.persistence.models import ProjectORM
+
+
+def _severity_rank_expression() -> ColumnElement[int]:
+    """Stable severity ordering shared by the list cursor and SQL ORDER BY."""
+    severity_text = cast(Alert.severity, String)
+    return case(
+        (severity_text == AlertSeverity.CRITICAL.value, 0),
+        (severity_text == AlertSeverity.HIGH.value, 1),
+        (severity_text == AlertSeverity.MEDIUM.value, 2),
+        (severity_text == AlertSeverity.LOW.value, 3),
+        else_=4,
+    )
+
+
+def _severity_rank_value(severity: AlertSeverity | str) -> int:
+    normalized = severity.value if isinstance(severity, AlertSeverity) else str(severity).lower()
+    return {
+        AlertSeverity.CRITICAL.value: 0,
+        AlertSeverity.HIGH.value: 1,
+        AlertSeverity.MEDIUM.value: 2,
+        AlertSeverity.LOW.value: 3,
+    }.get(normalized, 4)
+
+
+def _encode_alert_cursor(alert: Alert) -> str:
+    return encode_cursor(
+        f"{_severity_rank_value(alert.severity)}|{alert.created_at.isoformat()}|{alert.id}"
+    )
+
+
+def _decode_alert_cursor(cursor: str) -> tuple[int, datetime, UUID]:
+    try:
+        rank_raw, created_raw, alert_id_raw = decode_cursor(cursor).split("|", 2)
+        rank = int(rank_raw)
+        created_at = datetime.fromisoformat(created_raw)
+        alert_id = UUID(alert_id_raw)
+    except (ValueError, TypeError) as exc:
+        raise InvalidCursorException("Invalid alert cursor") from exc
+    if rank < 0 or rank > 4:
+        raise InvalidCursorException("Invalid alert cursor")
+    return rank, created_at, alert_id
 
 
 class SqlAlchemyAlertRepository(AlertRepository):
@@ -51,26 +93,35 @@ class SqlAlchemyAlertRepository(AlertRepository):
         if alert_type:
             query = query.where(Alert.alert_type == alert_type)
 
+        severity_rank = _severity_rank_expression()
         if cursor:
-            try:
-                cursor_created_at = datetime.fromisoformat(decode_cursor(cursor))
-            except ValueError as exc:
-                raise InvalidCursorException("Invalid alert cursor") from exc
-            query = query.where(Alert.created_at < cursor_created_at)
+            cursor_rank, cursor_created_at, cursor_id = _decode_alert_cursor(cursor)
+            query = query.where(
+                or_(
+                    severity_rank > cursor_rank,
+                    and_(
+                        severity_rank == cursor_rank,
+                        Alert.created_at < cursor_created_at,
+                    ),
+                    and_(
+                        severity_rank == cursor_rank,
+                        Alert.created_at == cursor_created_at,
+                        Alert.id < cursor_id,
+                    ),
+                )
+            )
 
-        query = query.order_by(Alert.severity.desc(), Alert.created_at.desc()).limit(
-            limit + 1
-        )
+        query = query.order_by(
+            severity_rank.asc(),
+            Alert.created_at.desc(),
+            Alert.id.desc(),
+        ).limit(limit + 1)
         result = await self.session.scalars(query)
         items = list(result.all())
 
         has_more = len(items) > limit
         items = items[:limit]
-        next_cursor = (
-            encode_cursor(items[-1].created_at.isoformat())
-            if has_more and items
-            else None
-        )
+        next_cursor = _encode_alert_cursor(items[-1]) if has_more and items else None
         # Avoid materializing Page[AlertRecord] at runtime: AlertRecord is a
         # Protocol used for static typing, not a Pydantic schema.
         return Page(
