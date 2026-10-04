@@ -93,6 +93,9 @@ async def test_projection_is_canonical_evaluation_of_all_pending_substituted() -
         assert p.projected_delta == round(both - baseline, 4)
         assert p.pending_review_count == 2
         assert p.projection_score_version == "coherence-v1"
+        assert p.projection_baseline_sub_scores == (await evaluate(TRUSTED)).summary.category_scores
+        assert p.projected_sub_scores == (await evaluate([A_PRIME, B_PRIME])).summary.category_scores
+        assert set(p.projected_sub_scores) == {"SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"}
 
 
 async def test_single_pending_is_evaluated_not_copied_from_stored_score() -> None:
@@ -129,11 +132,17 @@ async def test_no_projection_when_nothing_is_pending_and_no_evaluation_runs() ->
     assert calls == []
 
 
-def _fake(score_by_len: dict[int, float | None], version: str | None = "coherence-v1"):
+def _fake(
+    score_by_len: dict[int, float | None],
+    version: str | None = "coherence-v1",
+    category_scores: dict[str, float | None] | None = None,
+):
     async def evaluate(artifacts):
         return SimpleNamespace(
             summary=SimpleNamespace(
-                overall_score=score_by_len.get(len(artifacts)), score_reason="insufficient_evidence"
+                overall_score=score_by_len.get(len(artifacts)),
+                category_scores=category_scores or {},
+                score_reason="insufficient_evidence",
             ),
             score_version=version,
         )
@@ -180,3 +189,40 @@ async def test_evaluation_failure_is_unavailable_not_an_error() -> None:
     assert p.status is ProjectionStatus.UNAVAILABLE
     assert p.reason == "projection_evaluation_failed"
     assert p.pending_review_count == 1
+
+
+async def test_projected_subscores_preserve_unknown_null_not_zero() -> None:
+    category_scores = {
+        "SCOPE": 91.0,
+        "BUDGET": 64.0,
+        "TIME": None,
+        "TECHNICAL": 82.0,
+        "LEGAL": None,
+        "QUALITY": 88.0,
+    }
+    p = await project_pending_coherence(
+        trusted_artifacts=TRUSTED,
+        pending=[_pending(A_PRIME)],
+        evaluate=_fake({2: 76.0}, category_scores=category_scores),
+    )
+    assert p.status is ProjectionStatus.PROVISIONAL
+    assert p.projected_sub_scores == category_scores
+    assert p.projected_sub_scores["TIME"] is None
+    assert p.projected_sub_scores["LEGAL"] is None
+
+
+async def test_score_version_mismatch_withholds_projected_subscores_too() -> None:
+    p = await project_pending_coherence(
+        trusted_artifacts=TRUSTED,
+        pending=[_pending(A_PRIME)],
+        evaluate=_fake(
+            {2: 60.0},
+            version="coherence-v2",
+            category_scores={"BUDGET": 45.0},
+        ),
+        trusted_score_version="coherence-v1",
+    )
+    assert p.status is ProjectionStatus.UNAVAILABLE
+    assert p.projected_score is None
+    assert p.projected_sub_scores is None
+    assert p.projection_baseline_sub_scores is None
