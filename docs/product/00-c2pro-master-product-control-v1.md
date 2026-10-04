@@ -307,6 +307,8 @@ P1 has started materially: one canonical WBS store is now runtime authority and 
 
 The authoritative Coherence v2 decision/cutover remains a separate open P1 concern. Alert **visibility/integration** belongs in P1; the richer Action/HITL automation programme remains P2 even though its runtime substrate is now substantially hardened.
 
+**Approved non-blocking ADR-025 evolution — Risk Register (#836).** Project Controls will later absorb a canonical Risk Register / governed Risk Assessment capability by evolving the existing N4/`RiskItem` extraction path. It stays on the same canonical project/WBS backbone; there is no parallel risk WBS and no autonomous agent that defines canonical risk truth. The future contract separates risk likelihood/probability, impact and exposure from Coherence certainty/materiality, preserves Unknown/null, and links treatment/owner/residual risk to Evidence, Alerts and Changes. This is an accepted architecture direction only and does not advance realization, deployment or production-validation state; B1/C3b continue independently.
+
 ### P2 — Procurement execution + richer Actions/HITL + governed communications — PLANNED
 
 Once the Project Controls backbone is complete, procurement packages can derive from real WBS work packages:
