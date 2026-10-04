@@ -4,7 +4,7 @@ import hashlib
 import re
 from collections.abc import Iterable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from src.analysis.application.dtos import AlertCreate
@@ -233,10 +233,11 @@ class AlertGeneratorService:
 
         current_approval = getattr(alert, "approval_status", None)
         if current_approval is not None:
+            writable_alert = cast(Any, alert)
             try:
-                setattr(alert, "approval_status", type(current_approval)("pending"))
+                writable_alert.approval_status = type(current_approval)("pending")
             except (TypeError, ValueError):
-                setattr(alert, "approval_status", "pending")
+                writable_alert.approval_status = "pending"
 
         self._update_alert(alert, violation, fingerprint)
 
