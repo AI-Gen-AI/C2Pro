@@ -1,101 +1,163 @@
-"""Unit tests for mirroring /evaluate coherence alerts into the alerts table.
+"""Line-B contract for mirroring /evaluate findings into durable alerts.
 
-The alerts UI lists rows from the ``alerts`` table; before this, /evaluate only
-stored alerts inside ``coherence_results.alerts`` (JSON), so the alerts page was
-empty while the dashboard showed a non-zero count. These tests pin the mirror
-behaviour: prior coherence rows are cleared (idempotent replace) and each alert
-is written with mapped severity/type and traceability metadata.
+The live path must reconcile through the canonical AlertGeneratorService:
+stable identity, tenant/type scope, no destructive batch replacement, and
+truthful evidence locators.
 """
-
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
-from src.analysis.adapters.persistence.models import Alert as AlertORM
-from src.analysis.domain.enums import AlertSeverity, AlertType
+from src.analysis.domain.enums import AlertSeverity
+from src.coherence.models import Clause
 from src.coherence.router import _mirror_coherence_alerts_to_alerts_table
 
 
 class _FakeSession:
-    """Minimal async session double: records execute() and add() calls."""
-
     def __init__(self) -> None:
-        self.added: list[Any] = []
-        self.executed: list[Any] = []
+        self.executed: list[tuple[object, object | None]] = []
 
-    async def execute(self, statement: Any) -> None:
-        self.executed.append(statement)
-
-    def add(self, obj: Any) -> None:
-        self.added.append(obj)
+    async def execute(self, statement: object, params: object | None = None) -> None:
+        self.executed.append((statement, params))
 
 
 @pytest.mark.asyncio
-async def test_mirror_writes_alert_row_with_mapped_fields() -> None:
+async def test_mirror_reconciles_via_canonical_service_with_evidence_locator() -> None:
     project_id = uuid4()
     tenant_id = uuid4()
-    evidence = SimpleNamespace(source_clause_id="clause-1", claim="c", quote="q")
+    clause_id = uuid4()
+    document_id = uuid4()
     alert = SimpleNamespace(
         severity="critical",
-        category="BUDGET",
-        rule_id="DET-BUD-SUM",
-        message="Budget items sum below contract total",
-        evidence=evidence,
+        category="schedule",
+        rule_id="DET-TIM-GAP",
+        message="Milestone gap exceeds tolerance",
+        evidence=SimpleNamespace(
+            source_clause_id=str(clause_id),
+            claim="Schedule gap detected",
+            quote="Milestone B starts thirty days later",
+        ),
     )
+    clauses = [
+        Clause(
+            id=str(clause_id),
+            text="Milestone B starts thirty days later",
+            data={"document_id": str(document_id)},
+        )
+    ]
     session = _FakeSession()
+    service = MagicMock()
+    service.process_violations = AsyncMock(return_value=[])
 
-    await _mirror_coherence_alerts_to_alerts_table(
-        db=session, project_id=project_id, tenant_id=tenant_id, alerts=[alert]
-    )
+    with (
+        patch("src.coherence.router.SqlAlchemyAlertRepository") as repo_cls,
+        patch("src.coherence.router.AlertGeneratorService", return_value=service),
+    ):
+        await _mirror_coherence_alerts_to_alerts_table(
+            db=session,  # type: ignore[arg-type]
+            project_id=project_id,
+            tenant_id=tenant_id,
+            alerts=[alert],
+            clauses=clauses,
+        )
 
-    # Prior coherence-sourced rows are cleared first (idempotent replace).
+    repo_cls.assert_called_once_with(session)
     assert len(session.executed) == 1
-    assert len(session.added) == 1
-    row = session.added[0]
-    assert isinstance(row, AlertORM)
-    assert row.project_id == project_id
-    assert row.tenant_id == tenant_id
-    assert row.analysis_id is None
-    assert row.severity == AlertSeverity.CRITICAL
-    assert row.alert_type == AlertType.COHERENCE
-    assert row.category == "BUDGET"
-    assert row.rule_id == "DET-BUD-SUM"
-    assert row.message == "Budget items sum below contract total"
-    assert row.title == "Budget items sum below contract total"
-    assert row.alert_metadata["source"] == "coherence_evaluate"
-    assert row.alert_metadata["evidence"]["source_clause_id"] == "clause-1"
+    statement, params = session.executed[0]
+    assert "pg_advisory_xact_lock" in str(statement)
+    assert params == {"mirror_key": f"coherence-alerts:{tenant_id}:{project_id}"}
+
+    kwargs = service.process_violations.await_args.kwargs
+    assert kwargs["project_id"] == project_id
+    assert kwargs["tenant_id"] == tenant_id
+    assert kwargs["auto_resolve"] is True
+    assert kwargs["commit"] is False
+    assert len(kwargs["violations"]) == 1
+    payload = kwargs["violations"][0]
+    assert payload.severity == AlertSeverity.CRITICAL
+    assert payload.category == "TIME"
+    assert payload.rule_id == "DET-TIM-GAP"
+    assert payload.source_clause_id == clause_id
+    assert payload.affected_entities == {"documents": [str(document_id)]}
+    assert payload.alert_metadata["detection_evidence"] == {
+        "source_clause_id": str(clause_id),
+        "source_document_id": str(document_id),
+        "claim": "Schedule gap detected",
+        "quote": "Milestone B starts thirty days later",
+    }
 
 
 @pytest.mark.asyncio
-async def test_mirror_unknown_severity_defaults_medium_and_handles_no_evidence() -> None:
-    session = _FakeSession()
+async def test_mirror_keeps_unresolvable_locator_as_text_but_not_fake_uuid_fk() -> None:
+    project_id = uuid4()
+    tenant_id = uuid4()
     alert = SimpleNamespace(
-        severity="bogus", category=None, rule_id=None, message="", evidence=None
+        severity="bogus",
+        category="general",
+        rule_id="AUDIT_INCOMPLETE",
+        message="",
+        evidence=SimpleNamespace(
+            source_clause_id="parsed_deadbeef",
+            claim="Missing dimensions",
+            quote="",
+        ),
     )
+    clauses = [
+        Clause(
+            id="parsed_deadbeef",
+            text="Fallback parsed text",
+            data={"document_id": "doc-fallback"},
+        )
+    ]
+    session = _FakeSession()
+    service = MagicMock()
+    service.process_violations = AsyncMock(return_value=[])
 
-    await _mirror_coherence_alerts_to_alerts_table(
-        db=session, project_id=uuid4(), tenant_id=uuid4(), alerts=[alert]
-    )
+    with (
+        patch("src.coherence.router.SqlAlchemyAlertRepository"),
+        patch("src.coherence.router.AlertGeneratorService", return_value=service),
+    ):
+        await _mirror_coherence_alerts_to_alerts_table(
+            db=session,  # type: ignore[arg-type]
+            project_id=project_id,
+            tenant_id=tenant_id,
+            alerts=[alert],
+            clauses=clauses,
+        )
 
-    row = session.added[0]
-    assert row.severity == AlertSeverity.MEDIUM
-    assert row.message == "Coherence issue detected."  # empty message -> fallback
-    assert row.alert_metadata["evidence"] is None
+    payload = service.process_violations.await_args.kwargs["violations"][0]
+    assert payload.severity == AlertSeverity.MEDIUM
+    assert payload.category == "SCOPE"
+    assert payload.source_clause_id is None
+    assert payload.alert_metadata["detection_evidence"]["source_clause_id"] == "parsed_deadbeef"
+    assert payload.alert_metadata["detection_evidence"]["source_document_id"] == "doc-fallback"
 
 
 @pytest.mark.asyncio
-async def test_mirror_empty_alerts_still_clears_prior_batch() -> None:
+async def test_empty_evaluation_reconciles_empty_set_instead_of_deleting_history() -> None:
     session = _FakeSession()
+    service = MagicMock()
+    service.process_violations = AsyncMock(return_value=[])
+    project_id = uuid4()
+    tenant_id = uuid4()
 
-    await _mirror_coherence_alerts_to_alerts_table(
-        db=session, project_id=uuid4(), tenant_id=uuid4(), alerts=[]
-    )
+    with (
+        patch("src.coherence.router.SqlAlchemyAlertRepository"),
+        patch("src.coherence.router.AlertGeneratorService", return_value=service),
+    ):
+        await _mirror_coherence_alerts_to_alerts_table(
+            db=session,  # type: ignore[arg-type]
+            project_id=project_id,
+            tenant_id=tenant_id,
+            alerts=[],
+            clauses=[],
+        )
 
-    # The delete runs even with no new alerts, so a project that no longer has
-    # any incoherence ends up with an empty alerts list rather than stale rows.
-    assert len(session.executed) == 1
-    assert session.added == []
+    kwargs = service.process_violations.await_args.kwargs
+    assert kwargs["violations"] == []
+    assert kwargs["auto_resolve"] is True
+    assert kwargs["commit"] is False

@@ -25,6 +25,7 @@ class AlertGeneratorService:
         *,
         tenant_id: UUID | None = None,
         auto_resolve: bool = True,
+        commit: bool = True,
     ) -> list[AlertRecord]:
         """
         Persist new alerts, update existing ones, and optionally auto-resolve missing ones.
@@ -43,9 +44,16 @@ class AlertGeneratorService:
 
         fingerprints = set(seen_fingerprints)
         existing = await self._load_existing(project_id, tenant_id=tenant_id)
-        existing_by_fp = {
-            (alert.alert_metadata or {}).get("fingerprint"): alert for alert in existing
-        }
+        existing_by_fp: dict[str, AlertRecord] = {}
+        for alert in existing:
+            fingerprint = self._fingerprint_existing(alert)
+            if fingerprint is None:
+                continue
+            metadata = dict(alert.alert_metadata or {})
+            if metadata.get("fingerprint") != fingerprint:
+                metadata["fingerprint"] = fingerprint
+                alert.alert_metadata = metadata
+            existing_by_fp.setdefault(fingerprint, alert)
 
         processed: list[AlertRecord] = []
         now = datetime.now(UTC)
@@ -84,7 +92,8 @@ class AlertGeneratorService:
                     )
                     await self._repository.update(alert)
 
-        await self._repository.commit()
+        if commit:
+            await self._repository.commit()
 
         return processed
 
@@ -169,10 +178,60 @@ class AlertGeneratorService:
         # Detector fields may refresh on every evaluation, but human-managed
         # history/evidence/disposition metadata must survive the refresh.
         metadata = dict(existing_metadata or {})
+        legacy_evidence = metadata.get("evidence")
+        if isinstance(legacy_evidence, dict):
+            metadata.setdefault("detection_evidence", dict(legacy_evidence))
+            metadata["evidence"] = []
+        elif legacy_evidence is not None and not isinstance(legacy_evidence, list):
+            metadata["evidence"] = []
+
         metadata.update(dict(violation.alert_metadata or {}))
         metadata["fingerprint"] = fingerprint
         metadata["requires_human_review"] = self._requires_human_review(violation)
         return metadata
+
+    @staticmethod
+    def _normalized_identity_text(value: object) -> str:
+        return " ".join(str(value or "").split())
+
+    def _fingerprint_existing(self, alert: AlertRecord) -> str | None:
+        metadata = dict(alert.alert_metadata or {})
+        fingerprint = metadata.get("fingerprint")
+        if isinstance(fingerprint, str) and fingerprint:
+            return fingerprint
+
+        rule_id = getattr(alert, "rule_id", None)
+        if not rule_id:
+            return None
+        source_clause_id = getattr(alert, "source_clause_id", None)
+        if source_clause_id is None:
+            detector = metadata.get("detection_evidence")
+            if not isinstance(detector, dict):
+                legacy = metadata.get("evidence")
+                detector = legacy if isinstance(legacy, dict) else {}
+            source_clause_id = detector.get("source_clause_id")
+
+        related = getattr(alert, "related_clause_ids", None) or []
+        anchors = [str(value) for value in [source_clause_id, *related] if value]
+        if anchors:
+            base = f"{rule_id}|anchors|" + "|".join(sorted(set(anchors)))
+            return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+        entities = self._flatten_entities(getattr(alert, "affected_entities", {}) or {})
+        if entities:
+            category = getattr(alert, "category", None) or ""
+            base = f"{rule_id}|entities|{category}|" + "|".join(sorted(set(entities)))
+            return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+        detector = metadata.get("detection_evidence")
+        if not isinstance(detector, dict):
+            legacy = metadata.get("evidence")
+            detector = legacy if isinstance(legacy, dict) else {}
+        claim = self._normalized_identity_text(detector.get("claim"))
+        quote = self._normalized_identity_text(detector.get("quote"))
+        category = getattr(alert, "category", None) or ""
+        base = f"{rule_id}|fallback|{category}|{claim}|{quote}"
+        return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
     def _requires_human_review(self, violation: AlertCreate) -> bool:
         if violation.severity in {AlertSeverity.CRITICAL, AlertSeverity.HIGH}:
@@ -182,13 +241,32 @@ class AlertGeneratorService:
 
     def _fingerprint(self, violation: AlertCreate) -> str:
         rule_id = violation.rule_id or "unknown_rule"
-        entities = self._flatten_entities(violation.affected_entities)
+        anchors: list[str] = []
         if violation.source_clause_id:
-            entities.append(str(violation.source_clause_id))
+            anchors.append(str(violation.source_clause_id))
         if violation.related_clause_ids:
-            entities.extend(str(clause_id) for clause_id in violation.related_clause_ids)
-        entities = sorted(set(entities))
-        base = f"{rule_id}_" + "_".join(entities) if entities else rule_id
+            anchors.extend(str(clause_id) for clause_id in violation.related_clause_ids)
+        if anchors:
+            # Rendered claim/quote/severity/category may evolve while the same
+            # revision-bound documentary finding remains. Stable locators own
+            # identity whenever they exist.
+            base = f"{rule_id}|anchors|" + "|".join(sorted(set(anchors)))
+            return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+        entities = sorted(set(self._flatten_entities(violation.affected_entities)))
+        if entities:
+            base = f"{rule_id}|entities|{violation.category or ''}|" + "|".join(entities)
+            return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+        # Unanchored findings have no stronger locator. Fall back to detector
+        # evidence rather than presentation message/title.
+        metadata = dict(violation.alert_metadata or {})
+        detector = metadata.get("detection_evidence")
+        if not isinstance(detector, dict):
+            detector = {}
+        claim = self._normalized_identity_text(detector.get("claim"))
+        quote = self._normalized_identity_text(detector.get("quote"))
+        base = f"{rule_id}|fallback|{violation.category or ''}|{claim}|{quote}"
         return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
     def _flatten_entities(self, payload: dict[str, Any]) -> list[str]:
