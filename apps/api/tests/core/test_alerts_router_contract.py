@@ -315,3 +315,72 @@ def test_alert_mapper_tolerates_legacy_rows_with_missing_title_and_bad_metadata(
     assert response.message == "Fallback description for malformed legacy alert"
     assert response.category == "risk"
     assert response.affected_entities == {}
+
+def test_alert_mapper_exposes_detector_provenance_without_reinterpreting_category() -> None:
+    tenant_id = uuid4()
+    clause_id = uuid4()
+    document_id = uuid4()
+    alert = DomainAlert(
+        id=uuid4(),
+        project_id=uuid4(),
+        severity=DomainAlertSeverity.MEDIUM,
+        category="schedule",
+        status=DomainAlertStatus.OPEN,
+        approval_status=DomainApprovalStatus.PENDING,
+        rule_id="DET-TIM-GAP",
+        title="Schedule gap",
+        description="Schedule gap",
+        source_clause_id=clause_id,
+        alert_metadata={
+            "detection_evidence": {
+                "source_clause_id": str(clause_id),
+                "source_document_id": str(document_id),
+                "claim": "Milestone gap detected",
+                "quote": "Milestone B starts thirty days later",
+            }
+        },
+    )
+
+    response = AlertMapper.to_response(alert, tenant_id)
+
+    assert response.category == "schedule"
+    assert response.source_clause_id == clause_id
+    assert response.detection_evidence is not None
+    assert response.detection_evidence.source_clause_id == str(clause_id)
+    assert response.detection_evidence.source_document_id == str(document_id)
+    assert response.detection_evidence.claim == "Milestone gap detected"
+    assert response.detection_evidence.quote == "Milestone B starts thirty days later"
+
+
+def test_alert_mapper_legacy_detector_dict_does_not_confuse_reviewer_evidence_list() -> None:
+    tenant_id = uuid4()
+    clause_id = uuid4()
+    alert = DomainAlert(
+        id=uuid4(),
+        project_id=uuid4(),
+        severity=DomainAlertSeverity.LOW,
+        category="LEGAL",
+        status=DomainAlertStatus.OPEN,
+        approval_status=DomainApprovalStatus.PENDING,
+        rule_id="DET-LEG-NOTICE",
+        title="Notice gap",
+        description="Notice gap",
+        alert_metadata={
+            "evidence": [
+                {"type": "note", "content": "Reviewer note", "source": "manual_review"}
+            ],
+            "coherence_evidence": {
+                "source_clause_id": str(clause_id),
+                "claim": "Legacy detector claim",
+                "quote": "Legacy detector quote",
+            },
+        },
+    )
+
+    response = AlertMapper.to_response(alert, tenant_id)
+
+    assert response.source_clause_id is None
+    assert response.detection_evidence is not None
+    assert response.detection_evidence.source_clause_id == str(clause_id)
+    assert response.detection_evidence.claim == "Legacy detector claim"
+
