@@ -83,6 +83,18 @@ def test_verifier_sets_tenant_rls_context_inside_readonly_transaction() -> None:
     assert "SET ROLE" not in source
 
 
+def test_hitl_verification_is_scoped_to_a_dedicated_project_and_requires_human_attribution() -> None:
+    source = SCRIPT.read_text(encoding="utf-8")
+
+    assert "--hitl-project-id" in source
+    assert "hitl_project_id" in source
+    assert "approved_by IS NOT NULL" in source
+    assert "approved_at IS NOT NULL" in source
+    assert "event_type = 'hitl.correction'" in source
+    assert "hitl_review_item_id" in source
+    assert "hitl_document_id" in source
+
+
 def test_verifier_output_path_is_fixed_to_canonical_evidence_file(tmp_path: Path) -> None:
     expected = tmp_path / "evidence/product-qualification/runtime/verifier.json"
     assert MODULE._verifier_output_path(repo_root=tmp_path) == expected

@@ -228,6 +228,57 @@ def test_prod_auth_proves_real_clerk_session_before_protected_navigation() -> No
     assert "PROD_ACCEPTANCE_CLERK_ORGANIZATION_NOT_ACTIVE" in helper
 
 
+def test_full_journey_has_a_dedicated_deterministic_hitl_fixture() -> None:
+    source = _source()
+    support = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "support"
+        / "prod-preflight.ts"
+    ).read_text(encoding="utf-8")
+    journey = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "PROD_ACCEPTANCE_HITL_FIXTURE" in support
+    assert "PROD_ACCEPTANCE_HITL_FIXTURE_SHA256" in support
+    assert "PROD_ACCEPTANCE_HITL_FIXTURE_SHA256" in source
+    assert "apps/api/tests/fixtures/documents/real/budget-scope-summary.txt" in source
+    assert "hitl_project_id" in journey
+    assert "hitl_document_id" in journey
+    assert "`${projectName}-hitl`" in journey
+    assert "PROD_ACCEPTANCE_HITL_FIXTURE" in journey
+
+
+def test_durable_verifier_receives_dedicated_hitl_project_id() -> None:
+    source = _source()
+    resolve = source[
+        source.index("Resolve bounded run identifiers") :
+        source.index("Read-only durable post-run verification")
+    ]
+    durable = source[
+        source.index("Read-only durable post-run verification") :
+        source.index("Build non-authoritative P0b evidence bundle")
+    ]
+
+    assert "hitl_project_id" in resolve
+    assert "PROD_ACCEPTANCE_HITL_PROJECT_ID" in resolve
+    assert "--hitl-project-id" in durable
+    assert "\"$PROD_ACCEPTANCE_HITL_PROJECT_ID\"" in durable
+
+
 def test_identity_preflight_is_the_default_non_mutating_mode() -> None:
     source = _source()
     assert 'default: "identity-preflight"' in source

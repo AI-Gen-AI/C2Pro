@@ -6,6 +6,7 @@ from validation.product.build_p0b_prod_qualification_bundle import (
     BundleBuildError,
     _bundle_output,
     _require_full_sha,
+    _require_hitl_alignment,
     _run_json,
     _sha256,
     _verifier_json,
@@ -58,3 +59,33 @@ def test_sha256_hashes_evidence_bytes(tmp_path: Path) -> None:
         _sha256(artifact)
         == "b51e697e6ad7dc2485112282cac26c9e22bc81e3af450b5845841c7505053ddd"
     )
+
+
+def test_hitl_alignment_requires_same_dedicated_project_and_review() -> None:
+    run = {
+        "hitl_exercised": True,
+        "hitl_project_id": "project-hitl",
+        "hitl_document_id": "document-hitl",
+        "review_item_id": "review-hitl",
+    }
+    identifiers = {
+        "hitl_project_id": "project-hitl",
+        "hitl_document_id": "document-hitl",
+        "hitl_review_item_id": "review-hitl",
+    }
+
+    assert _require_hitl_alignment(run, identifiers) == {
+        "hitl_project_id": "project-hitl",
+        "hitl_document_id": "document-hitl",
+        "review_item_id": "review-hitl",
+    }
+
+    for key, bad in (
+        ("hitl_project_id", "other-project"),
+        ("hitl_document_id", "other-document"),
+        ("hitl_review_item_id", "other-review"),
+    ):
+        mismatched = dict(identifiers)
+        mismatched[key] = bad
+        with pytest.raises(BundleBuildError, match="HITL"):
+            _require_hitl_alignment(run, mismatched)

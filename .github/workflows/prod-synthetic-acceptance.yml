@@ -58,6 +58,7 @@ env:
   NODE_VERSION: "22"
   PROD_ACCEPTANCE_BASE_URL: "https://c2pro.io"
   PROD_ACCEPTANCE_FIXTURE_SHA256: "f0bc7170cf002570be58f9225f9affc534720a4756fa1da39ae7ad328d63a9b9"
+  PROD_ACCEPTANCE_HITL_FIXTURE_SHA256: "8a84ac001e00eefbac3a84080d2e7850a9dfc04aaaebb45da50632eebdf2d1fa"
   PROD_ACCEPTANCE_RAILWAY_PROJECT_ID: "db60e356-d645-4561-a8c5-ddf5e5a2afa2"
   PROD_ACCEPTANCE_RAILWAY_ENVIRONMENT_ID: "ecd39af1-2501-4b9b-8e2e-fafcc6a66570"
   PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID: "dd372d3a-fb0a-4953-862b-63a10b9058ad"
@@ -271,6 +272,8 @@ jobs:
           set -euo pipefail
           actual="$(sha256sum apps/web/src/tests/e2e/test-data/sample-contract.pdf | awk '{print $1}')"
           test "$actual" = "$PROD_ACCEPTANCE_FIXTURE_SHA256"
+          hitl_actual="$(sha256sum apps/api/tests/fixtures/documents/real/budget-scope-summary.txt | awk '{print $1}')"
+          test "$hitl_actual" = "$PROD_ACCEPTANCE_HITL_FIXTURE_SHA256"
 
       - name: Read-only synthetic tenant preflight
         env:
@@ -333,20 +336,34 @@ jobs:
 
       - name: Resolve bounded run identifiers
         if: ${{ inputs.execution_mode == 'full-journey' }}
+        env:
+          PROD_INPUT_REQUIRE_HITL: ${{ inputs.require_hitl }}
         shell: bash
         run: |
           set -euo pipefail
-          project_id="$(python - <<'PY'
+          readarray -t ids < <(python - <<'PY'
           import json
           from pathlib import Path
           data = json.loads(Path('apps/web/playwright/.prod-acceptance/run.json').read_text())
-          value = data.get('project_id')
-          if not isinstance(value, str) or not value:
+          project_id = data.get('project_id')
+          if not isinstance(project_id, str) or not project_id:
               raise SystemExit(2)
-          print(value)
+          hitl_project_id = data.get('hitl_project_id')
+          if hitl_project_id is not None and (
+              not isinstance(hitl_project_id, str) or not hitl_project_id
+          ):
+              raise SystemExit(2)
+          print(project_id)
+          print(hitl_project_id or "")
           PY
           )"
+          project_id="${ids[0]}"
+          hitl_project_id="${ids[1]:-}"
+          if [ "$PROD_INPUT_REQUIRE_HITL" = "true" ]; then
+            test -n "$hitl_project_id"
+          fi
           echo "PROD_ACCEPTANCE_PROJECT_ID=$project_id" >> "$GITHUB_ENV"
+          echo "PROD_ACCEPTANCE_HITL_PROJECT_ID=$hitl_project_id" >> "$GITHUB_ENV"
 
       - name: Read-only durable post-run verification
         if: ${{ inputs.execution_mode == 'full-journey' }}
@@ -360,7 +377,13 @@ jobs:
           set -euo pipefail
           mkdir -p evidence/product-qualification/runtime
           hitl=()
-          if [ "$PROD_INPUT_REQUIRE_HITL" = "true" ]; then hitl=(--require-hitl); fi
+          if [ "$PROD_INPUT_REQUIRE_HITL" = "true" ]; then
+            test -n "$PROD_ACCEPTANCE_HITL_PROJECT_ID"
+            hitl=(
+              --require-hitl
+              --hitl-project-id "$PROD_ACCEPTANCE_HITL_PROJECT_ID"
+            )
+          fi
           python apps/api/scripts/verify_prod_synthetic_journey.py \
             --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
             --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID" \

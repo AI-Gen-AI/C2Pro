@@ -118,7 +118,7 @@ async def _preflight_checks(
 
 
 async def _journey_checks(
-    conn: AsyncConnection, *, tenant_id: UUID, project_id: UUID, require_hitl: bool
+    conn: AsyncConnection, *, tenant_id: UUID, project_id: UUID
 ) -> list[Check]:
     p = {TENANT_ID_KEY: tenant_id, PROJECT_ID_KEY: project_id}
     queries = {
@@ -179,34 +179,128 @@ async def _journey_checks(
         Check(CHECK_PROJECT_GRAPH_COMPLETED, values[CHECK_PROJECT_GRAPH_COMPLETED] > 0, f"graph_completed={values[CHECK_PROJECT_GRAPH_COMPLETED]}"),
         Check(CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT, values[CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT] > 0, f"health_snapshots={values[CHECK_SIX_CATEGORY_HEALTH_SNAPSHOT]}"),
     ]
-    if require_hitl:
-        finalized = await _scalar(
-            conn,
-            text(
-                """
-                SELECT count(*) FROM review_items
-                 WHERE project_id = :project_id AND tenant_id = :tenant_id
-                   AND current_status::text IN ('APPROVED','REJECTED','CLOSED')
-                """
-            ),
-            p,
-        )
-        corrections = await _scalar(
-            conn,
-            text(
-                """
-                SELECT count(*) FROM project_events
-                 WHERE project_id = :project_id AND tenant_id = :tenant_id
-                   AND event_type = 'hitl.correction'
-                """
-            ),
-            p,
-        )
-        checks.extend([
-            Check("HITL decision finalized", finalized > 0, f"finalized_reviews={finalized}"),
-            Check("HITL event persisted", corrections > 0, f"hitl_events={corrections}"),
-        ])
     return checks
+
+
+async def _hitl_checks(
+    conn: AsyncConnection, *, tenant_id: UUID, hitl_project_id: UUID
+) -> list[Check]:
+    p = {TENANT_ID_KEY: tenant_id, PROJECT_ID_KEY: hitl_project_id}
+    project_count = await _scalar(
+        conn,
+        text(
+            """
+            SELECT count(*) FROM projects
+             WHERE id = :project_id AND tenant_id = :tenant_id
+               AND name LIKE 'ACCEPT-706-%'
+            """
+        ),
+        p,
+    )
+    terminal_documents = await _scalar(
+        conn,
+        text(
+            """
+            SELECT count(*) FROM documents
+             WHERE project_id = :project_id AND tenant_id = :tenant_id
+               AND upload_status::text IN ('analyzed','needs_changes')
+            """
+        ),
+        p,
+    )
+    human_finalized = await _scalar(
+        conn,
+        text(
+            """
+            SELECT count(*) FROM review_items
+             WHERE project_id = :project_id AND tenant_id = :tenant_id
+               AND current_status::text IN ('APPROVED','REJECTED','CLOSED')
+               AND approved_by IS NOT NULL
+               AND approved_at IS NOT NULL
+            """
+        ),
+        p,
+    )
+    corrections = await _scalar(
+        conn,
+        text(
+            """
+            SELECT count(*) FROM project_events
+             WHERE project_id = :project_id AND tenant_id = :tenant_id
+               AND event_type = 'hitl.correction'
+            """
+        ),
+        p,
+    )
+    graph_completed = await _scalar(
+        conn,
+        text(
+            """
+            SELECT count(*) FROM project_events
+             WHERE project_id = :project_id AND tenant_id = :tenant_id
+               AND event_type = 'graph.completed'
+            """
+        ),
+        p,
+    )
+    return [
+        Check("HITL synthetic project scope", project_count == 1, f"projects={project_count}"),
+        Check(
+            "HITL document terminal",
+            terminal_documents >= 1,
+            f"terminal_documents={terminal_documents}",
+        ),
+        Check(
+            "HITL decision human-finalized",
+            human_finalized == 1,
+            f"human_finalized_reviews={human_finalized}",
+        ),
+        Check("HITL event persisted", corrections >= 1, f"hitl_events={corrections}"),
+        Check(
+            "HITL graph resumed to completion",
+            graph_completed >= 1,
+            f"graph_completed={graph_completed}",
+        ),
+    ]
+
+
+async def _hitl_identifiers(
+    conn: AsyncConnection, *, tenant_id: UUID, hitl_project_id: UUID
+) -> tuple[dict[str, str], Check]:
+    result = await conn.execute(
+        text(
+            """
+            SELECT item_id AS review_item_id, document_id
+              FROM review_items
+             WHERE project_id = :project_id
+               AND tenant_id = :tenant_id
+               AND current_status::text IN ('APPROVED','REJECTED','CLOSED')
+               AND approved_by IS NOT NULL
+               AND approved_at IS NOT NULL
+             ORDER BY approved_at DESC
+            """
+        ),
+        {TENANT_ID_KEY: tenant_id, PROJECT_ID_KEY: hitl_project_id},
+    )
+    rows = result.all()
+    if len(rows) != 1 or rows[0].document_id is None:
+        return (
+            {"hitl_project_id": str(hitl_project_id)},
+            Check(
+                "HITL identifiers resolved",
+                False,
+                f"human_finalized_reviews={len(rows)}",
+            ),
+        )
+    row = rows[0]
+    return (
+        {
+            "hitl_project_id": str(hitl_project_id),
+            "hitl_document_id": str(row.document_id),
+            "hitl_review_item_id": str(row.review_item_id),
+        },
+        Check("HITL identifiers resolved", True, "human_finalized_reviews=1"),
+    )
 
 
 async def _journey_identifiers(
@@ -257,6 +351,7 @@ async def verify(
     tenant_id: UUID,
     clerk_org_id: str,
     project_id: UUID | None,
+    hitl_project_id: UUID | None,
     require_hitl: bool,
 ) -> tuple[list[Check], dict[str, str]]:
     engine = create_async_engine(_normalize_database_url(database_url))
@@ -284,7 +379,6 @@ async def verify(
                             conn,
                             tenant_id=tenant_id,
                             project_id=project_id,
-                            require_hitl=require_hitl,
                         )
                     )
                     identifiers, revision_check = await _journey_identifiers(
@@ -293,6 +387,25 @@ async def verify(
                         project_id=project_id,
                     )
                     checks.append(revision_check)
+                if require_hitl:
+                    if hitl_project_id is None:
+                        raise VerificationFailure(
+                            "dedicated HITL project id is required when HITL is required"
+                        )
+                    checks.extend(
+                        await _hitl_checks(
+                            conn,
+                            tenant_id=tenant_id,
+                            hitl_project_id=hitl_project_id,
+                        )
+                    )
+                    hitl_identifiers, hitl_identifier_check = await _hitl_identifiers(
+                        conn,
+                        tenant_id=tenant_id,
+                        hitl_project_id=hitl_project_id,
+                    )
+                    identifiers.update(hitl_identifiers)
+                    checks.append(hitl_identifier_check)
                 await transaction.rollback()
                 return checks, identifiers
             except Exception:
@@ -307,6 +420,10 @@ def main() -> int:
     parser.add_argument("--tenant-id", default=os.getenv("PROD_ACCEPTANCE_EXPECTED_TENANT_ID"))
     parser.add_argument("--clerk-org-id", default=os.getenv("PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"))
     parser.add_argument("--project-id", default=os.getenv("PROD_ACCEPTANCE_PROJECT_ID"))
+    parser.add_argument(
+        "--hitl-project-id",
+        default=os.getenv("PROD_ACCEPTANCE_HITL_PROJECT_ID"),
+    )
     parser.add_argument("--require-hitl", action="store_true")
     parser.add_argument(
         "--write-evidence",
@@ -321,12 +438,18 @@ def main() -> int:
     try:
         tenant_id = _uuid(args.tenant_id, "tenant id")
         project_id = _uuid(args.project_id, "project id") if args.project_id else None
+        hitl_project_id = (
+            _uuid(args.hitl_project_id, "HITL project id")
+            if args.hitl_project_id
+            else None
+        )
         checks, identifiers = asyncio.run(
             verify(
                 database_url=database_url,
                 tenant_id=tenant_id,
                 clerk_org_id=args.clerk_org_id,
                 project_id=project_id,
+                hitl_project_id=hitl_project_id,
                 require_hitl=args.require_hitl,
             )
         )
