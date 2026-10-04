@@ -2,15 +2,13 @@
   "openapi": "3.1.0",
   "info": {
     "title": "C2Pro API",
-    "description": "\n        **C2Pro - Contract Intelligence Platform**\n\n        Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.\n\n        ## CaracterÃ­sticas\n\n        - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto\n        - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n\n        - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos\n        - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders\n        - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n\n\n        ## AutenticaciÃ³n\n\n        La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.\n\n        1. **Registro**: `POST /api/v1/auth/register`\n        2. **Login**: `POST /api/v1/auth/login`\n        3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`\n\n        ## LÃ­mites de Uso\n\n        - **Rate Limit**: 60 requests/minuto\n        - **AI Budget**: $50 USD/mes (plan free)\n        - **File Upload**: Max 50 MB\n\n        ## Soporte\n\n        - ðŸ“§ Email: support@c2pro.app\n        - ðŸ“– Docs: https://docs.c2pro.app\n        - ðŸ’¬ Discord: https://discord.gg/c2pro\n        ",
+    "description": "\n        **C2Pro - Contract Intelligence Platform**\n\n        Plataforma de inteligencia contractual para proyectos de construcci\u00c3\u00b3n e ingenier\u00c3\u00ada.\n\n        ## Caracter\u00c3\u00adsticas\n\n        - \u00f0\u0178\u201d **Auditor\u00c3\u00ada Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto\n        - \u00f0\u0178\u00a4\u2013 **IA Especializada**: Claude 4 entrenado en documentos de construcci\u00c3\u00b3n\n        - \u00f0\u0178\u201c\u0160 **Coherence Score**: Indicador 0-100 de alineaci\u00c3\u00b3n entre documentos\n        - \u00f0\u0178\u2018\u00a5 **Stakeholder Intelligence**: Extracci\u00c3\u00b3n y mapeo autom\u00c3\u00a1tico de stakeholders\n        - \u00f0\u0178\u201c\u02c6 **Multi-tenant**: Aislamiento completo de datos por organizaci\u00c3\u00b3n\n\n        ## Autenticaci\u00c3\u00b3n\n\n        La API usa JWT (JSON Web Tokens) para autenticaci\u00c3\u00b3n.\n\n        1. **Registro**: `POST /api/v1/auth/register`\n        2. **Login**: `POST /api/v1/auth/login`\n        3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`\n\n        ## L\u00c3\u00admites de Uso\n\n        - **Rate Limit**: 60 requests/minuto\n        - **AI Budget**: $50 USD/mes (plan free)\n        - **File Upload**: Max 50 MB\n\n        ## Soporte\n\n        - \u00f0\u0178\u201c\u00a7 Email: support@c2pro.app\n        - \u00f0\u0178\u201c\u2013 Docs: https://docs.c2pro.app\n        - \u00f0\u0178\u2019\u00ac Discord: https://discord.gg/c2pro\n        ",
     "version": "1.0.0"
   },
   "paths": {
     "/": {
       "get": {
-        "tags": [
-          "Public"
-        ],
+        "tags": ["Public"],
         "summary": "Root",
         "description": "Root endpoint.\n\nRedirects to API documentation.",
         "operationId": "root__get",
@@ -34,10 +32,7 @@
     },
     "/health/live": {
       "get": {
-        "tags": [
-          "Health",
-          "Public"
-        ],
+        "tags": ["Health", "Public"],
         "summary": "Liveness Probe",
         "description": "Checks if the application process is running. This should not have external dependencies.",
         "operationId": "liveness_check_health_live_get",
@@ -61,11 +56,7 @@
     },
     "/health/ready": {
       "get": {
-        "tags": [
-          "Health",
-          "Public",
-          "Public"
-        ],
+        "tags": ["Health", "Public", "Public"],
         "summary": "Readiness Probe",
         "description": "Checks if the application is ready to accept traffic by verifying connections to dependencies.",
         "operationId": "readiness_check_health_ready_get",
@@ -87,10 +78,7 @@
     },
     "/health/circuit-breakers": {
       "get": {
-        "tags": [
-          "Health",
-          "Public"
-        ],
+        "tags": ["Health", "Public"],
         "summary": "Circuit Breaker Status",
         "description": "Detailed status of all circuit breakers for external services.",
         "operationId": "circuit_breaker_status_health_circuit_breakers_get",
@@ -112,10 +100,7 @@
     },
     "/health": {
       "get": {
-        "tags": [
-          "Health",
-          "Public"
-        ],
+        "tags": ["Health", "Public"],
         "summary": "Generic Health Check",
         "description": "Simple uptime check. Returns {status: ok} for basic monitoring.",
         "operationId": "generic_health_check_health_get",
@@ -139,10 +124,7 @@
     },
     "/health/worker": {
       "get": {
-        "tags": [
-          "Health",
-          "Public"
-        ],
+        "tags": ["Health", "Public"],
         "summary": "Celery Worker Health",
         "description": "Checks that a Celery worker is online and consuming the document_parsing queue.",
         "operationId": "worker_health_check_health_worker_get",
@@ -164,10 +146,7 @@
     },
     "/api/v1/health/live": {
       "get": {
-        "tags": [
-          "Health",
-          "Public"
-        ],
+        "tags": ["Health", "Public"],
         "summary": "Liveness Probe",
         "description": "Checks if the application process is running. This should not have external dependencies.",
         "operationId": "liveness_check_api_v1_health_live_get",
@@ -191,11 +170,7 @@
     },
     "/api/v1/health/ready": {
       "get": {
-        "tags": [
-          "Health",
-          "Public",
-          "Public"
-        ],
+        "tags": ["Health", "Public", "Public"],
         "summary": "Readiness Probe",
         "description": "Checks if the application is ready to accept traffic by verifying connections to dependencies.",
         "operationId": "readiness_check_api_v1_health_ready_get",
@@ -217,10 +192,7 @@
     },
     "/api/v1/health/circuit-breakers": {
       "get": {
-        "tags": [
-          "Health",
-          "Public"
-        ],
+        "tags": ["Health", "Public"],
         "summary": "Circuit Breaker Status",
         "description": "Detailed status of all circuit breakers for external services.",
         "operationId": "circuit_breaker_status_api_v1_health_circuit_breakers_get",
@@ -242,10 +214,7 @@
     },
     "/api/v1/health": {
       "get": {
-        "tags": [
-          "Health",
-          "Public"
-        ],
+        "tags": ["Health", "Public"],
         "summary": "Generic Health Check",
         "description": "Simple uptime check. Returns {status: ok} for basic monitoring.",
         "operationId": "generic_health_check_api_v1_health_get",
@@ -269,10 +238,7 @@
     },
     "/api/v1/health/worker": {
       "get": {
-        "tags": [
-          "Health",
-          "Public"
-        ],
+        "tags": ["Health", "Public"],
         "summary": "Celery Worker Health",
         "description": "Checks that a Celery worker is online and consuming the document_parsing queue.",
         "operationId": "worker_health_check_api_v1_health_worker_get",
@@ -294,11 +260,7 @@
     },
     "/api/v1/auth/register": {
       "post": {
-        "tags": [
-          "Authentication",
-          "Authentication",
-          "Public"
-        ],
+        "tags": ["Authentication", "Authentication", "Public"],
         "summary": "Register new user and company",
         "description": "Registers a new user and creates a new company (tenant).\n\n    The first user registered for a company becomes the admin.\n    Returns user info, company info, and authentication tokens.\n\n    **Requirements:**\n    - Email must be unique\n    - Password must be at least 8 characters with uppercase, lowercase, and digit\n    - Must accept terms and conditions",
         "operationId": "register_api_v1_auth_register_post",
@@ -354,9 +316,7 @@
     },
     "/api/v1/auth/login": {
       "post": {
-        "tags": [
-          "Authentication"
-        ],
+        "tags": ["Authentication"],
         "summary": "Login with email and password",
         "description": "Authenticates a user with email and password.\n\n    Returns user info, company info, and JWT tokens.\n\n    **Tokens:**\n    - `access_token`: Use for API requests (expires in 24h)\n    - `refresh_token`: Use to get new access token (expires in 30 days)",
         "operationId": "login_api_v1_auth_login_post",
@@ -402,11 +362,7 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
-        "tags": [
-          "Authentication",
-          "Authentication",
-          "Public"
-        ],
+        "tags": ["Authentication", "Authentication", "Public"],
         "summary": "Refresh access token",
         "description": "Refreshes the access token using a valid refresh token.\n\n    Use this endpoint when your access token expires to get a new one\n    without requiring the user to log in again.",
         "operationId": "refresh_token_api_v1_auth_refresh_post",
@@ -459,9 +415,7 @@
     },
     "/api/v1/auth/me": {
       "get": {
-        "tags": [
-          "Authentication"
-        ],
+        "tags": ["Authentication"],
         "summary": "Get current user info",
         "description": "Returns information about the currently authenticated user.\n\n    Requires valid JWT access token in Authorization header:\n    ```\n    Authorization: Bearer <access_token>\n    ```",
         "operationId": "get_me_api_v1_auth_me_get",
@@ -497,9 +451,7 @@
         ]
       },
       "put": {
-        "tags": [
-          "Authentication"
-        ],
+        "tags": ["Authentication"],
         "summary": "Update current user profile",
         "description": "Updates the profile of the currently authenticated user.\n\n    Only the user can update their own profile.",
         "operationId": "update_me_api_v1_auth_me_put",
@@ -564,9 +516,7 @@
     },
     "/api/v1/auth/logout": {
       "post": {
-        "tags": [
-          "Authentication"
-        ],
+        "tags": ["Authentication"],
         "summary": "Logout current user",
         "description": "Logs out the current user.\n\n    Note: With JWT tokens, actual logout is handled client-side by\n    removing the tokens. This endpoint is for logging purposes.",
         "operationId": "logout_api_v1_auth_logout_post",
@@ -604,9 +554,7 @@
     },
     "/api/v1/auth/change-password": {
       "post": {
-        "tags": [
-          "Authentication"
-        ],
+        "tags": ["Authentication"],
         "summary": "Change password",
         "description": "Changes the password for the currently authenticated user.\n\n    Requires:\n    - Current password (for verification)\n    - New password (must meet security requirements)",
         "operationId": "change_password_api_v1_auth_change_password_post",
@@ -664,9 +612,7 @@
     },
     "/api/v1/projects/health": {
       "get": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "Projects Service Health Check",
         "description": "Health check endpoint (no authentication required).",
         "operationId": "health_check_api_v1_projects_health_get",
@@ -690,9 +636,7 @@
     },
     "/api/v1/projects/stats": {
       "get": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "Project statistics",
         "description": "Return aggregate project statistics for current tenant.",
         "operationId": "get_project_stats_api_v1_projects_stats_get",
@@ -719,9 +663,7 @@
     },
     "/api/v1/projects": {
       "post": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "Create Project",
         "description": "Create a new project for the current tenant (persisted to database).",
         "operationId": "create_project_api_v1_projects_post",
@@ -764,9 +706,7 @@
         }
       },
       "get": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "List Projects",
         "description": "List all projects for the current tenant.\n\nFilters by tenant_id automatically. Reads from database.",
         "operationId": "list_projects_api_v1_projects_get",
@@ -908,9 +848,7 @@
     },
     "/api/v1/projects/{project_id}": {
       "get": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "Get Project",
         "description": "Get project by ID.\n\nReturns 404 if project doesn't exist or belongs to another tenant.",
         "operationId": "get_project_api_v1_projects__project_id__get",
@@ -955,9 +893,7 @@
         }
       },
       "put": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "Put Project",
         "description": "Update an existing project (legacy PUT contract).",
         "operationId": "put_project_api_v1_projects__project_id__put",
@@ -1012,9 +948,7 @@
         }
       },
       "patch": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "Update Project",
         "description": "Update project.\n\nReturns 404 if project doesn't exist or belongs to another tenant.",
         "operationId": "update_project_api_v1_projects__project_id__patch",
@@ -1069,9 +1003,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "Delete Project",
         "description": "Delete project.\n\nReturns 404 if project doesn't exist or belongs to another tenant.",
         "operationId": "delete_project_api_v1_projects__project_id__delete",
@@ -1111,9 +1043,7 @@
     },
     "/api/v1/projects/{project_id}/summary": {
       "get": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "Get Project Summary",
         "description": "Return a compact tenant-scoped project summary for the frontend quick-view sheet.",
         "operationId": "get_project_summary_api_v1_projects__project_id__summary_get",
@@ -1160,9 +1090,7 @@
     },
     "/api/v1/projects/{project_id}/status": {
       "patch": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "Update Project Status",
         "description": "Update only project status.",
         "operationId": "update_project_status_api_v1_projects__project_id__status_patch",
@@ -1218,9 +1146,7 @@
     },
     "/api/v1/projects/{project_id}/documents/bulk": {
       "post": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "Bulk Upload Documents",
         "description": "Upload multiple documents for processing.\n\n    **For TS-E2E-FLW-BLK-001 E2E tests.**\n\n    Processes up to 100 documents in a single request.\n    Returns summary of accepted/failed documents.",
         "operationId": "bulk_upload_documents_api_v1_projects__project_id__documents_bulk_post",
@@ -1279,9 +1205,7 @@
     },
     "/api/v1/projects/{project_id}/wbs/bulk": {
       "post": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "Bulk Create WBS Items",
         "description": "Create multiple WBS items in bulk.\n\n    **For TS-E2E-FLW-BLK-001 E2E tests.**\n\n    Supports:\n    - Partial success (some items fail, others succeed)\n    - Atomic transactions (atomic=true, all or nothing)\n    - Parent-child hierarchy validation",
         "operationId": "bulk_create_wbs_api_v1_projects__project_id__wbs_bulk_post",
@@ -1336,9 +1260,7 @@
     },
     "/api/v1/projects/{project_id}/export": {
       "post": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "Export Project Data",
         "description": "Export complete project data in various formats.\n\n    **For TS-E2E-FLW-BLK-001 E2E tests.**\n\n    Supports formats: json, csv, xlsx, zip\n    Includes: documents, wbs, alerts, coherence, etc.",
         "operationId": "export_project_data_api_v1_projects__project_id__export_post",
@@ -1397,9 +1319,7 @@
     },
     "/api/v1/projects/{project_id}/budget": {
       "get": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "Get Project Budget",
         "description": "Returns budget information for a project.\n\n    **For TS-E2E-J2-001 E2E tests.**\n\n    Returns:\n    - Total budget\n    - Spent amount\n    - Utilization percentage\n    - Budget variance status",
         "operationId": "get_project_budget_api_v1_projects__project_id__budget_get",
@@ -1448,9 +1368,7 @@
     },
     "/api/v1/projects/{project_id}/wbs": {
       "get": {
-        "tags": [
-          "projects"
-        ],
+        "tags": ["projects"],
         "summary": "Get Project WBS Tree",
         "description": "Returns WBS (Work Breakdown Structure) tree for a project.\n\n    Uses procurement WBS items for real data.\n\n    Returns:\n    - Hierarchical WBS tree with children",
         "operationId": "get_project_wbs_api_v1_projects__project_id__wbs_get",
@@ -1497,11 +1415,9 @@
     },
     "/api/v1/projects/{project_id}/health": {
       "get": {
-        "tags": [
-          "project-health"
-        ],
+        "tags": ["project-health"],
         "summary": "Get latest project health vector",
-        "description": "Return latest tenant-scoped project HealthVector or honest insufficient data.\n\nA project the caller cannot see is a 404, exactly as ``GET /projects/{project_id}``\nand its siblings behave: \"not found\" covers both \"does not exist\" and \"belongs to\nanother tenant\", so the response never reveals which. Returning 200 with an empty\nvector would make an authorization failure indistinguishable from a real project\nthat simply has no snapshot yet — and \"no data\" is a legitimate answer only for a\nproject the caller actually owns.",
+        "description": "Return latest tenant-scoped project HealthVector or honest insufficient data.\n\nA project the caller cannot see is a 404, exactly as ``GET /projects/{project_id}``\nand its siblings behave: \"not found\" covers both \"does not exist\" and \"belongs to\nanother tenant\", so the response never reveals which. Returning 200 with an empty\nvector would make an authorization failure indistinguishable from a real project\nthat simply has no snapshot yet \u2014 and \"no data\" is a legitimate answer only for a\nproject the caller actually owns.",
         "operationId": "get_project_health_api_v1_projects__project_id__health_get",
         "security": [
           {
@@ -1549,9 +1465,7 @@
     },
     "/api/v1/projects/{project_id}/reports/current-state": {
       "get": {
-        "tags": [
-          "project-reports"
-        ],
+        "tags": ["project-reports"],
         "summary": "Get the current state report for a project",
         "description": "Project the current state of a project the caller owns.\n\nNo domain source is read until project ownership is confirmed, so a foreign\nor unknown project id costs nothing and reveals nothing.",
         "operationId": "get_current_state_report_api_v1_projects__project_id__reports_current_state_get",
@@ -1601,9 +1515,7 @@
     },
     "/api/v1/projects/{project_id}/documents": {
       "post": {
-        "tags": [
-          "Documents"
-        ],
+        "tags": ["Documents"],
         "summary": "Upload a document for asynchronous processing",
         "operationId": "upload_document_for_processing_api_v1_projects__project_id__documents_post",
         "security": [
@@ -1666,9 +1578,7 @@
         }
       },
       "get": {
-        "tags": [
-          "Documents"
-        ],
+        "tags": ["Documents"],
         "summary": "List documents for a project",
         "operationId": "list_documents_for_project_api_v1_projects__project_id__documents_get",
         "security": [
@@ -1746,9 +1656,7 @@
     },
     "/api/v1/documents/{document_id}/file": {
       "patch": {
-        "tags": [
-          "Documents"
-        ],
+        "tags": ["Documents"],
         "summary": "Re-upload a document file (creates new version)",
         "description": "Re-upload a document with a new file.\n\nTASK-BCK-023: Document versioning\n- Calculates file hash and compares with existing\n- Increments version if content changed\n- Resets status to UPLOADED for re-processing\n- Returns existing document if content unchanged",
         "operationId": "reupload_document_file_api_v1_documents__document_id__file_patch",
@@ -1814,9 +1722,7 @@
     },
     "/api/v1/documents/{document_id}": {
       "get": {
-        "tags": [
-          "Documents"
-        ],
+        "tags": ["Documents"],
         "summary": "Get document details by ID",
         "operationId": "get_document_endpoint_api_v1_documents__document_id__get",
         "security": [
@@ -1888,9 +1794,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Documents"
-        ],
+        "tags": ["Documents"],
         "summary": "Delete a document by ID",
         "operationId": "delete_document_endpoint_api_v1_documents__document_id__delete",
         "security": [
@@ -1938,9 +1842,7 @@
     },
     "/api/v1/documents/{document_id}/history": {
       "get": {
-        "tags": [
-          "Documents"
-        ],
+        "tags": ["Documents"],
         "summary": "Get persisted evidence history for a document",
         "operationId": "get_document_history_endpoint_api_v1_documents__document_id__history_get",
         "security": [
@@ -1995,9 +1897,7 @@
     },
     "/api/v1/documents/{document_id}/relationship-explanation": {
       "get": {
-        "tags": [
-          "Documents"
-        ],
+        "tags": ["Documents"],
         "summary": "Get a grounded relationship explanation for a document",
         "operationId": "get_document_relationship_explanation_endpoint_api_v1_documents__document_id__relationship_explanation_get",
         "security": [
@@ -2052,9 +1952,7 @@
     },
     "/api/v1/documents/{document_id}/entities": {
       "get": {
-        "tags": [
-          "Documents"
-        ],
+        "tags": ["Documents"],
         "summary": "Get extracted entities for a document",
         "operationId": "get_document_entities_endpoint_api_v1_documents__document_id__entities_get",
         "security": [
@@ -2132,9 +2030,7 @@
     },
     "/api/v1/documents/{document_id}/download": {
       "get": {
-        "tags": [
-          "Documents"
-        ],
+        "tags": ["Documents"],
         "summary": "Download document file by ID",
         "operationId": "download_document_endpoint_api_v1_documents__document_id__download_get",
         "security": [
@@ -2187,9 +2083,7 @@
     },
     "/api/v1/documents/{document_id}/parse": {
       "post": {
-        "tags": [
-          "Documents"
-        ],
+        "tags": ["Documents"],
         "summary": "Parse a document by ID",
         "operationId": "parse_document_endpoint_api_v1_documents__document_id__parse_post",
         "security": [
@@ -2244,9 +2138,7 @@
     },
     "/api/v1/projects/{project_id}/documents/{document_id}/reprocess": {
       "post": {
-        "tags": [
-          "Documents"
-        ],
+        "tags": ["Documents"],
         "summary": "Re-trigger async processing for a stuck or errored document",
         "description": "Re-dispatch a Celery processing task for a document stuck in queued, uploaded,\nor error state. Resets the document status to UPLOADED and enqueues a fresh\nparse + analysis run.",
         "operationId": "reprocess_document_endpoint_api_v1_projects__project_id__documents__document_id__reprocess_post",
@@ -2312,9 +2204,7 @@
     },
     "/api/v1/projects/{project_id}/rag/answer": {
       "post": {
-        "tags": [
-          "Documents"
-        ],
+        "tags": ["Documents"],
         "summary": "Ask a question about project documents (RAG)",
         "operationId": "answer_project_question_api_v1_projects__project_id__rag_answer_post",
         "security": [
@@ -2379,9 +2269,7 @@
     },
     "/api/v1/projects/{project_id}/timeline": {
       "get": {
-        "tags": [
-          "Temporal changes"
-        ],
+        "tags": ["Temporal changes"],
         "summary": "Get Project Timeline",
         "description": "Read the append-only project timeline in canonical temporal order.",
         "operationId": "get_project_timeline_api_v1_projects__project_id__timeline_get",
@@ -2456,9 +2344,7 @@
     },
     "/api/v1/projects/{project_id}/documents/{document_id}/changes/{revision_id}": {
       "get": {
-        "tags": [
-          "Temporal changes"
-        ],
+        "tags": ["Temporal changes"],
         "summary": "Get Revision Change Detail",
         "description": "Read a revision detail only from the tenant-scoped immutable projection.",
         "operationId": "get_revision_change_detail_api_v1_projects__project_id__documents__document_id__changes__revision_id__get",
@@ -2525,9 +2411,7 @@
     },
     "/api/v1/alerts/workspace-settings": {
       "get": {
-        "tags": [
-          "alerts"
-        ],
+        "tags": ["alerts"],
         "summary": "Get alert workspace settings",
         "operationId": "get_alert_workspace_settings_api_v1_alerts_workspace_settings_get",
         "responses": {
@@ -2549,9 +2433,7 @@
         ]
       },
       "put": {
-        "tags": [
-          "alerts"
-        ],
+        "tags": ["alerts"],
         "summary": "Save alert workspace settings",
         "operationId": "put_alert_workspace_settings_api_v1_alerts_workspace_settings_put",
         "requestBody": {
@@ -2595,9 +2477,7 @@
     },
     "/api/v1/alerts": {
       "post": {
-        "tags": [
-          "alerts"
-        ],
+        "tags": ["alerts"],
         "summary": "Create alert",
         "operationId": "create_alert_api_v1_alerts_post",
         "requestBody": {
@@ -2641,9 +2521,7 @@
     },
     "/api/v1/alerts/projects/{project_id}": {
       "get": {
-        "tags": [
-          "alerts"
-        ],
+        "tags": ["alerts"],
         "summary": "List alerts for a project",
         "operationId": "list_project_alerts_api_v1_alerts_projects__project_id__get",
         "security": [
@@ -2737,9 +2615,7 @@
     },
     "/api/v1/alerts/tenant": {
       "get": {
-        "tags": [
-          "alerts"
-        ],
+        "tags": ["alerts"],
         "summary": "List alerts for tenant",
         "operationId": "list_tenant_alerts_api_v1_alerts_tenant_get",
         "security": [
@@ -2857,9 +2733,7 @@
     },
     "/api/v1/alerts/{alert_id}/review": {
       "post": {
-        "tags": [
-          "alerts"
-        ],
+        "tags": ["alerts"],
         "summary": "Review alert (approve/reject)",
         "operationId": "review_alert_api_v1_alerts__alert_id__review_post",
         "security": [
@@ -2915,9 +2789,7 @@
     },
     "/api/v1/alerts/bulk-review": {
       "post": {
-        "tags": [
-          "alerts"
-        ],
+        "tags": ["alerts"],
         "summary": "Bulk approve/reject alerts",
         "operationId": "bulk_review_alerts_api_v1_alerts_bulk_review_post",
         "requestBody": {
@@ -2961,9 +2833,7 @@
     },
     "/api/v1/alerts/{alert_id}/resolve": {
       "post": {
-        "tags": [
-          "alerts"
-        ],
+        "tags": ["alerts"],
         "summary": "Resolve alert",
         "operationId": "resolve_alert_api_v1_alerts__alert_id__resolve_post",
         "security": [
@@ -3019,9 +2889,7 @@
     },
     "/api/v1/alerts/bulk-resolve": {
       "post": {
-        "tags": [
-          "alerts"
-        ],
+        "tags": ["alerts"],
         "summary": "Bulk resolve alerts",
         "operationId": "bulk_resolve_alerts_api_v1_alerts_bulk_resolve_post",
         "requestBody": {
@@ -3065,9 +2933,7 @@
     },
     "/api/v1/alerts/{alert_id}/history": {
       "get": {
-        "tags": [
-          "alerts"
-        ],
+        "tags": ["alerts"],
         "summary": "Get alert status history",
         "operationId": "get_alert_history_api_v1_alerts__alert_id__history_get",
         "security": [
@@ -3113,9 +2979,7 @@
     },
     "/api/v1/alerts/{alert_id}": {
       "delete": {
-        "tags": [
-          "alerts"
-        ],
+        "tags": ["alerts"],
         "summary": "Delete alert",
         "operationId": "delete_alert_api_v1_alerts__alert_id__delete",
         "security": [
@@ -3154,9 +3018,7 @@
     },
     "/api/v1/projects/{project_id}/alerts": {
       "get": {
-        "tags": [
-          "alerts"
-        ],
+        "tags": ["alerts"],
         "summary": "List alerts for a project",
         "operationId": "list_project_alerts_compatibility_api_v1_projects__project_id__alerts_get",
         "security": [
@@ -3250,9 +3112,7 @@
     },
     "/api/projects/{project_id}/alerts": {
       "get": {
-        "tags": [
-          "alerts"
-        ],
+        "tags": ["alerts"],
         "summary": "List alerts for a project",
         "operationId": "list_project_alerts_compatibility_api_projects__project_id__alerts_get",
         "security": [
@@ -3346,9 +3206,7 @@
     },
     "/api/v1/bulk-operations/{job_id}/progress": {
       "get": {
-        "tags": [
-          "bulk-operations"
-        ],
+        "tags": ["bulk-operations"],
         "summary": "Get Bulk Operation Progress",
         "description": "Get progress of a bulk operation.\n\nGREEN PHASE: Minimal implementation using \"Fake It\" pattern.\n\nArgs:\n    job_id: UUID of the bulk operation job\n    current_user: Authenticated user\n\nReturns:\n    Progress information (percentage, status, estimated time)\n\nRaises:\n    404: Job not found",
         "operationId": "get_bulk_operation_progress_api_v1_bulk_operations__job_id__progress_get",
@@ -3396,9 +3254,7 @@
     },
     "/api/v1/observability/status": {
       "get": {
-        "tags": [
-          "Observability"
-        ],
+        "tags": ["Observability"],
         "summary": "Get system health status",
         "description": "Retrieves the overall health status of the API and its dependencies, such as the database.",
         "operationId": "get_system_status_api_v1_observability_status_get",
@@ -3423,9 +3279,7 @@
     },
     "/api/v1/observability/analyses": {
       "get": {
-        "tags": [
-          "Observability"
-        ],
+        "tags": ["Observability"],
         "summary": "Get recent coherence analyses",
         "description": "Retrieves a list of recent coherence analysis runs with their status and key metrics.\nResults are filtered by tenant.",
         "operationId": "get_recent_analyses_api_v1_observability_analyses_get",
@@ -3482,9 +3336,7 @@
     },
     "/api/v1/observability/performance/snapshot": {
       "get": {
-        "tags": [
-          "Observability"
-        ],
+        "tags": ["Observability"],
         "summary": "Get performance snapshot",
         "description": "Refers to Suite ID: TS-E2E-PER-LRG-001.",
         "operationId": "get_performance_snapshot_api_v1_observability_performance_snapshot_get",
@@ -3513,9 +3365,7 @@
     },
     "/api/v1/ai/feedback": {
       "post": {
-        "tags": [
-          "AI Feedback"
-        ],
+        "tags": ["AI Feedback"],
         "summary": "Submit Ai Feedback",
         "description": "Submits feedback about an AI interaction.\n\nThis endpoint accepts user feedback (e.g., ratings, corrections) and\nassociates it with a specific AI interaction trace in LangSmith.",
         "operationId": "submit_ai_feedback_api_v1_ai_feedback_post",
@@ -3555,9 +3405,7 @@
     },
     "/api/v1/ai/analytics/cost": {
       "get": {
-        "tags": [
-          "AI Analytics"
-        ],
+        "tags": ["AI Analytics"],
         "summary": "Cost and token analytics over time",
         "operationId": "get_cost_analytics_api_v1_ai_analytics_cost_get",
         "parameters": [
@@ -3567,11 +3415,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "examples": [
-                "24h",
-                "7d",
-                "30d"
-              ],
+              "examples": ["24h", "7d", "30d"],
               "default": "7d",
               "title": "Timeframe"
             }
@@ -3605,9 +3449,7 @@
     },
     "/api/v1/ai/analytics/versions": {
       "get": {
-        "tags": [
-          "AI Analytics"
-        ],
+        "tags": ["AI Analytics"],
         "summary": "Prompt version leaderboard and quality performance",
         "operationId": "get_version_analytics_api_v1_ai_analytics_versions_get",
         "parameters": [
@@ -3617,11 +3459,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "examples": [
-                "7d",
-                "30d",
-                "90d"
-              ],
+              "examples": ["7d", "30d", "90d"],
               "default": "30d",
               "title": "Timeframe"
             }
@@ -3655,9 +3493,7 @@
     },
     "/api/v1/ai/analytics/comparison": {
       "get": {
-        "tags": [
-          "AI Analytics"
-        ],
+        "tags": ["AI Analytics"],
         "summary": "Compare two prompt versions",
         "operationId": "compare_prompt_versions_api_v1_ai_analytics_comparison_get",
         "parameters": [
@@ -3687,11 +3523,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "examples": [
-                "7d",
-                "30d",
-                "90d"
-              ],
+              "examples": ["7d", "30d", "90d"],
               "default": "30d",
               "title": "Timeframe"
             }
@@ -3725,9 +3557,7 @@
     },
     "/api/v1/ai/analytics/quality-drift": {
       "get": {
-        "tags": [
-          "AI Analytics"
-        ],
+        "tags": ["AI Analytics"],
         "summary": "Detect quality and latency drift",
         "operationId": "get_quality_drift_api_v1_ai_analytics_quality_drift_get",
         "parameters": [
@@ -3737,11 +3567,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "examples": [
-                "7d",
-                "30d",
-                "90d"
-              ],
+              "examples": ["7d", "30d", "90d"],
               "default": "30d",
               "title": "Timeframe"
             }
@@ -3775,10 +3601,7 @@
     },
     "/api/v1/admin/dlq": {
       "get": {
-        "tags": [
-          "Admin",
-          "DLQ"
-        ],
+        "tags": ["Admin", "DLQ"],
         "summary": "List DLQ entries by status",
         "description": "TS-BCK-042-001: List DLQ entries for organization administrators.",
         "operationId": "list_dlq_entries_api_v1_admin_dlq_get",
@@ -3793,11 +3616,7 @@
             "in": "query",
             "required": false,
             "schema": {
-              "enum": [
-                "pending",
-                "retrying",
-                "exhausted"
-              ],
+              "enum": ["pending", "retrying", "exhausted"],
               "type": "string",
               "default": "pending",
               "title": "Status"
@@ -3853,10 +3672,7 @@
     },
     "/api/v1/admin/dlq/{dlq_id}/retry": {
       "post": {
-        "tags": [
-          "Admin",
-          "DLQ"
-        ],
+        "tags": ["Admin", "DLQ"],
         "summary": "Retry a DLQ entry",
         "description": "Retry a cross-tenant DLQ entry as an authorized platform operator.",
         "operationId": "retry_dlq_entry_api_v1_admin_dlq__dlq_id__retry_post",
@@ -3903,9 +3719,7 @@
     },
     "/api/v1/compliance/cookies/consent": {
       "post": {
-        "tags": [
-          "frontend-support"
-        ],
+        "tags": ["frontend-support"],
         "summary": "Create Cookie Consent",
         "operationId": "create_cookie_consent_api_v1_compliance_cookies_consent_post",
         "security": [
@@ -3949,9 +3763,7 @@
         }
       },
       "get": {
-        "tags": [
-          "frontend-support"
-        ],
+        "tags": ["frontend-support"],
         "summary": "Get Cookie Consent",
         "operationId": "get_cookie_consent_api_v1_compliance_cookies_consent_get",
         "security": [
@@ -4014,9 +3826,7 @@
         }
       },
       "patch": {
-        "tags": [
-          "frontend-support"
-        ],
+        "tags": ["frontend-support"],
         "summary": "Update Cookie Consent",
         "operationId": "update_cookie_consent_api_v1_compliance_cookies_consent_patch",
         "security": [
@@ -4062,9 +3872,7 @@
     },
     "/api/v1/projects/{project_id}/gates/gate-8/disclaimer/status": {
       "get": {
-        "tags": [
-          "frontend-support"
-        ],
+        "tags": ["frontend-support"],
         "summary": "Get Legal Disclaimer Status",
         "operationId": "get_legal_disclaimer_status_api_v1_projects__project_id__gates_gate_8_disclaimer_status_get",
         "security": [
@@ -4111,9 +3919,7 @@
     },
     "/api/v1/projects/{project_id}/gates/gate-8/disclaimer/accept": {
       "post": {
-        "tags": [
-          "frontend-support"
-        ],
+        "tags": ["frontend-support"],
         "summary": "Accept Legal Disclaimer",
         "operationId": "accept_legal_disclaimer_api_v1_projects__project_id__gates_gate_8_disclaimer_accept_post",
         "security": [
@@ -4170,9 +3976,7 @@
     },
     "/api/v1/onboarding/sample-project/start": {
       "post": {
-        "tags": [
-          "frontend-support"
-        ],
+        "tags": ["frontend-support"],
         "summary": "Start Sample Project",
         "description": "Create (or idempotently reuse) a REAL seeded sample project for the tenant (ADR-024).\n\nThe previous stub returned a non-UUID id (``proj_sample_001``) that 422'd every downstream\ncall, breaking the new-user flow. This creates a real project so onboarding lands on\nworking endpoints; a genuine UUID + route is returned.",
         "operationId": "start_sample_project_api_v1_onboarding_sample_project_start_post",
@@ -4199,9 +4003,7 @@
     },
     "/api/v1/onboarding/sample-project/ready": {
       "get": {
-        "tags": [
-          "frontend-support"
-        ],
+        "tags": ["frontend-support"],
         "summary": "Get Sample Project Ready",
         "operationId": "get_sample_project_ready_api_v1_onboarding_sample_project_ready_get",
         "security": [
@@ -4255,9 +4057,7 @@
     },
     "/api/v1/onboarding/sample-project/retry": {
       "post": {
-        "tags": [
-          "frontend-support"
-        ],
+        "tags": ["frontend-support"],
         "summary": "Retry Sample Project",
         "operationId": "retry_sample_project_api_v1_onboarding_sample_project_retry_post",
         "requestBody": {
@@ -4303,9 +4103,7 @@
     },
     "/api/v1/onboarding/sample-project/telemetry": {
       "get": {
-        "tags": [
-          "frontend-support"
-        ],
+        "tags": ["frontend-support"],
         "summary": "Get Sample Project Telemetry",
         "operationId": "get_sample_project_telemetry_api_v1_onboarding_sample_project_telemetry_get",
         "security": [
@@ -4359,9 +4157,7 @@
     },
     "/api/v1/security/secret-channel/clerk": {
       "get": {
-        "tags": [
-          "frontend-support"
-        ],
+        "tags": ["frontend-support"],
         "summary": "Get Clerk Secret Channel Bundle",
         "operationId": "get_clerk_secret_channel_bundle_api_v1_security_secret_channel_clerk_get",
         "parameters": [
@@ -4408,9 +4204,7 @@
     },
     "/api/v1/decision-intelligence/execute": {
       "post": {
-        "tags": [
-          "decision-intelligence"
-        ],
+        "tags": ["decision-intelligence"],
         "summary": "Execute Decision Intelligence Flow",
         "description": "Runs I13 orchestration and returns a final decision package when gates pass. Returns 409 when finalization is blocked by HITL/citation/sign-off policy.",
         "operationId": "execute_decision_intelligence_api_v1_decision_intelligence_execute_post",
@@ -4451,9 +4245,7 @@
     },
     "/api/v1/hitl/route": {
       "post": {
-        "tags": [
-          "HITL"
-        ],
+        "tags": ["HITL"],
         "summary": "Route an item for HITL review",
         "operationId": "route_for_review_api_v1_hitl_route_post",
         "requestBody": {
@@ -4500,9 +4292,7 @@
     },
     "/api/v1/hitl/queue": {
       "get": {
-        "tags": [
-          "HITL"
-        ],
+        "tags": ["HITL"],
         "summary": "List items in the review queue",
         "operationId": "list_review_queue_api_v1_hitl_queue_get",
         "security": [
@@ -4599,9 +4389,7 @@
     },
     "/api/v1/hitl/queue/{item_id}": {
       "get": {
-        "tags": [
-          "HITL"
-        ],
+        "tags": ["HITL"],
         "summary": "Get a single review item",
         "operationId": "get_review_item_api_v1_hitl_queue__item_id__get",
         "security": [
@@ -4650,9 +4438,7 @@
     },
     "/api/v1/hitl/queue/{item_id}/approve": {
       "post": {
-        "tags": [
-          "HITL"
-        ],
+        "tags": ["HITL"],
         "summary": "Approve a review item",
         "operationId": "approve_item_api_v1_hitl_queue__item_id__approve_post",
         "security": [
@@ -4711,9 +4497,7 @@
     },
     "/api/v1/hitl/queue/{item_id}/reject": {
       "post": {
-        "tags": [
-          "HITL"
-        ],
+        "tags": ["HITL"],
         "summary": "Reject a review item",
         "operationId": "reject_item_api_v1_hitl_queue__item_id__reject_post",
         "security": [
@@ -4772,9 +4556,7 @@
     },
     "/api/v1/hitl/queue/{item_id}/release": {
       "post": {
-        "tags": [
-          "HITL"
-        ],
+        "tags": ["HITL"],
         "summary": "Release an approved item (mark as CLOSED)",
         "operationId": "release_item_api_v1_hitl_queue__item_id__release_post",
         "security": [
@@ -4823,9 +4605,7 @@
     },
     "/api/v1/hitl/escalate": {
       "post": {
-        "tags": [
-          "HITL"
-        ],
+        "tags": ["HITL"],
         "summary": "Check SLAs and escalate overdue items",
         "operationId": "check_and_escalate_api_v1_hitl_escalate_post",
         "responses": {
@@ -4854,11 +4634,7 @@
     },
     "/api/v1/hitl/resume/{review_id}": {
       "post": {
-        "tags": [
-          "HITL",
-          "HITL",
-          "Workflow"
-        ],
+        "tags": ["HITL", "HITL", "Workflow"],
         "summary": "Resume workflow after HITL approval/rejection",
         "description": "Resume a LangGraph workflow after HITL review decision.\n\n    This endpoint handles both approval and rejection decisions from human reviewers:\n\n    - **Approve**: The workflow resumes from the interrupt point with the approved status.\n      Human feedback is injected into the workflow state and execution continues.\n\n    - **Reject**: The workflow terminates gracefully. The rejection reason is stored\n      for audit purposes but no further workflow steps are executed.\n\n    **Prerequisites**:\n    - Review item must exist and be in `PENDING_REVIEW_REQUIRED` or `PENDING_REVIEW_CONDITIONAL` status\n    - Review item must have a valid `checkpoint_id` and `thread_id` from the interrupted workflow\n\n    **Metrics**: This endpoint emits Prometheus metrics for monitoring:\n    - `c2pro_hitl_resume_total` - Total resume attempts by decision and status\n    - `c2pro_hitl_resume_latency_seconds` - Resume operation latency\n    - `c2pro_hitl_resume_errors_total` - Errors by type",
         "operationId": "resumeHitlWorkflow",
@@ -4934,11 +4710,11 @@
               }
             }
           },
-          "400": {
-            "description": "Invalid request - review item not pending or missing checkpoint data"
-          },
           "404": {
             "description": "Review item not found"
+          },
+          "400": {
+            "description": "Invalid request - review item not pending or missing checkpoint data"
           },
           "422": {
             "description": "Validation error - invalid decision value or feedback too long"
@@ -4948,9 +4724,7 @@
     },
     "/api/v1/settings/notifications": {
       "get": {
-        "tags": [
-          "HITL Settings"
-        ],
+        "tags": ["HITL Settings"],
         "summary": "Get tenant notification configuration",
         "description": "Get current notification configuration for the tenant.",
         "operationId": "get_notification_config_api_v1_settings_notifications_get",
@@ -4976,9 +4750,7 @@
         ]
       },
       "post": {
-        "tags": [
-          "HITL Settings"
-        ],
+        "tags": ["HITL Settings"],
         "summary": "Create or update notification configuration",
         "description": "Create or update notification configuration for the tenant.",
         "operationId": "save_notification_config_api_v1_settings_notifications_post",
@@ -5026,9 +4798,7 @@
     },
     "/api/v1/analysis/analyze": {
       "post": {
-        "tags": [
-          "analysis"
-        ],
+        "tags": ["analysis"],
         "summary": "Preview document analysis without persistence",
         "description": "Runs a synchronous non-persisting analysis preview. This endpoint may stop at critique/HITL and does not create Analysis rows, alerts, or coherence records. Use the document reprocess/full pipeline path for persisted analysis and alert generation.",
         "operationId": "analyze_document_api_v1_analysis_analyze_post",
@@ -5076,9 +4846,7 @@
     },
     "/api/v1/analysis/projects/{project_id}/process/stream": {
       "get": {
-        "tags": [
-          "analysis"
-        ],
+        "tags": ["analysis"],
         "summary": "Stream Project Processing",
         "operationId": "stream_project_processing_api_v1_analysis_projects__project_id__process_stream_get",
         "parameters": [
@@ -5120,11 +4888,9 @@
     },
     "/api/v1/mcp/query-view": {
       "post": {
-        "tags": [
-          "MCP - Model Context Protocol"
-        ],
+        "tags": ["MCP - Model Context Protocol"],
         "summary": "Query Vista Permitida",
-        "description": "Ejecuta una query sobre una vista permitida.\n\n    **Seguridad:**\n    - Solo vistas en allowlist\n    - Rate limiting por tenant\n    - Query limits (timeout, row count)\n    - Auditoría completa\n\n    **Vistas permitidas:**\n    - v_project_summary\n    - v_project_alerts\n    - v_project_clauses\n    - v_project_stakeholders\n    - v_project_wbs\n    - v_project_bom\n    - v_coherence_breakdown\n    - v_raci_matrix",
+        "description": "Ejecuta una query sobre una vista permitida.\n\n    **Seguridad:**\n    - Solo vistas en allowlist\n    - Rate limiting por tenant\n    - Query limits (timeout, row count)\n    - Auditor\u00eda completa\n\n    **Vistas permitidas:**\n    - v_project_summary\n    - v_project_alerts\n    - v_project_clauses\n    - v_project_stakeholders\n    - v_project_wbs\n    - v_project_bom\n    - v_coherence_breakdown\n    - v_raci_matrix",
         "operationId": "query_view_api_v1_mcp_query_view_post",
         "requestBody": {
           "content": {
@@ -5162,11 +4928,9 @@
     },
     "/api/v1/mcp/call-function": {
       "post": {
-        "tags": [
-          "MCP - Model Context Protocol"
-        ],
-        "summary": "Llamar Función Permitida",
-        "description": "Ejecuta una función permitida.\n\n    **Seguridad:**\n    - Solo funciones en allowlist\n    - Validación de parámetros\n    - Rate limiting\n    - Auditoría\n\n    **Funciones permitidas:**\n    - fn_get_clause_by_id\n    - fn_get_stakeholder_by_id\n    - fn_get_neighbors (Knowledge Graph)\n    - fn_find_path (Knowledge Graph)\n    - fn_get_subgraph (Knowledge Graph)",
+        "tags": ["MCP - Model Context Protocol"],
+        "summary": "Llamar Funci\u00f3n Permitida",
+        "description": "Ejecuta una funci\u00f3n permitida.\n\n    **Seguridad:**\n    - Solo funciones en allowlist\n    - Validaci\u00f3n de par\u00e1metros\n    - Rate limiting\n    - Auditor\u00eda\n\n    **Funciones permitidas:**\n    - fn_get_clause_by_id\n    - fn_get_stakeholder_by_id\n    - fn_get_neighbors (Knowledge Graph)\n    - fn_find_path (Knowledge Graph)\n    - fn_get_subgraph (Knowledge Graph)",
         "operationId": "call_function_api_v1_mcp_call_function_post",
         "requestBody": {
           "content": {
@@ -5204,9 +4968,7 @@
     },
     "/api/v1/mcp/views": {
       "get": {
-        "tags": [
-          "MCP - Model Context Protocol"
-        ],
+        "tags": ["MCP - Model Context Protocol"],
         "summary": "Listar Vistas Permitidas",
         "description": "Retorna la lista de vistas permitidas en el MCP Server.",
         "operationId": "list_allowed_views_api_v1_mcp_views_get",
@@ -5233,9 +4995,7 @@
     },
     "/api/v1/mcp/functions": {
       "get": {
-        "tags": [
-          "MCP - Model Context Protocol"
-        ],
+        "tags": ["MCP - Model Context Protocol"],
         "summary": "Listar Funciones Permitidas",
         "description": "Retorna la lista de funciones permitidas en el MCP Server.",
         "operationId": "list_allowed_functions_api_v1_mcp_functions_get",
@@ -5262,9 +5022,7 @@
     },
     "/api/v1/mcp/rate-limit-status": {
       "get": {
-        "tags": [
-          "MCP - Model Context Protocol"
-        ],
+        "tags": ["MCP - Model Context Protocol"],
         "summary": "Estado de Rate Limit",
         "description": "Retorna el estado actual del rate limit para el tenant actual.",
         "operationId": "get_rate_limit_status_api_v1_mcp_rate_limit_status_get",
@@ -5286,9 +5044,7 @@
     },
     "/api/v1/mcp/execute": {
       "post": {
-        "tags": [
-          "MCP - Model Context Protocol"
-        ],
+        "tags": ["MCP - Model Context Protocol"],
         "summary": "Execute MCP Operation",
         "description": "Generic MCP operation execution endpoint.\n\n    **For TS-E2E-SEC-MCP-001 E2E tests.**\n\n    Security features:\n    - Allowlist validation (views + functions)\n    - Blocks destructive operations\n    - Rate limiting (60 req/min per tenant)\n    - Query limits (5s timeout, 1000 rows)\n    - Audit logging\n    - Tenant isolation",
         "operationId": "execute_mcp_operation_api_v1_mcp_execute_post",
@@ -5330,9 +5086,7 @@
     },
     "/api/v1/coherence/evaluate": {
       "post": {
-        "tags": [
-          "Coherence Engine"
-        ],
+        "tags": ["Coherence Engine"],
         "summary": "Evaluate Project Coherence",
         "description": "Accepts a project's context and evaluates it against a predefined set of coherence rules.\n    Returns a list of alerts and a calculated coherence score.\n\n    Can work in two modes:\n    1. With project_id: Fetches document clauses from RAG automatically\n    2. With explicit clauses: Uses the provided clauses directly\n\n    **v0.3 Features:**\n    - Granular scoring (5-97 range) instead of binary 0/100\n    - 27 deterministic evaluators across 6 categories + CROSS\n    - Optional LLM semantic evaluation (disabled in low_budget_mode)\n    - Optional RAG similarity detection for cross-document analysis\n    - Add ?include_diagnostics=true to get detailed diagnostic information",
         "operationId": "evaluate_project_coherence_api_v1_coherence_evaluate_post",
@@ -5394,9 +5148,7 @@
     },
     "/api/v1/coherence/evaluate/diagnostics": {
       "post": {
-        "tags": [
-          "Coherence Engine"
-        ],
+        "tags": ["Coherence Engine"],
         "summary": "Evaluate with Full Diagnostics",
         "description": "Same as /evaluate but always returns full diagnostic information.\n\n    Includes:\n    - finding_signals: All deterministic + LLM signals with impact scores\n    - diagnostics: Detailed breakdown of scoring logic\n    - cross_pairs: RAG-detected cross-document relationships\n    - cost_usd: LLM API cost (if LLM evaluation was enabled)",
         "operationId": "evaluate_with_diagnostics_api_v1_coherence_evaluate_diagnostics_post",
@@ -5444,9 +5196,7 @@
     },
     "/api/v1/coherence/dashboard/{project_id}": {
       "get": {
-        "tags": [
-          "Coherence Dashboard"
-        ],
+        "tags": ["Coherence Dashboard"],
         "summary": "Get Coherence Dashboard",
         "description": "Returns coherence dashboard data for a project.\n    Derived from the latest Analysis or CoherenceResult records.",
         "operationId": "get_coherence_dashboard_api_v1_coherence_dashboard__project_id__get",
@@ -5493,9 +5243,7 @@
     },
     "/api/coherence/dashboard/{project_id}": {
       "get": {
-        "tags": [
-          "Coherence Dashboard"
-        ],
+        "tags": ["Coherence Dashboard"],
         "summary": "Get Coherence Dashboard",
         "description": "Returns coherence dashboard data for a project.\n    Derived from the latest Analysis or CoherenceResult records.",
         "operationId": "get_coherence_dashboard_api_coherence_dashboard__project_id__get",
@@ -5542,9 +5290,7 @@
     },
     "/api/v1/stakeholders/projects/{project_id}": {
       "get": {
-        "tags": [
-          "Stakeholders"
-        ],
+        "tags": ["Stakeholders"],
         "summary": "List stakeholders for a project",
         "operationId": "list_project_stakeholders_api_v1_stakeholders_projects__project_id__get",
         "security": [
@@ -5595,9 +5341,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Stakeholders"
-        ],
+        "tags": ["Stakeholders"],
         "summary": "Create stakeholder manually",
         "operationId": "create_project_stakeholder_api_v1_stakeholders_projects__project_id__post",
         "security": [
@@ -5656,9 +5400,7 @@
     },
     "/api/v1/stakeholders/{stakeholder_id}": {
       "patch": {
-        "tags": [
-          "Stakeholders"
-        ],
+        "tags": ["Stakeholders"],
         "summary": "Update stakeholder",
         "operationId": "update_stakeholder_api_v1_stakeholders__stakeholder_id__patch",
         "security": [
@@ -5715,9 +5457,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Stakeholders"
-        ],
+        "tags": ["Stakeholders"],
         "summary": "Delete stakeholder",
         "operationId": "delete_stakeholder_api_v1_stakeholders__stakeholder_id__delete",
         "security": [
@@ -5759,9 +5499,7 @@
     },
     "/api/stakeholders/projects/{project_id}": {
       "get": {
-        "tags": [
-          "Stakeholders"
-        ],
+        "tags": ["Stakeholders"],
         "summary": "List stakeholders for a project",
         "operationId": "list_project_stakeholders_api_stakeholders_projects__project_id__get",
         "security": [
@@ -5812,9 +5550,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Stakeholders"
-        ],
+        "tags": ["Stakeholders"],
         "summary": "Create stakeholder manually",
         "operationId": "create_project_stakeholder_api_stakeholders_projects__project_id__post",
         "security": [
@@ -5873,9 +5609,7 @@
     },
     "/api/stakeholders/{stakeholder_id}": {
       "patch": {
-        "tags": [
-          "Stakeholders"
-        ],
+        "tags": ["Stakeholders"],
         "summary": "Update stakeholder",
         "operationId": "update_stakeholder_api_stakeholders__stakeholder_id__patch",
         "security": [
@@ -5932,9 +5666,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Stakeholders"
-        ],
+        "tags": ["Stakeholders"],
         "summary": "Delete stakeholder",
         "operationId": "delete_stakeholder_api_stakeholders__stakeholder_id__delete",
         "security": [
@@ -5976,9 +5708,7 @@
     },
     "/api/v1/approvals/{resource_type}/{resource_id}": {
       "patch": {
-        "tags": [
-          "Approvals"
-        ],
+        "tags": ["Approvals"],
         "summary": "Approve, reject, or correct AI-generated resources",
         "operationId": "review_resource_api_v1_approvals__resource_type___resource_id__patch",
         "security": [
@@ -6053,26 +5783,21 @@
             "type": "string",
             "title": "Trace Id",
             "description": "The LangSmith trace ID of the AI interaction that this feedback refers to.",
-            "examples": [
-              "e2a6f3b6-1b6a-4b0a-8a0a-9c7d8f3b6a1e"
-            ]
+            "examples": ["e2a6f3b6-1b6a-4b0a-8a0a-9c7d8f3b6a1e"]
           },
           "key": {
             "type": "string",
             "title": "Key",
             "description": "The key or name for the feedback, used for grouping in LangSmith.",
             "default": "user_feedback",
-            "examples": [
-              "user_rating",
-              "correction"
-            ]
+            "examples": ["user_rating", "correction"]
           },
           "score": {
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1,
-                "minimum": 0
+                "maximum": 1.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -6096,9 +5821,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "trace_id"
-        ],
+        "required": ["trace_id"],
         "title": "AIFeedbackCreate",
         "description": "Schema for creating a new AI feedback entry."
       },
@@ -6158,12 +5881,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "rule_id",
-          "severity",
-          "message",
-          "evidence"
-        ],
+        "required": ["rule_id", "severity", "message", "evidence"],
         "title": "Alert",
         "description": "Represents an alert generated by a rule."
       },
@@ -6183,10 +5901,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "alert_id",
-          "items"
-        ],
+        "required": ["alert_id", "items"],
         "title": "AlertHistoryResponse"
       },
       "AlertItem": {
@@ -6278,10 +5993,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "items",
-          "total"
-        ],
+        "required": ["items", "total"],
         "title": "AlertListResponse"
       },
       "AlertResponse": {
@@ -6633,11 +6345,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "source_domain",
-          "evidence_tier"
-        ],
+        "required": ["status", "source_domain", "evidence_tier"],
         "title": "AlertsSection"
       },
       "AnalysisStatus": {
@@ -6731,13 +6439,11 @@
             "type": "string",
             "title": "Analysis Prompt",
             "description": "Analysis prompt/question for the documents",
-            "default": "Analiza todos los documentos del proyecto y extrae: 1) Partes contratantes, 2) Objeto del contrato, 3) Duración, 4) Importe, 5) Posibles riesgos"
+            "default": "Analiza todos los documentos del proyecto y extrae: 1) Partes contratantes, 2) Objeto del contrato, 3) Duraci\u00f3n, 4) Importe, 5) Posibles riesgos"
           }
         },
         "type": "object",
-        "required": [
-          "project_id"
-        ],
+        "required": ["project_id"],
         "title": "AnalyzeRequest"
       },
       "AnalyzeResponse": {
@@ -6847,11 +6553,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "resource_type",
-          "resource_id",
-          "status"
-        ],
+        "required": ["resource_type", "resource_id", "status"],
         "title": "ApprovalResponse"
       },
       "ApprovalReview": {
@@ -6884,19 +6586,12 @@
           }
         },
         "type": "object",
-        "required": [
-          "status"
-        ],
+        "required": ["status"],
         "title": "ApprovalReview"
       },
       "ApprovalStatus": {
         "type": "string",
-        "enum": [
-          "PENDING",
-          "APPROVED",
-          "REJECTED",
-          "CORRECTED"
-        ],
+        "enum": ["PENDING", "APPROVED", "REJECTED", "CORRECTED"],
         "title": "ApprovalStatus"
       },
       "ApproveRequest": {
@@ -6916,7 +6611,7 @@
         },
         "type": "object",
         "title": "ApproveRequest",
-        "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is never\naccepted from the client — it is derived server-side from the\nauthenticated session (Depends(get_current_user)). A client-supplied\nreviewer field here would let any authenticated user forge a review as\nanother user, corrupting the HITL audit trail. Do not add a reviewer\nidentity field back.\n\nC2PRO #714: ``row_id`` pins the decision to the EXACT review row the\nreviewer saw (ReviewItemResponse.row_id). item_id is a business key a\nreplacement review for a newer candidate shares; without the row, a\ndecision from a stale screen would land on a review the human never saw.\nA pinned row that is no longer awaiting a decision fails closed."
+        "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is never\naccepted from the client \u2014 it is derived server-side from the\nauthenticated session (Depends(get_current_user)). A client-supplied\nreviewer field here would let any authenticated user forge a review as\nanother user, corrupting the HITL audit trail. Do not add a reviewer\nidentity field back.\n\nC2PRO #714: ``row_id`` pins the decision to the EXACT review row the\nreviewer saw (ReviewItemResponse.row_id). item_id is a business key a\nreplacement review for a newer candidate shares; without the row, a\ndecision from a stale screen would land on a review the human never saw.\nA pinned row that is no longer awaiting a decision fails closed."
       },
       "AttentionItem": {
         "properties": {
@@ -6938,21 +6633,12 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "kind",
-          "level",
-          "message",
-          "section_key"
-        ],
+        "required": ["kind", "level", "message", "section_key"],
         "title": "AttentionItem"
       },
       "AttentionLevel": {
         "type": "string",
-        "enum": [
-          "critical",
-          "warning",
-          "info"
-        ],
+        "enum": ["critical", "warning", "info"],
         "title": "AttentionLevel"
       },
       "AuthErrorResponse": {
@@ -6974,11 +6660,9 @@
           }
         },
         "type": "object",
-        "required": [
-          "detail"
-        ],
+        "required": ["detail"],
         "title": "AuthErrorResponse",
-        "description": "Response de error de autenticación.",
+        "description": "Response de error de autenticaci\u00f3n.",
         "example": {
           "detail": "Invalid credentials",
           "error_code": "INVALID_CREDENTIALS"
@@ -6993,9 +6677,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "file"
-        ],
+        "required": ["file"],
         "title": "Body_reupload_document_file_api_v1_documents__document_id__file_patch"
       },
       "Body_upload_document_for_processing_api_v1_projects__project_id__documents_post": {
@@ -7010,10 +6692,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "document_type",
-          "file"
-        ],
+        "required": ["document_type", "file"],
         "title": "Body_upload_document_for_processing_api_v1_projects__project_id__documents_post"
       },
       "BudgetData": {
@@ -7110,12 +6789,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "id",
-          "name",
-          "code",
-          "amount"
-        ],
+        "required": ["id", "name", "code", "amount"],
         "title": "BudgetLineItem"
       },
       "BudgetReconciliation": {
@@ -7174,11 +6848,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "items_sum",
-          "deviation_pct",
-          "direction"
-        ],
+        "required": ["items_sum", "deviation_pct", "direction"],
         "title": "BudgetReconciliation",
         "description": "TASK-BCK-093: Typed reconciliation fields from DET-BUD FindingSignal.raw_data."
       },
@@ -7253,11 +6923,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "source_domain",
-          "evidence_tier"
-        ],
+        "required": ["status", "source_domain", "evidence_tier"],
         "title": "BudgetSection"
       },
       "BulkDocumentItem": {
@@ -7276,11 +6942,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "filename",
-          "document_type",
-          "file_data"
-        ],
+        "required": ["filename", "document_type", "file_data"],
         "title": "BulkDocumentItem",
         "description": "Single document in bulk upload."
       },
@@ -7295,9 +6957,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "documents"
-        ],
+        "required": ["documents"],
         "title": "BulkDocumentRequest",
         "description": "Bulk document upload request."
       },
@@ -7305,12 +6965,7 @@
         "properties": {
           "format": {
             "type": "string",
-            "enum": [
-              "json",
-              "csv",
-              "xlsx",
-              "zip"
-            ],
+            "enum": ["json", "csv", "xlsx", "zip"],
             "title": "Format"
           },
           "include": {
@@ -7322,9 +6977,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "format"
-        ],
+        "required": ["format"],
         "title": "BulkExportRequest",
         "description": "Bulk export request."
       },
@@ -7383,9 +7036,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "processed_count"
-        ],
+        "required": ["processed_count"],
         "title": "BulkOperationResponse"
       },
       "BulkResolveRequest": {
@@ -7414,10 +7065,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "alert_ids",
-          "resolution"
-        ],
+        "required": ["alert_ids", "resolution"],
         "title": "BulkResolveRequest"
       },
       "BulkReviewRequest": {
@@ -7431,10 +7079,7 @@
           },
           "decision": {
             "type": "string",
-            "enum": [
-              "approve",
-              "reject"
-            ],
+            "enum": ["approve", "reject"],
             "title": "Decision"
           },
           "comment": {
@@ -7444,10 +7089,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "alert_ids",
-          "decision"
-        ],
+        "required": ["alert_ids", "decision"],
         "title": "BulkReviewRequest"
       },
       "BulkWBSItem": {
@@ -7528,9 +7170,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "items"
-        ],
+        "required": ["items"],
         "title": "BulkWBSRequest",
         "description": "Bulk WBS creation request."
       },
@@ -7544,7 +7184,7 @@
           },
           "evidence_count": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Evidence Count",
             "default": 0
           },
@@ -7585,10 +7225,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "category",
-          "state"
-        ],
+        "required": ["category", "state"],
         "title": "CategoryAssessment",
         "description": "Per-category single-document assessment: state + evidence + findings + gap.\n\n``PRESENT`` carries qualifying evidence and no gap; ``INSUFFICIENT_EVIDENCE`` carries\nno evidence, factual ``missing_data`` and an actionable ``gap``. ``findings`` are\nindependent of coverage state (an issue can exist regardless of coverage)."
       },
@@ -7665,10 +7302,7 @@
       },
       "CategoryCoverageState": {
         "type": "string",
-        "enum": [
-          "present",
-          "insufficient_evidence"
-        ],
+        "enum": ["present", "insufficient_evidence"],
         "title": "CategoryCoverageState",
         "description": "Whether a category is evidence-backed or lacks sufficient evidence."
       },
@@ -7685,10 +7319,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "category",
-          "action"
-        ],
+        "required": ["category", "action"],
         "title": "CategoryGapAlert",
         "description": "An actionable gap alert for a category that lacks sufficient evidence."
       },
@@ -7727,17 +7358,17 @@
           "evidence_coverage": {
             "type": "number",
             "title": "Evidence Coverage",
-            "default": 0
+            "default": 0.0
           },
           "technical_reliability": {
             "type": "number",
             "title": "Technical Reliability",
-            "default": 0
+            "default": 0.0
           },
           "evidence_freshness": {
             "type": "number",
             "title": "Evidence Freshness",
-            "default": 0
+            "default": 0.0
           },
           "applicability_reason": {
             "anyOf": [
@@ -7826,10 +7457,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "category",
-          "status"
-        ],
+        "required": ["category", "status"],
         "title": "CategoryV2"
       },
       "ChangeDetailResponse": {
@@ -7960,12 +7588,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "event_id",
-          "occurred_at",
-          "event_type",
-          "state"
-        ],
+        "required": ["event_id", "occurred_at", "event_type", "state"],
         "title": "ChangeDetailResponse",
         "description": "Evidence-grounded revision detail with L1/L2 before and after snapshots."
       },
@@ -7973,7 +7596,7 @@
         "properties": {
           "change_index": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Change Index"
           },
           "change_type": {
@@ -7989,12 +7612,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "change_index",
-          "change_type",
-          "source",
-          "assessment"
-        ],
+        "required": ["change_index", "change_type", "source", "assessment"],
         "title": "ChangeImpact",
         "description": "The impact of one change within a stored change event."
       },
@@ -8018,23 +7636,13 @@
           }
         },
         "type": "object",
-        "required": [
-          "id",
-          "text"
-        ],
+        "required": ["id", "text"],
         "title": "Clause",
         "description": "Represents a specific clause or segment of a document."
       },
       "CoherenceCategory": {
         "type": "string",
-        "enum": [
-          "SCOPE",
-          "BUDGET",
-          "QUALITY",
-          "TECHNICAL",
-          "LEGAL",
-          "TIME"
-        ],
+        "enum": ["SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME"],
         "title": "CoherenceCategory",
         "description": "Canonical coherence categories used by score calculators."
       },
@@ -8115,9 +7723,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "evaluation_alert_count"
-        ],
+        "required": ["evaluation_alert_count"],
         "title": "CoherenceData"
       },
       "CoherenceEvaluateRequest": {
@@ -8223,10 +7829,7 @@
           },
           "score_version": {
             "type": "string",
-            "enum": [
-              "coherence-v1",
-              "coherence-v2"
-            ],
+            "enum": ["coherence-v1", "coherence-v2"],
             "title": "Score Version",
             "description": "Immutable scoring algorithm version used for this result.",
             "default": "coherence-v1"
@@ -8260,10 +7863,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "overall_score",
-          "alerts"
-        ],
+        "required": ["overall_score", "alerts"],
         "title": "CoherenceResult",
         "description": "Represents the complete result of a coherence evaluation, including alerts and the final score."
       },
@@ -8338,11 +7938,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "source_domain",
-          "evidence_tier"
-        ],
+        "required": ["status", "source_domain", "evidence_tier"],
         "title": "CoherenceSection"
       },
       "CoherenceV2Payload": {
@@ -8375,11 +7971,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "project_id",
-          "generated_at",
-          "global"
-        ],
+        "required": ["project_id", "generated_at", "global"],
         "title": "CoherenceV2Payload"
       },
       "ConsentCategories": {
@@ -8415,13 +8007,7 @@
           },
           "severity": {
             "type": "string",
-            "enum": [
-              "critical",
-              "high",
-              "medium",
-              "low",
-              "info"
-            ],
+            "enum": ["critical", "high", "medium", "low", "info"],
             "title": "Severity"
           },
           "summary": {
@@ -8442,14 +8028,9 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "rule_id",
-          "clause_id",
-          "severity",
-          "summary"
-        ],
+        "required": ["rule_id", "clause_id", "severity", "summary"],
         "title": "ContractClarityFinding",
-        "description": "One clause-level clarity finding.\n\nSeverity only — deliberately carries no score/confidence/weight field so\nit cannot be aggregated into a Health dimension or the Coherence Score."
+        "description": "One clause-level clarity finding.\n\nSeverity only \u2014 deliberately carries no score/confidence/weight field so\nit cannot be aggregated into a Health dimension or the Coherence Score."
       },
       "CookieConsentCreateRequest": {
         "properties": {
@@ -8482,11 +8063,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "tenantId",
-          "userId",
-          "version"
-        ],
+        "required": ["tenantId", "userId", "version"],
         "title": "CookieConsentCreateRequest"
       },
       "CookieConsentUpdateRequest": {
@@ -8508,12 +8085,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "tenantId",
-          "userId",
-          "version",
-          "categories"
-        ],
+        "required": ["tenantId", "userId", "version", "categories"],
         "title": "CookieConsentUpdateRequest"
       },
       "CreateAlertRequest": {
@@ -8541,12 +8113,7 @@
           },
           "severity": {
             "type": "string",
-            "enum": [
-              "low",
-              "medium",
-              "high",
-              "critical"
-            ],
+            "enum": ["low", "medium", "high", "critical"],
             "title": "Severity"
           },
           "message": {
@@ -8672,45 +8239,6 @@
           "evidence_quality"
         ],
         "title": "CurrentStateSections"
-      },
-      "DetectionEvidenceResponse": {
-        "properties": {
-          "source_clause_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Clause Id"
-          },
-          "source_document_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Document Id"
-          },
-          "claim": {
-            "type": "string",
-            "title": "Claim",
-            "default": ""
-          },
-          "quote": {
-            "type": "string",
-            "title": "Quote",
-            "default": ""
-          }
-        },
-        "type": "object",
-        "title": "DetectionEvidenceResponse",
-        "description": "Detector-produced provenance; distinct from reviewer-attached evidence."
       },
       "DLQEntryResponse": {
         "properties": {
@@ -8841,13 +8369,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "entries",
-          "total",
-          "limit",
-          "offset",
-          "has_more"
-        ],
+        "required": ["entries", "total", "limit", "offset", "has_more"],
         "title": "DLQListResponse",
         "description": "TS-BCK-042-001: Admin DLQ list response with pagination metadata."
       },
@@ -8865,10 +8387,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "id",
-          "status"
-        ],
+        "required": ["id", "status"],
         "title": "DLQRetryResponse",
         "description": "TS-BCK-042-001: Admin DLQ retry response."
       },
@@ -8942,10 +8461,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": [
-                  "coherence-v1",
-                  "coherence-v2"
-                ]
+                "enum": ["coherence-v1", "coherence-v2"]
               },
               {
                 "type": "null"
@@ -9051,10 +8567,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": [
-                  "coherence-v1",
-                  "coherence-v2"
-                ]
+                "enum": ["coherence-v1", "coherence-v2"]
               },
               {
                 "type": "null"
@@ -9064,11 +8577,7 @@
           },
           "projection_status": {
             "type": "string",
-            "enum": [
-              "none",
-              "provisional",
-              "unavailable"
-            ],
+            "enum": ["none", "provisional", "unavailable"],
             "title": "Projection Status",
             "default": "none"
           },
@@ -9097,7 +8606,46 @@
           "last_updated"
         ],
         "title": "DashboardSummary",
-        "description": "Consolidated view of project coherence for the dashboard.\n\nECOA v2 (ADR-009 §7.2 step 1): the optional `categories_v2` field carries\nthe locked v2 contract. Defaults to None so v1 clients are unaffected."
+        "description": "Consolidated view of project coherence for the dashboard.\n\nECOA v2 (ADR-009 \u00a77.2 step 1): the optional `categories_v2` field carries\nthe locked v2 contract. Defaults to None so v1 clients are unaffected."
+      },
+      "DetectionEvidenceResponse": {
+        "properties": {
+          "source_clause_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Clause Id"
+          },
+          "source_document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Document Id"
+          },
+          "claim": {
+            "type": "string",
+            "title": "Claim",
+            "default": ""
+          },
+          "quote": {
+            "type": "string",
+            "title": "Quote",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "DetectionEvidenceResponse",
+        "description": "Detector-produced provenance; distinct from reviewer-attached evidence."
       },
       "DisclaimerAcceptRequest": {
         "properties": {
@@ -9314,12 +8862,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "id",
-          "type",
-          "text",
-          "confidence"
-        ],
+        "required": ["id", "type", "text", "confidence"],
         "title": "DocumentEntityResponse",
         "description": "Entity extracted or derived from a persisted document."
       },
@@ -9339,10 +8882,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "document_id",
-          "items"
-        ],
+        "required": ["document_id", "items"],
         "title": "DocumentHistoryResponse",
         "description": "Ordered history events for a single document."
       },
@@ -9563,23 +9103,13 @@
           }
         },
         "type": "object",
-        "required": [
-          "items",
-          "total_count",
-          "skip",
-          "limit"
-        ],
+        "required": ["items", "total_count", "skip", "limit"],
         "title": "DocumentListResponse",
         "description": "Paginated list response for documents."
       },
       "DocumentPollingStatus": {
         "type": "string",
-        "enum": [
-          "queued",
-          "processing",
-          "parsed",
-          "error"
-        ],
+        "enum": ["queued", "processing", "parsed", "error"],
         "title": "DocumentPollingStatus",
         "description": "Polling status exposed to clients."
       },
@@ -9973,11 +9503,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "document_id",
-          "status",
-          "message"
-        ],
+        "required": ["document_id", "status", "message"],
         "title": "DocumentUploadResponse",
         "description": "Response for parse endpoints."
       },
@@ -10109,11 +9635,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "source_domain",
-          "evidence_tier"
-        ],
+        "required": ["status", "source_domain", "evidence_tier"],
         "title": "DocumentsSection"
       },
       "EnrichedCoherenceResult": {
@@ -10122,8 +9644,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 100,
-                "minimum": 0
+                "maximum": 100.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -10156,10 +9678,7 @@
           },
           "score_version": {
             "type": "string",
-            "enum": [
-              "coherence-v1",
-              "coherence-v2"
-            ],
+            "enum": ["coherence-v1", "coherence-v2"],
             "title": "Score Version",
             "description": "Immutable scoring algorithm version used for this result.",
             "default": "coherence-v1"
@@ -10215,31 +9734,31 @@
             "type": "number",
             "title": "Scope Factor",
             "description": "Scope normalization factor used in scoring",
-            "default": 1
+            "default": 1.0
           },
           "penalty_density": {
             "type": "number",
             "title": "Penalty Density",
             "description": "Raw weighted penalty density before decay",
-            "default": 0
+            "default": 0.0
           },
           "avg_impact": {
             "type": "number",
             "title": "Avg Impact",
             "description": "Average impact_score across all findings",
-            "default": 0
+            "default": 0.0
           },
           "avg_confidence": {
             "type": "number",
             "title": "Avg Confidence",
             "description": "Average confidence across all findings",
-            "default": 0
+            "default": 0.0
           },
           "llm_cost_usd": {
             "type": "number",
             "title": "Llm Cost Usd",
             "description": "Total LLM cost for this evaluation",
-            "default": 0
+            "default": 0.0
           },
           "evaluation_mode": {
             "type": "string",
@@ -10286,20 +9805,13 @@
           }
         },
         "type": "object",
-        "required": [
-          "overall_score"
-        ],
+        "required": ["overall_score"],
         "title": "EnrichedCoherenceResult",
         "description": "Extended coherence result with diagnostic fields for v0.3 scoring.\n\nCoherenceResult remains the public API shape; this adds internal diagnostics\nfor debugging, dashboards, and score curve validation."
       },
       "EpistemicBasis": {
         "type": "string",
-        "enum": [
-          "observed",
-          "derived",
-          "projected",
-          "trusted"
-        ],
+        "enum": ["observed", "derived", "projected", "trusted"],
         "title": "EpistemicBasis"
       },
       "Evidence": {
@@ -10321,11 +9833,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "source_clause_id",
-          "claim",
-          "quote"
-        ],
+        "required": ["source_clause_id", "claim", "quote"],
         "title": "Evidence",
         "description": "Represents the specific evidence supporting an alert."
       },
@@ -10353,10 +9861,7 @@
       },
       "EvidenceGranularity": {
         "type": "string",
-        "enum": [
-          "clause",
-          "document"
-        ],
+        "enum": ["clause", "document"],
         "title": "EvidenceGranularity",
         "description": "What the ``evidence_clause_ids`` in a coverage actually identify (P0b-R1).\n\nThis qualifies every coverage that carries evidence ids, so it lives beside the\ncoverage contract rather than in the persistence artifact alone: \"six categories\nevidenced by six distinct clauses\" and \"six categories evidenced by one\nwhole-document blob\" are different product claims, and a reader must be able to\ntell them apart **without** inspecting the shape of an id."
       },
@@ -10403,12 +9908,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "id",
-          "title",
-          "detail",
-          "occurred_at"
-        ],
+        "required": ["id", "title", "detail", "occurred_at"],
         "title": "EvidenceHistoryEventResponse",
         "description": "A persisted evidence-history event for a document timeline."
       },
@@ -10427,10 +9927,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "rows",
-          "available_section_tiers"
-        ],
+        "required": ["rows", "available_section_tiers"],
         "title": "EvidenceQualityData"
       },
       "EvidenceQualityRow": {
@@ -10459,11 +9956,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "section_key",
-          "status",
-          "evidence_tier"
-        ],
+        "required": ["section_key", "status", "evidence_tier"],
         "title": "EvidenceQualityRow"
       },
       "EvidenceQualitySection": {
@@ -10537,11 +10030,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "source_domain",
-          "evidence_tier"
-        ],
+        "required": ["status", "source_domain", "evidence_tier"],
         "title": "EvidenceQualitySection"
       },
       "EvidenceRef": {
@@ -10571,22 +10060,13 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "ref_id",
-          "source",
-          "tier"
-        ],
+        "required": ["ref_id", "source", "tier"],
         "title": "EvidenceRef",
         "description": "Reference to evidence supporting or withholding a critical output."
       },
       "EvidenceTier": {
         "type": "string",
-        "enum": [
-          "verified",
-          "weak",
-          "inferred",
-          "unverified"
-        ],
+        "enum": ["verified", "weak", "inferred", "unverified"],
         "title": "EvidenceTier",
         "description": "Evidence confidence tier used by Runtime Trust and downstream health."
       },
@@ -10630,10 +10110,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "project_id",
-          "document_bytes_b64"
-        ],
+        "required": ["project_id", "document_bytes_b64"],
         "title": "ExecuteDecisionRequestDTO",
         "description": "Refers to Suite ID: TS-I13-E2E-REAL-001."
       },
@@ -10691,12 +10168,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "coherence_score",
-          "risks",
-          "evidence_links",
-          "citations"
-        ],
+        "required": ["coherence_score", "risks", "evidence_links", "citations"],
         "title": "ExecuteDecisionResponseDTO",
         "description": "Refers to Suite ID: TS-I13-E2E-REAL-001."
       },
@@ -10859,11 +10331,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "source_domain",
-          "evidence_tier"
-        ],
+        "required": ["status", "source_domain", "evidence_tier"],
         "title": "ExecutiveSummarySection"
       },
       "FindingSignal": {
@@ -10880,38 +10348,29 @@
           },
           "source": {
             "type": "string",
-            "enum": [
-              "deterministic",
-              "llm"
-            ],
+            "enum": ["deterministic", "llm"],
             "title": "Source",
             "description": "deterministic or llm",
             "default": "deterministic"
           },
           "impact_score": {
             "type": "number",
-            "maximum": 1,
-            "minimum": 0,
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "Impact Score",
             "description": "Continuous severity: 0.0 = no issue, 1.0 = catastrophic"
           },
           "confidence": {
             "type": "number",
-            "maximum": 1,
-            "minimum": 0,
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "Confidence",
             "description": "Evaluator confidence: 1.0 = certain, 0.5 = borderline",
-            "default": 1
+            "default": 1.0
           },
           "severity": {
             "type": "string",
-            "enum": [
-              "critical",
-              "high",
-              "medium",
-              "low",
-              "info"
-            ],
+            "enum": ["critical", "high", "medium", "low", "info"],
             "title": "Severity",
             "description": "Categorical severity for backward compatibility",
             "default": "medium"
@@ -10951,11 +10410,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "rule_id",
-          "clause_id",
-          "impact_score"
-        ],
+        "required": ["rule_id", "clause_id", "impact_score"],
         "title": "FindingSignal",
         "description": "Unified signal format for the Scoring Arbiter (Agent C).\n\nReplaces binary rule_violated with continuous impact_score (0.0-1.0).\nUsed by both deterministic evaluators (Agent A) and LLM evaluators (Agent B).\n\nAttributes:\n    rule_id: Identifier of the rule that generated this signal (e.g., DET-BUD-OVERRUN)\n    clause_id: ID of the clause that was evaluated\n    source: Whether this came from deterministic rules or LLM analysis\n    impact_score: Continuous severity from 0.0 (no issue) to 1.0 (catastrophic)\n    confidence: How certain the evaluator is (1.0 for deterministic, 0.0-1.0 for LLM)\n    severity: Categorical severity for backward compatibility\n    category: Which of the 6 coherence categories this belongs to\n    evidence_summary: One-sentence explanation of the finding\n    quote: Exact text from the clause that triggered the rule\n    raw_data: Structured data relevant to the finding (for diagnostics)"
       },
@@ -10972,12 +10427,9 @@
           }
         },
         "type": "object",
-        "required": [
-          "function_name",
-          "params"
-        ],
+        "required": ["function_name", "params"],
         "title": "FunctionCallRequest",
-        "description": "Request para llamada a función."
+        "description": "Request para llamada a funci\u00f3n."
       },
       "GlobalV2": {
         "properties": {
@@ -10995,12 +10447,12 @@
           "completeness_score": {
             "type": "number",
             "title": "Completeness Score",
-            "default": 0
+            "default": 0.0
           },
           "technical_reliability_index": {
             "type": "number",
             "title": "Technical Reliability Index",
-            "default": 0
+            "default": 0.0
           },
           "status": {
             "type": "string",
@@ -11026,13 +10478,11 @@
           "active_weight": {
             "type": "number",
             "title": "Active Weight",
-            "default": 0
+            "default": 0.0
           }
         },
         "type": "object",
-        "required": [
-          "status"
-        ],
+        "required": ["status"],
         "title": "GlobalV2"
       },
       "HTTPValidationError": {
@@ -11050,13 +10500,7 @@
       },
       "HealthBand": {
         "type": "string",
-        "enum": [
-          "healthy",
-          "watch",
-          "at_risk",
-          "critical",
-          "unknown"
-        ],
+        "enum": ["healthy", "watch", "at_risk", "critical", "unknown"],
         "title": "HealthBand"
       },
       "HealthCategoryItem": {
@@ -11072,7 +10516,7 @@
           },
           "evidence_count": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Evidence Count"
           },
           "missing_data": {
@@ -11097,11 +10541,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "category",
-          "state",
-          "evidence_count"
-        ],
+        "required": ["category", "state", "evidence_count"],
         "title": "HealthCategoryItem",
         "description": "One canonical Health category, from the single-document coverage (ADR-024)."
       },
@@ -11127,11 +10567,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "computed_at",
-          "evidence_granularity",
-          "categories"
-        ],
+        "required": ["computed_at", "evidence_granularity", "categories"],
         "title": "HealthData",
         "description": "User-facing Health: exactly the six canonical categories, in MASTER order.\n\nThe legacy ADR-018 v0 dimensions (contract/risk/documentation/governance) and their composite\nstay internal Health inputs; they are not a competing user-facing taxonomy, and no composite is\nreported until a canonical six-category roll-up exists."
       },
@@ -11150,11 +10586,7 @@
       },
       "HealthNullReason": {
         "type": "string",
-        "enum": [
-          "insufficient_evidence",
-          "not_applicable",
-          "budget_exhausted"
-        ],
+        "enum": ["insufficient_evidence", "not_applicable", "budget_exhausted"],
         "title": "HealthNullReason"
       },
       "HealthSection": {
@@ -11228,11 +10660,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "source_domain",
-          "evidence_tier"
-        ],
+        "required": ["status", "source_domain", "evidence_tier"],
         "title": "HealthSection"
       },
       "HealthSignal": {
@@ -11244,8 +10672,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 100,
-                "minimum": 0
+                "maximum": 100.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -11258,8 +10686,8 @@
           },
           "confidence": {
             "type": "number",
-            "maximum": 1,
-            "minimum": 0,
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "Confidence"
           },
           "evidence": {
@@ -11293,22 +10721,13 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "dimension",
-          "band",
-          "confidence"
-        ],
+        "required": ["dimension", "band", "confidence"],
         "title": "HealthSignal",
         "description": "One dimension's health result.\n\nA non-null score must be backed by concrete evidence. Confidence remains a\nseparate evidence-quality axis and cannot substitute for provenance."
       },
       "HealthTrend": {
         "type": "string",
-        "enum": [
-          "up",
-          "down",
-          "flat",
-          "unknown"
-        ],
+        "enum": ["up", "down", "flat", "unknown"],
         "title": "HealthTrend"
       },
       "HealthVector": {
@@ -11334,8 +10753,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 100,
-                "minimum": 0
+                "maximum": 100.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -11386,12 +10805,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "project_id",
-          "tenant_id",
-          "dimensions",
-          "computed_at"
-        ],
+        "required": ["project_id", "tenant_id", "dimensions", "computed_at"],
         "title": "HealthVector",
         "description": "Project-level health vector across supported dimensions."
       },
@@ -11428,10 +10842,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "pending_count",
-          "items"
-        ],
+        "required": ["pending_count", "items"],
         "title": "HitlData"
       },
       "HitlItem": {
@@ -11557,11 +10968,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "source_domain",
-          "evidence_tier"
-        ],
+        "required": ["status", "source_domain", "evidence_tier"],
         "title": "HitlSection"
       },
       "ImpactAssessment": {
@@ -11580,8 +10987,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1,
-                "minimum": 0
+                "maximum": 1.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -11607,9 +11014,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status"
-        ],
+        "required": ["status"],
         "title": "ImpactAssessment"
       },
       "ImpactItem": {
@@ -11622,18 +11027,15 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "CONFIRMED",
-              "CANDIDATE"
-            ],
+            "enum": ["CONFIRMED", "CANDIDATE"],
             "title": "Status"
           },
           "confidence": {
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1,
-                "minimum": 0
+                "maximum": 1.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -11644,31 +11046,19 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "target",
-          "relationship",
-          "status"
-        ],
+        "required": ["target", "relationship", "status"],
         "title": "ImpactItem"
       },
       "ImpactLevel": {
         "type": "string",
-        "enum": [
-          "LOW",
-          "MEDIUM",
-          "HIGH",
-          "CRITICAL"
-        ],
+        "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
         "title": "ImpactLevel"
       },
       "ImpactRelationship": {
         "properties": {
           "kind": {
             "type": "string",
-            "enum": [
-              "direct",
-              "indirect"
-            ],
+            "enum": ["direct", "indirect"],
             "title": "Kind"
           },
           "via": {
@@ -11679,8 +11069,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1,
-                "minimum": 0
+                "maximum": 1.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -11691,19 +11081,12 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "kind",
-          "via"
-        ],
+        "required": ["kind", "via"],
         "title": "ImpactRelationship"
       },
       "ImpactStatus": {
         "type": "string",
-        "enum": [
-          "CONFIRMED",
-          "CANDIDATE",
-          "UNKNOWN"
-        ],
+        "enum": ["CONFIRMED", "CANDIDATE", "UNKNOWN"],
         "title": "ImpactStatus"
       },
       "ImpactTarget": {
@@ -11753,20 +11136,13 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "entity_type",
-          "entity_id"
-        ],
+        "required": ["entity_type", "entity_id"],
         "title": "ImpactTarget",
         "description": "A persisted project entity that depends on the changed source entity."
       },
       "InterestLevel": {
         "type": "string",
-        "enum": [
-          "low",
-          "medium",
-          "high"
-        ],
+        "enum": ["low", "medium", "high"],
         "title": "InterestLevel",
         "description": "Level of interest of the stakeholder."
       },
@@ -11784,10 +11160,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "email",
-          "password"
-        ],
+        "required": ["email", "password"],
         "title": "LoginRequest",
         "description": "Request para login.",
         "example": {
@@ -11830,11 +11203,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "user",
-          "tenant",
-          "tokens"
-        ],
+        "required": ["user", "tenant", "tokens"],
         "title": "LoginResponse",
         "description": "Response completo de login.",
         "example": {
@@ -11852,7 +11221,7 @@
             "email": "usuario@ejemplo.com",
             "first_name": "Juan",
             "id": "550e8400-e29b-41d4-a716-446655440000",
-            "last_name": "Pérez",
+            "last_name": "P\u00e9rez",
             "role": "admin"
           }
         }
@@ -11872,9 +11241,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "operation"
-        ],
+        "required": ["operation"],
         "title": "MCPExecuteRequest",
         "description": "Generic MCP execution request.\n\nUsed for TS-E2E-SEC-MCP-001 test suite."
       },
@@ -11888,10 +11255,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "user",
-          "tenant"
-        ],
+        "required": ["user", "tenant"],
         "title": "MeResponse",
         "description": "Response para endpoint /me."
       },
@@ -11907,9 +11271,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "items"
-        ],
+        "required": ["items"],
         "title": "MissingEvidenceData"
       },
       "MissingEvidenceItem": {
@@ -11929,11 +11291,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "source_domain",
-          "subject",
-          "description"
-        ],
+        "required": ["source_domain", "subject", "description"],
         "title": "MissingEvidenceItem"
       },
       "MissingEvidenceSection": {
@@ -12007,11 +11365,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "source_domain",
-          "evidence_tier"
-        ],
+        "required": ["status", "source_domain", "evidence_tier"],
         "title": "MissingEvidenceSection"
       },
       "NotModeledSection": {
@@ -12079,20 +11433,12 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "source_domain",
-          "evidence_tier"
-        ],
+        "required": ["status", "source_domain", "evidence_tier"],
         "title": "NotModeledSection"
       },
       "NotificationChannel": {
         "type": "string",
-        "enum": [
-          "email",
-          "slack",
-          "webhook"
-        ],
+        "enum": ["email", "slack", "webhook"],
         "title": "NotificationChannel",
         "description": "Valid notification channel types."
       },
@@ -12310,20 +11656,13 @@
           }
         },
         "type": "object",
-        "required": [
-          "current_password",
-          "new_password"
-        ],
+        "required": ["current_password", "new_password"],
         "title": "PasswordChangeRequest",
-        "description": "Request para cambio de contraseña."
+        "description": "Request para cambio de contrase\u00f1a."
       },
       "PowerLevel": {
         "type": "string",
-        "enum": [
-          "low",
-          "medium",
-          "high"
-        ],
+        "enum": ["low", "medium", "high"],
         "title": "PowerLevel",
         "description": "Level of power of the stakeholder."
       },
@@ -12411,9 +11750,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "title": "ProjectCreateRequest",
         "description": "Create project payload."
       },
@@ -12453,10 +11790,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "id",
-          "name"
-        ],
+        "required": ["id", "name"],
         "title": "ProjectIdentity"
       },
       "ProjectListResponse": {
@@ -12489,10 +11823,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "items",
-          "total"
-        ],
+        "required": ["items", "total"],
         "title": "ProjectListResponse",
         "description": "Project list response."
       },
@@ -12522,13 +11853,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "id",
-          "title",
-          "severity",
-          "status",
-          "created_at"
-        ],
+        "required": ["id", "title", "severity", "status", "created_at"],
         "title": "ProjectQuickViewAlertResponse",
         "description": "Compact alert payload for the project quick-view sheet."
       },
@@ -12750,11 +12075,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "id",
-          "tenant_id",
-          "name"
-        ],
+        "required": ["id", "tenant_id", "name"],
         "title": "ProjectResponse",
         "description": "Project response schema (compat for legacy and e2e suites)."
       },
@@ -13139,11 +12460,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "artifact_id",
-          "artifact_version",
-          "artifact_hash"
-        ],
+        "required": ["artifact_id", "artifact_version", "artifact_hash"],
         "title": "ProjectionCandidate",
         "description": "The exact #714 candidate envelope the projection substituted."
       },
@@ -13194,11 +12511,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "data",
-          "row_count",
-          "execution_time_ms"
-        ],
+        "required": ["data", "row_count", "execution_time_ms"],
         "title": "QueryResult",
         "description": "Resultado de query."
       },
@@ -13315,11 +12628,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "source_domain",
-          "evidence_tier"
-        ],
+        "required": ["status", "source_domain", "evidence_tier"],
         "title": "RaciSection"
       },
       "RaciTaskItem": {
@@ -13383,9 +12692,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "answer"
-        ],
+        "required": ["answer"],
         "title": "RagAnswerResponse",
         "description": "Response for RAG answers."
       },
@@ -13408,9 +12715,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "question"
-        ],
+        "required": ["question"],
         "title": "RagQuestionRequest",
         "description": "Request for RAG questions."
       },
@@ -13431,10 +12736,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "analyses",
-          "total_analyses"
-        ],
+        "required": ["analyses", "total_analyses"],
         "title": "RecentAnalysesResponse"
       },
       "RefreshTokenRequest": {
@@ -13445,9 +12747,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "refresh_token"
-        ],
+        "required": ["refresh_token"],
         "title": "RefreshTokenRequest",
         "description": "Request para refrescar token."
       },
@@ -13482,7 +12782,7 @@
               }
             ],
             "title": "Password Confirm",
-            "description": "Opcional; si se envía debe coincidir con password"
+            "description": "Opcional; si se env\u00eda debe coincidir con password"
           },
           "first_name": {
             "anyOf": [
@@ -13511,16 +12811,12 @@
           "accept_terms": {
             "type": "boolean",
             "title": "Accept Terms",
-            "description": "Debe aceptar términos y condiciones",
+            "description": "Debe aceptar t\u00e9rminos y condiciones",
             "default": true
           }
         },
         "type": "object",
-        "required": [
-          "company_name",
-          "email",
-          "password"
-        ],
+        "required": ["company_name", "email", "password"],
         "title": "RegisterRequest",
         "description": "Request para registro de nuevo usuario.",
         "example": {
@@ -13528,7 +12824,7 @@
           "company_name": "Constructora Ejemplo S.L.",
           "email": "usuario@ejemplo.com",
           "first_name": "Juan",
-          "last_name": "Pérez",
+          "last_name": "P\u00e9rez",
           "password": "Password123!",
           "password_confirm": "Password123!"
         }
@@ -13573,11 +12869,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "user",
-          "tenant",
-          "tokens"
-        ],
+        "required": ["user", "tenant", "tokens"],
         "title": "RegisterResponse",
         "description": "Response completo de registro."
       },
@@ -13638,23 +12930,13 @@
           }
         },
         "type": "object",
-        "required": [
-          "clause_id",
-          "clause_code",
-          "label",
-          "reason"
-        ],
+        "required": ["clause_id", "clause_code", "label", "reason"],
         "title": "RelationshipExplanationCitationResponse",
         "description": "Citation payload for a relationship explanation."
       },
       "ReportEvidenceTier": {
         "type": "string",
-        "enum": [
-          "strong_linked",
-          "weak_linked",
-          "unlinked",
-          "unavailable"
-        ],
+        "enum": ["strong_linked", "weak_linked", "unlinked", "unavailable"],
         "title": "ReportEvidenceTier",
         "description": "How well a section's facts trace back to source evidence."
       },
@@ -13677,26 +12959,18 @@
           }
         },
         "type": "object",
-        "required": [
-          "resolution"
-        ],
+        "required": ["resolution"],
         "title": "ResolveAlertRequest",
-        "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): resolver identity is never\naccepted from the client — it is always the authenticated session's\nuser_id. A client-supplied resolved_by here would let any authenticated\nuser forge a resolution as another user, corrupting the audit trail."
+        "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): resolver identity is never\naccepted from the client \u2014 it is always the authenticated session's\nuser_id. A client-supplied resolved_by here would let any authenticated\nuser forge a resolution as another user, corrupting the audit trail."
       },
       "ResumeWorkflowRequest": {
         "properties": {
           "decision": {
             "type": "string",
-            "enum": [
-              "approve",
-              "reject"
-            ],
+            "enum": ["approve", "reject"],
             "title": "Decision",
             "description": "The reviewer's decision: 'approve' to resume workflow, 'reject' to terminate",
-            "examples": [
-              "approve",
-              "reject"
-            ]
+            "examples": ["approve", "reject"]
           },
           "feedback": {
             "type": "string",
@@ -13711,9 +12985,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "decision"
-        ],
+        "required": ["decision"],
         "title": "ResumeWorkflowRequest",
         "description": "Request to resume workflow after HITL decision.\n\nAfter a human reviewer makes a decision on a pending review item,\nthis endpoint resumes the LangGraph workflow with the decision.\n\n- **approve**: Workflow resumes from interrupt point with approved status\n- **reject**: Workflow terminates gracefully with rejection reason"
       },
@@ -13729,10 +13001,7 @@
             "type": "string",
             "title": "Status",
             "description": "Result status: 'resumed' (approved), 'rejected' (terminated), or 'terminated_with_errors'",
-            "examples": [
-              "resumed",
-              "rejected"
-            ]
+            "examples": ["resumed", "rejected"]
           },
           "message": {
             "type": "string",
@@ -13741,11 +13010,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "review_id",
-          "status",
-          "message"
-        ],
+        "required": ["review_id", "status", "message"],
         "title": "ResumeWorkflowResponse",
         "description": "Response from workflow resumption.\n\nReturns the outcome of the resume operation including the final status."
       },
@@ -13753,10 +13018,7 @@
         "properties": {
           "decision": {
             "type": "string",
-            "enum": [
-              "approve",
-              "reject"
-            ],
+            "enum": ["approve", "reject"],
             "title": "Decision"
           },
           "comment": {
@@ -13766,9 +13028,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "decision"
-        ],
+        "required": ["decision"],
         "title": "ReviewAlertRequest"
       },
       "ReviewDecisionDTO": {
@@ -13780,20 +13040,15 @@
           },
           "action": {
             "type": "string",
-            "enum": [
-              "approve",
-              "reject"
-            ],
+            "enum": ["approve", "reject"],
             "title": "Action",
             "default": "approve"
           }
         },
         "type": "object",
-        "required": [
-          "item_id"
-        ],
+        "required": ["item_id"],
         "title": "ReviewDecisionDTO",
-        "description": "Refers to Suite ID: TS-I13-E2E-REAL-001.\n\nSECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is NEVER accepted\nfrom the client. ``reviewer_id``/``reviewer_name`` are derived server-side\nfrom the authenticated session (``Depends(get_current_user)``) at the\npoint this DTO is consumed — a client-supplied identity here would let any\nauthenticated user forge a review as another user, corrupting the HITL\naudit trail. Do not add reviewer identity fields back to this model."
+        "description": "Refers to Suite ID: TS-I13-E2E-REAL-001.\n\nSECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is NEVER accepted\nfrom the client. ``reviewer_id``/``reviewer_name`` are derived server-side\nfrom the authenticated session (``Depends(get_current_user)``) at the\npoint this DTO is consumed \u2014 a client-supplied identity here would let any\nauthenticated user forge a review as another user, corrupting the HITL\naudit trail. Do not add reviewer identity fields back to this model."
       },
       "ReviewItemResponse": {
         "properties": {
@@ -13905,10 +13160,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "items",
-          "total"
-        ],
+        "required": ["items", "total"],
         "title": "ReviewQueueResponse"
       },
       "ReviewStatus": {
@@ -13932,11 +13184,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "none",
-              "provisional",
-              "unavailable"
-            ],
+            "enum": ["none", "provisional", "unavailable"],
             "title": "Status"
           },
           "source_revision_id": {
@@ -14038,10 +13286,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "source_revision_id"
-        ],
+        "required": ["status", "source_revision_id"],
         "title": "RevisionProjection"
       },
       "RouteForReviewRequest": {
@@ -14058,8 +13303,8 @@
           },
           "confidence": {
             "type": "number",
-            "maximum": 1,
-            "minimum": 0,
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "Confidence"
           },
           "impact_level": {
@@ -14072,12 +13317,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "item_id",
-          "item_type",
-          "confidence",
-          "impact_level"
-        ],
+        "required": ["item_id", "item_type", "confidence", "impact_level"],
         "title": "RouteForReviewRequest"
       },
       "ScoreExplanation": {
@@ -14130,21 +13370,12 @@
           }
         },
         "type": "object",
-        "required": [
-          "bundle_version",
-          "values"
-        ],
+        "required": ["bundle_version", "values"],
         "title": "SecretChannelClerkResponse"
       },
       "SectionStatus": {
         "type": "string",
-        "enum": [
-          "available",
-          "empty",
-          "unavailable",
-          "not_modeled",
-          "error"
-        ],
+        "enum": ["available", "empty", "unavailable", "not_modeled", "error"],
         "title": "SectionStatus"
       },
       "SeverityCount": {
@@ -14216,11 +13447,9 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "assessments"
-        ],
+        "required": ["assessments"],
         "title": "SingleDocumentCoverage",
-        "description": "Single-document coverage: the six category assessments + preserved CROSS findings.\n\n``cross_findings`` holds the ``FindingSignal`` entries tagged ``CROSS``. They are\ncross-dimensional and CAN be produced from one document (``CROSS-BUDGET-SCOPE`` pairs\na BUDGET clause with a SCOPE clause; ``CROSS-SCHEDULE-DELIVERY`` pairs a TIME clause\nwith a TECHNICAL clause), so they are preserved verbatim rather than discarded, and are\nNOT attributed to any canonical category — a CROSS finding spans two dimensions and\ncarries a composite ``clause_id``, so single-category attribution would fabricate\nevidence (INV-1)."
+        "description": "Single-document coverage: the six category assessments + preserved CROSS findings.\n\n``cross_findings`` holds the ``FindingSignal`` entries tagged ``CROSS``. They are\ncross-dimensional and CAN be produced from one document (``CROSS-BUDGET-SCOPE`` pairs\na BUDGET clause with a SCOPE clause; ``CROSS-SCHEDULE-DELIVERY`` pairs a TIME clause\nwith a TECHNICAL clause), so they are preserved verbatim rather than discarded, and are\nNOT attributed to any canonical category \u2014 a CROSS finding spans two dimensions and\ncarries a composite ``clause_id``, so single-category attribution would fabricate\nevidence (INV-1)."
       },
       "StakeholderCreateRequest": {
         "properties": {
@@ -14306,8 +13535,8 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 10,
-                "minimum": 1
+                "maximum": 10.0,
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -14319,8 +13548,8 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 10,
-                "minimum": 1
+                "maximum": 10.0,
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -14366,9 +13595,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "title": "StakeholderCreateRequest"
       },
       "StakeholderItem": {
@@ -14428,20 +13655,12 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "id",
-          "evidence_tier"
-        ],
+        "required": ["id", "evidence_tier"],
         "title": "StakeholderItem"
       },
       "StakeholderQuadrant": {
         "type": "string",
-        "enum": [
-          "key_player",
-          "keep_satisfied",
-          "keep_informed",
-          "monitor"
-        ],
+        "enum": ["key_player", "keep_satisfied", "keep_informed", "monitor"],
         "title": "StakeholderQuadrant",
         "description": "Power/interest quadrant (Mendelow Matrix)."
       },
@@ -14684,8 +13903,8 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 10,
-                "minimum": 1
+                "maximum": 10.0,
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -14697,8 +13916,8 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 10,
-                "minimum": 1
+                "maximum": 10.0,
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -14796,12 +14015,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "total",
-          "by_quadrant",
-          "items",
-          "evidence_breakdown"
-        ],
+        "required": ["total", "by_quadrant", "items", "evidence_breakdown"],
         "title": "StakeholdersData"
       },
       "StakeholdersSection": {
@@ -14875,23 +14089,14 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "source_domain",
-          "evidence_tier"
-        ],
+        "required": ["status", "source_domain", "evidence_tier"],
         "title": "StakeholdersSection"
       },
       "SubscriptionPlan": {
         "type": "string",
-        "enum": [
-          "free",
-          "starter",
-          "professional",
-          "enterprise"
-        ],
+        "enum": ["free", "starter", "professional", "enterprise"],
         "title": "SubscriptionPlan",
-        "description": "Planes de suscripción disponibles."
+        "description": "Planes de suscripci\u00f3n disponibles."
       },
       "SystemStatusResponse": {
         "properties": {
@@ -14913,11 +14118,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "api_status",
-          "database_status",
-          "timestamp"
-        ],
+        "required": ["api_status", "database_status", "timestamp"],
         "title": "SystemStatusResponse"
       },
       "TemporalEntityRef": {
@@ -15082,7 +14283,7 @@
           "updated_at"
         ],
         "title": "TenantResponse",
-        "description": "Response con información de Tenant."
+        "description": "Response con informaci\u00f3n de Tenant."
       },
       "TimelineItemResponse": {
         "properties": {
@@ -15179,12 +14380,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "event_id",
-          "occurred_at",
-          "event_type",
-          "state"
-        ],
+        "required": ["event_id", "occurred_at", "event_type", "state"],
         "title": "TimelineItemResponse",
         "description": "One immutable event rendered for the What Changed product surface."
       },
@@ -15210,9 +14406,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "items"
-        ],
+        "required": ["items"],
         "title": "TimelineResponse",
         "description": "Stable cursor page; an empty page means no events, not an unavailable diff."
       },
@@ -15244,12 +14438,9 @@
           }
         },
         "type": "object",
-        "required": [
-          "access_token",
-          "expires_in"
-        ],
+        "required": ["access_token", "expires_in"],
         "title": "TokenResponse",
-        "description": "Response con tokens de autenticación.",
+        "description": "Response con tokens de autenticaci\u00f3n.",
         "example": {
           "access_token": "example-access-token",
           "expires_in": 86400,
@@ -15405,16 +14596,11 @@
           "updated_at"
         ],
         "title": "UserResponse",
-        "description": "Response con información de Usuario."
+        "description": "Response con informaci\u00f3n de Usuario."
       },
       "UserRole": {
         "type": "string",
-        "enum": [
-          "admin",
-          "user",
-          "viewer",
-          "api"
-        ],
+        "enum": ["admin", "user", "viewer", "api"],
         "title": "UserRole",
         "description": "Roles de usuario."
       },
@@ -15486,7 +14672,7 @@
         "description": "Request para actualizar perfil de usuario.",
         "example": {
           "first_name": "Juan",
-          "last_name": "Pérez",
+          "last_name": "P\u00e9rez",
           "phone": "+34 600 000 000"
         }
       },
@@ -15523,11 +14709,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
+        "required": ["loc", "msg", "type"],
         "title": "ValidationError"
       },
       "ViewQueryRequest": {
@@ -15555,22 +14737,20 @@
           },
           "limit": {
             "type": "integer",
-            "maximum": 1000,
-            "minimum": 1,
+            "maximum": 1000.0,
+            "minimum": 1.0,
             "title": "Limit",
             "default": 100
           },
           "offset": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Offset",
             "default": 0
           }
         },
         "type": "object",
-        "required": [
-          "view_name"
-        ],
+        "required": ["view_name"],
         "title": "ViewQueryRequest",
         "description": "Request para query de vista."
       },
@@ -15712,13 +14892,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "id",
-          "code",
-          "name",
-          "level",
-          "evidence_tier"
-        ],
+        "required": ["id", "code", "name", "level", "evidence_tier"],
         "title": "WbsItemSummary"
       },
       "WbsSection": {
@@ -15792,11 +14966,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "source_domain",
-          "evidence_tier"
-        ],
+        "required": ["status", "source_domain", "evidence_tier"],
         "title": "WbsSection"
       }
     },
