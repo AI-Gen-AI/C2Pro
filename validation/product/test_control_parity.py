@@ -25,6 +25,7 @@ sys.path.insert(0, str(_HERE))
 import check_control_parity as c  # noqa: E402
 
 _MD_TEXT = c._MD.read_text(encoding="utf-8")
+_ARCH_BASELINE_TEXT = (_HERE.parents[1] / "docs/architecture/C2PRO_TECHNICAL_BASELINE_2026-10-01.md").read_text(encoding="utf-8")
 
 
 def test_pristine_passes() -> None:
@@ -158,7 +159,7 @@ def test_p0b_slice_statuses_are_canonical_and_parity_checked() -> None:
         "P0b-L4-2": "DONE",
         "P0b-L4-3": "DONE",
         "P0b-L4-4": "DONE",
-        "P0b-L4-5": "PARTIAL",
+        "P0b-L4-5": "DONE",
     }
     canon = c.extract_canonical(c.load_yaml())
     md = c.parse_md_block(_MD_TEXT)
@@ -261,23 +262,20 @@ def test_r1_records_its_resolution_without_erasing_history() -> None:
     assert "DID block P0b-L4-5" in res["historical_truth"]
 
 
-def test_l4_5_is_partial_and_carries_no_blocker_field() -> None:
-    """L4-5 is PARTIAL: merged/release-ready, but PROD validation is still the exit gate."""
+def test_l4_5_is_done_only_with_accepted_p0b_qualification() -> None:
+    """Current control truth: L4-5 is DONE because P0b has an accepted PASS bundle."""
     doc = c.load_yaml()
-    slice_45 = next(
-        sl for sl in doc["p0b_vertical_contract"]["slices"] if sl["id"] == "P0b-L4-5"
-    )
-    slice_44 = next(
-        sl for sl in doc["p0b_vertical_contract"]["slices"] if sl["id"] == "P0b-L4-4"
-    )
-    assert slice_44["slice_status"] == "DONE", "L4-5 only advances after L4-4 closed"
-    assert slice_45["slice_status"] == "PARTIAL"
-    assert slice_45["slice_status"] != "DONE", "release-ready merge must not imply PROD validation"
-    assert "blocked_by" not in slice_45, "an unblocked slice must not carry a blocker field"
+    slice_45 = c._p0b_slice(doc, "P0b-L4-5")
+    lane = doc["qualification_control"]["lanes"]["P0b"]
+    assert slice_45["slice_status"] == "DONE"
+    assert lane["qualification_status"] == "PASS"
+    assert lane["bundle_ref"]
+    assert lane["bundle_sha256"]
+    assert "blocked_by" not in slice_45
 
 
-def test_resolved_residual_is_not_the_current_blocker_and_l4_5_is_next() -> None:
-    """ANTI-DRIFT: once R1 is RESOLVED, control truth must stop gating on it."""
+def test_resolved_residual_is_not_the_current_blocker_and_p0b_has_no_next_slice() -> None:
+    """ANTI-DRIFT: completed P0b has no fabricated follow-on slice."""
     doc = c.load_yaml()
     p0b = doc["p0b_vertical_contract"]
     r1 = _residual(doc, "P0b-R1-EVIDENCE-GRANULARITY")
@@ -291,25 +289,31 @@ def test_resolved_residual_is_not_the_current_blocker_and_l4_5_is_next() -> None
         res["id"] for res in p0b["residuals"] if res.get("blocks") == "P0b-L4-5"
     ], "P0b-L4-5 is still gated by a residual"
 
-    assert p0b["next_slice"] == "P0b-L4-5"
-    nxt = next(sl for sl in p0b["slices"] if sl["id"] == p0b["next_slice"])
-    assert nxt["slice_status"] == "PARTIAL"
+    assert p0b["next_slice"] is None
+    assert all(sl["slice_status"] == "DONE" for sl in p0b["slices"])
 
 
 def test_next_slice_is_parity_checked() -> None:
-    """The next authorized action is a canonical value, so MD cannot disagree."""
+    """Terminal P0b next_slice=None is represented canonically as NONE."""
     canon = c.extract_canonical(c.load_yaml())
-    md = c.parse_md_block(_MD_TEXT)
-    assert canon["p0b.next_slice"] == "P0b-L4-5"
-    assert md["p0b.next_slice"] == canon["p0b.next_slice"]
+    assert canon["p0b.next_slice"] == "NONE"
 
 
 def test_missing_next_slice_detected() -> None:
-    """Negative: control truth must always name what comes next."""
+    """Negative: terminal state is explicit null, not an omitted authority field."""
     doc = c.load_yaml()
     del doc["p0b_vertical_contract"]["next_slice"]
     problems = c.validate_enums(doc)
-    assert any("missing 'next_slice'" in p for p in problems), problems
+    assert any("missing 'next_slice' field" in p for p in problems), problems
+
+
+def test_null_next_slice_rejected_when_work_remains() -> None:
+    """Negative: null is legal only for a fully completed P0b slice set."""
+    doc = c.load_yaml()
+    c._p0b_slice(doc, "P0b-L4-5")["slice_status"] = "PARTIAL"
+    doc["p0b_vertical_contract"]["next_slice"] = None
+    problems = c.validate_enums(doc)
+    assert any("may be null only when every P0b slice is DONE" in p for p in problems), problems
 
 
 def test_unknown_next_slice_detected() -> None:
@@ -414,8 +418,20 @@ def test_md_blocking_contradiction_detected() -> None:
 
 
 
-# ── Schema v7 Product Qualification control ──────────────────────────────────
+# ── Schema v8 Product Qualification control ──────────────────────────────────
 
+
+
+
+def _demote_p0b_fixture(doc: dict) -> None:
+    """Return P0b to the pre-promotion state for isolated guard tests."""
+    row = doc["qualification_control"]["lanes"]["P0b"]
+    row["qualification_status"] = "REQUIRED"
+    row["bundle_ref"] = None
+    row["bundle_sha256"] = None
+    c._adr_row(doc, "ADR-024")["prod_validation_status"] = "NONE"
+    c._p0b_slice(doc, "P0b-L4-5")["slice_status"] = "PARTIAL"
+    doc["p0b_vertical_contract"]["next_slice"] = "P0b-L4-5"
 
 def _attach_stub_bundle(
     doc: dict,
@@ -424,6 +440,8 @@ def _attach_stub_bundle(
     *,
     verdict: str = "PASS",
 ) -> Path:
+    if lane != "P0b":
+        _demote_p0b_fixture(doc)
     evidence_dir = root / "evidence" / "product-qualification"
     evidence_dir.mkdir(parents=True, exist_ok=True)
     path = evidence_dir / f"{lane.lower()}-qualification.yaml"
@@ -444,16 +462,61 @@ def _stub_loader_for(lane: str, verdict: str = "PASS"):
     return lambda _path: {"capability_id": lane, "validator_verdict": verdict}
 
 
-def test_schema_v7_initial_qualification_control_is_valid_and_non_promoted() -> None:
+def test_human_projection_current_sections_reflect_accepted_p0b_without_rewriting_history() -> None:
+    """Current narrative surfaces must not contradict the canonical P0b PASS state."""
+    assert "### P0b — Single-document Health — PROD_VALIDATED / CLOSED" in _MD_TEXT
+    assert "| ADR-024 Single-document Activation | Accepted | WIRED | **PARTIAL** | **PROD_VALIDATED** |" in _MD_TEXT
+    assert "The #715/#733 qualification mechanism was exercised successfully by A1 #55 and A2 #56" in _MD_TEXT
+    assert "**This subsection is historical and is superseded by §2.5" in _MD_TEXT
+    assert "**This is a historical 2026-10-03 revalidation;" in _MD_TEXT
+    assert "The bounded P0b single-document Health wedge passed production run #56; broader ADR-018" in _MD_TEXT
+    assert "L4-1..L4-5 are DONE and the bounded P0b production done-definition passed" in _MD_TEXT
+    assert "## 6. P0b vertical contract — accepted production baseline" in _MD_TEXT
+    assert "**`L4-5` DONE**" in _MD_TEXT
+    assert "revalidated 2026-10-04" in _ARCH_BASELINE_TEXT
+    assert "A1 #55 and A2 #56" in _ARCH_BASELINE_TEXT
+    assert "`#715` and `#792` are closed" in _ARCH_BASELINE_TEXT
+    assert "P0c temporal/change and P0d Current State remain **not production-validated**" in _ARCH_BASELINE_TEXT
+
+
+def test_schema_v8_current_qualification_control_is_valid_with_p0b_promoted() -> None:
     doc = c.load_yaml()
-    assert doc["schema_version"] == 7
+    assert doc["schema_version"] == 8
     assert c.validate_enums(doc) == []
     assert c.validate_qualification_control(doc) == []
-    for lane in ("P0b", "P0c", "P0d"):
+
+    p0b = doc["qualification_control"]["lanes"]["P0b"]
+    assert p0b["qualification_status"] == "PASS"
+    assert p0b["bundle_ref"] == "evidence/product-qualification/p0b-prod-gh-37196092728-1.yaml"
+    assert p0b["bundle_sha256"] == "d6031d454ac40f30a84a1b9c30f4f5d97ef285d7eb9e8d047a0af97148f6281b"
+    assert c._adr_row(doc, "ADR-024")["prod_validation_status"] == "PROD_VALIDATED"
+    assert c._p0b_slice(doc, "P0b-L4-5")["slice_status"] == "DONE"
+
+    for lane in ("P0c", "P0d"):
         row = doc["qualification_control"]["lanes"][lane]
         assert row["qualification_status"] == "REQUIRED"
         assert row["bundle_ref"] is None
         assert row["bundle_sha256"] is None
+
+
+def test_p0b_reconciliation_runtime_binding_is_bound_to_accepted_bundle() -> None:
+    doc = c.load_yaml()
+    doc["reconciliation_delta_2026_10_04_p0b"]["runtime_binding"]["backend"]["commit_sha"] = "0" * 40
+    problems = c.validate_qualification_control(doc)
+    assert any(
+        "runtime_binding.backend.commit_sha must match accepted bundle" in problem
+        for problem in problems
+    ), problems
+
+
+def test_p0b_reconciliation_bundle_record_is_bound_to_lane() -> None:
+    doc = c.load_yaml()
+    doc["reconciliation_delta_2026_10_04_p0b"]["qualification_bundle"]["sha256"] = "0" * 64
+    problems = c.validate_qualification_control(doc)
+    assert any(
+        "qualification_bundle.sha256 must match qualification[P0b].bundle_sha256" in problem
+        for problem in problems
+    ), problems
 
 
 def test_qualification_schema_version_rejects_boolean_true() -> None:
@@ -616,6 +679,7 @@ def test_capability_lifecycle_mapping_is_fixed_not_self_authored() -> None:
 
 def test_lifecycle_promotion_without_pass_bundle_fails_closed() -> None:
     doc = c.load_yaml()
+    _demote_p0b_fixture(doc)
     c._adr_row(doc, "ADR-024")["prod_validation_status"] = "PROD_VALIDATED"
     c._p0b_slice(doc, "P0b-L4-5")["slice_status"] = "DONE"
     problems = c.validate_qualification_control(doc)
@@ -625,6 +689,7 @@ def test_lifecycle_promotion_without_pass_bundle_fails_closed() -> None:
 
 def test_valid_pass_bundle_does_not_auto_promote_lifecycle() -> None:
     doc = c.load_yaml()
+    _demote_p0b_fixture(doc)
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         _attach_stub_bundle(doc, "P0b", root)
@@ -641,6 +706,7 @@ def test_valid_pass_bundle_does_not_auto_promote_lifecycle() -> None:
 
 def test_valid_pass_bundle_can_guard_explicit_atomic_p0b_promotion() -> None:
     doc = c.load_yaml()
+    _demote_p0b_fixture(doc)
     c._adr_row(doc, "ADR-024")["prod_validation_status"] = "PROD_VALIDATED"
     c._p0b_slice(doc, "P0b-L4-5")["slice_status"] = "DONE"
     with tempfile.TemporaryDirectory() as tmp:
@@ -657,6 +723,7 @@ def test_valid_pass_bundle_can_guard_explicit_atomic_p0b_promotion() -> None:
 
 def test_partial_p0b_promotion_is_rejected() -> None:
     doc = c.load_yaml()
+    _demote_p0b_fixture(doc)
     c._adr_row(doc, "ADR-024")["prod_validation_status"] = "PROD_VALIDATED"
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -736,7 +803,19 @@ def test_p0d_promotes_current_state_without_promoting_executive_portfolio() -> N
 def test_qualification_compact_values_are_parity_checked() -> None:
     canon = c.extract_canonical(c.load_yaml())
     md = c.parse_md_block(_MD_TEXT)
-    for lane in ("P0b", "P0c", "P0d"):
+
+    assert canon["qualification.P0b.status"] == "PASS"
+    assert canon["qualification.P0b.bundle_ref"] == "evidence/product-qualification/p0b-prod-gh-37196092728-1.yaml"
+    assert canon["qualification.P0b.evidence_digest"] == "d6031d454ac40f30"
+    for key in (
+        "qualification.P0b.status",
+        "qualification.P0b.bundle_ref",
+        "qualification.P0b.evidence_digest",
+        "qualification.P0b.targets_digest",
+    ):
+        assert md[key] == canon[key]
+
+    for lane in ("P0c", "P0d"):
         assert canon[f"qualification.{lane}.status"] == "REQUIRED"
         assert canon[f"qualification.{lane}.bundle_ref"] == "NONE"
         assert canon[f"qualification.{lane}.evidence_digest"] == "NONE"
@@ -746,8 +825,8 @@ def test_qualification_compact_values_are_parity_checked() -> None:
 
 def test_qualification_md_status_drift_is_detected() -> None:
     mutated = _MD_TEXT.replace(
-        "qualification.P0b.status=REQUIRED",
         "qualification.P0b.status=PASS",
+        "qualification.P0b.status=REQUIRED",
     )
     problems = _compare_with_mutated_md(mutated)
     assert any("qualification.P0b.status" in problem and "VALUE DRIFT" in problem for problem in problems)
