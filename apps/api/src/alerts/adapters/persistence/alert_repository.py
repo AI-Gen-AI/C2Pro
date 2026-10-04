@@ -19,6 +19,7 @@ from src.alerts.application.ports.alert_repository import IAlertRepository
 from src.alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
 from src.alerts.domain.models import Alert
 from src.analysis.adapters.persistence.models import Alert as AlertORM
+from src.core.approval import ApprovalStatus as ORMApprovalStatus
 from src.documents.adapters.persistence.models import ClauseORM
 from src.projects.adapters.persistence.models import ProjectORM
 
@@ -118,10 +119,13 @@ class SqlAlchemyAlertRepository(IAlertRepository):
             alert_metadata=domain_alert.alert_metadata,
             created_at=self._normalize_naive_utc(domain_alert.created_at),
             updated_at=self._normalize_naive_utc(domain_alert.updated_at or datetime.now(UTC)),
+            approval_status=ORMApprovalStatus[domain_alert.approval_status.name],
             reviewed_by=domain_alert.reviewed_by,
             reviewed_at=self._normalize_naive_utc(domain_alert.reviewed_at),
+            review_comment=domain_alert.review_comment,
             resolved_at=self._normalize_naive_utc(domain_alert.resolved_at),
             resolved_by=domain_alert.resolved_by,
+            resolution_notes=domain_alert.resolution_notes,
             source_clause_id=domain_alert.source_clause_id,
         )
 
@@ -210,6 +214,13 @@ class SqlAlchemyAlertRepository(IAlertRepository):
             description=alert.description,
             affected_entities=alert.affected_entities,
             alert_metadata=alert.alert_metadata,
+            approval_status=ORMApprovalStatus[alert.approval_status.name],
+            reviewed_by=alert.reviewed_by,
+            reviewed_at=self._normalize_naive_utc(alert.reviewed_at),
+            review_comment=alert.review_comment,
+            resolved_at=self._normalize_naive_utc(alert.resolved_at),
+            resolved_by=alert.resolved_by,
+            resolution_notes=alert.resolution_notes,
             created_at=self._normalize_naive_utc(alert.created_at),
             source_clause_id=alert.source_clause_id,
         )
@@ -231,10 +242,13 @@ class SqlAlchemyAlertRepository(IAlertRepository):
             orm_alert = result.scalar_one_or_none()
         if orm_alert:
             orm_alert.status = alert.status.value  # type: ignore[assignment]
+            orm_alert.approval_status = ORMApprovalStatus[alert.approval_status.name]
             orm_alert.reviewed_by = alert.reviewed_by
             orm_alert.reviewed_at = self._normalize_naive_utc(alert.reviewed_at)
+            orm_alert.review_comment = alert.review_comment
             orm_alert.resolved_at = self._normalize_naive_utc(alert.resolved_at)
             orm_alert.resolved_by = alert.resolved_by
+            orm_alert.resolution_notes = alert.resolution_notes
             orm_alert.alert_metadata = alert.alert_metadata
             orm_alert.updated_at = datetime.now(UTC).replace(tzinfo=None)
             await self._session.flush()

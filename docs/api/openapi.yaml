@@ -1983,6 +1983,41 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/alerts/{alert_id}/evidence:
+    post:
+      tags:
+      - alerts
+      summary: Attach reviewer evidence to alert
+      operationId: attach_alert_evidence_api_v1_alerts__alert_id__evidence_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachEvidenceRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/alerts/{alert_id}/history:
     get:
       tags:
@@ -4512,6 +4547,27 @@ components:
         \ review for a newer candidate shares; without the row, a\ndecision from a\
         \ stale screen would land on a review the human never saw.\nA pinned row that\
         \ is no longer awaiting a decision fails closed."
+    AttachEvidenceRequest:
+      properties:
+        type:
+          type: string
+          enum:
+          - note
+          - screenshot
+          - document_excerpt
+          title: Type
+        content:
+          type: string
+          title: Content
+        source:
+          type: string
+          title: Source
+          default: manual_review
+      type: object
+      required:
+      - type
+      - content
+      title: AttachEvidenceRequest
     AttentionItem:
       properties:
         kind:
@@ -6982,6 +7038,19 @@ components:
       - tier
       title: EvidenceRef
       description: Reference to evidence supporting or withholding a critical output.
+    EvidenceResponse:
+      properties:
+        alert_id:
+          type: string
+          title: Alert Id
+        evidence_count:
+          type: integer
+          title: Evidence Count
+      type: object
+      required:
+      - alert_id
+      - evidence_count
+      title: EvidenceResponse
     EvidenceTier:
       type: string
       enum:
