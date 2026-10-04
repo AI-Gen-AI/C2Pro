@@ -44,6 +44,7 @@ from src.core.middleware import (
     RequestLoggingMiddleware,
     TenantIsolationMiddleware,
 )
+from src.core.observability.monitoring import configure_logging
 from src.core.observability.router import router as observability_router
 from src.core.routers.health import router as health_router
 from src.documents.adapters.http.router import router as documents_router
@@ -62,6 +63,7 @@ from src.projects.adapters.http.router import router as projects_router
 from src.reporting.adapters.http.router import router as project_reports_router
 from src.temporal.adapters.http.router import router as temporal_router
 
+configure_logging()
 logger = structlog.get_logger()
 
 
