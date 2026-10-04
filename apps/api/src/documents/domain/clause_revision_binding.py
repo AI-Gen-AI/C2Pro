@@ -9,7 +9,8 @@ them as that revision's clauses.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from typing import Any
 from uuid import UUID
 
 from src.documents.domain.models import Clause
@@ -17,7 +18,12 @@ from src.documents.domain.models import Clause
 
 def clause_revision_id(clause: Clause) -> UUID | None:
     """The revision the clause was extracted from, or ``None`` when unrecorded."""
-    location = (clause.extracted_entities or {}).get("evidence_location")
+    return revision_id_from_extracted_entities(clause.extracted_entities)
+
+
+def revision_id_from_extracted_entities(extracted_entities: Mapping[str, Any] | None) -> UUID | None:
+    """Same binding, read from a raw ``clauses.extracted_entities`` value."""
+    location = (extracted_entities or {}).get("evidence_location")
     raw = location.get("revision_id") if isinstance(location, dict) else None
     if not raw:
         return None
@@ -49,4 +55,4 @@ def clauses_bound_to_revision(
     return True
 
 
-__all__ = ["clause_revision_id", "clauses_bound_to_revision"]
+__all__ = ["clause_revision_id", "clauses_bound_to_revision", "revision_id_from_extracted_entities"]

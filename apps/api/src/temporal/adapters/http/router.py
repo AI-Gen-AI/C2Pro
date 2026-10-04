@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from typing import Any, cast
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any, Protocol, cast
 from uuid import UUID
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.core.auth.dependencies import get_current_user
@@ -16,8 +19,19 @@ from src.core.database import get_session_with_tenant
 from src.core.tenants.types import TenantId, require_tenant_id
 from src.projects.adapters.persistence.project_repository import SQLAlchemyProjectRepository
 from src.projects.ports.project_repository import ProjectRepository
+from src.temporal.adapters.persistence.clause_impact_resolver import SqlAlchemyClauseImpactResolver
 from src.temporal.adapters.persistence.project_event_repository import (
     SqlAlchemyProjectEventRepository,
+)
+from src.temporal.application.change_qualification import ChangeQualification, qualify_event
+from src.temporal.application.impact_assessment import (
+    ImpactResolver,
+    ResolverResult,
+    assess_change_impacts,
+)
+from src.temporal.application.revision_projection import (
+    RevisionProjection,
+    project_revision_coherence,
 )
 from src.temporal.application.timeline import (
     InvalidTimelineCursor,
@@ -25,10 +39,22 @@ from src.temporal.application.timeline import (
     decode_cursor,
     encode_cursor,
 )
+from src.temporal.domain.entity_ref import TemporalEntityRef
+from src.temporal.domain.impact import ChangeImpact, EpistemicBasis
 from src.temporal.domain.project_event import ProjectEvent
 from src.temporal.ports.project_event_repository import IProjectEventRepository
 
+logger = structlog.get_logger()
+
 router = APIRouter(prefix="/projects", tags=["Temporal changes"])
+
+ImpactAssessor = Callable[[ProjectEvent, ChangeQualification], Awaitable[list[ChangeImpact]]]
+
+
+class RevisionProjector(Protocol):
+    def __call__(
+        self, *, project_id: UUID, document_id: UUID, revision_id: UUID, qualification: ChangeQualification
+    ) -> Awaitable[RevisionProjection]: ...
 
 
 class TimelineItemResponse(BaseModel):
@@ -37,9 +63,16 @@ class TimelineItemResponse(BaseModel):
     event_id: UUID
     occurred_at: str
     event_type: str
+    # A stored event is observed evidence; ``state``, ``confidence`` and
+    # ``change_cause`` are its read-time qualified values (PR-C2), never mutated.
+    basis: EpistemicBasis = EpistemicBasis.OBSERVED
     state: str
     change_cause: str | None = None
     confidence: float | None = None
+    # "current" | "legacy" | "unsupported"; None for a non-comparison event.
+    matcher_status: str | None = None
+    legacy_matcher: bool = False
+    qualification_reason: str | None = None
     document_id: UUID | None = None
     provenance: dict[str, Any] = Field(default_factory=dict)
     l3_impact: None = None
@@ -57,6 +90,10 @@ class ChangeDetailResponse(TimelineItemResponse):
 
     changes: list[dict[str, Any]] = Field(default_factory=list)
     evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+    # DERIVED: persisted relationships of each changed entity (never similarity).
+    impacts: list[ChangeImpact] = Field(default_factory=list)
+    # PROJECTED: hypothetical #714 Coherence with this revision's pending candidate.
+    projection: RevisionProjection | None = None
 
 
 async def get_event_repository(
@@ -75,20 +112,117 @@ async def get_project_repository(
         yield SQLAlchemyProjectRepository(db)
 
 
+class _FailClosedResolver:
+    """A resolver failure is UNKNOWN impact, never a missing or partial claim."""
+
+    def __init__(self, inner: ImpactResolver, session: AsyncSession) -> None:
+        self.entity_type = inner.entity_type
+        self._inner = inner
+        self._session = session
+
+    async def resolve(self, source: TemporalEntityRef) -> ResolverResult:
+        try:
+            async with self._session.begin_nested():
+                return await self._inner.resolve(source)
+        except Exception:  # noqa: BLE001 - degrade to UNKNOWN, keep the detail readable
+            logger.warning("temporal_impact_resolution_failed", entity_type=self.entity_type, exc_info=True)
+            return ResolverResult(links=[], source_verified=False, reason="impact lookup unavailable")
+
+
+async def _document_type(session: AsyncSession, tenant_id: UUID, document_id: UUID) -> str | None:
+    from src.documents.adapters.persistence.models import DocumentORM
+
+    value = (
+        await session.execute(
+            select(DocumentORM.document_type).where(DocumentORM.id == document_id, DocumentORM.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    return str(getattr(value, "value", value)) if value is not None else None
+
+
+async def get_impact_assessor(
+    current_user: User = Depends(get_current_user),
+) -> AsyncIterator[ImpactAssessor]:
+    """Impact resolution over persisted relationships, in the caller's RLS context."""
+    tenant_id = require_tenant_id(current_user.tenant_id)
+    async with get_session_with_tenant(tenant_id) as db:
+        # Resolvers are selected by source entity type; only clauses have one today.
+        resolvers: dict[str, ImpactResolver] = {
+            "clause": _FailClosedResolver(SqlAlchemyClauseImpactResolver(db, tenant_id=tenant_id), db),
+        }
+
+        async def assess(event: ProjectEvent, qualification: ChangeQualification) -> list[ChangeImpact]:
+            document_id = _projection_payload(event).get("document_id")
+            artifact_type = (
+                await _document_type(db, tenant_id, UUID(document_id)) if isinstance(document_id, str) else None
+            )
+            return await assess_change_impacts(
+                event=event, qualification=qualification, resolvers=resolvers, artifact_type=artifact_type
+            )
+
+        yield assess
+
+
+async def get_revision_projector(
+    current_user: User = Depends(get_current_user),
+) -> AsyncIterator[RevisionProjector]:
+    """#714 projection of this revision's pending candidate; read-only, never trusted."""
+    from src.analysis.adapters.graph.project_graph import (
+        evaluate_artifact_set,
+        is_coherence_llm_enabled,
+    )
+    from src.analysis.adapters.persistence.document_artifact_repository import (
+        SqlAlchemyDocumentArtifactRepository,
+    )
+
+    tenant_id = require_tenant_id(current_user.tenant_id)
+    async with get_session_with_tenant(tenant_id) as db:
+        repo = SqlAlchemyDocumentArtifactRepository(db)
+
+        async def project(
+            *, project_id: UUID, document_id: UUID, revision_id: UUID, qualification: ChangeQualification
+        ) -> RevisionProjection:
+            async def _evaluate(artifacts: list[Any]) -> Any:
+                llm_on = await is_coherence_llm_enabled(tenant_id)
+                return await evaluate_artifact_set(artifacts, project_id=project_id, tenant_id=tenant_id, llm_on=llm_on)
+
+            try:
+                async with db.begin_nested():
+                    return await project_revision_coherence(
+                        document_id=document_id,
+                        revision_id=revision_id,
+                        list_pending=lambda: repo.list_pending_candidates(project_id=project_id, tenant_id=tenant_id),
+                        list_trusted=lambda: repo.list_trusted_for_project(project_id=project_id, tenant_id=tenant_id),
+                        evaluate=_evaluate,
+                        qualification=qualification,
+                    )
+            except Exception:  # noqa: BLE001 - a projection never hides the observed change
+                logger.warning("temporal_revision_projection_unavailable", revision_id=str(revision_id), exc_info=True)
+                return RevisionProjection(
+                    status="unavailable", source_revision_id=revision_id, reason="projection_read_failed"
+                )
+
+        yield project
+
+
 def _projection_payload(event: ProjectEvent) -> dict[str, Any]:
     return event.payload if isinstance(event.payload, dict) else {}
 
 
-def _item(event: ProjectEvent) -> TimelineItemResponse:
+def _item(event: ProjectEvent, qualification: ChangeQualification | None = None) -> TimelineItemResponse:
     payload = _projection_payload(event)
     document_id = payload.get("document_id")
+    qualified = qualification or qualify_event(event)
     return TimelineItemResponse(
         event_id=event.event_id,
         occurred_at=event.occurred_at.isoformat(),
         event_type=event.event_type,
-        state=str(payload.get("state") or ("processing" if event.event_type == "revision.ingested" else "ready")),
-        change_cause=payload.get("change_cause") if isinstance(payload.get("change_cause"), str) else None,
-        confidence=event.confidence,
+        state=qualified.effective_state,
+        change_cause=qualified.effective_change_cause,
+        confidence=qualified.effective_confidence,
+        matcher_status=qualified.matcher_status.value if qualified.matcher_status else None,
+        legacy_matcher=qualified.legacy_matcher,
+        qualification_reason=qualified.reason,
         document_id=UUID(document_id) if isinstance(document_id, str) else None,
         provenance=cast(dict[str, Any], payload["provenance"]) if isinstance(payload.get("provenance"), dict) else {},
         l3_impact=None,
@@ -152,6 +286,8 @@ async def get_revision_change_detail(
     current_user: User = Depends(get_current_user),
     events: IProjectEventRepository = Depends(get_event_repository),
     projects: ProjectRepository = Depends(get_project_repository),
+    assess_impacts: ImpactAssessor = Depends(get_impact_assessor),
+    project_revision: RevisionProjector = Depends(get_revision_projector),
 ) -> ChangeDetailResponse:
     """Read a revision detail only from the tenant-scoped immutable projection."""
 
@@ -173,14 +309,25 @@ async def get_revision_change_detail(
         or payload.get("document_id") != str(document_id)
     ):
         raise HTTPException(status_code=404, detail="Change not found")
-    item = _item(event)
+    qualification = qualify_event(event)
+    item = _item(event, qualification)
     changeset = payload.get("changeset")
     changes = changeset.get("changes", []) if isinstance(changeset, dict) else []
     return ChangeDetailResponse(
         **item.model_dump(),
         changes=changes if isinstance(changes, list) else [],
         evidence_refs=[ref.model_dump(mode="json") for ref in event.evidence_refs],
+        impacts=await assess_impacts(event, qualification),
+        projection=await project_revision(
+            project_id=project_id, document_id=document_id, revision_id=revision_id, qualification=qualification
+        ),
     )
 
 
-__all__ = ["get_event_repository", "get_project_repository", "router"]
+__all__ = [
+    "get_event_repository",
+    "get_impact_assessor",
+    "get_project_repository",
+    "get_revision_projector",
+    "router",
+]

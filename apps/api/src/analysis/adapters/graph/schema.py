@@ -39,6 +39,12 @@ class ProjectState(TypedDict):
     # bare document_id. Never fabricated; absent (None) if unknown.
     document_filename: str | None
     analysis_id: str | None
+    # C2PRO Lane C PR-C2: the document revision this run is pinned to (from the
+    # #711 processing authority). Binds the #714 artifact to its revision and
+    # lets N12 consult the temporal-review seam. None when no authority pins it.
+    document_revision_id: str | None
+    # Why the temporal-review seam did or did not require approval (N12).
+    temporal_review_reason: str
     human_approval_required: bool
     # C2PRO P0b true-resume hotfix: the explicit decision a human supplied
     # via Command(resume=...), consumed from interrupt()'s return value in

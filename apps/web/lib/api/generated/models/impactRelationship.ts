@@ -37,33 +37,10 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { ChangeDetailResponseChangesItem } from "./changeDetailResponseChangesItem";
-import type { ChangeDetailResponseEvidenceRefsItem } from "./changeDetailResponseEvidenceRefsItem";
-import type { ChangeDetailResponseProvenance } from "./changeDetailResponseProvenance";
-import type { ChangeImpact } from "./changeImpact";
-import type { EpistemicBasis } from "./epistemicBasis";
-import type { RevisionProjection } from "./revisionProjection";
+import type { ImpactRelationshipKind } from "./impactRelationshipKind";
 
-/**
- * Evidence-grounded revision detail with L1/L2 before and after snapshots.
- */
-export interface ChangeDetailResponse {
-  event_id: string;
-  occurred_at: string;
-  event_type: string;
-  basis?: EpistemicBasis;
-  state: string;
-  change_cause?: string | null;
-  confidence?: number | null;
-  matcher_status?: string | null;
-  legacy_matcher?: boolean;
-  qualification_reason?: string | null;
-  document_id?: string | null;
-  provenance?: ChangeDetailResponseProvenance;
-  /** @nullable */
-  l3_impact?: null;
-  changes?: ChangeDetailResponseChangesItem[];
-  evidence_refs?: ChangeDetailResponseEvidenceRefsItem[];
-  impacts?: ChangeImpact[];
-  projection?: RevisionProjection | null;
+export interface ImpactRelationship {
+  kind: ImpactRelationshipKind;
+  via: string;
+  link_confidence?: number | null;
 }

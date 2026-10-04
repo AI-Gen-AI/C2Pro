@@ -57,5 +57,10 @@ class IProjectEventRepository(ABC):
         """Fail-closed relational lookup for one revision change projection."""
         ...
 
+    @abstractmethod
+    async def list_for_revision(self, *, tenant_id: UUID, revision_id: UUID) -> list[ProjectEvent]:
+        """Every event a revision itself produced, in canonical order (temporal-review seam)."""
+        ...
+
 
 __all__ = ["IProjectEventRepository"]

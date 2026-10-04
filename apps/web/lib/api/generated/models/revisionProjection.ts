@@ -37,33 +37,21 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { ChangeDetailResponseChangesItem } from "./changeDetailResponseChangesItem";
-import type { ChangeDetailResponseEvidenceRefsItem } from "./changeDetailResponseEvidenceRefsItem";
-import type { ChangeDetailResponseProvenance } from "./changeDetailResponseProvenance";
-import type { ChangeImpact } from "./changeImpact";
 import type { EpistemicBasis } from "./epistemicBasis";
-import type { RevisionProjection } from "./revisionProjection";
+import type { ProjectionCandidate } from "./projectionCandidate";
+import type { RevisionProjectionQualification } from "./revisionProjectionQualification";
+import type { RevisionProjectionStatus } from "./revisionProjectionStatus";
 
-/**
- * Evidence-grounded revision detail with L1/L2 before and after snapshots.
- */
-export interface ChangeDetailResponse {
-  event_id: string;
-  occurred_at: string;
-  event_type: string;
+export interface RevisionProjection {
   basis?: EpistemicBasis;
-  state: string;
-  change_cause?: string | null;
+  status: RevisionProjectionStatus;
+  source_revision_id: string;
+  trusted_score?: number | null;
+  projected_score?: number | null;
+  projected_delta?: number | null;
+  score_version?: string | null;
+  candidate?: ProjectionCandidate | null;
+  qualification?: RevisionProjectionQualification;
   confidence?: number | null;
-  matcher_status?: string | null;
-  legacy_matcher?: boolean;
-  qualification_reason?: string | null;
-  document_id?: string | null;
-  provenance?: ChangeDetailResponseProvenance;
-  /** @nullable */
-  l3_impact?: null;
-  changes?: ChangeDetailResponseChangesItem[];
-  evidence_refs?: ChangeDetailResponseEvidenceRefsItem[];
-  impacts?: ChangeImpact[];
-  projection?: RevisionProjection | null;
+  reason?: string | null;
 }

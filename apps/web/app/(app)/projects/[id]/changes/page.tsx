@@ -17,6 +17,10 @@ type ChangeItem = {
   confidence: number | null;
   document_id: string | null;
   provenance: { target_revision_id?: string; diff_engine_version?: string };
+  // Read-time qualification: an older or unregistered matcher is never settled intelligence.
+  matcher_status?: "current" | "legacy" | "unsupported" | null;
+  legacy_matcher?: boolean;
+  qualification_reason?: string | null;
 };
 
 type Timeline = { items: ChangeItem[]; next_cursor: string | null };
@@ -28,6 +32,12 @@ function stateBadge(item: ChangeItem) {
   if (item.change_cause === "NEWLY_DISCOVERED") return <Badge variant="secondary"><Sparkles className="mr-1 h-3 w-3" />Newly discovered</Badge>;
   if (item.change_cause === "BUSINESS_STATE_CHANGED") return <Badge variant="success"><GitCompareArrows className="mr-1 h-3 w-3" />Business state changed</Badge>;
   return <Badge variant="outline"><CheckCircle2 className="mr-1 h-3 w-3" />No change</Badge>;
+}
+
+function matcherBadge(item: ChangeItem) {
+  if (item.matcher_status === "legacy") return <Badge variant="outline">Older matcher</Badge>;
+  if (item.matcher_status === "unsupported") return <Badge variant="outline">Unverified matcher</Badge>;
+  return null;
 }
 
 // An error, a pending review or an unfinished comparison is never "no material change":
@@ -74,9 +84,10 @@ export default function ProjectChangesPage() {
                   <CardTitle className="text-base">{itemTitle(item)}</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">{new Date(item.occurred_at).toLocaleString()} · {item.provenance.diff_engine_version ?? "analysis pending"}</p>
                 </div>
-                {stateBadge(item)}
+                <div className="flex flex-wrap gap-2">{matcherBadge(item)}{stateBadge(item)}</div>
               </CardHeader>
               <CardContent className="flex flex-wrap items-center justify-between gap-3">
+                {item.qualification_reason ? <p className="w-full text-sm text-muted-foreground">{item.qualification_reason}</p> : null}
                 <span className="text-sm text-muted-foreground">{item.confidence == null ? "Confidence unavailable" : `${Math.round(item.confidence * 100)}% confidence`}</span>
                 {detailHref ? <Link className="text-sm font-medium text-primary hover:underline" href={detailHref}><FileSearch className="mr-1 inline h-4 w-4" />View before, after & evidence</Link> : null}
               </CardContent>
