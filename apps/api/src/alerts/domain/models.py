@@ -129,7 +129,14 @@ class Alert:
     ) -> None:
         """Attach evidence to alert."""
         metadata = dict(self.alert_metadata or {})
-        evidence = list(metadata.get("evidence", []))
+        raw_evidence = metadata.get("evidence", [])
+        if isinstance(raw_evidence, dict):
+            metadata.setdefault("detection_evidence", dict(raw_evidence))
+            evidence: list[dict[str, Any]] = []
+        elif isinstance(raw_evidence, list):
+            evidence = list(raw_evidence)
+        else:
+            evidence = []
         evidence.append(
             {
                 "type": evidence_type,

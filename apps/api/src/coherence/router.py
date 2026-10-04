@@ -12,12 +12,14 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import String, cast, delete, func, select, text
+from sqlalchemy import String, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.alerts.adapters.persistence.tenant_repository import SqlAlchemyTenantRepository
+from src.analysis.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
 from src.analysis.adapters.persistence.models import Alert as AlertORM
 from src.analysis.adapters.persistence.models import Analysis
+from src.analysis.application.dtos import AlertCreate
 from src.analysis.domain.enums import AlertSeverity, AlertType, AnalysisStatus
 from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.coherence.feature_flags import (
@@ -25,6 +27,7 @@ from src.coherence.feature_flags import (
     coherence_llm_crosscheck_enabled_for_tenant,
     coherence_v2_enabled_for_tenant,
 )
+from src.coherence.services.alerts.generator import AlertGeneratorService
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session
@@ -567,60 +570,233 @@ _COHERENCE_ALERT_SEVERITY: dict[str, AlertSeverity] = {
 }
 
 
+def _coherence_alert_category(value: object) -> str:
+    key = str(getattr(value, "value", value) or "").strip().upper()
+    return {
+        "SCHEDULE": "TIME",
+        "FINANCIAL": "BUDGET",
+        "GENERAL": "SCOPE",
+    }.get(key, key or "SCOPE")
+
+
+def _uuid_or_none(value: object) -> UUID | None:
+    if not value:
+        return None
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+def _split_clause_locators(value: object) -> list[str]:
+    """Split detector locators that encode multiple clause identities."""
+
+    raw = str(value or "").strip()
+    if not raw:
+        return []
+    return [part.strip() for part in raw.split("|") if part.strip()]
+
+
+def _coherence_alert_to_create(
+    *,
+    project_id: UUID,
+    alert: Any,
+    clauses: Sequence[Clause],
+    persisted_clause_documents: dict[UUID, UUID],
+) -> AlertCreate:
+    evidence = getattr(alert, "evidence", None)
+    source_locator = (
+        str(getattr(evidence, "source_clause_id", "") or "") if evidence else ""
+    )
+    clause_by_id = {str(clause.id): clause for clause in clauses}
+    source_locators = _split_clause_locators(source_locator)
+    candidate_clause_ids = [_uuid_or_none(locator) for locator in source_locators]
+    # Composite documentary provenance is all-or-nothing. Promoting only the
+    # current subset would lend partial authority to a finding that still
+    # depends on stale/external evidence.
+    all_locators_verified = bool(source_locators) and all(
+        candidate is not None and candidate in persisted_clause_documents
+        for candidate in candidate_clause_ids
+    )
+    verified_clause_ids = (
+        [candidate for candidate in candidate_clause_ids if candidate is not None]
+        if all_locators_verified
+        else []
+    )
+
+    source_clause_id = verified_clause_ids[0] if verified_clause_ids else None
+    related_clause_ids = verified_clause_ids[1:] or None
+    verified_document_ids: list[str] = []
+    for clause_id in verified_clause_ids:
+        document_id = str(persisted_clause_documents[clause_id])
+        if document_id not in verified_document_ids:
+            verified_document_ids.append(document_id)
+
+    source_clause = (
+        clause_by_id.get(source_locators[0])
+        if len(source_locators) == 1
+        else None
+    )
+    source_document_id = (
+        verified_document_ids[0]
+        if verified_document_ids
+        else (
+            str(source_clause.data.get("document_id"))
+            if source_clause is not None and source_clause.data.get("document_id")
+            else None
+        )
+    )
+    detection_evidence = (
+        {
+            "source_clause_id": source_locator or None,
+            "source_document_id": source_document_id,
+            "claim": str(getattr(evidence, "claim", "") or ""),
+            "quote": str(getattr(evidence, "quote", "") or ""),
+        }
+        if evidence is not None
+        else None
+    )
+    affected_entities: dict[str, Any] = {}
+    if verified_document_ids:
+        affected_entities["documents"] = verified_document_ids
+    elif source_document_id:
+        affected_entities["documents"] = [source_document_id]
+
+    severity_key = str(getattr(alert.severity, "value", alert.severity)).lower()
+    message = (getattr(alert, "message", None) or "Coherence issue detected.").strip()
+    return AlertCreate(
+        project_id=project_id,
+        analysis_id=None,
+        severity=_COHERENCE_ALERT_SEVERITY.get(
+            severity_key, AlertSeverity.MEDIUM
+        ),
+        alert_type=AlertType.COHERENCE,
+        rule_id=getattr(alert, "rule_id", None),
+        category=_coherence_alert_category(getattr(alert, "category", None)),
+        title=message[:255],
+        description=message,
+        source_clause_id=source_clause_id,
+        related_clause_ids=related_clause_ids,
+        affected_entities=affected_entities,
+        recommendation=None,
+        impact_level=None,
+        alert_metadata={
+            "source": "coherence_evaluate",
+            "detection_evidence": detection_evidence,
+        },
+    )
+
+
+async def _verified_persisted_clause_documents(
+    *,
+    db: AsyncSession,
+    project_id: UUID,
+    tenant_id: UUID,
+    alerts: Sequence[Any],
+) -> dict[UUID, UUID]:
+    """Return only clause/document pairs inside C3a trusted-current truth.
+
+    Clause UUID shape and project membership are insufficient once historical
+    revisions remain queryable. Reuse C3a's canonical current-revision SQL
+    predicate rather than re-deriving temporal authority in Line B.
+    """
+    candidate_set: set[UUID] = set()
+    for alert in alerts:
+        evidence = getattr(alert, "evidence", None)
+        if evidence is None:
+            continue
+        for locator in _split_clause_locators(
+            getattr(evidence, "source_clause_id", None)
+        ):
+            candidate = _uuid_or_none(locator)
+            if candidate is not None:
+                candidate_set.add(candidate)
+    candidates = sorted(candidate_set, key=str)
+
+    if not candidates:
+        return {}
+
+    candidate_params = {
+        f"candidate_{index}": str(candidate)
+        for index, candidate in enumerate(candidates)
+    }
+    candidate_sql = ", ".join(
+        f"CAST(:candidate_{index} AS uuid)"
+        for index in range(len(candidates))
+    )
+    statement = text(
+        f"""
+        SELECT c.id, c.document_id
+        FROM clauses c
+        JOIN documents d ON d.id = c.document_id
+        CROSS JOIN LATERAL
+            {current_revision_lateral("c.document_id", "c.tenant_id")} AS cur
+        WHERE c.id IN ({candidate_sql})
+          AND c.tenant_id = CAST(:tenant_id AS uuid)
+          AND d.tenant_id = CAST(:tenant_id AS uuid)
+          AND d.project_id = CAST(:project_id AS uuid)
+          AND {clause_in_current_scope("c", "cur")}
+        """
+    )
+    rows = (
+        await db.execute(
+            statement,
+            {
+                **candidate_params,
+                "tenant_id": str(tenant_id),
+                "project_id": str(project_id),
+            },
+        )
+    ).all()
+    return {row.id: row.document_id for row in rows}
+
+
 async def _mirror_coherence_alerts_to_alerts_table(
     *,
     db: AsyncSession,
     project_id: UUID,
     tenant_id: UUID,
     alerts: Sequence[Any],
+    clauses: Sequence[Clause] = (),
 ) -> None:
-    """Mirror ``/evaluate`` coherence alerts into the ``alerts`` table.
+    """Reconcile generated Coherence findings without destroying human state.
 
-    The alerts UI lists rows from the ``alerts`` table (ListAlertsUseCase), but
-    ``/evaluate`` only stored alerts inside ``coherence_results.alerts`` (JSON) —
-    so the dashboard showed a non-zero ``alert_count`` while the alerts page stayed
-    empty. Coherence-sourced rows are ``analysis_id=NULL`` + ``alert_type=COHERENCE``;
-    the prior batch for the project is replaced first so re-evaluating never
-    duplicates. Not committed here — the caller commits with the coherence result.
+    The same documentary finding keeps the same alert row across evaluations.
+    Missing current findings are auto-resolved by the canonical alert service;
+    reviewed false positives remain dismissed; genuine resolved findings reopen
+    only if the same finding is detected again.
+
+    A project-scoped PostgreSQL transaction advisory lock serializes concurrent
+    evaluations. The service deliberately does not commit here: the caller owns
+    the transaction and releases the lock with its existing commit.
     """
     await db.execute(
-        delete(AlertORM).where(
-            AlertORM.project_id == project_id,
-            AlertORM.tenant_id == tenant_id,
-            AlertORM.analysis_id.is_(None),
-            AlertORM.alert_type == AlertType.COHERENCE,
-        )
+        text("SELECT pg_advisory_xact_lock(hashtext(:mirror_key))"),
+        {"mirror_key": f"coherence-alerts:{tenant_id}:{project_id}"},
     )
-    for alert in alerts:
-        severity_key = str(getattr(alert.severity, "value", alert.severity)).lower()
-        message = (alert.message or "Coherence issue detected.").strip()
-        evidence = getattr(alert, "evidence", None)
-        db.add(
-            AlertORM(
-                project_id=project_id,
-                tenant_id=tenant_id,
-                analysis_id=None,
-                severity=_COHERENCE_ALERT_SEVERITY.get(severity_key, AlertSeverity.MEDIUM),
-                alert_type=AlertType.COHERENCE,
-                category=getattr(alert, "category", None),
-                rule_id=getattr(alert, "rule_id", None),
-                title=message[:255],
-                message=message,
-                description=message,
-                alert_metadata={
-                    "source": "coherence_evaluate",
-                    "evidence": (
-                        {
-                            "source_clause_id": evidence.source_clause_id,
-                            "claim": evidence.claim,
-                            "quote": evidence.quote,
-                        }
-                        if evidence
-                        else None
-                    ),
-                },
-            )
+    persisted_clause_documents = await _verified_persisted_clause_documents(
+        db=db,
+        project_id=project_id,
+        tenant_id=tenant_id,
+        alerts=alerts,
+    )
+    payloads = [
+        _coherence_alert_to_create(
+            project_id=project_id,
+            alert=alert,
+            clauses=clauses,
+            persisted_clause_documents=persisted_clause_documents,
         )
+        for alert in alerts
+    ]
+    await AlertGeneratorService(
+        SqlAlchemyAlertRepository(db)
+    ).process_violations(
+        project_id=project_id,
+        tenant_id=tenant_id,
+        violations=payloads,
+        auto_resolve=True,
+        commit=False,
+    )
 
 
 _TECHNICAL_PLIEGO_MARKERS: tuple[str, ...] = (
@@ -855,6 +1031,7 @@ async def evaluate_project_coherence(
                 project_id=payload.project_id,
                 tenant_id=current_user.tenant_id,
                 alerts=enriched_result.alerts,
+                clauses=clauses,
             )
             await db.commit()
         except Exception:
