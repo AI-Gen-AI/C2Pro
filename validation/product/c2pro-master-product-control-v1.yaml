@@ -48,7 +48,7 @@ development_execution_authority:
     This product plane records target/state; it does not authorize merges or production mutation.
 
 production_position:
-  reconciled_against_main_sha: e331dc4a027b9dcdb3985bb7b3961b9293ba06b7
+  reconciled_against_main_sha: c41ff69bcabd87da1a606b125bd9cc37184bc7cc
   deployed_runtime_sha: UNVERIFIED
   observed_production_evidence:
     - "kuwait2 doc c510de21: enqueue -> worker -> SUCCESS on dedicated Railway Redis (historical P0a evidence)"
@@ -207,7 +207,7 @@ reconciliation_delta_2026_10_03_post_780:
 
 reconciliation_delta_2026_10_04_p0b:
   previous_main_sha: 9893cd42049c3cd2bbf9e8d891df0725b35ef082
-  current_main_sha: e331dc4a027b9dcdb3985bb7b3961b9293ba06b7
+  current_main_sha: c41ff69bcabd87da1a606b125bd9cc37184bc7cc
   authoritative_runs:
     A1: {run_number: 55, run_id: 37195954713, conclusion: PASS}
     A2: {run_number: 56, run_id: 37196092728, conclusion: PASS}
@@ -243,9 +243,9 @@ reconciliation_delta_2026_10_04_p0b:
     journey and a hash-bound PASS bundle. This promotes only the fixed P0b lifecycle targets and
     product_value_delivered for the current wedge; it does not validate P0c/P0d, global Coherence
     cutover, Project Controls or the full North Star. Repository main later advanced through
-    #824 (persisted alert review) and #823 (Lane C temporal impact/trust seam); those later merges
-    are implementation state only and do not alter the accepted P0b runtime binding or inherit
-    production-validation authority from run #56.
+    #824 (persisted alert review), #823 (Lane C temporal impact/trust seam) and #826 (production-acceptance
+    Evidence hard-refresh rate-limit handling); those later merges are implementation/harness state only
+    and do not alter the accepted P0b runtime binding or inherit production-validation authority from run #56.
 
 north_star:
   full_product: >

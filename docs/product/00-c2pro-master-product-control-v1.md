@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
 **Status:** Reconciliation snapshot (read-only) · **Date:** 2026-10-04 · **Schema:** v8
-**reconciled_against_main_sha:** `e331dc4a027b9dcdb3985bb7b3961b9293ba06b7` · **deployed_runtime_sha:** `UNVERIFIED`
+**reconciled_against_main_sha:** `c41ff69bcabd87da1a606b125bd9cc37184bc7cc` · **deployed_runtime_sha:** `UNVERIFIED`
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This document is the human projection of the machine product-control plane. It does not grant execution authority. Direct `main`, merge and production mutation remain governed outside this document.
@@ -10,7 +10,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=e331dc4a027b9dcdb3985bb7b3961b9293ba06b7
+reconciled_against_main_sha=c41ff69bcabd87da1a606b125bd9cc37184bc7cc
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=true
@@ -105,7 +105,7 @@ This resolves the earlier ambiguity that could have led the product toward paral
 
 Three facts remain deliberately separate:
 
-- `reconciled_against_main_sha = e331dc4a027b9dcdb3985bb7b3961b9293ba06b7` — current repository baseline after #824 (persisted alert review) and #823 (Lane C temporal impact/trust seam). Those later merges are implementation state only; the accepted P0b runtime remains the earlier qualified composite.
+- `reconciled_against_main_sha = c41ff69bcabd87da1a606b125bd9cc37184bc7cc` — current repository baseline after #824 (persisted alert review), #823 (Lane C temporal impact/trust seam) and #826 (production-acceptance Evidence hard-refresh rate-limit handling). Those later merges are implementation/harness state only; the accepted P0b runtime remains the earlier qualified composite.
 - `deployed_runtime_sha = UNVERIFIED` — retained as a legacy singleton because production is composite. The accepted P0b binding is Railway backend `5491e36c8f71113540c65ddd9fa7fc5e45a01f27` / API deployment `f976eb47-c2aa-4b02-a0c6-25e555d4405b` (SUCCESS) plus Vercel frontend `84842677adb7046ea24b0e92fc5aaa3ee20565b0` / deployment `dpl_3Lv1u6UtwWUQvVrhdckiqfZc4SHg` (READY).
 - A1 run **#55 / 37195954713** passed identity/runtime/auth/tenant preflight. A2 run **#56 / 37196092728** passed the full production browser journey, durable verifier, evidence-bundle build and evidence validator.
 - The accepted P0b bundle is `evidence/product-qualification/p0b-prod-gh-37196092728-1.yaml`, SHA-256 `d6031d454ac40f30a84a1b9c30f4f5d97ef285d7eb9e8d047a0af97148f6281b`.

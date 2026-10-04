@@ -25,7 +25,7 @@ Completed work belongs in Git/PR/CI/evidence history, not as permanently duplica
 
 ## Current reconciliation hinge — 2026-10-04
 
-Current repository baseline: `main@e331dc4a027b9dcdb3985bb7b3961b9293ba06b7`.
+Current repository baseline: `main@c41ff69bcabd87da1a606b125bd9cc37184bc7cc`.
 
 Material programme facts:
 
@@ -36,7 +36,7 @@ Material programme facts:
 - `product_value_delivered=true` refers to the current P0b wedge only, not the complete North Star.
 - P0c and P0d remain `REQUIRED` and must earn their own exact-runtime production evidence.
 - OPS residuals from run #56 remain explicit: best-effort AI-usage telemetry schema drift (`ai_usage_logs.model_name`) and Railway log-rate saturation.
-- #824 (persisted alert review) and #823 (Lane C temporal impact/trust seam) are merged after the P0b qualification run; neither inherits PROD_VALIDATED status from P0b.
+- #824 (persisted alert review), #823 (Lane C temporal impact/trust seam) and #826 (production-acceptance Evidence hard-refresh rate-limit handling) are merged after the P0b qualification run; none inherits PROD_VALIDATED status from P0b.
 
 ### Next Line B work package
 

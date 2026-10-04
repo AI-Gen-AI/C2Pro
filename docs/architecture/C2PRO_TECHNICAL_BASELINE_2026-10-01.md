@@ -2,7 +2,7 @@
 
 **Status:** Canonical current-state architecture baseline · revalidated 2026-10-04
 **Original baseline main SHA:** `33650a28a930d82a7bd65d98b50981145b3fd1d1`  
-**Revalidated against main SHA:** `e331dc4a027b9dcdb3985bb7b3961b9293ba06b7`
+**Revalidated against main SHA:** `c41ff69bcabd87da1a606b125bd9cc37184bc7cc`
 **Scope:** implemented architecture and active product-control boundaries, not a product-release claim
 
 > This document describes the architecture that exists or is explicitly governed on the revalidated baseline above. It does **not** imply that the complete end-user journey is production validated. Product lifecycle truth remains in `validation/product/c2pro-master-product-control-v1.yaml`.
