@@ -588,11 +588,11 @@ def test_direct_processing_polls_quiesce_browser_background_requests() -> None:
 
     assert 'async function quiesceBrowserPage(page: Page): Promise<void>' in spec
     assert 'await page.goto("about:blank");' in spec
-    assert spec.count("await quiesceBrowserPage(page);") == 2
 
     journey = spec[
         spec.index('test("real user completes the canonical production journey"') :
     ]
+    assert journey.count("await quiesceBrowserPage(page);") == 2
     upload = journey.index("const upload = await uploadFixture(page, projectId);")
     auth_page = journey.index(
         "const pollingAuthPage = await createPollingAuthPage(page);",
