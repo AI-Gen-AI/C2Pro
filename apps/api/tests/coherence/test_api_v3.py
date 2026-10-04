@@ -813,3 +813,56 @@ def test_convert_enriched_to_coherence_result():
     assert not hasattr(result, "finding_signals")
     assert not hasattr(result, "diagnostics")
     assert not hasattr(result, "llm_cost_usd")
+
+
+@pytest.mark.asyncio
+async def test_b1_coherence_result_is_not_committed_before_alert_reconciliation_succeeds(
+    sample_clauses,
+    sample_enriched_result,
+):
+    """B1-02/B1-11: a failed Alert reconciliation cannot leave a newly durable score."""
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
+
+    project_id = uuid4()
+    tenant_id = uuid4()
+    db = Mock()
+    db.add = Mock()
+    db.scalar = AsyncMock(return_value=None)
+    db.commit = AsyncMock()
+
+    with (
+        patch(
+            "src.coherence.router.evaluate_coherence_async",
+            new_callable=AsyncMock,
+            return_value=sample_enriched_result,
+        ),
+        patch(
+            "src.coherence.router._mirror_coherence_alerts_to_alerts_table",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("injected alert reconciliation failure"),
+        ),
+        patch(
+            "src.coherence.router._v2_enabled_for",
+            new_callable=AsyncMock,
+            return_value=False,
+        ),
+    ):
+        try:
+            await evaluate_project_coherence(
+                payload=CoherenceEvaluateRequest(
+                    project_id=project_id,
+                    clauses=sample_clauses,
+                ),
+                include_diagnostics=False,
+                db=db,
+                current_user=SimpleNamespace(tenant_id=tenant_id),
+                flags_service=None,
+            )
+        except RuntimeError:
+            # Propagation vs translated failure is not the contract under test.
+            pass
+
+    assert db.commit.await_count == 0, (
+        "Coherence committed before canonical Alert reconciliation completed; "
+        "B1 requires one owning transaction so this fault leaves no new durable result."
+    )
