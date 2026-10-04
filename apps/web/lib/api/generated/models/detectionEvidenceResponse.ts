@@ -37,25 +37,13 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { AlertResponseAffectedEntities } from "./alertResponseAffectedEntities";
-import type { DetectionEvidenceResponse } from "./detectionEvidenceResponse";
 
-export interface AlertResponse {
-  id: string;
-  project_id: string;
-  tenant_id: string;
-  rule_code: string;
-  category: string;
-  severity: string;
-  message: string;
-  status: string;
-  affected_entities?: AlertResponseAffectedEntities;
+/**
+ * Detector-produced provenance; distinct from reviewer-attached evidence.
+ */
+export interface DetectionEvidenceResponse {
   source_clause_id?: string | null;
-  detection_evidence?: DetectionEvidenceResponse | null;
-  reviewed_by?: string | null;
-  reviewed_at?: string | null;
-  root_cause?: string | null;
-  sla_policy_name?: string | null;
-  sla_due_at?: string | null;
-  created_at: string;
+  source_document_id?: string | null;
+  claim?: string;
+  quote?: string;
 }

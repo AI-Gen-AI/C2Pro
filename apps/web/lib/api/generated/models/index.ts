@@ -132,6 +132,7 @@ export * from "./dashboardSummaryProjectionStatus";
 export * from "./dashboardSummaryScoreVersion";
 export * from "./dashboardSummarySubScores";
 export * from "./dashboardSummaryWeightsUsed";
+export * from "./detectionEvidenceResponse";
 export * from "./disclaimerAcceptRequest";
 export * from "./dLQEntryResponse";
 export * from "./dLQEntryResponsePayloadJson";

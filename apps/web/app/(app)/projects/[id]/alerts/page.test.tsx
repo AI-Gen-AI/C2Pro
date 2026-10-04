@@ -57,6 +57,10 @@ vi.mock("@/components/features/alerts/AlertReviewCenter", () => ({
       title: string;
       assignee?: string;
       clauseId?: string;
+      addressableClauseId?: string;
+      sourceDocumentId?: string;
+      evidenceClaim?: string;
+      evidenceQuote?: string;
       status?: string;
     }>;
     onApprove?: (alertId: string) => Promise<void>;
@@ -104,6 +108,13 @@ describe("Project alerts route", () => {
             severity: "critical",
             message: "Schedule drift",
             status: "open",
+            source_clause_id: "11111111-1111-4111-8111-111111111111",
+            detection_evidence: {
+              source_clause_id: "11111111-1111-4111-8111-111111111111",
+              source_document_id: "22222222-2222-4222-8222-222222222222",
+              claim: "Milestone gap detected",
+              quote: "Milestone B starts thirty days later",
+            },
             created_at: "2026-03-29T00:00:00Z",
           },
         ],
@@ -131,7 +142,15 @@ describe("Project alerts route", () => {
       }),
     );
     expect(reviewProps.alerts[0]).not.toHaveProperty("assignee");
-    expect(reviewProps.alerts[0]).not.toHaveProperty("clauseId");
+    expect(reviewProps.alerts[0]).toEqual(
+      expect.objectContaining({
+        clauseId: "11111111-1111-4111-8111-111111111111",
+        addressableClauseId: "11111111-1111-4111-8111-111111111111",
+        sourceDocumentId: "22222222-2222-4222-8222-222222222222",
+        evidenceClaim: "Milestone gap detected",
+        evidenceQuote: "Milestone B starts thirty days later",
+      }),
+    );
     expect(screen.getByText(/alert review for proj-real-42/i)).toBeInTheDocument();
     expect(screen.queryByText(/legal\.reviewer|finance\.analyst|project\.manager/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/clause-alert-1/i)).not.toBeInTheDocument();

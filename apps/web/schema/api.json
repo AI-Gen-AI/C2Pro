@@ -6038,6 +6038,28 @@
             "type": "object",
             "title": "Affected Entities"
           },
+          "source_clause_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Clause Id"
+          },
+          "detection_evidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DetectionEvidenceResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "reviewed_by": {
             "anyOf": [
               {
@@ -8585,6 +8607,45 @@
         ],
         "title": "DashboardSummary",
         "description": "Consolidated view of project coherence for the dashboard.\n\nECOA v2 (ADR-009 \u00a77.2 step 1): the optional `categories_v2` field carries\nthe locked v2 contract. Defaults to None so v1 clients are unaffected."
+      },
+      "DetectionEvidenceResponse": {
+        "properties": {
+          "source_clause_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Clause Id"
+          },
+          "source_document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Document Id"
+          },
+          "claim": {
+            "type": "string",
+            "title": "Claim",
+            "default": ""
+          },
+          "quote": {
+            "type": "string",
+            "title": "Quote",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "DetectionEvidenceResponse",
+        "description": "Detector-produced provenance; distinct from reviewer-attached evidence."
       },
       "DisclaimerAcceptRequest": {
         "properties": {

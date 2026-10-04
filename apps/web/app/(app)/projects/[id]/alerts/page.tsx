@@ -37,12 +37,35 @@ function mapAlertToReviewAlert(alert: {
   severity: string;
   status: string;
   message: string;
+  source_clause_id?: string | null;
+  detection_evidence?: {
+    source_clause_id?: string | null;
+    source_document_id?: string | null;
+    claim?: string | null;
+    quote?: string | null;
+  } | null;
 }): ReviewAlert {
+  const persistedClauseId = alert.source_clause_id ?? undefined;
+  const clauseId =
+    persistedClauseId ?? alert.detection_evidence?.source_clause_id ?? undefined;
+  const sourceDocumentId =
+    alert.detection_evidence?.source_document_id ?? undefined;
+
   return {
     id: alert.id,
     title: alert.message,
     severity: SEVERITY_MAP[alert.severity] ?? "medium",
     status: STATUS_MAP[alert.status] ?? "pending",
+    ...(clauseId ? { clauseId } : {}),
+    ...(persistedClauseId && sourceDocumentId
+      ? { addressableClauseId: persistedClauseId, sourceDocumentId }
+      : {}),
+    ...(alert.detection_evidence?.claim
+      ? { evidenceClaim: alert.detection_evidence.claim }
+      : {}),
+    ...(alert.detection_evidence?.quote
+      ? { evidenceQuote: alert.detection_evidence.quote }
+      : {}),
   };
 }
 
