@@ -473,8 +473,13 @@ def get_list_documents_use_case(
 
 def get_get_document_with_clauses_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+    revision_repository: SqlAlchemyDocumentRevisionRepository = Depends(
+        get_document_revision_repository
+    ),
 ) -> GetDocumentWithClausesUseCase:
-    return GetDocumentWithClausesUseCase(document_repository=repo)
+    return GetDocumentWithClausesUseCase(
+        document_repository=repo, revision_repository=revision_repository
+    )
 
 
 def get_parse_document_use_case(
@@ -686,8 +691,17 @@ async def get_document_endpoint(
     _user_id: CurrentUserId,
     tenant_id: CurrentTenantId,
     use_case: GetDocumentWithClausesUseCase = Depends(get_get_document_with_clauses_use_case),
+    revision_id: UUID | None = Query(
+        default=None,
+        description=(
+            "Read the clauses of this historical revision instead of the document's "
+            "trusted-current revision. Never changes what is current."
+        ),
+    ),
 ) -> DocumentDetailResponse:
-    document = await use_case.execute(tenant_id=tenant_id, document_id=document_id)
+    document = await use_case.execute(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_id
+    )
     response_data = DocumentResponse.model_validate(document).model_dump()
     response_data["clauses"] = [
         {
@@ -705,6 +719,7 @@ async def get_document_endpoint(
             "extraction_model": clause.extraction_model,
             "manually_verified": clause.manually_verified,
             "verified_at": clause.verified_at,
+            "revision_id": clause.revision_id,
         }
         for clause in document.clauses
     ]
@@ -753,8 +768,17 @@ async def get_document_entities_endpoint(
     revision_repository: SqlAlchemyDocumentRevisionRepository = Depends(
         get_document_revision_repository
     ),
+    revision_id: UUID | None = Query(
+        default=None,
+        description=(
+            "Read the entities of this historical revision instead of the document's "
+            "trusted-current revision. Never changes what is current."
+        ),
+    ),
 ) -> list[DocumentEntityResponse]:
-    document = await use_case.execute(tenant_id=tenant_id, document_id=document_id)
+    document = await use_case.execute(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_id
+    )
 
     revision_validity: dict[str, bool] = {}
     entities: list[DocumentEntityResponse] = []

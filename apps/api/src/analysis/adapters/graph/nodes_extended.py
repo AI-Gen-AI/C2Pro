@@ -638,8 +638,12 @@ async def _resolve_clause_evidence(state: ProjectState) -> ClauseEvidence:
         )
 
     try:
+        pinned_revision = state.get("document_revision_id")
         persisted = await load_persisted_clause_evidence(
-            UUID(str(tenant_id)), UUID(str(raw_document_id))
+            UUID(str(tenant_id)),
+            UUID(str(raw_document_id)),
+            # C3a: exactly the revision the #711 authority pinned for this run.
+            revision_id=UUID(str(pinned_revision)) if pinned_revision else None,
         )
     except StaleClauseEvidenceError:
         # The persisted rows describe an earlier revision: score the current

@@ -828,6 +828,36 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
         state["messages"].append(AIMessage(content="Missing tenant_id; skipping persistence."))
         return state
 
+    # Lane C / C3a: canonical state (analysis row, risk alerts, canonical WBS,
+    # graph.completed) is written only by a run that needs no human approval or
+    # that a human approved (N13 sets the flag to False). A run that reached N17
+    # with approval still required -- C2PRO_SKIP_HITL / C2PRO_AI_MOCK route past
+    # N13 -- is exactly the run whose #714 artifact is persisted PROPOSED
+    # (document_artifact_completion._requires_human_approval): it must not mutate
+    # what the trusted revision established. Same fail-closed rule: anything but
+    # an explicit False is untrusted.
+    if state.get("human_approval_required") is not False:
+        logger.info(
+            "n17_canonical_write_skipped_untrusted",
+            document_id=state.get("document_id"),
+            revision_id=state.get("document_revision_id"),
+        )
+        state["node_results"] = [
+            *state.get("node_results", []),
+            NodeResult(
+                node="save_to_db",
+                status=NodeStatus.SKIPPED,
+                degradation_reason="canonical_write_requires_trusted_approval",
+            ),
+        ]
+        state["messages"].append(
+            AIMessage(
+                content="N17 save_to_db: skipped -- human approval is still required, "
+                "so no canonical state is written."
+            )
+        )
+        return state
+
     # C2PRO P0b crash-safe resume V3: a fenced resume persists through ONE
     # atomic transaction that also re-verifies this attempt still owns the
     # operation. The legacy path below stays for non-resume runs, which have

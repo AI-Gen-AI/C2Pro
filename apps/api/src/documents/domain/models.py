@@ -81,6 +81,9 @@ class Clause:
     extraction_model: str | None = None
     manually_verified: bool = False
     verified_at: datetime | None = None
+    # Lane C / C3a: the immutable revision this clause was extracted from (None only
+    # for legacy rows whose revision was never proven).
+    revision_id: UUID | None = None
 
     def __post_init__(self) -> None:
         if self.project_id is None:

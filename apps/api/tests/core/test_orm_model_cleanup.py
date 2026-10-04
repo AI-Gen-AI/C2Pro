@@ -40,7 +40,12 @@ def test_reenabled_foreign_keys_reference_real_tables() -> None:
     assert str(next(iter(Alert.__table__.c.source_clause_id.foreign_keys)).target_fullname) == "clauses.id"
     assert str(next(iter(DocumentORM.__table__.c.project_id.foreign_keys)).target_fullname) == "projects.id"
     assert str(next(iter(ClauseORM.__table__.c.project_id.foreign_keys)).target_fullname) == "projects.id"
-    assert str(next(iter(ClauseORM.__table__.c.document_id.foreign_keys)).target_fullname) == "documents.id"
+    # C3a: clauses.document_id is also part of the composite revision-identity FK.
+    clause_document_targets = {
+        str(foreign_key.target_fullname)
+        for foreign_key in ClauseORM.__table__.c.document_id.foreign_keys
+    }
+    assert "documents.id" in clause_document_targets
     assert str(next(iter(StakeholderORM.__table__.c.project_id.foreign_keys)).target_fullname) == "projects.id"
     assert str(next(iter(StakeholderORM.__table__.c.source_clause_id.foreign_keys)).target_fullname) == "clauses.id"
     assert (

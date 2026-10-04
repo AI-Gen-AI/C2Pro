@@ -34,8 +34,11 @@ class IDocumentRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_document_with_clauses(self, tenant_id: TenantId, document_id: UUID) -> Document | None:
-        """Retrieves a document by its ID, including its associated clauses."""
+    async def get_document_with_clauses(
+        self, tenant_id: TenantId, document_id: UUID, revision_id: UUID | None = None
+    ) -> Document | None:
+        """The document with ONE clause set: its current revision's (trusted-current
+        rule) or, when ``revision_id`` is given, that historical revision's."""
         pass
 
     @abstractmethod
@@ -137,15 +140,37 @@ class IDocumentRepository(ABC):
 
     @abstractmethod
     async def get_clause_by_document_and_code(
-        self, tenant_id: TenantId, document_id: UUID, clause_code: str
+        self,
+        tenant_id: TenantId,
+        document_id: UUID,
+        clause_code: str,
+        revision_id: UUID | None = None,
     ) -> Clause | None:
-        """Returns a clause by document_id and clause_code."""
+        """The clause with ``clause_code`` in the current (or the given) revision."""
         pass
 
     @abstractmethod
     async def list_clauses_for_document(self, tenant_id: TenantId, document_id: UUID) -> list[Clause]:
-        """Lists all clauses for a document."""
+        """Every clause row of the document across ALL revisions (not current truth)."""
         pass
+
+    # Lane C / C3a revision-scoped reads. Not abstract so existing test doubles keep
+    # constructing; an adapter that does not implement them fails closed.
+    async def list_current_clauses(self, tenant_id: TenantId, document_id: UUID) -> list[Clause]:
+        """The current revision's clauses; empty when the current revision is unresolved."""
+        raise NotImplementedError
+
+    async def list_revision_clauses(
+        self, tenant_id: TenantId, document_id: UUID, revision_id: UUID
+    ) -> list[Clause]:
+        """An explicitly requested revision's clauses (historical read)."""
+        raise NotImplementedError
+
+    async def list_clauses_bound_to_revision(
+        self, tenant_id: TenantId, document_id: UUID, revision_id: UUID
+    ) -> list[Clause]:
+        """Only the rows physically bound to ``revision_id``."""
+        raise NotImplementedError
 
     async def begin_processing_generation(
         self,

@@ -194,6 +194,8 @@ export * from "./getCookieConsentApiV1ComplianceCookiesConsentGet200";
 export * from "./getCookieConsentApiV1ComplianceCookiesConsentGetParams";
 export * from "./getCostAnalyticsApiV1AiAnalyticsCostGet200";
 export * from "./getCostAnalyticsApiV1AiAnalyticsCostGetParams";
+export * from "./getDocumentEndpointApiV1DocumentsDocumentIdGetParams";
+export * from "./getDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetParams";
 export * from "./getLegalDisclaimerStatusApiV1ProjectsProjectIdGatesGate8DisclaimerStatusGet200";
 export * from "./getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet200";
 export * from "./getProjectBudgetApiV1ProjectsProjectIdBudgetGet200";
