@@ -28,17 +28,28 @@ Execution model: AT-LEAST-ONCE delivery + IDEMPOTENT durable effects.
 
 Derived-state policy (C3b-1):
 
-* WBS: canonical WBS identity is generated-code-only today (ProjectGraph marks
-  every WBS pairing ``generated_anchor``), so codes never establish identity.
-  An existing canonical WBS is NEVER replaced, upserted or re-linked here: it
-  is preserved and the materialization is qualified
-  ``WBS_RECONCILIATION_REQUIRED`` (governed WBS baseline / change-proposal
-  work, PC-1/PC-2). Only a project with NO canonical WBS receives the approved
-  artifact's WBS -- no identity is claimed and no relationship can be lost.
-* Alerts: the per-analysis risk alerts are generated exactly as before (once,
-  because the analysis is created once). Cross-revision alert reconciliation
-  belongs to the canonical AlertGeneratorService work (#828) and is qualified
-  ``ALERT_RECONCILIATION_WAITING_ON_828``.
+* ``materialized`` means "every effect CURRENTLY AUTHORISED BY GOVERNANCE was
+  applied" -- NOT "every proposed effect became canonical". Effects that need a
+  governance step this approval does not provide are DEFERRED and recorded as
+  qualifications on the artifact-keyed obligation and the completion event.
+* WBS is a governed canonical project backbone. A generic artifact approval
+  does not prove that a human reviewed, could edit and approved the exact WBS
+  tree as scope authority, and WBS identity is generated-code-only today
+  (ProjectGraph marks every pairing ``generated_anchor``). So NO canonical WBS
+  is written here -- not even a project's first one: nothing is created,
+  replaced, upserted or re-linked, and RACI / BOM are never touched. The
+  proposal stays in the exact approved artifact
+  (``document_artifacts.payload.extracted_wbs``, bound by id/version/digest and
+  revision) for the future governed baseline workflow (review + edit + approve
+  -> Baseline #1, then governed change proposals -> Baseline #N+1), and the
+  materialization is qualified ``WBS_GOVERNANCE_REQUIRED``.
+* Alerts: the per-analysis RISK alerts are created exactly as before (once,
+  because the analysis is created once); existing alerts, their human
+  disposition and reviewer evidence are never read or modified here. The
+  canonical AlertGeneratorService (#828) reconciles COHERENCE alerts only and
+  has no stable identity for RISK findings (no rule, anchor or detector
+  evidence), so cross-revision RISK reconciliation is NOT attempted and is
+  qualified ``RISK_ALERT_RECONCILIATION_REQUIRED``.
 """
 
 from __future__ import annotations
@@ -51,14 +62,14 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 
 from src.analysis.domain.enums import AnalysisStatus, AnalysisType
 
 logger = structlog.get_logger()
 
 #: Bumped whenever the set or semantics of canonical effects changes.
-MATERIALIZER_VERSION = "c3b1-trusted-materializer-v1"
+MATERIALIZER_VERSION = "c3b1-trusted-materializer-v2"
 MATERIALIZATION_COMPLETED_EVENT = "materialization.completed"
 
 Fault = Callable[[str], Awaitable[None]]
@@ -73,8 +84,8 @@ class MaterializationState(StrEnum):
 
 
 class MaterializationQualification(StrEnum):
-    WBS_RECONCILIATION_REQUIRED = "WBS_RECONCILIATION_REQUIRED"
-    ALERT_RECONCILIATION_WAITING_ON_828 = "ALERT_RECONCILIATION_WAITING_ON_828"
+    WBS_GOVERNANCE_REQUIRED = "WBS_GOVERNANCE_REQUIRED"
+    RISK_ALERT_RECONCILIATION_REQUIRED = "RISK_ALERT_RECONCILIATION_REQUIRED"
 
 
 class MaterializationStatus(StrEnum):
@@ -191,7 +202,7 @@ _MARK_MATERIALIZED_SQL = text(
     UPDATE system_recovery.trusted_projection_index
        SET materialization_state = 'materialized',
            materialized_analysis_id = cast(:analysis_id as uuid),
-           materialization_detail = cast(:detail as jsonb),
+           materialization_detail = coalesce(cast(:detail as jsonb), materialization_detail),
            materialization_checked_at = (clock_timestamp() AT TIME ZONE 'UTC'),
            updated_at = (clock_timestamp() AT TIME ZONE 'UTC')
      WHERE artifact_id = cast(:artifact_id as uuid)
@@ -225,8 +236,38 @@ async def mark_obsolete(session: Any, ref: ArtifactRef, reason: str) -> None:
     )
 
 
+def materialization_detail(
+    ref: ArtifactRef, content: MaterializationContent, qualifications: Sequence[str]
+) -> dict[str, Any]:
+    """The durable meaning of ``materialized`` for this artifact.
+
+    ``scope`` makes explicit that only governance-authorised effects were
+    applied; ``deferred_effects`` names what still needs governance and where
+    the exact proposal is recoverable from.
+    """
+    deferred: dict[str, Any] = {}
+    if MaterializationQualification.WBS_GOVERNANCE_REQUIRED in qualifications:
+        deferred["wbs"] = {
+            "qualification": MaterializationQualification.WBS_GOVERNANCE_REQUIRED.value,
+            "proposed_nodes": len(content.wbs),
+            "proposal_source": {
+                "table": "document_artifacts",
+                "artifact_id": str(ref.artifact_id),
+                "artifact_version": ref.artifact_version,
+                "artifact_hash": ref.artifact_hash,
+                "path": "payload.extracted_wbs",
+            },
+        }
+    return {
+        "scope": "governance_authorized_effects_applied",
+        "qualifications": list(qualifications),
+        "deferred_effects": deferred,
+        "materializer_version": MATERIALIZER_VERSION,
+    }
+
+
 async def _mark_materialized(
-    session: Any, ref: ArtifactRef, analysis_id: UUID, qualifications: Sequence[str]
+    session: Any, ref: ArtifactRef, analysis_id: UUID, detail: Mapping[str, Any] | None
 ) -> None:
     await session.execute(
         _MARK_MATERIALIZED_SQL,
@@ -234,12 +275,8 @@ async def _mark_materialized(
             "artifact_id": str(ref.artifact_id),
             "tenant_id": str(ref.tenant_id),
             "analysis_id": str(analysis_id),
-            "detail": _json(
-                {
-                    "qualifications": list(qualifications),
-                    "materializer_version": MATERIALIZER_VERSION,
-                }
-            ),
+            # A replay re-links the existing result and keeps its recorded detail.
+            "detail": _json(dict(detail)) if detail is not None else None,
         },
     )
 
@@ -340,7 +377,7 @@ async def materialize_in_transaction(
     if existing is not None:
         # Replay (duplicate delivery, beat sweep, resume-then-worker): the
         # canonical effect already happened. Write nothing new.
-        await _mark_materialized(session, ref, existing, ())
+        await _mark_materialized(session, ref, existing, None)
         return MaterializationOutcome(MaterializationStatus.ALREADY_MATERIALIZED, existing)
 
     analysis_id, qualifications = await write_canonical_effects(
@@ -381,8 +418,7 @@ async def materialize_in_transaction(
                 "artifact_version": ref.artifact_version,
                 "artifact_hash": ref.artifact_hash,
                 "analysis_id": str(analysis_id),
-                "qualifications": list(qualifications),
-                "materializer_version": MATERIALIZER_VERSION,
+                **materialization_detail(ref, content, qualifications),
                 "resume_operation_id": str(resume.operation_id) if resume else None,
             },
             actor=actor,
@@ -393,7 +429,9 @@ async def materialize_in_transaction(
         )
     )
     await session.flush()
-    await _mark_materialized(session, ref, analysis_id, qualifications)
+    await _mark_materialized(
+        session, ref, analysis_id, materialization_detail(ref, content, qualifications)
+    )
     logger.info(
         "trusted_materialization_created",
         artifact_id=str(ref.artifact_id),
@@ -413,7 +451,7 @@ async def write_canonical_effects(
     resume: ResumeLink | None,
     fault: Fault | None = None,
 ) -> tuple[UUID, tuple[str, ...]]:
-    """The extracted N17 persistence core: analysis + alerts + WBS policy.
+    """The extracted N17 persistence core: analysis + alerts; WBS is deferred.
 
     Shared by the artifact-keyed materializer and the pre-#714 (unbound)
     resume path, so there is exactly one implementation of "what approval
@@ -424,8 +462,6 @@ async def write_canonical_effects(
     )
     from src.analysis.ports.types import AlertWrite, AnalysisWrite
     from src.coherence.alert_generator import AlertGenerator
-    from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
-    from src.wbs.adapters.persistence.models import WBSNodeORM
 
     qualifications: list[str] = []
     analysis_id = uuid4()
@@ -481,34 +517,20 @@ async def write_canonical_effects(
             tenant_id=tenant_id,
         )
         await repo.flush()
-        # Cross-revision identity / disappearance handling is owned by #828.
-        qualifications.append(MaterializationQualification.ALERT_RECONCILIATION_WAITING_ON_828)
+        # No canonical identity exists for RISK findings (see module docstring).
+        qualifications.append(MaterializationQualification.RISK_ALERT_RECONCILIATION_REQUIRED)
     if fault is not None:
         await fault("after_alerts")
 
     if content.wbs:
-        existing_nodes = (
-            await session.execute(
-                select(func.count())
-                .select_from(WBSNodeORM)
-                .where(WBSNodeORM.project_id == project_id, WBSNodeORM.tenant_id == tenant_id)
-            )
-        ).scalar_one()
-        if existing_nodes:
-            # Generated WBS codes are not identity: never replace, upsert or
-            # re-link a canonical WBS (and its RACI / BOM) from them.
-            qualifications.append(MaterializationQualification.WBS_RECONCILIATION_REQUIRED)
-            logger.info(
-                "trusted_materialization_wbs_deferred",
-                project_id=str(project_id),
-                canonical_nodes=int(existing_nodes),
-                proposed_nodes=len(content.wbs),
-            )
-        else:
-            await SQLAlchemyWBSRepository(session).bulk_create_from_dicts(
-                project_id, list(content.wbs), tenant_id
-            )
-            await session.flush()
+        # Governed backbone: no canonical WBS write without a governed baseline
+        # approval -- whether or not the project already has a WBS.
+        qualifications.append(MaterializationQualification.WBS_GOVERNANCE_REQUIRED)
+        logger.info(
+            "trusted_materialization_wbs_governance_required",
+            project_id=str(project_id),
+            proposed_nodes=len(content.wbs),
+        )
     if fault is not None:
         await fault("after_wbs")
 
@@ -541,6 +563,7 @@ __all__ = [
     "ResumeLink",
     "lock_document",
     "lock_project",
+    "materialization_detail",
     "mark_obsolete",
     "materialize_in_transaction",
     "verify_current_authority",

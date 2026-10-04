@@ -18,12 +18,12 @@ V3 does all core N17 work in one transaction on one session:
 
     SELECT resume_operations ... FOR UPDATE   -- authority, serialised
     verify attempt/owner/fence/lease
-    lock project row                          -- serialise canonical WBS
+    lock project row                          -- serialise canonical writes
     detect existing analysis BY resume_operation_id
       -> if present: return it; repeat NOTHING
     approve: promote the exact bound candidate (#714)
     materialize it (C3b-1 trusted_materialization: stale guard, analysis
-         + alerts + WBS policy, keyed by artifact_id)
+         + alerts, keyed by artifact_id; WBS deferred to governance)
          + ProjectEvent('analysis.persisted')
          + operation.analysis_id / provenance / phase=N17_DURABLE
     COMMIT ONCE

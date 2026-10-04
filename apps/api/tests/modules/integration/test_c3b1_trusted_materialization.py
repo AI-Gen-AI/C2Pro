@@ -235,6 +235,7 @@ async def test_sync_resume_plus_async_replay_is_one_canonical_effect(
     assert obligation.materialized_analysis_id == analysis.id
     before = await _project_counts(independent_sessions, tenant.id, arranged.project_id)
     assert before["analyses"] == 1 and before["completed_events"] == 1
+    recorded_detail = obligation.materialization_detail
 
     run = _worker(independent_sessions)
     assert (await run(binding, tenant.id))["status"] == "noop"
@@ -246,9 +247,10 @@ async def test_sync_resume_plus_async_replay_is_one_canonical_effect(
     assert replay["analysis_id"] == str(analysis.id)
 
     assert await _project_counts(independent_sessions, tenant.id, arranged.project_id) == before
-    assert (
-        await _obligation(independent_sessions, tenant.id, binding.artifact_id)
-    ).materialization_state == "materialized"
+    after = await _obligation(independent_sessions, tenant.id, binding.artifact_id)
+    assert after.materialization_state == "materialized"
+    # The replay re-links; it never rewrites what the materialization recorded.
+    assert after.materialization_detail == recorded_detail
 
 
 # ── 3. a pending obligation survives broker loss ─────────────────────────────
@@ -531,7 +533,18 @@ async def test_historical_and_non_gated_obligations_are_never_scheduled(
     ] == 0
 
 
-# ── 9 / 10. generated WBS codes are not identity; canonical WBS is preserved ──
+# ── 9 / 10. WBS is a governed backbone: no canonical write without a baseline ─
+#
+# A. existing canonical WBS -> proposal does not mutate it -> WBS_GOVERNANCE_REQUIRED
+# B. NO canonical WBS -> proposal still does not become canonical -> qualified,
+#    and recoverable from the exact approved artifact
+# C. a generated code alone never establishes identity
+# D. manually verified RACI untouched      E. BOM links untouched
+
+_PROPOSED_WBS = [
+    {"code": "1", "name": "Electrical works (AI V2)"},
+    {"code": "2", "name": "Commissioning (AI V2)"},
+]
 
 
 async def _canonical_wbs_with_relationships(db: AsyncSession, tenant_id: UUID, project_id: UUID):
@@ -566,7 +579,49 @@ async def _canonical_wbs_with_relationships(db: AsyncSession, tenant_id: UUID, p
     return node.id
 
 
-async def test_generated_wbs_code_never_replaces_or_relinks_canonical_wbs(
+def _propose_with_wbs(monkeypatch) -> None:
+    """The approved candidate itself carries the AI-proposed WBS."""
+    final_state = t714._final_state
+    monkeypatch.setattr(
+        t714,
+        "_final_state",
+        lambda *args, **kwargs: {**final_state(*args, **kwargs), "extracted_wbs": _PROPOSED_WBS},
+    )
+
+
+async def _approve(request_sessions, independent_sessions, tenant, arranged, saver) -> None:
+    response = await _post_approve(
+        request_sessions,
+        tenant.id,
+        arranged.review_item_id,
+        saver=saver,
+        app=arranged.app,
+        sessions=independent_sessions,
+    )
+    assert response.current_status == ReviewStatus.APPROVED
+
+
+def _assert_wbs_governance_required(obligation: Any, binding: Any) -> None:
+    assert obligation.materialization_state == "materialized"
+    detail = obligation.materialization_detail
+    # "materialized" means: every governance-AUTHORISED effect was applied.
+    assert detail["scope"] == "governance_authorized_effects_applied"
+    assert (
+        materializer.MaterializationQualification.WBS_GOVERNANCE_REQUIRED
+        in detail["qualifications"]
+    )
+    deferred = detail["deferred_effects"]["wbs"]
+    assert deferred["qualification"] == "WBS_GOVERNANCE_REQUIRED"
+    assert deferred["proposal_source"] == {
+        "table": "document_artifacts",
+        "artifact_id": str(binding.artifact_id),
+        "artifact_version": binding.artifact_version,
+        "artifact_hash": binding.artifact_hash,
+        "path": "payload.extracted_wbs",
+    }
+
+
+async def test_existing_canonical_wbs_is_never_mutated_by_a_proposal(
     real_saver,
     independent_sessions,
     request_sessions,
@@ -576,12 +631,11 @@ async def test_generated_wbs_code_never_replaces_or_relinks_canonical_wbs(
     test_user: User,
     monkeypatch,  # noqa: F811
 ) -> None:
-    # The approved run proposes a node with the SAME generated code "1" but a
-    # different meaning, plus a new one. Same code must not mean same entity.
-    _with_resumed_wbs(
-        monkeypatch,
-        [{"code": "1", "name": "Electrical works (AI V2)"}, {"code": "2", "name": "New"}],
-    )
+    # A + C + D + E. The approved run proposes a node with the SAME generated
+    # code "1" but a different meaning, plus a new one. Same code must not mean
+    # same entity, and nothing canonical may change.
+    _with_resumed_wbs(monkeypatch, _PROPOSED_WBS)
+    _propose_with_wbs(monkeypatch)
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
     arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
@@ -589,14 +643,7 @@ async def test_generated_wbs_code_never_replaces_or_relinks_canonical_wbs(
     await _propose(completion_sessions, arranged, tenant.id, title="Reviewed risk")
     binding = await _binding(db, arranged.review_row_id)
 
-    await _post_approve(
-        request_sessions,
-        tenant.id,
-        arranged.review_item_id,
-        saver=saver,
-        app=arranged.app,
-        sessions=independent_sessions,
-    )
+    await _approve(request_sessions, independent_sessions, tenant, arranged, saver)
 
     async with independent_sessions(tenant.id) as s:
         nodes = (
@@ -625,17 +672,14 @@ async def test_generated_wbs_code_never_replaces_or_relinks_canonical_wbs(
     ]
     assert [(r.wbs_item_id, r.manually_verified) for r in raci] == [(node_id, True)]
     assert bom.wbs_item_id == node_id
-    obligation = await _obligation(independent_sessions, tenant.id, binding.artifact_id)
-    assert obligation.materialization_state == "materialized"
-    assert (
-        materializer.MaterializationQualification.WBS_RECONCILIATION_REQUIRED
-        in obligation.materialization_detail["qualifications"]
+    _assert_wbs_governance_required(
+        await _obligation(independent_sessions, tenant.id, binding.artifact_id), binding
     )
     # The approved analysis itself is durable; only the WBS effect is deferred.
     assert len(await _analyses_for(independent_sessions, tenant.id, binding.artifact_id)) == 1
 
 
-async def test_project_without_canonical_wbs_receives_the_approved_wbs(
+async def test_first_wbs_is_not_auto_materialized_and_stays_recoverable(
     real_saver,
     independent_sessions,
     request_sessions,
@@ -645,35 +689,62 @@ async def test_project_without_canonical_wbs_receives_the_approved_wbs(
     test_user: User,
     monkeypatch,  # noqa: F811
 ) -> None:
-    _with_resumed_wbs(monkeypatch, [{"code": "1", "name": "Civil works"}])
+    # B. No canonical WBS yet: the first baseline is governed too.
+    _with_resumed_wbs(monkeypatch, _PROPOSED_WBS)
+    _propose_with_wbs(monkeypatch)
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
     arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
     await _propose(completion_sessions, arranged, tenant.id, title="Reviewed risk")
     binding = await _binding(db, arranged.review_row_id)
 
-    await _post_approve(
-        request_sessions,
-        tenant.id,
-        arranged.review_item_id,
-        saver=saver,
-        app=arranged.app,
-        sessions=independent_sessions,
-    )
+    await _approve(request_sessions, independent_sessions, tenant, arranged, saver)
 
     counts = await _project_counts(independent_sessions, tenant.id, arranged.project_id)
-    assert counts["wbs"] == 1
+    assert counts["wbs"] == 0
+    assert counts["analyses"] == 1
     obligation = await _obligation(independent_sessions, tenant.id, binding.artifact_id)
+    _assert_wbs_governance_required(obligation, binding)
+
+    # The exact proposal is recoverable from the exact approved artifact.
+    source = obligation.materialization_detail["deferred_effects"]["wbs"]["proposal_source"]
+    async with independent_sessions(tenant.id) as s:
+        artifact = (
+            await s.execute(
+                select(DocumentArtifactORM).where(
+                    DocumentArtifactORM.artifact_id == UUID(source["artifact_id"])
+                )
+            )
+        ).scalar_one()
+        [event] = (
+            (
+                await s.execute(
+                    select(ProjectEventORM).where(
+                        ProjectEventORM.project_id == arranged.project_id,
+                        ProjectEventORM.event_type == materializer.MATERIALIZATION_COMPLETED_EVENT,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert (artifact.trust_state, artifact.artifact_version, artifact.artifact_hash) == (
+        "trusted",
+        source["artifact_version"],
+        source["artifact_hash"],
+    )
+    assert [(n["code"], n["name"]) for n in artifact.payload["extracted_wbs"]] == [
+        (n["code"], n["name"]) for n in _PROPOSED_WBS
+    ]
     assert (
-        materializer.MaterializationQualification.WBS_RECONCILIATION_REQUIRED
-        not in obligation.materialization_detail["qualifications"]
+        event.payload["deferred_effects"] == obligation.materialization_detail["deferred_effects"]
     )
 
 
-# ── 11. alerts: no second identity system; reconciliation waits on #828 ──────
+# ── 11. alerts: canonical service not applicable to RISK; #834 integrity kept ──
 
 
-async def test_alert_identity_is_not_duplicated_and_waits_on_828(
+async def test_risk_alerts_are_qualified_and_existing_reviews_are_untouched(
     real_saver,
     independent_sessions,
     completion_sessions,
@@ -681,10 +752,37 @@ async def test_alert_identity_is_not_duplicated_and_waits_on_828(
     db: AsyncSession,
     test_user: User,
 ) -> None:
+    from src.shared_kernel.enums import AlertSeverity, AlertStatus, AlertType
+
     saver, register = real_saver
     tenant, arranged, binding = await _approved_but_unmaterialized(
         db, test_user, saver, register, independent_sessions, completion_sessions
     )
+    # A human-reviewed COHERENCE alert with reviewer evidence (#828/#834 state).
+    reviewed_id = uuid4()
+    reviewed_metadata = {
+        "fingerprint": "f" * 64,
+        "fingerprint_version": 3,
+        "evidence": [{"kind": "note", "text": "Reviewer evidence", "added_by": "pm"}],
+        "detection_evidence": {"claim": "c", "quote": "q"},
+    }
+    async with independent_sessions(tenant.id) as s:
+        s.add(
+            Alert(
+                id=reviewed_id,
+                tenant_id=tenant.id,
+                project_id=arranged.project_id,
+                severity=AlertSeverity.HIGH,
+                alert_type=AlertType.COHERENCE,
+                title="Reviewed finding",
+                message="m",
+                description="d",
+                alert_metadata=reviewed_metadata,
+                status=AlertStatus.ACKNOWLEDGED,
+                resolution_notes="Accepted variance",
+            )
+        )
+
     await _worker(independent_sessions)(binding, tenant.id)
 
     async with independent_sessions(tenant.id) as s:
@@ -698,7 +796,13 @@ async def test_alert_identity_is_not_duplicated_and_waits_on_828(
                 )
             ).scalars()
         )
-    assert "fingerprint" not in alert_columns
+        reviewed = (await s.execute(select(Alert).where(Alert.id == reviewed_id))).scalar_one()
+    assert "fingerprint" not in alert_columns  # no second identity system
+    assert (reviewed.status, reviewed.resolution_notes, reviewed.alert_metadata) == (
+        AlertStatus.ACKNOWLEDGED,
+        "Accepted variance",
+        reviewed_metadata,
+    )
     [analysis] = await _analyses_for(independent_sessions, tenant.id, binding.artifact_id)
     async with independent_sessions(tenant.id) as s:
         linked = await s.scalar(
@@ -707,7 +811,7 @@ async def test_alert_identity_is_not_duplicated_and_waits_on_828(
     assert linked == len(t714._risks("Approved risk"))
     obligation = await _obligation(independent_sessions, tenant.id, binding.artifact_id)
     assert obligation.materialization_detail["qualifications"] == [
-        materializer.MaterializationQualification.ALERT_RECONCILIATION_WAITING_ON_828
+        materializer.MaterializationQualification.RISK_ALERT_RECONCILIATION_REQUIRED
     ]
 
 
