@@ -7,7 +7,11 @@ from uuid import uuid4
 
 import pytest
 
-from src.analysis.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
+from src.analysis.adapters.persistence.alert_repository import (
+    SqlAlchemyAlertRepository,
+    _decode_alert_cursor,
+    _encode_alert_cursor,
+)
 from src.analysis.adapters.persistence.models import Alert as AlertORM
 from src.analysis.application.dtos import AlertCreate
 from src.analysis.domain.enums import AlertSeverity, AlertType
@@ -41,6 +45,23 @@ async def test_create_persists_requested_alert_type() -> None:
 
     persisted = session.add.call_args.args[0]
     assert persisted.alert_type == AlertType.COHERENCE
+
+
+def test_alert_cursor_round_trip_carries_full_severity_ordering_key() -> None:
+    alert_id = uuid4()
+    created_at = datetime(2026, 10, 4, 12, 30, 0)
+    alert = SimpleNamespace(
+        id=alert_id,
+        severity=AlertSeverity.HIGH,
+        created_at=created_at,
+    )
+
+    cursor = _encode_alert_cursor(alert)  # type: ignore[arg-type]
+
+    rank, decoded_created_at, decoded_id = _decode_alert_cursor(cursor)
+    assert rank == 1
+    assert decoded_created_at == created_at
+    assert decoded_id == alert_id
 
 
 @pytest.mark.asyncio
