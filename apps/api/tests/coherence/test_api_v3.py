@@ -820,7 +820,7 @@ async def test_b1_coherence_result_is_not_committed_before_alert_reconciliation_
     sample_clauses,
     sample_enriched_result,
 ):
-    """B1-02/B1-11: a failed Alert reconciliation cannot leave a newly durable score."""
+    """B1-02/B1-11 RED: a failed Alert reconciliation cannot leave a newly durable score."""
     from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
     project_id = uuid4()
