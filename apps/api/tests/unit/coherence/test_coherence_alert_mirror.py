@@ -26,15 +26,23 @@ class _FakeScalarResult:
 
 
 class _FakeSession:
-    def __init__(self, persisted_clause_ids: set[object] | None = None) -> None:
+    def __init__(
+        self,
+        persisted_clause_documents: dict[object, object] | None = None,
+    ) -> None:
         self.executed: list[tuple[object, object | None]] = []
-        self.persisted_clause_ids = persisted_clause_ids or set()
+        self.persisted_clause_documents = persisted_clause_documents or {}
 
     async def execute(self, statement: object, params: object | None = None) -> None:
         self.executed.append((statement, params))
 
     async def scalars(self, statement: object) -> _FakeScalarResult:
-        return _FakeScalarResult(list(self.persisted_clause_ids))
+        return _FakeScalarResult(
+            [
+                SimpleNamespace(id=clause_id, document_id=document_id)
+                for clause_id, document_id in self.persisted_clause_documents.items()
+            ]
+        )
 
 
 @pytest.mark.asyncio
@@ -61,7 +69,7 @@ async def test_mirror_reconciles_via_canonical_service_with_evidence_locator() -
             data={"document_id": str(document_id), "source": "persisted_clause"},
         )
     ]
-    session = _FakeSession(persisted_clause_ids={clause_id})
+    session = _FakeSession(persisted_clause_documents={clause_id: document_id})
     service = MagicMock()
     service.process_violations = AsyncMock(return_value=[])
 
@@ -101,6 +109,62 @@ async def test_mirror_reconciles_via_canonical_service_with_evidence_locator() -
         "claim": "Schedule gap detected",
         "quote": "Milestone B starts thirty days later",
     }
+
+
+@pytest.mark.asyncio
+async def test_verified_clause_uses_database_document_not_request_metadata() -> None:
+    project_id = uuid4()
+    tenant_id = uuid4()
+    clause_id = uuid4()
+    canonical_document_id = uuid4()
+    forged_document_id = uuid4()
+    alert = SimpleNamespace(
+        severity="high",
+        category="legal",
+        rule_id="DET-LEG-PROVENANCE",
+        message="Verified clause provenance",
+        evidence=SimpleNamespace(
+            source_clause_id=str(clause_id),
+            claim="Persisted clause",
+            quote="Canonical source",
+        ),
+    )
+    clauses = [
+        Clause(
+            id=str(clause_id),
+            text="Canonical source",
+            data={
+                "document_id": str(forged_document_id),
+                "source": "persisted_clause",
+            },
+        )
+    ]
+    session = _FakeSession(
+        persisted_clause_documents={clause_id: canonical_document_id}
+    )
+    service = MagicMock()
+    service.process_violations = AsyncMock(return_value=[])
+
+    with (
+        patch("src.coherence.router.SqlAlchemyAlertRepository"),
+        patch("src.coherence.router.AlertGeneratorService", return_value=service),
+    ):
+        await _mirror_coherence_alerts_to_alerts_table(
+            db=session,  # type: ignore[arg-type]
+            project_id=project_id,
+            tenant_id=tenant_id,
+            alerts=[alert],
+            clauses=clauses,
+        )
+
+    payload = service.process_violations.await_args.kwargs["violations"][0]
+    assert payload.source_clause_id == clause_id
+    assert payload.affected_entities == {
+        "documents": [str(canonical_document_id)]
+    }
+    assert payload.alert_metadata["detection_evidence"]["source_document_id"] == str(
+        canonical_document_id
+    )
 
 
 @pytest.mark.asyncio
