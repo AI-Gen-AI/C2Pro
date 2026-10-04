@@ -79,6 +79,7 @@ def _simple_db() -> Mock:
     """Minimal db mock (router still receives it as a parameter)."""
     mock_db = Mock()
     mock_db.execute = AsyncMock()
+    mock_db.scalars = AsyncMock(return_value=SimpleNamespace(all=lambda: []))
     mock_db.commit = AsyncMock()
     mock_db.rollback = AsyncMock()
     return mock_db
