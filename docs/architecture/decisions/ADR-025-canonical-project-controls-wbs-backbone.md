@@ -98,7 +98,7 @@ However, parent scores MUST NOT be implemented as an unqualified arithmetic aver
 
 ## 2026-10-05 Amendment — Canonical Risk Register as Project Controls evolution (APPROVED)
 
-**Status:** Approved direction; non-blocking for current B1/C3b work.  
+**Status:** Approved direction; non-blocking for current B1/C3b work.
 **Tracking:** #836.
 
 Risk analysis is an extension of this Project Controls backbone, not a new product plane and not an autonomous agent that owns canonical truth.
