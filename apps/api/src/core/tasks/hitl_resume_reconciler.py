@@ -81,6 +81,210 @@ _CLAIMABLE_SQL = text(
     """
 )
 
+HEALTH_PROJECTION_BATCH_SIZE = 20
+MAX_HEALTH_PROJECTION_ENQUEUES = 12
+
+_PENDING_HEALTH_PROJECTIONS_SQL = text(
+    """
+    SELECT o.id, o.tenant_id, o.project_id, e.event_id,
+           coalesce(
+               (o.operation_metadata
+                 -> 'graph_completed_health_projection'
+                 ->> 'attempts')::integer,
+               0
+           ) AS attempts,
+           coalesce(
+               o.operation_metadata
+                 -> 'graph_completed_health_projection'
+                 ->> 'state',
+               'pending'
+           ) AS projection_state,
+           EXISTS (
+               SELECT 1
+                 FROM project_snapshots s
+                WHERE s.tenant_id = o.tenant_id
+                  AND s.project_id = o.project_id
+                  AND s.source_event_id = e.event_id
+                  AND s.trigger = 'graph_completed'
+           ) AS snapshot_exists
+      FROM resume_operations o
+      JOIN project_events e
+        ON e.event_id = cast(
+               o.operation_metadata
+                 -> 'graph_completed_health_projection'
+                 ->> 'event_id'
+               AS uuid
+           )
+       AND e.resume_operation_id = o.id
+       AND e.tenant_id = o.tenant_id
+       AND e.project_id = o.project_id
+       AND e.event_type = 'graph.completed'
+     WHERE o.phase = 'FINALIZED_APPROVED'
+       AND coalesce(
+               o.operation_metadata
+                 -> 'graph_completed_health_projection'
+                 ->> 'state',
+               ''
+           ) IN ('pending', 'exhausted')
+     ORDER BY o.updated_at
+     LIMIT :limit
+    """
+)
+
+_MARK_HEALTH_PROJECTION_PROJECTED_SQL = text(
+    """
+    UPDATE resume_operations
+       SET operation_metadata =
+               coalesce(operation_metadata, '{}'::jsonb)
+               || jsonb_build_object(
+                      'graph_completed_health_projection',
+                      coalesce(
+                          operation_metadata -> 'graph_completed_health_projection',
+                          '{}'::jsonb
+                      ) || jsonb_build_object('state', 'projected')
+                  ),
+           updated_at = clock_timestamp()
+     WHERE id = cast(:operation_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
+       AND phase = 'FINALIZED_APPROVED'
+       AND operation_metadata
+             -> 'graph_completed_health_projection'
+             ->> 'event_id' = cast(:event_id as text)
+    """
+)
+
+_CLAIM_HEALTH_PROJECTION_RETRY_SQL = text(
+    """
+    UPDATE resume_operations
+       SET operation_metadata =
+               coalesce(operation_metadata, '{}'::jsonb)
+               || jsonb_build_object(
+                      'graph_completed_health_projection',
+                      coalesce(
+                          operation_metadata -> 'graph_completed_health_projection',
+                          '{}'::jsonb
+                      ) || jsonb_build_object(
+                          'attempts', cast(:next_attempt as integer),
+                          'state', CASE
+                              WHEN cast(:next_attempt as integer)
+                                   >= cast(:max_attempts as integer)
+                              THEN 'exhausted'
+                              ELSE 'pending'
+                          END
+                      )
+                  ),
+           updated_at = clock_timestamp()
+     WHERE id = cast(:operation_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
+       AND phase = 'FINALIZED_APPROVED'
+       AND operation_metadata
+             -> 'graph_completed_health_projection'
+             ->> 'event_id' = cast(:event_id as text)
+       AND operation_metadata
+             -> 'graph_completed_health_projection'
+             ->> 'state' = 'pending'
+       AND coalesce(
+               (operation_metadata
+                 -> 'graph_completed_health_projection'
+                 ->> 'attempts')::integer,
+               0
+           ) = cast(:expected_attempt as integer)
+    RETURNING id
+    """
+)
+
+
+async def _reconcile_graph_completed_health_projections(
+    batch_size: int = HEALTH_PROJECTION_BATCH_SIZE,
+    *,
+    session_factory: Any = None,
+) -> dict[str, int]:
+    """Recover lost GRAPH_COMPLETED snapshot dispatches after trusted HITL finalization."""
+    from src.core.tenants.types import require_tenant_id
+    from src.temporal.application import project_snapshot_trigger
+    from src.temporal.domain.project_snapshot import SnapshotTrigger
+
+    if session_factory is None:
+        from src.core.database import init_db
+
+        result = init_db()
+        if asyncio.iscoroutine(result):
+            await result
+        session_factory = _production_session
+
+    async with session_factory(None) as session:
+        rows = (
+            await session.execute(
+                _PENDING_HEALTH_PROJECTIONS_SQL,
+                {"limit": batch_size},
+            )
+        ).all()
+
+    counts = {"scanned": 0, "enqueued": 0, "projected": 0, "exhausted": 0, "failed": 0}
+    for row in rows:
+        counts["scanned"] += 1
+        tenant_id = UUID(str(row.tenant_id))
+        project_id = UUID(str(row.project_id))
+        event_id = UUID(str(row.event_id))
+
+        if bool(row.snapshot_exists):
+            async with session_factory(tenant_id) as session:
+                await session.execute(
+                    _MARK_HEALTH_PROJECTION_PROJECTED_SQL,
+                    {
+                        "operation_id": str(row.id),
+                        "tenant_id": str(tenant_id),
+                        "event_id": str(event_id),
+                    },
+                )
+            counts["projected"] += 1
+            continue
+
+        attempts = int(row.attempts)
+        if row.projection_state == "exhausted" or attempts >= MAX_HEALTH_PROJECTION_ENQUEUES:
+            counts["exhausted"] += 1
+            continue
+
+        next_attempt = attempts + 1
+        async with session_factory(tenant_id) as session:
+            claimed = (
+                await session.execute(
+                    _CLAIM_HEALTH_PROJECTION_RETRY_SQL,
+                    {
+                        "operation_id": str(row.id),
+                        "tenant_id": str(tenant_id),
+                        "event_id": str(event_id),
+                        "expected_attempt": attempts,
+                        "next_attempt": next_attempt,
+                        "max_attempts": MAX_HEALTH_PROJECTION_ENQUEUES,
+                    },
+                )
+            ).first()
+        if claimed is None:
+            continue
+
+        try:
+            project_snapshot_trigger.enqueue_project_snapshot(
+                project_id=project_id,
+                tenant_id=require_tenant_id(tenant_id),
+                trigger=SnapshotTrigger.GRAPH_COMPLETED,
+                source_event_id=event_id,
+            )
+            counts["enqueued"] += 1
+        except Exception:  # noqa: BLE001 - bounded reconciler retries on the next beat
+            counts["failed"] += 1
+            logger.warning(
+                "hitl_health_projection_reconcile_enqueue_failed",
+                operation_id=str(row.id),
+                project_id=str(project_id),
+                event_id=str(event_id),
+                attempt=next_attempt,
+                exc_info=True,
+            )
+
+    logger.info("hitl_health_projection_reconcile", **counts)
+    return counts
+
 
 async def _sweep_async(
     batch_size: int = DEFAULT_BATCH_SIZE,
@@ -216,3 +420,13 @@ def reconcile_abandoned_resumes(
     batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> dict[str, Any]:
     return run_async_db_task(_sweep_async(batch_size=batch_size))
+
+
+@celery_app.task(name="hitl_resume.reconcile_health_projection", bind=True)
+def reconcile_health_projections(
+    self: Any,  # noqa: ARG001
+    batch_size: int = HEALTH_PROJECTION_BATCH_SIZE,
+) -> dict[str, int]:
+    return run_async_db_task(
+        _reconcile_graph_completed_health_projections(batch_size=batch_size)
+    )

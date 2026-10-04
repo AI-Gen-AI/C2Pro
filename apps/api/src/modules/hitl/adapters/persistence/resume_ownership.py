@@ -968,13 +968,49 @@ _FINALIZE_DOCUMENT_REJECT_SQL = text(
     """
 )
 
+GRAPH_COMPLETED_HEALTH_PROJECTION_KEY = "graph_completed_health_projection"
+
 _FINALIZE_OPERATION_SQL = text(
     """
     UPDATE resume_operations
-       SET phase = cast(:phase as text), updated_at = clock_timestamp()
+       SET phase = cast(:phase as text),
+           operation_metadata = CASE
+               WHEN cast(:phase as text) = 'FINALIZED_APPROVED'
+               THEN coalesce(operation_metadata, '{}'::jsonb)
+                    || jsonb_build_object(
+                           'graph_completed_health_projection',
+                           jsonb_build_object(
+                               'event_id', (
+                                   SELECT e.event_id::text
+                                     FROM project_events e
+                                    WHERE e.resume_operation_id = resume_operations.id
+                                      AND e.tenant_id = resume_operations.tenant_id
+                                      AND e.project_id = resume_operations.project_id
+                                      AND e.event_type = 'graph.completed'
+                                    LIMIT 1
+                               ),
+                               'state', 'pending',
+                               'attempts', 0
+                           )
+                       )
+               ELSE coalesce(operation_metadata, '{}'::jsonb)
+           END,
+           updated_at = clock_timestamp()
      WHERE id = cast(:operation_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
        AND current_attempt_id = cast(:attempt_id as uuid)
        AND fencing_token = cast(:fencing_token as bigint)
+       AND (
+           cast(:phase as text) <> 'FINALIZED_APPROVED'
+           OR EXISTS (
+               SELECT 1
+                 FROM project_events e
+                WHERE e.resume_operation_id = resume_operations.id
+                  AND e.tenant_id = resume_operations.tenant_id
+                  AND e.project_id = resume_operations.project_id
+                  AND e.event_type = 'graph.completed'
+           )
+       )
     RETURNING id
     """
 )
@@ -1071,7 +1107,6 @@ async def finalize_v3(
                     "Cannot finalize approval without a document to mark ANALYZED; "
                     "refusing to report success"
                 )
-
         review = (
             await session.execute(
                 _FINALIZE_REVIEW_SQL,
@@ -1133,6 +1168,7 @@ async def finalize_v3(
                 _FINALIZE_OPERATION_SQL,
                 {
                     "operation_id": str(ownership.operation_id),
+                    "tenant_id": str(ownership.tenant_id),
                     "attempt_id": str(ownership.attempt_id),
                     "fencing_token": ownership.fencing_token,
                     "phase": (

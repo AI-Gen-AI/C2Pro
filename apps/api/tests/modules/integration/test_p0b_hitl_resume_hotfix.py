@@ -25,13 +25,13 @@ production runs, minus the LLM-backed graph nodes.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.graph import workflow
@@ -567,6 +567,114 @@ async def test_full_hitl_lifecycle_resume_to_n17_to_analyzed_and_health_readable
         "approved HITL resume must enqueue the exact durable graph.completed "
         "event so SnapshotWriter can project single_document_coverage for Health"
     )
+
+    # #795 P1: the enqueue above is only the fast path. Finalization must have
+    # committed a durable retry obligation in the SAME trusted transaction.
+    async with get_session_with_tenant(document.tenant_id) as verify_session:
+        projection = (
+            await verify_session.execute(
+                text(
+                    "SELECT operation_metadata -> "
+                    "'graph_completed_health_projection' AS projection "
+                    "FROM resume_operations WHERE review_row_id = :review_row_id "
+                    "AND tenant_id = :tenant_id"
+                ),
+                {
+                    "review_row_id": review_orm.id,
+                    "tenant_id": document.tenant_id,
+                },
+            )
+        ).scalar_one()
+    assert projection == {
+        "event_id": str(events[0].event_id),
+        "state": "pending",
+        "attempts": 0,
+    }
+
+    # Simulate a lost post-commit broker dispatch: no snapshot exists because
+    # the fast path was captured above instead of actually queued. The bounded
+    # Beat reconciler must redispatch the SAME event, without replaying HITL.
+    from src.core.tasks import hitl_resume_reconciler
+
+    snapshot_enqueues.clear()
+    reconcile = await hitl_resume_reconciler._reconcile_graph_completed_health_projections()
+    assert reconcile["enqueued"] >= 1
+    assert snapshot_enqueues == [
+        {
+            "project_id": document.project_id,
+            "tenant_id": document.tenant_id,
+            "trigger": SnapshotTrigger.GRAPH_COMPLETED,
+            "source_event_id": events[0].event_id,
+        }
+    ]
+
+    async with get_session_with_tenant(document.tenant_id) as verify_session:
+        projection = (
+            await verify_session.execute(
+                text(
+                    "SELECT operation_metadata -> "
+                    "'graph_completed_health_projection' AS projection "
+                    "FROM resume_operations WHERE review_row_id = :review_row_id "
+                    "AND tenant_id = :tenant_id"
+                ),
+                {
+                    "review_row_id": review_orm.id,
+                    "tenant_id": document.tenant_id,
+                },
+            )
+        ).scalar_one()
+    assert projection["state"] == "pending"
+    assert projection["attempts"] == 1
+
+    # Once the exact source-event snapshot exists, reconciliation must stop
+    # dispatching and durably acknowledge the obligation as projected.
+    from src.temporal.adapters.persistence.models import ProjectSnapshotORM
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    async with get_session_with_tenant(document.tenant_id) as verify_session:
+        verify_session.add(
+            ProjectSnapshotORM(
+                snapshot_id=uuid4(),
+                project_id=document.project_id,
+                tenant_id=document.tenant_id,
+                captured_at=now,
+                trigger=SnapshotTrigger.GRAPH_COMPLETED.value,
+                health_vector={
+                    "single_document_coverage": {
+                        "document_id": str(document.id),
+                        "assessments": [{"proof_marker": "reconciled"}],
+                    }
+                },
+                coherence_subscore=None,
+                counts={},
+                totals={},
+                source_event_id=events[0].event_id,
+                created_at=now,
+            )
+        )
+        await verify_session.commit()
+
+    snapshot_enqueues.clear()
+    reconcile = await hitl_resume_reconciler._reconcile_graph_completed_health_projections()
+    assert reconcile["projected"] >= 1
+    assert snapshot_enqueues == []
+
+    async with get_session_with_tenant(document.tenant_id) as verify_session:
+        state = (
+            await verify_session.execute(
+                text(
+                    "SELECT operation_metadata -> "
+                    "'graph_completed_health_projection' ->> 'state' "
+                    "FROM resume_operations WHERE review_row_id = :review_row_id "
+                    "AND tenant_id = :tenant_id"
+                ),
+                {
+                    "review_row_id": review_orm.id,
+                    "tenant_id": document.tenant_id,
+                },
+            )
+        ).scalar_one()
+    assert state == "projected"
 
     # 9. Document becomes ANALYZED (the gap this hotfix closes: N17 alone
     # never touched Document.upload_status -- ResumeWorkflowUseCase must).
