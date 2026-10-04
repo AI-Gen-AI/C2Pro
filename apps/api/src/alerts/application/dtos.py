@@ -64,8 +64,6 @@ class CreateAlertRequest(BaseModel):
     severity: Literal["low", "medium", "high", "critical"]
     message: str
     affected_entities: dict[str, Any] = Field(default_factory=dict)
-    source_clause_id: UUID | None = None
-    detection_evidence: DetectionEvidenceResponse | None = None
 
 
 class ReviewAlertRequest(BaseModel):
