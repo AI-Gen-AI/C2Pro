@@ -21,6 +21,9 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         "analysis.persisted",
         "graph.completed",
         "hitl.correction",
+        # Lane C / C3b-1: append-only evidence that an approved artifact's
+        # canonical state became durable (idempotency lives in the DB, not here).
+        "materialization.completed",
         "baseline.changed",
     }
 )

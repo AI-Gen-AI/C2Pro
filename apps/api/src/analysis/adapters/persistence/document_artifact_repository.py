@@ -196,16 +196,35 @@ _RECORD_OBLIGATION_SQL = text(
     """
     INSERT INTO system_recovery.trusted_projection_index (
         artifact_id, document_id, project_id, tenant_id,
-        artifact_version, artifact_hash, projection_state
+        artifact_version, artifact_hash, projection_state, materialization_state
     )
     VALUES (
         cast(:artifact_id as uuid), cast(:document_id as uuid),
         cast(:project_id as uuid), cast(:tenant_id as uuid),
-        :artifact_version, :artifact_hash, 'pending'
+        :artifact_version, :artifact_hash, 'pending', :materialization_state
     )
     ON CONFLICT (artifact_id) DO UPDATE
        SET projection_state = 'pending',
            updated_at = (clock_timestamp() AT TIME ZONE 'UTC')
+    """
+)
+
+# Lane C / C3b-1: the materialization obligation rides on the same artifact-keyed
+# envelope row but is independent of projection_state. A newer trusted version of
+# the document makes an older, still-pending materialization obsolete (the
+# materializer's own stale guard would refuse it anyway; this records why).
+_OBSOLETE_MATERIALIZATIONS_SQL = text(
+    """
+    UPDATE system_recovery.trusted_projection_index
+       SET materialization_state = 'obsolete',
+           materialization_detail = jsonb_build_object(
+               'reason', 'superseded_by_newer_trusted_artifact',
+               'superseded_by_artifact_id', cast(:artifact_id as text)),
+           updated_at = (clock_timestamp() AT TIME ZONE 'UTC')
+     WHERE document_id = cast(:document_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
+       AND artifact_id <> cast(:artifact_id as uuid)
+       AND materialization_state = 'pending'
     """
 )
 
@@ -461,7 +480,9 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
             await self._session.execute(_OPEN_MINIMAL_REVIEW_SQL, params)
         return new_id
 
-    async def _record_projection_obligation(self, row: DocumentArtifactORM) -> None:
+    async def _record_projection_obligation(
+        self, row: DocumentArtifactORM, *, materialization: str = "not_required"
+    ) -> None:
         """Durable trusted -> ProjectGraph hand-off, in THIS transaction (#714).
 
         The Celery enqueue after commit stays a best-effort fast path; this
@@ -469,6 +490,12 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
         until a successful ProjectGraph run that loaded exactly this
         artifact acknowledges it, and the beat reconciler re-enqueues it
         meanwhile. A newer trusted version obsoletes the older obligation.
+
+        C3b-1: ``materialization`` is the INDEPENDENT canonical-materialization
+        obligation of the same artifact. Only a human approval
+        (``commit_candidate``) creates a ``pending`` one; a non-gated TRUSTED
+        completion is materialized in-graph by its own N17, so it records
+        ``not_required`` and the materializer never writes it a second time.
         """
         params = {
             "artifact_id": str(row.artifact_id),
@@ -479,7 +506,10 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
             "artifact_hash": str(row.artifact_hash),
         }
         await self._session.execute(_OBSOLETE_OBLIGATIONS_SQL, params)
-        await self._session.execute(_RECORD_OBLIGATION_SQL, params)
+        await self._session.execute(_OBSOLETE_MATERIALIZATIONS_SQL, params)
+        await self._session.execute(
+            _RECORD_OBLIGATION_SQL, {**params, "materialization_state": materialization}
+        )
 
     async def mark_loaded_projected(self, *, project_id: UUID, tenant_id: TenantId) -> int:
         """Acknowledge the obligations of exactly the artifacts last loaded.
@@ -671,7 +701,9 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
             )
             .values(trust_state=TrustState.TRUSTED.value, lifecycle_status="active")
         )
-        await self._record_projection_obligation(row)
+        # C3b-1: the approval itself leaves the durable proof that canonical
+        # project state must be materialized for exactly this artifact.
+        await self._record_projection_obligation(row, materialization="pending")
         await self._session.flush()
         return TrustedCommit(
             outcome=TrustedCommitOutcome.COMMITTED,

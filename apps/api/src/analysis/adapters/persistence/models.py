@@ -26,6 +26,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -132,6 +133,14 @@ class Analysis(Base):
     fencing_token: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     decision_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Lane C / C3b-1: the trusted #714 artifact this analysis materializes. The
+    # partial unique index makes "one trusted artifact -> at most one canonical
+    # materialization" a database fact; the composite FK (migration
+    # 20261004_0002) pins it to the analysis' own tenant and project.
+    source_artifact_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+
     # Timing
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -154,6 +163,22 @@ class Analysis(Base):
             "resume_operation_id",
             unique=True,
             postgresql_where=text("resume_operation_id IS NOT NULL"),
+        ),
+        ForeignKeyConstraint(
+            ["source_artifact_id", "tenant_id", "project_id"],
+            [
+                "document_artifacts.artifact_id",
+                "document_artifacts.tenant_id",
+                "document_artifacts.project_id",
+            ],
+            name="fk_analyses_source_artifact_scope",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "uq_analyses_source_artifact",
+            "source_artifact_id",
+            unique=True,
+            postgresql_where=text("source_artifact_id IS NOT NULL"),
         ),
         Index("ix_analyses_project", "project_id"),
         Index("ix_analyses_status", "status"),
@@ -628,6 +653,11 @@ class DocumentArtifactORM(Base):
         CheckConstraint(
             "trust_state IN ('proposed','trusted','rejected','superseded')",
             name="ck_document_artifacts_trust_state",
+        ),
+        # C3b-1 integrity key: lets analyses.source_artifact_id reference an
+        # artifact only within the analysis' own tenant and project.
+        UniqueConstraint(
+            "artifact_id", "tenant_id", "project_id", name="uq_document_artifacts_scope"
         ),
         Index(
             "uq_document_artifacts_document_version",
