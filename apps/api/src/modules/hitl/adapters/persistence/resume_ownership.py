@@ -761,13 +761,67 @@ _MARK_TERMINAL_SQL = text(
 )
 
 
+@dataclass(frozen=True)
+class GraphCompletedMarker:
+    """The durable ``graph.completed`` event committed by section 9.
+
+    Returned so the application layer can enqueue the snapshot projection
+    only after the fenced transaction has committed.
+    """
+
+    event_id: UUID
+    project_id: UUID
+
+
+_LOAD_GRAPH_COMPLETED_MARKER_SQL = text(
+    """
+    SELECT event_id, project_id
+      FROM project_events
+     WHERE tenant_id = cast(:tenant_id as uuid)
+       AND resume_operation_id = cast(:operation_id as uuid)
+       AND event_type = 'graph.completed'
+     ORDER BY created_at ASC, event_id ASC
+     LIMIT 1
+    """
+)
+
+
+async def get_graph_completed_marker(
+    *,
+    ownership: Ownership,
+    session_factory: Any = None,
+) -> GraphCompletedMarker | None:
+    """Load the exact graph-completion event already committed for this operation.
+
+    Recovery enters at ``GRAPH_COMPLETED`` without replaying the graph, so it
+    must reuse the original event identity.  The database uniqueness contract
+    makes this a single durable marker rather than a "latest event" guess.
+    """
+    async with _session(session_factory, ownership.tenant_id) as session:
+        row = (
+            await session.execute(
+                _LOAD_GRAPH_COMPLETED_MARKER_SQL,
+                {
+                    "tenant_id": str(ownership.tenant_id),
+                    "operation_id": str(ownership.operation_id),
+                },
+            )
+        ).first()
+    if row is None:
+        return None
+    return GraphCompletedMarker(
+        event_id=_uuid(row.event_id),
+        project_id=_uuid(row.project_id),
+    )
+
+
 async def mark_graph_completed(
     *,
     ownership: Ownership,
     terminal_checkpoint_id: str,
     document_id: str | None = None,
     session_factory: Any = None,
-) -> bool:
+) -> GraphCompletedMarker | None:
     """Record that the graph reached a VERIFIED terminal checkpoint.
 
     C2PRO P0b crash-safe HITL resume V3, section 9. One short fenced
@@ -804,13 +858,15 @@ async def mark_graph_completed(
         ).first()
         if row is None:
             # Not in N17_DURABLE, or no longer ours: emit nothing.
-            return False
+            return None
 
+        event_id = _uuid4()
+        project_id = _uuid(row.project_id)
         now = datetime.now(UTC).replace(tzinfo=None)
         session.add(
             ProjectEventORM(
-                event_id=_uuid4(),
-                project_id=row.project_id,
+                event_id=event_id,
+                project_id=project_id,
                 tenant_id=ownership.tenant_id,
                 event_type=GRAPH_COMPLETED_EVENT,
                 payload={
@@ -835,8 +891,9 @@ async def mark_graph_completed(
         operation_id=str(ownership.operation_id),
         attempt_id=str(ownership.attempt_id),
         terminal_checkpoint_id=terminal_checkpoint_id,
+        event_id=str(event_id),
     )
-    return True
+    return GraphCompletedMarker(event_id=event_id, project_id=project_id)
 
 
 # ── finalization (V3 section 10) ─────────────────────────────────────────────
