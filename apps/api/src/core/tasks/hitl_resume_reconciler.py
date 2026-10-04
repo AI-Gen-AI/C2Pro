@@ -114,8 +114,31 @@ _PENDING_HEALTH_PROJECTIONS_SQL = text(
                       AND s.project_id = o.project_id
                       AND s.source_event_id = e.event_id
                       AND s.trigger = 'graph_completed'
-               ) AS snapshot_exists
+               ) AS snapshot_exists,
+               (
+                   r.thread_id IS NOT DISTINCT FROM o.thread_id
+                   AND (
+                       (r.lineage_generation IS NULL
+                        AND r.lineage_fencing_token IS NULL)
+                       OR a.generation IS NULL
+                       OR (
+                           (r.lineage_generation IS NULL
+                            OR r.lineage_generation = a.generation)
+                           AND (
+                               r.lineage_fencing_token IS NULL
+                               OR a.fencing_token IS NULL
+                               OR r.lineage_fencing_token = a.fencing_token
+                           )
+                       )
+                   )
+               ) AS lineage_current
           FROM resume_operations o
+          JOIN review_items r
+            ON r.id = o.review_row_id
+           AND r.tenant_id = o.tenant_id
+          LEFT JOIN document_processing_operations a
+            ON a.document_id = r.document_id
+           AND a.tenant_id = r.tenant_id
           JOIN project_events e
             ON e.event_id = cast(
                    o.operation_metadata
@@ -130,18 +153,20 @@ _PENDING_HEALTH_PROJECTIONS_SQL = text(
          WHERE o.phase = 'FINALIZED_APPROVED'
     )
     SELECT id, tenant_id, project_id, event_id, attempts,
-           projection_state, retry_after, snapshot_exists
+           projection_state, retry_after, snapshot_exists, lineage_current
       FROM candidates
      WHERE (
                snapshot_exists
            AND projection_state <> 'projected'
         )
         OR (
-               projection_state = 'pending'
+               lineage_current
+           AND projection_state = 'pending'
            AND attempts < cast(:max_attempts as integer)
         )
         OR (
-               projection_state = 'in_flight'
+               lineage_current
+           AND projection_state = 'in_flight'
            AND retry_after IS NOT NULL
            AND retry_after <= clock_timestamp()
         )

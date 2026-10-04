@@ -33,6 +33,84 @@ from src.temporal.domain.project_snapshot import SnapshotTrigger
 logger = logging.getLogger(__name__)
 
 
+_SOURCE_EVENT_LOCK_SQL = text(
+    """
+    SELECT pg_advisory_xact_lock(
+        hashtextextended('project_snapshot:' || cast(:source_event_id as text), 0)
+    )
+    """
+)
+
+_HITL_GRAPH_COMPLETION_CURRENCY_SQL = text(
+    """
+    SELECT
+        e.resume_operation_id,
+        CASE
+            WHEN e.resume_operation_id IS NULL THEN true
+            WHEN o.id IS NULL OR r.id IS NULL THEN false
+            ELSE
+                r.thread_id IS NOT DISTINCT FROM o.thread_id
+                AND (
+                    (r.lineage_generation IS NULL
+                     AND r.lineage_fencing_token IS NULL)
+                    OR a.generation IS NULL
+                    OR (
+                        (r.lineage_generation IS NULL
+                         OR r.lineage_generation = a.generation)
+                        AND (
+                            r.lineage_fencing_token IS NULL
+                            OR a.fencing_token IS NULL
+                            OR r.lineage_fencing_token = a.fencing_token
+                        )
+                    )
+                )
+        END AS lineage_current
+      FROM project_events e
+      LEFT JOIN resume_operations o
+        ON o.id = e.resume_operation_id
+       AND o.tenant_id = e.tenant_id
+       AND o.project_id = e.project_id
+      LEFT JOIN review_items r
+        ON r.id = o.review_row_id
+       AND r.tenant_id = o.tenant_id
+      LEFT JOIN document_processing_operations a
+        ON a.document_id = r.document_id
+       AND a.tenant_id = r.tenant_id
+     WHERE e.event_id = cast(:source_event_id as uuid)
+       AND e.tenant_id = cast(:tenant_id as uuid)
+       AND e.project_id = cast(:project_id as uuid)
+       AND e.event_type = 'graph.completed'
+    """
+)
+
+
+async def _source_event_is_current_hitl_lineage(
+    session: Any,
+    *,
+    source_event_id: UUID,
+    tenant_id: TenantId,
+    project_id: UUID,
+) -> bool:
+    """Fail closed only for HITL graph events proven to belong to stale lineage.
+
+    A non-HITL graph.completed event has no resume_operation_id and therefore
+    returns no row here; its pre-existing behavior is unchanged. For HITL,
+    this mirrors ReviewLineage.is_current_for_document at the final writer
+    boundary so a delayed old delivery cannot become the newest Health state.
+    """
+    row = (
+        await session.execute(
+            _HITL_GRAPH_COMPLETION_CURRENCY_SQL,
+            {
+                "source_event_id": str(source_event_id),
+                "tenant_id": str(tenant_id),
+                "project_id": str(project_id),
+            },
+        )
+    ).first()
+    return row is None or bool(row.lineage_current)
+
+
 async def _maybe_await(value: object) -> None:
     if inspect.isawaitable(value):
         await value
@@ -64,6 +142,37 @@ async def _write_project_snapshot_async(
     async with get_raw_session() as session:
         try:
             await session.execute(text(f"SET LOCAL app.current_tenant = '{tenant_id}'"))
+            if source_event_id is not None:
+                # Database-level idempotency boundary. Concurrent deliveries of
+                # the SAME event serialize for this transaction; the waiter
+                # observes the committed snapshot via SnapshotWriter's existing
+                # source_event_id replay check instead of inserting a duplicate.
+                await session.execute(
+                    _SOURCE_EVENT_LOCK_SQL,
+                    {"source_event_id": str(source_event_id)},
+                )
+                if (
+                    trigger == SnapshotTrigger.GRAPH_COMPLETED.value
+                    and not await _source_event_is_current_hitl_lineage(
+                        session,
+                        source_event_id=source_event_id,
+                        tenant_id=tenant_id,
+                        project_id=project_id,
+                    )
+                ):
+                    logger.info(
+                        "project_snapshot_stale_hitl_lineage_skipped",
+                        extra={
+                            "project_id": str(project_id),
+                            "tenant_id": str(tenant_id),
+                            "source_event_id": str(source_event_id),
+                        },
+                    )
+                    await session.commit()
+                    return {
+                        "status": "skipped_stale_hitl_lineage",
+                        "snapshot_id": "",
+                    }
             snapshot = await SnapshotWriter(
                 project_state_repository=SqlAlchemyProjectStateRepository(session),
                 snapshot_repository=SqlAlchemyProjectSnapshotRepository(session),

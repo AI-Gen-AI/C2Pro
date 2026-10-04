@@ -599,10 +599,40 @@ async def test_full_hitl_lifecycle_resume_to_n17_to_analyzed_and_health_readable
     assert reconcile["enqueued"] == 0
     assert snapshot_enqueues == []
 
-    # Simulate a lost post-commit broker dispatch by expiring the in-flight
-    # lease. The bounded reconciler may now redispatch the SAME event once,
-    # without replaying HITL or changing authority.
+    # Establish an explicit fenced processing lineage for this historical
+    # review. The retry scan must compare it with the document's CURRENT
+    # processing authority, not merely FINALIZED_APPROVED.
     async with get_session_with_tenant(document.tenant_id) as verify_session:
+        await verify_session.execute(
+            text(
+                "UPDATE review_items "
+                "SET lineage_generation = 1, lineage_fencing_token = 10 "
+                "WHERE id = :review_row_id AND tenant_id = :tenant_id"
+            ),
+            {
+                "review_row_id": review_orm.id,
+                "tenant_id": document.tenant_id,
+            },
+        )
+        await verify_session.execute(
+            text(
+                "INSERT INTO document_processing_operations ("
+                "document_id, tenant_id, revision_id, generation, stage, phase, "
+                "fencing_token, attempt_count, failure_count, created_at, updated_at"
+                ") VALUES ("
+                ":document_id, :tenant_id, NULL, 1, 'ANALYSIS', 'COMPLETED', "
+                "10, 0, 0, clock_timestamp(), clock_timestamp()"
+                ") ON CONFLICT (document_id) DO UPDATE SET "
+                "generation = EXCLUDED.generation, "
+                "fencing_token = EXCLUDED.fencing_token, "
+                "stage = EXCLUDED.stage, phase = EXCLUDED.phase, "
+                "updated_at = clock_timestamp()"
+            ),
+            {
+                "document_id": document.id,
+                "tenant_id": document.tenant_id,
+            },
+        )
         await verify_session.execute(
             text(
                 "UPDATE resume_operations "
@@ -615,6 +645,40 @@ async def test_full_hitl_lifecycle_resume_to_n17_to_analyzed_and_health_readable
             ),
             {
                 "review_row_id": review_orm.id,
+                "tenant_id": document.tenant_id,
+            },
+        )
+
+    # P1: a newer generation/fence supersedes this historical decision.
+    async with get_session_with_tenant(document.tenant_id) as verify_session:
+        await verify_session.execute(
+            text(
+                "UPDATE document_processing_operations "
+                "SET generation = 2, fencing_token = 11, updated_at = clock_timestamp() "
+                "WHERE document_id = :document_id AND tenant_id = :tenant_id"
+            ),
+            {
+                "document_id": document.id,
+                "tenant_id": document.tenant_id,
+            },
+        )
+
+    snapshot_enqueues.clear()
+    reconcile = await hitl_resume_reconciler._reconcile_graph_completed_health_projections()
+    assert reconcile["scanned"] == 0
+    assert reconcile["enqueued"] == 0
+    assert snapshot_enqueues == []
+
+    # Restore exact lineage only to continue this test's lost-broker recovery.
+    async with get_session_with_tenant(document.tenant_id) as verify_session:
+        await verify_session.execute(
+            text(
+                "UPDATE document_processing_operations "
+                "SET generation = 1, fencing_token = 10, updated_at = clock_timestamp() "
+                "WHERE document_id = :document_id AND tenant_id = :tenant_id"
+            ),
+            {
+                "document_id": document.id,
                 "tenant_id": document.tenant_id,
             },
         )
