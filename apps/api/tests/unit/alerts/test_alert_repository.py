@@ -102,7 +102,11 @@ async def test_b1_human_disposition_fields_are_all_written_by_repository_save() 
 
     await repo.save(alert)
 
-    persisted_approval = getattr(orm_alert.approval_status, "value", orm_alert.approval_status)
-    assert persisted_approval == ApprovalStatus.APPROVED.value
+    persisted_approval_name = getattr(
+        orm_alert.approval_status,
+        "name",
+        str(orm_alert.approval_status).upper(),
+    )
+    assert persisted_approval_name == ApprovalStatus.APPROVED.name
     assert orm_alert.review_comment == "Confirmed against the trusted schedule."
     assert orm_alert.resolution_notes == "Corrective change approved and recorded."
