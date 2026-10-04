@@ -18,6 +18,7 @@ Verifies:
 Location: apps/api/tests/coherence/test_api_v3.py
 """
 
+from contextlib import suppress
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -847,7 +848,7 @@ async def test_b1_coherence_result_is_not_committed_before_alert_reconciliation_
             return_value=False,
         ),
     ):
-        try:
+        with suppress(RuntimeError):
             await evaluate_project_coherence(
                 payload=CoherenceEvaluateRequest(
                     project_id=project_id,
@@ -858,9 +859,6 @@ async def test_b1_coherence_result_is_not_committed_before_alert_reconciliation_
                 current_user=SimpleNamespace(tenant_id=tenant_id),
                 flags_service=None,
             )
-        except RuntimeError:
-            # Propagation vs translated failure is not the contract under test.
-            pass
 
     assert db.commit.await_count == 0, (
         "Coherence committed before canonical Alert reconciliation completed; "
