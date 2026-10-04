@@ -4,7 +4,8 @@ from datetime import datetime
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import String, and_, case, cast as sa_cast, or_, select
+from sqlalchemy import String, and_, case, or_, select
+from sqlalchemy import cast as sa_cast
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
