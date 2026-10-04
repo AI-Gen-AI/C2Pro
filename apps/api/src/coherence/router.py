@@ -587,6 +587,14 @@ def _uuid_or_none(value: object) -> UUID | None:
     except (TypeError, ValueError, AttributeError):
         return None
 
+def _split_clause_locators(value: object) -> list[str]:
+    """Split detector locators that encode multiple clause identities."""
+
+    raw = str(value or "").strip()
+    if not raw:
+        return []
+    return [part.strip() for part in raw.split("|") if part.strip()]
+
 
 def _coherence_alert_to_create(
     *,
@@ -600,16 +608,32 @@ def _coherence_alert_to_create(
         str(getattr(evidence, "source_clause_id", "") or "") if evidence else ""
     )
     clause_by_id = {str(clause.id): clause for clause in clauses}
-    source_clause = clause_by_id.get(source_locator)
-    candidate_clause_id = _uuid_or_none(source_locator)
-    source_clause_id = (
-        candidate_clause_id
-        if candidate_clause_id in persisted_clause_documents
+    source_locators = _split_clause_locators(source_locator)
+    verified_clause_ids: list[UUID] = []
+    for locator in source_locators:
+        candidate_clause_id = _uuid_or_none(locator)
+        if (
+            candidate_clause_id is not None
+            and candidate_clause_id in persisted_clause_documents
+        ):
+            verified_clause_ids.append(candidate_clause_id)
+
+    source_clause_id = verified_clause_ids[0] if verified_clause_ids else None
+    related_clause_ids = verified_clause_ids[1:] or None
+    verified_document_ids: list[str] = []
+    for clause_id in verified_clause_ids:
+        document_id = str(persisted_clause_documents[clause_id])
+        if document_id not in verified_document_ids:
+            verified_document_ids.append(document_id)
+
+    source_clause = (
+        clause_by_id.get(source_locators[0])
+        if len(source_locators) == 1
         else None
     )
     source_document_id = (
-        str(persisted_clause_documents[source_clause_id])
-        if source_clause_id is not None
+        verified_document_ids[0]
+        if verified_document_ids
         else (
             str(source_clause.data.get("document_id"))
             if source_clause is not None and source_clause.data.get("document_id")
@@ -627,7 +651,9 @@ def _coherence_alert_to_create(
         else None
     )
     affected_entities: dict[str, Any] = {}
-    if source_document_id:
+    if verified_document_ids:
+        affected_entities["documents"] = verified_document_ids
+    elif source_document_id:
         affected_entities["documents"] = [source_document_id]
 
     severity_key = str(getattr(alert.severity, "value", alert.severity)).lower()
@@ -644,7 +670,7 @@ def _coherence_alert_to_create(
         title=message[:255],
         description=message,
         source_clause_id=source_clause_id,
-        related_clause_ids=None,
+        related_clause_ids=related_clause_ids,
         affected_entities=affected_entities,
         recommendation=None,
         impact_level=None,
@@ -668,20 +694,19 @@ async def _verified_persisted_clause_documents(
     revisions remain queryable. Reuse C3a's canonical current-revision SQL
     predicate rather than re-deriving temporal authority in Line B.
     """
-    candidates = sorted(
-        {
-            candidate
-            for alert in alerts
-            if (evidence := getattr(alert, "evidence", None)) is not None
-            if (
-                candidate := _uuid_or_none(
-                    getattr(evidence, "source_clause_id", None)
-                )
-            )
-            is not None
-        },
-        key=str,
-    )
+    candidate_set: set[UUID] = set()
+    for alert in alerts:
+        evidence = getattr(alert, "evidence", None)
+        if evidence is None:
+            continue
+        for locator in _split_clause_locators(
+            getattr(evidence, "source_clause_id", None)
+        ):
+            candidate = _uuid_or_none(locator)
+            if candidate is not None:
+                candidate_set.add(candidate)
+    candidates = sorted(candidate_set, key=str)
+
     if not candidates:
         return {}
 
