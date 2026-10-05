@@ -40,6 +40,8 @@ def test_p0c_workflow_binds_exact_runtime_and_fresh_synthetic_journey() -> None:
     assert "source_revision_id:" not in source
     assert "apps/web/src/tests/e2e/test-data/pj01/contract-a.pdf" in source
     assert "apps/web/src/tests/e2e/test-data/pj01/contract-b.pdf" in source
+    assert "P0C_NEGATIVE_PROJECT_ID" in source
+    assert "--negative-change-event-id" in source
 
 
 def test_p0c_browser_journey_creates_fresh_project_and_two_revisions() -> None:
@@ -54,6 +56,10 @@ def test_p0c_browser_journey_creates_fresh_project_and_two_revisions() -> None:
     assert "assertWhatChangedThroughNavigation" in source
     assert "documentsListed !== 1" in source
     assert "P0c Qualification " in source
+    assert "P0c Qualification Negative" in source
+    assert "assertIdenticalReuploadProducesHonestNoChange" in source
+    assert "No material change found" in source
+    assert "negative_change_event_id" in source
 
 
 def test_p0c_verifier_is_read_only_tenant_scoped_and_exact_lineage() -> None:
@@ -67,3 +73,9 @@ def test_p0c_verifier_is_read_only_tenant_scoped_and_exact_lineage() -> None:
     assert "dst.parent_revision_id = src.revision_id" in source
     assert "event_type = \'revision.changed\'" in source
     assert "jsonb_array_length(evidence_refs) > 0" in source
+    assert "P0c Qualification Negative %" in source
+    assert "src.blob_hash = :blob_hash" in source
+    assert "dst.blob_hash = :blob_hash" in source
+    assert "payload -> 'change_cause' = 'null'::jsonb" in source
+    assert "jsonb_array_length(payload #> '{changeset,changes}') = 0" in source
+    assert "jsonb_array_length(evidence_refs) = 0" in source
