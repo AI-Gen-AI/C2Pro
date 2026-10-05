@@ -5,6 +5,14 @@
 
 This file is a compatibility pointer only. It must not become a second programme or execution authority.
 
+## Compatibility reconciliation note — 2026-10-05
+
+Repository-quality execution is now tracked under **C2PRO-DEV-15 / issue #849 — Repository Hygiene & Core AI Assurance** in the canonical `.c2pro` development control plane.
+
+This lane is explicitly non-product: it does not alter Product Control lifecycle state, P0 qualification status, Temporal/WBS/Alerts/Coherence semantics, or production authority. Wave 1 is limited to reference-proven repository hygiene; later Core AI coverage work must earn each coverage-omit removal with meaningful contract/failure-path tests.
+
+Current execution baseline for this campaign: `main@96014415543f78ed69eca6aaba17593ffa739228`.
+
 ## Product programme authority
 
 - Machine source: `validation/product/c2pro-master-product-control-v1.yaml`
