@@ -1,6 +1,7 @@
 """Tests for PersistAnalysisUseCase.
 
-TASK-IMPL-010.7: Persistence orchestration — saves analysis, alerts, WBS.
+TASK-IMPL-010.7: Persistence orchestration — saves analysis and alerts.
+#830: an extracted WBS is a proposal kept in result_json, never a canonical write.
 Uses mocked ORM models to avoid SQLAlchemy mapper initialization issues.
 """
 
@@ -9,7 +10,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Generator
 from types import ModuleType
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -136,27 +137,7 @@ class TestPersistAnalysisUseCase:
         self.analysis_repo.flush = AsyncMock()
         self.analysis_repo.commit = AsyncMock()
 
-        self.wbs_repo = MagicMock()
-        self.wbs_repo.bulk_create_from_dicts = AsyncMock()
-
-        self.session = MagicMock()
-        self.session.execute = AsyncMock()
-
-        # Patch sqlalchemy.delete to avoid mapper validation on stub ORM
-        self._delete_patcher = patch(
-            "src.analysis.application.persist_analysis_use_case.delete"
-        )
-        self.mock_delete = self._delete_patcher.start()
-        self.mock_delete.return_value.where.return_value = "mock_delete_stmt"
-
-        self.use_case = PersistAnalysisUseCase(
-            analysis_repo=self.analysis_repo,
-            wbs_repo=self.wbs_repo,
-            session=self.session,
-        )
-
-    def teardown_method(self):
-        self._delete_patcher.stop()
+        self.use_case = PersistAnalysisUseCase(analysis_repo=self.analysis_repo)
 
     @pytest.mark.asyncio
     async def test_persist_with_risks_generates_alerts(self):
@@ -187,15 +168,26 @@ class TestPersistAnalysisUseCase:
         assert alerts[0].message == alerts[0].description
 
     @pytest.mark.asyncio
-    async def test_persist_with_wbs_deletes_and_creates(self):
-        cmd = _make_command(
-            extracted_wbs=[{"code": "W1"}, {"code": "W2"}],
-        )
-        result = await self.use_case.execute(cmd)
+    async def test_persist_with_wbs_keeps_a_proposal_and_writes_no_canonical_wbs(self):
+        """#830: the use case has no WBS write dependency at all; the proposal is kept."""
+        wbs = [{"code": "W1"}, {"code": "W2"}]
+        result = await self.use_case.execute(_make_command(extracted_wbs=wbs))
 
         assert isinstance(result.analysis_id, UUID)
-        self.session.execute.assert_called()
-        self.wbs_repo.bulk_create_from_dicts.assert_called_once()
+        assert result.qualifications == ("WBS_GOVERNANCE_REQUIRED",)
+        analysis = self.analysis_repo.add_analysis.call_args.args[0]
+        assert analysis.result_json["wbs"] == wbs
+        assert analysis.result_json["wbs_governance"] == {
+            "qualification": "WBS_GOVERNANCE_REQUIRED",
+            "canonical_wbs_modified": False,
+            "proposed_nodes": 2,
+            "proposal_source": {
+                "table": "analyses",
+                "analysis_id": str(result.analysis_id),
+                "path": "result_json.wbs",
+            },
+        }
+        self.analysis_repo.commit.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_persist_with_both_risks_and_wbs(self):
@@ -206,7 +198,6 @@ class TestPersistAnalysisUseCase:
         await self.use_case.execute(cmd)
 
         self.analysis_repo.add_alerts.assert_called_once()
-        self.wbs_repo.bulk_create_from_dicts.assert_called_once()
         self.analysis_repo.commit.assert_called_once()
 
     @pytest.mark.asyncio
@@ -215,8 +206,17 @@ class TestPersistAnalysisUseCase:
         result = await self.use_case.execute(cmd)
 
         assert isinstance(result.analysis_id, UUID)
+        assert result.qualifications == ()
         self.analysis_repo.add_alerts.assert_not_called()
-        self.wbs_repo.bulk_create_from_dicts.assert_not_called()
+        analysis = self.analysis_repo.add_analysis.call_args.args[0]
+        assert "wbs_governance" not in analysis.result_json
+
+    def test_use_case_cannot_receive_a_wbs_writer(self):
+        """#830: no WBS repository or raw session can be injected into the use case."""
+        with pytest.raises(TypeError):
+            PersistAnalysisUseCase(  # type: ignore[call-arg]
+                analysis_repo=self.analysis_repo, wbs_repo=MagicMock(), session=MagicMock()
+            )
 
     @pytest.mark.asyncio
     async def test_analysis_type_risk_when_risks_present(self):
