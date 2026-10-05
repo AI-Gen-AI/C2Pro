@@ -48,7 +48,7 @@ development_execution_authority:
     This product plane records target/state; it does not authorize merges or production mutation.
 
 production_position:
-  reconciled_against_main_sha: 23b963a50a7de7a4096063808a7f361f9df84ba1
+  reconciled_against_main_sha: 1b1ccd94046d02ada077c989aa19047ebb6e0bf8
   deployed_runtime_sha: UNVERIFIED
   observed_production_evidence:
     - "kuwait2 doc c510de21: enqueue -> worker -> SUCCESS on dedicated Railway Redis (historical P0a evidence)"
@@ -279,11 +279,12 @@ north_star:
     Health, relational Coherence, Change/Time intelligence, Alerts/Actions/HITL; procurement
     workflows (Plan/RfQ/BoQ/bid/award/comms); and executive/portfolio reporting. Every surface
     is evidence-backed and honest: Unknown renders null, never a fabricated zero/green.
-  current_product_wedge_id: P0b-single-document-health-activation
+  current_product_wedge_id: P0c-what-changed-production-qualification
   current_product_wedge: >
-    P0b — Single-document Health activation (ADR-024 -> ADR-018): value from document #1
-    through six-category coverage, intrinsic findings, missing_data, gap alerts and Health Vector.
-    It is the entry point to the North Star, not the complete product.
+    P0c — What Changed / Temporal Change production qualification: prove the already-wired
+    revision-bound event, semantic change projection, API and UI journey on the exact deployed
+    runtime with durable lineage and honest no-change/unknown semantics. P0b remains the accepted
+    product-value baseline; moving the active wedge does not change any P0c lifecycle status.
   canonical_project_model: >
     ONE canonical hierarchical WBS per project. Discipline structures are branches/levels of that
     WBS, never independent WBSs. Budget, Schedule, Procurement, Stakeholders/RACI, Alerts,
@@ -673,7 +674,7 @@ pr_disposition:
 
 next_authorized_action:
   - "P0b remains accepted from run #56 / 37196092728 and its hash-bound bundle. Later merges do not inherit or extend that production-validation authority."
-  - "B1 runtime implementation is closed by the landed reconciliation/scoring chain and #832 v1.2; B1-12 exact-runtime Alerts+Coherence product acceptance remains separate and may proceed in parallel."
+  - "B1 runtime implementation is closed by the landed reconciliation/scoring chain and #832 v1.2; #867 owns B1-12 exact-runtime Alerts+Coherence product acceptance and may proceed in parallel."
   - "Execute #686 P0c What Changed exact-runtime production qualification next; rebind the live Railway/Vercel deployment pair immediately before any production mutation."
   - "After accepted P0c evidence, execute #687 P0d Current State qualification on the same clean governed project where possible. PASS bundles never self-promote lifecycle state."
   - "After remaining P0 qualification, enter P1 Project Controls through PC-1/PC-2 (one logical canonical WBS + baseline/change governance) unless an explicit reviewed dependency decision authorizes a different order."

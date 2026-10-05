@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
 **Status:** Reconciliation snapshot (read-only) · **Date:** 2026-10-05 · **Schema:** v8
-**reconciled_against_main_sha:** `23b963a50a7de7a4096063808a7f361f9df84ba1` · **deployed_runtime_sha:** `UNVERIFIED`
+**reconciled_against_main_sha:** `1b1ccd94046d02ada077c989aa19047ebb6e0bf8` · **deployed_runtime_sha:** `UNVERIFIED`
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This document is the human projection of the machine product-control plane. It does not grant execution authority. Direct `main`, merge and production mutation remain governed outside this document.
@@ -10,11 +10,11 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=23b963a50a7de7a4096063808a7f361f9df84ba1
+reconciled_against_main_sha=1b1ccd94046d02ada077c989aa19047ebb6e0bf8
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=true
-current_product_wedge_id=P0b-single-document-health-activation
+current_product_wedge_id=P0c-what-changed-production-qualification
 coherence.global_authoritative_cutover=NO
 legacy_coverage.unmapped_open_legacy_items=0
 project_controls.invariant=one_project_one_canonical_hierarchical_wbs
@@ -101,15 +101,17 @@ The invariant introduced by **ADR-025** is explicit:
 
 This resolves the earlier ambiguity that could have led the product toward parallel discipline WBS structures.
 
+**Active product wedge:** P0c What Changed / Temporal Change production qualification. P0b remains the accepted product-value baseline; this planning-focus change does not self-promote P0c deployment or production-validation state.
+
 ## 2. Current production truth
 
 Three facts remain deliberately separate:
 
-- `reconciled_against_main_sha = c41ff69bcabd87da1a606b125bd9cc37184bc7cc` — current repository baseline after #824 (persisted alert review), #823 (Lane C temporal impact/trust seam) and #826 (production-acceptance Evidence hard-refresh rate-limit handling). Those later merges are implementation/harness state only; the accepted P0b runtime remains the earlier qualified composite.
+- `reconciled_against_main_sha = 1b1ccd94046d02ada077c989aa19047ebb6e0bf8` — current repository baseline after #866 reconciled the B1/correctness closure onto main. This is repository/control truth only; the accepted P0b runtime remains the earlier qualified composite.
 - `deployed_runtime_sha = UNVERIFIED` — retained as a legacy singleton because production is composite. The accepted P0b binding is Railway backend `5491e36c8f71113540c65ddd9fa7fc5e45a01f27` / API deployment `f976eb47-c2aa-4b02-a0c6-25e555d4405b` (SUCCESS) plus Vercel frontend `84842677adb7046ea24b0e92fc5aaa3ee20565b0` / deployment `dpl_3Lv1u6UtwWUQvVrhdckiqfZc4SHg` (READY).
 - A1 run **#55 / 37195954713** passed identity/runtime/auth/tenant preflight. A2 run **#56 / 37196092728** passed the full production browser journey, durable verifier, evidence-bundle build and evidence validator.
 - The accepted P0b bundle is `evidence/product-qualification/p0b-prod-gh-37196092728-1.yaml`, SHA-256 `d6031d454ac40f30a84a1b9c30f4f5d97ef285d7eb9e8d047a0af97148f6281b`.
-- `product_value_delivered = true` means the **current P0b single-document Health wedge** has proven production user value. It does not claim that P0c/P0d, global Coherence, Project Controls, Procurement or the complete North Star are delivered.
+- `product_value_delivered = true` remains grounded only in the accepted **P0b single-document Health** evidence. The active qualification focus is now P0c; this does not claim that P0c/P0d, global Coherence, Project Controls, Procurement or the complete North Star are delivered.
 - Two OPS residuals remain explicit: best-effort `ai_usage_logs` telemetry currently hits a production-schema `model_name` drift, and the high-volume acceptance run reached Railway's log-rate limit. Neither invalidated the product journey; both require separate operational follow-up.
 
 ### 2.1 What changed in the 2026-10-01 reconciliation
@@ -399,7 +401,7 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 ## 12. Next authorized sequence
 
 1. **Preserve P0b truth.** Run #56 / 37196092728 and its hash-bound bundle remain the accepted P0b evidence. Later merges neither demote nor extend that production-validation scope.
-2. **B1 acceptance may proceed in parallel.** Runtime implementation is closed; B1-12 still requires its own exact-runtime Alerts + Coherence acceptance evidence.
+2. **#867 B1-12 acceptance may proceed in parallel.** Runtime implementation is closed; B1-12 still requires its own exact-runtime Alerts + Coherence acceptance evidence.
 3. **#686 P0c What Changed:** rebind the exact live Railway backend + Vercel frontend immediately before execution, then qualify the two-revision real user journey. Failed runs are evidence and never justify manual production repair.
 4. **#687 P0d Current State:** only after accepted P0c evolution, qualify authoritative Current State, six-category Health parity, honest null, API/UI/export parity and reproducibility on the governed project.
 5. **Reconcile before P1.** PASS evidence does not self-promote Product Control. After P0c/P0d evidence review, reconcile lifecycle state explicitly.
