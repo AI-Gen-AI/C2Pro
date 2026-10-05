@@ -94,15 +94,17 @@ test.describe("Issue #686 P0c production qualification", () => {
       expect(afterRelogin.targetRevisionId).toBe(second.whatChanged.targetRevisionId);
       recorder.record("p0cReloginVerified", true);
 
-      // The approved PJ-01 Contract B manifest defines an identical reupload
-      // as the bounded NO_CHANGE case. Re-upload B as a new version of the same
-      // logical document: absent/new evidence must not fabricate a business
-      // change. This is deterministic fixture behavior, not arbitrary prod data.
-      await recorder.step("P0C-N1", "Identical B reupload remains no material change", async () => {
+      // Build step provides a byte-distinct PDF whose parser-visible text is
+      // proven identical to Contract B. It must create a real new revision but
+      // still produce NO_CHANGE; metadata-only byte drift may never fabricate a
+      // business change.
+      const noChangePdf = process.env.P0C_NO_CHANGE_PDF;
+      if (!noChangePdf) throw new Error("P0C_PROD_MISSING_ENV:P0C_NO_CHANGE_PDF");
+      await recorder.step("P0C-N1", "Semantically identical revision remains no material change", async () => {
         await uploadNewVersionThroughUi(page, recorder, {
           projectId: first.projectId,
           documentId: first.documentId,
-          filePath: contractBPdfPath(revisionManifest),
+          filePath: noChangePdf,
         });
         const processed = await observeProcessingWithoutReload(page, recorder, {
           projectId: first.projectId,
@@ -248,6 +250,7 @@ test.describe("Issue #686 P0c production qualification", () => {
           targetRevisionId: String(noChange.provenance?.target_revision_id ?? ""),
           changeCause: noChange.change_cause,
           browserLabel: revisionManifest.expected_revision_change.identical_reupload?.browser_label ?? null,
+          fixtureClass: "byte-distinct-parser-equivalent",
         });
       });
 
