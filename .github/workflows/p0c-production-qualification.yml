@@ -288,8 +288,8 @@ jobs:
           {
             echo "## C2Pro #686 P0c Production Qualification"
             echo
-            echo "- backend: `$BACKEND_DEPLOYMENT` @ `$BACKEND_SHA`"
-            echo "- frontend: `$FRONTEND_DEPLOYMENT` @ `$FRONTEND_SHA`"
+            echo "- backend: \`$BACKEND_DEPLOYMENT\` @ \`$BACKEND_SHA\`"
+            echo "- frontend: \`$FRONTEND_DEPLOYMENT\` @ \`$FRONTEND_SHA\`"
             echo "- journey: fresh synthetic project -> Contract A -> same-document Contract B -> What Changed -> relogin"
             echo "- negative proof: isolated synthetic project -> Contract B -> identical same-document Contract B -> honest no-change"
             echo "- no existing P0b project is mutated"
