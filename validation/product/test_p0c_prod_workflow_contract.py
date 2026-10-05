@@ -20,41 +20,49 @@ def test_p0c_production_workflow_is_manual_and_environment_gated() -> None:
     assert 'test "$STAGED_CLEAR" = "true"' in source
 
 
-def test_p0c_workflow_binds_exact_runtime_and_existing_document() -> None:
+def test_p0c_workflow_binds_exact_runtime_and_fresh_synthetic_journey() -> None:
     source = _workflow()
     for required in (
         "backend_commit_sha:",
         "backend_deployment_id:",
         "frontend_commit_sha:",
         "frontend_deployment_id:",
-        "project_id:",
-        "document_id:",
-        "source_revision_id:",
         "verify_prod_deployment_identity.py",
+        "verify_prod_synthetic_journey.py",
         "verify_p0c_prod_qualification.py",
         "build_p0c_prod_qualification_bundle.py",
         "validate_qualification_evidence.py",
     ):
         assert required in source
+    assert "project_id:" not in source
+    assert "document_id:" not in source
+    assert "source_revision_id:" not in source
+    assert "apps/web/src/tests/e2e/test-data/pj01/contract-a.pdf" in source
+    assert "apps/web/src/tests/e2e/test-data/pj01/contract-b.pdf" in source
 
 
-def test_p0c_browser_journey_only_uploads_new_version() -> None:
+def test_p0c_browser_journey_creates_fresh_project_and_two_revisions() -> None:
     source = SPEC.read_text(encoding="utf-8")
+    assert "createQualificationProject" in source
+    assert "uploadDocumentThroughUi" in source
     assert "uploadNewVersionThroughUi" in source
-    assert "uploadDocumentThroughUi" not in source
-    assert "createProjectThroughUi" not in source
+    assert "contractAPdfPath" in source
+    assert "contractBPdfPath" in source
     assert "signInSyntheticProductionUser" in source
     assert "signOutThroughUi" in source
     assert "assertWhatChangedThroughNavigation" in source
     assert "documentsListed !== 1" in source
+    assert "P0c Qualification " in source
 
 
-def test_p0c_verifier_is_read_only_and_tenant_scoped() -> None:
+def test_p0c_verifier_is_read_only_tenant_scoped_and_exact_lineage() -> None:
     source = VERIFIER.read_text(encoding="utf-8")
     assert "SET TRANSACTION READ ONLY" in source
     assert "app.current_tenant" in source
     assert "UPDATE " not in source
     assert "DELETE " not in source
     assert "INSERT " not in source
+    assert "name LIKE \'P0c Qualification %\'" in source
+    assert "dst.parent_revision_id = src.revision_id" in source
     assert "event_type = \'revision.changed\'" in source
     assert "jsonb_array_length(evidence_refs) > 0" in source
