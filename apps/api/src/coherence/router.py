@@ -23,6 +23,7 @@ from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.application.dtos import AlertCreate
 from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType, AnalysisStatus
 from src.coherence.adapters.persistence.models import CoherenceResultORM
+from src.coherence.application.disposition_review import build_scoring_snapshot
 from src.coherence.feature_flags import (
     coherence_canonical_canary_enabled_for_tenant,
     coherence_llm_crosscheck_enabled_for_tenant,
@@ -1086,6 +1087,8 @@ async def evaluate_project_coherence(
         alerts_count=len(enriched_result.alerts),
         overall_score=enriched_result.overall_score,
     )
+    detected_result = enriched_result
+    reconciliation: _CoherenceAlertReconciliation | None = None
 
     # B1-09: durable human disposition is part of the scoring input authority.
     # Reconcile first (same transaction), then re-score the complete FindingSignals.
@@ -1125,8 +1128,22 @@ async def evaluate_project_coherence(
         score_version=enriched_result.score_version,
     )
 
-    # Persist result so the dashboard always reflects the latest evaluation
+    # Persist result so the dashboard always reflects the latest evaluation.
+    # The scoring snapshot preserves the complete detected FindingSignals plus
+    # their family/observation identities so a later human false-positive review
+    # can replay the exact scorer without rerunning detectors or approximating
+    # from Alert severity.
     if payload.project_id and enriched_result.overall_score is not None:
+        scoring_snapshot = None
+        if isinstance(reconciliation, _CoherenceAlertReconciliation):
+            scoring_snapshot = build_scoring_snapshot(
+                detected_result=detected_result,
+                finding_keys_by_alert_index=reconciliation.finding_keys_by_alert_index,
+                records_by_finding_key=reconciliation.records_by_finding_key,
+                clauses=list(clauses),
+                config=config,
+                score_version=enriched_result.score_version or SCORE_VERSION_V1,
+            )
         # Normalize legacy "SCHEDULE"→"TIME" so dashboard sub_scores keys match COHERENCE_CATEGORIES
         _CAT_ALIAS = {"SCHEDULE": "TIME", "FINANCIAL": "BUDGET", "GENERAL": "SCOPE"}
 
@@ -1177,6 +1194,7 @@ async def evaluate_project_coherence(
                 score_version=enriched_result.score_version or SCORE_VERSION_V1,
                 score_reason=enriched_result.score_reason,
                 score_missing_dimensions=enriched_result.score_missing_dimensions,
+                scoring_snapshot=scoring_snapshot,
             )
         )
         # Alert lifecycle was reconciled before scoring with commit=False.
