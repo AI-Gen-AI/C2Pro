@@ -876,3 +876,372 @@ async def test_b1_coherence_result_is_not_committed_before_alert_reconciliation_
         "Coherence committed before canonical Alert reconciliation completed; "
         "B1 requires one owning transaction so this fault leaves no new durable result."
     )
+
+def _b1_full_coverage() -> dict[str, bool]:
+    return {
+        "SCOPE": True,
+        "BUDGET": True,
+        "TIME": True,
+        "TECHNICAL": True,
+        "LEGAL": True,
+        "QUALITY": True,
+    }
+
+
+def _b1_existing_coherence_alert(
+    *,
+    project_id,
+    candidate,
+    status,
+    disposition: str,
+):
+    from src.analysis.domain.enums import AlertSeverity
+    from src.coherence.services.alerts.generator import (
+        FINGERPRINT_VERSION,
+        AlertGeneratorService,
+    )
+
+    identity = AlertGeneratorService(repository=Mock())
+    fingerprint = identity._fingerprint(candidate)
+    observation_key = identity._observation_key(candidate.alert_metadata)
+    return SimpleNamespace(
+        id=uuid4(),
+        project_id=project_id,
+        analysis_id=None,
+        severity=AlertSeverity.HIGH,
+        category=candidate.category,
+        rule_id=candidate.rule_id,
+        title=candidate.title,
+        description=candidate.description,
+        recommendation=None,
+        source_clause_id=candidate.source_clause_id,
+        related_clause_ids=candidate.related_clause_ids,
+        affected_entities=candidate.affected_entities,
+        impact_level=None,
+        alert_metadata={
+            **dict(candidate.alert_metadata),
+            "fingerprint": fingerprint,
+            "fingerprint_version": FINGERPRINT_VERSION,
+            "current_observation_key": observation_key,
+            "disposition_basis_key": observation_key,
+            "disposition": disposition,
+            "history": [{"action": "reviewed"}],
+        },
+        status=status,
+        resolved_at=None,
+        resolved_by=None,
+        resolution_notes=None,
+    )
+
+
+class _B1DispositionRepo:
+    def __init__(self, existing):
+        self.existing = list(existing)
+        self.created = []
+        self.updated = []
+
+    async def list_for_project(self, **kwargs):
+        return SimpleNamespace(
+            items=list(self.existing),
+            has_more=False,
+            next_cursor=None,
+        )
+
+    async def create(self, payload):
+        created = SimpleNamespace(
+            id=uuid4(),
+            project_id=payload.project_id,
+            analysis_id=payload.analysis_id,
+            severity=payload.severity,
+            category=payload.category,
+            rule_id=payload.rule_id,
+            title=payload.title,
+            description=payload.description,
+            recommendation=payload.recommendation,
+            source_clause_id=payload.source_clause_id,
+            related_clause_ids=payload.related_clause_ids,
+            affected_entities=payload.affected_entities,
+            impact_level=payload.impact_level,
+            alert_metadata=payload.alert_metadata,
+            status=__import__(
+                "src.analysis.domain.enums",
+                fromlist=["AlertStatus"],
+            ).AlertStatus.OPEN,
+            resolved_at=None,
+            resolved_by=None,
+            resolution_notes=None,
+        )
+        self.created.append(created)
+        return created
+
+    async def update(self, alert):
+        self.updated.append(alert)
+
+    async def commit(self):
+        raise AssertionError("caller owns B1 transaction")
+
+
+@pytest.mark.asyncio
+async def test_b1_false_positive_is_excluded_before_full_signal_rescore() -> None:
+    from src.analysis.domain.enums import AlertStatus
+    from src.coherence.graph.nodes import _build_category_breakdown, _signal_to_alert
+    from src.coherence.models import FindingSignal
+    from src.coherence.router import (
+        CoherenceEvaluateRequest,
+        _coherence_alert_to_create,
+        evaluate_project_coherence,
+    )
+    from src.coherence.scoring import ScoringService
+
+    project_id = uuid4()
+    tenant_id = uuid4()
+    document_id = uuid4()
+    rejected_clause = uuid4()
+    open_clause = uuid4()
+
+    rejected = FindingSignal(
+        rule_id="DET-TIM-FALSE-POSITIVE",
+        clause_id=str(rejected_clause),
+        source="deterministic",
+        impact_score=0.95,
+        confidence=1.0,
+        severity="critical",
+        category="TIME",
+        evidence_summary="Rejected timing conflict",
+        quote="Rejected conflict evidence",
+    )
+    genuine = FindingSignal(
+        rule_id="DET-TIM-GENUINE",
+        clause_id=str(open_clause),
+        source="deterministic",
+        impact_score=0.30,
+        confidence=1.0,
+        severity="low",
+        category="TIME",
+        evidence_summary="Genuine timing warning",
+        quote="Genuine warning evidence",
+    )
+    coverage = _b1_full_coverage()
+    scorer = ScoringService()
+    original = scorer.calculate_detailed(
+        [rejected, genuine],
+        num_clauses=2,
+        coverage_map=coverage,
+    )
+    expected = scorer.calculate_detailed(
+        [genuine],
+        num_clauses=2,
+        coverage_map=coverage,
+    )
+    assert original.score != expected.score
+
+    clauses = [
+        Clause(
+            id=str(rejected_clause),
+            text="Rejected conflict evidence",
+            data={"document_id": str(document_id), "source": "persisted_clause"},
+        ),
+        Clause(
+            id=str(open_clause),
+            text="Genuine warning evidence",
+            data={"document_id": str(document_id), "source": "persisted_clause"},
+        ),
+    ]
+    alerts = [_signal_to_alert(rejected), _signal_to_alert(genuine)]
+    persisted = {
+        rejected_clause: document_id,
+        open_clause: document_id,
+    }
+    rejected_candidate = _coherence_alert_to_create(
+        project_id=project_id,
+        alert=alerts[0],
+        clauses=clauses,
+        persisted_clause_documents=persisted,
+    )
+    existing = _b1_existing_coherence_alert(
+        project_id=project_id,
+        candidate=rejected_candidate,
+        status=AlertStatus.DISMISSED,
+        disposition="false_positive",
+    )
+    repo = _B1DispositionRepo([existing])
+
+    enriched = EnrichedCoherenceResult(
+        overall_score=original.score,
+        alerts=alerts,
+        category_breakdown=_build_category_breakdown(
+            [rejected, genuine],
+            coverage,
+            original.category_scores or {},
+        ),
+        finding_signals=[rejected, genuine],
+        deterministic_findings_count=2,
+        llm_findings_count=0,
+        scope_factor=original.scope_factor,
+        penalty_density=original.penalty_density,
+        avg_impact=original.avg_impact,
+        avg_confidence=original.avg_confidence,
+        category_scores=original.category_scores,
+        audit_coverage=original.audit_coverage,
+    )
+
+    db = Mock()
+    db.add = Mock()
+    db.execute = AsyncMock(return_value=SimpleNamespace(all=lambda: []))
+    db.scalar = AsyncMock(return_value=None)
+    db.commit = AsyncMock()
+
+    async def _identity_canary(result, **kwargs):
+        return result
+
+    with (
+        patch(
+            "src.coherence.router.evaluate_coherence_async",
+            new_callable=AsyncMock,
+            return_value=enriched,
+        ),
+        patch(
+            "src.coherence.router._verified_persisted_clause_documents",
+            new_callable=AsyncMock,
+            return_value=persisted,
+        ),
+        patch("src.coherence.router.SqlAlchemyAlertRepository", return_value=repo),
+        patch(
+            "src.coherence.router._maybe_apply_canonical_canary",
+            side_effect=_identity_canary,
+        ),
+    ):
+        result = await evaluate_project_coherence(
+            payload=CoherenceEvaluateRequest(
+                project_id=project_id,
+                clauses=clauses,
+            ),
+            include_diagnostics=True,
+            db=db,
+            current_user=SimpleNamespace(tenant_id=tenant_id),
+            flags_service=None,
+        )
+
+    assert isinstance(result, EnrichedCoherenceResult)
+    assert result.overall_score == expected.score
+    assert result.category_scores == expected.category_scores
+    assert [signal.rule_id for signal in result.finding_signals] == ["DET-TIM-GENUINE"]
+    assert [alert.rule_id for alert in result.alerts] == ["DET-TIM-GENUINE"]
+
+
+@pytest.mark.asyncio
+async def test_b1_acknowledged_genuine_finding_remains_scoring_eligible() -> None:
+    from src.analysis.domain.enums import AlertStatus
+    from src.coherence.graph.nodes import _build_category_breakdown, _signal_to_alert
+    from src.coherence.models import FindingSignal
+    from src.coherence.router import (
+        CoherenceEvaluateRequest,
+        _coherence_alert_to_create,
+        evaluate_project_coherence,
+    )
+    from src.coherence.scoring import ScoringService
+
+    project_id = uuid4()
+    tenant_id = uuid4()
+    document_id = uuid4()
+    clause_id = uuid4()
+    signal = FindingSignal(
+        rule_id="DET-LEG-ACK",
+        clause_id=str(clause_id),
+        source="deterministic",
+        impact_score=0.85,
+        confidence=0.95,
+        severity="high",
+        category="LEGAL",
+        evidence_summary="Acknowledged legal inconsistency",
+        quote="The documents genuinely conflict.",
+    )
+    coverage = _b1_full_coverage()
+    scorer = ScoringService()
+    expected = scorer.calculate_detailed(
+        [signal],
+        num_clauses=1,
+        coverage_map=coverage,
+    )
+    clauses = [
+        Clause(
+            id=str(clause_id),
+            text="The documents genuinely conflict.",
+            data={"document_id": str(document_id), "source": "persisted_clause"},
+        )
+    ]
+    alerts = [_signal_to_alert(signal)]
+    persisted = {clause_id: document_id}
+    candidate = _coherence_alert_to_create(
+        project_id=project_id,
+        alert=alerts[0],
+        clauses=clauses,
+        persisted_clause_documents=persisted,
+    )
+    existing = _b1_existing_coherence_alert(
+        project_id=project_id,
+        candidate=candidate,
+        status=AlertStatus.ACKNOWLEDGED,
+        disposition="genuine_inconsistency",
+    )
+    repo = _B1DispositionRepo([existing])
+
+    enriched = EnrichedCoherenceResult(
+        overall_score=expected.score,
+        alerts=alerts,
+        category_breakdown=_build_category_breakdown(
+            [signal],
+            coverage,
+            expected.category_scores or {},
+        ),
+        finding_signals=[signal],
+        deterministic_findings_count=1,
+        llm_findings_count=0,
+        scope_factor=expected.scope_factor,
+        penalty_density=expected.penalty_density,
+        avg_impact=expected.avg_impact,
+        avg_confidence=expected.avg_confidence,
+        category_scores=expected.category_scores,
+        audit_coverage=expected.audit_coverage,
+    )
+
+    db = Mock()
+    db.add = Mock()
+    db.execute = AsyncMock(return_value=SimpleNamespace(all=lambda: []))
+    db.scalar = AsyncMock(return_value=None)
+    db.commit = AsyncMock()
+
+    async def _identity_canary(result, **kwargs):
+        return result
+
+    with (
+        patch(
+            "src.coherence.router.evaluate_coherence_async",
+            new_callable=AsyncMock,
+            return_value=enriched,
+        ),
+        patch(
+            "src.coherence.router._verified_persisted_clause_documents",
+            new_callable=AsyncMock,
+            return_value=persisted,
+        ),
+        patch("src.coherence.router.SqlAlchemyAlertRepository", return_value=repo),
+        patch(
+            "src.coherence.router._maybe_apply_canonical_canary",
+            side_effect=_identity_canary,
+        ),
+    ):
+        result = await evaluate_project_coherence(
+            payload=CoherenceEvaluateRequest(
+                project_id=project_id,
+                clauses=clauses,
+            ),
+            include_diagnostics=True,
+            db=db,
+            current_user=SimpleNamespace(tenant_id=tenant_id),
+            flags_service=None,
+        )
+
+    assert isinstance(result, EnrichedCoherenceResult)
+    assert result.overall_score == expected.score
+    assert [item.rule_id for item in result.finding_signals] == ["DET-LEG-ACK"]
