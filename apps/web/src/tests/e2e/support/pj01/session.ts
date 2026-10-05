@@ -47,15 +47,13 @@ export async function signInAsJourneyUser(page: Page, baseURL: string): Promise<
   return observation;
 }
 
-export async function createProjectThroughUi(
+async function completeProjectCreationWizard(
   page: Page,
-  observation: AuthObservation,
   projectName: string,
 ): Promise<string> {
-  // Clicks "New Project" and proves the wizard opened under a stable authenticated session.
-  await assertProjectEntryContinuity(page, observation);
-
-  await page.getByTestId("project-name-input").fill(projectName);
+  const input = page.getByTestId("project-name-input");
+  await expect(input).toBeEditable({ timeout: 15_000 });
+  await input.fill(projectName);
   await page.getByRole("button", { name: "Next step" }).click();
   await page.getByRole("button", { name: "Review project" }).click();
 
@@ -74,6 +72,37 @@ export async function createProjectThroughUi(
   await page.waitForURL(PROJECT_URL, { timeout: 60_000 });
   await expect(page.getByTestId("documents-page")).toBeVisible({ timeout: 30_000 });
   const projectId = page.url().match(PROJECT_URL)?.[1];
-  if (!projectId) throw new Error("PJ01_PROJECT_ID_UNRESOLVED: project id missing from the Documents URL");
+  if (!projectId) {
+    throw new Error(
+      "PJ01_PROJECT_ID_UNRESOLVED: project id missing from the Documents URL",
+    );
+  }
   return projectId;
+}
+
+export async function createProjectThroughUi(
+  page: Page,
+  observation: AuthObservation,
+  projectName: string,
+): Promise<string> {
+  // Clicks "New Project" and proves the wizard opened under a stable authenticated session.
+  await assertProjectEntryContinuity(page, observation);
+  return completeProjectCreationWizard(page, projectName);
+}
+
+/**
+ * Production-qualification variant.
+ *
+ * The caller has already proven the real production Clerk Organization + tenant binding via
+ * `signInSyntheticProductionUser`. From the authenticated `/projects` page onward this
+ * function uses the same visible project wizard as PJ-01 without importing test-only Clerk
+ * bootstrap state into the production journey.
+ */
+export async function createProjectThroughAuthenticatedUi(
+  page: Page,
+  projectName: string,
+): Promise<string> {
+  await expect(page).toHaveURL(/\/projects(?:\?|$|\/)/, { timeout: 30_000 });
+  await page.getByRole("button", { name: /new project|create project/i }).first().click();
+  return completeProjectCreationWizard(page, projectName);
 }
