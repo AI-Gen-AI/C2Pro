@@ -299,7 +299,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          output="evidence/product-qualification/b1-12-prod-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.yaml"
+          bundle_name="b1-12-prod-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.yaml"
           python validation/product/build_b1_12_prod_qualification_bundle.py \
             --control-commit-sha "$CONTROL_COMMIT_SHA" \
             --backend-commit-sha "$BACKEND_SHA" \
@@ -308,7 +308,7 @@ jobs:
             --frontend-deployment-id "$FRONTEND_DEPLOYMENT" \
             --github-run-id "$GITHUB_RUN_ID" \
             --github-run-attempt "$GITHUB_RUN_ATTEMPT"
-          python validation/product/validate_b1_12_prod_qualification.py "$output"
+          python validation/product/validate_b1_12_prod_qualification.py "$bundle_name"
 
       - name: Upload bounded B1-12 artifacts
         if: always()
