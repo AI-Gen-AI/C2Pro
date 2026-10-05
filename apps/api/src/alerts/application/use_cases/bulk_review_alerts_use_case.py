@@ -77,6 +77,16 @@ class BulkReviewAlertsUseCase:
                     "cannot be bulk approved."
                 )
 
+        if decision == "reject":
+            coherence_alerts = [
+                alert for alert in alerts if alert.alert_type == "coherence"
+            ]
+            if coherence_alerts:
+                raise BulkReviewPolicyError(
+                    "Coherence false-positive decisions require individual review "
+                    "so Alert disposition and score recalculation commit atomically."
+                )
+
         for alert in alerts:
             alert.apply_review(user_id, decision, normalized_comment)
             alert.append_history("reviewed", user_id, decision=decision)
