@@ -129,7 +129,20 @@ def build_bundle(
     to_revision_id = str(identifiers.get("target_revision_id") or "")
     change_event_id = str(identifiers.get("change_event_id") or "")
     no_change_event_id = str(identifiers.get("no_change_event_id") or "")
-    if not all((project_id, document_id, from_revision_id, to_revision_id, change_event_id, no_change_event_id)):
+    no_change_target_revision_id = str(
+        identifiers.get("no_change_target_revision_id") or ""
+    )
+    if not all(
+        (
+            project_id,
+            document_id,
+            from_revision_id,
+            to_revision_id,
+            change_event_id,
+            no_change_event_id,
+            no_change_target_revision_id,
+        )
+    ):
         raise BundleBuildError("P0c verifier identifiers are incomplete")
     if from_revision_id == to_revision_id:
         raise BundleBuildError("P0c source and target revisions must differ")
@@ -142,6 +155,15 @@ def build_bundle(
         or str(prod.get("changeEventId")) != change_event_id
     ):
         raise BundleBuildError("browser and DB verifier identifiers disagree")
+
+    if (
+        str(no_change.get("eventId")) != no_change_event_id
+        or str(no_change.get("targetRevisionId")) != no_change_target_revision_id
+        or no_change.get("fixtureClass") != "byte-distinct-parser-equivalent"
+    ):
+        raise BundleBuildError(
+            "browser and DB verifier no-change identifiers disagree"
+        )
 
     control = _control_at(control_commit_sha)
     production = control.get("production_position")
@@ -194,6 +216,13 @@ def build_bundle(
             "id": "no-change-event",
             "kind": "persisted_entity",
             "ref": f"postgres:project_event:{no_change_event_id}",
+            "immutable": True,
+            "sha256": None,
+        },
+        {
+            "id": "no-change-target-revision",
+            "kind": "persisted_entity",
+            "ref": f"postgres:document_revision:{no_change_target_revision_id}",
             "immutable": True,
             "sha256": None,
         },
@@ -274,7 +303,12 @@ def build_bundle(
             {
                 "id": "absent_evidence_does_not_invent_change",
                 "status": "PASS",
-                "evidence_refs": ["browser-run", "db-verifier", "no-change-event"],
+                "evidence_refs": [
+                    "browser-run",
+                    "db-verifier",
+                    "no-change-event",
+                    "no-change-target-revision",
+                ],
                 "note": "Approved byte-distinct parser-equivalent Contract B derivative persisted as an empty changeset with change_cause=null.",
             },
         ],
