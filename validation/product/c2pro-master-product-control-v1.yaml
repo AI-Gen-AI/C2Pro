@@ -207,7 +207,8 @@ reconciliation_delta_2026_10_03_post_780:
 
 reconciliation_delta_2026_10_04_p0b:
   previous_main_sha: 9893cd42049c3cd2bbf9e8d891df0725b35ef082
-  current_main_sha: c41ff69bcabd87da1a606b125bd9cc37184bc7cc
+  accepted_control_main_sha: c41ff69bcabd87da1a606b125bd9cc37184bc7cc
+  current_main_sha: 23b963a50a7de7a4096063808a7f361f9df84ba1
   authoritative_runs:
     A1: {run_number: 55, run_id: 37195954713, conclusion: PASS}
     A2: {run_number: 56, run_id: 37196092728, conclusion: PASS}
