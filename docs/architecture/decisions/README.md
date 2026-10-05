@@ -42,6 +42,7 @@ This directory is the authoritative human catalogue of durable architecture deci
 - [ADR-026 Trusted-State Commit Boundary](./ADR-026-trusted-state-commit-boundary.md)
 - [ADR-027 Processing Authority & Checkpoint-Lineage Fencing](./ADR-027-processing-authority-checkpoint-lineage.md)
 - [ADR-028 Production Qualification & Composite Runtime Identity](./ADR-028-production-qualification-composite-runtime.md)
+- [ADR-029 WBS Governance — Implicit Root, Stable Identity, Governed Baselines](./ADR-029-wbs-governance-identity-baseline.md) *(Proposed; partially supersedes ADR-025)*
 
 ## Current critical architecture path
 
