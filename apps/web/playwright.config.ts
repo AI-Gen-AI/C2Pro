@@ -164,6 +164,30 @@ export default defineConfig({
       },
     },
     {
+      // Manual-only P0c production qualification. Uses the protected
+      // production-qualification identity to create a fresh synthetic PJ-01
+      // project, upload canonical Contract A, then Contract B as a new version
+      // of the same logical document. Existing accepted P0b state is untouched.
+      name: "p0c-prod-acceptance",
+      testMatch: [
+        /(^|[\\/])prod-acceptance[\\/]686-p0c-production\.spec\.ts$/,
+      ],
+      use: {
+        ...devices["Desktop Chrome"],
+        trace: "off",
+        screenshot: "off",
+        video: "off",
+      },
+      metadata: {
+        suite: "ISSUE-686-P0C-PROD-ACCEPTANCE",
+        type: "production-qualification",
+        priority: "p0",
+        manualOnly: true,
+        description:
+          "Real production auth -> fresh PJ-01 project -> Contract A -> same-document Contract B -> What Changed -> relogin durability",
+      },
+    },
+    {
       name: "cross-browser-chromium",
       testMatch: /cross-browser-smoke\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
