@@ -164,6 +164,30 @@ export default defineConfig({
       },
     },
     {
+      // Manual-only P0c production qualification. Uses the same protected
+      // production-qualification identity as #706, but mutates only by
+      // uploading Contract B as a new version of the already accepted
+      // synthetic Contract A document.
+      name: "p0c-prod-acceptance",
+      testMatch: [
+        /(^|[\\/])prod-acceptance[\\/]686-p0c-production\.spec\.ts$/,
+      ],
+      use: {
+        ...devices["Desktop Chrome"],
+        trace: "off",
+        screenshot: "off",
+        video: "off",
+      },
+      metadata: {
+        suite: "ISSUE-686-P0C-PROD-ACCEPTANCE",
+        type: "production-qualification",
+        priority: "p0",
+        manualOnly: true,
+        description:
+          "Real production auth -> same-document revision B -> What Changed -> relogin durability",
+      },
+    },
+    {
       name: "cross-browser-chromium",
       testMatch: /cross-browser-smoke\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
