@@ -5,6 +5,7 @@ Regression checks for backend CI workflow prerequisites.
 
 from __future__ import annotations
 
+import json
 import tomllib
 from pathlib import Path
 
@@ -579,3 +580,36 @@ def test_backend_lint_has_no_up042_baseline_exemption() -> None:
     assert "python -m ruff check ." in workflow
     assert '"backend-lint:$RESULT_BACKEND_LINT"' in workflow
     assert "UP042 ignored pending TASK-DEV-030" not in workflow
+
+
+def test_root_manifest_has_real_private_workspace_contract() -> None:
+    """C2PRO-DEV-15: root package metadata must not advertise a fake runtime/package license."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    manifest = json.loads((repo_root / "package.json").read_text(encoding="utf-8"))
+
+    assert manifest["private"] is True
+    assert manifest["license"] == "UNLICENSED"
+    assert "main" not in manifest
+    assert manifest["scripts"]["test"] == "pnpm --filter c2pro-web test:all"
+
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    assert "License: Proprietary" in readme
+    assert "](LICENSE)" not in readme
+
+
+def test_live_backend_entrypoint_has_no_utf8_mojibake() -> None:
+    """C2PRO-DEV-15: current source must stay UTF-8 clean."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    contents = (repo_root / "apps" / "api" / "src" / "main.py").read_text(encoding="utf-8")
+
+    for marker in ("Ã", "Â", "â€"):
+        assert marker not in contents
+
+
+def test_legacy_api_root_test_runner_is_removed() -> None:
+    """C2PRO-DEV-15: pytest is canonical; the unused self-installing root runner is debris."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    assert not (repo_root / "apps" / "api" / "test.py").exists()
