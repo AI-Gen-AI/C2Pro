@@ -60,8 +60,11 @@ def _canonical_run_path(run_id: str) -> Path:
     if not RUN_ID_RE.fullmatch(run_id) or ".." in run_id:
         raise VerificationFailure("run id is invalid")
     root = RUN_ROOT.resolve()
-    path = (root / run_id / "run.json").resolve(strict=True)
-    if path.is_symlink() or path.parent != (root / run_id).resolve():
+    candidate = root / run_id / "run.json"
+    if candidate.is_symlink():
+        raise VerificationFailure("run evidence path must not be a symlink")
+    path = candidate.resolve(strict=True)
+    if path.parent != (root / run_id).resolve():
         raise VerificationFailure("run evidence path is outside canonical root")
     if not path.is_file():
         raise VerificationFailure("run evidence must be a regular file")
