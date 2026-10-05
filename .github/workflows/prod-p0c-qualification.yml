@@ -261,13 +261,16 @@ jobs:
         env:
           PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
           PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_P0C_PROJECT_ID: ${{ inputs.project_id }}
+          PROD_P0C_DOCUMENT_ID: ${{ inputs.document_id }}
+          PROD_P0C_SOURCE_REVISION_ID: ${{ inputs.source_revision_id }}
         shell: bash
         run: |
           set -euo pipefail
           python apps/api/scripts/verify_p0c_prod_journey.py \
-            --project-id "${{ inputs.project_id }}" \
-            --document-id "${{ inputs.document_id }}" \
-            --source-revision-id "${{ inputs.source_revision_id }}"
+            --project-id "$PROD_P0C_PROJECT_ID" \
+            --document-id "$PROD_P0C_DOCUMENT_ID" \
+            --source-revision-id "$PROD_P0C_SOURCE_REVISION_ID"
 
       - name: Execute real P0c production browser journey
         env:
@@ -309,26 +312,34 @@ jobs:
         env:
           PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
           PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_P0C_PROJECT_ID: ${{ inputs.project_id }}
+          PROD_P0C_DOCUMENT_ID: ${{ inputs.document_id }}
+          PROD_P0C_SOURCE_REVISION_ID: ${{ inputs.source_revision_id }}
         shell: bash
         run: |
           set -euo pipefail
           python apps/api/scripts/verify_p0c_prod_journey.py \
-            --project-id "${{ inputs.project_id }}" \
-            --document-id "${{ inputs.document_id }}" \
-            --source-revision-id "${{ inputs.source_revision_id }}" \
+            --project-id "$PROD_P0C_PROJECT_ID" \
+            --document-id "$PROD_P0C_DOCUMENT_ID" \
+            --source-revision-id "$PROD_P0C_SOURCE_REVISION_ID" \
             --target-revision-id "$PROD_P0C_TARGET_REVISION_ID" \
             --write-evidence
 
       - name: Build non-authoritative P0c evidence bundle
+        env:
+          BACKEND_SHA: ${{ inputs.backend_commit_sha }}
+          BACKEND_DEPLOYMENT: ${{ inputs.backend_deployment_id }}
+          FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
+          FRONTEND_DEPLOYMENT: ${{ inputs.frontend_deployment_id }}
         shell: bash
         run: |
           set -euo pipefail
           python validation/product/build_p0c_prod_qualification_bundle.py \
             --control-commit-sha "$CONTROL_COMMIT_SHA" \
-            --backend-commit-sha "${{ inputs.backend_commit_sha }}" \
-            --backend-deployment-id "${{ inputs.backend_deployment_id }}" \
-            --frontend-commit-sha "${{ inputs.frontend_commit_sha }}" \
-            --frontend-deployment-id "${{ inputs.frontend_deployment_id }}" \
+            --backend-commit-sha "$BACKEND_SHA" \
+            --backend-deployment-id "$BACKEND_DEPLOYMENT" \
+            --frontend-commit-sha "$FRONTEND_SHA" \
+            --frontend-deployment-id "$FRONTEND_DEPLOYMENT" \
             --github-run-id "$GITHUB_RUN_ID" \
             --github-run-attempt "$GITHUB_RUN_ATTEMPT"
 
@@ -337,17 +348,25 @@ jobs:
 
       - name: Emit bounded summary
         if: always()
+        env:
+          BACKEND_SHA: ${{ inputs.backend_commit_sha }}
+          BACKEND_DEPLOYMENT: ${{ inputs.backend_deployment_id }}
+          FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
+          FRONTEND_DEPLOYMENT: ${{ inputs.frontend_deployment_id }}
+          PROD_P0C_PROJECT_ID: ${{ inputs.project_id }}
+          PROD_P0C_DOCUMENT_ID: ${{ inputs.document_id }}
+          PROD_P0C_SOURCE_REVISION_ID: ${{ inputs.source_revision_id }}
         shell: bash
         run: |
           {
             echo "## C2Pro #686 P0c production qualification"
             echo
             echo "- control commit: `$GITHUB_SHA`"
-            echo "- backend: `${{ inputs.backend_deployment_id }}` / `${{ inputs.backend_commit_sha }}`"
-            echo "- frontend: `${{ inputs.frontend_deployment_id }}` / `${{ inputs.frontend_commit_sha }}`"
-            echo "- accepted project: `${{ inputs.project_id }}`"
-            echo "- accepted document: `${{ inputs.document_id }}`"
-            echo "- source revision A: `${{ inputs.source_revision_id }}`"
+            echo "- backend: `$BACKEND_DEPLOYMENT` / `$BACKEND_SHA`"
+            echo "- frontend: `$FRONTEND_DEPLOYMENT` / `$FRONTEND_SHA`"
+            echo "- accepted project: `$PROD_P0C_PROJECT_ID`"
+            echo "- accepted document: `$PROD_P0C_DOCUMENT_ID`"
+            echo "- source revision A: `$PROD_P0C_SOURCE_REVISION_ID`"
             echo "- lifecycle authority: **false**"
             echo
             echo "Credentials and tokens are never included in this summary."
