@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 
 import openpyxl
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+OUTPUT_DIR = REPO_ROOT / "apps" / "web" / "playwright" / ".prod-b1" / "fixtures"
 
 
 def _budget(path: Path) -> None:
@@ -32,13 +34,9 @@ def _schedule(path: Path) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-dir", required=True)
-    args = parser.parse_args()
-    output = Path(args.output_dir)
-    output.mkdir(parents=True, exist_ok=True)
-    budget = output / "b1-budget.xlsx"
-    schedule = output / "b1-schedule.xlsx"
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    budget = OUTPUT_DIR / "b1-budget.xlsx"
+    schedule = OUTPUT_DIR / "b1-schedule.xlsx"
     _budget(budget)
     _schedule(schedule)
     print(f"B1_BUDGET_FIXTURE={budget}")
