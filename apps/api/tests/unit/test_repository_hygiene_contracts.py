@@ -19,16 +19,30 @@ def test_document_repository_integration_note_points_to_live_rls_authorities() -
     """Repository docs/tests must point at active PostgreSQL/RLS coverage."""
 
     repo_root = _repo_root()
-    integration = (
-        repo_root
-        / "apps"
-        / "api"
+    api_root = repo_root / "apps" / "api"
+    integration_path = (
+        api_root
         / "tests"
         / "modules"
         / "integration"
         / "test_document_repository_db.py"
-    ).read_text(encoding="utf-8")
+    )
+    postgres_read_authority = (
+        api_root
+        / "tests"
+        / "integration"
+        / "documents"
+        / "test_clause_evidence_read_port_db.py"
+    )
+    rls_authority = api_root / "tests" / "security" / "test_rls_real_enforcement.py"
 
-    assert "tests/integration/documents/test_clause_evidence_read_port_db.py" in integration
-    assert "tests/security/test_rls_real_enforcement.py" in integration
-    assert "see test_document_repository.py" not in integration
+    assert postgres_read_authority.is_file()
+    assert rls_authority.is_file()
+
+    integration = integration_path.read_text(encoding="utf-8")
+    postgres_reference = postgres_read_authority.relative_to(api_root).as_posix()
+    rls_reference = rls_authority.relative_to(api_root).as_posix()
+
+    assert postgres_reference in integration
+    assert rls_reference in integration
+    assert "test_document_repository.py" not in integration
