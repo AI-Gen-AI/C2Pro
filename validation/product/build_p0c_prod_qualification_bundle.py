@@ -249,7 +249,7 @@ def build_bundle(
                 "id": "absent_evidence_does_not_invent_change",
                 "status": "PASS",
                 "evidence_refs": ["browser-run", "db-verifier", "no-change-event"],
-                "note": "Approved PJ-01 identical Contract B reupload persisted as an empty changeset with change_cause=null.",
+                "note": "Approved byte-distinct parser-equivalent Contract B derivative persisted as an empty changeset with change_cause=null.",
             },
         ],
         "evidence_refs": evidence_refs,
