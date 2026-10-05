@@ -192,6 +192,18 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
 
         return [self._to_domain(item) for item in items], total_count
 
+    async def find_by_project_email(
+        self, project_id: UUID, tenant_id: UUID, email: str
+    ) -> list[Stakeholder]:
+        """Stakeholders of one tenant-scoped project whose email matches, case-insensitively."""
+        stmt = select(StakeholderORM).where(
+            StakeholderORM.project_id == project_id,
+            StakeholderORM.tenant_id == tenant_id,
+            func.lower(func.trim(StakeholderORM.email)) == email.strip().lower(),
+        )
+        result = await self.session.execute(stmt)
+        return [self._to_domain(item) for item in result.scalars().all()]
+
     async def update(self, stakeholder: Stakeholder, tenant_id: UUID) -> None:
         """Update stakeholder metadata."""
         stmt = select(StakeholderORM).where(
