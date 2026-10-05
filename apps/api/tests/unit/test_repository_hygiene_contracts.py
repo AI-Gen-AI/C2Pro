@@ -29,6 +29,6 @@ def test_document_repository_integration_note_points_to_live_rls_authorities() -
         / "test_document_repository_db.py"
     ).read_text(encoding="utf-8")
 
-    assert "tests/adapters/persistence/test_documents_repository.py" in integration
+    assert "tests/integration/documents/test_clause_evidence_read_port_db.py" in integration
     assert "tests/security/test_rls_real_enforcement.py" in integration
     assert "see test_document_repository.py" not in integration
