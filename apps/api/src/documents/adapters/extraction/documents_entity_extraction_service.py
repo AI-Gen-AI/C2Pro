@@ -2,12 +2,18 @@
 SqlAlchemy implementation of the IEntityExtractionService port.
 Uses use cases from other modules (Stakeholders, Procurement) to extract and persist entities.
 Follows the modular monolith principles by going through public use cases.
+
+#852: a SCHEDULE is observed, never written into the canonical WBS. A schedule
+activity is not a WBS node and its visible ``wbs`` code is not a canonical WBS
+identity; the governed WBS baseline authority is PC-1 / PC-2. The schedule stays
+recoverable from its immutable revision (deterministically reparsable) and from
+its RAG chunks, so nothing is lost by not materializing it here. This service
+therefore has no WBS writer at all.
 """
 from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
@@ -16,8 +22,8 @@ import structlog
 
 from src.documents.domain.models import Document, DocumentType
 from src.documents.ports.entity_extraction_service import IEntityExtractionService
-from src.procurement.application.dtos import BOMItemCreate, WBSItemCreate
-from src.procurement.domain.models import BOMCategory, ProcurementStatus, WBSItemType
+from src.procurement.application.dtos import BOMItemCreate
+from src.procurement.domain.models import BOMCategory, ProcurementStatus
 
 # DTOs and Interfaces from other modules
 from src.stakeholders.application.dtos import StakeholderCreateRequest
@@ -29,16 +35,17 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
     def __init__(
         self,
         stakeholder_use_case_factory: Callable[[], Any],
-        wbs_use_case_factory: Callable[[], Any],
         bom_use_case_factory: Callable[[], Any],
         user_id: UUID,
     ) -> None:
         """
         Initialize the service with factories to avoid circular dependencies
         and provide the user_id for auditing.
+
+        There is deliberately no WBS use case: schedule ingestion never writes the
+        canonical WBS (#852).
         """
         self._stakeholder_use_case_factory = stakeholder_use_case_factory
-        self._wbs_use_case_factory = wbs_use_case_factory
         self._bom_use_case_factory = bom_use_case_factory
         self._user_id = user_id
 
@@ -48,15 +55,23 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
         parsed_payload: dict[str, Any],
         tenant_id: UUID,
     ) -> dict[str, int]:
-        extraction_summary = {"stakeholders": 0, "wbs_items": 0, "bom_items": 0}
+        # ``wbs_items`` counts canonical WBS writes and is always 0 (#852);
+        # ``schedule_activities`` counts the named activities the schedule carries.
+        extraction_summary = {
+            "stakeholders": 0,
+            "wbs_items": 0,
+            "bom_items": 0,
+            "schedule_activities": 0,
+        }
 
         if document.document_type == DocumentType.CONTRACT:
             summary = await self._extract_stakeholders(document, parsed_payload, tenant_id)
             extraction_summary["stakeholders"] = summary
 
         if document.document_type == DocumentType.SCHEDULE:
-            summary = await self._extract_wbs_items(document, parsed_payload, tenant_id)
-            extraction_summary["wbs_items"] = summary
+            extraction_summary["schedule_activities"] = _count_schedule_activities(
+                parsed_payload
+            )
 
         if document.document_type == DocumentType.BUDGET:
             summary = await self._extract_bom_items(document, parsed_payload, tenant_id)
@@ -105,68 +120,6 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
                 logger.debug("stakeholder_extraction_skipped", email=email, error=str(exc))
 
         return count
-
-    async def _extract_wbs_items(
-        self, document: Document, parsed_payload: dict[str, Any], _tenant_id: UUID
-    ) -> int:
-        schedule_data = parsed_payload.get("schedule", [])
-        if not schedule_data:
-            return 0
-
-        use_case = self._wbs_use_case_factory()
-
-        payloads: list[WBSItemCreate] = []
-        for index, task in enumerate(schedule_data, start=1):
-            task_name = task.get("task")
-            if not task_name:
-                continue
-
-            wbs_code = str(task.get("wbs") or f"SCH-{index:03d}")
-            metadata: dict[str, object] = {"source_document_id": str(document.id)}
-            predecessor = task.get("predecessor_id") or task.get("predecessors")
-            if isinstance(predecessor, str) and predecessor.strip():
-                metadata["predecessor_id"] = predecessor.strip()
-            status = task.get("status")
-            if isinstance(status, str) and status.strip():
-                metadata["status"] = status.strip()
-
-            payloads.append(
-                WBSItemCreate(
-                    project_id=document.project_id,
-                    wbs_code=wbs_code,
-                    name=str(task_name),
-                    level=_infer_wbs_level(wbs_code),
-                    item_type=WBSItemType.ACTIVITY,
-                    parent_id=None,
-                    description=None,
-                    budget_allocated=None,
-                    budget_spent=Decimal(0),
-                    actual_start=None,
-                    actual_end=None,
-                    planned_start=_parse_datetime_value(task.get("start_date")),
-                    planned_end=_parse_datetime_value(task.get("end_date")),
-                    funded_by_clause_id=None,
-                    source_document_id=document.id,
-                    wbs_metadata=metadata,
-                )
-            )
-
-        if not payloads:
-            return 0
-
-        # Idempotent per source document: re-parsing the same schedule replaces
-        # its own WBS rows instead of colliding on uq_procurement_wbs_project_code.
-        try:
-            created = await use_case.replace_for_source_document(
-                project_id=document.project_id,
-                source_document_id=document.id,
-                wbs_items=payloads,
-                tenant_id=_tenant_id,
-            )
-            return len(created)
-        except Exception as exc:
-            logger.debug("wbs_extraction_skipped", document_id=str(document.id), error=str(exc))
-            return 0
 
     async def _extract_bom_items(
         self, document: Document, parsed_payload: dict[str, Any], _tenant_id: UUID
@@ -277,25 +230,10 @@ def _extract_emails(text_blocks: list[dict[str, Any]]) -> set[str]:
     return emails
 
 
-def _parse_datetime_value(value: object) -> datetime | None:
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value)
-        except ValueError:
-            return None
-    return None
-
-
-def _infer_wbs_level(wbs_code: str) -> int:
-    """TS-UD-DOC-EXT-001: infer hierarchy depth from parsed or generated WBS codes."""
-    normalized_code = wbs_code.strip()
-    if not normalized_code:
-        return 0
-    if "." in normalized_code:
-        return len([segment for segment in normalized_code.split(".") if segment])
-    return 1
+def _count_schedule_activities(parsed_payload: dict[str, Any]) -> int:
+    """Named schedule activities observed (#852): counted, never written as WBS."""
+    schedule_data = parsed_payload.get("schedule") or []
+    return sum(1 for task in schedule_data if isinstance(task, dict) and task.get("task"))
 
 
 def _parse_decimal(value: object) -> Decimal | None:
