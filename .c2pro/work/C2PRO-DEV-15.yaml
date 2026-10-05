@@ -1,0 +1,64 @@
+schema: c2pro-work-envelope-v1
+schema_version: 1
+work_id: C2PRO-DEV-15
+campaign_id: REPO-HYGIENE-CORE-AI-20261005
+role: implementation_lead
+base_sha: f2214730efd216e176e28fdd4716e23ab272be61
+branch: chore/c2pro-dev-15-repository-hygiene-wave1
+risk_class: normal
+scope:
+  - reconcile repository-hygiene debt against current main and active product lanes
+  - fix internally inconsistent root package metadata without publishing a package
+  - remove only debris proven unreferenced by current repository paths
+  - eliminate confirmed UTF-8 mojibake from touched live source
+  - progressively bring high-value src/core/ai modules under meaningful coverage in later waves
+  - preserve active P0c Temporal WBS Alerts Coherence Risk and Procurement work without overlap
+out_of_scope:
+  - product lifecycle promotion or Product Control mutation
+  - P0c or P0d production qualification
+  - Temporal WBS Alerts Coherence Risk or Procurement functional changes
+  - broad architectural refactor or bounded-context consolidation
+  - mass deletion without reference evidence
+  - aggregate coverage threshold jumps unsupported by meaningful tests
+allowed_tools:
+  - github_repository_read
+  - scoped_repository_write
+  - github_ci_read
+  - focused_python_tests
+  - repository_reference_search
+forbidden_paths:
+  - validation/product/**
+  - docs/product/**
+  - apps/api/alembic/**
+  - supabase/migrations/**
+  - apps/api/src/temporal/**
+  - apps/api/src/wbs/**
+  - apps/api/src/coherence/**
+  - apps/api/src/alerts/**
+acceptance_criteria:
+  - root manifest no longer advertises nonexistent index.js or ISC licensing
+  - root JavaScript test command invokes the real frontend full-test surface
+  - README proprietary badge no longer links to a nonexistent LICENSE file
+  - confirmed mojibake is absent from touched live backend entrypoint
+  - apps/api/test.py is removed only after repository-wide reference search proves no active consumer
+  - referenced dev.py and requirements-sprint1.txt are preserved
+  - CI remains green and no active product PR is modified
+  - later Core AI coverage work removes exclusions only with failure-path and contract tests
+required_tests:
+  - C2PRO-DEV-15 Wave1 repository hygiene contract tests
+  - backend unit suite for touched CI-guard tests
+  - backend lint
+  - canonical GitHub CI required gates
+evidence_required:
+  - exact_base_sha
+  - issue_849_scope
+  - repository_reference_search_results
+  - exact_head_ci
+  - independent_review
+review_policy: independent_principal
+worker_selection:
+  preferred: null
+  eligible_principals: [claude_code, codex]
+  eligible_subordinates: []
+  selected: null
+timeout_resource_policy: bounded_repository_hygiene_no_production_mutation
