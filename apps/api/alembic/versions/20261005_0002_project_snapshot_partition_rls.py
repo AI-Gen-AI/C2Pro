@@ -26,27 +26,27 @@ depends_on = None
 SUPABASE_MIRROR = "20261005000200_project_snapshot_partition_rls.sql"
 
 ENABLE_EXISTING_PARTITION_RLS_SQL = r"""
-DO $$
+DO $
 DECLARE
-    child record;
+    partition_row record;
 BEGIN
-    FOR child IN
-        SELECT child_ns.nspname AS schema_name, child.relname AS table_name
+    FOR partition_row IN
+        SELECT child_ns.nspname AS schema_name, child_rel.relname AS table_name
         FROM pg_inherits
-        JOIN pg_class parent ON parent.oid = pg_inherits.inhparent
-        JOIN pg_namespace parent_ns ON parent_ns.oid = parent.relnamespace
-        JOIN pg_class child ON child.oid = pg_inherits.inhrelid
-        JOIN pg_namespace child_ns ON child_ns.oid = child.relnamespace
+        JOIN pg_class parent_rel ON parent_rel.oid = pg_inherits.inhparent
+        JOIN pg_namespace parent_ns ON parent_ns.oid = parent_rel.relnamespace
+        JOIN pg_class child_rel ON child_rel.oid = pg_inherits.inhrelid
+        JOIN pg_namespace child_ns ON child_ns.oid = child_rel.relnamespace
         WHERE parent_ns.nspname = 'public'
-          AND parent.relname = 'project_snapshots'
+          AND parent_rel.relname = 'project_snapshots'
     LOOP
         EXECUTE 'ALTER TABLE '
-            || quote_ident(child.schema_name)
+            || quote_ident(partition_row.schema_name)
             || '.'
-            || quote_ident(child.table_name)
+            || quote_ident(partition_row.table_name)
             || ' ENABLE ROW LEVEL SECURITY';
     END LOOP;
-END $$;
+END $;
 """
 
 UPGRADE_STATEMENTS: tuple[str, ...] = (ENABLE_EXISTING_PARTITION_RLS_SQL,)
