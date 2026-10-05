@@ -164,6 +164,27 @@ export default defineConfig({
       },
     },
     {
+      // Manual-only #686 P0c production qualification. Reuses the already
+      // accepted synthetic P0b project and mutates only by uploading revision B
+      // of the same logical document.
+      name: "prod-p0c-acceptance",
+      testMatch: [/(^|[\\/])prod-acceptance[\\/]686-p0c-production\.spec\.ts$/],
+      use: {
+        ...devices["Desktop Chrome"],
+        trace: "off",
+        screenshot: "off",
+        video: "off",
+      },
+      metadata: {
+        suite: "ISSUE-686-P0C-PROD-ACCEPTANCE",
+        type: "production-qualification",
+        priority: "p0",
+        manualOnly: true,
+        description:
+          "Real Clerk production auth -> accepted P0b document -> revision B -> What Changed -> relogin durability",
+      },
+    },
+    {
       name: "cross-browser-chromium",
       testMatch: /cross-browser-smoke\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
