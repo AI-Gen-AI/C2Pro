@@ -6012,6 +6012,29 @@ components:
           title: Projected Delta
           description: projected_score - projection_baseline_score (null when either
             is null).
+        projection_baseline_sub_scores:
+          anyOf:
+          - additionalProperties:
+              anyOf:
+              - type: number
+              - type: 'null'
+            type: object
+          - type: 'null'
+          title: Projection Baseline Sub Scores
+          description: Canonical six-dimension subscores for the trusted artifact-set
+            evaluation used as the projection baseline. Null when no baseline is available.
+        projected_sub_scores:
+          anyOf:
+          - additionalProperties:
+              anyOf:
+              - type: number
+              - type: 'null'
+            type: object
+          - type: 'null'
+          title: Projected Sub Scores
+          description: PROVISIONAL six-dimension subscores for the pending scenario.
+            Same evaluator/score_version as projected_score; Unknown dimensions remain
+            null.
         pending_review_count:
           type: integer
           title: Pending Review Count
