@@ -227,8 +227,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python apps/api/scripts/generate_b1_prod_qualification_fixtures.py \
-            --output-dir apps/web/playwright/.prod-b1/fixtures | tee /tmp/b1-fixtures.env
+          python apps/api/scripts/generate_b1_prod_qualification_fixtures.py | tee /tmp/b1-fixtures.env
           cat /tmp/b1-fixtures.env >> "$GITHUB_ENV"
 
       - name: Execute B1-12 real production browser journey
