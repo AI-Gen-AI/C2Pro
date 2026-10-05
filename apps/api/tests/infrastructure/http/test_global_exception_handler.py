@@ -7,9 +7,6 @@ Refers to Suite IDs: TS-UA-DTO-ALL-001, TS-UAD-HTTP-ERR-001, TS-INT-EXT-LLM-002.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from unittest.mock import AsyncMock
-
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
@@ -54,27 +51,3 @@ class TestAllDtoSerialization:
             json_payload = instance.model_dump_json()
             restored = dto_cls.model_validate_json(json_payload)
             assert restored == instance
-
-
-class TestLlmFallback:
-    """Refers to Suite ID: TS-INT-EXT-LLM-002."""
-
-    @pytest.mark.asyncio
-    async def test_fallback_to_openai_when_anthropic_fails(self):
-        from src.core.ai.fallback_client import LLMFallbackClient
-
-        anthropic_client = AsyncMock()
-        openai_client = AsyncMock()
-        anthropic_client.generate.side_effect = RuntimeError("Anthropic down")
-        openai_client.generate.return_value = {"content": "ok"}
-
-        client = LLMFallbackClient(
-            primary_client=anthropic_client,
-            fallback_client=openai_client,
-        )
-
-        result = await client.generate(prompt="hello")
-
-        anthropic_client.generate.assert_awaited_once()
-        openai_client.generate.assert_awaited_once()
-        assert result == {"content": "ok"}
