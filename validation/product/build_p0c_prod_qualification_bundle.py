@@ -91,8 +91,10 @@ def build_bundle(
         raise BundleBuildError("browser did not prove relogin durability")
     if run.get("documents_listed_after_revision") != 1:
         raise BundleBuildError("revision journey did not preserve one logical document")
-    if run.get("processing_outcome") != "analyzed":
-        raise BundleBuildError("revision B did not settle as analyzed")
+    if run.get("source_processing_outcome") != "analyzed":
+        raise BundleBuildError("Contract A did not settle as analyzed")
+    if run.get("target_processing_outcome") != "analyzed":
+        raise BundleBuildError("Contract B did not settle as analyzed")
 
     verifier_ids = verifier.get("identifiers")
     if not isinstance(verifier_ids, dict):
