@@ -225,6 +225,93 @@ async function createQualificationProject(
   }
 }
 
+
+interface NoChangeOutcome {
+  eventId: string;
+  sourceRevisionId: string;
+  targetRevisionId: string;
+}
+
+async function assertIdenticalReuploadProducesHonestNoChange(
+  page: Page,
+  projectId: string,
+  documentId: string,
+): Promise<NoChangeOutcome> {
+  type TimelineItem = {
+    event_id: string;
+    event_type: string;
+    state: string;
+    change_cause: string | null;
+    document_id?: string | null;
+    provenance?: {
+      source_revision_id?: string | null;
+      target_revision_id?: string | null;
+    };
+  };
+
+  let outcome: TimelineItem | undefined;
+  const onResponse = async (
+    response: import("@playwright/test").Response,
+  ): Promise<void> => {
+    if (response.request().method() !== "GET" || !response.ok()) return;
+    if (
+      !new RegExp(\`/projects/\${projectId}/timeline/?$\`).test(
+        new URL(response.url()).pathname,
+      )
+    ) {
+      return;
+    }
+    try {
+      const body = (await response.json()) as { items?: TimelineItem[] };
+      outcome = body.items?.find(
+        (item) =>
+          item.event_type === "revision.changed" &&
+          item.document_id === documentId &&
+          item.state === "ready" &&
+          item.change_cause === null,
+      );
+    } catch {
+      // A malformed timeline response cannot satisfy the negative proof.
+    }
+  };
+
+  page.on("response", onResponse);
+  try {
+    await page.goto(\`\${baseUrl()}/projects/\${projectId}/changes\`, {
+      waitUntil: "domcontentloaded",
+    });
+    const deadline = Date.now() + 180_000;
+    while (!outcome && Date.now() < deadline) {
+      await page.waitForTimeout(2_000);
+    }
+    if (!outcome) {
+      throw new Error("P0C_PROD_NO_CHANGE_OUTCOME_MISSING");
+    }
+
+    const sourceRevisionId = String(outcome.provenance?.source_revision_id ?? "");
+    const targetRevisionId = String(outcome.provenance?.target_revision_id ?? "");
+    if (
+      !sourceRevisionId ||
+      !targetRevisionId ||
+      sourceRevisionId === targetRevisionId
+    ) {
+      throw new Error("P0C_PROD_NO_CHANGE_REVISION_IDENTITY_INVALID");
+    }
+
+    const card = page.getByTestId(\`change-item-\${outcome.event_id}\`);
+    await expect(card).toBeVisible({ timeout: 30_000 });
+    await expect(card.getByText("No material change found")).toBeVisible();
+
+    return {
+      eventId: outcome.event_id,
+      sourceRevisionId,
+      targetRevisionId,
+    };
+  } finally {
+    page.off("response", onResponse);
+  }
+}
+
 test("P0c production: fresh PJ-01 Contract A -> same-document B -> durable honest What Changed", async ({
   page,
 }) => {
@@ -462,6 +549,89 @@ test("P0c production: fresh PJ-01 Contract A -> same-document B -> durable hones
         ),
     );
 
+
+    const negativeProjectId = await recorder.step(
+      "P0C-PROD-N1",
+      "Create isolated no-change qualification project",
+      async () => createQualificationProject(page, runId, "Negative"),
+    );
+
+    const negativeUpload = await recorder.step(
+      "P0C-PROD-N2",
+      "Upload Contract B as negative-case baseline",
+      async () =>
+        uploadDocumentThroughUi(page, recorder, {
+          projectId: negativeProjectId,
+          filePath: contractBPdfPath(revisionManifest),
+          documentType: revisionManifest.document_type,
+        }),
+    );
+    const negativeDocumentId = negativeUpload.documentId;
+
+    const negativeBaselineProcessing = await recorder.step(
+      "P0C-PROD-N3",
+      "Analyze negative-case baseline",
+      async () =>
+        observeProcessingWithoutReload(page, recorder, {
+          projectId: negativeProjectId,
+          documentId: negativeDocumentId,
+        }),
+    );
+    if (
+      negativeBaselineProcessing.evaluation.outcome !== "analyzed" ||
+      negativeBaselineProcessing.evaluation.violations.length > 0
+    ) {
+      throw new Error(
+        \`P0C_PROD_NEGATIVE_BASELINE_PROCESSING_FAILED:\${negativeBaselineProcessing.evaluation.outcome}\`,
+      );
+    }
+
+    const identicalRevision = await recorder.step(
+      "P0C-PROD-N4",
+      "Re-upload identical Contract B as the same logical document",
+      async () =>
+        uploadNewVersionThroughUi(page, recorder, {
+          projectId: negativeProjectId,
+          documentId: negativeDocumentId,
+          filePath: contractBPdfPath(revisionManifest),
+        }),
+    );
+    if (
+      identicalRevision.documentId !== negativeDocumentId ||
+      identicalRevision.documentsListed !== 1
+    ) {
+      throw new Error("P0C_PROD_NEGATIVE_REVISION_IDENTITY_FAILED");
+    }
+
+    const negativeTargetProcessing = await recorder.step(
+      "P0C-PROD-N5",
+      "Analyze identical re-upload",
+      async () =>
+        observeProcessingWithoutReload(page, recorder, {
+          projectId: negativeProjectId,
+          documentId: negativeDocumentId,
+        }),
+    );
+    if (
+      negativeTargetProcessing.evaluation.outcome !== "analyzed" ||
+      negativeTargetProcessing.evaluation.violations.length > 0
+    ) {
+      throw new Error(
+        \`P0C_PROD_NEGATIVE_TARGET_PROCESSING_FAILED:\${negativeTargetProcessing.evaluation.outcome}\`,
+      );
+    }
+
+    const noChange = await recorder.step(
+      "P0C-PROD-N6",
+      "Prove identical content yields an honest no-change outcome",
+      async () =>
+        assertIdenticalReuploadProducesHonestNoChange(
+          page,
+          negativeProjectId,
+          negativeDocumentId,
+        ),
+    );
+
     const blockers = recorder.blockingFindings();
     if (blockers.length > 0) {
       throw new Error(
@@ -489,6 +659,15 @@ test("P0c production: fresh PJ-01 Contract A -> same-document B -> durable hones
           target_processing_outcome: processingB.evaluation.outcome,
           navigation_mode: recorder.mode,
           classification: recorder.classification(),
+          negative_project_id: negativeProjectId,
+          negative_document_id: negativeDocumentId,
+          negative_source_revision_id: noChange.sourceRevisionId,
+          negative_target_revision_id: noChange.targetRevisionId,
+          negative_change_event_id: noChange.eventId,
+          negative_source_processing_outcome:
+            negativeBaselineProcessing.evaluation.outcome,
+          negative_target_processing_outcome:
+            negativeTargetProcessing.evaluation.outcome,
           negative_project_id: negativeProjectId,
           negative_document_id: negativeDocumentId,
           negative_source_revision_id: noChange.sourceRevisionId,
