@@ -89,3 +89,11 @@ def test_p0c_bundle_uses_canonical_phase_a_contract_without_lifecycle_authority(
         "absent_evidence_does_not_invent_change",
     ):
         assert f'"id": "{assertion}"' in source
+
+
+def test_p0c_workflow_does_not_interpolate_dispatch_inputs_inside_shell() -> None:
+    source = _workflow()
+    run_blocks = source.split("run: |")[1:]
+    for block in run_blocks:
+        shell_body = block.split("\n      - name:", 1)[0]
+        assert "${{ inputs." not in shell_body
