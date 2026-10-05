@@ -591,7 +591,7 @@ def test_root_manifest_has_real_private_workspace_contract() -> None:
     assert manifest["private"] is True
     assert manifest["license"] == "UNLICENSED"
     assert "main" not in manifest
-    assert manifest["scripts"]["test"] == "pnpm --filter c2pro-web test:all"
+    assert manifest["scripts"]["test"] == "pnpm --filter c2pro-web exec vitest run --coverage"
 
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
     assert "License: Proprietary" in readme
