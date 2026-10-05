@@ -230,10 +230,10 @@ async def verify(
                         and provenance.get("target_revision_id") == str(no_change_target_revision_id)
                     )
 
-                    hash_rows = await conn.execute(
+                    revision_rows = await conn.execute(
                         text(
                             """
-                            SELECT revision_id, blob_hash
+                            SELECT revision_id, parent_revision_id, blob_hash
                               FROM document_revisions
                              WHERE tenant_id=:tenant_id
                                AND project_id=:project_id
@@ -243,11 +243,23 @@ async def verify(
                         ),
                         params,
                     )
-                    hashes = {row.revision_id: row.blob_hash for row in hash_rows.all()}
+                    revision_map = {
+                        row.revision_id: {
+                            "parent_revision_id": row.parent_revision_id,
+                            "blob_hash": row.blob_hash,
+                        }
+                        for row in revision_rows.all()
+                    }
+                    target_row = revision_map.get(target_revision_id)
+                    no_change_row = revision_map.get(no_change_target_revision_id)
                     no_change_hash_ok = (
-                        hashes.get(target_revision_id) is not None
-                        and hashes.get(no_change_target_revision_id) is not None
-                        and hashes.get(target_revision_id) != hashes.get(no_change_target_revision_id)
+                        target_row is not None
+                        and no_change_row is not None
+                        and target_row["blob_hash"] != no_change_row["blob_hash"]
+                    )
+                    no_change_lineage_ok = (
+                        no_change_row is not None
+                        and no_change_row["parent_revision_id"] == target_revision_id
                     )
                 checks.append(Check(
                     "identical reupload persisted as no change",
@@ -258,6 +270,11 @@ async def verify(
                     "semantic no-change probe is byte-distinct",
                     no_change_hash_ok,
                     "revision B and metadata-only revision have different blob hashes",
+                ))
+                checks.append(Check(
+                    "semantic no-change probe extends revision B",
+                    no_change_lineage_ok,
+                    "metadata-only revision parent is the accepted revision B",
                 ))
 
                 failed_after = await conn.execute(
