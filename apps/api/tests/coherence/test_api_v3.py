@@ -1245,3 +1245,152 @@ async def test_b1_acknowledged_genuine_finding_remains_scoring_eligible() -> Non
     assert isinstance(result, EnrichedCoherenceResult)
     assert result.overall_score == expected.score
     assert [item.rule_id for item in result.finding_signals] == ["DET-LEG-ACK"]
+
+
+def test_b1_duplicate_family_is_scored_once_after_reconciliation() -> None:
+    from src.analysis.domain.enums import AlertStatus
+    from src.coherence.graph.nodes import _build_category_breakdown, _signal_to_alert
+    from src.coherence.graph.state import EvaluationConfig
+    from src.coherence.models import EnrichedCoherenceResult, FindingSignal
+    from src.coherence.router import (
+        _CoherenceAlertReconciliation,
+        _apply_disposition_aware_rescore,
+    )
+    from src.coherence.scoring import ScoringService
+
+    signal = FindingSignal(
+        rule_id="DET-TIM-DUPLICATE",
+        clause_id=str(uuid4()),
+        source="deterministic",
+        impact_score=0.6,
+        confidence=0.9,
+        severity="high",
+        category="TIME",
+        evidence_summary="Duplicate timing finding",
+        quote="Same documentary evidence",
+    )
+    duplicate = signal.model_copy(deep=True)
+    coverage = _b1_full_coverage()
+    scorer = ScoringService()
+    original = scorer.calculate_detailed(
+        [signal, duplicate],
+        num_clauses=1,
+        coverage_map=coverage,
+    )
+    expected = scorer.calculate_detailed(
+        [signal],
+        num_clauses=1,
+        coverage_map=coverage,
+    )
+    family_key = "same-family"
+    record = SimpleNamespace(
+        status=AlertStatus.OPEN,
+        alert_metadata={
+            "finding_key": family_key,
+            "current_observation_key": "basis-1",
+        },
+    )
+    result = EnrichedCoherenceResult(
+        overall_score=original.score,
+        alerts=[_signal_to_alert(signal), _signal_to_alert(duplicate)],
+        category_breakdown=_build_category_breakdown(
+            [signal, duplicate],
+            coverage,
+            original.category_scores or {},
+        ),
+        finding_signals=[signal, duplicate],
+        deterministic_findings_count=2,
+        llm_findings_count=0,
+        scope_factor=original.scope_factor,
+        penalty_density=original.penalty_density,
+        avg_impact=original.avg_impact,
+        avg_confidence=original.avg_confidence,
+        category_scores=original.category_scores,
+        audit_coverage=original.audit_coverage,
+    )
+    reconciled = _CoherenceAlertReconciliation(
+        finding_keys_by_alert_index=(family_key, family_key),
+        records_by_finding_key={family_key: record},
+    )
+
+    updated = _apply_disposition_aware_rescore(
+        result,
+        reconciled,
+        clauses=[Clause(id=signal.clause_id, text="Same documentary evidence", data={})],
+        config=EvaluationConfig(),
+    )
+
+    assert updated.overall_score == expected.score
+    assert len(updated.finding_signals) == 1
+    assert len(updated.alerts) == 1
+
+
+def test_b1_legacy_dismissal_without_review_basis_cannot_change_score() -> None:
+    from src.analysis.domain.enums import AlertStatus
+    from src.coherence.graph.nodes import _build_category_breakdown, _signal_to_alert
+    from src.coherence.graph.state import EvaluationConfig
+    from src.coherence.models import EnrichedCoherenceResult, FindingSignal
+    from src.coherence.router import (
+        _CoherenceAlertReconciliation,
+        _apply_disposition_aware_rescore,
+    )
+    from src.coherence.scoring import ScoringService
+
+    signal = FindingSignal(
+        rule_id="DET-LEG-LEGACY-DISMISSAL",
+        clause_id=str(uuid4()),
+        source="deterministic",
+        impact_score=0.75,
+        confidence=0.95,
+        severity="high",
+        category="LEGAL",
+        evidence_summary="Legacy dismissal without basis",
+        quote="Conflicting clause",
+    )
+    coverage = _b1_full_coverage()
+    diagnostics = ScoringService().calculate_detailed(
+        [signal],
+        num_clauses=1,
+        coverage_map=coverage,
+    )
+    family_key = "legacy-family"
+    record = SimpleNamespace(
+        status=AlertStatus.DISMISSED,
+        alert_metadata={
+            "finding_key": family_key,
+            "disposition": "false_positive",
+            # Deliberately no disposition_basis_key/current_observation_key.
+        },
+    )
+    result = EnrichedCoherenceResult(
+        overall_score=diagnostics.score,
+        alerts=[_signal_to_alert(signal)],
+        category_breakdown=_build_category_breakdown(
+            [signal],
+            coverage,
+            diagnostics.category_scores or {},
+        ),
+        finding_signals=[signal],
+        deterministic_findings_count=1,
+        llm_findings_count=0,
+        scope_factor=diagnostics.scope_factor,
+        penalty_density=diagnostics.penalty_density,
+        avg_impact=diagnostics.avg_impact,
+        avg_confidence=diagnostics.avg_confidence,
+        category_scores=diagnostics.category_scores,
+        audit_coverage=diagnostics.audit_coverage,
+    )
+    reconciled = _CoherenceAlertReconciliation(
+        finding_keys_by_alert_index=(family_key,),
+        records_by_finding_key={family_key: record},
+    )
+
+    updated = _apply_disposition_aware_rescore(
+        result,
+        reconciled,
+        clauses=[Clause(id=signal.clause_id, text="Conflicting clause", data={})],
+        config=EvaluationConfig(),
+    )
+
+    assert updated.overall_score == diagnostics.score
+    assert [item.rule_id for item in updated.finding_signals] == [signal.rule_id]
