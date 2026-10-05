@@ -181,11 +181,11 @@ async def verify(
                 checks.append(Check("basis change reopened once", len(basis_history) == 1, f"basis_reopens={len(basis_history)}"))
 
                 finding_key = fp_meta.get("finding_key")
+                finding_key_valid = isinstance(finding_key, str) and bool(finding_key)
                 current_basis = fp_meta.get("current_observation_key")
                 reviewed_basis = fp_meta.get("disposition_basis_key")
                 stale_basis_rejected = bool(
-                    isinstance(finding_key, str)
-                    and finding_key
+                    finding_key_valid
                     and isinstance(current_basis, str)
                     and current_basis
                     and isinstance(reviewed_basis, str)
@@ -203,13 +203,17 @@ async def verify(
                     )
                 )
 
-                family_rows = [
-                    row
-                    for row in alerts
-                    if row.get("rule_id") == false_positive_rule
-                    and isinstance(row.get("alert_metadata"), dict)
-                    and row["alert_metadata"].get("finding_key") == finding_key
-                ]
+                family_rows = (
+                    [
+                        row
+                        for row in alerts
+                        if row.get("rule_id") == false_positive_rule
+                        and isinstance(row.get("alert_metadata"), dict)
+                        and row["alert_metadata"].get("finding_key") == finding_key
+                    ]
+                    if finding_key_valid
+                    else []
+                )
                 checks.append(Check("single alert family", len(family_rows) == 1, f"family_rows={len(family_rows)}"))
 
                 results = [
@@ -248,7 +252,8 @@ async def verify(
                     source_id = last_rescore.get("source_result_id")
                     source_result = next((row for row in results if str(row["id"]) == source_id), None)
                     exact_rescore = bool(
-                        source_result
+                        finding_key_valid
+                        and source_result
                         and last_rescore.get("reviewed_finding_key") == finding_key
                         and last_rescore.get("reviewed_observation_key") == reviewed_basis
                         and rescore_result["score_version"] == source_result["score_version"]
@@ -265,16 +270,16 @@ async def verify(
                     checks.append(Check("same-version exact-snapshot rescore", False, "no unique rescore row"))
 
                 approve_at = _parse_timestamp(approve_history[0].get("timestamp")) if len(approve_history) == 1 else None
-                reject_at = _parse_timestamp(reject_history[0].get("timestamp")) if len(reject_history) == 1 else None
-                if approve_at and reject_at and source_result:
+                if approve_at and source_result and rescore_result:
                     source_at = source_result["calculated_at"]
+                    rescore_at = rescore_result["calculated_at"]
                     unexpected = [
                         row
                         for row in results
-                        if source_at < row["calculated_at"] < reject_at
+                        if source_at < row["calculated_at"] < rescore_at
                         and row["id"] != source_result["id"]
                     ]
-                    approval_no_score_write = approve_at < reject_at and not unexpected
+                    approval_no_score_write = approve_at < rescore_at and not unexpected
                     checks.append(
                         Check(
                             "approve does not improve canonical score",
@@ -283,7 +288,7 @@ async def verify(
                         )
                     )
                 else:
-                    checks.append(Check("approve does not improve canonical score", False, "review/result timestamps unavailable"))
+                    checks.append(Check("approve does not improve canonical score", False, "approval/source/rescore timestamps unavailable"))
 
                 latest = results[-1] if results else None
                 latest_snapshot = dict(latest.get("scoring_snapshot") or {}) if latest else {}
@@ -294,7 +299,7 @@ async def verify(
                         for item in latest_findings
                         if isinstance(item, dict) and item.get("finding_key") == finding_key
                     ]
-                    if isinstance(latest_findings, list)
+                    if finding_key_valid and isinstance(latest_findings, list)
                     else []
                 )
                 current_observation_in_snapshot = bool(
