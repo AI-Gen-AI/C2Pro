@@ -108,12 +108,27 @@ def _next_after_critique_v2(state: ProjectState) -> Literal[
             critique_notes=state.get("critique_notes", "") or "",
             retry_count=int(state.get("retry_count", 0)),
             doc_type=state.get("doc_type") or "",
-            skip_hitl=(
-                os.getenv("C2PRO_SKIP_HITL", "0") == "1"
-                or os.getenv("C2PRO_AI_MOCK", "0") == "1"
-            ),
+            skip_hitl=_skip_hitl_requested(),
         ),
     )
+
+
+def _skip_hitl_requested() -> bool:
+    """Whether an operator override routes this run past the HITL gate.
+
+    Lane C / C3b-1: a skipped gate leaves a PROPOSED candidate with no
+    resumable interrupt, i.e. one no canonical approval can reach. Settings
+    refuse to start in production with either flag; this re-checks at the
+    routing point so a mis-set environment variable can never take effect
+    there (fail closed: the run pauses for a real human decision).
+    """
+    requested = (
+        os.getenv("C2PRO_SKIP_HITL", "0") == "1" or os.getenv("C2PRO_AI_MOCK", "0") == "1"
+    )
+    if requested and os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+        logger.error("hitl_skip_refused_in_production")
+        return False
+    return requested
 
 
 # ── Enrichment fan-out point (passthrough) ──────────────────────────────────

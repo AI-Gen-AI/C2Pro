@@ -9,6 +9,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, and_, exists, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -24,7 +25,12 @@ from src.temporal.ports.project_event_repository import IProjectEventRepository
 # ``revision.ingested`` and every ready ``revision.analyzed`` snapshot) stay in the append-only
 # log but are not timeline results: shown as items they claimed "being compared" forever and
 # "No material change found" for revisions that were never compared.
-_OUTCOME_EVENT_TYPES = ("revision.changed", "revision.reinterpreted", "revision.analysis_failed")
+_OUTCOME_EVENT_TYPES = (
+    "revision.changed",
+    "revision.reinterpreted",
+    "revision.recomputed",
+    "revision.analysis_failed",
+)
 _REVISION_SETTLED_EVENT_TYPES = ("revision.analyzed", *_OUTCOME_EVENT_TYPES)
 
 
@@ -162,6 +168,28 @@ class SqlAlchemyProjectEventRepository(IProjectEventRepository):
         document_id: UUID,
         revision_id: UUID,
     ) -> ProjectEvent | None:
+        """The revision's EFFECTIVE comparison (C3b-2): lineage + matcher, never recency alone."""
+        from src.temporal.application.change_qualification import CHANGE_EVENT_TYPES
+        from src.temporal.application.effective_change import select_effective_outcome
+
+        events = await self.list_revision_outcomes(
+            tenant_id=tenant_id, project_id=project_id, document_id=document_id, revision_id=revision_id
+        )
+        # Selected over EVERY outcome: when the effective outcome is a failed newer
+        # analysis there is no current comparison to render (fail closed); the
+        # older comparison stays readable as history by its event id.
+        effective = select_effective_outcome(events).effective
+        return effective if effective is not None and effective.event_type in CHANGE_EVENT_TYPES else None
+
+    async def list_revision_outcomes(
+        self,
+        *,
+        tenant_id: UUID,
+        project_id: UUID,
+        document_id: UUID,
+        revision_id: UUID,
+    ) -> list[ProjectEvent]:
+        """Every outcome event of one revision of one document (fail-closed relational scope)."""
         stmt = (
             select(ProjectEventORM)
             .join(
@@ -169,7 +197,7 @@ class SqlAlchemyProjectEventRepository(IProjectEventRepository):
                 ProjectEventORM.source_revision_id == DocumentRevisionORM.revision_id,
             )
             .where(
-                ProjectEventORM.event_type.in_(("revision.changed", "revision.reinterpreted")),
+                ProjectEventORM.event_type.in_(_OUTCOME_EVENT_TYPES),
                 ProjectEventORM.tenant_id == tenant_id,
                 ProjectEventORM.project_id == project_id,
                 ProjectEventORM.source_revision_id == revision_id,
@@ -177,11 +205,39 @@ class SqlAlchemyProjectEventRepository(IProjectEventRepository):
                 DocumentRevisionORM.project_id == project_id,
                 DocumentRevisionORM.document_id == document_id,
             )
-            .order_by(ProjectEventORM.occurred_at.desc(), ProjectEventORM.event_id.desc())
+            .order_by(ProjectEventORM.occurred_at.asc(), ProjectEventORM.event_id.asc())
         )
         result = await self._session.execute(stmt)
-        orm = result.scalars().first()
-        return self._to_domain(orm) if orm is not None else None
+        return [self._to_domain(orm) for orm in result.scalars().all()]
+
+    async def list_outcomes_for_revisions(
+        self, *, tenant_id: UUID, revision_ids: list[UUID]
+    ) -> list[ProjectEvent]:
+        if not revision_ids:
+            return []
+        stmt = (
+            select(ProjectEventORM)
+            .where(
+                ProjectEventORM.tenant_id == tenant_id,
+                ProjectEventORM.source_revision_id.in_(list(dict.fromkeys(revision_ids))),
+                ProjectEventORM.event_type.in_(_OUTCOME_EVENT_TYPES),
+            )
+            .order_by(ProjectEventORM.occurred_at.asc(), ProjectEventORM.event_id.asc())
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_domain(orm) for orm in result.scalars().all()]
+
+    async def append_if_absent(self, event: ProjectEvent) -> bool:
+        """Race-safe idempotent append: the primary key admits a deterministic id once."""
+        if await self.get(event.event_id, event.tenant_id) is not None:
+            return False
+        try:
+            async with self._session.begin_nested():
+                await self.append(event)
+        except IntegrityError:
+            # A concurrent recomputation inserted the same deterministic id first.
+            return False
+        return True
 
     async def list_for_revision(self, *, tenant_id: UUID, revision_id: UUID) -> list[ProjectEvent]:
         stmt = (

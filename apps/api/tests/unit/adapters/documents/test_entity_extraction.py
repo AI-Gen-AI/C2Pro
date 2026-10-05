@@ -23,20 +23,18 @@ class TestDocumentsEntityExtractionService:
         )
 
         stakeholder_factory = MagicMock(return_value=MagicMock())
-        wbs_factory = MagicMock(return_value=MagicMock())
         bom_factory = MagicMock(return_value=MagicMock())
         user_id = uuid4()
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=stakeholder_factory,
-            wbs_use_case_factory=wbs_factory,
             bom_use_case_factory=bom_factory,
             user_id=user_id,
         )
 
         assert service._user_id == user_id
         assert service._stakeholder_use_case_factory is stakeholder_factory
-        assert service._wbs_use_case_factory is wbs_factory
+        assert not hasattr(service, "_wbs_use_case_factory")
         assert service._bom_use_case_factory is bom_factory
 
     def test_has_extract_method(self):
@@ -46,12 +44,10 @@ class TestDocumentsEntityExtractionService:
         )
 
         stakeholder_factory = MagicMock(return_value=MagicMock())
-        wbs_factory = MagicMock(return_value=MagicMock())
         bom_factory = MagicMock(return_value=MagicMock())
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=stakeholder_factory,
-            wbs_use_case_factory=wbs_factory,
             bom_use_case_factory=bom_factory,
             user_id=uuid4(),
         )
@@ -74,12 +70,10 @@ class TestExtractionServiceIntegration:
         mock_stakeholder_use_case.execute = AsyncMock()
 
         mock_stakeholder_factory = MagicMock(return_value=mock_stakeholder_use_case)
-        mock_wbs_factory = MagicMock(return_value=MagicMock())
         mock_bom_factory = MagicMock(return_value=MagicMock())
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            wbs_use_case_factory=mock_wbs_factory,
             bom_use_case_factory=mock_bom_factory,
             user_id=uuid4(),
         )
@@ -111,63 +105,18 @@ class TestExtractionServiceIntegration:
 
     @pytest.mark.asyncio
     async def test_extract_entities_schedule_document(self):
-        """Test extraction for SCHEDULE document type extracts WBS items."""
+        """#852: an empty SCHEDULE yields no activities and no canonical WBS write."""
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
         from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
-        mock_wbs_use_case = MagicMock()
-        mock_wbs_use_case.execute = AsyncMock()
-
-        mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_wbs_factory = MagicMock(return_value=mock_wbs_use_case)
-        mock_bom_factory = MagicMock(return_value=MagicMock())
-
-        service = DocumentsEntityExtractionService(
-            stakeholder_use_case_factory=mock_stakeholder_factory,
-            wbs_use_case_factory=mock_wbs_factory,
-            bom_use_case_factory=mock_bom_factory,
-            user_id=uuid4(),
-        )
-
-        doc = Document(
-            id=uuid4(),
-            project_id=uuid4(),
-            tenant_id=uuid4(),
-            document_type=DocumentType.SCHEDULE,
-            filename="schedule.xlsx",
-            upload_status=DocumentStatus.PARSED,
-        )
-
-        parsed_payload = {"schedule": []}
-
-        result = await service.extract_entities_from_document(
-            document=doc,
-            parsed_payload=parsed_payload,
-            tenant_id=uuid4(),
-        )
-
-        assert "wbs_items" in result
-
-    @pytest.mark.asyncio
-    async def test_extract_entities_schedule_document_sets_wbs_level_from_code(self):
-        """TS-UD-DOC-EXT-001: parsed schedule rows map into valid WBS create payloads."""
-        from src.documents.adapters.extraction.documents_entity_extraction_service import (
-            DocumentsEntityExtractionService,
-        )
-        from src.documents.domain.models import Document, DocumentStatus, DocumentType
-
-        mock_wbs_use_case = MagicMock()
-        mock_wbs_use_case.replace_for_source_document = AsyncMock(
-            side_effect=lambda **kwargs: kwargs["wbs_items"]
-        )
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=MagicMock(return_value=MagicMock()),
-            wbs_use_case_factory=MagicMock(return_value=mock_wbs_use_case),
             bom_use_case_factory=MagicMock(return_value=MagicMock()),
             user_id=uuid4(),
         )
+
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
@@ -177,7 +126,45 @@ class TestExtractionServiceIntegration:
             upload_status=DocumentStatus.PARSED,
         )
 
-        await service.extract_entities_from_document(
+        result = await service.extract_entities_from_document(
+            document=doc,
+            parsed_payload={"schedule": []},
+            tenant_id=uuid4(),
+        )
+
+        assert result["wbs_items"] == 0
+        assert result["schedule_activities"] == 0
+
+    @pytest.mark.asyncio
+    async def test_extract_entities_schedule_document_observes_activities_only(self):
+        """#852: schedule rows (codes, dates, predecessors) are counted, never written as WBS.
+
+        Supersedes TS-UD-DOC-EXT-001 / TS-IA-COH-SCH-002: a schedule activity is not a
+        WBS node, so no WBS payload (level, predecessor metadata) is built at all; the
+        rows stay retrievable from the immutable revision and the RAG chunks.
+        """
+        from src.documents.adapters.extraction.documents_entity_extraction_service import (
+            DocumentsEntityExtractionService,
+        )
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
+
+        stakeholder_factory = MagicMock()
+        bom_factory = MagicMock()
+        service = DocumentsEntityExtractionService(
+            stakeholder_use_case_factory=stakeholder_factory,
+            bom_use_case_factory=bom_factory,
+            user_id=uuid4(),
+        )
+        doc = Document(
+            id=uuid4(),
+            project_id=uuid4(),
+            tenant_id=uuid4(),
+            document_type=DocumentType.SCHEDULE,
+            filename="schedule.xlsx",
+            upload_status=DocumentStatus.PARSED,
+        )
+
+        result = await service.extract_entities_from_document(
             document=doc,
             parsed_payload={
                 "schedule": [
@@ -186,14 +173,22 @@ class TestExtractionServiceIntegration:
                         "wbs": "1.1",
                         "start_date": "2024-01-01",
                         "end_date": "2024-01-01",
-                    }
+                    },
+                    {"task": "Structure", "wbs": "SCH-002", "predecessors": "SCH-001"},
+                    {"description": "row with no task name is not an activity"},
                 ]
             },
             tenant_id=doc.tenant_id,
         )
 
-        payload = mock_wbs_use_case.replace_for_source_document.await_args.kwargs["wbs_items"][0]
-        assert payload.level == 2
+        assert result == {
+            "stakeholders": 0,
+            "wbs_items": 0,
+            "bom_items": 0,
+            "schedule_activities": 2,
+        }
+        stakeholder_factory.assert_not_called()
+        bom_factory.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_extract_entities_budget_document(self):
@@ -207,12 +202,10 @@ class TestExtractionServiceIntegration:
         mock_bom_use_case.execute = AsyncMock()
 
         mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_wbs_factory = MagicMock(return_value=MagicMock())
         mock_bom_factory = MagicMock(return_value=mock_bom_use_case)
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            wbs_use_case_factory=mock_wbs_factory,
             bom_use_case_factory=mock_bom_factory,
             user_id=uuid4(),
         )
@@ -252,12 +245,10 @@ class TestExtractionServiceIntegration:
         mock_bom_use_case.execute = AsyncMock()
 
         mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_wbs_factory = MagicMock(return_value=MagicMock())
         mock_bom_factory = MagicMock(return_value=mock_bom_use_case)
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            wbs_use_case_factory=mock_wbs_factory,
             bom_use_case_factory=mock_bom_factory,
             user_id=uuid4(),
         )
@@ -301,12 +292,10 @@ class TestExtractionServiceIntegration:
         from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_wbs_factory = MagicMock(return_value=MagicMock())
         mock_bom_factory = MagicMock(return_value=MagicMock())
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            wbs_use_case_factory=mock_wbs_factory,
             bom_use_case_factory=mock_bom_factory,
             user_id=uuid4(),
         )
@@ -338,12 +327,10 @@ class TestExtractionServiceIntegration:
         mock_use_case.execute = AsyncMock(side_effect=Exception("Duplicate"))
 
         mock_stakeholder_factory = MagicMock(return_value=mock_use_case)
-        mock_wbs_factory = MagicMock(return_value=MagicMock())
         mock_bom_factory = MagicMock(return_value=MagicMock())
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            wbs_use_case_factory=mock_wbs_factory,
             bom_use_case_factory=mock_bom_factory,
             user_id=uuid4(),
         )
@@ -375,14 +362,12 @@ class TestExtractionServiceIntegration:
         mock_use_case.execute = AsyncMock()
 
         mock_stakeholder_factory = MagicMock(return_value=mock_use_case)
-        mock_wbs_factory = MagicMock(return_value=MagicMock())
         mock_bom_factory = MagicMock(return_value=MagicMock())
         user_id = uuid4()
         tenant_id = uuid4()
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            wbs_use_case_factory=mock_wbs_factory,
             bom_use_case_factory=mock_bom_factory,
             user_id=user_id,
         )
@@ -406,127 +391,6 @@ class TestExtractionServiceIntegration:
         assert mock_use_case.execute.await_args.kwargs["user_id"] == user_id
 
     @pytest.mark.asyncio
-    async def test_extract_wbs_items_no_schedule(self):
-        """Test WBS extraction returns 0 when no schedule data."""
-        from src.documents.adapters.extraction.documents_entity_extraction_service import (
-            DocumentsEntityExtractionService,
-        )
-        from src.documents.domain.models import Document, DocumentStatus, DocumentType
-
-        mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_wbs_factory = MagicMock(return_value=MagicMock())
-        mock_bom_factory = MagicMock(return_value=MagicMock())
-
-        service = DocumentsEntityExtractionService(
-            stakeholder_use_case_factory=mock_stakeholder_factory,
-            wbs_use_case_factory=mock_wbs_factory,
-            bom_use_case_factory=mock_bom_factory,
-            user_id=uuid4(),
-        )
-
-        doc = Document(
-            id=uuid4(),
-            project_id=uuid4(),
-            tenant_id=uuid4(),
-            document_type=DocumentType.SCHEDULE,
-            filename="schedule.xlsx",
-            upload_status=DocumentStatus.PARSED,
-        )
-
-        parsed_payload = {}
-
-        result = await service._extract_wbs_items(doc, parsed_payload, uuid4())
-
-        assert result == 0
-
-    @pytest.mark.asyncio
-    async def test_extract_wbs_items_with_exception(self):
-        """Test WBS extraction handles exceptions gracefully."""
-        from src.documents.adapters.extraction.documents_entity_extraction_service import (
-            DocumentsEntityExtractionService,
-        )
-        from src.documents.domain.models import Document, DocumentStatus, DocumentType
-
-        mock_use_case = MagicMock()
-        mock_use_case.replace_for_source_document = AsyncMock(side_effect=Exception("DB error"))
-
-        mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_wbs_factory = MagicMock(return_value=mock_use_case)
-        mock_bom_factory = MagicMock(return_value=MagicMock())
-
-        service = DocumentsEntityExtractionService(
-            stakeholder_use_case_factory=mock_stakeholder_factory,
-            wbs_use_case_factory=mock_wbs_factory,
-            bom_use_case_factory=mock_bom_factory,
-            user_id=uuid4(),
-        )
-
-        doc = Document(
-            id=uuid4(),
-            project_id=uuid4(),
-            tenant_id=uuid4(),
-            document_type=DocumentType.SCHEDULE,
-            filename="schedule.xlsx",
-            upload_status=DocumentStatus.PARSED,
-        )
-
-        # Non-empty schedule so persistence runs and the raised error is handled.
-        parsed_payload = {"schedule": [{"task": "Excavation"}]}
-
-        result = await service._extract_wbs_items(doc, parsed_payload, uuid4())
-
-        assert result == 0
-
-    @pytest.mark.asyncio
-    async def test_extract_wbs_items_preserves_explicit_predecessor_code(self):
-        """TS-IA-COH-SCH-002: parsed schedule dependencies persist as WBS metadata."""
-        from src.documents.adapters.extraction.documents_entity_extraction_service import (
-            DocumentsEntityExtractionService,
-        )
-        from src.documents.domain.models import Document, DocumentStatus, DocumentType
-
-        mock_use_case = MagicMock()
-        mock_use_case.replace_for_source_document = AsyncMock(
-            side_effect=lambda **kwargs: kwargs["wbs_items"]
-        )
-        service = DocumentsEntityExtractionService(
-            stakeholder_use_case_factory=MagicMock(return_value=MagicMock()),
-            wbs_use_case_factory=MagicMock(return_value=mock_use_case),
-            bom_use_case_factory=MagicMock(return_value=MagicMock()),
-            user_id=uuid4(),
-        )
-        document = Document(
-            id=uuid4(),
-            project_id=uuid4(),
-            tenant_id=uuid4(),
-            document_type=DocumentType.SCHEDULE,
-            filename="schedule.xlsx",
-            upload_status=DocumentStatus.PARSED,
-        )
-
-        created = await service._extract_wbs_items(
-            document,
-            {
-                "schedule": [
-                    {
-                        "task": "Structure",
-                        "wbs": "SCH-002",
-                        "start_date": "2026-04-01",
-                        "end_date": "2026-08-01",
-                        "predecessors": "SCH-001",
-                        "status": "delayed",
-                    }
-                ]
-            },
-            document.tenant_id,
-        )
-
-        assert created == 1
-        payload = mock_use_case.replace_for_source_document.await_args.kwargs["wbs_items"][0]
-        assert payload.wbs_metadata["predecessor_id"] == "SCH-001"
-        assert payload.wbs_metadata["status"] == "delayed"
-
-    @pytest.mark.asyncio
     async def test_extract_bom_items_no_budget(self):
         """Test BOM extraction returns 0 when no budget data."""
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
@@ -535,12 +399,10 @@ class TestExtractionServiceIntegration:
         from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_wbs_factory = MagicMock(return_value=MagicMock())
         mock_bom_factory = MagicMock(return_value=MagicMock())
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            wbs_use_case_factory=mock_wbs_factory,
             bom_use_case_factory=mock_bom_factory,
             user_id=uuid4(),
         )
@@ -572,12 +434,10 @@ class TestExtractionServiceIntegration:
         mock_use_case.execute = AsyncMock(side_effect=Exception("DB error"))
 
         mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_wbs_factory = MagicMock(return_value=MagicMock())
         mock_bom_factory = MagicMock(return_value=mock_use_case)
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            wbs_use_case_factory=mock_wbs_factory,
             bom_use_case_factory=mock_bom_factory,
             user_id=uuid4(),
         )
@@ -609,12 +469,10 @@ class TestExtractionServiceIntegration:
         mock_use_case.execute = AsyncMock()
 
         mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_wbs_factory = MagicMock(return_value=MagicMock())
         mock_bom_factory = MagicMock(return_value=mock_use_case)
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            wbs_use_case_factory=mock_wbs_factory,
             bom_use_case_factory=mock_bom_factory,
             user_id=uuid4(),
         )
@@ -689,54 +547,6 @@ class TestEmailExtraction:
         result = _extract_emails(text_blocks)
 
         assert len(result) == 0
-
-
-class TestParseDatetimeValue:
-    """Tests for _parse_datetime_value helper."""
-
-    def test_parse_datetime_from_datetime(self):
-        """Test passing datetime returns same."""
-        from datetime import datetime
-
-        from src.documents.adapters.extraction.documents_entity_extraction_service import (
-            _parse_datetime_value,
-        )
-
-        dt = datetime(2024, 1, 15, 10, 30)
-        result = _parse_datetime_value(dt)
-
-        assert result == dt
-
-    def test_parse_datetime_from_string(self):
-        """Test parsing ISO format string."""
-        from src.documents.adapters.extraction.documents_entity_extraction_service import (
-            _parse_datetime_value,
-        )
-
-        result = _parse_datetime_value("2024-01-15T10:30:00")
-
-        assert result is not None
-        assert result.year == 2024
-
-    def test_parse_datetime_invalid_string(self):
-        """Test parsing invalid string returns None."""
-        from src.documents.adapters.extraction.documents_entity_extraction_service import (
-            _parse_datetime_value,
-        )
-
-        result = _parse_datetime_value("not-a-date")
-
-        assert result is None
-
-    def test_parse_datetime_none(self):
-        """Test passing None returns None."""
-        from src.documents.adapters.extraction.documents_entity_extraction_service import (
-            _parse_datetime_value,
-        )
-
-        result = _parse_datetime_value(None)
-
-        assert result is None
 
 
 class TestParseDecimal:

@@ -1,8 +1,16 @@
 """
 Persistence use case for analysis results.
 
-Orchestrates saving analysis records, generating alerts from risks,
-and replacing WBS snapshots. Session lifecycle is owned by the caller.
+Orchestrates saving analysis records and generating alerts from risks.
+Session lifecycle is owned by the caller.
+
+WBS is a governed canonical project backbone (#830): an AI-extracted WBS is a
+PROPOSAL. It is kept, exactly as extracted, in the analysis' ``result_json["wbs"]``
+and qualified ``WBS_GOVERNANCE_REQUIRED``; the canonical WBS is never created,
+deleted, replaced or relinked here -- not even a project's first WBS. Only the
+governed WBS baseline authority (PC-1 / PC-2: human review + edit + approval of
+the exact tree) may turn a proposal into Baseline #1 / #N+1. A visible WBS code
+is not an identity, so nothing here matches proposals to canonical nodes.
 
 Refers to TASK-IMPL-010.7.
 """
@@ -14,9 +22,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from src.analysis.application.trusted_materialization import MaterializationQualification
 from src.analysis.domain.enums import AnalysisStatus, AnalysisType
 from src.analysis.ports.analysis_repository import IAnalysisRepository
 
@@ -42,34 +48,48 @@ class PersistAnalysisResult:
     """Result of persistence operation."""
 
     analysis_id: UUID
+    qualifications: tuple[str, ...] = ()
+
+
+def wbs_governance_qualification(analysis_id: UUID, extracted_wbs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Where the WBS proposal lives, and that the canonical WBS was not modified."""
+    return {
+        "qualification": MaterializationQualification.WBS_GOVERNANCE_REQUIRED.value,
+        "canonical_wbs_modified": False,
+        "proposed_nodes": len(extracted_wbs),
+        "proposal_source": {
+            "table": "analyses",
+            "analysis_id": str(analysis_id),
+            "path": "result_json.wbs",
+        },
+    }
 
 
 class PersistAnalysisUseCase:
-    """Persists analysis records, risk alerts, and WBS items.
+    """Persists analysis records and risk alerts; an extracted WBS stays a proposal.
 
-    Session is received via injection — caller owns the lifecycle
-    (context manager stays in the node).
+    The repository's session is owned by the caller (the context manager stays
+    in the node).
     """
 
-    def __init__(
-        self,
-        analysis_repo: IAnalysisRepository,
-        wbs_repo: Any,  # SQLAlchemyWBSRepository
-        session: AsyncSession,
-    ) -> None:
+    def __init__(self, analysis_repo: IAnalysisRepository) -> None:
         self._analysis_repo = analysis_repo
-        self._wbs_repo = wbs_repo
-        self._session = session
 
     async def execute(self, command: PersistAnalysisCommand) -> PersistAnalysisResult:
         from src.analysis.ports.types import AlertWrite, AnalysisWrite
         from src.coherence.alert_generator import AlertGenerator
-        from src.wbs.adapters.persistence.models import WBSNodeORM
 
         analysis_type = (
             AnalysisType.RISK if command.extracted_risks else AnalysisType.SCHEDULE
         )
         analysis_id = uuid4()
+        qualifications: tuple[str, ...] = ()
+        governance: dict[str, Any] = {}
+        if command.extracted_wbs:
+            qualifications = (MaterializationQualification.WBS_GOVERNANCE_REQUIRED.value,)
+            governance = {
+                "wbs_governance": wbs_governance_qualification(analysis_id, command.extracted_wbs)
+            }
 
         completed_at = datetime.now(UTC).replace(tzinfo=None)
         analysis = AnalysisWrite(
@@ -84,10 +104,12 @@ class PersistAnalysisUseCase:
             completed_at=completed_at,
             result_json={
                 "risks": command.extracted_risks,
+                # The WBS proposal, exactly as extracted (recoverable for governance).
                 "wbs": command.extracted_wbs,
                 # Additive: existing keys are preserved; the assessment key is written
                 # only when the assessment actually ran.
                 **(command.single_document_assessment or {}),
+                **governance,
             },
         )
         await self._analysis_repo.add_analysis(analysis, tenant_id=command.tenant_id)
@@ -122,19 +144,6 @@ class PersistAnalysisUseCase:
             ]
             await self._analysis_repo.add_alerts(alerts, tenant_id=command.tenant_id)
 
-        if command.extracted_wbs:
-            # The analysis replaces the project's canonical WBS (ADR-025: one WBS per project).
-            await self._session.execute(
-                delete(WBSNodeORM).where(
-                    WBSNodeORM.project_id == command.project_id,
-                    WBSNodeORM.tenant_id == command.tenant_id,
-                )
-            )
-            await self._wbs_repo.bulk_create_from_dicts(
-                command.project_id, command.extracted_wbs
-            )
-
         await self._analysis_repo.commit()
 
-        return PersistAnalysisResult(analysis_id=analysis_id)
-
+        return PersistAnalysisResult(analysis_id=analysis_id, qualifications=qualifications)

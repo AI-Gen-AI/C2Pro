@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Clock3, FileSearch, GitCompareArrows, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock3, FileSearch, GitCompareArrows, History, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiClient } from "@/lib/api/client";
@@ -21,6 +21,12 @@ type ChangeItem = {
   matcher_status?: "current" | "legacy" | "unsupported" | null;
   legacy_matcher?: boolean;
   qualification_reason?: string | null;
+  // Lineage (C3b-2): which result of a revision is effective is decided by lineage
+  // and matcher qualification, never by recency alone; superseded results stay visible.
+  derivation?: "original" | "recomputed" | "reinterpreted" | null;
+  derived_from_event_id?: string | null;
+  effective?: boolean | null;
+  superseded_by_event_id?: string | null;
 };
 
 type Timeline = { items: ChangeItem[]; next_cursor: string | null };
@@ -37,6 +43,12 @@ function stateBadge(item: ChangeItem) {
 function matcherBadge(item: ChangeItem) {
   if (item.matcher_status === "legacy") return <Badge variant="outline">Older matcher</Badge>;
   if (item.matcher_status === "unsupported") return <Badge variant="outline">Unverified matcher</Badge>;
+  return null;
+}
+
+function lineageBadge(item: ChangeItem) {
+  if (item.effective === false) return <Badge variant="outline"><History className="mr-1 h-3 w-3" />Historical — superseded</Badge>;
+  if (item.derivation === "recomputed") return <Badge variant="secondary">Recomputed · current matcher</Badge>;
   return null;
 }
 
@@ -74,9 +86,11 @@ export default function ProjectChangesPage() {
       </div>
       <div className="space-y-3">
         {data.items.map((item) => {
-          const detailHref = item.document_id && item.provenance.target_revision_id
+          const revisionHref = item.document_id && item.provenance.target_revision_id
             ? `/projects/${projectId}/changes/${item.document_id}/${item.provenance.target_revision_id}`
             : null;
+          // A superseded result opens as itself (labelled historical), never as the current one.
+          const detailHref = revisionHref && item.effective === false ? `${revisionHref}?event=${item.event_id}` : revisionHref;
           return (
             <Card key={item.event_id} data-testid={`change-item-${item.event_id}`}>
               <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -84,7 +98,7 @@ export default function ProjectChangesPage() {
                   <CardTitle className="text-base">{itemTitle(item)}</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">{new Date(item.occurred_at).toLocaleString()} · {item.provenance.diff_engine_version ?? "analysis pending"}</p>
                 </div>
-                <div className="flex flex-wrap gap-2">{matcherBadge(item)}{stateBadge(item)}</div>
+                <div className="flex flex-wrap gap-2">{lineageBadge(item)}{matcherBadge(item)}{stateBadge(item)}</div>
               </CardHeader>
               <CardContent className="flex flex-wrap items-center justify-between gap-3">
                 {item.qualification_reason ? <p className="w-full text-sm text-muted-foreground">{item.qualification_reason}</p> : null}

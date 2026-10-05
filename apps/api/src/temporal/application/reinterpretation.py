@@ -8,6 +8,7 @@ from uuid import UUID
 from src.change_intelligence.application.semantic_diff import enrich_modified_changes
 from src.change_intelligence.domain.contracts import ChangeSet
 from src.temporal.application.change_projection import ChangeCause, build_change_projection_event
+from src.temporal.application.change_qualification import CHANGE_EVENT_TYPES
 from src.temporal.domain.project_event import ProjectEvent
 from src.temporal.ports.project_event_repository import IProjectEventRepository
 
@@ -42,7 +43,7 @@ async def reinterpret_change_event(
     different uploads: the new event describes what C2Pro learned later, not a
     second mutation of business reality.
     """
-    if original_event.event_type not in {"revision.changed", "revision.reinterpreted"}:
+    if original_event.event_type not in CHANGE_EVENT_TYPES:
         return None
     payload = original_event.payload
     raw_changeset = payload.get("changeset")

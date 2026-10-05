@@ -21,13 +21,11 @@ class TestDocumentsEntityExtraction:
 
         # Create mock factories
         stakeholder_factory = MagicMock(return_value=MagicMock())
-        wbs_factory = MagicMock(return_value=MagicMock())
         bom_factory = MagicMock(return_value=MagicMock())
         user_id = uuid4()
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=stakeholder_factory,
-            wbs_use_case_factory=wbs_factory,
             bom_use_case_factory=bom_factory,
             user_id=user_id,
         )
@@ -42,12 +40,10 @@ class TestDocumentsEntityExtraction:
         )
 
         stakeholder_factory = MagicMock(return_value=MagicMock())
-        wbs_factory = MagicMock(return_value=MagicMock())
         bom_factory = MagicMock(return_value=MagicMock())
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=stakeholder_factory,
-            wbs_use_case_factory=wbs_factory,
             bom_use_case_factory=bom_factory,
             user_id=uuid4(),
         )

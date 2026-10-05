@@ -64,6 +64,8 @@ from src.alerts.application.use_cases.review_alert_use_case import (
 from src.alerts.application.use_cases.update_alert_workspace_settings_use_case import (
     UpdateAlertWorkspaceSettingsUseCase,
 )
+from src.alerts.domain.models import Alert
+from src.coherence.application.disposition_review import CoherenceReviewRescoreUnavailable
 from src.core.database import get_session
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
 
@@ -103,8 +105,38 @@ def get_create_alert_use_case(
 
 def get_review_alert_use_case(
     repository: IAlertRepository = Depends(get_alert_repository),
+    session: AsyncSession = Depends(get_session),
 ) -> ReviewAlertUseCase:
-    return ReviewAlertUseCase(repository=repository)
+    from src.coherence.application.disposition_review import (
+        acquire_coherence_review_lock,
+        rescore_coherence_after_review,
+    )
+
+    async def pre_review(alert_id: UUID, tenant_id: UUID, decision: str) -> None:
+        await acquire_coherence_review_lock(
+            session=session,
+            alert_id=alert_id,
+            tenant_id=tenant_id,
+            decision=decision,
+        )
+
+    async def post_review(
+        alert: Alert,
+        tenant_id: UUID,
+        decision: str,
+    ) -> None:
+        await rescore_coherence_after_review(
+            session=session,
+            alert=alert,
+            tenant_id=tenant_id,
+            decision=decision,
+        )
+
+    return ReviewAlertUseCase(
+        repository=repository,
+        pre_review_handler=pre_review,
+        post_review_handler=post_review,
+    )
 
 
 def get_resolve_alert_use_case(
@@ -290,6 +322,8 @@ async def review_alert(
         )
     except ReviewAlertNotFoundError:
         raise HTTPException(status_code=404, detail="Alert not found")
+    except CoherenceReviewRescoreUnavailable as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post(

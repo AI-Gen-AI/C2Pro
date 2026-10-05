@@ -13,6 +13,9 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         "revision.analyzed",
         "revision.analysis_failed",
         "revision.reinterpreted",
+        # Lane C / C3b-2: the CURRENT matcher re-run over an earlier comparison's
+        # immutable snapshots; append-only, provenance.recomputed_from_event_id.
+        "revision.recomputed",
         # C2PRO P0b crash-safe resume V3: N17 durably persisting an analysis
         # and the graph reaching its terminal state are DIFFERENT facts. N17
         # emits analysis.persisted; only a verified terminal checkpoint emits
@@ -21,6 +24,9 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         "analysis.persisted",
         "graph.completed",
         "hitl.correction",
+        # Lane C / C3b-1: append-only evidence that an approved artifact's
+        # canonical state became durable (idempotency lives in the DB, not here).
+        "materialization.completed",
         "baseline.changed",
     }
 )

@@ -90,9 +90,7 @@ from src.documents.ports.storage_service import IStorageService
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.domain.entities import ReviewStatus
 from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.application.use_cases.bom_use_cases import CreateBOMItemUseCase
-from src.procurement.application.use_cases.wbs_use_cases import CreateWBSItemUseCase
 from src.projects.ports.project_repository import ProjectRepository
 
 # Cross-module dependencies for entity extraction
@@ -368,17 +366,13 @@ def get_entity_extraction_service(
         repo = SqlAlchemyStakeholderRepository(session=db)
         return CreateStakeholderUseCase(repository=repo, document_repository=doc_repo)
 
-    def wbs_factory() -> CreateWBSItemUseCase:
-        repo = SQLAlchemyWBSRepository(session=db)
-        return CreateWBSItemUseCase(wbs_repository=repo)
-
     def bom_factory() -> CreateBOMItemUseCase:
         repo = SQLAlchemyBOMRepository(session=db)
         return CreateBOMItemUseCase(bom_repository=repo)
 
     return DocumentsEntityExtractionService(
         stakeholder_use_case_factory=stakeholder_factory,
-        wbs_use_case_factory=wbs_factory,
+        # #852: no WBS writer -- a schedule is observed, never written as canonical WBS.
         bom_use_case_factory=bom_factory,
         user_id=user_id,
     )

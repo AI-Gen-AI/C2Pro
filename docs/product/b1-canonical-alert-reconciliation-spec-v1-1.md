@@ -2,7 +2,7 @@
 
 **Status:** Canonical focused specification for Line B implementation and acceptance
 **Decision owner:** Product / architecture approval in the 2026-10-04 B1 review
-**Baseline:** `origin/main@4e3928b3f91ded93163b617214ddde48149b2039` (PR #828 + #829 + #834 merged on top of C3a)
+**Baseline:** `origin/main@e60090bb4466714b5cd8f915a9c8fa350995e0fb` (PR #828 + PR #829 merged on top of C3a)
 **Architecture authority:** ADR-009, ADR-019, ADR-020, ADR-026, ADR-027, ADR-028
 **Parallel work/dependencies:** #831 (Lane C / C3b, open)
 **Lifecycle note:** This specification does not promote realization, deployment, or PROD_VALIDATED state.
@@ -27,9 +27,9 @@ The objective is not merely to persist Alert mutations. It is to establish one c
 
 ## 2. Current baseline truth
 
-The baseline now consumes Line-B PRs #828, #829 and #834 as current truth.
+The baseline now consumes both Line-B PR #828 and PR #829 as current truth.
 
-### 2.1 Already merged by #828, #829 and #834
+### 2.1 Already merged by #828 and #829
 
 At `a0512c5f...`, the live Coherence alert path now:
 
@@ -47,23 +47,20 @@ At `a0512c5f...`, the live Coherence alert path now:
 
 PR #829 additionally exposes detector provenance through the canonical Alerts response and real Review Center, preserves the detector/reviewer evidence split, and deep-links only database-verified clause/document evidence.
 
-PR #834 additionally closes the previously demonstrated HITL persistence gap: approval status, reviewer/timestamp/comment, resolution state/notes and reviewer-attached evidence are durable across a fresh session. It also makes bulk review fail closed through bounded batch size, mandatory individual review for HIGH/CRITICAL approval, and mandatory rationale for bulk rejection.
-
 These are implementation advances, not automatic B1 product acceptance.
 
 ### 2.2 Residual gaps on current main
 
-B1.1 must target only gaps that still exist after #828/#829/#834:
+B1.1 must target only gaps that still exist after #828:
 
 1. **Score/Alert atomicity remains broken.** `/coherence/evaluate` still commits `CoherenceResultORM` before Alert reconciliation and then treats mirror failure as best-effort. A durable score can therefore exist without its canonical Alert surface.
-2. **ADR-009 disposition-to-score integration remains unwired.** A validated `false_positive` still lacks the governed path that removes the invalid finding before the canonical score is finalized, while acknowledged/accepted/explained discrepancies must preserve their score impact.
-3. **Cross-revision identity semantics remain partial.** #828 gives stable current-path identity and safe handling for revision-unstable synthetic locators, but persisted clause UUIDs are revision-bound. There is not yet an explicit family-vs-observation contract with evidence-basis-bound human disposition.
-4. **Legacy identity conflict handling is not explicit.** #828 can recompute versioned legacy fingerprints, but B1 still requires a fail-closed policy when more than one historical row could claim the same semantic family.
-5. **C3b materialization remains open.** #831 must consume the shared Alert reconciliation contract and may not create parallel identity/trust semantics.
+2. **HITL durability remains incomplete.** The Alerts domain mutates fields including `approval_status`, `review_comment` and `resolution_notes`, while the bounded-context repository `save()` does not currently persist that complete state.
+3. **ADR-009 disposition-to-score integration remains unwired.** #828 explicitly made review-to-score recalculation a non-goal. A validated `false_positive` still lacks the governed path that removes the invalid finding before the canonical score is finalized.
+4. **Cross-revision identity semantics remain partial.** #828 gives stable current-path identity and safe handling for revision-unstable synthetic locators, but persisted clause UUIDs are revision-bound. There is not yet an explicit family-vs-observation contract with evidence-basis-bound human disposition.
+5. **Legacy identity conflict handling is not explicit.** #828 can recompute versioned legacy fingerprints, but B1 still requires a fail-closed policy when more than one historical row could claim the same semantic family.
+6. **C3b materialization remains open.** #831 must consume the shared Alert reconciliation contract and may not create parallel identity/trust semantics.
 
-The full HITL persistence defect demonstrated by the original B1 RED is now closed by #834 and becomes a mandatory regression contract rather than residual RED justification.
-
-Tests whose only purpose is to re-prove a seam already closed by #828/#829/#834 are regression tests, not new RED justification.
+Tests whose only purpose is to re-prove a seam already closed by #828 are regression tests, not new RED justification.
 
 ## 3. Non-negotiable product semantics
 
@@ -464,29 +461,6 @@ For current API semantics:
 - `reject` is explicit false-positive disposition and may remove the invalid finding through canonical recalculation;
 - `resolve` is lifecycle/action state only until trusted evidence changes.
 
-### 14.0 Canonical rescore source
-
-A score-affecting disposition MUST NOT reconstruct Coherence from the durable Alert row.
-
-The current Alert projection intentionally persists review/provenance fields but does not carry the full scoring signal (for example the original finding `impact_score` and `confidence/certainty`). Rebuilding a score from Alert severity alone would silently change the scoring model.
-
-Canonical recalculation therefore follows:
-
-```text
-trusted evidence
-  -> regenerate full FindingSignal set
-  -> compute the same canonical finding identities
-  -> apply durable human disposition by identity
-       acknowledged / accepted / explained => keep finding
-       validated false_positive => exclude finding
-  -> canonical scorer using the full original scoring inputs
-  -> trusted score + trusted subscores
-```
-
-Alerts contribute lifecycle/disposition authority; they do not become a lossy scoring datastore.
-
-The finding identity used by detector/scorer and Alert reconciliation MUST be shared or provably equivalent. A false-positive disposition cannot be applied by title/message/severity matching.
-
 ### 14.1 Trusted score vs projected/provisional score
 
 B1 reuses the already-shipped #714 trusted/projected Coherence contract. It MUST NOT invent a second score-authority model.
@@ -501,9 +475,6 @@ B1 reuses the already-shipped #714 trusted/projected Coherence contract. It MUST
 - when both trusted and projected exist, both MUST use the same canonical scorer and identical `score_version`. Version mismatch => projection unavailable, never arithmetic conversion.
 - when no trusted score exists yet, `trusted_score=null`; a projected score may exist but remains explicitly provisional.
 - the UI MUST label projected score as non-approved and show the pending-review cause/count sufficient to explain why it is provisional.
-- the six canonical subscores remain first-class: `sub_scores` are the trusted category scores; a projection MUST additionally expose `projection_baseline_sub_scores` and `projected_sub_scores` for the same six dimensions.
-- projected subscores follow exactly the same engine/version and honest-null rules as the projected global score; a missing/unsupported dimension remains `null`, never 0.
-- approval NEVER copies a projected subscore into trusted state; the newly trusted artifact set is recomputed and its category scores become the new trusted `sub_scores`.
 
 This preserves the existing #714 product semantics while extending B1 lifecycle decisions into the same authority model.
 
@@ -558,7 +529,7 @@ Unverified/textual locators may be visible but MUST NOT fabricate a source deep-
 
 ## 17. B1 acceptance matrix
 
-Merged #828 is implementation evidence toward B1-01/B1-02/B1-03/B1-05. Merged #829 is evidence toward B1-05/B1-10/B1-11. Merged #834 is evidence toward B1-03/B1-11 and review-integrity behavior. None is automatic PASS for full B1 acceptance.
+Merged #828 is implementation evidence toward B1-01/B1-02/B1-03/B1-05. Merged #829 is implementation evidence toward B1-05/B1-10/B1-11. Neither merge is automatic PASS for full B1 acceptance.
 
 | ID | Mandatory PASS |
 |---|---|
@@ -585,22 +556,22 @@ The first new RED package must demonstrate residual defects, not already-fixed h
 At minimum:
 
 1. force Alert reconciliation failure after the current first Coherence commit and prove the result can remain durable today;
-2. keep #834 fresh-session review persistence, reviewer-evidence, and bulk-review-integrity contracts GREEN;
+2. POST review/reject/resolve, then use a wholly new DB session/transaction and prove any non-persisted review fields are lost;
 3. prove a validated false-positive has no governed canonical recalculation path yet, while acknowledgement must not change raw score;
 4. construct a cross-revision case with provable semantic continuity and show the current fingerprint model lacks explicit family/observation/disposition-basis semantics;
 5. construct an ambiguous legacy-fingerprint case and prove current reconciliation has no explicit fail-closed ownership classification;
 6. keep #829 detector-provenance and verified-deep-link regressions GREEN while later B1 slices change lifecycle/scoring internals;
 7. pin #831 so C3b cannot introduce a second reconciler or canonical writes from untrusted/stale authority.
 
-#828/#829/#834 regression tests remain GREEN throughout later B1 work.
+#828 regression tests remain GREEN throughout later B1 work.
 
 ## 19. Baseline and rebase policy
 
-- B1.0 baseline is `4e3928b3f91ded93163b617214ddde48149b2039` and already includes #828, #829 and #834.
+- B1.0 baseline is `e60090bb4466714b5cd8f915a9c8fa350995e0fb` and already includes #828 and #829.
 - No `b1-baseline` tag is required; exact SHA is the immutable authority.
 - B1 work uses a clean worktree.
 - The unrelated untracked `apps/storage/` in another checkout is not deleted without ownership evidence; isolation is sufficient.
-- If `origin/main` advances, including #831 or another overlapping B/C change, rebase and rerun affected RED/GREEN/acceptance.
+- If `origin/main` advances, including #829 or #831, rebase and rerun affected RED/GREEN/acceptance.
 - production qualification binds exact deployed backend/frontend identities under ADR-028, not merely the B1.0 source baseline.
 
 ## 20. Non-goals
@@ -628,11 +599,11 @@ Acceptance may become stricter; it may not be weakened merely to make code pass.
 ## 22. Approved implementation sequence
 
 ```text
-B1.0  Freeze current main 4e3928b3... and consume #828 + #829 + #834 as merged truth
+B1.0  Freeze current main e60090bb... and consume #828 + #829 as merged truth
 B1.1  RED only for residual post-#828 false-PASS modes
-B1.2  Complete durable Alert lifecycle: basis semantics + legacy ambiguity; preserve #834 HITL durability
+B1.2  Complete durable Alert lifecycle: full HITL persistence, basis semantics, legacy ambiguity
 B1.3  Atomic Coherence <-> Alert persistence + governed disposition-to-score eligibility
-B1.4  Preserve #829 provenance/deep-link + #834 reviewer-evidence integrity and complete category/trigger/expected-observed UX
+B1.4  Preserve #829 provenance/deep-link behavior and complete category/trigger/expected-observed UX
 B1.5  C3b/#831 shared-reconciler boundary
 B1.6  Exact-head independent/adversarial review + required CI
 B1.7  Production qualification against B1-01 through B1-13
@@ -641,7 +612,5 @@ B1.7  Production qualification against B1-01 through B1-13
 Implementation follows RED -> GREEN -> REFACTOR for each bounded slice.
 
 A locally green suite or merged PR does not imply production acceptance.
-
-[executed on device: vmi3226522 (f25c3740-ed77-4837-8d92-d0f9660f9596)]
 
 [executed on device: vmi3226522 (f25c3740-ed77-4837-8d92-d0f9660f9596)]

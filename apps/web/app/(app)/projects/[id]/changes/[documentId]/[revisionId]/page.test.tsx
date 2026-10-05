@@ -8,8 +8,11 @@ import { render, screen, within } from "@/src/tests/test-utils";
 
 const apiClientGetMock = vi.fn();
 
+let searchParams = new URLSearchParams();
+
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "proj_1", documentId: "doc_1", revisionId: "rev_2" }),
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock("@/lib/api/client", () => ({
@@ -174,5 +177,134 @@ describe("ChangeDetailPage — trust state of each change", () => {
     render(<ChangeDetailPage />);
 
     expect(await screen.findByTestId("change-detail-qualification")).toHaveTextContent(/older matcher/i);
+  });
+});
+
+describe("ChangeDetailPage — current vs historical, trust and materialization (C3b-2)", () => {
+  beforeEach(() => {
+    apiClientGetMock.mockReset();
+    searchParams = new URLSearchParams();
+  });
+
+  it("states that a governance-qualified materialization applied only authorized effects", async () => {
+    detail([modified], "ready", {
+      event_id: "evt-v2",
+      effective: true,
+      derivation: "original",
+      revision_status: {
+        status: "available",
+        trust_state: "trusted",
+        is_current: true,
+        current_revision_id: "rev_2",
+        materialization: {
+          state: "materialized",
+          scope: "governance_authorized_effects_applied",
+          qualifications: ["WBS_GOVERNANCE_REQUIRED", "RISK_ALERT_RECONCILIATION_REQUIRED"],
+          deferred_effects: { wbs: { qualification: "WBS_GOVERNANCE_REQUIRED" } },
+        },
+      },
+    });
+
+    render(<ChangeDetailPage />);
+
+    const status = within(await screen.findByTestId("revision-status"));
+    expect(status.getByText("Current revision")).toBeInTheDocument();
+    expect(status.getByText("Trusted")).toBeInTheDocument();
+    expect(status.getByTestId("revision-materialization")).toHaveTextContent(
+      "All effects currently authorized by governance were applied.",
+    );
+    expect(status.getByTestId("revision-qualification-WBS_GOVERNANCE_REQUIRED")).toHaveTextContent(
+      /not part of the canonical WBS/i,
+    );
+    expect(status.getByTestId("revision-qualification-RISK_ALERT_RECONCILIATION_REQUIRED")).toBeInTheDocument();
+    expect(screen.queryByTestId("change-detail-historical")).not.toBeInTheDocument();
+  });
+
+  it("never presents a proposed revision as current", async () => {
+    detail([modified], "ready", {
+      revision_status: { status: "available", trust_state: "proposed", is_current: false, current_revision_id: "rev_1", materialization: null },
+    });
+
+    render(<ChangeDetailPage />);
+
+    const status = within(await screen.findByTestId("revision-status"));
+    expect(status.getByText("Not the current revision")).toBeInTheDocument();
+    expect(status.getByText(/previously trusted revision stays current/i)).toBeInTheDocument();
+    expect(status.queryByTestId("revision-materialization")).not.toBeInTheDocument();
+  });
+
+  it("labels a superseded legacy comparison as historical and reads it by event id", async () => {
+    searchParams = new URLSearchParams("event=evt-legacy");
+    detail([modified], "needs_review", {
+      event_id: "evt-legacy",
+      effective: false,
+      derivation: "original",
+      superseded_by_event_id: "evt-recomputed",
+      matcher_status: "legacy",
+      history: [
+        { event_id: "evt-legacy", event_type: "revision.changed", derivation: "original", effective: false, provenance: { diff_engine_version: "p0c-structural-l1-v1" } },
+        { event_id: "evt-recomputed", event_type: "revision.recomputed", derivation: "recomputed", effective: true, provenance: { diff_engine_version: "p0c-structural-l1-v2" } },
+      ],
+    });
+
+    render(<ChangeDetailPage />);
+
+    const banner = within(await screen.findByTestId("change-detail-historical"));
+    expect(banner.getByText(/historical — superseded/i)).toBeInTheDocument();
+    expect(banner.getByRole("link", { name: /view the current result/i })).toHaveAttribute(
+      "href",
+      "/projects/proj_1/changes/doc_1/rev_2",
+    );
+    expect(apiClientGetMock).toHaveBeenCalledWith(
+      "/projects/proj_1/documents/doc_1/changes/rev_2",
+      { params: { event_id: "evt-legacy" } },
+    );
+    const history = within(screen.getByTestId("change-history"));
+    expect(within(history.getByTestId("history-evt-recomputed")).getByText("Current result")).toBeInTheDocument();
+    expect(within(history.getByTestId("history-evt-legacy")).getByText("(shown)")).toBeInTheDocument();
+  });
+
+  it("explains a recomputed comparison and its provenance", async () => {
+    detail([modified], "ready", {
+      event_id: "evt-recomputed",
+      effective: true,
+      derivation: "recomputed",
+      provenance: { recomputed_from_engine: "p0c-structural-l1-v1", diff_engine_version: "p0c-structural-l1-v2" },
+    });
+
+    render(<ChangeDetailPage />);
+
+    const note = within(await screen.findByTestId("change-detail-recomputed"));
+    expect(note.getByText(/recomputed · current matcher/i)).toBeInTheDocument();
+    expect(note.getByText(/made by p0c-structural-l1-v1/i)).toBeInTheDocument();
+  });
+
+  it("reports an unavailable status instead of guessing", async () => {
+    detail([modified], "ready", { revision_status: { status: "unavailable", is_current: false } });
+
+    render(<ChangeDetailPage />);
+
+    const status = within(await screen.findByTestId("revision-status"));
+    expect(status.getByText("Revision status unavailable.")).toBeInTheDocument();
+    expect(status.queryByText("Current revision")).not.toBeInTheDocument();
+  });
+
+  it("never links a comparison superseded by a failed analysis back to itself", async () => {
+    searchParams = new URLSearchParams("event=evt-old");
+    detail([modified], "ready", {
+      event_id: "evt-old",
+      effective: false,
+      superseded_by_event_id: "evt-failed",
+      history: [
+        { event_id: "evt-old", event_type: "revision.changed", derivation: "original", effective: false },
+        { event_id: "evt-failed", event_type: "revision.analysis_failed", derivation: "original", effective: true },
+      ],
+    });
+
+    render(<ChangeDetailPage />);
+
+    const banner = within(await screen.findByTestId("change-detail-historical"));
+    expect(banner.getByText(/newer analysis of this revision failed/i)).toBeInTheDocument();
+    expect(banner.queryByRole("link")).not.toBeInTheDocument();
   });
 });

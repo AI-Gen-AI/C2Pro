@@ -58,4 +58,8 @@ export interface TimelineItemResponse {
   provenance?: TimelineItemResponseProvenance;
   /** @nullable */
   l3_impact?: null;
+  derivation?: string | null;
+  derived_from_event_id?: string | null;
+  effective?: boolean | null;
+  superseded_by_event_id?: string | null;
 }
