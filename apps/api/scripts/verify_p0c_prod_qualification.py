@@ -246,7 +246,8 @@ async def verify(
                     hashes = {row.revision_id: row.blob_hash for row in hash_rows.all()}
                     no_change_hash_ok = (
                         hashes.get(target_revision_id) is not None
-                        and hashes.get(target_revision_id) == hashes.get(no_change_target_revision_id)
+                        and hashes.get(no_change_target_revision_id) is not None
+                        and hashes.get(target_revision_id) != hashes.get(no_change_target_revision_id)
                     )
                 checks.append(Check(
                     "identical reupload persisted as no change",
@@ -254,9 +255,9 @@ async def verify(
                     f"event_found={no_change_event is not None}",
                 ))
                 checks.append(Check(
-                    "identical reupload preserves identical blob hash",
+                    "semantic no-change probe is byte-distinct",
                     no_change_hash_ok,
-                    "revision B and identical reupload hash equality",
+                    "revision B and metadata-only revision have different blob hashes",
                 ))
 
                 failed_after = await conn.execute(
