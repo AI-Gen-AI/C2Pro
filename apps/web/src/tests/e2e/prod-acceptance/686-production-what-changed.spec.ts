@@ -172,7 +172,7 @@ test.describe("P0c production qualification — What Changed", () => {
 
     const recorderPath = recorder.write();
     const classification = recorder.classification();
-    if (classification !== "PASS") {
+    if (classification !== "USABLE") {
       throw new Error(`P0C_PRODUCTION_JOURNEY_NOT_PASS:${classification}`);
     }
 
