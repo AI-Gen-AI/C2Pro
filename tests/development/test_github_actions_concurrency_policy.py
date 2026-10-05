@@ -26,5 +26,5 @@ def test_target_workflows_cancel_only_superseded_pull_request_runs() -> None:
 
         assert "concurrency:" in text, filename
         assert f"group: {group_prefix}-" in text, filename
-        assert "github.event.pull_request.number || github.ref" in text, filename
+        assert "github.event.pull_request.number || github.run_id" in text, filename
         assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in text, filename
