@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: c2pro-development-control-${{ github.event.pull_request.number || github.ref }}
+  group: c2pro-development-control-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
