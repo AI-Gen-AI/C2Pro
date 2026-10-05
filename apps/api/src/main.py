@@ -213,11 +213,11 @@ def create_application() -> FastAPI:
 
         ## Características
 
-        - ðŸ” **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
-        - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcción
-        - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineación entre documentos
-        - ðŸ‘¥ **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
-        - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organización
+        - 🔍 **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
+        - 🤖 **IA Especializada**: Claude 4 entrenado en documentos de construcción
+        - 📊 **Coherence Score**: Indicador 0-100 de alineación entre documentos
+        - 👥 **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
+        - 📈 **Multi-tenant**: Aislamiento completo de datos por organización
 
         ## Autenticación
 
@@ -235,9 +235,9 @@ def create_application() -> FastAPI:
 
         ## Soporte
 
-        - ðŸ“§ Email: support@c2pro.app
-        - ðŸ“– Docs: https://docs.c2pro.app
-        - ðŸ’¬ Discord: https://discord.gg/c2pro
+        - 📧 Email: support@c2pro.app
+        - 📖 Docs: https://docs.c2pro.app
+        - 💬 Discord: https://discord.gg/c2pro
         """,
         docs_url="/docs",
         redoc_url="/redoc",
