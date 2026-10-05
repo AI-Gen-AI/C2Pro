@@ -4,6 +4,7 @@ Tests for Token Counter & Cost Estimator.
 P3.1: Validates tiktoken-based pre-execution cost prediction.
 """
 
+from unittest.mock import patch
 
 from src.core.ai.token_counter import (
     MODEL_PRICING,
@@ -358,3 +359,32 @@ class TestEdgeCases:
 
         assert estimate.system_tokens > 1000
         assert estimate.context_usage_percent > 1  # Should use noticeable context
+
+
+class TestOfflineEncodingFallback:
+    """Failure-path coverage for offline tokenizer initialization."""
+
+    def test_tiktoken_initialization_failure_uses_approximate_encoder(self):
+        with patch(
+            "src.core.ai.token_counter.tiktoken.get_encoding",
+            side_effect=RuntimeError("encoding unavailable"),
+        ):
+            counter = TokenCounter()
+
+        assert counter.count_tokens("alpha beta, gamma") >= 4
+
+    def test_multipart_image_content_has_bounded_estimate(self):
+        counter = TokenCounter()
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": "opaque"},
+                    {"type": "text", "text": "inspect this"},
+                ],
+            }
+        ]
+
+        tokens = counter.count_message_tokens(messages)
+
+        assert tokens >= 1600
