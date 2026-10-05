@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from core.ai.sync_prompts import run_sync
 from src.core.ai.prompt_registry import InMemoryPromptHubClient
+from src.core.ai.sync_prompts import run_sync
 
 
 def test_run_sync_pushes_discovered_templates(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
