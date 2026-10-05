@@ -4,7 +4,7 @@ import hashlib
 import re
 from collections.abc import Iterable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from src.analysis.application.dtos import AlertCreate
@@ -14,7 +14,7 @@ from src.coherence.alert_generator import AlertGenerator
 from src.coherence.rules_engine.context_rules import CoherenceRuleResult
 from src.shared_kernel.enums import AlertSeverity, AlertStatus, AlertType
 
-FINGERPRINT_VERSION = 3
+FINGERPRINT_VERSION = 4
 
 _POSITIONAL_RAG_LOCATOR = re.compile(r"^chunk_\d+_([0-9a-fA-F]{8})$")
 _PARSED_TEXT_LOCATOR = re.compile(r"^parsed_([0-9a-fA-F]{8})$")
@@ -65,7 +65,14 @@ class AlertGeneratorService:
                 metadata["fingerprint"] = stored_fingerprint
                 metadata["fingerprint_version"] = FINGERPRINT_VERSION
                 existing_alert.alert_metadata = metadata
-            existing_by_fp.setdefault(stored_fingerprint, existing_alert)
+
+            previous = existing_by_fp.get(stored_fingerprint)
+            if previous is not None and previous is not existing_alert:
+                raise RuntimeError(
+                    "LEGACY_IDENTITY_CONFLICT:"
+                    f"{project_id}:{stored_fingerprint}"
+                )
+            existing_by_fp[stored_fingerprint] = existing_alert
 
         processed: list[AlertRecord] = []
         now = datetime.now(UTC)
@@ -78,13 +85,18 @@ class AlertGeneratorService:
                 processed.append(created)
                 continue
 
-            if current_alert.status == AlertStatus.RESOLVED:
+            basis_changed = self._review_basis_changed(current_alert, violation)
+            if (
+                current_alert.status in {AlertStatus.ACKNOWLEDGED, AlertStatus.DISMISSED}
+                and basis_changed
+            ):
+                self._reopen_for_basis_change(current_alert, violation, fingerprint)
+            elif current_alert.status == AlertStatus.RESOLVED:
                 # A previously fixed finding detected again is a genuine regression.
                 self._reopen_alert(current_alert, violation, fingerprint)
             else:
-                # OPEN findings stay open. ACKNOWLEDGED (accepted/genuine variance)
-                # and DISMISSED (false positive) are human dispositions and must not
-                # be silently rewritten just because the same detector fires again.
+                # OPEN findings stay open. ACKNOWLEDGED/DISMISSED remain stable only
+                # while the exact reviewed evidence basis remains the same.
                 self._update_alert(current_alert, violation, fingerprint)
             await self._repository.update(current_alert)
             processed.append(current_alert)
@@ -180,6 +192,96 @@ class AlertGeneratorService:
         )
         self._update_alert(alert, violation, fingerprint)
 
+    def _reopen_for_basis_change(
+        self,
+        alert: AlertRecord,
+        violation: AlertCreate,
+        fingerprint: str,
+    ) -> None:
+        """Revalidate a basis-sensitive human disposition on new trusted evidence."""
+        existing_metadata = dict(alert.alert_metadata or {})
+        from_key = (
+            existing_metadata.get("disposition_basis_key")
+            or existing_metadata.get("current_observation_key")
+            or self._observation_key(existing_metadata)
+        )
+        incoming_metadata = dict(violation.alert_metadata or {})
+        to_key = self._observation_key(incoming_metadata)
+
+        history_raw = existing_metadata.get("history", [])
+        history = list(history_raw) if isinstance(history_raw, list) else []
+        already_recorded = any(
+            isinstance(item, dict)
+            and item.get("action") == "basis_changed_reopened"
+            and item.get("to_observation_key") == to_key
+            for item in history
+        )
+        if not already_recorded:
+            history.append(
+                {
+                    "action": "basis_changed_reopened",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "from_observation_key": from_key,
+                    "to_observation_key": to_key,
+                }
+            )
+        existing_metadata["history"] = history
+        alert.alert_metadata = existing_metadata
+        alert.status = AlertStatus.OPEN
+        alert.resolved_at = None
+        alert.resolved_by = None
+
+        current_approval = getattr(alert, "approval_status", None)
+        if current_approval is not None:
+            writable_alert = cast(Any, alert)
+            try:
+                writable_alert.approval_status = type(current_approval)("pending")
+            except (TypeError, ValueError):
+                writable_alert.approval_status = "pending"
+
+        self._update_alert(alert, violation, fingerprint)
+
+    def _review_basis_changed(
+        self,
+        alert: AlertRecord,
+        violation: AlertCreate,
+    ) -> bool:
+        existing_metadata = dict(alert.alert_metadata or {})
+        reviewed_basis = (
+            existing_metadata.get("disposition_basis_key")
+            or existing_metadata.get("current_observation_key")
+            or self._observation_key(existing_metadata)
+        )
+        incoming_basis = self._observation_key(dict(violation.alert_metadata or {}))
+        return bool(
+            isinstance(reviewed_basis, str)
+            and reviewed_basis
+            and incoming_basis is not None
+            and incoming_basis != reviewed_basis
+        )
+
+    @staticmethod
+    def _observation_key(metadata: dict[str, Any]) -> str | None:
+        detector = metadata.get("detection_evidence")
+        if not isinstance(detector, dict):
+            return None
+
+        basis_fields = (
+            "revision_id",
+            "artifact_id",
+            "content_sha256",
+            "source_document_id",
+            "source_clause_id",
+        )
+        parts = [
+            f"{field}={detector[field]}"
+            for field in basis_fields
+            if detector.get(field) not in (None, "")
+        ]
+        if not parts:
+            return None
+        return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+
     def _build_metadata(
         self,
         violation: AlertCreate,
@@ -201,6 +303,9 @@ class AlertGeneratorService:
         metadata["fingerprint"] = fingerprint
         metadata["fingerprint_version"] = FINGERPRINT_VERSION
         metadata["requires_human_review"] = self._requires_human_review(violation)
+        observation_key = self._observation_key(metadata)
+        if observation_key is not None:
+            metadata["current_observation_key"] = observation_key
         return metadata
 
     @staticmethod
@@ -228,11 +333,33 @@ class AlertGeneratorService:
             detector = legacy if isinstance(legacy, dict) else {}
 
         source_clause_id = getattr(alert, "source_clause_id", None)
-        raw_source_locator = (
-            detector.get("source_clause_id") if source_clause_id is None else None
-        )
+        raw_source_locator = detector.get("source_clause_id")
         if source_clause_id is None and raw_source_locator:
             source_clause_id = raw_source_locator
+
+        if raw_source_locator and self._is_revision_unstable_locator(raw_source_locator):
+            return self._synthetic_fallback_fingerprint(rule_id, detector)
+
+        category = getattr(alert, "category", None) or ""
+        affected = getattr(alert, "affected_entities", {}) or {}
+        family = self._document_family_fingerprint(
+            rule_id=rule_id,
+            category=category,
+            detector=detector,
+            affected_entities=affected,
+        )
+        if family is not None:
+            return family
+
+        non_document_entities = self._flatten_entities(
+            {key: value for key, value in affected.items() if key != "documents"}
+        )
+        if non_document_entities:
+            base = (
+                f"{rule_id}|entities|{category}|"
+                + "|".join(sorted(set(non_document_entities)))
+            )
+            return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
         related = getattr(alert, "related_clause_ids", None) or []
         anchors = [
@@ -241,25 +368,11 @@ class AlertGeneratorService:
             if value and not self._is_revision_unstable_locator(value)
         ]
         if anchors:
-            base = f"{rule_id}|anchors|" + "|".join(sorted(set(anchors)))
+            base = f"{rule_id}|revision_anchors|" + "|".join(sorted(set(anchors)))
             return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
-        if raw_source_locator and self._is_revision_unstable_locator(raw_source_locator):
-            return self._synthetic_fallback_fingerprint(rule_id, detector)
-
-        entities = self._flatten_entities(getattr(alert, "affected_entities", {}) or {})
-        if entities:
-            category = getattr(alert, "category", None) or ""
-            base = f"{rule_id}|entities|{category}|" + "|".join(sorted(set(entities)))
-            return hashlib.sha256(base.encode("utf-8")).hexdigest()
-
-        detector = metadata.get("detection_evidence")
-        if not isinstance(detector, dict):
-            legacy = metadata.get("evidence")
-            detector = legacy if isinstance(legacy, dict) else {}
         claim = self._normalized_identity_text(detector.get("claim"))
         quote = self._normalized_identity_text(detector.get("quote"))
-        category = getattr(alert, "category", None) or ""
         base = f"{rule_id}|fallback|{category}|{claim}|{quote}"
         return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
@@ -276,42 +389,92 @@ class AlertGeneratorService:
         if not isinstance(detector, dict):
             detector = {}
 
-        anchors: list[str] = []
-        if violation.source_clause_id:
-            anchors.append(str(violation.source_clause_id))
         raw_source_locator = detector.get("source_clause_id")
-        if violation.related_clause_ids:
-            anchors.extend(str(clause_id) for clause_id in violation.related_clause_ids)
-        # Once detector provenance has been verified into canonical clause IDs,
-        # those DB identities own the fingerprint. Do not also hash the raw
-        # composite locator (A|B), otherwise the incoming and persisted forms
-        # would have different identities on the next evaluation.
-        if (
-            raw_source_locator
-            and not anchors
-            and not self._is_revision_unstable_locator(raw_source_locator)
-        ):
-            anchors.append(str(raw_source_locator))
-        if anchors:
-            # Rendered claim/quote/severity/category may evolve while the same
-            # revision-bound documentary finding remains. Stable locators own
-            # identity whenever they exist.
-            base = f"{rule_id}|anchors|" + "|".join(sorted(set(anchors)))
-            return hashlib.sha256(base.encode("utf-8")).hexdigest()
-
         if raw_source_locator and self._is_revision_unstable_locator(raw_source_locator):
             return self._synthetic_fallback_fingerprint(rule_id, detector)
 
-        entities = sorted(set(self._flatten_entities(violation.affected_entities)))
-        if entities:
-            base = f"{rule_id}|entities|{violation.category or ''}|" + "|".join(entities)
+        family = self._document_family_fingerprint(
+            rule_id=rule_id,
+            category=violation.category or "",
+            detector=detector,
+            affected_entities=violation.affected_entities,
+        )
+        if family is not None:
+            return family
+
+        non_document_entities = self._flatten_entities(
+            {
+                key: value
+                for key, value in (violation.affected_entities or {}).items()
+                if key != "documents"
+            }
+        )
+        if non_document_entities:
+            base = (
+                f"{rule_id}|entities|{violation.category or ''}|"
+                + "|".join(sorted(set(non_document_entities)))
+            )
             return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
-        # Unanchored findings have no stronger locator. Fall back to detector
-        # evidence rather than presentation message/title.
+        anchors: list[str] = []
+        if violation.source_clause_id:
+            anchors.append(str(violation.source_clause_id))
+        if violation.related_clause_ids:
+            anchors.extend(str(clause_id) for clause_id in violation.related_clause_ids)
+        if raw_source_locator and not anchors:
+            anchors.append(str(raw_source_locator))
+        if anchors:
+            # No stable document/business anchor is available. Keep the family
+            # revision-bound rather than guessing cross-revision continuity.
+            base = f"{rule_id}|revision_anchors|" + "|".join(sorted(set(anchors)))
+            return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
         claim = self._normalized_identity_text(detector.get("claim"))
         quote = self._normalized_identity_text(detector.get("quote"))
         base = f"{rule_id}|fallback|{violation.category or ''}|{claim}|{quote}"
+        return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+    def _document_family_fingerprint(
+        self,
+        *,
+        rule_id: str,
+        category: str,
+        detector: dict[str, Any],
+        affected_entities: dict[str, Any],
+    ) -> str | None:
+        """Stable family identity when document + semantic claim are available.
+
+        Exact clause/revision IDs belong to observation identity. A document
+        anchor alone is not enough when the same rule may fire multiple times,
+        so claim (or quote fallback) disambiguates the semantic family.
+        """
+        documents: set[str] = set()
+        detector_document = detector.get("source_document_id")
+        if detector_document:
+            documents.add(str(detector_document))
+        raw_documents = affected_entities.get("documents")
+        if isinstance(raw_documents, list):
+            documents.update(str(value) for value in raw_documents if value)
+        elif raw_documents:
+            documents.add(str(raw_documents))
+
+        if not documents:
+            return None
+
+        claim = self._normalized_identity_text(detector.get("claim"))
+        quote = self._normalized_identity_text(detector.get("quote"))
+        if not claim and not quote:
+            return None
+
+        # Conservative weak semantic anchor: when both are available require
+        # both to remain stable. Losing continuity is safer than collapsing
+        # distinct same-rule findings in one document.
+        semantic_anchor = f"claim={claim}|quote={quote}"
+        base = (
+            f"{rule_id}|documents|{category}|"
+            + "|".join(sorted(documents))
+            + f"|{semantic_anchor}"
+        )
         return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
     @staticmethod

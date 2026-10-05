@@ -18,6 +18,7 @@ Verifies:
 Location: apps/api/tests/coherence/test_api_v3.py
 """
 
+from contextlib import suppress
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -501,6 +502,12 @@ async def test_evaluate_passes_authenticated_tenant_to_evaluation_config(
             low_budget_mode=False,
         )
         mock_db = Mock()
+        mock_db.execute = AsyncMock()
+        mock_db.scalars = AsyncMock(return_value=SimpleNamespace(all=lambda: []))
+        mock_db.scalar = AsyncMock(
+            return_value=SimpleNamespace(tenant_id=tenant_id)
+        )
+        mock_db.flush = AsyncMock()
         mock_db.commit = AsyncMock()
 
         await evaluate_project_coherence(
@@ -591,6 +598,12 @@ async def test_evaluate_fetches_from_rag_with_project_id(
             project_id = uuid4()
             request = CoherenceEvaluateRequest(project_id=project_id)
             mock_db = Mock()
+            mock_db.execute = AsyncMock()
+            mock_db.scalars = AsyncMock(return_value=SimpleNamespace(all=lambda: []))
+            mock_db.scalar = AsyncMock(
+                return_value=SimpleNamespace(tenant_id=sample_current_user.tenant_id)
+            )
+            mock_db.flush = AsyncMock()
             mock_db.commit = AsyncMock()
 
             await evaluate_project_coherence(
@@ -813,3 +826,53 @@ def test_convert_enriched_to_coherence_result():
     assert not hasattr(result, "finding_signals")
     assert not hasattr(result, "diagnostics")
     assert not hasattr(result, "llm_cost_usd")
+
+
+@pytest.mark.asyncio
+async def test_b1_coherence_result_is_not_committed_before_alert_reconciliation_succeeds(
+    sample_clauses,
+    sample_enriched_result,
+):
+    """B1-02/B1-11 RED: a failed Alert reconciliation cannot leave a newly durable score."""
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
+
+    project_id = uuid4()
+    tenant_id = uuid4()
+    db = Mock()
+    db.add = Mock()
+    db.scalar = AsyncMock(return_value=None)
+    db.commit = AsyncMock()
+
+    with (
+        patch(
+            "src.coherence.router.evaluate_coherence_async",
+            new_callable=AsyncMock,
+            return_value=sample_enriched_result,
+        ),
+        patch(
+            "src.coherence.router._mirror_coherence_alerts_to_alerts_table",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("injected alert reconciliation failure"),
+        ),
+        patch(
+            "src.coherence.router._v2_enabled_for",
+            new_callable=AsyncMock,
+            return_value=False,
+        ),
+    ):
+        with suppress(RuntimeError):
+            await evaluate_project_coherence(
+                payload=CoherenceEvaluateRequest(
+                    project_id=project_id,
+                    clauses=sample_clauses,
+                ),
+                include_diagnostics=False,
+                db=db,
+                current_user=SimpleNamespace(tenant_id=tenant_id),
+                flags_service=None,
+            )
+
+    assert db.commit.await_count == 0, (
+        "Coherence committed before canonical Alert reconciliation completed; "
+        "B1 requires one owning transaction so this fault leaves no new durable result."
+    )
