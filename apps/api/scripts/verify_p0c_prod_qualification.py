@@ -86,6 +86,20 @@ async def verify(
         "target_blob_hash": target_blob_hash,
     }
 
+    change_params = {
+        **p,
+        "document_id_text": str(document_id),
+        "source_revision_id_text": str(source_revision_id),
+        "target_revision_id_text": str(target_revision_id),
+    }
+    duplicate_change_params = {
+        "tenant_id": tenant_id,
+        "project_id": project_id,
+        "document_id_text": str(document_id),
+        "source_revision_id_text": str(source_revision_id),
+        "target_revision_id_text": str(target_revision_id),
+    }
+
     eligible_tenant = await _scalar(
         conn,
         """
@@ -173,14 +187,14 @@ async def verify(
            AND event_type = 'revision.changed'
            AND source_revision_id = :target_revision_id
            AND payload ->> 'state' = 'ready'
-           AND payload ->> 'document_id' = CAST(:document_id AS text)
+           AND payload ->> 'document_id' = :document_id_text
            AND payload ->> 'change_cause' = 'BUSINESS_STATE_CHANGED'
-           AND payload #>> '{provenance,source_revision_id}' = CAST(:source_revision_id AS text)
-           AND payload #>> '{provenance,target_revision_id}' = CAST(:target_revision_id AS text)
+           AND payload #>> '{provenance,source_revision_id}' = :source_revision_id_text
+           AND payload #>> '{provenance,target_revision_id}' = :target_revision_id_text
            AND payload #>> '{provenance,source_blob_hash}' = :source_blob_hash
            AND payload #>> '{provenance,target_blob_hash}' = :target_blob_hash
         """,
-        p,
+        change_params,
     )
     event_evidence = await _scalar(
         conn,
@@ -202,11 +216,11 @@ async def verify(
          WHERE project_id = :project_id
            AND tenant_id = :tenant_id
            AND event_type = 'revision.changed'
-           AND payload ->> 'document_id' = CAST(:document_id AS text)
-           AND payload #>> '{provenance,source_revision_id}' = CAST(:source_revision_id AS text)
-           AND payload #>> '{provenance,target_revision_id}' = CAST(:target_revision_id AS text)
+           AND payload ->> 'document_id' = :document_id_text
+           AND payload #>> '{provenance,source_revision_id}' = :source_revision_id_text
+           AND payload #>> '{provenance,target_revision_id}' = :target_revision_id_text
         """,
-        p,
+        duplicate_change_params,
     )
 
     checks = [
