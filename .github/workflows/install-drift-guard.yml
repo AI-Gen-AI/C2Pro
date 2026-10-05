@@ -18,7 +18,7 @@ on:
     branches: [main, develop]
 
 concurrency:
-  group: install-drift-guard-${{ github.event.pull_request.number || github.ref }}
+  group: install-drift-guard-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
