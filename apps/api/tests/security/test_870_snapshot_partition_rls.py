@@ -32,6 +32,9 @@ def test_migration_repairs_all_attached_snapshot_partitions() -> None:
     assert "project_snapshots" in sql
     assert "ENABLE ROW LEVEL SECURITY" in sql
     assert "CREATE POLICY" not in sql
+    assert "%" not in sql
+    assert "quote_ident(child.schema_name)" in sql
+    assert "quote_ident(child.table_name)" in sql
 
 
 def test_supabase_mirror_matches_canonical_migration() -> None:

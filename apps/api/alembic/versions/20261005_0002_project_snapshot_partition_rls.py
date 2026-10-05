@@ -40,11 +40,11 @@ BEGIN
         WHERE parent_ns.nspname = 'public'
           AND parent.relname = 'project_snapshots'
     LOOP
-        EXECUTE format(
-            'ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY',
-            child.schema_name,
-            child.table_name
-        );
+        EXECUTE 'ALTER TABLE '
+            || quote_ident(child.schema_name)
+            || '.'
+            || quote_ident(child.table_name)
+            || ' ENABLE ROW LEVEL SECURITY';
     END LOOP;
 END $$;
 """
