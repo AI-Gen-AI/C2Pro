@@ -95,6 +95,10 @@ def build_bundle(
         raise BundleBuildError("Contract A did not settle as analyzed")
     if run.get("target_processing_outcome") != "analyzed":
         raise BundleBuildError("Contract B did not settle as analyzed")
+    if run.get("negative_source_processing_outcome") != "analyzed":
+        raise BundleBuildError("negative baseline did not settle as analyzed")
+    if run.get("negative_target_processing_outcome") != "analyzed":
+        raise BundleBuildError("negative identical revision did not settle as analyzed")
 
     verifier_ids = verifier.get("identifiers")
     if not isinstance(verifier_ids, dict):
@@ -105,8 +109,17 @@ def build_bundle(
     source_revision_id = _required(run, "source_revision_id")
     target_revision_id = _required(run, "target_revision_id")
     change_event_id = _required(run, "change_event_id")
+    negative_project_id = _required(run, "negative_project_id")
+    negative_document_id = _required(run, "negative_document_id")
+    negative_source_revision_id = _required(run, "negative_source_revision_id")
+    negative_target_revision_id = _required(run, "negative_target_revision_id")
+    negative_change_event_id = _required(run, "negative_change_event_id")
     if source_revision_id == target_revision_id:
         raise BundleBuildError("source and target revisions must differ")
+    if negative_source_revision_id == negative_target_revision_id:
+        raise BundleBuildError("negative source and target revisions must differ")
+    if negative_project_id == project_id:
+        raise BundleBuildError("negative proof must use an isolated project")
 
     expected = {
         "project_id": project_id,
@@ -114,6 +127,11 @@ def build_bundle(
         "source_revision_id": source_revision_id,
         "target_revision_id": target_revision_id,
         "change_event_id": change_event_id,
+        "negative_project_id": negative_project_id,
+        "negative_document_id": negative_document_id,
+        "negative_source_revision_id": negative_source_revision_id,
+        "negative_target_revision_id": negative_target_revision_id,
+        "negative_change_event_id": negative_change_event_id,
     }
     for key, value in expected.items():
         if verifier_ids.get(key) != value:
@@ -166,6 +184,27 @@ def build_bundle(
             "sha256": None,
         },
         {
+            "id": "negative-source-revision",
+            "kind": "persisted_entity",
+            "ref": f"postgres:document_revision:{negative_source_revision_id}",
+            "immutable": True,
+            "sha256": None,
+        },
+        {
+            "id": "negative-target-revision",
+            "kind": "persisted_entity",
+            "ref": f"postgres:document_revision:{negative_target_revision_id}",
+            "immutable": True,
+            "sha256": None,
+        },
+        {
+            "id": "negative-change-event",
+            "kind": "persisted_entity",
+            "ref": f"postgres:project_event:{negative_change_event_id}",
+            "immutable": True,
+            "sha256": None,
+        },
+        {
             "id": "browser-run",
             "kind": "ui_report",
             "ref": f"artifact:{RUN_JSON.as_posix()}",
@@ -205,7 +244,13 @@ def build_bundle(
         {
             "id": "absent_evidence_does_not_invent_change",
             "status": "PASS",
-            "evidence_refs": ["browser-run", "db-verifier"],
+            "evidence_refs": [
+                "browser-run",
+                "negative-source-revision",
+                "negative-target-revision",
+                "negative-change-event",
+                "db-verifier",
+            ],
         },
     ]
 
