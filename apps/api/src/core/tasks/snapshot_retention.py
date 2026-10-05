@@ -76,6 +76,12 @@ async def _execute_partition_sql(
             """
         )
     )
+    # #870: RLS is table-local in PostgreSQL. New partition leaves do not
+    # inherit the parent's relrowsecurity flag, so every leaf must be born
+    # closed even though ordinary application queries target the parent.
+    await session.execute(
+        text(f"ALTER TABLE {partition_name} ENABLE ROW LEVEL SECURITY")
+    )
 
 
 async def ensure_project_snapshot_partitions(
@@ -95,6 +101,9 @@ async def ensure_project_snapshot_partitions(
             PARTITION OF project_snapshots DEFAULT
             """
         )
+    )
+    await session.execute(
+        text("ALTER TABLE project_snapshots_default ENABLE ROW LEVEL SECURITY")
     )
     base_month = _month_start(anchor or _utcnow())
     for offset in range(-months_back, months_ahead + 1):
