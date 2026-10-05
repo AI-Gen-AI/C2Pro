@@ -68,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$CONFIRM" = "RUN-ISSUE-686"
-          test "${GITHUB_REF_NAME}" = "main"
+          test "${GITHUB_REF}" = "refs/heads/main"
           test "$STAGED_CLEAR" = "true"
           [[ "$BACKEND_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$FRONTEND_SHA" =~ ^[0-9a-f]{40}$ ]]
