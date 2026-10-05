@@ -6,7 +6,7 @@ canonical_plan:
   id: C2PRO-VPS-DEV-CONTROL-V1
   path: docs/architecture/development/c2pro-vps-development-control-plan-v1.md
 baseline:
-  main_sha: 1aecb4cf7ca454088e26046bb2ae8fa6b11bc518
+  main_sha: 23b963a50a7de7a4096063808a7f361f9df84ba1
 active_campaign: null
 active_work: []
 next_eligible_work: C2PRO-DEV-03
