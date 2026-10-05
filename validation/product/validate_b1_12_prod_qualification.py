@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EVIDENCE_ROOT = (REPO_ROOT / "evidence" / "product-qualification").resolve()
-BUNDLE_NAME_RE = __import__("re").compile(r"^b1-12-prod-gh-[1-9][0-9]*-[1-9][0-9]*\.yaml$")
+BUNDLE_NAME_RE = re.compile(r"^b1-12-prod-gh-[1-9][0-9]*-[1-9][0-9]*\.yaml$")
 REQUIRED_ASSERTIONS = {
     "canonical_alerts_from_same_finding_set",
     "fresh_session_identity_and_provenance",
