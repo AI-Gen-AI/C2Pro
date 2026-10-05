@@ -29,6 +29,7 @@ def test_p0c_workflow_binds_exact_runtime_and_fresh_synthetic_journey() -> None:
         "frontend_deployment_id:",
         "verify_prod_deployment_identity.py",
         "verify_prod_synthetic_journey.py",
+        '--allow-project-prefix "P0c Qualification "',
         "verify_p0c_prod_qualification.py",
         "build_p0c_prod_qualification_bundle.py",
         "validate_qualification_evidence.py",
