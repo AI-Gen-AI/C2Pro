@@ -63,9 +63,21 @@ class SqlAlchemyAlertRepository(IAlertRepository):
             status = AlertStatus.OPEN
 
         try:
-            approval_status_converted = ApprovalStatus(str(getattr(orm_alert.approval_status, "value", orm_alert.approval_status)).lower())
+            approval_status_converted = ApprovalStatus(
+                str(
+                    getattr(
+                        orm_alert.approval_status,
+                        "value",
+                        orm_alert.approval_status,
+                    )
+                ).lower()
+            )
         except ValueError:
             approval_status_converted = ApprovalStatus.PENDING
+
+        raw_alert_type = getattr(orm_alert, "alert_type", None)
+        alert_type_value = getattr(raw_alert_type, "value", raw_alert_type)
+        alert_type = str(alert_type_value or "risk").lower()
 
         return Alert(
             id=orm_alert.id,
@@ -77,6 +89,7 @@ class SqlAlchemyAlertRepository(IAlertRepository):
             rule_id=orm_alert.rule_id,
             title=orm_alert.title,
             description=orm_alert.description or "",
+            alert_type=alert_type,
             affected_entities=orm_alert.affected_entities or {},
             alert_metadata=orm_alert.alert_metadata or {},
             created_at=orm_alert.created_at,
@@ -108,6 +121,7 @@ class SqlAlchemyAlertRepository(IAlertRepository):
             if hasattr(domain_alert.severity, "value")
             else domain_alert.severity,
             category=domain_alert.category,
+            alert_type=domain_alert.alert_type,
             status=domain_alert.status.value
             if hasattr(domain_alert.status, "value")
             else domain_alert.status,
@@ -207,6 +221,7 @@ class SqlAlchemyAlertRepository(IAlertRepository):
             project_id=alert.project_id,
             severity=alert.severity.value if hasattr(alert.severity, "value") else alert.severity,
             category=alert.category,
+            alert_type=alert.alert_type,
             status=alert.status.value if hasattr(alert.status, "value") else alert.status,
             rule_id=alert.rule_id,
             title=alert.title,
