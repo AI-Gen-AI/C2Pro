@@ -168,14 +168,14 @@ def build_bundle(
         {
             "id": "browser-run",
             "kind": "ui_report",
-            "ref": "artifact:playwright/.prod-acceptance/p0c-run.json",
+            "ref": f"artifact:{RUN_JSON.as_posix()}",
             "immutable": False,
             "sha256": run_sha,
         },
         {
             "id": "db-verifier",
             "kind": "test_report",
-            "ref": "artifact:prod-acceptance/p0c-verifier.json",
+            "ref": f"artifact:{VERIFIER_JSON.as_posix()}",
             "immutable": False,
             "sha256": verifier_sha,
         },
