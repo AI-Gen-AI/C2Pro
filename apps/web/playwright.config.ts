@@ -164,6 +164,29 @@ export default defineConfig({
       },
     },
     {
+      // Manual-only P0c exact-runtime production qualification. Real Clerk
+      // credentials come only from the protected production-qualification
+      // environment; no storageState or development testing token is used.
+      name: "prod-p0c",
+      testMatch: [
+        /(^|[\\/])prod-acceptance[\\/]686-production-what-changed\.spec\.ts$/,
+      ],
+      use: {
+        ...devices["Desktop Chrome"],
+        trace: "off",
+        screenshot: "off",
+        video: "off",
+      },
+      metadata: {
+        suite: "ISSUE-686-P0C-PROD-01",
+        type: "production-qualification",
+        priority: "p0",
+        manualOnly: true,
+        description:
+          "Real production auth -> Contract A -> revision B of same document -> What Changed -> relogin durability",
+      },
+    },
+    {
       name: "cross-browser-chromium",
       testMatch: /cross-browser-smoke\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
