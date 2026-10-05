@@ -120,12 +120,18 @@ def get_review_alert_use_case(
             decision=decision,
         )
 
-    async def post_review(alert: Alert, tenant_id: UUID, decision: str) -> None:
+    async def post_review(
+        alert: Alert,
+        tenant_id: UUID,
+        decision: str,
+        previous_disposition: str | None,
+    ) -> None:
         await rescore_coherence_after_review(
             session=session,
             alert=alert,
             tenant_id=tenant_id,
             decision=decision,
+            previous_disposition=previous_disposition,
         )
 
     return ReviewAlertUseCase(
