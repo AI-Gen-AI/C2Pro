@@ -164,6 +164,29 @@ export default defineConfig({
       },
     },
     {
+      // Manual-only P0c production qualification. Reuses the canonical PJ-01
+      // A->B revision journey under the protected production qualification
+      // identity; no storageState/testing-token bootstrap is allowed.
+      name: "prod-p0c-acceptance",
+      testMatch: [
+        /(^|[\\/])prod-acceptance[\\/]p0c-production-pj01\.spec\.ts$/,
+      ],
+      use: {
+        ...devices["Desktop Chrome"],
+        trace: "off",
+        screenshot: "off",
+        video: "off",
+      },
+      metadata: {
+        suite: "ISSUE-686-P0C-PROD-ACCEPTANCE",
+        type: "production-qualification",
+        priority: "p0",
+        manualOnly: true,
+        description:
+          "Real Clerk production auth -> Contract A -> revision B -> What Changed -> relogin durability",
+      },
+    },
+    {
       name: "cross-browser-chromium",
       testMatch: /cross-browser-smoke\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
