@@ -1,9 +1,17 @@
 # MASTER_DEVELOPMENT_STATUS.md
 
 > **Status:** Deprecated as a canonical status register  
-> **Reconciled:** 2026-10-03
+> **Reconciled:** 2026-10-05
 
 This file is a compatibility pointer only. It must not become a second programme or execution authority.
+
+## Compatibility reconciliation note — 2026-10-05
+
+Repository-quality execution is tracked under **C2PRO-DEV-15 / issue #849 — Repository Hygiene & Core AI Assurance** in the canonical `.c2pro` development control plane.
+
+This is a non-product quality lane: it does not alter Product Control lifecycle state or the active P0c qualification. Wave 1 covers reference-proven repository hygiene; later Core AI assurance removes coverage exclusions only alongside meaningful contract and failure-path tests.
+
+DEV-15 execution baseline for this wave: `main@f2214730efd216e176e28fdd4716e23ab272be61`.
 
 ## Product programme authority
 
