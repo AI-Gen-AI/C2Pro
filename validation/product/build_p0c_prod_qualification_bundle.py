@@ -21,6 +21,8 @@ RUN_JSON = Path("apps/web/playwright/.p0c-prod/run.json")
 TIMELINE_JSON = Path("apps/web/playwright/.p0c-prod/timeline.json")
 DETAIL_JSON = Path("apps/web/playwright/.p0c-prod/change-detail.json")
 NO_CHANGE_DETAIL_JSON = Path("apps/web/playwright/.p0c-prod/no-change-detail.json")
+FRESH_TIMELINE_JSON = Path("apps/web/playwright/.p0c-prod/fresh-session-timeline.json")
+FRESH_DETAIL_JSON = Path("apps/web/playwright/.p0c-prod/fresh-session-change-detail.json")
 VERIFIER_JSON = Path("evidence/product-qualification/runtime/p0c-verifier.json")
 OUTPUT_ROOT = Path("evidence/product-qualification")
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -113,12 +115,16 @@ def build_bundle(
     timeline_path = _path(TIMELINE_JSON, "P0c timeline capture")
     detail_path = _path(DETAIL_JSON, "P0c change-detail capture")
     no_change_detail_path = _path(NO_CHANGE_DETAIL_JSON, "P0c no-change detail capture")
+    fresh_timeline_path = _path(FRESH_TIMELINE_JSON, "P0c fresh-session timeline capture")
+    fresh_detail_path = _path(FRESH_DETAIL_JSON, "P0c fresh-session change-detail capture")
     verifier_path = _path(VERIFIER_JSON, "P0c durable verifier")
 
     run = _json(run_path)
     timeline = _json(timeline_path)
     detail = _json(detail_path)
     no_change_detail = _json(no_change_detail_path)
+    fresh_timeline = _json(fresh_timeline_path)
+    fresh_detail = _json(fresh_detail_path)
     verifier = _json(verifier_path)
     _assert_verifier(verifier)
 
@@ -189,6 +195,47 @@ def build_bundle(
     if no_change_provenance.get("target_blob_hash") != negative_blob_hash:
         raise BundleBuildError("no-change target blob hash disagrees")
 
+    fresh_session = run.get("fresh_session")
+    if not isinstance(fresh_session, dict) or fresh_session.get("relogin_verified") is not True:
+        raise BundleBuildError("fresh authenticated session proof is missing")
+    if fresh_session.get("timeline_capture") != "playwright/.p0c-prod/fresh-session-timeline.json":
+        raise BundleBuildError("fresh-session timeline capture binding disagrees")
+    if fresh_session.get("change_detail_capture") != "playwright/.p0c-prod/fresh-session-change-detail.json":
+        raise BundleBuildError("fresh-session change-detail capture binding disagrees")
+
+    fresh_items = fresh_timeline.get("items")
+    if not isinstance(fresh_items, list):
+        raise BundleBuildError("fresh-session timeline capture has no items")
+    fresh_changed = [
+        item
+        for item in fresh_items
+        if isinstance(item, dict)
+        and item.get("event_id") == change_event_id
+        and item.get("event_type") == "revision.changed"
+        and item.get("state") == "ready"
+    ]
+    fresh_unchanged = [
+        item
+        for item in fresh_items
+        if isinstance(item, dict)
+        and item.get("event_id") == negative_event_id
+        and item.get("event_type") == "revision.changed"
+        and item.get("state") == "ready"
+        and item.get("change_cause") is None
+    ]
+    if len(fresh_changed) != 1 or len(fresh_unchanged) != 1:
+        raise BundleBuildError("fresh authenticated session does not reproduce both durable change outcomes")
+
+    if fresh_detail.get("event_id") != change_event_id or fresh_detail.get("state") != "ready":
+        raise BundleBuildError("fresh-session A-to-B detail is not durable/ready")
+    fresh_provenance = fresh_detail.get("provenance")
+    if not isinstance(fresh_provenance, dict):
+        raise BundleBuildError("fresh-session change-detail provenance is missing")
+    if fresh_provenance.get("source_revision_id") != from_revision_id:
+        raise BundleBuildError("fresh-session source revision disagrees")
+    if fresh_provenance.get("target_revision_id") != to_revision_id:
+        raise BundleBuildError("fresh-session target revision disagrees")
+
     timeline_items = timeline.get("items")
     if not isinstance(timeline_items, list):
         raise BundleBuildError("timeline capture has no items")
@@ -233,6 +280,8 @@ def build_bundle(
     timeline_sha = _sha256(timeline_path)
     detail_sha = _sha256(detail_path)
     no_change_detail_sha = _sha256(no_change_detail_path)
+    fresh_timeline_sha = _sha256(fresh_timeline_path)
+    fresh_detail_sha = _sha256(fresh_detail_path)
     verifier_sha = _sha256(verifier_path)
 
     evidence_refs: list[dict[str, Any]] = [
@@ -314,6 +363,20 @@ def build_bundle(
             "sha256": no_change_detail_sha,
         },
         {
+            "id": "fresh-session-timeline-api",
+            "kind": "api_capture",
+            "ref": "artifact:playwright/.p0c-prod/fresh-session-timeline.json",
+            "immutable": False,
+            "sha256": fresh_timeline_sha,
+        },
+        {
+            "id": "fresh-session-change-detail-api",
+            "kind": "api_capture",
+            "ref": "artifact:playwright/.p0c-prod/fresh-session-change-detail.json",
+            "immutable": False,
+            "sha256": fresh_detail_sha,
+        },
+        {
             "id": "db-verifier",
             "kind": "test_report",
             "ref": "artifact:product-qualification/runtime/p0c-verifier.json",
@@ -378,7 +441,12 @@ def build_bundle(
             {
                 "id": "api_ui_projection_parity",
                 "status": "PASS",
-                "evidence_refs": ["browser-run", "timeline-api", "change-detail-api"],
+                "evidence_refs": [
+                    "browser-run",
+                    "fresh-session-timeline-api",
+                    "fresh-session-change-detail-api",
+                ],
+                "note": "Re-authenticated UI/API projection after explicit sign-out/sign-in.",
             },
             {
                 "id": "absent_evidence_does_not_invent_change",
