@@ -1,6 +1,6 @@
 # ADR-025: Canonical Project Controls Backbone — One Hierarchical WBS per Project
 
-**Status:** Accepted — P1 Product Foundation. **Partially superseded (proposed) by [ADR-029](./ADR-029-wbs-governance-identity-baseline.md):** §1 "single logical root" / "codes are stable" and invariant WBS-2. Body retained unchanged for history.
+**Status:** Accepted — P1 Product Foundation. **Partially superseded by [ADR-029](./ADR-029-wbs-governance-identity-baseline.md):** §1 "single logical root" / "codes are stable" and invariant WBS-2. Body retained unchanged for history.
 **Date:** 2026-09-13
 **Decision class:** Product + domain architecture
 **Related:** ADR-014 (Project State), ADR-015 (Temporal Intelligence), ADR-018 (Project Health), ADR-019 (Alerts/Actions), ADR-021 (Reporting), ADR-024 (Single-Document Activation)

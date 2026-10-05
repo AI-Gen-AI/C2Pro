@@ -1,198 +1,211 @@
 # ADR-029: WBS Governance — Implicit Project Root, Stable Identity, Governed Baselines
 
-**Status:** Proposed — architecture review required before any implementation (PC-1R / PC-2a)
-**Date:** 2026-10-05
+**Status:** Accepted
+**Date:** 2026-10-05 (proposed and accepted the same day after architecture review)
 **Decision class:** Product + domain architecture (aggregate authority, trust/approval boundary, persistent data semantics)
-**Supersedes (in part):** ADR-025 §1 "single logical root" and "codes are stable" wording, and invariant WBS-2. All other ADR-025 decisions (WBS-1, WBS-3..WBS-6, §2–§7) remain in force and are restated or refined here.
+**Supersedes (in part):** ADR-025 §1 "single logical root" and "codes are stable" wording, and invariant WBS-2. All other ADR-025 decisions (WBS-1, WBS-3..WBS-6, §2–§7) remain in force.
 **Related:** ADR-015 (Temporal Intelligence), ADR-020 (HITL), ADR-025 (Project Controls backbone), ADR-026 (Trusted-state commit boundary)
-**Planning lineage:** #682 (superseded by PC-1R), #688 (amended), #830 / #852 / #860 (automated WBS / BOM writers removed)
+**Supporting note:** [WBS qualification, alignment and readiness](../notes/ARCH_NOTE_WBS_QUALIFICATION_AND_ALIGNMENT_2026-10-05.md)
+**Planning lineage:** #682 (superseded by PC-1R #886), #688 (amended: PC-2a / PC-2b / PC-7), #885, and the #830 / #852 / #860 guards that removed the automated WBS/BOM writers
 
 ## Context
 
 ADR-025 makes the WBS the canonical Project Controls backbone. Since then:
 
-- automated writers were removed: analysis proposes only (#830), a schedule is never written as WBS (#852), and a budget is never written as BOM (#860);
-- a full audit of `wbs_nodes` at `7e03deb8` and a consolidation at `4777b510` showed the following:
+- **Automated writers were removed.** Analysis now proposes only (#830). A schedule is never written as WBS (#852). A budget is never written as BOM (#860).
+- **The audits found no structural or authority guarantees in the stored tree.** Two audits ran, at `7e03deb8` and `4777b510`:
   - the stored tree has no hierarchy, root, identity or approval invariant;
-  - application ports address parents and sibling order by the visible `code`;
-  - deleting a document cascades into canonical WBS rows, and orphaned children silently re-root through `parent_id ON DELETE SET NULL`;
+  - ports address parents and sibling order by the visible code;
+  - deleting a document cascades into WBS rows;
+  - orphaned children silently re-root through `parent_id ON DELETE SET NULL`;
   - RACI rows cascade on node deletion.
-- the read-only production preflight on 2026-10-05 found:
-  - 23 nodes, all in 1 of 39 projects;
-  - all 23 are `activity` rows derived from one schedule document before #852 was fixed;
-  - all are parentless, never human-edited, and have no RACI or BOM links;
-  - no human-authored WBS exists.
-
-The product vision is broader than EPC. The WBS is the governed decomposition of **project scope, deliverables and control packages** for solar, civil, buildings, energy, data centres, software and SaaS, IT, data/AI and hybrid projects. Schedule, budget, BOM/procurement, RACI, obligations, risks/alerts, evidence and changes **link to** the WBS. They never become it.
+- **No human-authored WBS exists in production.** A read-only preflight (2026-10-05) found 23 nodes in 1 of 39 projects. All of them:
+  - are flat `activity` rows derived from a single schedule document before #852;
+  - were never edited;
+  - have no links.
 
 ## Decision
 
-### 1. One tree per project; the project is the implicit root
+### 1. Product role and generality
 
-- Each project owns exactly one canonical WBS tree. **The project itself is the root.** There is no stored root node.
-- Top-level branches have `parent_id IS NULL` and `depth = 0`. Depth is `0..N`; no fixed level structure is imposed.
-- A user who wants a single "Project scope" node may create one. It is an ordinary depth-0 node, not a database rule.
+The WBS is the **governed canonical project scope backbone**. It defines and maintains *what* constitutes the governed scope: deliverables and control packages.
+
+Schedule, Budget/Cost, Procurement/BOM, RACI, contract obligations, risks/alerts, evidence/quality, change and technical documents **link to** the WBS. They remain separate domain objects:
+
+- `SCHEDULE ACTIVITY != WBS NODE`
+- `BUDGET LINE != WBS NODE`
+- `BOM ITEM != WBS NODE`
+- RACI is not a WBS attribute.
+
+The engine is **industry-agnostic**. It covers EPC, construction, civil infrastructure, energy, data centres, IT, cybersecurity, software/SaaS, data/AI and hybrid projects. Domain Profiles (§9) adapt terminology, decomposition patterns, heuristics and specialist guidance. They never change the core governance model.
+
+### 2. One tree per project; the project is the implicit root
+
+- Each project owns exactly one canonical tree. **The project itself is the root; no root node is stored.**
+- Top-level branches have `parent_id IS NULL` and `depth = 0`. Depth runs `0..N`, and no fixed level schema is imposed.
+- A user who wants a single "Project scope" node may create one. It is an ordinary depth-0 node.
 - "One tree" is enforced by:
-  - same-tenant, same-project parenting;
+  - same-tenant / same-project parenting;
   - acyclicity;
   - a single live node set per project;
-  - the baseline digest, which covers every node of the project.
-- This replaces ADR-025 WBS-2 ("one logical root per project"). Discipline, procurement and schedule structures remain branches or linked domains, never second WBSs.
+  - the baseline digest covering every node.
 
-### 2. Identity
+This replaces ADR-025 WBS-2.
 
-- **Canonical identity is `wbs_nodes.id` (UUID).** It is server-minted and immutable.
+### 3. Identity and hierarchy
+
+- **Canonical identity is `wbs_nodes.id`** (UUID). It is server-minted and immutable.
 - Rename, recode, move, reorder and dictionary edits keep the id.
-- **Visible code is display data, never identity.** It is not used for parenting, diffing, lineage or sibling order. This replaces ADR-025 §1 "codes are stable".
-- Hierarchy authority is `(parent_id, sort_order)`. `depth`, `lft` and `rgt` are derived read caches.
-- Proposal and candidate node ids are minted by the server. On approval they become the canonical ids, so proposal, baseline and live identity are a single value.
-- Retired ids are never reused. Reinstating removed scope creates a new id with `SUPERSEDES` lineage.
+- **Code is display data, never identity.** It is not used for parenting, diffing, lineage or sibling order. This replaces ADR-025 "codes are stable".
+- Hierarchy authority is `(parent_id, sort_order)`. `depth`, `lft` and `rgt` are derived caches.
+  - Their integrity is checked at commit, by deferred mechanisms rather than non-deferrable CHECKs.
+- Candidate ids are server-minted and become the canonical ids on approval.
+- Retired ids are never reused.
 
-### 3. Authority states and governance
+### 4. Authority states
 
-WBS authority is **derived**, not stored:
+Authority is **derived**, never stored:
 
-- `NO_WBS`: no baseline, no live nodes, no draft.
-- `LEGACY_UNGOVERNED`: live nodes exist without any approved baseline.
-- `DRAFT_EXISTS`: an open draft or submitted change set exists. This combines with either of the states above or below.
-- `APPROVED_BASELINE`: at least one applied baseline exists.
+- `NO_WBS`
+- `LEGACY_UNGOVERNED`: live rows exist without a baseline.
+- `APPROVED_BASELINE`
+- Orthogonal flag: an open draft exists.
 
-Rules:
+`LEGACY_UNGOVERNED` and draft content may be readable for compatibility. They never masquerade as approved project-control scope: they are labelled, and they are not authoritative for Health, Coherence, Reporting KPIs or new downstream bindings.
 
-- Live rows without a baseline are never presented as approved project-control scope.
-- **Every** structural or dictionary change happens in a **change set**, including the first WBS of a project (`base_baseline_id = NULL`).
-- A change set owns a separate candidate tree. It is editable only while `DRAFT` and frozen and digested on submit. Downstream domains may never reference candidate nodes.
-- `wbs_nodes` holds only the approved operational tree, plus explicitly qualified `LEGACY_UNGOVERNED` transition rows. Only an approved apply writes governed content to it.
-- Human governance means **review + edit + approve**. A human may add, remove, rename, rescope, move, reorder, recode, split and merge before approving.
-- AI produces drafts only. It never submits on a human's behalf and never approves.
+The per-consumer reader matrix is fixed in PC-2a (#688). **RACI/BOM binding policy before Baseline #1 belongs to PC-2a.**
 
-### 4. Change-set lifecycle and approval
+### 5. Governance: every change is a change set
 
-Lifecycle:
+- Every structural or dictionary change, including a project's first WBS, is a **change set**. A change set owns a separate candidate tree:
+  - editable only while `DRAFT`;
+  - frozen and digested on submit;
+  - never referenced by downstream domains.
+- `wbs_nodes` holds only the approved operational tree, plus explicitly qualified `LEGACY_UNGOVERNED` transition rows.
+- Human governance means **REVIEW + EDIT + APPROVE**. The human may:
+  - add, remove, rename, rescope;
+  - move, reorder, recode;
+  - split, merge;
+  - change `decomposition_kind` and `control_level`;
+  - edit the WBS Dictionary.
+- Approval binds the **exact** resulting tree.
+- AI and background processes never modify the live WBS, never submit on a human's behalf and never approve.
+
+### 6. Entry modes
+
+| Mode | When | Flow |
+|---|---|---|
+| **A — Generate** | The project has no WBS | Project evidence (contract, scope, specs, drawings, BOQ, budget, schedule, procurement, quality, other trusted evidence, project type / profiles) → AI proposal → DRAFT change set → human review + full edit → validation → submit → human approval → **Baseline #1** |
+| **B — Import + Review** | The customer already has a WBS | External WBS → import as candidate (**never canonical on import**) → structural qualification → project-evidence cross-check → AI improvement proposals → human review + edit → validation → approval → **Baseline #1** |
+| **C — Change baseline** | Baseline #N exists | New evidence / human request / AI-detected gap → change set → AI/human proposal → human edit → impact + validation → human approval → **Baseline #N+1** |
+
+- In Mode B, C2Pro shows the **imported WBS vs the AI-proposed / human-edited candidate** as a node-level diff.
+  - The user may accept, reject or modify each suggestion, add their own changes, or keep the imported structure unchanged.
+  - AI never replaces the customer's WBS silently.
+- Two AI capabilities exist:
+  - **Generator**: no WBS exists → proposes a candidate.
+  - **Reviewer/Optimizer**: an existing, imported or baselined WBS plus evidence → assesses coverage and control quality → proposes improvements.
+- Reviewer/Optimizer outputs are **qualifications and proposals, never authority**. The qualification dimensions are listed in the supporting note.
+
+### 7. Change-set lifecycle and approval
 
 ```text
 DRAFT → SUBMITTED → APPLIED
-                  → REJECTED
+SUBMITTED → REJECTED
 DRAFT|SUBMITTED → WITHDRAWN
-SUBMITTED → DRAFT            (reopen; invalidates the submitted digest)
-DRAFT|SUBMITTED → STALE      (base baseline is no longer current)
+SUBMITTED → DRAFT            (reopen; invalidates the digest)
+DRAFT|SUBMITTED → STALE      (base baseline no longer current)
 ```
 
-- There is no long-lived approved-but-unapplied state.
-- **Approve = apply**, in one transaction under the project row lock. That transaction performs:
-  - a compare-and-set on the change set;
-  - a recompute and match of the submitted digest;
-  - a check that the base is still the current baseline;
-  - insertion of the immutable baseline and its node snapshot;
-  - materialization of the live tree (upsert by id, plus downstream link dispositions);
-  - writing the `ProjectEvent` records;
-  - marking the change set `APPLIED`.
+- There is no approved-but-unapplied state.
+- **Approve = apply**, in one transaction under the project row lock. The transaction:
+  1. performs a compare-and-set on the change set;
+  2. recomputes the digest and requires it to match;
+  3. checks that the base is still current;
+  4. inserts the immutable baseline;
+  5. materializes the live tree and link dispositions;
+  6. writes the events.
 
-  `ProjectSnapshot(trigger=baseline_changed)` follows after commit.
-- Approval binds exactly:
-  - project;
-  - change set id;
-  - submitted revision;
-  - base baseline id;
-  - the change-set digest, which covers the tree digest, lineage, pinned profile references, change-set evidence references and the submitted revision. Digest semantics: `wbs-tree-digest/v1` and `wbs-changeset-digest/v1`, fixed by the PC-2a planning issue.
+  The `ProjectSnapshot(baseline_changed)` follows after commit.
+- Approval binds the change-set digest. That digest covers:
+  - the tree digest;
+  - lineage;
+  - pinned profile refs;
+  - evidence refs;
+  - the submitted revision.
 
-  An approval of digest A can never apply digest B.
-- Approval authority:
-  - the approver is an authenticated human with tenant role `admin`;
-  - `user` may create, edit, submit and withdraw;
-  - `viewer` is read-only;
-  - the `api` role and service principals can never approve or reject.
-- Separation of duties is controlled by the tenant setting `wbs_governance.require_distinct_approver`. The default is `true` (fail-closed). Approving one's own submission requires the tenant to set it to `false`.
-- This reuses the #714 / ADR-026 **pattern** (exact-content binding, compare-and-set under a row lock, one application, approve and materialize in one transaction), not its document-artifact primitive. No second generic approval engine is introduced.
+  The digest versions are `wbs-tree-digest/v1` and `wbs-changeset-digest/v1`; the exact spec and vectors are in #688.
+- **Authority (existing tenant roles):**
+  - `user` / `admin` humans create, edit and submit.
+  - Withdraw and reopen: the proposer or an `admin`.
+  - Approve and reject: an `admin` human session only.
+  - `viewer` is read-only.
+  - The `api` role and service principals are never governance actors.
+  - Reviewer identity always comes from the session.
+- **Separation of duties (approved policy):** tenant setting `wbs_governance.require_distinct_approver`, **default `true` (fail-closed)**. The approver must differ from the submitter. A single-admin tenant must disable it explicitly, and every self-approval is recorded on the applied event.
+- This reuses the #714 / ADR-026 pattern (exact binding, compare-and-set under lock, one application). It does not introduce a second approval engine.
 
-### 5. Baselines
+### 8. Baselines, lineage, dictionary, node semantics
 
-- Baselines are immutable and append-only.
-- `baseline_no` is monotonic per project. History is linear: one child per parent baseline.
-- `baseline.source_change_set_id` (UNIQUE) is the **only** link between a baseline and its change set. The applied baseline of a change set is derived through it; no reverse foreign key exists.
-- Baseline node snapshots are keyed `(baseline_id, node_id)` and have no foreign key to `wbs_nodes`, so history survives live deletion.
-- Snapshots exclude:
-  - derived caches;
-  - execution status;
-  - schedule dates;
-  - cost and budget values;
-  - timestamps.
-- "Approved WBS at time T" is the latest baseline with `applied_at <= T`. Before Baseline #1 the answer is an honest "no approved WBS".
+- **Baselines:**
+  - immutable and append-only;
+  - `baseline_no` monotonic per project, with linear history;
+  - `baseline.source_change_set_id` (UNIQUE) is the only link between a baseline and its change set;
+  - node snapshots keyed `(baseline_id, node_id)`, with no FK to live rows;
+  - snapshots exclude caches, status, dates, cost and timestamps.
+  - "Approved WBS at T" is the latest baseline applied at or before T. Before Baseline #1 the answer is an honest "none".
+- **Operations:** `ADD / UPDATE / MOVE / REMOVE / SPLIT / MERGE`. Recode and rename are UPDATE; reorder is MOVE. Diffs are computed by node id, and no executable patches are stored.
+- **Lineage:** recorded on the change set as `SPLIT` (1 → N new), `MERGE` (N → 1 new) or `SUPERSEDES`, and included in the approval digest.
+- **WBS Dictionary:** descriptive JSON that is part of the digest. Fields:
+  - `scope_statement`;
+  - `scope_included`;
+  - `scope_excluded`;
+  - `deliverables`;
+  - `acceptance_criteria`;
+  - `assumptions`;
+  - `interface_notes`.
 
-### 6. Change vocabulary and lineage
+  Relational facts become association/domain links, never authoritative JSON. These include interfaces, obligations, schedule, cost, procurement/BOM, RACI, evidence/quality and risks.
+- **`control_level`:** optional, from a small core set `none | control_account | work_package | planning_package`. No level is mandatory. Methodology-specific nesting rules remain subject to PC-2a review.
+- **`decomposition_kind`:** a namespaced `namespace:term` value. `core:` belongs to C2Pro; any other namespace must come from a pinned profile. Free text is never authority.
+- Legacy `activity` / `milestone` node types are schedule concepts and become `NEEDS_REVIEW`.
 
-- First-class operations: `ADD`, `UPDATE`, `MOVE`, `REMOVE`, `SPLIT`, `MERGE`. `RECODE` and `RENAME` are UPDATE; `REORDER` is MOVE within the same parent.
-- Operations are editor commands and derived diff entries. They are never stored as executable patches. The stored state is the candidate tree plus lineage.
-- Diffs are computed by node id, never by code.
-- Lineage belongs to the change set: `SPLIT` (1 → N new), `MERGE` (N → 1 new), `SUPERSEDES`.
-  - Sources must exist in the base baseline and be absent from the candidate.
-  - Targets must be new candidate ids.
-  - Lineage is included in the approval digest.
+### 9. Domain Profiles
 
-### 7. WBS Dictionary and node semantics
+- Profiles are versioned, declarative and **advisory**.
+- They are pinned on change sets and baselines as `(profile_id, profile_version, profile_digest)`. Profiles compose; for example, a data centre is construction + MEP + critical power + IT.
+- They may suggest, validate heuristically, warn and guide AI.
+- They may never create nodes, approve, or override core invariants.
 
-The **descriptive** dictionary is schema-versioned JSON on the node and is part of the digest:
+### 10. Baseline approval triggers alignment, never mutation
 
-- `scope_statement`;
-- `scope_included[]`;
-- `scope_excluded[]`;
-- `deliverables[]`;
-- `acceptance_criteria[]`;
-- `assumptions[]`;
-- `interface_notes[]` (human-readable).
+- Applying a baseline **may trigger project alignment analysis**:
+  - Schedule↔WBS;
+  - Budget/Cost↔WBS;
+  - Procurement/BOM↔WBS;
+  - RACI completeness;
+  - obligation, risk/alert and evidence/quality coverage.
+- Outputs are **observations, proposals, qualifications and alerts**. **Alignment is not authority:** it never mutates a downstream domain. Each domain keeps its own governance.
+- *WBS / Project Controls Readiness* is recorded as a future read-model concept, `DRAFT → STRUCTURALLY_VALID → REVIEWED → APPROVED_BASELINE → ALIGNED`. It is not a database enum. `ALIGNED` means sufficiently linked to the Project Controls domains, never merely "approved".
+- **Software / SDD (future compatibility only):** software WBSs may follow Product/Domain → Capability → Service/Component → Deliverable → Work Package. SDD objects (specification, architecture, implementation, validation) may later **link** to WBS nodes, but `SDD node != WBS node`.
 
-**Relational** facts are never authoritative JSON. They become association or domain links as they are operationalized:
+See the supporting note for §6, §10 and the readiness details.
 
-- node↔node interfaces;
-- obligations and requirements;
-- schedule activities;
-- cost accounts and budget lines;
-- procurement packages and BOM;
-- RACI and ownership;
-- evidence and quality;
-- risks and alerts.
+## Phase ownership
 
-Two orthogonal node attributes replace `WBSNodeType`:
-
-- `control_level` is a small optional core set: `none | control_account | work_package | planning_package`.
-  - The engine enforces structural rules on it; for example, no work package may sit under another work package.
-  - No project is required to use every level, and not every leaf is a work package.
-- `decomposition_kind` is a namespaced value `namespace:term`:
-  - the `core:` namespace is defined by C2Pro;
-  - every other namespace must belong to a profile pinned on the change set or baseline;
-  - free text is never semantic authority.
-
-The legacy node types `activity` and `milestone` are schedule concepts and become `NEEDS_REVIEW`.
-
-### 8. Domain Profiles
-
-- Profiles are versioned, declarative and **advisory** packages. They provide:
-  - terminology;
-  - `decomposition_kind` vocabularies;
-  - typical decomposition axes and patterns;
-  - recommended control-level depth;
-  - heuristic warnings;
-  - examples;
-  - AI guidance.
-- Profiles compose. For example, a data centre is construction + MEP + critical power + IT.
-- Change sets and baselines pin `(profile_id, profile_version, profile_digest)`.
-- Profiles may never create nodes, approve, or override core invariants.
-- Initial profiles are Solar PV / EPC, civil linear infrastructure, and Software / SaaS. Profiles are not implemented yet.
-
-### 9. Domain separation (restating ADR-025 §2–§5)
-
-- `SCHEDULE ACTIVITY != WBS NODE`. The relation is many-to-many through a reviewed association. Activities may stay unmapped.
-- `BUDGET LINE != BOM ITEM != WBS NODE`:
-  - a budget line maps to a cost account, which maps to a control account or work package;
-  - a BOM item keeps a nullable many-to-one link to a node;
-  - a procurement package maps to nodes many-to-many.
-- The legacy `wbs_nodes` date and budget columns are not baseline attributes. They migrate to linked domains in PC-3 / PC-4.
+| Phase | Scope |
+|---|---|
+| **PC-1R** (#886) | Structural integrity: implicit root, same-project parenting, `(parent_id, sort_order)`, code decoupling, server-minted ids, project lock, cache integrity, cascade safety, bulk-endpoint retirement, dead-writer cleanup |
+| **PC-2a** | Governance core: candidate tree, first baseline, change sets, edit/review/approve, digest, authority resolver + reader matrix, dictionary, lineage, `control_level` / `decomposition_kind` |
+| **PC-2b** | AI WBS intelligence: Generate, Import + Review, Review/Optimize, profile seam, evidence / rationale / confidence |
+| **PC-7** | Human WBS editor UX |
+| Later | Alignment engines, Schedule Temporal Intelligence, Budget/Cost model, procurement mapping, SDD / AI-Gen links |
 
 ## Consequences
 
-- PC-1R (structural integrity) precedes governance. It intentionally does **not** add a single-root index, and it must not add a non-deferrable depth/parent `CHECK`: `depth` is a derived cache written in separate statements.
-- Readers must expose WBS authority state. `LEGACY_UNGOVERNED` stays readable but is labelled and is never authoritative for Health, Coherence or Reporting.
-- The existing 23 production rows are schedule leakage. They are never seeded into a baseline as WBS.
+- PC-1R adds no single-root index and no non-deferrable depth/parent CHECK.
+- Readers must expose WBS authority. Legacy and draft content is labelled and is never authoritative.
+- The 23 existing production rows are schedule leakage. They are never seeded into a baseline as WBS.
 
 ## Success criteria
 
@@ -200,3 +213,4 @@ The legacy node types `activity` and `milestone` are schedule concepts and becom
 - Rename, move and recode preserve identity. Split and merge are traceable.
 - Every baseline is immutable and digest-bound to the exact human approval.
 - No consumer treats legacy or draft WBS as approved scope.
+- No alignment result mutates a downstream domain.
