@@ -184,6 +184,34 @@ def _routing_coverage_priors_from_clauses(clauses: list[Clause]) -> dict[str, bo
         return {}
 
 
+def _withheld_coverage(clauses: list[Clause]) -> dict[str, str]:
+    """Categories that assembled inputs declare unassessable: category -> reason.
+
+    A clause may carry ``assessment_unavailable = {category: reason}`` when the
+    evaluation assembly knows that category's authoritative source is missing
+    (e.g. #860: no structured budget-line source). Routing relevance or a partial
+    rule pass must then not mark the category assessed -- that would report it
+    clean and put its baseline into the headline. Findings stay visible as alerts.
+    """
+    withheld: dict[str, str] = {}
+    for clause in clauses:
+        declared = (clause.data or {}).get("assessment_unavailable")
+        if isinstance(declared, dict):
+            for category, reason in declared.items():
+                withheld.setdefault(str(category).upper(), str(reason))
+    return withheld
+
+
+def _effective_coverage(
+    coverage_map: dict[str, bool], clauses: list[Clause]
+) -> dict[str, bool]:
+    """``coverage_map`` with every withheld category forced unassessed."""
+    withheld = _withheld_coverage(clauses)
+    if not withheld:
+        return dict(coverage_map)
+    return {**coverage_map, **dict.fromkeys(withheld, False)}
+
+
 # =============================================================================
 # NODE 1: PREPARE CONTEXT
 # =============================================================================
@@ -1233,13 +1261,15 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
     )
 
     # Calculate score
+    coverage = _effective_coverage(state.coverage_map, state.clauses)
+    withheld = _withheld_coverage(state.clauses)
     scoring_service = ScoringService()
     diagnostics = scoring_service.calculate_detailed(
         signals=all_signals,
         num_clauses=len(state.clauses),
         num_rules=12,
         poor_extraction_quality=state.config.poor_extraction_quality,
-        coverage_map=state.coverage_map,
+        coverage_map=coverage,
     )
 
     logger.info(
@@ -1261,7 +1291,8 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
     )
     if budget_exhausted:
         for cat in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"):
-            if not state.coverage_map.get(cat, False):
+            # A withheld category is unassessed for a source reason, not a cap.
+            if not coverage.get(cat, False) and cat not in withheld:
                 budget_throttled.append(cat)
 
     return {
@@ -1322,7 +1353,7 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
     # Build category breakdown
     category_breakdown = _build_category_breakdown(
         state.all_signals,
-        state.coverage_map,
+        _effective_coverage(state.coverage_map, state.clauses),
         state.diagnostics.get("category_scores") or {},
         budget_throttled_categories=set(
             state.diagnostics.get("budget_throttled_categories") or []

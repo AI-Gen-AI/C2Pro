@@ -95,6 +95,9 @@ async def build_budget_clauses(
         "stated_total": stated_total,
         "budget_line_items": "unavailable",
         "budget_line_items_reason": STRUCTURED_BUDGET_SOURCE_UNAVAILABLE,
+        # Generic coverage marker: routing this budget-typed clause (or a
+        # total-level rule pass) must not make BUDGET read as assessed / clean.
+        "assessment_unavailable": {"BUDGET": STRUCTURED_BUDGET_SOURCE_UNAVAILABLE},
     }
     contract_total = await load_contract_total(db, project_id, tenant_id)
     if contract_total is not None:

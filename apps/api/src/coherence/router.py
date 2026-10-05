@@ -1355,11 +1355,23 @@ async def _run_v2_shadow_on_evaluate(
         # authoritative structured budget-line source exists (the BOM table is
         # not budget truth), so BUDGET is applicable but unassessed.
         assessment_by_category, assessment_reason_by_category = structured_budget_assessment()
+        # An unassessed category is never scored, so its v1 findings are passed
+        # only to stay visible (``available_rule_signals``) -- independent rules
+        # such as retention / advance yield no conflict candidate. Assessed
+        # categories keep their existing shadow inputs.
+        unassessed_rule_signals: dict[str, list[tuple[str, float]]] = {}
+        for signal in v1_result.finding_signals:
+            category = str(signal.category).upper()
+            if assessment_by_category.get(category, True) is False:
+                unassessed_rule_signals.setdefault(category, []).append(
+                    (signal.rule_id, float(signal.impact_score) * 100.0)
+                )
         v2_payload = await orchestrator.run(
             project_id=project_id,
             evidence_inputs=ProjectEvidenceInputs(
                 project_docs=project_docs,
                 project_context={},
+                rule_signals_by_category=unassessed_rule_signals,
                 conflict_candidates_by_category=conflict_candidates_by_category,
                 assessment_by_category=assessment_by_category,
                 assessment_reason_by_category=assessment_reason_by_category,
