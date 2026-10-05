@@ -23,18 +23,6 @@ on:
         description: "Expected Vercel production deployment ID."
         required: true
         type: string
-      project_id:
-        description: "Accepted synthetic P0b project to continue."
-        required: true
-        type: string
-      document_id:
-        description: "Canonical Contract A document in that project."
-        required: true
-        type: string
-      source_revision_id:
-        description: "Current Contract A revision before P0c mutation."
-        required: true
-        type: string
       railway_staged_changes_clear:
         description: "Operator verified Railway has no effective staged production changes."
         required: true
@@ -76,9 +64,6 @@ jobs:
           FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
           BACKEND_DEPLOYMENT: ${{ inputs.backend_deployment_id }}
           FRONTEND_DEPLOYMENT: ${{ inputs.frontend_deployment_id }}
-          PROJECT_ID: ${{ inputs.project_id }}
-          DOCUMENT_ID: ${{ inputs.document_id }}
-          SOURCE_REVISION_ID: ${{ inputs.source_revision_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -89,9 +74,6 @@ jobs:
           [[ "$FRONTEND_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$BACKEND_DEPLOYMENT" =~ ^[0-9a-fA-F-]{36}$ ]]
           [[ "$FRONTEND_DEPLOYMENT" =~ ^dpl_[A-Za-z0-9]{20,64}$ ]]
-          [[ "$PROJECT_ID" =~ ^[0-9a-fA-F-]{36}$ ]]
-          [[ "$DOCUMENT_ID" =~ ^[0-9a-fA-F-]{36}$ ]]
-          [[ "$SOURCE_REVISION_ID" =~ ^[0-9a-fA-F-]{36}$ ]]
 
       - name: Fail closed on protected qualification prerequisites
         env:
