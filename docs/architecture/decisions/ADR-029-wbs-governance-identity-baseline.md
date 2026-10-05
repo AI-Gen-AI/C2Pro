@@ -94,7 +94,7 @@ DRAFT|SUBMITTED → STALE      (base baseline is no longer current)
   - change set id;
   - submitted revision;
   - base baseline id;
-  - the change-set digest, which covers the tree digest, lineage and pinned profile references.
+  - the change-set digest, which covers the tree digest, lineage, pinned profile references, change-set evidence references and the submitted revision. Digest semantics: `wbs-tree-digest/v1` and `wbs-changeset-digest/v1`, fixed by the PC-2a planning issue.
 
   An approval of digest A can never apply digest B.
 - Approval authority:
