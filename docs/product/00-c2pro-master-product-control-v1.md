@@ -1,7 +1,7 @@
 # C2Pro Master Product Programme Control — v1
 
-**Status:** Reconciliation snapshot (read-only) · **Date:** 2026-10-04 · **Schema:** v8
-**reconciled_against_main_sha:** `c41ff69bcabd87da1a606b125bd9cc37184bc7cc` · **deployed_runtime_sha:** `UNVERIFIED`
+**Status:** Reconciliation snapshot (read-only) · **Date:** 2026-10-05 · **Schema:** v8
+**reconciled_against_main_sha:** `23b963a50a7de7a4096063808a7f361f9df84ba1` · **deployed_runtime_sha:** `UNVERIFIED`
 **Machine source of truth:** [`validation/product/c2pro-master-product-control-v1.yaml`](../../validation/product/c2pro-master-product-control-v1.yaml)
 
 > This document is the human projection of the machine product-control plane. It does not grant execution authority. Direct `main`, merge and production mutation remain governed outside this document.
@@ -10,7 +10,7 @@
 
 <!-- CANONICAL-CONTROL:START (generated from the YAML by validation/product/check_control_parity.py --emit; do not hand-edit) -->
 ```control
-reconciled_against_main_sha=c41ff69bcabd87da1a606b125bd9cc37184bc7cc
+reconciled_against_main_sha=23b963a50a7de7a4096063808a7f361f9df84ba1
 deployed_runtime_sha=UNVERIFIED
 reliability_operability_baseline=CLOSED
 product_value_delivered=true
@@ -187,6 +187,20 @@ Line A is closed from the canonical production proof:
 - #712 and #713 remain separate fix-forward/acceptance authorities for scenarios not exhaustively covered by the bounded P0b run.
 
 This is the first explicit Product-Control promotion from production evidence for the current wedge. It does not promote P0c, P0d, ADR-018, global Coherence or P1.
+
+### 2.6 B1 implementation closure and correctness reconciliation — 2026-10-05
+
+Repository control is reconciled to `main@23b963a50a7de7a4096063808a7f361f9df84ba1` without changing the accepted production-runtime binding.
+
+- **B1 runtime implementation is closed at repository/CI level.** #842, #840, #853, #858 and #857 establish family/observation identity, honest projected subscores, validated false-positive canonical rescoring, transaction-aware review and exact snapshot/replay wiring. #832 records the governing v1.2 implementation-closure / acceptance boundary.
+- **B1-12 remains PENDING.** Green CI and merged code do not prove the complete Alerts + Coherence user journey on an exact deployed runtime.
+- **#817** adds document-first processing-authority locking with real two-session PostgreSQL race coverage; it is correctness evidence, not lifecycle promotion.
+- Schedule ingestion no longer mutates canonical WBS state. Schedule remains a linked temporal domain, never WBS identity.
+- **#863/#862** removes the destructive Budget→BOM NULL-source sweep: ordinary parse/reparse can replace only rows explicitly owned by the current source document. Manual/ownership-unknown BOM rows are preserved.
+- **#864** separately tracks machine-extracted Stakeholder provenance so automatic extraction cannot masquerade as human approval.
+- P0b remains exactly the accepted run #56 wedge. **P0c and P0d remain REQUIRED** and must earn their own exact-runtime evidence.
+
+No deployment or PROD_VALIDATED field is promoted by this reconciliation.
 
 ## 3. Three product signals that must not be conflated
 
@@ -384,13 +398,13 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 
 ## 12. Next authorized sequence
 
-1. **#690 prerequisite is complete.** Run #30 proved the dedicated non-customer production tenant/identity and real production auth preflight. Do not reopen it unless contradictory production evidence appears.
-2. **Line A / #715 — A1 identity preflight:** run the non-mutating production identity/provider preflight on the current composite production binding. A1 must PASS before any product mutation.
-3. **Line A / #715 — A2 full production journey:** only after A1 PASS, execute `AUTH → PROJECT → UPLOAD → PARSE/EXTRACT → ANALYSIS → EVIDENCE → REVIEW_REQUIRED → exactly one addressable review item → explicit UI approval → ANALYZED → HEALTH → REFRESH/RELOGIN → read-only durable verification` with `require_hitl=true`.
-4. **#792 acceptance is bound to A2:** close #792 only if A2 proves no confidence-only automatic approval, one explicit durable human decision/correction, same governed lineage and no duplicate trusted/durable effects.
-5. **#712/#713 remain acceptance/fix-forward authorities:** their landed lifecycle/evidence fixes must be exercised by A2. Administrative openness does not block A1.
-6. **Fail closed:** on the first failing seam, stop and remediate only that bounded defect. Do not weaken auth/RLS/HITL, substitute expected provider IDs for observation, accept fixture mismatch, or manually repair production state.
-7. **Return evidence to Line B:** A2 PASS returns one bounded non-secret bundle for explicit P0b Product-Control reconciliation. PASS never self-promotes lifecycle state.
-8. **Only after explicit P0b reconciliation:** qualify P0c/P0d where their own evidence contracts pass, then stop/reconcile before authorizing P1 Project Controls or downstream Procurement.
+1. **Preserve P0b truth.** Run #56 / 37196092728 and its hash-bound bundle remain the accepted P0b evidence. Later merges neither demote nor extend that production-validation scope.
+2. **B1 acceptance may proceed in parallel.** Runtime implementation is closed; B1-12 still requires its own exact-runtime Alerts + Coherence acceptance evidence.
+3. **#686 P0c What Changed:** rebind the exact live Railway backend + Vercel frontend immediately before execution, then qualify the two-revision real user journey. Failed runs are evidence and never justify manual production repair.
+4. **#687 P0d Current State:** only after accepted P0c evolution, qualify authoritative Current State, six-category Health parity, honest null, API/UI/export parity and reproducibility on the governed project.
+5. **Reconcile before P1.** PASS evidence does not self-promote Product Control. After P0c/P0d evidence review, reconcile lifecycle state explicitly.
+6. **Enter Project Controls through PC-1/PC-2:** one logical canonical WBS under all supported write paths, then WBS baseline/change governance. Schedule remains linked to WBS and Procurement consumes WBS packages; neither creates parallel hierarchy.
+7. **Correctness follow-ups remain explicit:** #864 stakeholder provenance is P1; #839 Risk Register direction is retained but must be reapplied to current Product Control; DEV-15 hygiene follows correctness/control work.
+8. **Fail closed throughout:** do not weaken auth/RLS/HITL/trust, fabricate evidence, coerce Unknown to zero, or infer deployment/PROD_VALIDATED from merge/CI.
 
 **No direct `main` or production mutation is authorized by this reconciliation. Human-reviewed merge remains mandatory.**
