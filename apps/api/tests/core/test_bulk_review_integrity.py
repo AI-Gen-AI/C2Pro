@@ -132,3 +132,25 @@ async def test_bulk_rejection_requires_non_empty_audit_reason() -> None:
     assert repository.saved == []
     assert repository.commit_count == 0
     assert alert.status is AlertStatus.OPEN
+
+
+@pytest.mark.asyncio
+async def test_b1_coherence_false_positive_requires_individual_review() -> None:
+    """Bulk reject cannot become a score-affecting Coherence bypass."""
+    alert = _alert()
+    alert.alert_type = "coherence"
+    repository = _FakeRepository([alert])
+    use_case = BulkReviewAlertsUseCase(repository=repository)
+
+    with pytest.raises(BulkReviewPolicyError, match="individual review"):
+        await use_case.execute(
+            alert_ids=[str(alert.id)],
+            tenant_id=uuid4(),
+            user_id=uuid4(),
+            decision="reject",
+            comment="False positive requires canonical project rescore",
+        )
+
+    assert repository.saved == []
+    assert repository.commit_count == 0
+    assert alert.status is AlertStatus.OPEN
