@@ -8,7 +8,8 @@ Tests the SqlAlchemyDocumentRepository against an in-memory SQLite database.
 Validates CRUD operations, tenant isolation (simulated), and relationship management between Documents and Clauses.
 
 Note: Uses SQLite for fast integration tests without external dependencies.
-For full PostgreSQL RLS testing, see test_document_repository.py.
+For PostgreSQL-backed tenant-scoped repository reads, see tests/integration/documents/test_clause_evidence_read_port_db.py.
+For database-policy RLS enforcement, see tests/security/test_rls_real_enforcement.py.
 """
 
 from __future__ import annotations
