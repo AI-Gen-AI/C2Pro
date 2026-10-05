@@ -164,10 +164,10 @@ export default defineConfig({
       },
     },
     {
-      // Manual-only P0c production qualification. Uses the same protected
-      // production-qualification identity as #706, but mutates only by
-      // uploading Contract B as a new version of the already accepted
-      // synthetic Contract A document.
+      // Manual-only P0c production qualification. Uses the protected
+      // production-qualification identity to create a fresh synthetic PJ-01
+      // project, upload canonical Contract A, then Contract B as a new version
+      // of the same logical document. Existing accepted P0b state is untouched.
       name: "p0c-prod-acceptance",
       testMatch: [
         /(^|[\\/])prod-acceptance[\\/]686-p0c-production\.spec\.ts$/,
@@ -184,7 +184,7 @@ export default defineConfig({
         priority: "p0",
         manualOnly: true,
         description:
-          "Real production auth -> same-document revision B -> What Changed -> relogin durability",
+          "Real production auth -> fresh PJ-01 project -> Contract A -> same-document Contract B -> What Changed -> relogin durability",
       },
     },
     {
