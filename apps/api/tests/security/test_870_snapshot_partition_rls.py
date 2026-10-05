@@ -23,23 +23,30 @@ def _load_migration():
     return module
 
 
-def test_migration_repairs_known_post_p0_sec_a_leaves() -> None:
+def test_migration_repairs_every_attached_snapshot_partition() -> None:
     module = _load_migration()
-    sql = "\n".join(module.UPGRADE_STATEMENTS)
+    sql = module.UPGRADE_SQL
     assert module.revision == "20261005_0002"
     assert module.down_revision == "20261005_0001"
+    assert "WITH RECURSIVE descendants" in sql
+    assert "FROM pg_inherits" in sql
+    assert "WHERE inhparent = parent_oid" in sql
+    assert "ENABLE ROW LEVEL SECURITY" in sql
+    assert "quote_ident(rec.schema_name)" in sql
+    assert "quote_ident(rec.table_name)" in sql
+    assert "CREATE POLICY" not in sql
+    assert "%" not in sql
+
+
+def test_migration_is_not_bound_to_october_2026_partition_names() -> None:
+    module = _load_migration()
+    sql = module.UPGRADE_SQL
     for table in (
         "project_snapshots_2026_10",
         "project_snapshots_2026_11",
         "project_snapshots_2026_12",
-        "project_snapshots_default",
     ):
-        assert (
-            f"ALTER TABLE IF EXISTS public.{table} ENABLE ROW LEVEL SECURITY"
-            in sql
-        )
-    assert "CREATE POLICY" not in sql
-    assert "%" not in sql
+        assert table not in sql
 
 
 def test_supabase_mirror_matches_canonical_migration() -> None:
