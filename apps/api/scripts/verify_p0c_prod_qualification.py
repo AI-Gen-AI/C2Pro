@@ -12,6 +12,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 ASYNCPG_URL_PREFIX = "postgresql+asyncpg://"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 OUTPUT = Path("evidence/product-qualification/runtime/p0c-verifier.json")
+RUN_ROOT = REPO_ROOT / "apps/web/playwright/.prod-p0c"
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
 
 class VerificationFailure(Exception):
@@ -51,6 +54,18 @@ def _uuid(raw: str, label: str) -> UUID:
         return UUID(raw)
     except (TypeError, ValueError) as exc:
         raise VerificationFailure(f"{label} must be a UUID") from exc
+
+
+def _canonical_run_path(run_id: str) -> Path:
+    if not RUN_ID_RE.fullmatch(run_id) or ".." in run_id:
+        raise VerificationFailure("run id is invalid")
+    root = RUN_ROOT.resolve()
+    path = (root / run_id / "run.json").resolve(strict=True)
+    if path.is_symlink() or path.parent != (root / run_id).resolve():
+        raise VerificationFailure("run evidence path is outside canonical root")
+    if not path.is_file():
+        raise VerificationFailure("run evidence must be a regular file")
+    return path
 
 
 def _load_run(path: Path) -> dict:
@@ -317,7 +332,7 @@ async def verify(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--run-json", required=True)
+    parser.add_argument("--run-id", required=True)
     parser.add_argument("--tenant-id", default=os.getenv("PROD_ACCEPTANCE_EXPECTED_TENANT_ID"))
     parser.add_argument("--write-evidence", action="store_true")
     args = parser.parse_args()
@@ -328,7 +343,7 @@ def main() -> int:
         return 2
 
     try:
-        run_path = Path(args.run_json).resolve(strict=True)
+        run_path = _canonical_run_path(args.run_id)
         run = _load_run(run_path)
         checks, identifiers = asyncio.run(
             verify(
