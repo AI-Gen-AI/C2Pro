@@ -63,6 +63,9 @@ def _load_run(path: Path) -> dict:
     prod = facts.get("p0cProduction")
     if not isinstance(prod, dict):
         raise VerificationFailure("p0cProduction facts are missing")
+    no_change = facts.get("p0cNoChange")
+    if not isinstance(no_change, dict):
+        raise VerificationFailure("p0cNoChange facts are missing")
     if facts.get("p0cReloginVerified") is not True:
         raise VerificationFailure("browser relogin durability was not proven")
     return data
@@ -85,6 +88,11 @@ async def verify(
     source_revision_id = _uuid(str(facts["sourceRevisionId"]), "source revision id")
     target_revision_id = _uuid(str(facts["targetRevisionId"]), "target revision id")
     change_event_id = _uuid(str(facts["changeEventId"]), "change event id")
+    no_change_facts = run["facts"]["p0cNoChange"]
+    no_change_event_id = _uuid(str(no_change_facts["eventId"]), "no-change event id")
+    no_change_target_revision_id = _uuid(
+        str(no_change_facts["targetRevisionId"]), "no-change target revision id"
+    )
 
     params = {
         "tenant_id": tenant_id,
@@ -93,6 +101,8 @@ async def verify(
         "source_revision_id": source_revision_id,
         "target_revision_id": target_revision_id,
         "change_event_id": change_event_id,
+        "no_change_event_id": no_change_event_id,
+        "no_change_target_revision_id": no_change_target_revision_id,
     }
     checks: list[Check] = []
     engine = create_async_engine(_normalize_database_url(database_url))
@@ -196,6 +206,59 @@ async def verify(
                 checks.append(Check("persisted provenance exact", bool(provenance_ok), "source/target ids and hashes bound"))
                 checks.append(Check("persisted changes evidence-backed", evidence_ok, "every stored change has evidence refs"))
 
+                no_change_event = await _one(
+                    conn,
+                    """
+                    SELECT event_id, event_type, payload
+                      FROM project_events
+                     WHERE event_id=:no_change_event_id
+                       AND project_id=:project_id
+                       AND tenant_id=:tenant_id
+                    """,
+                    params,
+                )
+                no_change_ok = False
+                no_change_hash_ok = False
+                if no_change_event is not None and no_change_event.event_type == "revision.changed":
+                    payload = no_change_event.payload if isinstance(no_change_event.payload, dict) else {}
+                    changeset = payload.get("changeset") if isinstance(payload.get("changeset"), dict) else {}
+                    changes = changeset.get("changes") if isinstance(changeset.get("changes"), list) else []
+                    provenance = payload.get("provenance") if isinstance(payload.get("provenance"), dict) else {}
+                    no_change_ok = (
+                        payload.get("change_cause") is None
+                        and len(changes) == 0
+                        and provenance.get("target_revision_id") == str(no_change_target_revision_id)
+                    )
+
+                    hash_rows = await conn.execute(
+                        text(
+                            """
+                            SELECT revision_id, blob_hash
+                              FROM document_revisions
+                             WHERE tenant_id=:tenant_id
+                               AND project_id=:project_id
+                               AND document_id=:document_id
+                               AND revision_id IN (:target_revision_id, :no_change_target_revision_id)
+                            """
+                        ),
+                        params,
+                    )
+                    hashes = {row.revision_id: row.blob_hash for row in hash_rows.all()}
+                    no_change_hash_ok = (
+                        hashes.get(target_revision_id) is not None
+                        and hashes.get(target_revision_id) == hashes.get(no_change_target_revision_id)
+                    )
+                checks.append(Check(
+                    "identical reupload persisted as no change",
+                    no_change_ok,
+                    f"event_found={no_change_event is not None}",
+                ))
+                checks.append(Check(
+                    "identical reupload preserves identical blob hash",
+                    no_change_hash_ok,
+                    "revision B and identical reupload hash equality",
+                ))
+
                 failed_after = await conn.execute(
                     text(
                         """
@@ -228,6 +291,8 @@ async def verify(
         "source_revision_id": str(source_revision_id),
         "target_revision_id": str(target_revision_id),
         "change_event_id": str(change_event_id),
+        "no_change_event_id": str(no_change_event_id),
+        "no_change_target_revision_id": str(no_change_target_revision_id),
     }
     return checks, identifiers
 
