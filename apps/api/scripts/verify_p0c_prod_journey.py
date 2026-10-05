@@ -330,7 +330,7 @@ async def _post_checks(
         Check("revision.changed durable provenance/evidence is exact", int(event["canonical_event_ok"]) == 1, f"matching_events={event['canonical_event_ok']}"),
         Check("revision B has one canonical change outcome", int(duplicate["n"]) == 1, f"revision_changed_events={duplicate['n']}"),
         Check("change cause is business-state change", event["change_cause"] == "BUSINESS_STATE_CHANGED", f"change_cause={event['change_cause']}"),
-        Check("browser PJ-01 classification passed", run.get("pj01_classification") == "PASS", f"classification={run.get('pj01_classification')}"),
+        Check("browser PJ-01 classification is usable", run.get("pj01_classification") == "USABLE", f"classification={run.get('pj01_classification')}"),
         Check("browser recorded no blocking findings", run.get("blocking_findings") == [], f"blocking_findings={len(run.get('blocking_findings') or [])}"),
         Check("same logical document remained listed", run.get("documents_listed") == 1, f"documents_listed={run.get('documents_listed')}"),
         Check("revision processing settled analyzed", run.get("processing_outcome") == "analyzed", f"outcome={run.get('processing_outcome')}"),
