@@ -199,6 +199,9 @@ test("P0c production: fresh PJ-01 Contract A -> same-document B -> durable hones
       },
     );
 
+    await page.goto(`${baseUrl()}/projects/${projectId}/documents`);
+    await expect(page.getByTestId("documents-page")).toBeVisible({ timeout: 30_000 });
+
     const afterRelogin = await recorder.step(
       "P0C-PROD-S9",
       "Re-read What Changed after a fresh production session",
