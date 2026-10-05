@@ -102,6 +102,12 @@ def build(
         raise BuildError("browser/verifier project mismatch")
     if run.get("false_positive_alert_id") != verifier_evidence.get("false_positive_alert_id"):
         raise BuildError("browser/verifier false-positive alert mismatch")
+    if run.get("genuine_alert_id") != verifier_evidence.get("genuine_alert_id"):
+        raise BuildError("browser/verifier genuine alert mismatch")
+    if run.get("post_revision_false_positive_alert_id") != verifier_evidence.get(
+        "post_revision_false_positive_alert_id"
+    ):
+        raise BuildError("browser/verifier post-revision false-positive alert mismatch")
 
     baseline = _control_baseline(control_commit_sha)
     observed_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
