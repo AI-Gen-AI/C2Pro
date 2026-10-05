@@ -164,6 +164,28 @@ export default defineConfig({
       },
     },
     {
+      // Manual-only B1-12 exact-runtime production qualification. Uses the
+      // protected real production identity and never storageState/test tokens.
+      name: "prod-b1-12",
+      testMatch: [
+        /(^|[\\/])prod-acceptance[\\/]867-production-alerts-coherence\.spec\.ts$/,
+      ],
+      use: {
+        ...devices["Desktop Chrome"],
+        trace: "off",
+        screenshot: "off",
+        video: "off",
+      },
+      metadata: {
+        suite: "ISSUE-867-B1-12-PROD-ACCEPTANCE",
+        type: "production-qualification",
+        priority: "p0",
+        manualOnly: true,
+        description:
+          "Real production triplet -> Coherence -> genuine review -> exact-basis false positive -> rescore -> new observation",
+      },
+    },
+    {
       // Manual-only P0c exact-runtime production qualification. Real Clerk
       // credentials come only from the protected production-qualification
       // environment; no storageState or development testing token is used.
