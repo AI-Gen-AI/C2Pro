@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[5]
+    return Path(__file__).resolve().parents[6]
 
 
 def test_fallback_authority_is_not_duplicated_under_core_ai() -> None:
