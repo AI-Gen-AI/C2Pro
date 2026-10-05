@@ -186,11 +186,41 @@ test.describe("B1-12 production qualification — Alerts + Coherence", () => {
       filePath: requiredFixture("B1_BUDGET_FIXTURE"),
       documentType: "budget",
     });
+    if (!budget.taskId) throw new Error("B1_BUDGET_NOT_ENQUEUED");
+
+    const budgetProcessing = await observeProcessingWithoutReload(page, recorder, {
+      projectId,
+      documentId: budget.documentId,
+    });
+    if (
+      budgetProcessing.evaluation.outcome !== "analyzed" ||
+      budgetProcessing.evaluation.violations.length
+    ) {
+      throw new Error(
+        `B1_BUDGET_NOT_ANALYZED:${budgetProcessing.evaluation.outcome}`,
+      );
+    }
+
     const schedule = await uploadDocumentThroughUi(page, recorder, {
       projectId,
       filePath: requiredFixture("B1_SCHEDULE_FIXTURE"),
       documentType: "schedule",
     });
+    if (!schedule.taskId) throw new Error("B1_SCHEDULE_NOT_ENQUEUED");
+
+    const scheduleProcessing = await observeProcessingWithoutReload(page, recorder, {
+      projectId,
+      documentId: schedule.documentId,
+    });
+    if (
+      scheduleProcessing.evaluation.outcome !== "analyzed" ||
+      scheduleProcessing.evaluation.violations.length
+    ) {
+      throw new Error(
+        `B1_SCHEDULE_NOT_ANALYZED:${scheduleProcessing.evaluation.outcome}`,
+      );
+    }
+
     expect(budget.documentId).not.toBe(contract.documentId);
     expect(schedule.documentId).not.toBe(contract.documentId);
 
@@ -254,6 +284,17 @@ test.describe("B1-12 production qualification — Alerts + Coherence", () => {
     const afterNewObservation = await openAlertsAndRead(page, recorder, projectId);
     const currentFalsePositive = findRule(afterNewObservation, FALSE_POSITIVE_RULE);
     expect(currentFalsePositive.status).toBe("open");
+
+    const unexpectedBlockers = recorder
+      .blockingFindings()
+      .filter((finding) => finding.code !== "DOCUMENT_DUPLICATED");
+    if (unexpectedBlockers.length > 0) {
+      throw new Error(
+        `B1_PROD_BLOCKING_FINDINGS:${unexpectedBlockers
+          .map((finding) => finding.code)
+          .join(",")}`,
+      );
+    }
 
     const recorderPath = recorder.write();
     mkdirSync(path.dirname(OUTPUT), { recursive: true });
