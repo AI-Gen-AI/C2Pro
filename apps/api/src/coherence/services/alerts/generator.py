@@ -61,9 +61,15 @@ class AlertGeneratorService:
             if (
                 metadata.get("fingerprint") != stored_fingerprint
                 or metadata.get("fingerprint_version") != FINGERPRINT_VERSION
+                or metadata.get("finding_key") != stored_fingerprint
+                or metadata.get("identity_schema_version") != FINGERPRINT_VERSION
+                or "identity_quality" not in metadata
             ):
                 metadata["fingerprint"] = stored_fingerprint
                 metadata["fingerprint_version"] = FINGERPRINT_VERSION
+                metadata["finding_key"] = stored_fingerprint
+                metadata["identity_schema_version"] = FINGERPRINT_VERSION
+                metadata["identity_quality"] = self._identity_quality_existing(existing_alert)
                 existing_alert.alert_metadata = metadata
 
             previous = existing_by_fp.get(stored_fingerprint)
@@ -302,6 +308,9 @@ class AlertGeneratorService:
         metadata.update(dict(violation.alert_metadata or {}))
         metadata["fingerprint"] = fingerprint
         metadata["fingerprint_version"] = FINGERPRINT_VERSION
+        metadata["finding_key"] = fingerprint
+        metadata["identity_schema_version"] = FINGERPRINT_VERSION
+        metadata["identity_quality"] = self._identity_quality_violation(violation)
         metadata["requires_human_review"] = self._requires_human_review(violation)
         observation_key = self._observation_key(metadata)
         if observation_key is not None:
@@ -375,6 +384,86 @@ class AlertGeneratorService:
         quote = self._normalized_identity_text(detector.get("quote"))
         base = f"{rule_id}|fallback|{category}|{claim}|{quote}"
         return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+    def _identity_quality_violation(self, violation: AlertCreate) -> str:
+        metadata = dict(violation.alert_metadata or {})
+        detector = metadata.get("detection_evidence")
+        if not isinstance(detector, dict):
+            detector = {}
+
+        raw_source_locator = detector.get("source_clause_id")
+        if raw_source_locator and self._is_revision_unstable_locator(raw_source_locator):
+            return "weak"
+
+        if (
+            self._document_family_fingerprint(
+                rule_id=violation.rule_id or "unknown_rule",
+                category=violation.category or "",
+                detector=detector,
+                affected_entities=violation.affected_entities,
+            )
+            is not None
+        ):
+            return "strong"
+
+        non_document_entities = self._flatten_entities(
+            {
+                key: value
+                for key, value in (violation.affected_entities or {}).items()
+                if key != "documents"
+            }
+        )
+        if non_document_entities:
+            return "strong"
+
+        if (
+            violation.source_clause_id
+            or violation.related_clause_ids
+            or raw_source_locator
+        ):
+            return "revision_bound"
+
+        return "weak"
+
+    def _identity_quality_existing(self, alert: AlertRecord) -> str:
+        metadata = dict(alert.alert_metadata or {})
+        detector = metadata.get("detection_evidence")
+        if not isinstance(detector, dict):
+            legacy = metadata.get("evidence")
+            detector = legacy if isinstance(legacy, dict) else {}
+
+        raw_source_locator = detector.get("source_clause_id")
+        if raw_source_locator and self._is_revision_unstable_locator(raw_source_locator):
+            return "weak"
+
+        rule_id = getattr(alert, "rule_id", None) or "unknown_rule"
+        category = getattr(alert, "category", None) or ""
+        affected = getattr(alert, "affected_entities", {}) or {}
+        if (
+            self._document_family_fingerprint(
+                rule_id=rule_id,
+                category=category,
+                detector=detector,
+                affected_entities=affected,
+            )
+            is not None
+        ):
+            return "strong"
+
+        non_document_entities = self._flatten_entities(
+            {key: value for key, value in affected.items() if key != "documents"}
+        )
+        if non_document_entities:
+            return "strong"
+
+        if (
+            getattr(alert, "source_clause_id", None)
+            or getattr(alert, "related_clause_ids", None)
+            or raw_source_locator
+        ):
+            return "revision_bound"
+
+        return "weak"
 
     def _requires_human_review(self, violation: AlertCreate) -> bool:
         if violation.severity in {AlertSeverity.CRITICAL, AlertSeverity.HIGH}:
