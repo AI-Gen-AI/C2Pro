@@ -2,8 +2,9 @@
 """Read-only verifier for #686 P0c production qualification.
 
 The verifier never repairs state, never reads unrelated tenants, and never
-prints credentials. It proves that the browser-observed revision/change IDs
-exist durably under the dedicated synthetic qualification tenant.
+prints credentials. It proves that the browser-created PJ-01 project contains
+one logical document, exactly two canonical revisions, and one durable
+revision.changed event with exact provenance.
 """
 
 from __future__ import annotations
@@ -60,7 +61,7 @@ async def _scalar(
     return int(result.scalar_one())
 
 
-async def verify_preflight(
+async def verify(
     conn: AsyncConnection,
     *,
     tenant_id: UUID,
@@ -68,7 +69,10 @@ async def verify_preflight(
     project_id: UUID,
     document_id: UUID,
     source_revision_id: UUID,
+    target_revision_id: UUID,
+    change_event_id: UUID,
     source_blob_hash: str,
+    target_blob_hash: str,
 ) -> tuple[list[Check], dict[str, str]]:
     p = {
         "tenant_id": tenant_id,
@@ -76,7 +80,10 @@ async def verify_preflight(
         "project_id": project_id,
         "document_id": document_id,
         "source_revision_id": source_revision_id,
+        "target_revision_id": target_revision_id,
+        "change_event_id": change_event_id,
         "source_blob_hash": source_blob_hash,
+        "target_blob_hash": target_blob_hash,
     }
 
     eligible_tenant = await _scalar(
@@ -96,7 +103,9 @@ async def verify_preflight(
         """
         SELECT count(*)
           FROM projects
-         WHERE id = :project_id AND tenant_id = :tenant_id
+         WHERE id = :project_id
+           AND tenant_id = :tenant_id
+           AND name LIKE 'P0c Qualification %'
         """,
         p,
     )
@@ -125,78 +134,6 @@ async def verify_preflight(
         """
         SELECT count(*)
           FROM document_revisions
-         WHERE document_id = :document_id
-           AND project_id = :project_id
-           AND tenant_id = :tenant_id
-        """,
-        p,
-    )
-    source_current = await _scalar(
-        conn,
-        """
-        SELECT count(*)
-          FROM document_revisions
-         WHERE revision_id = :source_revision_id
-           AND document_id = :document_id
-           AND project_id = :project_id
-           AND tenant_id = :tenant_id
-           AND valid_to IS NULL
-           AND blob_hash = :source_blob_hash
-        """,
-        p,
-    )
-
-    checks = [
-        Check("synthetic tenant binding", eligible_tenant == 1, f"eligible_tenants={eligible_tenant}"),
-        Check("qualification project exists", project == 1, f"projects={project}"),
-        Check("project has exactly one logical document", documents == 1, f"documents={documents}"),
-        Check("expected document is canonical project document", exact_document == 1, f"matching_documents={exact_document}"),
-        Check("clean P0c start has exactly one revision", revisions == 1, f"revisions={revisions}"),
-        Check("source revision is current Contract A", source_current == 1, f"current_source_matches={source_current}"),
-    ]
-    identifiers = {
-        "project_id": str(project_id),
-        "document_id": str(document_id),
-        "source_revision_id": str(source_revision_id),
-    }
-    return checks, identifiers
-
-
-async def verify_postrun(
-    conn: AsyncConnection,
-    *,
-    tenant_id: UUID,
-    project_id: UUID,
-    document_id: UUID,
-    source_revision_id: UUID,
-    target_revision_id: UUID,
-    change_event_id: UUID,
-    source_blob_hash: str,
-    target_blob_hash: str,
-) -> tuple[list[Check], dict[str, str]]:
-    p = {
-        "tenant_id": tenant_id,
-        "project_id": project_id,
-        "document_id": document_id,
-        "source_revision_id": source_revision_id,
-        "target_revision_id": target_revision_id,
-        "change_event_id": change_event_id,
-        "source_blob_hash": source_blob_hash,
-        "target_blob_hash": target_blob_hash,
-    }
-
-    documents = await _scalar(
-        conn,
-        """
-        SELECT count(*) FROM documents
-         WHERE project_id = :project_id AND tenant_id = :tenant_id
-        """,
-        p,
-    )
-    revisions = await _scalar(
-        conn,
-        """
-        SELECT count(*) FROM document_revisions
          WHERE document_id = :document_id
            AND project_id = :project_id
            AND tenant_id = :tenant_id
@@ -273,7 +210,10 @@ async def verify_postrun(
     )
 
     checks = [
+        Check("synthetic tenant binding", eligible_tenant == 1, f"eligible_tenants={eligible_tenant}"),
+        Check("fresh P0c qualification project belongs to tenant", project == 1, f"projects={project}"),
         Check("same logical document preserved", documents == 1, f"documents={documents}"),
+        Check("browser document is canonical project document", exact_document == 1, f"matching_documents={exact_document}"),
         Check("exactly two revisions after Contract B", revisions == 2, f"revisions={revisions}"),
         Check("source-target lineage and blob hashes durable", lineage == 1, f"lineage_matches={lineage}"),
         Check("revision.changed event durable and provenance exact", change == 1, f"matching_change_events={change}"),
@@ -292,10 +232,6 @@ async def verify_postrun(
 
 async def _run(args: argparse.Namespace, database_url: str) -> tuple[list[Check], dict[str, str]]:
     tenant_id = _uuid(args.tenant_id, "tenant id")
-    project_id = _uuid(args.project_id, "project id")
-    document_id = _uuid(args.document_id, "document id")
-    source_revision_id = _uuid(args.source_revision_id, "source revision id")
-
     engine = create_async_engine(_normalize_database_url(database_url))
     try:
         async with engine.connect() as conn:
@@ -306,28 +242,18 @@ async def _run(args: argparse.Namespace, database_url: str) -> tuple[list[Check]
                     text("SELECT set_config('app.current_tenant', :tenant_id, true)"),
                     {"tenant_id": str(tenant_id)},
                 )
-                if args.phase == "preflight":
-                    checks, identifiers = await verify_preflight(
-                        conn,
-                        tenant_id=tenant_id,
-                        clerk_org_id=args.clerk_org_id,
-                        project_id=project_id,
-                        document_id=document_id,
-                        source_revision_id=source_revision_id,
-                        source_blob_hash=args.source_blob_hash,
-                    )
-                else:
-                    checks, identifiers = await verify_postrun(
-                        conn,
-                        tenant_id=tenant_id,
-                        project_id=project_id,
-                        document_id=document_id,
-                        source_revision_id=source_revision_id,
-                        target_revision_id=_uuid(args.target_revision_id, "target revision id"),
-                        change_event_id=_uuid(args.change_event_id, "change event id"),
-                        source_blob_hash=args.source_blob_hash,
-                        target_blob_hash=args.target_blob_hash,
-                    )
+                checks, identifiers = await verify(
+                    conn,
+                    tenant_id=tenant_id,
+                    clerk_org_id=args.clerk_org_id,
+                    project_id=_uuid(args.project_id, "project id"),
+                    document_id=_uuid(args.document_id, "document id"),
+                    source_revision_id=_uuid(args.source_revision_id, "source revision id"),
+                    target_revision_id=_uuid(args.target_revision_id, "target revision id"),
+                    change_event_id=_uuid(args.change_event_id, "change event id"),
+                    source_blob_hash=args.source_blob_hash,
+                    target_blob_hash=args.target_blob_hash,
+                )
                 await transaction.rollback()
                 return checks, identifiers
             except Exception:
@@ -339,29 +265,21 @@ async def _run(args: argparse.Namespace, database_url: str) -> tuple[list[Check]
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--phase", choices=("preflight", "postrun"), required=True)
     parser.add_argument("--tenant-id", default=os.getenv("PROD_ACCEPTANCE_EXPECTED_TENANT_ID"))
     parser.add_argument("--clerk-org-id", default=os.getenv("PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"))
     parser.add_argument("--project-id", required=True)
     parser.add_argument("--document-id", required=True)
     parser.add_argument("--source-revision-id", required=True)
-    parser.add_argument("--target-revision-id")
-    parser.add_argument("--change-event-id")
+    parser.add_argument("--target-revision-id", required=True)
+    parser.add_argument("--change-event-id", required=True)
     parser.add_argument("--source-blob-hash", required=True)
-    parser.add_argument("--target-blob-hash")
+    parser.add_argument("--target-blob-hash", required=True)
     parser.add_argument("--write-evidence", action="store_true")
     args = parser.parse_args()
 
     database_url = os.getenv("PROD_ACCEPTANCE_DATABASE_URL_READONLY")
     if not database_url or not args.tenant_id or not args.clerk_org_id:
         print("FAIL: required production qualification configuration is missing.", file=sys.stderr)
-        return 2
-    if args.phase == "postrun" and (
-        not args.target_revision_id
-        or not args.change_event_id
-        or not args.target_blob_hash
-    ):
-        print("FAIL: postrun identifiers are incomplete.", file=sys.stderr)
         return 2
 
     try:
@@ -382,7 +300,6 @@ def main() -> int:
     if args.write_evidence:
         output = {
             "schema": "c2pro-p0c-prod-verifier/v1",
-            "phase": args.phase,
             "verdict": "FAIL" if failed else "PASS",
             "identifiers": identifiers,
             "checks": [
