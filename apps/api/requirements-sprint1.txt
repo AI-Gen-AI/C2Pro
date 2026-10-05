@@ -4,27 +4,27 @@
 # Versiones compatibles con Python 3.13 en Windows
 
 # Framework (versiones más recientes con wheels para Python 3.13)
-fastapi>=0.140.1
+fastapi>=0.142.2
 uvicorn[standard]>=0.52.1,<1.0.0
 pydantic>=2.10.0
 pydantic-settings>=2.15.0,<3.0.0
 
 # Database
-sqlalchemy>=2.0.36
+sqlalchemy>=2.1.2
 asyncpg>=0.30.0
 alembic>=1.18.5
 
 # Security
-PyJWT[crypto]>=2.13.0
+PyJWT[crypto]>=2.15.1
 passlib[bcrypt]>=1.7.4
-cryptography>=44.0.0
+cryptography>=50.0.2
 
 # Observability (básico)
 structlog>=24.4.0
 
 # Utilities
-python-dotenv>=1.0.1
+python-dotenv>=1.2.4
 asgi-lifespan==2.1.0
 
 # Contract Testing
-schemathesis>=4.24.3  # TASK-QA-200: OpenAPI-driven property-based API contract testing
+schemathesis>=4.29.0  # TASK-QA-200: OpenAPI-driven property-based API contract testing
