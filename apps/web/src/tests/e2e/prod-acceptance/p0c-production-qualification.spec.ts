@@ -170,6 +170,12 @@ test.describe("P0c production qualification — continuation of accepted P0b pro
         occurred_at: whatChanged.occurredAt,
         source_blob_hash: sourceBlobHash,
         target_blob_hash: targetBlobHash,
+        negative_control: {
+          mode: "unchanged_declared_facts_not_reported_changed",
+          fact_count: base.facts.filter((fact) =>
+            revisionManifest.expected_revision_change.no_change_control_fact_keys.includes(fact.key),
+          ).length,
+        },
         document_version: revision.version,
         documents_listed: revision.documentsListed,
         processing_outcome: revisionProcessing.evaluation.outcome,
