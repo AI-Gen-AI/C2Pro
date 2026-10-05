@@ -50,15 +50,21 @@ def _canonical_run_path(run_id: str) -> Path:
     if not RUN_ID_RE.fullmatch(run_id) or ".." in run_id:
         raise BundleBuildError("run id is invalid")
     root = RUN_ROOT.resolve()
-    path = (root / run_id / "run.json").resolve(strict=True)
-    if path.is_symlink() or path.parent != (root / run_id).resolve() or not path.is_file():
+    candidate = root / run_id / "run.json"
+    if candidate.is_symlink():
+        raise BundleBuildError("run evidence path must not be a symlink")
+    path = candidate.resolve(strict=True)
+    if path.parent != (root / run_id).resolve() or not path.is_file():
         raise BundleBuildError("run evidence path is not canonical")
     return path
 
 
 def _canonical_verifier_path() -> Path:
+    if VERIFIER_PATH.is_symlink():
+        raise BundleBuildError("verifier evidence path must not be a symlink")
     path = VERIFIER_PATH.resolve(strict=True)
-    if path.is_symlink() or path != VERIFIER_PATH.resolve() or not path.is_file():
+    expected_parent = (REPO_ROOT / "evidence/product-qualification/runtime").resolve()
+    if path.parent != expected_parent or path.name != "p0c-verifier.json" or not path.is_file():
         raise BundleBuildError("verifier evidence path is not canonical")
     return path
 
