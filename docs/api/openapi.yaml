@@ -11,9 +11,9 @@ info:
     n y mapeo autom\xE1tico de stakeholders\n        - \U0001F4C8 **Multi-tenant**:\
     \ Aislamiento completo de datos por organizaci\xF3n\n\n        ## Autenticaci\xF3\
     n\n\n        La API usa JWT (JSON Web Tokens) para autenticaci\xF3n.\n\n     \
-    \   1. **Registro**: \`POST /api/v1/auth/register\`\n        2. **Login**: \`POST\
-    \ /api/v1/auth/login\`\n        3. **Usar Token**: Incluir en header \`Authorization:\
-    \ Bearer <token>\`\n\n        ## L\xEDmites de Uso\n\n        - **Rate Limit**:\
+    \   1. **Registro**: `POST /api/v1/auth/register`\n        2. **Login**: `POST\
+    \ /api/v1/auth/login`\n        3. **Usar Token**: Incluir en header `Authorization:\
+    \ Bearer <token>`\n\n        ## L\xEDmites de Uso\n\n        - **Rate Limit**:\
     \ 60 requests/minuto\n        - **AI Budget**: $50 USD/mes (plan free)\n     \
     \   - **File Upload**: Max 50 MB\n\n        ## Soporte\n\n        - \U0001F4E7\
     \ Email: support@c2pro.app\n        - \U0001F4D6 Docs: https://docs.c2pro.app\n\
