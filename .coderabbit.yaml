@@ -103,8 +103,11 @@ reviews:
 
 chat:
   auto_reply: false
+  allow_non_org_members: false
 
 knowledge_base:
+  web_search:
+    enabled: false
   code_guidelines:
     enabled: true
     filePatterns:
