@@ -1,6 +1,6 @@
 """
-Regression tests for TASK-DOC-BOM-ORPHAN-007.
-TS-INT-BOM-ORPHAN-001: replace_for_source_document must purge NULL-source orphans.
+#862 data-integrity regression: source-scoped BOM replacement must preserve
+rows whose ownership is not proven by source_document_id.
 """
 from __future__ import annotations
 
@@ -79,18 +79,18 @@ def _make_bom_orm(project_id, source_document_id=None) -> BOMItemORM:
     )
 
 
-class TestBomOrphanCleanup:
-    """Regression suite for TASK-DOC-BOM-ORPHAN-007."""
+class TestBomSourceOwnership:
+    """#862: replacement may mutate only rows proven to belong to its source."""
 
     @pytest.mark.asyncio
-    async def test_replace_removes_null_source_orphans(self, db, orphan_project):
+    async def test_replace_preserves_null_source_manual_rows(self, db, orphan_project):
         """
-        GIVEN a project has BOM rows with source_document_id=NULL (legacy/orphaned)
-        WHEN replace_for_source_document is called for a new document parse
-        THEN the NULL-source rows are removed and only the new rows survive.
+        GIVEN a project has BOM rows with source_document_id=NULL
+        WHEN one source document is parsed/reparsed
+        THEN ownership-unknown/manual rows survive untouched.
 
-        Prevents false budget-reconciliation deviations caused by orphaned rows
-        doubling the project BOM totals (pilot: 40 rows instead of expected 20).
+        NULL is not proof that a row is disposable. Destructive legacy cleanup
+        must not run inside ordinary document replacement.
         """
         project = orphan_project["project"]
         tenant = orphan_project["tenant"]
@@ -133,11 +133,14 @@ class TestBomOrphanCleanup:
             select(BOMItemORM).where(BOMItemORM.project_id == project.id)
         )
         surviving = result.scalars().all()
-        assert len(surviving) == 1, (
-            f"Expected 1 BOM row after replace, got {len(surviving)} — "
-            f"orphaned NULL-source rows may have survived"
+        assert len(surviving) == 4, (
+            f"Expected 3 ownership-unknown/manual rows plus 1 replacement, "
+            f"got {len(surviving)}"
         )
-        assert surviving[0].source_document_id == doc_id
+        null_source = [row for row in surviving if row.source_document_id is None]
+        from_source = [row for row in surviving if row.source_document_id == doc_id]
+        assert len(null_source) == 3, "manual/unknown-ownership BOM rows were deleted"
+        assert len(from_source) == 1
         assert len(created) == 1
 
     @pytest.mark.asyncio
