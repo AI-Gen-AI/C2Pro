@@ -1253,8 +1253,8 @@ def test_b1_duplicate_family_is_scored_once_after_reconciliation() -> None:
     from src.coherence.graph.state import EvaluationConfig
     from src.coherence.models import EnrichedCoherenceResult, FindingSignal
     from src.coherence.router import (
-        _CoherenceAlertReconciliation,
         _apply_disposition_aware_rescore,
+        _CoherenceAlertReconciliation,
     )
     from src.coherence.scoring import ScoringService
 
