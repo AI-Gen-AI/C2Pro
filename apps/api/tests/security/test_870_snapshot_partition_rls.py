@@ -36,6 +36,8 @@ def test_migration_repairs_all_attached_snapshot_partitions() -> None:
     assert "quote_ident(partition_row.schema_name)" in sql
     assert "quote_ident(partition_row.table_name)" in sql
     assert "JOIN pg_class child_rel" in sql
+    assert "DO $" in sql
+    assert "END $;" in sql
 
 
 def test_supabase_mirror_matches_canonical_migration() -> None:
