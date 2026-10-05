@@ -307,6 +307,11 @@ class Settings(BaseSettings):
     # persist REAL RAG chunks -- that is the seam that failed in production -- so
     # only the provider network call is replaced, never the chunking or the write.
     embeddings_mock: bool = Field(default=False, validation_alias="C2PRO_EMBEDDINGS_MOCK")
+    # Operator override that routes past the HITL gate. A run that skips the
+    # interrupt still leaves a PROPOSED (untrusted) candidate, but one with no
+    # resumable interrupt -- no canonical approval can ever reach it. Forbidden
+    # in production (Lane C / C3b-1).
+    skip_hitl: bool = Field(default=False, validation_alias="C2PRO_SKIP_HITL")
 
     # ===========================================
     # DOCUMENT PROCESSING
@@ -608,6 +613,9 @@ class Settings(BaseSettings):
 
         if self.environment == "production" and self.embeddings_mock:
             raise ValueError("C2PRO_EMBEDDINGS_MOCK cannot be enabled in production")
+
+        if self.environment == "production" and self.skip_hitl:
+            raise ValueError("C2PRO_SKIP_HITL cannot be enabled in production")
 
     def _validate_supabase_credentials(self) -> None:
         if self.environment == "test":

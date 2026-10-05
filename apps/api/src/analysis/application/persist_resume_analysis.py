@@ -18,11 +18,12 @@ V3 does all core N17 work in one transaction on one session:
 
     SELECT resume_operations ... FOR UPDATE   -- authority, serialised
     verify attempt/owner/fence/lease
-    lock project row                          -- serialise canonical WBS
+    lock project row                          -- serialise canonical writes
     detect existing analysis BY resume_operation_id
       -> if present: return it; repeat NOTHING
     approve: promote the exact bound candidate (#714)
-    persist analysis + alerts + canonical WBS
+    materialize it (C3b-1 trusted_materialization: stale guard, analysis
+         + alerts, keyed by artifact_id; WBS deferred to governance)
          + ProjectEvent('analysis.persisted')
          + operation.analysis_id / provenance / phase=N17_DURABLE
     COMMIT ONCE
@@ -48,9 +49,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
-from sqlalchemy import delete, select, text
-
-from src.analysis.domain.enums import AnalysisStatus, AnalysisType
+from sqlalchemy import select, text
 
 logger = structlog.get_logger()
 
@@ -102,30 +101,32 @@ async def persist_resume_analysis_atomically(
     fault: Any = None,
 ) -> AtomicPersistResult:
     """Persist every core N17 effect for this operation, or none of them."""
-    from src.analysis.adapters.persistence.analysis_repository import (
-        SqlAlchemyAnalysisRepository,
-    )
     from src.analysis.adapters.persistence.models import Analysis
-    from src.analysis.ports.types import AlertWrite, AnalysisWrite
-    from src.coherence.alert_generator import AlertGenerator
+    from src.analysis.application import trusted_materialization as materializer
+    from src.analysis.domain.trust import StaleCandidateError
     from src.modules.hitl.adapters.persistence import resume_ownership
-    from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
     from src.temporal.adapters.persistence.models import ProjectEventORM
-    from src.wbs.adapters.persistence.models import WBSNodeORM
 
     tenant_id = provenance.tenant_id
     project_id = UUID(str(state["project_id"]))
-    extracted_risks = state.get("extracted_risks") or []
-    extracted_wbs = state.get("extracted_wbs") or []
+    document_id = _uuid_or_none(state.get("document_id"))
 
     ownership = _ownership_view(provenance)
 
     async with _session(session_factory, tenant_id) as session:
+        # 0. Canonical cross-aggregate lock order (finalize_v3, C3b-1):
+        # DOCUMENT before RESUME_OPERATION, so the materializer's stale guard
+        # runs with the document serialised and no inverse edge exists.
+        if document_id is not None:
+            await materializer.lock_document(
+                session, tenant_id=tenant_id, document_id=document_id
+            )
+
         # 1-2. Authority, serialised on the operation row itself.
         operation = await resume_ownership.verify_in_transaction(session, ownership)
 
-        # 3. Serialise canonical WBS replacement against concurrent writers
-        # for the same project (ADR-025: one canonical WBS per project).
+        # 3. Serialise canonical writes against concurrent writers for the
+        # same project (ADR-025: one canonical WBS per project).
         await session.execute(
             text("SELECT id FROM projects WHERE id = cast(:p as uuid) FOR UPDATE"),
             {"p": str(project_id)},
@@ -150,122 +151,96 @@ async def persist_resume_analysis_atomically(
             return AtomicPersistResult(analysis_id=existing, created=False)
 
         # #714: persisted != trusted. An approved decision promotes its exact
-        # bound candidate in THIS transaction, so the analysis, alerts and
-        # canonical WBS below can never land without the trusted transition;
-        # a stale or superseded binding rolls all of them back.
-        await resume_ownership.commit_trust_in_transaction(
+        # bound candidate in THIS transaction (leaving a pending, artifact-
+        # keyed materialization obligation, C3b-1), so the canonical effects
+        # below can never land without the trusted transition; a stale or
+        # superseded binding rolls all of them back.
+        commit = await resume_ownership.commit_trust_in_transaction(
             session, tenant_id=tenant_id, operation=operation
         )
 
-        # 6. First execution: every core effect, one transaction.
-        analysis_id = uuid4()
-        completed_at = datetime.now(UTC).replace(tzinfo=None)
-        analysis_type = AnalysisType.RISK if extracted_risks else AnalysisType.SCHEDULE
-        repo = SqlAlchemyAnalysisRepository(session)
-
-        await repo.add_analysis(
-            AnalysisWrite(
-                id=analysis_id,
+        # 6. First execution: the ONE canonical materializer, same transaction.
+        content = materializer.MaterializationContent.from_state(state)
+        link = materializer.ResumeLink(
+            operation_id=provenance.operation_id,
+            attempt_id=provenance.attempt_id,
+            fencing_token=provenance.fencing_token,
+            decision_revision=provenance.decision_revision,
+        )
+        created = True
+        if commit is not None:
+            outcome = await materializer.materialize_in_transaction(
+                session,
+                ref=materializer.ArtifactRef(
+                    artifact_id=commit.binding.artifact_id,
+                    document_id=commit.binding.document_id,
+                    artifact_version=commit.binding.artifact_version,
+                    artifact_hash=commit.binding.artifact_hash,
+                    project_id=commit.project_id,
+                    tenant_id=tenant_id,
+                ),
+                content=content,
+                resume=link,
+                actor="analysis_graph",
+                fault=fault,
+            )
+            if outcome.status is materializer.MaterializationStatus.OBSOLETE:
+                # The approved artifact is not the trusted-current one: the
+                # approval fails closed and the trust commit rolls back too.
+                raise StaleCandidateError(
+                    f"Approved candidate {commit.binding.artifact_id} is not the "
+                    f"trusted-current artifact ({outcome.reason}); refusing to materialize"
+                )
+            assert outcome.analysis_id is not None
+            analysis_id = outcome.analysis_id
+            created = outcome.status is materializer.MaterializationStatus.CREATED
+        else:
+            # Pre-#714 review: nothing was proposed or bound, so there is no
+            # artifact identity -- same core effects, no obligation.
+            analysis_id, _ = await materializer.write_canonical_effects(
+                session,
                 tenant_id=tenant_id,
                 project_id=project_id,
-                analysis_type=analysis_type,
-                status=AnalysisStatus.COMPLETED,
-                coherence_score=state.get("coherence_score"),
-                coherence_breakdown=state.get("coherence_breakdown") or {},
-                alerts_count=len(extracted_risks),
-                completed_at=completed_at,
-                result_json={
-                    "risks": extracted_risks,
-                    "wbs": extracted_wbs,
-                    **(state.get("single_document_assessment") or {}),
-                },
-                resume_operation_id=provenance.operation_id,
-                resume_attempt_id=provenance.attempt_id,
-                fencing_token=provenance.fencing_token,
-                decision_revision=provenance.decision_revision,
-            ),
-            tenant_id=tenant_id,
-        )
-        await repo.flush()
-        if fault is not None:
-            await fault("after_analysis")
-
-        if extracted_risks:
-            generator = AlertGenerator(project_id=project_id, analysis_id=analysis_id)
-            await repo.add_alerts(
-                [
-                    AlertWrite(
-                        tenant_id=tenant_id,
-                        project_id=dto.project_id,
-                        analysis_id=dto.analysis_id,
-                        alert_type=dto.alert_type,
-                        severity=dto.severity,
-                        title=dto.title,
-                        message=dto.description,
-                        description=dto.description,
-                        category=dto.category,
-                        impact_level=dto.impact_level,
-                        alert_metadata=dto.alert_metadata,
-                        rule_id=dto.rule_id,
-                        source_clause_id=dto.source_clause_id,
-                        related_clause_ids=dto.related_clause_ids,
-                        affected_entities=dto.affected_entities,
-                        recommendation=dto.recommendation,
-                    )
-                    for dto in generator.generate_risk_alerts(extracted_risks)
-                ],
-                tenant_id=tenant_id,
+                content=content,
+                source_artifact_id=None,
+                resume=link,
+                fault=fault,
             )
-            await repo.flush()
-        if fault is not None:
-            await fault("after_alerts")
-
-        if extracted_wbs:
-            await session.execute(
-                delete(WBSNodeORM).where(
-                    WBSNodeORM.project_id == project_id,
-                    WBSNodeORM.tenant_id == tenant_id,
-                )
-            )
-            await SQLAlchemyWBSRepository(session).bulk_create_from_dicts(
-                project_id, extracted_wbs, tenant_id
-            )
-            await session.flush()
-        if fault is not None:
-            await fault("after_wbs")
 
         # The core event is part of THIS transaction. The partial unique
         # index on (resume_operation_id, event_type) is the durable guard
-        # against a duplicate for the same operation.
+        # against a duplicate for the same operation. An artifact this
+        # operation found already materialized gets no second event.
         now = datetime.now(UTC).replace(tzinfo=None)
-        # Inserted WITH its provenance in one statement. An append-then-
-        # update would be wrong twice over: the update could match other
-        # operations' events for the same project and collide on the
-        # partial unique index, and it would briefly leave the row
-        # unattributed inside the transaction.
-        session.add(
-            ProjectEventORM(
-                event_id=uuid4(),
-                project_id=project_id,
-                tenant_id=tenant_id,
-                event_type=ANALYSIS_PERSISTED_EVENT,
-                payload={
-                    "analysis_id": str(analysis_id),
-                    "document_id": state.get("document_id"),
-                    "resume_operation_id": str(provenance.operation_id),
-                    "resume_attempt_id": str(provenance.attempt_id),
-                    "fencing_token": provenance.fencing_token,
-                    "decision_revision": provenance.decision_revision,
-                },
-                actor="analysis_graph",
-                evidence_refs=[],
-                occurred_at=now,
-                created_at=now,
-                resume_operation_id=provenance.operation_id,
-                resume_attempt_id=provenance.attempt_id,
+        if created:
+            # Inserted WITH its provenance in one statement. An append-then-
+            # update would be wrong twice over: the update could match other
+            # operations' events for the same project and collide on the
+            # partial unique index, and it would briefly leave the row
+            # unattributed inside the transaction.
+            session.add(
+                ProjectEventORM(
+                    event_id=uuid4(),
+                    project_id=project_id,
+                    tenant_id=tenant_id,
+                    event_type=ANALYSIS_PERSISTED_EVENT,
+                    payload={
+                        "analysis_id": str(analysis_id),
+                        "document_id": state.get("document_id"),
+                        "resume_operation_id": str(provenance.operation_id),
+                        "resume_attempt_id": str(provenance.attempt_id),
+                        "fencing_token": provenance.fencing_token,
+                        "decision_revision": provenance.decision_revision,
+                    },
+                    actor="analysis_graph",
+                    evidence_refs=[],
+                    occurred_at=now,
+                    created_at=now,
+                    resume_operation_id=provenance.operation_id,
+                    resume_attempt_id=provenance.attempt_id,
+                )
             )
-        )
-        await session.flush()
+            await session.flush()
         if fault is not None:
             await fault("after_event")
 
@@ -296,7 +271,14 @@ async def persist_resume_analysis_atomically(
         attempt_id=str(provenance.attempt_id),
         analysis_id=str(analysis_id),
     )
-    return AtomicPersistResult(analysis_id=analysis_id, created=True)
+    return AtomicPersistResult(analysis_id=analysis_id, created=created)
+
+
+def _uuid_or_none(value: Any) -> UUID | None:
+    try:
+        return UUID(str(value)) if value else None
+    except ValueError:
+        return None
 
 
 def _ownership_view(provenance: ResumeProvenance) -> Any:
