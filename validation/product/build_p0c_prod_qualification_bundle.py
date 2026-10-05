@@ -19,6 +19,9 @@ REPOSITORY = "AI-Gen-AI/C2Pro"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 QUALIFICATION_OUTPUT_ROOT = Path("evidence/product-qualification")
 FULL_SHA_RE = re.compile(r"[0-9a-fA-F]{40}")
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+RUN_ROOT = REPO_ROOT / "apps/web/playwright/.prod-p0c"
+VERIFIER_PATH = REPO_ROOT / "evidence/product-qualification/runtime/p0c-verifier.json"
 
 
 class BundleBuildError(RuntimeError):
@@ -41,6 +44,23 @@ def _load_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise BundleBuildError(f"{path} must contain a JSON object")
     return value
+
+
+def _canonical_run_path(run_id: str) -> Path:
+    if not RUN_ID_RE.fullmatch(run_id) or ".." in run_id:
+        raise BundleBuildError("run id is invalid")
+    root = RUN_ROOT.resolve()
+    path = (root / run_id / "run.json").resolve(strict=True)
+    if path.is_symlink() or path.parent != (root / run_id).resolve() or not path.is_file():
+        raise BundleBuildError("run evidence path is not canonical")
+    return path
+
+
+def _canonical_verifier_path() -> Path:
+    path = VERIFIER_PATH.resolve(strict=True)
+    if path.is_symlink() or path != VERIFIER_PATH.resolve() or not path.is_file():
+        raise BundleBuildError("verifier evidence path is not canonical")
+    return path
 
 
 def _control_at(commit_sha: str) -> dict[str, Any]:
@@ -174,7 +194,7 @@ def build_bundle(
         {
             "id": "browser-run",
             "kind": "ui_report",
-            "ref": f"artifact:{run_json.as_posix()}",
+            "ref": f"artifact:apps/web/playwright/.prod-p0c/{run_json.parent.name}/run.json",
             "immutable": False,
             "sha256": run_sha,
         },
@@ -271,16 +291,15 @@ def main() -> int:
     parser.add_argument("--backend-deployment-id", required=True)
     parser.add_argument("--frontend-commit-sha", required=True)
     parser.add_argument("--frontend-deployment-id", required=True)
-    parser.add_argument("--run-json", required=True)
-    parser.add_argument("--verifier-json", required=True)
+    parser.add_argument("--run-id", required=True)
     parser.add_argument("--github-run-id", required=True, type=_positive_int)
     parser.add_argument("--github-run-attempt", required=True, type=_positive_int)
     parser.add_argument("--observed-at")
     args = parser.parse_args()
 
     try:
-        run_json = Path(args.run_json).resolve(strict=True)
-        verifier_json = Path(args.verifier_json).resolve(strict=True)
+        run_json = _canonical_run_path(args.run_id)
+        verifier_json = _canonical_verifier_path()
         bundle = build_bundle(
             control_commit_sha=_require_full_sha(args.control_commit_sha, "control commit"),
             backend_commit_sha=_require_full_sha(args.backend_commit_sha, "backend commit"),
