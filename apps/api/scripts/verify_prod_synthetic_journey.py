@@ -103,6 +103,8 @@ async def _preflight_checks(
           FROM projects
          WHERE tenant_id = :tenant_id
            AND name NOT LIKE 'ACCEPT-706-%'
+           AND name NOT LIKE 'ACCEPT-686-%'
+           AND name NOT LIKE 'ACCEPT-867-%'
             """
         ),
         {TENANT_ID_KEY: tenant_id},
@@ -110,7 +112,7 @@ async def _preflight_checks(
     return [
         Check("synthetic tenant binding", eligible == 1, f"eligible_tenants={eligible}"),
         Check(
-            "dedicated tenant contains no non-acceptance projects",
+            "dedicated tenant contains only governed acceptance projects",
             foreign_projects == 0,
             f"non_acceptance_projects={foreign_projects}",
         ),
