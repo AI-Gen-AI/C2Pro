@@ -42,6 +42,13 @@ class IStakeholderRepository(ABC):
         pass
 
     @abstractmethod
+    async def find_by_project_email(
+        self, project_id: UUID, tenant_id: TenantId, email: str
+    ) -> list[Stakeholder]:
+        """Stakeholders of one tenant-scoped project whose email matches, case-insensitively."""
+        pass
+
+    @abstractmethod
     async def update(self, stakeholder: Stakeholder, tenant_id: TenantId) -> None:
         """Updates an existing stakeholder with tenant verification."""
         pass
