@@ -1082,7 +1082,7 @@ async def evaluate_project_coherence(
     )
 
     logger.info(
-        "coherence_evaluate_complete",
+        "coherence_detection_complete",
         alerts_count=len(enriched_result.alerts),
         overall_score=enriched_result.overall_score,
     )
@@ -1115,6 +1115,14 @@ async def evaluate_project_coherence(
     # the same eligible finding set.
     enriched_result = await _maybe_apply_canonical_canary(
         enriched_result, tenant_id=current_user.tenant_id, flags_service=flags_service
+    )
+
+    logger.info(
+        "coherence_evaluate_complete",
+        alerts_count=len(enriched_result.alerts),
+        findings_count=len(enriched_result.finding_signals),
+        overall_score=enriched_result.overall_score,
+        score_version=enriched_result.score_version,
     )
 
     # Persist result so the dashboard always reflects the latest evaluation
