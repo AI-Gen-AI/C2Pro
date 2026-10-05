@@ -172,9 +172,9 @@ async function clickVisibleB1Tab(
   const tabs = page.locator('nav[aria-label="Project tabs"] a');
   await tabs.first().waitFor({ state: "visible", timeout: 30_000 });
   const expectedHref = `/projects/${projectId}/${key}`;
-  const tab = tabs.filter({ hasText: new RegExp(key, "i") }).filter({
-    has: page.locator(`[href="${expectedHref}"]`),
-  });
+  const tab = page
+    .locator(`nav[aria-label="Project tabs"] a[href="${expectedHref}"]`)
+    .filter({ hasText: new RegExp(key, "i") });
   if ((await tab.count()) === 0) {
     throw new Error(`B1_${key.toUpperCase()}_TAB_NOT_NAVIGABLE`);
   }
